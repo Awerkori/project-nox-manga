@@ -1,11 +1,12 @@
 import { redirect } from '@sveltejs/kit';
-import { check } from '$lib/server/db';
+import { check, WORK_FIELDS } from '$lib/server/db';
 export const load = async ({ locals, params, url }) => {
   if (!locals.user) redirect(303, '/entrar');
   const tab = url.searchParams.get('status') || '';
   let query = locals.db
     .from('library')
-    .select('*,works(*)')
+    .select(`*,works!inner(${WORK_FIELDS})`)
+    .eq('works.published', true)
     .order('updated_at', { ascending: false })
     .limit(100);
   if (params.area === 'favoritos') query = query.eq('favorite', true);
@@ -17,7 +18,9 @@ export const load = async ({ locals, params, url }) => {
     params.area === 'historico'
       ? locals.db
           .from('reading')
-          .select('*,chapters(id,number,works(slug,title,cover_id))')
+          .select('*,chapters!inner(id,number,works!inner(slug,title,cover_id))')
+          .not('chapters.published_at', 'is', null)
+          .eq('chapters.works.published', true)
           .order('updated_at', { ascending: false })
           .limit(100)
       : Promise.resolve({ data: [], error: null }),

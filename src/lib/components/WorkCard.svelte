@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Work } from '$lib/types';
-  import { kindLabels } from '$lib/types';
+  import { kindLabels, statusLabels } from '$lib/types';
   let { work, index = 0 }: { work: Work; index?: number } = $props();
 </script>
 
@@ -18,7 +18,7 @@
   </div>
   <h3>{work.title}</h3>
   <p>
-    {work.status === 'COMPLETED' ? 'Concluído' : 'Em andamento'} <span>·</span>
+    {statusLabels[work.status] || work.status} <span>·</span>
     {work.year || 'Project Nox'}
   </p>
 </a>

@@ -5,6 +5,7 @@
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import { action } from '$lib/actions';
+  import { readPreference, savePreference } from '$lib/preferences';
   let { data } = $props();
   let current = $state(1),
     settings = $state(false),
@@ -33,24 +34,24 @@
   onMount(() => {
     fullscreen = !!document.documentElement.requestFullscreen;
     try {
-      const prefs = JSON.parse(localStorage.getItem('nox-reader') || '{}');
+      const prefs = JSON.parse(readPreference('nox-reader') || '{}');
       width = Math.min(1200, Math.max(400, Number(prefs.width) || 850));
       gap = !!prefs.gap;
     } catch {
       /* Default preferences remain valid. */
     }
-    const saved = data.progress?.page || Number(localStorage.getItem(`nox-page:${data.chapter.id}`)) || 1;
+    const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
     requestAnimationFrame(() => jump(Math.min(data.pages.length, Math.max(1, saved))));
     if (data.profile && !data.preview)
       action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
         () => {
-          notice = 'Seu progresso será salvo neste dispositivo até a conexão voltar.';
+          notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
         }
       );
     const timer = setInterval(async () => {
-      if (document.visibilityState !== 'visible' || sending) return;
-      localStorage.setItem(`nox-page:${data.chapter.id}`, String(current));
-      localStorage.setItem('nox-reader', JSON.stringify({ width, gap }));
+      if (document.visibilityState !== 'visible' || sending || !visible.size) return;
+      const locallySaved = savePreference(`nox-page:${data.chapter.id}`, String(current));
+      savePreference('nox-reader', JSON.stringify({ width, gap }));
       if (data.profile && !data.preview) {
         sending = true;
         try {
@@ -59,14 +60,38 @@
             chapter_id: data.chapter.id,
             page: current
           });
+          notice = '';
         } catch {
-          notice = 'Sem conexão para sincronizar. O progresso está salvo neste dispositivo.';
+          notice = locallySaved
+            ? 'Sem conexão para sincronizar. O progresso está salvo neste dispositivo.'
+            : 'Não foi possível salvar o progresso. Verifique sua conexão.';
         } finally {
           sending = false;
         }
       }
     }, 3500);
-    return () => clearInterval(timer);
+    const saveOnExit = () => {
+      if (!visible.size) return;
+      savePreference(`nox-page:${data.chapter.id}`, String(current));
+      savePreference('nox-reader', JSON.stringify({ width, gap }));
+      if (data.profile && !data.preview)
+        void fetch('/api/action', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scope: 'member',
+            action: 'read_page',
+            data: { work_id: data.chapter.work_id, chapter_id: data.chapter.id, page: current }
+          })
+        }).catch(() => {});
+    };
+    window.addEventListener('pagehide', saveOnExit);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('pagehide', saveOnExit);
+      saveOnExit();
+    };
   });
 </script>
 

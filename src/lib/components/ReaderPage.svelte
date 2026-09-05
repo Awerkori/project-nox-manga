@@ -8,6 +8,8 @@
     onSeen: (page: number, visible: boolean) => void;
   } = $props();
   let root: HTMLDivElement;
+  let loaded = false,
+    visibleNow = false;
   let near = $state(false),
     broken = $state(false),
     retry = $state(0);
@@ -25,7 +27,10 @@
     preload.observe(root);
     const visible = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) onSeen(page.position, e.isIntersecting);
+        for (const e of entries) {
+          visibleNow = e.isIntersecting;
+          onSeen(page.position, visibleNow && loaded);
+        }
       },
       { rootMargin: '-30% 0px -30% 0px' }
     );
@@ -49,7 +54,15 @@
       width={page.width}
       height={page.height}
       decoding="async"
-      onerror={() => (broken = true)}
+      onload={() => {
+        loaded = true;
+        onSeen(page.position, visibleNow);
+      }}
+      onerror={() => {
+        loaded = false;
+        broken = true;
+        onSeen(page.position, false);
+      }}
     />{/if}
   {#if broken}<div class="page-retry">
       <p>Não foi possível carregar a página {page.position}.</p>

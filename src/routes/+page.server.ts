@@ -10,7 +10,9 @@ export const load = async ({ locals }) => {
   const recent = locals.user
     ? await locals.db
         .from('reading')
-        .select('page,updated_at,chapters(id,number,works(slug,title,cover_id))')
+        .select('page,updated_at,chapters!inner(id,number,works!inner(slug,title,cover_id))')
+        .not('chapters.published_at', 'is', null)
+        .eq('chapters.works.published', true)
         .order('updated_at', { ascending: false })
         .limit(4)
     : null;

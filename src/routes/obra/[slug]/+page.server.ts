@@ -20,7 +20,9 @@ export const load = async ({ locals, params, url }) => {
     locals.db.from('work_tags').select('tags(id,name,slug)').eq('work_id', work.id),
     locals.db
       .from('comments')
-      .select('id,user_id,body,created_at,parent_id,members(username,display_name),comment_likes(user_id)')
+      .select(
+        'id,user_id,body,created_at,parent_id,members(username,display_name,avatar_id),comment_likes(user_id)'
+      )
       .eq('work_id', work.id)
       .is('chapter_id', null)
       .order('created_at', { ascending: false })

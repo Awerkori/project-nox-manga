@@ -30,7 +30,9 @@ export const load = async ({ locals, params, url }) => {
       : Promise.resolve({ data: null }),
     locals.db
       .from('comments')
-      .select('id,user_id,body,created_at,parent_id,members(username,display_name),comment_likes(user_id)')
+      .select(
+        'id,user_id,body,created_at,parent_id,members(username,display_name,avatar_id),comment_likes(user_id)'
+      )
       .eq('chapter_id', chapter.id)
       .order('created_at', { ascending: false })
       .limit(100)

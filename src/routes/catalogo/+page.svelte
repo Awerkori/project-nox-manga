@@ -22,11 +22,11 @@
       placeholder="Buscar por título ou outros nomes…"
       aria-label="Título da obra"
     /><select name="tag" value={data.tag} aria-label="Gênero ou tag"
-      ><option value="">Todos os gêneros e tags</option>{#each data.tags as tag (tag?.id)}<option
+      ><option value="">Gêneros e tags</option>{#each data.tags as tag (tag?.id)}<option
           value={tag.slug}>{tag.name}</option
         >{/each}</select
     ><select name="tipo" value={data.kind} aria-label="Tipo de obra"
-      ><option value="">Todos os formatos</option
+      ><option value="">Formato</option
       >{#each Object.entries(kindLabels) as [value, label] (value)}<option {value}>{label}</option
         >{/each}</select
     ><select name="ordem" value={data.sort} aria-label="Ordenação"
