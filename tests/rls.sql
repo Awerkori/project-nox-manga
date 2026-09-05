@@ -1,0 +1,83 @@
+begin;
+create function pg_temp.assert_true(value boolean,label text) returns void language plpgsql as $$ begin if value is distinct from true then raise exception 'FAIL: %',label; end if; end $$;
+create function pg_temp.denied(query text,label text) returns void language plpgsql as $$ begin execute query; raise exception 'FAIL: % allowed',label; exception when insufficient_privilege then null; end $$;
+insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
+ ('10000001-0000-4000-8000-000000000001','nox-owner-test@example.invalid',now(),'{}'),
+ ('10000002-0000-4000-8000-000000000002','nox-editor-test@example.invalid',now(),'{}'),
+ ('10000003-0000-4000-8000-000000000003','nox-user-test@example.invalid',now(),'{"role":"ADMIN","is_admin":true}'),
+ ('10000004-0000-4000-8000-000000000004','nox-unconfirmed-test@example.invalid',null,'{}');
+update public.access_roles set role='ADMIN' where user_id='10000001-0000-4000-8000-000000000001';
+update public.access_roles set role='EDITOR' where user_id='10000002-0000-4000-8000-000000000002';
+select pg_temp.assert_true((select role='USER' from public.access_roles where user_id='10000003-0000-4000-8000-000000000003'),'signup metadata cannot set role');
+select pg_temp.assert_true(not exists(select 1 from pg_tables where schemaname='public' and not rowsecurity),'all public tables have RLS');
+insert into public.media(id,provider,provider_key,mime,width,height,bytes,sha256,created_by) values
+ ('20000000-0000-4000-8000-000000000001','supabase','test-private','image/png',800,1000,1024,'test','10000002-0000-4000-8000-000000000002'),
+ ('20000000-0000-4000-8000-000000000002','supabase','test-private-2','image/png',800,1000,1024,'test2','10000002-0000-4000-8000-000000000002');
+insert into public.works(id,slug,title,synopsis,cover_id,published) values
+ ('30000000-0000-4000-8000-000000000001','nox-security-test','Nox security test','Test only','20000000-0000-4000-8000-000000000001',true),
+ ('30000000-0000-4000-8000-000000000002','nox-private-test','Private draft','Never public',null,false);
+insert into public.chapters(id,work_id,number,published_at) values('40000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',1,now());
+insert into public.pages values('40000000-0000-4000-8000-000000000001',1,'20000000-0000-4000-8000-000000000001',800,1000),('40000000-0000-4000-8000-000000000001',2,'20000000-0000-4000-8000-000000000002',800,1000);
+set local role anon;
+select pg_temp.assert_true((select count(*)=0 from public.works where slug='nox-private-test'),'anonymous cannot see drafts');
+select pg_temp.assert_true((select count(*)=1 from public.works where slug='nox-security-test'),'published catalog visible');
+select pg_temp.denied('select * from public.media','provider keys private');
+select pg_temp.denied('select * from public.access_roles','roles private');
+select pg_temp.denied('select public.editor_action(''archive'',''{}'')','anonymous editor RPC');
+select pg_temp.denied('select public.member_action(''profile'',''{}'')','anonymous member RPC');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','10000003-0000-4000-8000-000000000003',true);
+select pg_temp.assert_true(public.current_role()='USER','verified user role');
+select pg_temp.denied('update public.members set xp=1000000','direct XP farm');
+select pg_temp.denied('update public.access_roles set role=''ADMIN''','self promotion');
+select pg_temp.denied('select public.owner_action(''role'',''{}'')','user owner RPC');
+select pg_temp.denied('select public.editor_action(''archive'',''{}'')','user editor RPC');
+select public.member_action('library','{"work_id":"30000000-0000-4000-8000-000000000001","status":"READING","favorite":true}');
+select public.member_action('like','{"work_id":"30000000-0000-4000-8000-000000000001"}');
+select pg_temp.assert_true((select count(*)=1 from public.likes where work_id='30000000-0000-4000-8000-000000000001'),'one vote');
+select public.member_action('like','{"work_id":"30000000-0000-4000-8000-000000000001"}');
+select pg_temp.assert_true((select count(*)=0 from public.likes where work_id='30000000-0000-4000-8000-000000000001'),'vote toggles instead of duplicates');
+select public.member_action('comment','{"work_id":"30000000-0000-4000-8000-000000000001","body":"<img src=x onerror=alert(1)> literal test"}');
+do $$begin perform public.member_action('comment','{"work_id":"30000000-0000-4000-8000-000000000001","body":"spam"}');raise exception 'FAIL: flood allowed';exception when raise_exception then if sqlerrm not like '%30 segundos%' then raise;end if;end$$;
+select public.member_action('read_start','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001"}');
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
+select pg_temp.assert_true((select xp=0 from public.members where id=auth.uid()),'jump to final page earns no XP');
+set local role postgres;
+update public.reading set started_at=now()-interval '30 seconds' where user_id='10000003-0000-4000-8000-000000000003';
+update public.reading_sessions set accepted_at=now()-interval '4 seconds' where user_id='10000003-0000-4000-8000-000000000003';
+set local role authenticated;
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":1}');
+set local role postgres;
+update public.reading_sessions set accepted_at=now()-interval '4 seconds' where user_id='10000003-0000-4000-8000-000000000003';
+set local role authenticated;
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
+select pg_temp.assert_true((select xp=25 from public.members where id=auth.uid()),'sequential timed reading earns XP');
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
+select pg_temp.assert_true((select xp=25 from public.members where id=auth.uid()),'reload cannot duplicate XP');
+select set_config('request.jwt.claim.sub','10000002-0000-4000-8000-000000000002',true);
+select pg_temp.assert_true(public.is_editor(),'editor access');
+select pg_temp.assert_true((select count(*)=0 from public.library),'library IDOR');
+select pg_temp.assert_true((select count(*)=0 from public.reading),'history IDOR');
+select pg_temp.assert_true((select count(*)=0 from public.notifications),'notifications IDOR');
+select pg_temp.denied('select public.owner_action(''role'',''{"id":"10000002-0000-4000-8000-000000000002","role":"ADMIN"}'')','editor cannot self promote');
+select pg_temp.denied('update public.access_roles set role=''ADMIN''','editor cannot alter REST roles');
+select public.editor_action('tag','{"name":"Test tag","slug":"test-tag","kind":"TAG"}');
+select public.editor_action('unpublish','{"id":"40000000-0000-4000-8000-000000000001"}');
+select pg_temp.assert_true(not public.public_chapter('40000000-0000-4000-8000-000000000001'),'unpublish revokes access');
+select public.editor_action('publish','{"id":"40000000-0000-4000-8000-000000000001","confirmed_final":true}');
+select public.editor_action('publish','{"id":"40000000-0000-4000-8000-000000000001","confirmed_final":true}');
+select set_config('request.jwt.claim.sub','10000003-0000-4000-8000-000000000003',true);
+select pg_temp.assert_true((select count(*)=1 from public.notifications where kind='chapter'),'publication notification deduplicated');
+select set_config('request.jwt.claim.sub','10000004-0000-4000-8000-000000000004',true);
+select pg_temp.assert_true(public.current_role() is null,'unconfirmed account denied');
+select pg_temp.denied('select public.member_action(''profile'',''{}'')','unconfirmed mutation denied');
+select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
+select public.owner_action('suspend','{"id":"10000002-0000-4000-8000-000000000002","suspended":true}');
+select set_config('request.jwt.claim.sub','10000002-0000-4000-8000-000000000002',true);
+select pg_temp.assert_true(public.current_role() is null,'suspension takes effect at backend');
+select pg_temp.denied('select public.editor_action(''archive'',''{}'')','suspended editor denied');
+select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
+select public.owner_action('suspend','{"id":"10000002-0000-4000-8000-000000000002","suspended":false}');
+do $$begin perform public.owner_action('role','{"id":"10000001-0000-4000-8000-000000000001","role":"USER"}');raise exception 'FAIL: last admin removed';exception when raise_exception then if sqlerrm not like '%administrador ativo%' then raise;end if;end$$;
+select 'PASS: RLS, RBAC, IDOR, spam, XP, publication, notifications, suspension and last-owner guard' as result;
+rollback;
