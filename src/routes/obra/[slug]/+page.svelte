@@ -62,8 +62,13 @@
   />{#if data.work.cover_id}<meta property="og:image" content={data.coverUrl || ''} />{/if}<link
     rel="canonical"
     href={data.canonical}
-  /><meta property="og:url" content={data.canonical} /><meta property="og:type" content="book" /></svelte:head
->
+  /><meta property="og:url" content={data.canonical} /><meta property="og:type" content="book" />
+  <meta property="og:site_name" content="Project Nox" />
+  <meta property="og:locale" content="pt_BR" />
+  <!-- Only the server-generated, HTML-escaped JSON-LD envelope is allowed here. -->
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+  {@html data.structuredData}
+</svelte:head>
 <div class="container spacer-bottom">
   <div class="page-top">
     <div class="breadcrumb"><a href="/catalogo">Catálogo</a><span>/</span><span>{data.work.title}</span></div>

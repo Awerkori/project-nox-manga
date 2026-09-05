@@ -15,7 +15,7 @@ export const GET = async ({ locals, params, url }) => {
   } else if (parts[0] === 'works' && parts.length === 2)
     result = await locals.db
       .from('works')
-      .select(WORK_FIELDS)
+      .select(`${WORK_FIELDS},work_tags(tags(id,name,slug,kind))`)
       .eq('slug', parts[1])
       .eq('published', true)
       .maybeSingle();

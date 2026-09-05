@@ -17,6 +17,7 @@ test('visitor cannot enter any administrative route or modify the API', async ({
 test('public catalog is read-only and has no provider or staff fields', async ({ request }) => {
   const response = await request.get('/api/v1/works');
   expect(response.ok()).toBe(true);
+  expect(response.headers()['x-robots-tag']).toBe('noindex, nofollow');
   const body = await response.json();
   expect(Array.isArray(body.data)).toBe(true);
   for (const work of body.data) {
@@ -27,6 +28,16 @@ test('public catalog is read-only and has no provider or staff fields', async ({
   expect(
     (await request.post('/api/v1/works', { data: { title: 'unauthorized' } })).status()
   ).toBeGreaterThanOrEqual(400);
+});
+test('account forms are not indexed and published catalog remains indexable', async ({ request }) => {
+  for (const path of ['/entrar', '/cadastrar', '/recuperar']) {
+    const response = await request.get(path);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['x-robots-tag']).toBe('noindex, nofollow');
+  }
+  const catalog = await request.get('/catalogo');
+  expect(catalog.status()).toBe(200);
+  expect(catalog.headers()['x-robots-tag']).toBeUndefined();
 });
 for (const width of [390, 768, 1440])
   test(`navigation and layout at ${width}px`, async ({ page }) => {

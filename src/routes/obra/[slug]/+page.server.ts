@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { WORK_FIELDS, check } from '$lib/server/db';
+import { structuredDataScript, workStructuredData } from '$lib/seo';
 export const load = async ({ locals, params, url }) => {
   const result = await locals.db
     .from('works')
@@ -17,7 +18,7 @@ export const load = async ({ locals, params, url }) => {
       .eq('work_id', work.id)
       .not('published_at', 'is', null)
       .order('number', { ascending: false }),
-    locals.db.from('work_tags').select('tags(id,name,slug)').eq('work_id', work.id),
+    locals.db.from('work_tags').select('tags(id,name,slug,kind)').eq('work_id', work.id),
     locals.db
       .from('comments')
       .select(
@@ -45,10 +46,12 @@ export const load = async ({ locals, params, url }) => {
       : Promise.resolve({ data: [] }),
     locals.db.rpc('work_metrics', { p_work: work.id })
   ]);
+  const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
   return {
     work,
     chapters: chapters.data || [],
-    tags: tags.data?.map((t) => t.tags).filter(Boolean) || [],
+    tags: publicTags,
+    structuredData: structuredDataScript(workStructuredData(work, publicTags, url.origin)),
     comments: comments.data || [],
     library: library.data,
     likes: likes.data || [],
