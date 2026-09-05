@@ -16,6 +16,7 @@ export default ts.config(
     }
   },
   { files: ['**/*.svelte'], languageOptions: { parserOptions: { parser: ts.parser } } },
+  { files: ['supabase/functions/**'], languageOptions: { globals: { Deno: 'readonly' } } },
   {
     ignores: [
       '.svelte-kit/**',

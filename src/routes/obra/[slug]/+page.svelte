@@ -59,10 +59,10 @@
   /><meta property="og:title" content={data.work.title} /><meta
     property="og:description"
     content={data.work.synopsis.slice(0, 200)}
-  />{#if data.work.cover_id}<meta
-      property="og:image"
-      content="/media/{data.work.cover_id}"
-    />{/if}</svelte:head
+  />{#if data.work.cover_id}<meta property="og:image" content={data.coverUrl || ''} />{/if}<link
+    rel="canonical"
+    href={data.canonical}
+  /><meta property="og:url" content={data.canonical} /><meta property="og:type" content="book" /></svelte:head
 >
 <div class="container spacer-bottom">
   <div class="page-top">
@@ -85,6 +85,10 @@
       </div>
       <p class="synopsis">{data.work.synopsis}</p>
       <div class="work-meta">
+        {#if data.metrics}
+          <span>Favoritos <strong>{data.metrics.favorites}</strong></span>
+          <span>Leitores <strong>{data.metrics.readers}</strong></span>
+        {/if}
         {#if data.work.author}<span>Autor <strong>{data.work.author}</strong></span
           >{/if}{#if data.work.artist}<span>Arte <strong>{data.work.artist}</strong></span>{/if}<span
           >Capítulos <strong>{data.chapters.length}</strong></span

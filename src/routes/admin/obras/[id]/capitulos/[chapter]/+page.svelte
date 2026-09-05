@@ -4,6 +4,7 @@
   import { action } from '$lib/actions';
   import { expandFiles, normalizePage } from '$lib/uploads';
   import { onMount } from 'svelte';
+  import DeleteContent from '$lib/components/DeleteContent.svelte';
   let { data } = $props();
   const initial = untrack(() => data);
   let pages = $state(initial.pages.map((p) => ({ id: p.media_id, name: `Página ${p.position}` }))),
@@ -15,6 +16,14 @@
     confirmed = $state(false);
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
+  let savedVersion = $state(
+    JSON.stringify({
+      number: initial.chapter?.number ?? 1,
+      title: initial.chapter?.title || '',
+      pages: initial.pages.map((p) => p.media_id)
+    })
+  );
+  let dirty = $derived(JSON.stringify({ number, title, pages: pages.map((p) => p.id) }) !== savedVersion);
   onMount(async () => {
     const response = await fetch(`/api/staff?work=${data.work.id}`);
     if (response.ok) finals = (await response.json()).chapters;
@@ -89,6 +98,8 @@
       });
       if (!data.chapter) goto(`/admin/obras/${data.work.id}/capitulos/${result.id}`);
       else {
+        savedVersion = JSON.stringify({ number, title, pages: pages.map((p) => p.id) });
+        confirmed = false;
         notice = 'Rascunho salvo.';
         await invalidateAll();
       }
@@ -99,6 +110,10 @@
     }
   }
   async function publish(unpublish = false) {
+    if (!unpublish && dirty) {
+      notice = 'Salve as alterações e confira a prévia antes de publicar.';
+      return;
+    }
     busy = true;
     notice = '';
     try {
@@ -229,15 +244,25 @@
       <button class="button secondary" onclick={() => publish(true)} disabled={busy}
         >Despublicar para corrigir</button
       >{:else}<p class="small">
-        A publicação usa a última versão salva. Abra a prévia e confira todas as páginas.
+        {dirty
+          ? 'Há alterações não salvas. Salve o rascunho antes de conferir e publicar.'
+          : 'Abra a prévia e confira todas as páginas antes de publicar.'}
       </p>
       <label class="small row" style="margin:20px 0"
         ><input type="checkbox" bind:checked={confirmed} /> Confirmo que são páginas finais, revisadas e autorizadas
         para publicação.</label
-      ><button class="button" onclick={() => publish()} disabled={busy || !confirmed}
+      ><button class="button" onclick={() => publish()} disabled={busy || !confirmed || dirty}
         >Publicar capítulo</button
       >{/if}
   </section>{/if}
+{#if data.role === 'ADMIN' && data.chapter}
+  <DeleteContent
+    id={data.chapter.id}
+    label={`Capítulo ${data.chapter.number}`}
+    kind="chapter"
+    destination={`/admin/obras/${data.work.id}`}
+  />
+{/if}
 
 <style>
   .upload-zone {

@@ -3,6 +3,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, slugify } from '$lib/types';
+  import DeleteContent from '$lib/components/DeleteContent.svelte';
   let { data } = $props();
   const initial = untrack(() => data);
   let title = $state(initial.work?.title || ''),
@@ -175,6 +176,9 @@
       >{/if}
   </div>
 </form>
+{#if data.role === 'ADMIN' && data.work}
+  <DeleteContent id={data.work.id} label={data.work.title} kind="work" destination="/admin/obras" />
+{/if}
 {#if data.work}<section style="margin-top:40px">
     <div class="row between">
       <h2 style="font-size:25px">Capítulos</h2>

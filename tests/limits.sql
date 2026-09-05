@@ -17,6 +17,7 @@ set local role authenticated;
 select pg_temp.assert_true(public.claim_editor_invite(),'verified exact email can claim');
 select pg_temp.assert_true(public.current_role()='EDITOR','invitation grants editor only');
 select pg_temp.assert_true(not public.claim_editor_invite(),'invitation single use');
+do $$begin perform public.revoke_editor_invite('someone@example.invalid');raise exception 'FAIL: editor revoked invitation';exception when insufficient_privilege then null;end$$;
 do $$begin perform public.reserve_media(gen_random_uuid(),auth.uid(),'supabase','image/png',1,1,1,'hash','editorial');raise exception 'FAIL: direct client bypassed media server';exception when insufficient_privilege then null;end$$;
 set local role postgres;
 insert into public.media(provider,provider_key,mime,width,height,bytes,sha256,created_by) select 'supabase','quota-test-'||i,'image/png',1000,2000,18750000,'test','11000002-0000-4000-8000-000000000002' from generate_series(1,40)i;

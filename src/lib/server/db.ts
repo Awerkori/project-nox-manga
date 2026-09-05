@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { env as publicEnv } from '$env/dynamic/public';
+import { databaseConfig } from './config';
 import { error } from '@sveltejs/kit';
 export const WORK_FIELDS =
   'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at';
 export function privileged() {
   if (!env.SUPABASE_SERVICE_ROLE_KEY) error(503, 'Armazenamento temporariamente indisponível');
-  return createClient(publicEnv.PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(databaseConfig().url, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 }

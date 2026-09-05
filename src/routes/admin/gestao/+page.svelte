@@ -2,6 +2,36 @@
   import { action } from '$lib/actions';
   import { invalidateAll } from '$app/navigation';
   let { data } = $props();
+  let staff = $state<{ user_id: string; display_name: string; github_login: string }[]>([]);
+  let staffLoaded = $state(false);
+  async function staffAccess(id?: string) {
+    busy = true;
+    try {
+      const response = await fetch(
+        '/api/staff-access',
+        id
+          ? {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id })
+            }
+          : {}
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message);
+      if (id) {
+        notice = result.message;
+        await invalidateAll();
+      } else {
+        staff = result.members;
+        staffLoaded = true;
+      }
+    } catch (e) {
+      notice = (e as Error).message;
+    } finally {
+      busy = false;
+    }
+  }
   let notice = $state(''),
     busy = $state(false),
     search = $state('');
@@ -35,6 +65,25 @@
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
       notice = result.message;
+      await invalidateAll();
+    } catch (e) {
+      notice = (e as Error).message;
+    } finally {
+      busy = false;
+    }
+  }
+  async function revoke(email: string) {
+    busy = true;
+    try {
+      const response = await fetch('/api/invite', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message);
+      notice = result.message;
+      await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;
     } finally {
@@ -48,8 +97,28 @@
 >
 <h1 style="font-size:34px">Pessoas e comunidade</h1>
 <p class="small">Administradores controlam todo o site. Editores cuidam de obras, capítulos e publicação.</p>
+<section class="panel" style="margin-top:24px">
+  <h2 style="font-size:21px">Equipe da central da staff</h2>
+  <p class="small">
+    Autorize individualmente os membros que poderão gerenciar obras, capítulos, uploads e publicação. Eles não
+    poderão alterar cargos ou configurações de segurança.
+  </p>
+  <button class="button secondary" disabled={busy} onclick={() => staffAccess()}
+    >Consultar membros ativos</button
+  >
+  {#if staffLoaded}
+    {#each staff as person (person.user_id)}
+      <div class="row between" style="margin-top:16px">
+        <span><strong>{person.display_name}</strong> <span class="small">@{person.github_login}</span></span>
+        <button class="button secondary compact" disabled={busy} onclick={() => staffAccess(person.user_id)}
+          >Autorizar acesso editorial</button
+        >
+      </div>
+    {:else}<p class="small">Nenhum membro ativo encontrado na central.</p>{/each}
+  {/if}
+</section>
 <form class="panel" onsubmit={invite} style="margin:24px 0">
-  <h2 style="font-size:21px">Autorizar um editor</h2>
+  <h2 style="font-size:21px">Convidar membro por e-mail</h2>
   <p class="small">
     A pessoa recebe a permissão ao entrar com este e-mail confirmado. O convite não concede acesso à
     administração de usuários.
@@ -67,6 +136,20 @@
     /><button class="button secondary" disabled={busy}>Registrar convite</button>
   </div>
 </form>
+{#if data.invites.length}
+  <section class="panel" style="margin-bottom:24px">
+    <h2 style="font-size:21px">Convites pendentes</h2>
+    <p class="small">Esta lista e os e-mails são visíveis somente para administradores.</p>
+    {#each data.invites as invitation (invitation.email)}
+      <div class="row between" style="margin-top:12px">
+        <span class="small">{invitation.email}</span>
+        <button class="button secondary compact" disabled={busy} onclick={() => revoke(invitation.email)}
+          >Revogar convite</button
+        >
+      </div>
+    {/each}
+  </section>
+{/if}
 {#if notice}<div class="notice" role="status">{notice}</div>{/if}<input
   class="control"
   bind:value={search}

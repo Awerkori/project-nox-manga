@@ -9,11 +9,11 @@ Somente planos gratuitos, sem cartão ou ativação de cobrança. Nenhum reset o
 - SvelteKit e Cloudflare Workers Free: SSR, rotas administrativas protegidas no servidor, assets estáticos gratuitos.
 - Projeto Supabase separado: Auth, PostgreSQL, RLS, RPCs transacionais. A central privada mantém seus dados e autenticação.
 - Provider de mídia privado com identificação opaca; páginas validadas por conteúdo, limites de tamanho e dimensões. Telegram somente por backend, abaixo do limite por página; ZIP processado antes do envio.
-- Integração consulta somente obras e artefatos da etapa final aprovada, por origem e identificadores idempotentes. Publicação sempre explícita.
+- Integração limitada hospedada no Supabase da central: valida JWT/cargo no banco público, consulta somente campos editoriais permitidos e arquivos finais aprovados. Gestão da equipe exclusiva do admin, sem exportar e-mails na listagem. Não envia a chave administrativa da central para a Cloudflare. Publicação sempre explícita.
 
 ## Dependências humanas a verificar
 
-Sessão Cloudflare; bot/canal Telegram; conta inequívoca da editora; remetente SMTP apto a enviar confirmação e recuperação para usuários públicos. Não são substituídos por mocks.
+Cloudflare e Supabase já autenticados. Falta aprovação específica para guardar a chave administrativa apenas do banco público novo como secret de servidor da Cloudflare; bot/canal Telegram; membros reais da staff autorizados pelo admin; remetente SMTP apto a enviar confirmação e recuperação para usuários públicos; capítulos finais aprovados. Não são substituídos por mocks. A menção original a uma editora específica foi corrigida pelo dono: o acesso editorial é para as contas autorizadas da staff.
 
 ## Fontes verificadas
 

@@ -2,13 +2,13 @@ import { json, error } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 export const GET = async ({ locals, params, url }) => {
   const parts = params.path.split('/'),
-    page = Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1)),
+    page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1))),
     limit = 30;
   let result;
   if (parts[0] === 'works' && parts.length === 1) {
     let query = locals.db.from('works').select(WORK_FIELDS, { count: 'exact' }).eq('published', true);
     const q = (url.searchParams.get('q') || '').slice(0, 100).replace(/[%_\\]/g, '');
-    if (q) query = query.ilike('title', `%${q}%`);
+    if (q) query = query.ilike('search_text', `%${q}%`);
     result = await query
       .order('updated_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);

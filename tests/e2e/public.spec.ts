@@ -6,6 +6,12 @@ test('visitor cannot enter any administrative route or modify the API', async ({
     (await request.post('/api/action', { data: { scope: 'owner', action: 'role', data: {} } })).status()
   ).toBe(403);
   expect((await request.get('/api/staff?work=00000000-0000-4000-8000-000000000000')).status()).toBe(401);
+  expect((await request.get('/api/staff-access')).status()).toBe(403);
+  expect(
+    (
+      await request.post('/api/staff-access', { data: { id: '00000000-0000-4000-8000-000000000000' } })
+    ).status()
+  ).toBe(403);
   expect((await request.get('/media/00000000-0000-4000-8000-000000000000')).status()).toBe(404);
 });
 test('public catalog is read-only and has no provider or staff fields', async ({ request }) => {

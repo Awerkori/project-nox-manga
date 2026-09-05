@@ -199,6 +199,32 @@ export type Database = {
           }
         ];
       };
+      editor_invites: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          email: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          email: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          email?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'editor_invites_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'members';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       library: {
         Row: {
           favorite: boolean;
@@ -281,7 +307,9 @@ export type Database = {
           mime: string;
           provider: string;
           provider_key: string;
+          purpose: string;
           sha256: string;
+          storage_ready: boolean;
           width: number;
         };
         Insert: {
@@ -293,7 +321,9 @@ export type Database = {
           mime: string;
           provider: string;
           provider_key: string;
+          purpose?: string;
           sha256: string;
+          storage_ready?: boolean;
           width: number;
         };
         Update: {
@@ -305,7 +335,9 @@ export type Database = {
           mime?: string;
           provider?: string;
           provider_key?: string;
+          purpose?: string;
           sha256?: string;
+          storage_ready?: boolean;
           width?: number;
         };
         Relationships: [
@@ -596,6 +628,7 @@ export type Database = {
           id: string;
           kind: string;
           published: boolean;
+          search_text: string;
           slug: string;
           source_id: string | null;
           status: string;
@@ -616,6 +649,7 @@ export type Database = {
           id?: string;
           kind?: string;
           published?: boolean;
+          search_text?: string;
           slug: string;
           source_id?: string | null;
           status?: string;
@@ -636,6 +670,7 @@ export type Database = {
           id?: string;
           kind?: string;
           published?: boolean;
+          search_text?: string;
           slug?: string;
           source_id?: string | null;
           status?: string;
@@ -659,16 +694,48 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_editor_invite: { Args: never; Returns: boolean };
       current_role: { Args: never; Returns: string };
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json };
+      invite_editor: { Args: { p_email: string }; Returns: undefined };
       is_editor: { Args: never; Returns: boolean };
       is_member: { Args: never; Returns: boolean };
       is_owner: { Args: never; Returns: boolean };
       member_action: { Args: { p_action: string; p_data: Json }; Returns: Json };
       owner_action: { Args: { p_action: string; p_data: Json }; Returns: Json };
       public_chapter: { Args: { p_id: string }; Returns: boolean };
+      public_settings: {
+        Args: never;
+        Returns: {
+          key: string;
+          value: string;
+        }[];
+      };
+      reserve_media: {
+        Args: {
+          p_bytes: number;
+          p_height: number;
+          p_id: string;
+          p_mime: string;
+          p_provider: string;
+          p_purpose?: string;
+          p_sha256: string;
+          p_user: string;
+          p_width: number;
+        };
+        Returns: undefined;
+      };
+      revoke_editor_invite: { Args: { p_email: string }; Returns: undefined };
       show_limit: { Args: never; Returns: number };
       show_trgm: { Args: { '': string }; Returns: string[] };
+      work_metrics: {
+        Args: { p_work: string };
+        Returns: {
+          favorites: number;
+          likes: number;
+          readers: number;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

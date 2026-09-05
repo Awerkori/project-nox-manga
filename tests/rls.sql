@@ -54,6 +54,21 @@ select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000
 select pg_temp.assert_true((select xp=25 from public.members where id=auth.uid()),'sequential timed reading earns XP');
 select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
 select pg_temp.assert_true((select xp=25 from public.members where id=auth.uid()),'reload cannot duplicate XP');
+-- Finishing a short chapter before 15 seconds must remain eligible once its timer expires.
+set local role postgres;
+update public.reading set completed_at=null,started_at=now(),max_page=0 where user_id='10000003-0000-4000-8000-000000000003';
+update public.members set xp=0 where id='10000003-0000-4000-8000-000000000003';
+update public.reading_sessions set next_page=2,accepted_at=now()-interval '4 seconds' where user_id='10000003-0000-4000-8000-000000000003';
+set local role authenticated;
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
+select pg_temp.assert_true((select xp=0 from public.members where id=auth.uid()),'short chapter must still meet minimum time');
+set local role postgres;
+update public.reading set started_at=now()-interval '20 seconds' where user_id='10000003-0000-4000-8000-000000000003';
+set local role authenticated;
+select public.member_action('read_page','{"work_id":"30000000-0000-4000-8000-000000000001","chapter_id":"40000000-0000-4000-8000-000000000001","page":2}');
+select pg_temp.assert_true((select xp=25 from public.members where id=auth.uid()),'short chapter can complete after waiting at last page');
+select pg_temp.assert_true((select favorites=1 and readers=1 from public.work_metrics('30000000-0000-4000-8000-000000000001')),'public metrics aggregate real activity');
+select pg_temp.assert_true((select count(*)=0 from public.work_metrics('30000000-0000-4000-8000-000000000002')),'draft metrics remain private');
 select set_config('request.jwt.claim.sub','10000002-0000-4000-8000-000000000002',true);
 select pg_temp.assert_true(public.is_editor(),'editor access');
 select pg_temp.assert_true((select count(*)=0 from public.library),'library IDOR');

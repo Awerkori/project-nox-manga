@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { WORK_FIELDS, check } from '$lib/server/db';
-export const load = async ({ locals, params }) => {
+export const load = async ({ locals, params, url }) => {
   const result = await locals.db
     .from('works')
     .select(WORK_FIELDS)
@@ -10,7 +10,7 @@ export const load = async ({ locals, params }) => {
   check(result);
   if (!result.data) error(404, 'Obra não encontrada');
   const work = result.data;
-  const [chapters, tags, comments, library, likes, progress] = await Promise.all([
+  const [chapters, tags, comments, library, likes, progress, metrics] = await Promise.all([
     locals.db
       .from('chapters')
       .select('id,number,title,published_at')
@@ -40,7 +40,8 @@ export const load = async ({ locals, params }) => {
           .select('chapter_id,page,completed_at,chapters!inner(work_id)')
           .eq('chapters.work_id', work.id)
           .order('updated_at', { ascending: false })
-      : Promise.resolve({ data: [] })
+      : Promise.resolve({ data: [] }),
+    locals.db.rpc('work_metrics', { p_work: work.id })
   ]);
   return {
     work,
@@ -49,6 +50,9 @@ export const load = async ({ locals, params }) => {
     comments: comments.data || [],
     library: library.data,
     likes: likes.data || [],
-    progress: progress.data || []
+    progress: progress.data || [],
+    metrics: metrics.data?.[0] || null,
+    canonical: `${url.origin}/obra/${work.slug}`,
+    coverUrl: work.cover_id ? `${url.origin}/media/${work.cover_id}` : null
   };
 };

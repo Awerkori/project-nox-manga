@@ -19,7 +19,7 @@
       class="search-input"
       name="q"
       value={data.q}
-      placeholder="Buscar uma obra pelo título…"
+      placeholder="Buscar por título ou outros nomes…"
       aria-label="Título da obra"
     /><select name="tag" value={data.tag} aria-label="Gênero ou tag"
       ><option value="">Todos os gêneros e tags</option>{#each data.tags as tag (tag?.id)}<option

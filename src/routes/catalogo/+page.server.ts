@@ -4,11 +4,11 @@ export const load = async ({ locals, url }) => {
     tag = url.searchParams.get('tag') || '',
     kind = url.searchParams.get('tipo') || '',
     sort = url.searchParams.get('ordem') || 'recentes';
-  const page = Math.max(1, Math.min(10000, Number(url.searchParams.get('pagina')) || 1));
+  const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('pagina')) || 1)));
   const tags = await locals.db.from('tags').select('*').order('name');
   check(tags);
   let query = locals.db.from('works').select(WORK_FIELDS, { count: 'exact' }).eq('published', true);
-  if (q) query = query.ilike('title', `%${q.replace(/[%_\\]/g, '')}%`);
+  if (q) query = query.ilike('search_text', `%${q.replace(/[%_\\]/g, '')}%`);
   if (kind) query = query.eq('kind', kind);
   if (tag) {
     const selected = tags.data?.find((t) => t.slug === tag);
