@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
+import { telegramStorage } from '$lib/server/telegram';
 export const GET = async ({ locals, params, request }) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
   const db = privileged();
@@ -32,16 +33,10 @@ export const GET = async ({ locals, params, request }) => {
     return new Response(data, { headers });
   }
   if (!env.TELEGRAM_BOT_TOKEN) error(503, 'Armazenamento temporariamente indisponível');
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ file_id: media.provider_key })
-  });
-  const result = (await response.json()) as { ok: boolean; result?: { file_path?: string } };
-  const path = result.result?.file_path;
-  if (!result.ok || !path || !/^documents\/[a-zA-Z0-9_.-]+$/.test(path))
+  try {
+    const body = await telegramStorage(env.TELEGRAM_BOT_TOKEN, '').download(media.provider_key);
+    return new Response(body, { headers });
+  } catch {
     error(502, 'Página temporariamente indisponível');
-  const file = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${path}`);
-  if (!file.ok) error(502, 'Página temporariamente indisponível');
-  return new Response(file.body, { headers });
+  }
 };

@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { inspectImage } from '$lib/media-validation';
+import { telegramStorage } from '$lib/server/telegram';
 export async function storeImage(request: Request, userId: string, purpose = 'editorial') {
   const reader = request.body?.getReader();
   if (!reader) error(400, 'Selecione uma imagem.');
@@ -56,19 +57,7 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
     if (provider === 'telegram') {
       if (!env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_TOKEN)
         throw new Error('Armazenamento Telegram não configurado.');
-      const form = new FormData();
-      form.append('chat_id', env.TELEGRAM_CHAT_ID);
-      form.append('document', new Blob([bytes], { type: info.mime }), `${id}.${info.mime.split('/')[1]}`);
-      form.append('disable_notification', 'true');
-      const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(60000)
-      });
-      const result = (await response.json()) as { ok: boolean; result?: { document?: { file_id: string } } };
-      if (!result.ok || !result.result?.document)
-        throw new Error('O armazenamento não respondeu. Tente enviar a página novamente.');
-      key = result.result.document.file_id;
+      key = await telegramStorage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID).upload(bytes, info.mime, id);
     } else {
       const { error: problem } = await db.storage
         .from('nox-media')
@@ -81,12 +70,12 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
       .eq('id', id);
     if (problem) throw new Error('Não foi possível registrar a imagem.');
     return { id, ...info, bytes: size };
-  } catch (e) {
+  } catch {
     // Keep the reservation if cleanup fails; this prevents orphaned bytes bypassing the free quota.
     if (provider === 'supabase') {
       const { error: cleanup } = await db.storage.from('nox-media').remove([id]);
       if (!cleanup) await db.from('media').delete().eq('id', id);
     } else if (key === id) await db.from('media').delete().eq('id', id);
-    error(502, e instanceof Error ? e.message : 'Falha no armazenamento.');
+    error(502, 'Não foi possível armazenar a imagem. Tente novamente.');
   }
 }
