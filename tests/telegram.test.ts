@@ -14,6 +14,21 @@ const metadata = (extra = {}) =>
   });
 
 describe('private Telegram provider', () => {
+  it('rejects redirects for both upload and download instead of forwarding credentials', async () => {
+    const redirect = () =>
+      new Response(null, { status: 302, headers: { Location: 'https://example.invalid' } });
+    const upload = vi.fn<typeof fetch>().mockResolvedValue(redirect());
+    await expect(
+      telegramStorage(token, 'chat', upload).upload(new Uint8Array(3), 'image/png', 'page')
+    ).rejects.toThrow('indisponível');
+    expect(upload).toHaveBeenCalledTimes(1);
+    const download = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(metadata())
+      .mockResolvedValueOnce(redirect());
+    await expect(telegramStorage(token, '', download).download('id')).rejects.toThrow('indisponível');
+    expect(download).toHaveBeenCalledTimes(2);
+  });
   it('sends documents silently, without following redirects or enabling paid broadcasts', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
@@ -25,7 +40,7 @@ describe('private Telegram provider', () => {
       await telegramStorage(token, '-100123', transport).upload(new Uint8Array(3), 'image/png', 'page')
     ).toBe('opaque_file_id');
     const options = transport.mock.calls[0][1]!;
-    expect(options.redirect).toBe('error');
+    expect(options.redirect).toBe('manual');
     expect(options.signal).toBeInstanceOf(AbortSignal);
     const form = options.body as FormData;
     expect(form.get('chat_id')).toBe('-100123');
@@ -68,7 +83,7 @@ describe('private Telegram provider', () => {
       .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3])));
     const stream = await telegramStorage(token, '', transport).download('id');
     expect(Array.from(new Uint8Array(await new Response(stream).arrayBuffer()))).toEqual([1, 2, 3]);
-    expect(transport.mock.calls[1][1]?.redirect).toBe('error');
+    expect(transport.mock.calls[1][1]?.redirect).toBe('manual');
   });
 
   it.each([2, 4])('rejects mismatched streamed size %s', async (length) => {

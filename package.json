@@ -3,7 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "overrides": { "@sveltejs/kit": { "cookie": "^0.7.2" } },
+  "overrides": {
+    "@sveltejs/kit": {
+      "cookie": "^0.7.2"
+    }
+  },
   "scripts": {
     "dev": "vite dev --host 127.0.0.1",
     "build": "vite build",
@@ -32,6 +36,7 @@
     "eslint": "latest",
     "eslint-plugin-svelte": "latest",
     "globals": "latest",
+    "miniflare": "5.20260903.0-alpha",
     "prettier": "^3.9.6",
     "prettier-plugin-svelte": "^4.1.1",
     "svelte": "latest",

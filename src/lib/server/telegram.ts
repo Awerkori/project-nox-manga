@@ -16,7 +16,8 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         method: 'POST',
         body,
         headers,
-        redirect: 'error',
+        // workerd only supports follow/manual; non-2xx statuses are rejected below.
+        redirect: 'manual',
         signal: AbortSignal.timeout(60_000)
       });
       if (!response.ok) throw new TelegramStorageError('http', response.status);
@@ -53,7 +54,7 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         throw unavailable();
       try {
         const response = await transport(`https://api.telegram.org/file/bot${token}/${path}`, {
-          redirect: 'error',
+          redirect: 'manual',
           signal: AbortSignal.timeout(60_000)
         });
         if (!response.ok || !response.body) throw unavailable();

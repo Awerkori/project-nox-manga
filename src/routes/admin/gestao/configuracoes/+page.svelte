@@ -39,7 +39,7 @@
       </div>
       <div>
         <h3>Armazenamento de páginas</h3>
-        <span class="chip">{data.telegram ? 'Telegram conectado' : 'Supabase Storage'}</span>
+        <span class="chip">{data.telegram ? 'Telegram configurado' : 'Supabase Storage'}</span>
         <p class="small">
           Uploads interrompem ao atingir a reserva gratuita. Nenhuma cobrança é ativada automaticamente.
         </p>
