@@ -232,15 +232,18 @@ otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Production SMTP is configured in the hosted dashboard. See docs/EMAIL.md.
+# Never push this local development config over production Auth: doing so could
+# disable the hosted SMTP integration or expose its credentials in a CLI diff.
+# The following block is documentation only; no SMTP password belongs in Git.
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
+# host = "smtp-relay.brevo.com"
 # port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# user = "env(NOX_MANGA_SMTP_USER)"
+# pass = "env(NOX_MANGA_SMTP_PASSWORD)"
+# admin_email = "env(NOX_MANGA_SMTP_FROM)"
+# sender_name = "Project Nox"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -253,8 +256,8 @@ otp_expiry = 3600
 # subject = "Your password has been changed"
 # content_path = "./supabase/templates/password_changed_notification.html"
 
-# Enable these templates after custom SMTP is configured. The default free sender
-# does not permit template customization and only delivers to organization members.
+# These templates are now configured in hosted Auth through its dashboard.
+# Keep local development SMTP separate; see docs/EMAIL.md before config push.
 # [auth.email.template.confirmation]
 # subject = "Confirme sua conta — Project Nox"
 # content_path = "./supabase/templates/confirmation.html"
