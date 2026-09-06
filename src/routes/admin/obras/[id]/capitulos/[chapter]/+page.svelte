@@ -1,8 +1,9 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { expandFiles, normalizePage } from '$lib/uploads';
+  import { flushUploads } from '$lib/upload-queue';
   import { onMount } from 'svelte';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
   let { data } = $props();
@@ -16,6 +17,11 @@
     confirmed = $state(false);
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
+  let pendingUploads = $state<File[]>([]),
+    pauseRequested = $state(false),
+    uploading = $state(false);
+  let batchTotal = 0,
+    savedNavigation = false;
   let savedVersion = $state(
     JSON.stringify({
       number: initial.chapter?.number ?? 1,
@@ -24,12 +30,21 @@
     })
   );
   let dirty = $derived(JSON.stringify({ number, title, pages: pages.map((p) => p.id) }) !== savedVersion);
+  beforeNavigate(({ cancel, willUnload }) => {
+    if (savedNavigation || (!dirty && !pendingUploads.length && !uploading)) return;
+    if (willUnload || !window.confirm('Há páginas pendentes ou alterações não salvas. Sair desta página?'))
+      cancel();
+  });
   onMount(async () => {
-    const response = await fetch(`/api/staff?work=${data.work.id}`);
-    if (response.ok) finals = (await response.json()).chapters;
+    try {
+      const response = await fetch(`/api/staff?work=${data.work.id}`);
+      if (response.ok) finals = (await response.json()).chapters;
+    } catch {
+      notice = 'A central está indisponível no momento. Você ainda pode selecionar arquivos locais.';
+    }
   });
   async function importFinal() {
-    if (!sourceChapter) return;
+    if (!sourceChapter || busy || pendingUploads.length) return;
     busy = true;
     try {
       const response = await fetch(`/api/staff?chapter=${sourceChapter}`);
@@ -49,35 +64,63 @@
     }
   }
   async function upload(event: Event) {
-    const input = (event.currentTarget as HTMLInputElement).files;
+    const element = event.currentTarget as HTMLInputElement;
+    const input = element.files;
     if (!input) return;
-    await uploadFiles(Array.from(input));
+    const selected = Array.from(input);
+    element.value = '';
+    await uploadFiles(selected);
   }
   async function uploadFiles(input: File[]) {
+    if (pendingUploads.length) return;
     busy = true;
     notice = 'Processando arquivos…';
     progress = 0;
     try {
       const files = await expandFiles(input);
       if (pages.length + files.length > 500) throw new Error('Limite de 500 páginas por capítulo.');
-      for (let i = 0; i < files.length; i++) {
-        notice = `Enviando página ${i + 1} de ${files.length}: ${files[i].name}`;
-        const image = await normalizePage(files[i]);
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': image.type },
-          body: image
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.message);
-        pages.push({ id: result.id, name: files[i].name });
-        progress = Math.round(((i + 1) / files.length) * 100);
-      }
-      notice = 'Páginas enviadas. Confira a ordem e salve o rascunho.';
+      pendingUploads = files;
+      batchTotal = files.length;
+      await resumeUploads();
     } catch (e) {
       notice = (e as Error).message;
     } finally {
       busy = false;
+    }
+  }
+  async function resumeUploads() {
+    if (uploading || !pendingUploads.length) return;
+    busy = uploading = true;
+    pauseRequested = false;
+    confirmed = false;
+    try {
+      await flushUploads(
+        pendingUploads,
+        async (file) => {
+          notice = `Enviando página ${batchTotal - pendingUploads.length + 1} de ${batchTotal}: ${file.name}`;
+          const image = await normalizePage(file);
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': image.type },
+            body: image
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.message);
+          return result;
+        },
+        (result, file) => {
+          pages.push({ id: result.id, name: file.name });
+          progress = Math.round(((batchTotal - pendingUploads.length) / batchTotal) * 100);
+        },
+        () => pauseRequested
+      );
+      notice = pendingUploads.length
+        ? 'Envio pausado. As páginas já enviadas foram preservadas.'
+        : 'Páginas enviadas. Confira a ordem e salve o rascunho.';
+    } catch (e) {
+      notice = `${(e as Error).message} As páginas já enviadas foram preservadas. Tente novamente para continuar.`;
+    } finally {
+      busy = uploading = false;
     }
   }
   function move(index: number, delta: number) {
@@ -96,10 +139,16 @@
         title,
         pages: pages.map((p) => p.id)
       });
-      if (!data.chapter) goto(`/admin/obras/${data.work.id}/capitulos/${result.id}`);
-      else {
-        savedVersion = JSON.stringify({ number, title, pages: pages.map((p) => p.id) });
-        confirmed = false;
+      savedVersion = JSON.stringify({ number, title, pages: pages.map((p) => p.id) });
+      confirmed = false;
+      if (!data.chapter) {
+        savedNavigation = true;
+        try {
+          await goto(`/admin/obras/${data.work.id}/capitulos/${result.id}`);
+        } finally {
+          savedNavigation = false;
+        }
+      } else {
         notice = 'Rascunho salvo.';
         await invalidateAll();
       }
@@ -110,7 +159,7 @@
     }
   }
   async function publish(unpublish = false) {
-    if (!unpublish && dirty) {
+    if (!unpublish && (dirty || pendingUploads.length)) {
       notice = 'Salve as alterações e confira a prévia antes de publicar.';
       return;
     }
@@ -156,8 +205,10 @@
           ><option value="">Selecionar capítulo</option>{#each finals as final (final.id)}<option
               value={final.id}>Capítulo {final.number}</option
             >{/each}</select
-        ><button class="button secondary" onclick={importFinal} disabled={busy || !sourceChapter}
-          >Importar páginas finais</button
+        ><button
+          class="button secondary"
+          onclick={importFinal}
+          disabled={busy || !!pendingUploads.length || !sourceChapter}>Importar páginas finais</button
         >
       </div>
     </div>
@@ -181,19 +232,52 @@
     >
   </div>
   {#if !data.chapter?.published_at}<label class="upload-zone"
-      ><span>+</span><strong>Selecione imagens ou um arquivo ZIP</strong><small
+      ><span aria-hidden="true">+</span><strong>Selecione imagens ou um arquivo ZIP</strong><small
         >Ordenação automática por nome. Você pode ajustar antes de publicar.</small
-      ><input
+      ><span class="file-choice">Escolher arquivos</span><input
         type="file"
+        aria-label="Selecionar imagens ou ZIP"
         multiple
         accept=".zip,image/png,image/jpeg,image/webp"
         onchange={upload}
-        disabled={busy}
+        disabled={busy || !!pendingUploads.length}
       /></label
     >{/if}
   {#if busy && progress > 0}<div class="progress" style="margin:20px 0">
       <span style="width:{progress}%"></span>
     </div>{/if}
+  {#if pendingUploads.length}
+    <div class="row" style="margin-top:16px">
+      <span class="small">{pendingUploads.length} páginas pendentes</span>
+      {#if uploading}
+        <button
+          class="button secondary compact"
+          disabled={pauseRequested}
+          onclick={() => (pauseRequested = true)}
+        >
+          {pauseRequested ? 'Pausando após esta página…' : 'Pausar envio'}
+        </button>
+      {:else}
+        <button class="button secondary compact" onclick={resumeUploads} disabled={busy}
+          >Continuar envio</button
+        >
+        <button
+          class="button secondary compact"
+          disabled={busy}
+          onclick={() => {
+            if (
+              window.confirm(
+                'Descartar as páginas ainda não enviadas? As páginas recebidas serão preservadas.'
+              )
+            ) {
+              pendingUploads = [];
+              notice = 'Pendências descartadas. Confira as páginas recebidas antes de salvar.';
+            }
+          }}>Descartar pendentes</button
+        >
+      {/if}
+    </div>
+  {/if}
   <div class="row between" style="margin:25px 0">
     <h3>{pages.length} páginas</h3>
     <span class="small muted">Ordem de leitura: esquerda para direita</span>
@@ -226,8 +310,10 @@
       </div>{/each}
   </div>
   <div class="row" style="margin-top:30px">
-    {#if !data.chapter?.published_at}<button class="button" onclick={save} disabled={busy || !pages.length}
-        >Salvar rascunho</button
+    {#if !data.chapter?.published_at}<button
+        class="button"
+        onclick={save}
+        disabled={busy || !!pendingUploads.length || !pages.length}>Salvar rascunho</button
       >{/if}{#if data.chapter}<a
         class="button secondary"
         href="/ler/{data.chapter.id}?preview=1"
@@ -251,8 +337,10 @@
       <label class="small row" style="margin:20px 0"
         ><input type="checkbox" bind:checked={confirmed} /> Confirmo que são páginas finais, revisadas e autorizadas
         para publicação.</label
-      ><button class="button" onclick={() => publish()} disabled={busy || !confirmed || dirty}
-        >Publicar capítulo</button
+      ><button
+        class="button"
+        onclick={() => publish()}
+        disabled={busy || !!pendingUploads.length || !confirmed || dirty}>Publicar capítulo</button
       >{/if}
   </section>{/if}
 {#if data.role === 'ADMIN' && data.chapter}
@@ -266,6 +354,7 @@
 
 <style>
   .upload-zone {
+    position: relative;
     border: 1px dashed #70518d;
     border-radius: 12px;
     padding: 35px 20px;
@@ -289,9 +378,27 @@
     color: var(--muted);
   }
   .upload-zone input {
-    max-width: 100%;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .upload-zone:focus-within {
+    outline: 2px solid var(--purple);
+    outline-offset: 4px;
+  }
+  .upload-zone:has(input:disabled) {
+    opacity: 0.55;
+  }
+  .upload-zone .file-choice {
     font-size: 12px;
-    margin-top: 10px;
+    font-weight: 650;
+    padding: 9px 16px;
+    border-radius: 8px;
+    background: #352643;
+    border: 1px solid #684781;
   }
   .page-grid {
     display: grid;

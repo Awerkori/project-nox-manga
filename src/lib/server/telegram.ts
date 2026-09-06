@@ -33,10 +33,13 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
   }
 
   return {
-    async upload(bytes: Uint8Array<ArrayBuffer>, mime: string, id: string): Promise<string> {
+    async upload(bytes: Uint8Array<ArrayBuffer>, _mime: string, id: string): Promise<string> {
       const form = new FormData();
       form.append('chat_id', chatId);
-      form.append('document', new Blob([bytes], { type: mime }), `${id}.${mime.split('/')[1]}`);
+      // Preserve the exact validated bytes; don't let Telegram turn WebP pages into stickers.
+      // The original MIME remains in our private media record, not in the storage filename.
+      form.append('document', new Blob([bytes], { type: 'application/octet-stream' }), `${id}.bin`);
+      form.append('disable_content_type_detection', 'true');
       form.append('disable_notification', 'true');
       const result = await api('sendDocument', form);
       const fileId = result.document?.file_id;

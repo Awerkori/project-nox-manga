@@ -45,6 +45,9 @@ describe('private Telegram provider', () => {
     const form = options.body as FormData;
     expect(form.get('chat_id')).toBe('-100123');
     expect(form.get('disable_notification')).toBe('true');
+    expect(form.get('disable_content_type_detection')).toBe('true');
+    expect((form.get('document') as File).name).toBe('page.bin');
+    expect((form.get('document') as File).type).toBe('application/octet-stream');
     expect(form.has('allow_paid_broadcast')).toBe(false);
   });
 

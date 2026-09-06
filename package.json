@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:browser": "playwright test --config playwright.components.config.ts",
     "deploy": "wrangler deploy"
   },
   "dependencies": {

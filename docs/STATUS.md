@@ -15,13 +15,13 @@
 
 - Revisão atual: lint e checagem de tipos passaram sem erros/avisos; auditoria de dependências com zero vulnerabilidades.
 - Build Cloudflare passou.
-- Vinte testes de mídia, integração, comentários, leitor, SEO e templates de e-mail passaram.
+- Quarenta e oito testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads e provider Telegram passaram, incluindo workerd real sem rede externa.
 - PostgreSQL descartável: RLS de todas as tabelas, USER/EDITOR/ADMIN, IDOR, spam, XP temporizado e único, notificação deduplicada, suspensão e proteção do último administrador.
 - PostgreSQL descartável: convite exige e-mail exato confirmado, uso único, e-mail de convite privado, reserva de mídia exclusiva do servidor e limite gratuito.
 - Navegador: nove páginas públicas em desktop/tablet/mobile, sem erros JavaScript ou overflow após a correção do tablet.
 - Navegador com ADMIN real: 11 rotas renderizaram HTTP 200 sem erros JavaScript; importação idempotente pela interface; upload SVG/script com MIME PNG devolveu HTTP 400.
 - Visitante acessando /admin recebeu HTTP 403.
-- Scanner atual não encontrou secrets configurados em 217 arquivos de fonte/client/Worker; repetir após alterações.
+- Scanner não encontrou secrets configurados no código, client ou Worker; repetir após alterações.
 - Corrigida falha de tipos no CI, antes mascarada pela presença de variáveis locais. CI do commit `88c5c02` passou (run `33980983629`).
 - Corrigida conclusão/XP de capítulos curtos; regressão e métricas agregadas validadas em PostgreSQL descartável.
 - Integração limitada real: importação idempotente e listagem de staff autenticada funcionaram. Nenhum e-mail ou secret aparece na listagem.
@@ -36,13 +36,20 @@
 - Brevo registrou entrega do e-mail real de recuperação, incluindo o assunto Project Nox. A senha do dono não foi alterada pelo agente.
 - Templates de confirmação e recuperação salvos e reabertos no painel; HTML e links token_hash conferidos. A confirmação completa de cadastro por uma nova conta real continua pendente.
 - Limite de e-mails Auth configurado e reaberto: 10/hora, com intervalo mínimo de 60 segundos por usuário. Nenhum upgrade ou cobrança ativado.
+- Bot exclusivo criado e conectado ao canal privado SITE MANGÁ. Permissão apenas de publicação confirmada pela API; dois secrets transferidos diretamente à Cloudflare. Nenhum token da staff foi reutilizado.
+- Telegram real: upload da marca (3.076 bytes), download com SHA-256 idêntico e bloqueio de acesso anônimo/condicional passaram. Arquivo privado `4f7268dd-17ed-4495-8e37-917d581afff5`, não representa capítulo.
+- Corrigida incompatibilidade de redirect no workerd. Commit `9e957e6`, CI `34048576813` passou; deploy `c6dcc24d-f92d-45a3-a4f0-bfff3cc414a3` validado pelo upload real. Consulte STORAGE.md.
+- Nova consulta pela integração limitada: três membros ativos; convites EDITOR para dois membros registrados pela interface real do owner, sem erros JavaScript e sem conceder ADMIN. O aceite das próprias pessoas continua pendente.
+- O único arquivo marcado como final do capítulo 3 é `icon.png`, um símbolo da marca de 1.254 × 1.254 pixels, conferido visualmente. Não foi publicado como capítulo. O dono foi solicitado a fornecer o ZIP real aprovado.
+- Oito testes de navegador com fixtures exclusivamente locais passaram: leitor com progresso independente entre capítulos, upload de ZIP com falha/retomada sem duplicar páginas e reordenação, em 390/768/1366/1440 pixels. Não substituem QA de capítulos reais em produção.
+- Scanner ampliado para tokens de bots, Brevo, JWT privado e histórico Git completo, sem imprimir valores. Varredura local passou.
 
 ## Pendências concretas
 
 1. SMTP resolvido: entrega real confirmada na Brevo. Ainda validar cadastro, confirmação e troca de senha ponta a ponta com identidades reais. Consultar EMAIL.md antes de mudar SMTP ou executar config push; não sobrescrever o SMTP remoto com a configuração local de desenvolvimento.
-2. O acesso editorial é para membros autorizados da staff. O admin já consulta membros ativos e registra convites vinculados ao e-mail confirmado da identidade real. Validar aceite e sessão EDITOR real. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
-3. Bot/canal Telegram não configurados. Provider implementado mas ainda não testado com arquivos reais. Não prometer storage ilimitado.
-4. Última consulta pela integração autenticada retornou zero capítulos finais aprovados. Não usar RAW, Clean ou Tradução como substitutos.
+2. Convites da staff real registrados. Validar aceite e sessão EDITOR das próprias pessoas. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
+3. Bot/canal Telegram configurados; upload individual real validado. Ainda testar capítulo completo e fluxo de ZIP pesado. Não prometer storage ilimitado.
+4. É necessário o ZIP real do capítulo final: o arquivo aprovado atual é somente um ícone. Não usar o ícone, RAW, Clean ou Tradução como substitutos de um capítulo.
 5. Concluir testes ponta a ponta de ZIP/reordenação, publicação, reader/progresso, comentários e likes em conteúdo final; testar sessão EDITOR real e login público. Upload individual aceito já validado em produção.
 6. Controles administrativos de remoção adicionados com confirmação digitada; validar em ambiente descartável. Finalizar estatísticas/descoberta e revisão das páginas com conteúdo real.
 7. Repetir CI, deploy e inspeção da URL pública a cada entrega. A autorização do dono para guardar exclusivamente a service-role do banco público na Cloudflare já foi atendida; nenhuma nova autorização dessa chave está pendente.
@@ -53,4 +60,4 @@ O teste SQL com fixtures no banco remoto foi rejeitado por risco. Foi substituí
 
 ## Percentual
 
-Estimativa após SMTP e templates validados: aproximadamente 65%. O último percentual antes desta etapa era 60%; os antigos 80% referiam-se à central da staff, outro projeto. Código escrito não equivale a funcionalidade entregue. A plataforma não está pronta para uso completo.
+Estimativa após SMTP e armazenamento individual Telegram validados: aproximadamente 68%. A etapa anterior estava em 65%; os antigos 80% referiam-se à central da staff, outro projeto. Código escrito não equivale a funcionalidade entregue. A plataforma não está pronta para uso completo.

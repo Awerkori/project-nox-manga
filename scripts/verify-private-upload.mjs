@@ -3,6 +3,8 @@ import { ownerCookies } from './owner-session.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
 const origin = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
+const format = process.env.TEST_UPLOAD_MIME || 'image/png';
+if (!['image/png', 'image/webp'].includes(format)) throw new Error('Unsupported verification image format');
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
 try {
   const context = await browser.newContext();
@@ -10,7 +12,7 @@ try {
   const page = await context.newPage();
   await page.goto(origin + '/admin', { waitUntil: 'networkidle' });
   // Use the project's own brand artwork. Do not create fake works, chapters or accounts.
-  const result = await page.evaluate(async () => {
+  const result = await page.evaluate(async (format) => {
     const image = new Image();
     image.src = '/favicon.svg';
     await image.decode();
@@ -18,17 +20,18 @@ try {
     canvas.width = 128;
     canvas.height = 128;
     canvas.getContext('2d').drawImage(image, 0, 0, 128, 128);
-    const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const imageFile = await new Promise((resolve) => canvas.toBlob(resolve, format, 0.92));
+    if (imageFile.type !== format) throw new Error('Browser cannot generate the requested format');
     const response = await fetch('/api/upload', {
       method: 'POST',
-      headers: { 'Content-Type': 'image/png' },
-      body: png
+      headers: { 'Content-Type': format },
+      body: imageFile
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || 'Upload failed');
     return body;
-  });
-  if (result.mime !== 'image/png' || result.width !== 128 || result.height !== 128)
+  }, format);
+  if (result.mime !== format || result.width !== 128 || result.height !== 128)
     throw new Error('Stored image metadata mismatch');
   // Read only the new public project's record; never use a staff administrative key.
   const db = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -43,7 +46,7 @@ try {
   if (process.env.EXPECTED_MEDIA_PROVIDER && stored.provider !== process.env.EXPECTED_MEDIA_PROVIDER)
     throw new Error('Unexpected storage provider');
   const media = await context.request.get(origin + '/media/' + result.id);
-  if (media.status() !== 200 || media.headers()['content-type'] !== 'image/png')
+  if (media.status() !== 200 || media.headers()['content-type'] !== format)
     throw new Error('Owner cannot read private upload');
   if (!media.headers()['cache-control']?.includes('private'))
     throw new Error('Private image cache is unsafe');
@@ -65,6 +68,7 @@ try {
       result: 'PASS: real upload and authenticated download; anonymous and conditional requests denied',
       asset: result.id,
       bytes: result.bytes,
+      format,
       provider: stored.provider,
       purpose: 'Private Project Nox brand asset, not a chapter'
     })

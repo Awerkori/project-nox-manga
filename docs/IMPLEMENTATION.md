@@ -13,7 +13,7 @@ Somente planos gratuitos, sem cartão ou ativação de cobrança. Nenhum reset o
 
 ## Dependências humanas a verificar
 
-Cloudflare e Supabase autenticados; a chave administrativa exclusivamente do banco público já foi autorizada e configurada como secret de servidor. Brevo Free conectado ao Auth; entrega de recuperação confirmada nos logs da Brevo. Faltam bot/canal de storage pesado, membros reais da staff autorizados pelo admin, capítulos finais aprovados e QA completo dos fluxos públicos. Não são substituídos por mocks. O acesso editorial é para as contas autorizadas da staff, não para uma pessoa específica. Consulte STATUS.md para o estado verificável e EMAIL.md antes de alterar Auth/SMTP.
+Cloudflare e Supabase autenticados; a chave administrativa exclusivamente do banco público já foi autorizada e configurada como secret de servidor. Brevo Free conectado ao Auth; entrega de recuperação confirmada nos logs da Brevo. Bot exclusivo e canal privado configurados; upload individual Telegram validado. Faltam aceite de membros reais da staff e QA completo de capítulos, publicação e fluxos públicos. Não são substituídos por mocks. O acesso editorial é para as contas autorizadas da staff, não para uma pessoa específica. Consulte STATUS.md, EMAIL.md e STORAGE.md antes de alterar integrações.
 
 ## Fontes verificadas
 

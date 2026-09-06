@@ -7,6 +7,7 @@ const values = Object.entries(process.env)
 const git = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
   encoding: 'utf8'
 });
+if (git.status !== 0) throw new Error('Cannot inspect Git files for secret scanning');
 const tracked = git.stdout.trim().split('\n').filter(Boolean);
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
@@ -19,17 +20,41 @@ const files = [
   ...(existsSync('.svelte-kit/cloudflare') ? walk('.svelte-kit/cloudflare') : [])
 ];
 const failures = [];
-for (const file of files) {
-  const text = readFileSync(file, 'utf8');
-  if (
+function containsSecret(text) {
+  const privateJwt = [...text.matchAll(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)].some(
+    ([jwt]) => {
+      try {
+        return JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString()).role !== 'anon';
+      } catch {
+        return true;
+      }
+    }
+  );
+  return (
     values.some((secret) => text.includes(secret)) ||
+    privateJwt ||
     /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text) ||
     /gh[pousr]_[A-Za-z0-9]{30,}/.test(text) ||
-    /sb_secret_[A-Za-z0-9_-]{20,}/.test(text)
-  )
-    failures.push(file);
+    /sb_secret_[A-Za-z0-9_-]{20,}/.test(text) ||
+    /\b[0-9]{6,15}:[A-Za-z0-9_-]{35}\b/.test(text) ||
+    /\b(?:xkeysib|xsmtpsib)-[A-Za-z0-9_-]{20,}/.test(text)
+  );
 }
+for (const file of files) {
+  const text = readFileSync(file, 'utf8');
+  if (containsSecret(text)) failures.push(file);
+}
+// Capture history only in memory; never print patches or a matched credential.
+const history = spawnSync('git', ['log', '--all', '-p', '--format='], {
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024
+});
+if (history.status !== 0) throw new Error('Cannot inspect complete Git history for secret scanning');
+if (containsSecret(history.stdout)) failures.push('Git history');
 if (failures.length) {
   console.error('Secret exposure in:', failures);
   process.exitCode = 1;
-} else console.log(`PASS: ${files.length} source/client files scanned; no configured secrets found.`);
+} else
+  console.log(
+    `PASS: ${files.length} source/client files and available Git history scanned; no secrets found.`
+  );
