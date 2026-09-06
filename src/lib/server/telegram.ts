@@ -1,5 +1,13 @@
 // Provider credentials and Telegram URLs never leave this server-only module.
-const unavailable = () => new Error('Armazenamento temporariamente indisponível. Tente novamente.');
+export class TelegramStorageError extends Error {
+  constructor(
+    readonly stage: 'http' | 'payload' | 'network' | 'file' = 'file',
+    readonly status?: number
+  ) {
+    super('Armazenamento temporariamente indisponível. Tente novamente.');
+  }
+}
+const unavailable = () => new TelegramStorageError();
 
 export function telegramStorage(token: string, chatId: string, transport: typeof fetch = fetch) {
   async function api(method: 'sendDocument' | 'getFile', body: BodyInit, headers?: HeadersInit) {
@@ -11,13 +19,15 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         redirect: 'error',
         signal: AbortSignal.timeout(60_000)
       });
-      if (!response.ok) throw unavailable();
-      const payload = await response.json();
-      if (!payload?.ok || !payload.result) throw unavailable();
+      if (!response.ok) throw new TelegramStorageError('http', response.status);
+      const payload = await response.json().catch(() => {
+        throw new TelegramStorageError('payload');
+      });
+      if (!payload?.ok || !payload.result) throw new TelegramStorageError('payload');
       return payload.result;
-    } catch {
+    } catch (failure) {
       // Network errors may contain the credential-bearing URL. Never forward them.
-      throw unavailable();
+      throw failure instanceof TelegramStorageError ? failure : new TelegramStorageError('network');
     }
   }
 

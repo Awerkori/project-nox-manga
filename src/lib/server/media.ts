@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { inspectImage } from '$lib/media-validation';
-import { telegramStorage } from '$lib/server/telegram';
+import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
 export async function storeImage(request: Request, userId: string, purpose = 'editorial') {
   const reader = request.body?.getReader();
   if (!reader) error(400, 'Selecione uma imagem.');
@@ -70,7 +70,13 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
       .eq('id', id);
     if (problem) throw new Error('Não foi possível registrar a imagem.');
     return { id, ...info, bytes: size };
-  } catch {
+  } catch (failure) {
+    // Log only our own fixed diagnostic labels; upstream errors can contain credentials.
+    console.warn('media_upload_failed', {
+      provider,
+      stage: failure instanceof TelegramStorageError ? failure.stage : 'storage_record',
+      status: failure instanceof TelegramStorageError ? failure.status : undefined
+    });
     // Keep the reservation if cleanup fails; this prevents orphaned bytes bypassing the free quota.
     if (provider === 'supabase') {
       const { error: cleanup } = await db.storage.from('nox-media').remove([id]);

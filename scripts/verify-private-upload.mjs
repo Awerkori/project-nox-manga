@@ -1,5 +1,7 @@
 import { chromium } from '@playwright/test';
 import { ownerCookies } from './owner-session.mjs';
+import { createClient } from '@supabase/supabase-js';
+import { createHash } from 'node:crypto';
 const origin = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
 try {
@@ -28,11 +30,29 @@ try {
   });
   if (result.mime !== 'image/png' || result.width !== 128 || result.height !== 128)
     throw new Error('Stored image metadata mismatch');
+  // Read only the new public project's record; never use a staff administrative key.
+  const db = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+  const { data: stored, error: lookupError } = await db
+    .from('media')
+    .select('provider,sha256,storage_ready')
+    .eq('id', result.id)
+    .single();
+  if (lookupError || !stored?.storage_ready) throw new Error('Upload was not committed');
+  if (process.env.EXPECTED_MEDIA_PROVIDER && stored.provider !== process.env.EXPECTED_MEDIA_PROVIDER)
+    throw new Error('Unexpected storage provider');
   const media = await context.request.get(origin + '/media/' + result.id);
   if (media.status() !== 200 || media.headers()['content-type'] !== 'image/png')
     throw new Error('Owner cannot read private upload');
   if (!media.headers()['cache-control']?.includes('private'))
     throw new Error('Private image cache is unsafe');
+  const downloaded = await media.body();
+  if (
+    downloaded.length !== result.bytes ||
+    createHash('sha256').update(downloaded).digest('hex') !== stored.sha256
+  )
+    throw new Error('Downloaded bytes differ from the uploaded image');
   const anonymous = await browser.newContext();
   const hidden = await anonymous.request.get(origin + '/media/' + result.id);
   if (hidden.status() !== 404) throw new Error('Unpublished image leaked');
@@ -45,6 +65,7 @@ try {
       result: 'PASS: real upload and authenticated download; anonymous and conditional requests denied',
       asset: result.id,
       bytes: result.bytes,
+      provider: stored.provider,
       purpose: 'Private Project Nox brand asset, not a chapter'
     })
   );
