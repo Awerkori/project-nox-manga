@@ -4,7 +4,6 @@
   import { action } from '$lib/actions';
   import { expandFiles, normalizePage } from '$lib/uploads';
   import { flushUploads } from '$lib/upload-queue';
-  import { onMount } from 'svelte';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
   let { data } = $props();
   const initial = untrack(() => data);
@@ -17,6 +16,7 @@
     confirmed = $state(false);
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
+  let loadingFinals = $state(false), finalsChecked = $state(false);
   let pendingUploads = $state<File[]>([]),
     pauseRequested = $state(false),
     uploading = $state(false);
@@ -35,14 +35,20 @@
     if (willUnload || !window.confirm('Há páginas pendentes ou alterações não salvas. Sair desta página?'))
       cancel();
   });
-  onMount(async () => {
+  async function loadFinals() {
+    loadingFinals = true;
     try {
       const response = await fetch(`/api/staff?work=${data.work.id}`);
-      if (response.ok) finals = (await response.json()).chapters;
+      if (!response.ok) throw new Error('Consulta indisponível');
+      finals = (await response.json()).chapters;
+      finalsChecked = true;
+      if (!finals.length) notice = 'Nenhum capítulo final disponível para importação. O upload local continua disponível.';
     } catch {
       notice = 'A central está indisponível no momento. Você ainda pode selecionar arquivos locais.';
+    } finally {
+      loadingFinals = false;
     }
-  });
+  }
   async function importFinal() {
     if (!sourceChapter || busy || pendingUploads.length) return;
     busy = true;
@@ -192,6 +198,15 @@
 <p class="small">1. Dados do capítulo → 2. Enviar páginas → 3. Conferir → 4. Publicar</p>
 {#if notice}<div class="notice" role="status">{notice}</div>{/if}
 <section class="panel">
+  {#if !data.chapter?.published_at && !finalsChecked}
+    <details style="margin-bottom:24px">
+      <summary>Importação opcional da central</summary>
+      <p class="small">Para arquivos deste computador, use o upload abaixo. A central só será consultada se você solicitar.</p>
+      <button class="button secondary" onclick={loadFinals} disabled={busy || loadingFinals}>
+        {loadingFinals ? 'Consultando…' : 'Consultar capítulos finais da central'}
+      </button>
+    </details>
+  {/if}
   {#if finals.length && !data.chapter?.published_at}
     <div class="panel" style="margin-bottom:24px">
       <h3>Capítulos aprovados na central</h3>

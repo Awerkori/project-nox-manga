@@ -16,7 +16,11 @@ for (const width of [390, 768, 1366, 1440])
       'base64'
     );
     let uploads = 0;
-    await page.route('**/api/staff?*', (route) => route.fulfill({ json: { chapters: [] } }));
+    let staffRequests = 0;
+    await page.route('**/api/staff?*', (route) => {
+      staffRequests++;
+      return route.abort();
+    });
     await page.route('**/api/upload', (route) => {
       uploads++;
       return route.fulfill(
@@ -48,6 +52,7 @@ for (const width of [390, 768, 1366, 1440])
     await expect(page.locator('.page-tile')).toHaveCount(3);
     await expect(page.getByRole('button', { name: 'Salvar rascunho' })).toBeEnabled();
     expect(uploads).toBe(4);
+    expect(staffRequests).toBe(0);
     await expect(page.locator('.page-tile > div > span')).toHaveText(['1.png', '2.png', '10.png']);
     await page.getByRole('button', { name: 'Mover página 3 para antes', exact: true }).click();
     await expect(page.locator('.page-tile > div > span')).toHaveText(['1.png', '10.png', '2.png']);
