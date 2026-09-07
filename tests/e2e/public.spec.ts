@@ -39,6 +39,54 @@ test('account forms are not indexed and published catalog remains indexable', as
   expect(catalog.status()).toBe(200);
   expect(catalog.headers()['x-robots-tag']).toBeUndefined();
 });
+test('published content has a readable cover, chapter API and progressive reader', async ({
+  page,
+  request
+}) => {
+  test.setTimeout(90000);
+  const catalog = await (await request.get('/api/v1/works')).json();
+  const work = catalog.data[0];
+  test.skip(!work, 'No published work available for the content-dependent smoke test');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  for (const width of [390, 768, 1366, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/obra/${work.slug}`, { waitUntil: 'networkidle' });
+    const cover = page.getByAltText(`Capa de ${work.title}`);
+    await expect(cover).toBeVisible();
+    const box = await cover.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width / box!.height).toBeCloseTo(5 / 7, 2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  const chapters = await (await request.get(`/api/v1/works/${work.slug}/chapters`)).json();
+  expect(chapters.data.length).toBeGreaterThan(0);
+  const chapter = chapters.data[0];
+  const manifest = await (await request.get(`/api/v1/chapters/${chapter.id}/pages`)).json();
+  expect(manifest.data.length).toBeGreaterThan(0);
+  for (const entry of manifest.data) {
+    expect(Object.keys(entry).sort()).toEqual(['height', 'position', 'url', 'width']);
+    expect(new URL(entry.url).pathname).toMatch(/^\/media\/[0-9a-f-]{36}$/);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/ler/${chapter.id}`, { waitUntil: 'networkidle' });
+  await expect
+    .poll(
+      () =>
+        page
+          .locator('#pagina-1 img')
+          .evaluateAll((images) =>
+            images.some(
+              (image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0
+            )
+          ),
+      { timeout: 30000 }
+    )
+    .toBe(true);
+  if (manifest.data.length > 3)
+    expect(await page.locator('.reader-page img').count()).toBeLessThan(manifest.data.length);
+  expect(errors).toEqual([]);
+});
 for (const width of [390, 768, 1440])
   test(`navigation and layout at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });

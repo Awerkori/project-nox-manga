@@ -15,7 +15,7 @@
 
 - Revisão atual: lint e checagem de tipos passaram sem erros/avisos; auditoria de dependências com zero vulnerabilidades.
 - Build Cloudflare passou.
-- Quarenta e oito testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads e provider Telegram passaram, incluindo workerd real sem rede externa.
+- Cinquenta testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads e provider Telegram passaram, incluindo workerd real sem rede externa e duas regressões dos loaders de comentários.
 - PostgreSQL descartável: RLS de todas as tabelas, USER/EDITOR/ADMIN, IDOR, spam, XP temporizado e único, notificação deduplicada, suspensão e proteção do último administrador.
 - PostgreSQL descartável: convite exige e-mail exato confirmado, uso único, e-mail de convite privado, reserva de mídia exclusiva do servidor e limite gratuito.
 - Navegador: nove páginas públicas em desktop/tablet/mobile, sem erros JavaScript ou overflow após a correção do tablet.
@@ -49,11 +49,15 @@
 
 ## Pendências concretas
 
+Atualização de escopo: o dono determinou que o teste do capítulo 64 fosse feito exclusivamente no Manga, sem acessar ou alterar a Central da Staff. O ZIP foi enviado diretamente pelo editor do site. Consulte [QA-CHAPTER-64.md](QA-CHAPTER-64.md).
+
+Último deploy funcional: `aa128de`, versão `1b83a284-ba1c-4cbc-862d-1d3b2764e2d4`, CI `34149236234` passou. Sete testes de produção passaram após a correção de comentários e capa, incluindo o capítulo real.
+
 1. SMTP resolvido: entrega real confirmada na Brevo. Ainda validar cadastro, confirmação e troca de senha ponta a ponta com identidades reais. Consultar EMAIL.md antes de mudar SMTP ou executar config push; não sobrescrever o SMTP remoto com a configuração local de desenvolvimento.
 2. Convites da staff real registrados. Validar aceite e sessão EDITOR das próprias pessoas. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
-3. Bot/canal Telegram configurados; upload individual real validado. Ainda testar capítulo completo e fluxo de ZIP pesado. Não prometer storage ilimitado.
-4. É necessário o ZIP real do capítulo final: o arquivo aprovado atual é somente um ícone. Não usar o ícone, RAW, Clean ou Tradução como substitutos de um capítulo.
-5. Concluir testes ponta a ponta de ZIP/reordenação, publicação, reader/progresso, comentários e likes em conteúdo final; testar sessão EDITOR real e login público. Upload individual aceito já validado em produção.
+3. Bot/canal Telegram configurados; capítulo real com oito páginas validado pelo upload local, publicação, API e leitor. Ainda testar cargas de centenas de MB; não prometer storage ilimitado.
+4. Bloqueio do capítulo resolvido: Distant Sky 64 está publicado a partir do ZIP fornecido pelo dono, sem usar o ícone nem a central como origem.
+5. Favoritos, biblioteca, curtidas, comentários (incluindo edição/remoção e HTML literal), histórico, continuar lendo, conquista e leitura completa com XP único passaram na conta real do dono. Validar demais notificações; testar sessão EDITOR real e login público.
 6. Controles administrativos de remoção adicionados com confirmação digitada; backend validado em ambiente descartável. Finalizar estatísticas/descoberta e revisão das páginas com conteúdo real.
 7. Repetir CI, deploy e inspeção da URL pública a cada entrega. A autorização do dono para guardar exclusivamente a service-role do banco público na Cloudflare já foi atendida; nenhuma nova autorização dessa chave está pendente.
 
@@ -63,4 +67,4 @@ O teste SQL com fixtures no banco remoto foi rejeitado por risco. Foi substituí
 
 ## Percentual
 
-Estimativa após SMTP e armazenamento individual Telegram validados: aproximadamente 68%. A etapa anterior estava em 65%; os antigos 80% referiam-se à central da staff, outro projeto. Código escrito não equivale a funcionalidade entregue. A plataforma não está pronta para uso completo.
+Estimativa após publicação e leitura reais do capítulo 64: aproximadamente 72%. A etapa anterior estava em 68%; os antigos 80% referiam-se à central da staff, outro projeto. Código escrito não equivale a funcionalidade entregue. A plataforma não está pronta para uso completo.
