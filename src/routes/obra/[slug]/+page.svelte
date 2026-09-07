@@ -43,11 +43,15 @@
       goto('/entrar');
       return;
     }
+    if (busy) return;
+    busy = true;
     try {
       await action('member', 'like', { work_id: data.work.id });
       await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;
+    } finally {
+      busy = false;
     }
   }
 </script>
@@ -114,7 +118,14 @@
             ?.favorite
             ? 'Favoritado'
             : 'Favoritar'}</button
-        ><button class="button secondary" onclick={like}
+        ><button
+          class="button secondary"
+          onclick={like}
+          disabled={busy}
+          aria-label={data.likes.some((l) => l.user_id === data.profile?.id)
+            ? 'Remover curtida da obra'
+            : 'Curtir obra'}
+          aria-pressed={data.likes.some((l) => l.user_id === data.profile?.id)}
           ><Heart
             size={18}
             fill={data.likes.some((l) => l.user_id === data.profile?.id) ? 'currentColor' : 'none'}
@@ -190,8 +201,10 @@
   }
   .work-cover img {
     width: 100%;
+    height: auto;
     aspect-ratio: 5/7;
-    object-fit: cover;
+    object-fit: contain;
+    background: var(--panel);
     border-radius: 14px;
     border: 1px solid #ffffff16;
   }

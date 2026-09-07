@@ -22,9 +22,10 @@ export const load = async ({ locals, params, url }) => {
     locals.db
       .from('comments')
       .select(
-        'id,user_id,body,created_at,parent_id,members(username,display_name,avatar_id),comment_likes(user_id)'
+        'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id),comment_likes(user_id)'
       )
       .eq('work_id', work.id)
+      .eq('removed', false)
       .is('chapter_id', null)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -46,6 +47,7 @@ export const load = async ({ locals, params, url }) => {
       : Promise.resolve({ data: [] }),
     locals.db.rpc('work_metrics', { p_work: work.id })
   ]);
+  check(comments);
   const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
   return {
     work,

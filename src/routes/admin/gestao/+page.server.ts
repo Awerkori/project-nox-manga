@@ -1,3 +1,4 @@
+import { check } from '$lib/server/db';
 export const load = async ({ locals }) => {
   const [members, comments, invites] = await Promise.all([
     locals.db
@@ -7,7 +8,7 @@ export const load = async ({ locals }) => {
       .limit(200),
     locals.db
       .from('comments')
-      .select('id,body,removed,created_at,members(display_name),works(title)')
+      .select('id,body,removed,created_at,members!comments_user_id_fkey(display_name),works(title)')
       .order('created_at', { ascending: false })
       .limit(100),
     locals.db
@@ -16,5 +17,6 @@ export const load = async ({ locals }) => {
       .order('created_at', { ascending: false })
       .limit(200)
   ]);
+  check(comments);
   return { members: members.data || [], comments: comments.data || [], invites: invites.data || [] };
 };

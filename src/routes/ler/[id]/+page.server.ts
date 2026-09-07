@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { check } from '$lib/server/db';
 export const load = async ({ locals, params, url }) => {
   const preview = url.searchParams.get('preview') === '1' && ['ADMIN', 'EDITOR'].includes(locals.role || '');
   let query = locals.db
@@ -31,12 +32,14 @@ export const load = async ({ locals, params, url }) => {
     locals.db
       .from('comments')
       .select(
-        'id,user_id,body,created_at,parent_id,members(username,display_name,avatar_id),comment_likes(user_id)'
+        'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id),comment_likes(user_id)'
       )
       .eq('chapter_id', chapter.id)
+      .eq('removed', false)
       .order('created_at', { ascending: false })
       .limit(100)
   ]);
+  check(comments);
   const all = siblings.data || [],
     index = all.findIndex((c) => c.id === chapter.id);
   return {
