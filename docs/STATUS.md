@@ -1,4 +1,4 @@
-# Estado verificável — 2026-09-06
+# Estado verificável — 2026-09-07
 
 ## Criado
 
@@ -43,6 +43,8 @@
 - O único arquivo marcado como final do capítulo 3 é `icon.png`, um símbolo da marca de 1.254 × 1.254 pixels, conferido visualmente. Não foi publicado como capítulo. O dono foi solicitado a fornecer o ZIP real aprovado.
 - Oito testes de navegador com fixtures exclusivamente locais passaram: leitor com progresso independente entre capítulos, upload de ZIP com falha/retomada sem duplicar páginas e reordenação, em 390/768/1366/1440 pixels. Não substituem QA de capítulos reais em produção.
 - Scanner ampliado para tokens de bots, Brevo, JWT privado e histórico Git completo, sem imprimir valores. Varredura local passou.
+- Commit `2285440`: CI `34064163624` passou; deploy `92882326-8a0f-407b-b4f9-c2d12a1ee416`. WebP real corrigido e validado no Telegram: 2.150 bytes, SHA-256 idêntico e acesso anônimo/condicional negado. Arquivo privado `97a500a1-fe15-4e8a-9316-031181650321`, não representa capítulo.
+- QA em produção encontrou overflow no painel administrativo mobile. Corrigido dimensionamento do grid; oito regressões locais passaram com o layout administrativo completo em quatro larguras. A revisão pós-deploy será registrada após execução.
 
 ## Pendências concretas
 

@@ -25,12 +25,13 @@
 <style>
   .admin-shell {
     display: grid;
-    grid-template-columns: 230px 1fr;
+    grid-template-columns: 230px minmax(0, 1fr);
     max-width: 1440px;
     margin: auto;
     min-height: 70vh;
   }
   .admin-sidebar {
+    min-width: 0;
     border-right: 1px solid var(--line);
     padding: 36px 25px;
   }
@@ -62,7 +63,7 @@
   }
   @media (max-width: 950px) {
     .admin-shell {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
     .admin-sidebar {
       padding: 20px;

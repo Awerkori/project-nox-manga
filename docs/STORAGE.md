@@ -6,7 +6,7 @@ O conteúdo editorial usa um bot exclusivo do Project Nox Manga no canal privado
 
 `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` ficam exclusivamente como secrets do Worker público. A transferência foi feita em memória, sem arquivo local de credenciais, Git ou frontend. O token pode ser revogado no BotFather e substituído diretamente no secret do servidor. Nunca reutilizar o token da staff.
 
-Foi testado um PNG real da marca, de 3.076 bytes: upload no Telegram, registro `storage_ready`, download autenticado com SHA-256 idêntico, acesso anônimo negado e tentativa condicional por ETag também negada. Isso não equivale a validar um capítulo completo ou um ZIP de centenas de MB.
+Foram testados PNG (3.076 bytes) e WebP (2.150 bytes) reais da marca: upload no Telegram, registro `storage_ready`, download autenticado com SHA-256 idêntico, acesso anônimo negado e tentativa condicional por ETag também negada. Isso não equivale a validar um capítulo completo ou um ZIP de centenas de MB.
 
 ## Limites e privacidade
 
@@ -15,6 +15,7 @@ Foi testado um PNG real da marca, de 3.076 bytes: upload no Telegram, registro `
 - Supabase continua disponível para avatares e mídia já armazenada, com reserva total limitada a 750 MB. O banco mantém `provider` e `provider_key` privados.
 - O site não entrega URLs do bot ao navegador. Cada pedido verifica publicação ou acesso editorial antes de baixar a página; o cache do navegador é privado e deve revalidar.
 - O runtime Cloudflare aceita `redirect: 'manual'`, não `error`. Respostas de redirecionamento são rejeitadas, sem encaminhar credenciais. Há regressão executada no próprio workerd.
+- O envio usa documento binário com detecção automática desativada para preservar WebP sem classificação como sticker. O MIME real é validado pelo servidor e registrado no banco; o endpoint de mídia o restitui no download.
 - Falhas de rede e de streaming são sanitizadas. O log usa somente rótulos fixos e status HTTP, nunca mensagens brutas do provider, URLs ou tokens.
 - Telegram e Workers têm limites de uso, latência e disponibilidade. Não há promessa de storage ilimitado ou SLA. Não ativar paid broadcasts, upgrade, cartão ou cobrança.
 
