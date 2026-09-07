@@ -15,7 +15,7 @@
 
 - Revisão atual: lint e checagem de tipos passaram sem erros/avisos; auditoria de dependências com zero vulnerabilidades.
 - Build Cloudflare passou.
-- Cinquenta testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads e provider Telegram passaram, incluindo workerd real sem rede externa e duas regressões dos loaders de comentários.
+- Sessenta e sete testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads, paginação e provider Telegram passaram, incluindo workerd real sem rede externa e regressões dos loaders de comentários e áreas pessoais.
 - PostgreSQL descartável: RLS de todas as tabelas, USER/EDITOR/ADMIN, IDOR, spam, XP temporizado e único, notificação deduplicada, suspensão e proteção do último administrador.
 - PostgreSQL descartável: convite exige e-mail exato confirmado, uso único, e-mail de convite privado, reserva de mídia exclusiva do servidor e limite gratuito.
 - Navegador: nove páginas públicas em desktop/tablet/mobile, sem erros JavaScript ou overflow após a correção do tablet.
@@ -51,10 +51,12 @@
 
 Atualização de escopo: o dono determinou que o teste do capítulo 64 fosse feito exclusivamente no Manga, sem acessar ou alterar a Central da Staff. O ZIP foi enviado diretamente pelo editor do site. Consulte [QA-CHAPTER-64.md](QA-CHAPTER-64.md).
 
-Último deploy funcional: `aa128de`, versão `1b83a284-ba1c-4cbc-862d-1d3b2764e2d4`, CI `34149236234` passou. Sete testes de produção passaram após a correção de comentários e capa, incluindo o capítulo real.
+Último deploy funcional: `1b8a330`, versão `ad5359dd-4b87-418b-9dbf-ff46fcb91624`. Sete testes de produção passaram, incluindo o capítulo real. CI desta revisão: `34150596686`, concluído com sucesso (verificação e smoke de produção).
+
+Revisão das áreas pessoais: biblioteca, favoritos, histórico e notificações agora têm paginação de 20 itens, totais exatos, ordenação estável e filtros preservados; perfil consulta contagens sem carregar coleções inteiras. Dezessete testes de dados e quatro novos testes de navegador passaram (12 testes de navegador no total), com mais de 100 registros exclusivamente em fixtures locais. No site real, as cinco áreas passaram com ADMIN em 390/768/1366/1440 pixels; filtros e redirecionamentos de páginas inválidas funcionaram. A notificação real de conquista foi marcada como lida pela interface, permaneceu salva após recarregar e continua disponível em Todas. Sem erros JavaScript/HTTP 5xx ou requisições à staff. Screenshots do perfil real mobile/desktop revisados. Script reproduzível: `scripts/verify-member-pages.mjs`; alteração de leitura exige opt-in explícito.
 
 1. SMTP resolvido: entrega real confirmada na Brevo. Ainda validar cadastro, confirmação e troca de senha ponta a ponta com identidades reais. Consultar EMAIL.md antes de mudar SMTP ou executar config push; não sobrescrever o SMTP remoto com a configuração local de desenvolvimento.
-2. Convites da staff real registrados. Validar aceite e sessão EDITOR das próprias pessoas. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
+2. Convites da staff real registrados. Consulta somente de contagens no banco próprio do Manga confirmou um ADMIN ativo e dois convites pendentes, sem EDITOR ativo. Validar aceite e sessão EDITOR das próprias pessoas. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
 3. Bot/canal Telegram configurados; capítulo real com oito páginas validado pelo upload local, publicação, API e leitor. Ainda testar cargas de centenas de MB; não prometer storage ilimitado.
 4. Bloqueio do capítulo resolvido: Distant Sky 64 está publicado a partir do ZIP fornecido pelo dono, sem usar o ícone nem a central como origem.
 5. Favoritos, biblioteca, curtidas, comentários (incluindo edição/remoção e HTML literal), histórico, continuar lendo, conquista e leitura completa com XP único passaram na conta real do dono. Validar demais notificações; testar sessão EDITOR real e login público.
