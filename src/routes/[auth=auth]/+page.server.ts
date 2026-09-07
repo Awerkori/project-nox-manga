@@ -1,7 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
-export const load = ({ params }) => ({ mode: params.auth });
+export const load = ({ params, url }) => ({
+  mode: params.auth,
+  error:
+    params.auth === 'entrar' && url.searchParams.get('erro') === 'link-expirado'
+      ? 'Este link é inválido ou expirou. Solicite um novo link de recuperação ou entre na sua conta.'
+      : ''
+});
 export const actions = {
   default: async ({ request, locals, params, url }) => {
     const f = await request.formData(),

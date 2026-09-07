@@ -24,6 +24,8 @@ try {
   console.log(results.flatMap((r) => r.rows).filter((r) => r.result));
   const limits = await db.exec(readFileSync('tests/limits.sql', 'utf8'));
   console.log(limits.flatMap((r) => r.rows).filter((r) => r.result));
+  const columns = await db.exec(readFileSync('tests/private-columns.sql', 'utf8'));
+  console.log(columns.flatMap((r) => r.rows).filter((r) => r.result));
   const counts = await db.query('select count(*)::integer as users from auth.users');
   if (counts.rows[0].users !== 0) throw new Error('Test transaction was not rolled back');
   console.log('PASS: no test users or content retained. Local PostgreSQL only.');

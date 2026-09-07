@@ -15,7 +15,7 @@
 
 - Revisão atual: lint e checagem de tipos passaram sem erros/avisos; auditoria de dependências com zero vulnerabilidades.
 - Build Cloudflare passou.
-- Sessenta e sete testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads, paginação e provider Telegram passaram, incluindo workerd real sem rede externa e regressões dos loaders de comentários e áreas pessoais.
+- Oitenta e nove testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads, paginação, autenticação e provider Telegram passaram, incluindo workerd real sem rede externa e regressões dos loaders de comentários e áreas pessoais.
 - PostgreSQL descartável: RLS de todas as tabelas, USER/EDITOR/ADMIN, IDOR, spam, XP temporizado e único, notificação deduplicada, suspensão e proteção do último administrador.
 - PostgreSQL descartável: convite exige e-mail exato confirmado, uso único, e-mail de convite privado, reserva de mídia exclusiva do servidor e limite gratuito.
 - Navegador: nove páginas públicas em desktop/tablet/mobile, sem erros JavaScript ou overflow após a correção do tablet.
@@ -51,7 +51,11 @@
 
 Atualização de escopo: o dono determinou que o teste do capítulo 64 fosse feito exclusivamente no Manga, sem acessar ou alterar a Central da Staff. O ZIP foi enviado diretamente pelo editor do site. Consulte [QA-CHAPTER-64.md](QA-CHAPTER-64.md).
 
-Último deploy funcional: `1b8a330`, versão `ad5359dd-4b87-418b-9dbf-ff46fcb91624`. Sete testes de produção passaram, incluindo o capítulo real. CI desta revisão: `34150596686`, concluído com sucesso (verificação e smoke de produção).
+Último deploy funcional: versão `d49fbdec-9013-420e-ab9d-3ee34ebc422e`. Oito testes de produção passaram, incluindo o capítulo real e a orientação para links de confirmação inválidos. CI anterior: `34150596686` e `34150814721`, concluídos com sucesso; consultar a execução do commit atual para esta revisão.
+
+Auditoria direta anônima do banco público encontrou SELECT indevido de `works.source_id` e `chapters.source_id`, embora a API do site já omitisse esses campos. Corrigido por grants explícitos de colunas na migration nova `20260908010000_private_source_columns.sql`, testada localmente e aplicada somente no Manga com `--skip-vault`; nenhuma migration antiga, dado, SMTP ou recurso da Central foi alterado. Verificação real após aplicar: identificadores internos e nove tabelas privadas negados; rascunhos, capítulos não publicados e comentários removidos ocultos; catálogo publicado acessível. Script de leitura: `scripts/verify-public-rls.mjs`. PostgreSQL descartável também confirma bloqueio das colunas para `authenticated`; isso não substitui sessão EDITOR real.
+
+Autenticação: 22 regressões locais passaram cobrindo validação de entrada, mensagens sem detalhes privados, confirmação, recuperação, ordem autenticação → convite e bloqueio de redirecionamento externo. Aviso de link expirado corrigido e validado no site real sem enviar e-mail. Os 89 testes, 12 testes de navegador locais, lint, tipos, build, scanner e auditoria de dependências passaram. Após a migration, páginas pessoais e navegação do editor com ADMIN real foram repetidas em quatro larguras sem erros ou chamadas à staff. Cadastro e recuperação completos com identidades reais continuam pendentes.
 
 Revisão das áreas pessoais: biblioteca, favoritos, histórico e notificações agora têm paginação de 20 itens, totais exatos, ordenação estável e filtros preservados; perfil consulta contagens sem carregar coleções inteiras. Dezessete testes de dados e quatro novos testes de navegador passaram (12 testes de navegador no total), com mais de 100 registros exclusivamente em fixtures locais. No site real, as cinco áreas passaram com ADMIN em 390/768/1366/1440 pixels; filtros e redirecionamentos de páginas inválidas funcionaram. A notificação real de conquista foi marcada como lida pela interface, permaneceu salva após recarregar e continua disponível em Todas. Sem erros JavaScript/HTTP 5xx ou requisições à staff. Screenshots do perfil real mobile/desktop revisados. Script reproduzível: `scripts/verify-member-pages.mjs`; alteração de leitura exige opt-in explícito.
 

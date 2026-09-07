@@ -30,21 +30,24 @@
           ? 'Crie sua conta gratuita e encontre seu lugar na Nox.'
           : 'Seu acesso, com segurança.'}
     </p>
-    {#if form?.message}<div
-        class:success={form.success}
-        class:error={!form.success}
+    {#if form?.message || data.error}<div
+        class:success={form?.success}
+        class:error={!form?.success}
         class="notice"
         role="status"
       >
-        {form.message}
+        {form?.message || data.error}
       </div>{/if}
     <form
       method="POST"
       use:enhance={() => {
         busy = true;
         return async ({ update }) => {
-          await update();
-          busy = false;
+          try {
+            await update();
+          } finally {
+            busy = false;
+          }
         };
       }}
     >
