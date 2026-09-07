@@ -94,5 +94,22 @@ select pg_temp.denied('select public.editor_action(''archive'',''{}'')','suspend
 select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
 select public.owner_action('suspend','{"id":"10000002-0000-4000-8000-000000000002","suspended":false}');
 do $$begin perform public.owner_action('role','{"id":"10000001-0000-4000-8000-000000000001","role":"USER"}');raise exception 'FAIL: last admin removed';exception when raise_exception then if sqlerrm not like '%administrador ativo%' then raise;end if;end$$;
-select 'PASS: RLS, RBAC, IDOR, spam, XP, publication, notifications, suspension and last-owner guard' as result;
+-- Destructive controls are tested only inside this disposable transaction.
+select set_config('request.jwt.claim.sub','10000002-0000-4000-8000-000000000002',true);
+select pg_temp.denied('select public.owner_action(''delete_chapter'',''{"id":"40000000-0000-4000-8000-000000000001"}'')','editor cannot permanently delete chapters');
+select pg_temp.denied('select public.owner_action(''delete_work'',''{"id":"30000000-0000-4000-8000-000000000001"}'')','editor cannot permanently delete works');
+select set_config('request.jwt.claim.sub','10000003-0000-4000-8000-000000000003',true);
+select pg_temp.denied('select public.owner_action(''delete_chapter'',''{"id":"40000000-0000-4000-8000-000000000001"}'')','user cannot permanently delete chapters');
+select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
+select public.owner_action('delete_chapter','{"id":"40000000-0000-4000-8000-000000000001"}');
+select pg_temp.assert_true(not exists(select 1 from public.chapters where id='40000000-0000-4000-8000-000000000001'),'owner can delete chapter');
+select pg_temp.assert_true(not exists(select 1 from public.pages where chapter_id='40000000-0000-4000-8000-000000000001'),'chapter deletion removes page associations');
+select public.owner_action('delete_work','{"id":"30000000-0000-4000-8000-000000000001"}');
+select pg_temp.assert_true(not exists(select 1 from public.works where id='30000000-0000-4000-8000-000000000001'),'owner can delete work');
+select pg_temp.assert_true((select count(*)=2 from public.audit_log where action in ('delete_chapter','delete_work')),'deletions are audited');
+set local role postgres;
+select pg_temp.assert_true(not exists(select 1 from public.library where work_id='30000000-0000-4000-8000-000000000001'),'work deletion removes library associations');
+select pg_temp.assert_true(not exists(select 1 from public.reading where chapter_id='40000000-0000-4000-8000-000000000001'),'chapter deletion removes reading associations');
+select pg_temp.assert_true((select count(*)=2 from public.media),'deletion preserves source media');
+select 'PASS: RLS, RBAC, IDOR, spam, XP, publication, notifications, suspension, last-owner guard and owner-only deletion' as result;
 rollback;

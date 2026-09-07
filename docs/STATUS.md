@@ -44,7 +44,8 @@
 - Oito testes de navegador com fixtures exclusivamente locais passaram: leitor com progresso independente entre capítulos, upload de ZIP com falha/retomada sem duplicar páginas e reordenação, em 390/768/1366/1440 pixels. Não substituem QA de capítulos reais em produção.
 - Scanner ampliado para tokens de bots, Brevo, JWT privado e histórico Git completo, sem imprimir valores. Varredura local passou.
 - Commit `2285440`: CI `34064163624` passou; deploy `92882326-8a0f-407b-b4f9-c2d12a1ee416`. WebP real corrigido e validado no Telegram: 2.150 bytes, SHA-256 idêntico e acesso anônimo/condicional negado. Arquivo privado `97a500a1-fe15-4e8a-9316-031181650321`, não representa capítulo.
-- QA em produção encontrou overflow no painel administrativo mobile. Corrigido dimensionamento do grid; oito regressões locais passaram com o layout administrativo completo em quatro larguras. A revisão pós-deploy será registrada após execução.
+- QA em produção encontrou overflow no painel administrativo mobile. Corrigido dimensionamento do grid; oito regressões locais passaram com o layout administrativo completo em quatro larguras. Deploy `51d9d80e-7349-4553-a377-7130c4e8006c`, commit `a59980c`: editor real passou em 390/768/1366/1440 pixels, sem overflow ou erros JavaScript; cancelar saída preserva alterações e confirmar permite sair. Screenshots mobile/desktop revisados. Nenhum rascunho de teste foi salvo.
+- Exclusão definitiva validada em PostgreSQL descartável: USER e EDITOR bloqueados, ADMIN autorizado; associações de páginas/biblioteca/progresso removidas, mídia preservada e ações auditadas. Nenhum conteúdo real foi excluído.
 
 ## Pendências concretas
 
@@ -53,7 +54,7 @@
 3. Bot/canal Telegram configurados; upload individual real validado. Ainda testar capítulo completo e fluxo de ZIP pesado. Não prometer storage ilimitado.
 4. É necessário o ZIP real do capítulo final: o arquivo aprovado atual é somente um ícone. Não usar o ícone, RAW, Clean ou Tradução como substitutos de um capítulo.
 5. Concluir testes ponta a ponta de ZIP/reordenação, publicação, reader/progresso, comentários e likes em conteúdo final; testar sessão EDITOR real e login público. Upload individual aceito já validado em produção.
-6. Controles administrativos de remoção adicionados com confirmação digitada; validar em ambiente descartável. Finalizar estatísticas/descoberta e revisão das páginas com conteúdo real.
+6. Controles administrativos de remoção adicionados com confirmação digitada; backend validado em ambiente descartável. Finalizar estatísticas/descoberta e revisão das páginas com conteúdo real.
 7. Repetir CI, deploy e inspeção da URL pública a cada entrega. A autorização do dono para guardar exclusivamente a service-role do banco público na Cloudflare já foi atendida; nenhuma nova autorização dessa chave está pendente.
 
 ## Revisão automática
