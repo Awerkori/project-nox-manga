@@ -3,10 +3,14 @@
   import { action } from '$lib/actions';
   import Empty from '$lib/components/Empty.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
-  import { date } from '$lib/types';
+  import Pagination from '$lib/components/Pagination.svelte';
+  import { pageLink } from '$lib/pagination';
+  import { date, statusLabels } from '$lib/types';
   let { data } = $props();
   let notice = $state('');
   let busy = $state(false);
+  const pageHref = (page: number) =>
+    pageLink(`/${data.area}`, page, { status: data.tab, filtro: data.filter });
   async function avatar(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -78,11 +82,16 @@
     }
   }
   async function read() {
+    if (busy) return;
+    busy = true;
     try {
       await action('member', 'notifications', {});
       await invalidateAll();
+      notice = 'Notificações marcadas como lidas.';
     } catch (e) {
       notice = (e as Error).message;
+    } finally {
+      busy = false;
     }
   }
 </script>
@@ -122,10 +131,13 @@
         >
         <h2>{data.profile.display_name}</h2>
         <p>@{data.profile.username} · Na Nox desde {date(data.profile.created_at)}</p>
+        <a class="text-link" href="/u/{data.profile.username}">Ver perfil público ↗</a>
         <div class="stat-row">
           <div class="stat"><strong>{Math.floor(data.profile.xp / 250) + 1}</strong><span>Nível</span></div>
           <div class="stat"><strong>{data.profile.xp}</strong><span>XP conquistado</span></div>
           <div class="stat"><strong>{data.completed}</strong><span>Capítulos lidos</span></div>
+          <div class="stat"><strong>{data.libraryTotal}</strong><span>Obras na biblioteca</span></div>
+          <div class="stat"><strong>{data.completedWorks}</strong><span>Obras concluídas</span></div>
         </div>
         <div class="progress"><span style="width:{((data.profile.xp % 250) / 250) * 100}%"></span></div>
         <p class="small">{250 - (data.profile.xp % 250)} XP para o próximo nível</p>
@@ -157,12 +169,18 @@
         ><button class="button" disabled={busy}>{busy ? 'Salvando…' : 'Salvar perfil'}</button>
       </form>
     </div>
-  {:else if data.area === 'notificacoes'}{#if data.notifications.length}<div
-        class="row between"
-        style="margin-bottom:20px"
+  {:else if data.area === 'notificacoes'}
+    <div class="chips" style="margin-bottom:24px">
+      <a class="chip" aria-current={!data.filter ? 'page' : undefined} href="/notificacoes">Todas</a>
+      <a class="chip" aria-current={data.filter ? 'page' : undefined} href="/notificacoes?filtro=nao-lidas"
+        >Não lidas{data.unread ? ` (${data.unread})` : ''}</a
       >
-        <p class="small">Novidades para você</p>
-        <button class="button secondary compact" onclick={read}>Marcar todas como lidas</button>
+    </div>
+    {#if data.notifications.length}<div class="row between" style="margin-bottom:20px">
+        <p class="small">{data.total} {data.total === 1 ? 'notificação' : 'notificações'}</p>
+        <button class="button secondary compact" onclick={read} disabled={busy || !data.unread}
+          >{busy ? 'Marcando…' : 'Marcar todas como lidas'}</button
+        >
       </div>
       <div class="stack">
         {#each data.notifications as item (item.id)}<a
@@ -175,8 +193,15 @@
       </div>{:else}<Empty
         title="Tudo em dia por aqui."
         text="Novos capítulos das obras acompanhadas, respostas e conquistas aparecerão aqui."
+        href={data.filter ? '/notificacoes' : undefined}
+        label={data.filter ? 'Ver todas as notificações' : undefined}
       />{/if}
-  {:else if data.area === 'historico'}{#if data.history.length}<div class="continue-grid">
+  {:else if data.area === 'historico'}{#if data.history.length}
+      <p class="small muted">
+        {data.total}
+        {data.total === 1 ? 'capítulo no histórico' : 'capítulos no histórico'}
+      </p>
+      <div class="continue-grid">
         {#each data.history as item (item.chapter_id)}{#if item.chapters}<a
               class="continue-card"
               href="/ler/{item.chapter_id}"
@@ -199,17 +224,38 @@
   {:else}{#if data.area === 'biblioteca'}<div class="chips" style="margin-bottom:28px">
         {#each [['', 'Todas'], ['READING', 'Lendo'], ['PLANNED', 'Quero ler'], ['COMPLETED', 'Concluído']] as [value, label] (value)}<a
             class="chip"
+            aria-current={data.tab === value ? 'page' : undefined}
             style="opacity:{data.tab === value ? 1 : 0.6}"
             href="/biblioteca?status={value}">{label}</a
           >{/each}
-      </div>{/if}{#if data.library.length}<div class="work-grid">
-        {#each data.library as item (item.work_id)}{#if item.works}<WorkCard work={item.works} />{/if}{/each}
+      </div>{/if}{#if data.library.length}
+      <p class="small muted">
+        {data.total}
+        {data.total === 1 ? 'obra' : 'obras'}{data.tab ? ` · ${statusLabels[data.tab]}` : ''}
+      </p>
+      <div class="work-grid">
+        {#each data.library as item (item.work_id)}{#if item.works}<div>
+              <WorkCard work={item.works} />
+              <p class="small muted" style="margin-top:10px">
+                {statusLabels[item.status]}{item.favorite ? ' · Favorito' : ''}
+              </p>
+            </div>{/if}{/each}
       </div>{:else}<Empty
-        title={data.area === 'favoritos'
-          ? 'Guarde as histórias que marcaram você.'
-          : 'Uma biblioteca com a sua cara.'}
-        text="Abra uma obra e adicione à sua biblioteca para acompanhar a leitura."
-        href="/catalogo"
-        label="Explorar o catálogo"
+        title={data.tab
+          ? 'Nenhuma obra nesta lista.'
+          : data.area === 'favoritos'
+            ? 'Guarde as histórias que marcaram você.'
+            : 'Uma biblioteca com a sua cara.'}
+        text={data.tab
+          ? 'Veja as outras listas ou organize uma obra pela página dela.'
+          : 'Abra uma obra e adicione à sua biblioteca para acompanhar a leitura.'}
+        href={data.tab ? '/biblioteca' : '/catalogo'}
+        label={data.tab ? 'Ver toda a biblioteca' : 'Explorar o catálogo'}
       />{/if}{/if}
+  {#if data.area !== 'perfil'}<Pagination
+      page={data.page}
+      total={data.total}
+      pageSize={data.pageSize}
+      href={pageHref}
+    />{/if}
 </div>
