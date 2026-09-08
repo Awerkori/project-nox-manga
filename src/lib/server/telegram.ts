@@ -2,7 +2,8 @@
 export class TelegramStorageError extends Error {
   constructor(
     readonly stage: 'http' | 'payload' | 'network' | 'file' = 'file',
-    readonly status?: number
+    readonly status?: number,
+    readonly retryAfter?: number
   ) {
     super('Armazenamento temporariamente indisponível. Tente novamente.');
   }
@@ -20,7 +21,23 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         redirect: 'manual',
         signal: AbortSignal.timeout(60_000)
       });
-      if (!response.ok) throw new TelegramStorageError('http', response.status);
+      if (!response.ok) {
+        let retryAfter: number | undefined;
+        if (response.status === 429) {
+          const header = response.headers?.get?.('retry-after');
+          if (header) {
+            const parsed = parseInt(header, 10);
+            if (!isNaN(parsed) && parsed > 0) retryAfter = parsed;
+          }
+          try {
+            const body = await response.json().catch(() => null);
+            if (body?.parameters?.retry_after && typeof body.parameters.retry_after === 'number') {
+              retryAfter = body.parameters.retry_after;
+            }
+          } catch {}
+        }
+        throw new TelegramStorageError('http', response.status, retryAfter);
+      }
       const payload = await response.json().catch(() => {
         throw new TelegramStorageError('payload');
       });

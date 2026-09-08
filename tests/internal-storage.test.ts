@@ -176,4 +176,51 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
     expect(JSON.stringify(body)).not.toContain('super-secret-token');
     expect(mockUpload).toHaveBeenCalledWith(expect.any(Uint8Array), 'image/png', testId);
   });
+
+  it('preserves Telegram 429 rate limit and returns 429 with Retry-After header', async () => {
+    vi.doMock('$env/dynamic/private', () => ({
+      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+    }));
+
+    class MockTelegramStorageError extends Error {
+      stage = 'http' as const;
+      status = 429;
+      retryAfter = 45;
+    }
+
+    vi.doMock('../src/lib/server/telegram', () => ({
+      telegramStorage: () => ({
+        upload: vi.fn().mockRejectedValue(new MockTelegramStorageError())
+      }),
+      TelegramStorageError: MockTelegramStorageError
+    }));
+
+    const { POST } = await import('../src/routes/api/internal/storage/upload/+server');
+    const testId = '22222222-2222-2222-2222-222222222222';
+    const req = new Request(`https://127.0.0.1/api/internal/storage/upload?id=${testId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+      body: VALID_1X1_PNG
+    });
+
+    const res = await POST({
+      request: req,
+      getClientAddress: () => '127.0.0.1',
+      url: new URL(`https://127.0.0.1/api/internal/storage/upload?id=${testId}`),
+      params: {} as any,
+      locals: {} as any,
+      cookies: {} as any,
+      fetch: vi.fn(),
+      setHeaders: vi.fn(),
+      isDataRequest: false,
+      route: { id: '/api/internal/storage/upload' },
+      platform: {} as any,
+      isSubRequest: false
+    } as any);
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('45');
+    const body = await res.json();
+    expect(body.retryAfter).toBe(45);
+  });
 });

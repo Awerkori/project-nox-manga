@@ -41,7 +41,13 @@ function authenticate(request: Request, getClientAddress: () => string, url: URL
   // 2. Rate limit defensive check
   const ip = request.headers.get('cf-connecting-ip') || getClientAddress() || '127.0.0.1';
   if (!checkRateLimit(ip)) {
-    error(429, 'Limite de requisições excedido. Tente novamente em instantes.');
+    return new Response(JSON.stringify({ error: 'Limite de requisições excedido. Tente novamente em instantes.' }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '15'
+      }
+    });
   }
 
   // 3. Constant-time token verification against dedicated NOX_STORAGE_BRIDGE_TOKEN
@@ -115,10 +121,27 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
       bytes: bytes.byteLength
     });
   } catch (failure) {
+    const isTg = failure instanceof TelegramStorageError;
     console.warn('internal_storage_upload_failed', {
-      stage: failure instanceof TelegramStorageError ? failure.stage : 'upload',
-      status: failure instanceof TelegramStorageError ? failure.status : undefined
+      stage: isTg ? failure.stage : 'upload',
+      status: isTg ? failure.status : undefined,
+      retryAfter: isTg ? failure.retryAfter : undefined
     });
+
+    if (isTg && failure.status === 429) {
+      const retryAfter = failure.retryAfter && failure.retryAfter > 0 ? failure.retryAfter : 15;
+      return new Response(
+        JSON.stringify({ error: 'Telegram rate limit (FloodWait)', retryAfter }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter)
+          }
+        }
+      );
+    }
+
     error(502, 'Não foi possível armazenar a imagem. Tente novamente.');
   }
 };
