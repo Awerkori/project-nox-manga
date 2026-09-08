@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'node:crypto';
 
 process.loadEnvFile('.env');
-const origin = process.env.TEST_BASE_URL || 'https://project-nox-manga.project-nox-awerkori.workers.dev';
+const origin = process.env.TEST_BASE_URL || 'https://manga.project-nox-awerkori.workers.dev';
 const admin = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
 });

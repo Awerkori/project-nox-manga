@@ -27,7 +27,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      TEST_BASE_URL: https://project-nox-manga.project-nox-awerkori.workers.dev
+      TEST_BASE_URL: https://manga.project-nox-awerkori.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

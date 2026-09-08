@@ -166,21 +166,23 @@
 
 <style>
   .reader-shell {
-    background: #070708;
+    background: #06070c;
     min-height: 100vh;
   }
   .reader-bar {
-    height: 66px;
+    height: 64px;
     position: sticky;
     top: 0;
     z-index: 20;
-    background: #111016ee;
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid #27232d;
+    background: rgba(8, 10, 18, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
-    gap: 22px;
-    padding: 0 25px;
+    gap: 18px;
+    padding: 0 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   }
   .reader-bar > div:nth-child(2) {
     min-width: 0;
@@ -191,13 +193,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 14px;
+    color: #ffffff;
   }
   .reader-bar span {
     display: block;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 4px;
+    font-size: 11px;
+    color: #8c899a;
+    margin-top: 2px;
   }
   .reader-tools {
     display: flex;
@@ -206,7 +209,9 @@
     margin-left: auto;
   }
   .reader-tools > span {
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #c9aa73;
     margin: 0;
   }
   .page-stack {
@@ -216,25 +221,29 @@
   }
   .reader-settings {
     position: fixed;
-    top: 76px;
-    right: 15px;
+    top: 72px;
+    right: 18px;
     z-index: 30;
-    width: 280px;
-    background: #1c1625;
-    border: 1px solid #44324f;
+    width: 290px;
+    background: rgba(13, 16, 26, 0.95);
+    border: 1px solid rgba(181, 154, 245, 0.3);
+    backdrop-filter: blur(20px);
     padding: 24px;
-    border-radius: 12px;
-    box-shadow: 0 15px 50px #000a;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
   }
   .reader-end {
-    padding: 65px 20px;
+    padding: 72px 20px 48px;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
+    gap: 12px;
   }
   .reader-end h2 {
-    font-size: 26px;
+    font-size: 28px;
+    color: #ffffff;
+    margin: 0;
   }
   .reader-comments {
     max-width: 850px;
@@ -242,19 +251,29 @@
     padding: 0 22px 30px;
   }
   .reader-progress {
-    height: 2px;
+    height: 3px;
     position: fixed;
     bottom: 0;
     left: 0;
-    background: var(--purple);
+    background: linear-gradient(90deg, #8b5cf6, #c9aa73);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
     z-index: 50;
+    transition: width 0.3s ease;
   }
   .back-top {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: #211828c9;
-    border: 1px solid #493852;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(18, 22, 36, 0.8);
+    border: 1px solid rgba(181, 154, 245, 0.3);
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   }
   .reader-bar > a {
     padding: 8px;
@@ -264,19 +283,19 @@
   }
   @media (max-width: 600px) {
     .reader-bar {
-      padding: 0 8px;
-      gap: 6px;
-      height: 60px;
+      padding: 0 12px;
+      gap: 10px;
+      height: 58px;
     }
     .reader-tools {
-      gap: 0;
+      gap: 6px;
     }
     .reader-bar strong {
-      max-width: 43vw;
-      font-size: 11px;
+      max-width: 38vw;
+      font-size: 12px;
     }
     .reader-bar span {
-      font-size: 9px;
+      font-size: 10px;
     }
     .reader-end h2 {
       font-size: 22px;

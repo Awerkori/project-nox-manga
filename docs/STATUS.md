@@ -5,7 +5,7 @@
 - Repositório: https://github.com/Awerkori/project-nox-manga
 - Diretório: /home/awerkori/.Projects/project-nox-manga
 - Banco público separado: Supabase `izregkwaqdygwioqzwwo`, região São Paulo (`sa-east-1`).
-- Site online em produção: https://project-nox-manga.project-nox-awerkori.workers.dev
+- Site online em produção: https://manga.project-nox-awerkori.workers.dev (com redirecionamento automático 308 mantido na URL anterior https://project-nox-manga.project-nox-awerkori.workers.dev).
 - Deploy ativo no Cloudflare Workers (versão atualizada com perfis públicos `/u/[username]`, ranking enriquecido `/ranking`, filtros de status no catálogo `/catalogo` e ícones contextuais nas notificações).
 - Central Staff (`PROJECT NOX SCAN STAFF`) totalmente preservada e intocada. Nenhuma chave ou migração da central foi modificada; isolamento total assegurado.
 - ADMIN definitivo ativo: `awerkori@gmail.com`.

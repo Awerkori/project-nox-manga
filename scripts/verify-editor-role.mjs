@@ -3,7 +3,7 @@ import { editorCookies } from './user-session.mjs';
 
 // Comprehensive live verification of real EDITOR role on production.
 // Confirms that the editor can manage editorial content and is strictly forbidden from admin/owner features.
-const origin = process.env.TEST_BASE_URL || 'https://project-nox-manga.project-nox-awerkori.workers.dev';
+const origin = process.env.TEST_BASE_URL || 'https://manga.project-nox-awerkori.workers.dev';
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
 
 try {

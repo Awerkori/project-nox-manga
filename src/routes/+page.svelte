@@ -1,94 +1,470 @@
 <script lang="ts">
-  import { ArrowRight, ArrowUpRight, BookOpen, Sparkles, Compass } from '@lucide/svelte';
+  import { ArrowRight, BookOpen, Clock, Trophy, Sparkles } from '@lucide/svelte';
+  import Hero from '$lib/components/Hero.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
+  import { memberRank } from '$lib/types';
+
   let { data } = $props();
 </script>
 
-<div class="container">
-  <section class="hero">
-    <div class="hero-copy">
-      <div class="eyebrow"><span></span> SEU PRÓXIMO UNIVERSO</div>
-      <h1>Algumas histórias<br />só começam<br /><em>depois do escuro.</em></h1>
-      <p>Mangás, manhwas e webtoons. Novos mundos, a mesma vontade de ler só mais um capítulo.</p>
-      <div class="hero-actions">
-        <a href="/catalogo" class="button">Encontrar minha próxima leitura <ArrowRight size={18} /></a><a
-          href="/sobre"
-          class="text-link">Conheça a Nox <ArrowUpRight size={16} /></a
-        >
+<svelte:head>
+  <title>Project Nox — Histórias que nascem nas sombras e conquistam a noite</title>
+</svelte:head>
+
+<div class="home-wrapper">
+  <!-- Cinematographic Hero with Official Brand Emblem & Spotlight -->
+  <Hero featuredWork={data.featured} />
+
+  <div class="container home-content">
+    <!-- Quick Genre Tags Filter Strip -->
+    <div class="genre-strip">
+      <span class="genre-label"><Sparkles size={14} /> Gêneros</span>
+      <div class="genre-scroll">
+        <a href="/catalogo?tag=acao" class="genre-tag">Ação</a>
+        <a href="/catalogo?tag=fantasia" class="genre-tag">Fantasia</a>
+        <a href="/catalogo?tag=misterio" class="genre-tag">Mistério</a>
+        <a href="/catalogo?tag=sobrenatural" class="genre-tag">Sobrenatural</a>
+        <a href="/catalogo?tag=drama" class="genre-tag">Drama</a>
+        <a href="/catalogo?tag=ficcao" class="genre-tag">Ficção</a>
       </div>
-      <div class="hero-note"><span class="gold-line"></span> UMA NOVA PÁGINA DA PROJECT NOX</div>
     </div>
-    <div class="hero-art" aria-hidden="true">
-      <div class="orbit orbit-one"></div>
-      <div class="orbit orbit-two"></div>
-      <div class="nocturne">
-        <span class="art-caption">NOCTURNE / 001</span><span class="art-letter">N</span><span class="art-star"
-          >✦</span
-        >
-        <div class="art-bottom"><span>BEYOND<br />THE ORDINARY.</span><span>夜</span></div>
+
+    <!-- Continue Reading (Logged in members with progress) -->
+    {#if data.recent.length}
+      <section class="section-block">
+        <div class="section-title-row">
+          <div class="title-with-badge">
+            <span class="sub-badge"><Clock size={12} /> CONTINUAR</span>
+            <h2 class="section-title">De Onde Você Parou</h2>
+          </div>
+          <a href="/historico" class="view-all-link">
+            <span>Histórico</span>
+            <ArrowRight size={14} />
+          </a>
+        </div>
+
+        <div class="continue-grid">
+          {#each data.recent as item (item.chapters.id)}
+            <a href="/ler/{item.chapters.id}" class="continue-card">
+              <div class="continue-thumb">
+                {#if item.chapters.works.cover_id}
+                  <img
+                    src="/media/{item.chapters.works.cover_id}"
+                    alt=""
+                    width="64"
+                    height="90"
+                    class="thumb-img"
+                  />
+                {:else}
+                  <div class="thumb-placeholder">NOX</div>
+                {/if}
+              </div>
+              <div class="continue-meta">
+                <strong class="continue-work-title">{item.chapters.works.title}</strong>
+                <span class="continue-ch-info">Capítulo {item.chapters.number} · Pág. {item.page}</span>
+                <span class="continue-cta">Retomar leitura ↗</span>
+              </div>
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    <!-- Recent Releases Grid -->
+    <section id="lancamentos" class="section-block">
+      <div class="section-title-row">
+        <div class="title-with-badge">
+          <span class="sub-badge"><BookOpen size={12} /> CATÁLOGO</span>
+          <h2 class="section-title">Lançamentos Recentes</h2>
+        </div>
+        <a href="/catalogo" class="view-all-link">
+          <span>Ver catálogo completo</span>
+          <ArrowRight size={14} />
+        </a>
       </div>
-      <div class="art-label"><span>PROJECT NOX</span><span>EST. 2026</span></div>
-    </div>
-  </section>
-  <div class="discovery-strip">
-    <span><Sparkles size={17} /> Sua próxima obsessão está por aqui</span><a href="/catalogo?tag=acao"
-      >Ação ↗</a
-    ><a href="/catalogo?tag=fantasia">Fantasia ↗</a><a href="/catalogo?tag=romance">Romance ↗</a><a
-      href="/catalogo?tag=misterio">Mistério ↗</a
-    >
+
+      {#if data.works.length}
+        <div class="works-grid">
+          {#each data.works as work, index (work.id)}
+            <WorkCard {work} {index} />
+          {/each}
+        </div>
+      {:else}
+        <div class="empty-releases">
+          <BookOpen size={36} class="empty-icon" />
+          <h3>Os primeiros lançamentos estão sendo preparados</h3>
+          <p>Nossa equipe editorial está organizando os próximos capítulos.</p>
+        </div>
+      {/if}
+    </section>
+
+    <!-- Community Top Readers Preview -->
+    {#if data.topReaders.length}
+      <section class="section-block">
+        <div class="section-title-row">
+          <div class="title-with-badge">
+            <span class="sub-badge"><Trophy size={12} /> COMUNIDADE</span>
+            <h2 class="section-title">Mestres da Leitura</h2>
+          </div>
+          <a href="/ranking" class="view-all-link">
+            <span>Ranking completo</span>
+            <ArrowRight size={14} />
+          </a>
+        </div>
+
+        <div class="top-readers-podium">
+          {#each data.topReaders as reader, i (reader.id)}
+            {@const rank = memberRank(reader.xp)}
+            <a href="/u/{reader.username}" class="reader-podium-card podium-rank-{i + 1}">
+              <div class="podium-badge">
+                {#if i === 0}🥇{:else if i === 1}🥈{:else}🥉{/if}
+              </div>
+              <div class="podium-avatar">
+                {#if reader.avatar_id}
+                  <img
+                    src="/media/{reader.avatar_id}"
+                    alt=""
+                    width="54"
+                    height="54"
+                    class="avatar-img"
+                  />
+                {:else}
+                  <span class="avatar-fallback">{reader.display_name[0] || 'N'}</span>
+                {/if}
+              </div>
+              <div class="podium-details">
+                <strong class="reader-name">{reader.display_name}</strong>
+                <span class="reader-rank-title">{rank.title}</span>
+                <span class="reader-xp-tag">{reader.xp} XP</span>
+              </div>
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
   </div>
-  {#if data.recent.length}<section class="section">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">NO SEU RITMO</span>
-          <h2>De onde você parou</h2>
-        </div>
-        <a href="/historico" class="text-link">Histórico <ArrowRight size={17} /></a>
-      </div>
-      <div class="continue-grid">
-        {#each data.recent as item (item.chapters.id)}<a class="continue-card" href="/ler/{item.chapters.id}"
-            ><BookOpen size={26} />
-            <div>
-              <strong>{item.chapters.works.title}</strong>
-              <p>Capítulo {item.chapters.number} · Página {item.page}</p>
-            </div>
-            <ArrowRight size={18} /></a
-          >{/each}
-      </div>
-    </section>{/if}
-  {#if data.works.length}<section class="section">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">ACABARAM DE CHEGAR</span>
-          <h2>Novas histórias. Novos capítulos.</h2>
-        </div>
-        <a href="/catalogo" class="text-link">Ver catálogo <ArrowRight size={17} /></a>
-      </div>
-      <div class="work-grid">
-        {#each data.works as work, index (work.id)}<WorkCard {work} {index} />{/each}
-      </div>
-    </section>{:else}<section class="launch-panel">
-      <div class="launch-icon"><BookOpen size={30} strokeWidth={1.2} /></div>
-      <div>
-        <span class="eyebrow">NOS BASTIDORES</span>
-        <h2>As primeiras histórias estão a caminho.</h2>
-        <p>Nossa equipe está preparando os capítulos. Quando a revisão terminar, você encontra tudo aqui.</p>
-      </div>
-      <a href="/cadastrar" class="button secondary">Faça parte da Nox <ArrowUpRight size={17} /></a>
-    </section>{/if}
-  <section class="community-banner">
-    <div>
-      <span class="eyebrow">MAIS QUE A ÚLTIMA PÁGINA</span>
-      <h2>Seu lugar entre<br />uma história e outra.</h2>
-      <p>
-        Organize suas leituras, acompanhe cada capítulo e encontre gente que também não consegue parar de ler.
-      </p>
-      <a href={data.profile ? '/biblioteca' : '/cadastrar'} class="text-link"
-        >{data.profile ? 'Abrir minha biblioteca' : 'Criar minha conta'} <ArrowRight size={18} /></a
-      >
-    </div>
-    <div class="community-seal" aria-hidden="true">
-      <Compass size={110} strokeWidth={0.7} /><span>EXPLORE · READ · BELONG</span>
-    </div>
-  </section>
 </div>
+
+<style>
+  .home-wrapper {
+    position: relative;
+    z-index: 1;
+  }
+
+  .home-content {
+    display: flex;
+    flex-direction: column;
+    gap: 64px;
+    padding-bottom: 72px;
+  }
+
+  /* Genre tags strip */
+  .genre-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-radius: 14px;
+    background: rgba(13, 16, 26, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .genre-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .genre-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #c9aa73;
+    white-space: nowrap;
+    padding-right: 8px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .genre-scroll {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .genre-tag {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #a6a3b8;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .genre-tag:hover {
+    color: #ffffff;
+    background: rgba(181, 154, 245, 0.12);
+    border-color: rgba(181, 154, 245, 0.3);
+    transform: translateY(-1px);
+  }
+
+  /* Sections */
+  .section-block {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+  }
+
+  .title-with-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sub-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: #b59af5;
+  }
+
+  .section-title {
+    font-size: clamp(22px, 2.8vw, 30px);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    margin: 0;
+    color: #ffffff;
+  }
+
+  .view-all-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #c9aa73;
+    transition: all 0.2s ease;
+    padding-bottom: 4px;
+  }
+
+  .view-all-link:hover {
+    color: #e5c58a;
+    gap: 10px;
+  }
+
+  /* Continue Reading Cards */
+  .continue-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .continue-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(13, 16, 26, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .continue-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(181, 154, 245, 0.35);
+    box-shadow: 0 12px 28px -6px rgba(109, 40, 217, 0.25);
+  }
+
+  .continue-thumb {
+    width: 60px;
+    height: 84px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #0d0f1a;
+  }
+
+  .thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #151829;
+    color: #b59af5;
+    font-weight: 800;
+    font-size: 12px;
+  }
+
+  .continue-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .continue-work-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f2f0f7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .continue-ch-info {
+    font-size: 12px;
+    color: #8c899a;
+  }
+
+  .continue-cta {
+    font-size: 11px;
+    font-weight: 600;
+    color: #b59af5;
+    margin-top: 2px;
+  }
+
+  /* Works Grid */
+  .works-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 24px;
+  }
+
+  @media (max-width: 600px) {
+    .works-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+  }
+
+  .empty-releases {
+    padding: 48px 24px;
+    text-align: center;
+    border-radius: 16px;
+    background: rgba(13, 16, 26, 0.4);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+
+  :global(.empty-icon) {
+    color: #b59af5;
+    margin-bottom: 12px;
+  }
+
+  .empty-releases h3 {
+    font-size: 18px;
+    color: #ffffff;
+    margin: 0 0 6px;
+  }
+
+  .empty-releases p {
+    font-size: 14px;
+    color: #8c899a;
+    margin: 0;
+  }
+
+  /* Top Readers Podium */
+  .top-readers-podium {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .reader-podium-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: rgba(13, 16, 26, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reader-podium-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .podium-rank-1 {
+    border-color: rgba(201, 170, 115, 0.4);
+    box-shadow: 0 8px 24px -6px rgba(201, 170, 115, 0.15);
+  }
+
+  .podium-rank-2 {
+    border-color: rgba(190, 195, 210, 0.35);
+  }
+
+  .podium-rank-3 {
+    border-color: rgba(180, 130, 95, 0.35);
+  }
+
+  .podium-badge {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .podium-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid rgba(181, 154, 245, 0.4);
+  }
+
+  .podium-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .reader-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reader-rank-title {
+    font-size: 11px;
+    color: #c9aa73;
+    font-weight: 600;
+  }
+
+  .reader-xp-tag {
+    font-size: 11px;
+    color: #b59af5;
+    font-weight: 700;
+  }
+</style>

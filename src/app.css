@@ -1,14 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap');
 :root {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #eceaf1;
-  background: #0b0b10;
+  background: #06070c;
   font-synthesis: none;
-  --muted: #a2a0ae;
-  --line: #24232d;
-  --panel: #121219;
+  --bg-void: #06070c;
+  --bg-surface: #0b0d17;
+  --muted: #9d99ab;
+  --line: rgba(255, 255, 255, 0.07);
+  --panel: rgba(13, 16, 26, 0.7);
   --purple: #b59af5;
+  --purple-glow: rgba(181, 154, 245, 0.35);
   --gold: #c9aa73;
+  --gold-glow: rgba(201, 170, 115, 0.3);
   --radius: 16px;
   color-scheme: dark;
 }
@@ -190,39 +194,45 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 15px 23px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: #b49aef;
-  color: #181123;
+  gap: 10px;
+  padding: 13px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #ffffff;
   font-size: 14px;
-  font-weight: 700;
-  min-height: 48px;
-  transition:
-    background 0.18s,
-    transform 0.18s;
+  font-weight: 600;
+  min-height: 46px;
+  box-shadow: 0 4px 18px rgba(109, 40, 217, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .button:hover {
-  background: #c9b4fa;
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #9333ea, #7c3aed);
+  box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5);
+  transform: translateY(-2px);
 }
 .button.secondary {
-  background: #191820;
-  border-color: #35313f;
-  color: #e1d8f5;
+  background: rgba(18, 22, 36, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #d1cde0;
+  box-shadow: none;
+  backdrop-filter: blur(12px);
 }
 .button.secondary:hover {
-  background: #24202d;
+  background: rgba(28, 33, 54, 0.8);
+  border-color: rgba(181, 154, 245, 0.3);
+  color: #ffffff;
 }
 .button.compact {
-  padding: 10px 16px;
-  min-height: 40px;
+  padding: 8px 16px;
+  min-height: 38px;
+  font-size: 13px;
 }
 .button.danger {
-  background: #331d29;
-  color: #ffacb8;
-  border-color: #62303c;
+  background: rgba(80, 20, 30, 0.7);
+  color: #ffbac4;
+  border-color: rgba(255, 100, 120, 0.3);
+  box-shadow: 0 4px 16px rgba(180, 20, 40, 0.3);
 }
 .text-link {
   display: inline-flex;
@@ -834,10 +844,12 @@ select.control {
   margin: 24px 0 35px;
 }
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 26px;
+  background: rgba(13, 16, 26, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 28px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .two-columns {
   display: grid;

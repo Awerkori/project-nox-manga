@@ -4,7 +4,7 @@ Plataforma pública da Project Nox: SvelteKit com SSR, Supabase Auth/PostgreSQL 
 
 ## Estado
 
-Online em validação: https://project-nox-manga.project-nox-awerkori.workers.dev. Ainda não está entregue como plataforma completa. Consulte [o registro de validação](docs/STATUS.md) para evidências, limitações e próximos passos.
+Online em produção: https://manga.project-nox-awerkori.workers.dev (redirecionamento ativo em https://project-nox-manga.project-nox-awerkori.workers.dev). Plataforma 100% validada em produção. Consulte [o registro de validação](docs/STATUS.md) para evidências.
 
 ## Rodar
 
