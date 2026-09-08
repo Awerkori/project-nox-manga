@@ -245,12 +245,10 @@
             <span class="meta-label">Capítulos</span>
             <span class="meta-value">{data.chapters.length}</span>
           </div>
-          {#if data.metrics?.readers}
-            <div class="meta-item">
-              <span class="meta-label">Leitores</span>
-              <span class="meta-value">{data.metrics.readers}</span>
-            </div>
-          {/if}
+          <div class="meta-item">
+            <span class="meta-label">Leitores</span>
+            <span class="meta-value">{data.metrics?.readers ?? 0}</span>
+          </div>
           {#if data.work.author}
             <div class="meta-item">
               <span class="meta-label">Autor</span>
@@ -658,13 +656,14 @@
 
   /* Metadata Card (INFORMAÇÕES) */
   .work-metadata-card {
-    padding: 20px 24px;
-    border-radius: 16px;
-    background: rgba(13, 16, 26, 0.65);
+    padding: 18px 24px;
+    border-radius: 14px;
+    background: rgba(13, 16, 26, 0.6);
     border: 1px solid rgba(181, 154, 245, 0.16);
     backdrop-filter: blur(16px);
-    box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.5);
     margin-bottom: 24px;
+    max-width: 580px;
   }
 
   .metadata-heading {
@@ -672,20 +671,21 @@
     font-weight: 800;
     letter-spacing: 0.16em;
     color: #dfc28d;
-    margin: 0 0 16px;
+    margin: 0 0 14px;
     text-transform: uppercase;
   }
 
   .metadata-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 20px;
   }
 
   .meta-item {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
+    min-width: 0;
   }
 
   .meta-label {
@@ -693,13 +693,16 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #7b788a;
+    color: #8c899e;
   }
 
   .meta-value {
-    font-size: 14px;
+    font-size: 14.5px;
     font-weight: 700;
     color: #f2f0f7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .meta-status {
@@ -914,6 +917,9 @@
     .work-metadata-card {
       text-align: left;
       width: 100%;
+      max-width: 580px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .chapter-item {

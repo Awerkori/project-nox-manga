@@ -76,27 +76,36 @@
   <header class="site-header" class:scrolled class:menu-open={menu}>
     <div class="header-inner">
       <a href="/" class="brand" aria-label="Project Nox, início" onclick={() => (menu = false)}>
-        <img
-          src="/brand/nox-symbol-64.webp"
-          alt="Project Nox"
-          width="36"
-          height="36"
-          class="header-symbol"
-        />
+        <div class="brand-symbol-wrap">
+          <img
+            src="/brand/nox-symbol-64.webp"
+            alt="Project Nox"
+            width="46"
+            height="46"
+            class="header-symbol"
+          />
+          <span class="brand-symbol-glow"></span>
+        </div>
         <span class="brand-text">
-          <small>PROJECT</small>
-          <strong>NOX</strong>
+          <span class="brand-project">PROJECT</span>
+          <span class="brand-nox">NOX</span>
         </span>
       </a>
 
       <nav class="desktop-nav" aria-label="Navegação principal">
-        <a class:active={data.pathname === '/'} href="/">Início</a>
-        <a class:active={data.pathname.startsWith('/catalogo')} href="/catalogo">Catálogo</a>
-        <a class:active={data.pathname === '/ranking'} href="/ranking">Ranking</a>
+        <a class:active={data.pathname === '/'} href="/">
+          <span>Início</span>
+        </a>
+        <a class:active={data.pathname.startsWith('/catalogo')} href="/catalogo">
+          <span>Catálogo</span>
+        </a>
+        <a class:active={data.pathname === '/ranking'} href="/ranking">
+          <span>Ranking</span>
+        </a>
       </nav>
 
       <div class="header-actions">
-        <a class="icon-button" href="/catalogo" aria-label="Pesquisar catálogo">
+        <a class="icon-button header-search-btn" href="/catalogo" aria-label="Pesquisar catálogo">
           <Search size={18} />
         </a>
 
@@ -264,11 +273,14 @@
           <img
             src="/brand/nox-symbol-64.webp"
             alt=""
-            width="28"
-            height="28"
+            width="32"
+            height="32"
             class="footer-symbol"
           />
-          <span>PROJECT <strong>NOX</strong></span>
+          <span class="brand-text footer-brand-text">
+            <span class="brand-project">PROJECT</span>
+            <span class="brand-nox">NOX</span>
+          </span>
         </a>
         <p class="footer-tagline">Histórias que nascem nas sombras e conquistam a noite.</p>
       </div>
@@ -308,19 +320,19 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 72px;
+    height: 78px;
     z-index: 50;
-    background: rgba(6, 7, 12, 0.4);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(6, 7, 14, 0.65);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .site-header.scrolled {
-    background: rgba(8, 10, 18, 0.85);
-    border-bottom-color: rgba(181, 154, 245, 0.14);
-    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+    background: rgba(6, 7, 14, 0.92);
+    border-bottom-color: rgba(181, 154, 245, 0.2);
+    box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.75);
   }
 
   .header-inner {
@@ -340,101 +352,184 @@
     }
   }
 
+  /* Brand Lockup Horizontal */
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+    user-select: none;
+    flex-shrink: 0;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .brand:hover {
+    transform: translateY(-1px);
+  }
+
+  .brand-symbol-wrap {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    text-decoration: none;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .header-symbol {
-    width: 36px;
-    height: 36px;
+    width: 46px;
+    height: 46px;
     object-fit: contain;
-    filter: drop-shadow(0 0 8px rgba(181, 154, 245, 0.3));
-    transition: transform 0.3s ease;
+    filter: drop-shadow(0 0 12px rgba(181, 154, 245, 0.38));
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
+  }
+
+  .brand-symbol-glow {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(181, 154, 245, 0.45), transparent 70%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .brand:hover .brand-symbol-glow {
+    opacity: 1;
   }
 
   .brand:hover .header-symbol {
-    transform: scale(1.08);
+    transform: scale(1.06) rotate(1deg);
+    filter: drop-shadow(0 0 20px rgba(181, 154, 245, 0.6));
   }
 
   .brand-text {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
     line-height: 1;
   }
 
-  .brand-text small {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.28em;
-    color: #a6a3b8;
-  }
-
-  .brand-text strong {
+  .brand-project {
     font-family: var(--font-heading, Manrope, sans-serif);
-    font-size: 20px;
-    font-weight: 800;
+    font-size: 22px;
+    font-weight: 850;
     letter-spacing: 0.04em;
-    color: #ffffff;
+    color: #dfc28d;
+    background: linear-gradient(135deg, #ffffff 0%, #f6e4c7 35%, #dfc28d 75%, #b89352 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 10px rgba(223, 194, 141, 0.25));
   }
 
+  .brand-nox {
+    font-family: var(--font-heading, Manrope, sans-serif);
+    font-size: 22px;
+    font-weight: 850;
+    letter-spacing: 0.05em;
+    color: #b59af5;
+    background: linear-gradient(135deg, #ffffff 0%, #e6dcfe 35%, #b59af5 75%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 14px rgba(181, 154, 245, 0.35));
+  }
+
+  /* Desktop Navigation in Segmented Glass Capsule */
   .desktop-nav {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 28px;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 999px;
+    background: rgba(14, 18, 28, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
   .desktop-nav a {
-    font-size: 14px;
-    font-weight: 500;
-    color: #a6a3b8;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-heading, Manrope, sans-serif);
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #b5b1c7;
     text-decoration: none;
-    padding: 6px 0;
+    padding: 8px 20px;
+    border-radius: 999px;
     position: relative;
-    transition: color 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .desktop-nav a:hover,
+  .desktop-nav a:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
   .desktop-nav a.active {
     color: #ffffff;
+    font-weight: 700;
+    background: linear-gradient(135deg, rgba(181, 154, 245, 0.22) 0%, rgba(201, 170, 115, 0.15) 100%);
+    border: 1px solid rgba(181, 154, 245, 0.4);
+    box-shadow: 0 0 18px rgba(181, 154, 245, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.3);
   }
 
-  .desktop-nav a.active::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #b59af5, #c9aa73);
-    border-radius: 2px;
-  }
-
+  /* Actions Toolbar */
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+
+  .header-actions .icon-button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(14, 18, 28, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #b5b1c7;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    padding: 0;
+  }
+
+  .header-actions .icon-button:hover {
+    color: #ffffff;
+    background: rgba(28, 33, 54, 0.85);
+    border-color: rgba(181, 154, 245, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 18px rgba(181, 154, 245, 0.2);
   }
 
   .btn-login-nav {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 18px;
+    gap: 8px;
+    padding: 9px 22px;
     border-radius: 999px;
-    background: rgba(181, 154, 245, 0.12);
-    border: 1px solid rgba(181, 154, 245, 0.3);
+    background: linear-gradient(135deg, rgba(181, 154, 245, 0.2), rgba(201, 170, 115, 0.14));
+    border: 1px solid rgba(181, 154, 245, 0.38);
     color: #ffffff;
-    font-size: 13px;
-    font-weight: 600;
-    transition: all 0.25s ease;
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: 0 2px 14px rgba(181, 154, 245, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    text-decoration: none;
   }
 
   .btn-login-nav:hover {
-    background: rgba(181, 154, 245, 0.22);
-    border-color: rgba(181, 154, 245, 0.5);
+    background: linear-gradient(135deg, rgba(181, 154, 245, 0.32), rgba(201, 170, 115, 0.24));
+    border-color: rgba(181, 154, 245, 0.65);
+    box-shadow: 0 6px 24px rgba(181, 154, 245, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3);
     transform: translateY(-1px);
   }
 
@@ -448,8 +543,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
     padding: 0;
     border-radius: 50%;
     background: transparent;
@@ -461,10 +556,11 @@
   }
 
   .avatar-btn:hover,
-  .avatar-btn:focus-visible {
-    transform: scale(1.06);
+  .avatar-btn:focus-visible,
+  .avatar-btn[aria-expanded="true"] {
+    transform: translateY(-1px) scale(1.04);
     border-color: #b59af5;
-    box-shadow: 0 0 14px rgba(181, 154, 245, 0.35);
+    box-shadow: 0 0 16px rgba(181, 154, 245, 0.45);
   }
 
   .avatar-img {
@@ -666,7 +762,7 @@
   }
 
   .mobile-menu-btn {
-    display: none;
+    display: none !important;
   }
 
   .mobile-drawer {
@@ -707,17 +803,31 @@
   .footer-brand {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    color: #ffffff;
+    gap: 12px;
     text-decoration: none;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    user-select: none;
   }
 
   .footer-symbol {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(181, 154, 245, 0.3));
+  }
+
+  .footer-brand-text {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .footer-brand-text .brand-project {
+    font-size: 19px;
+  }
+
+  .footer-brand-text .brand-nox {
+    font-size: 19px;
   }
 
   .footer-tagline {
@@ -769,26 +879,91 @@
     }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 980px) and (min-width: 769px) {
     .header-inner {
-      padding: 0 20px;
+      padding: 0 24px;
+      gap: 20px;
+    }
+    .desktop-nav {
+      gap: 4px;
+      padding: 5px 6px;
+    }
+    .desktop-nav a {
+      padding: 7px 14px;
+      font-size: 14px;
+    }
+    .brand-project,
+    .brand-nox {
+      font-size: 20px;
+    }
+    .header-symbol {
+      width: 42px;
+      height: 42px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .site-header {
+      height: 68px;
+    }
+
+    .header-inner {
+      padding: 0 16px;
+      gap: 12px;
+    }
+
+    .brand {
+      gap: 10px;
+    }
+
+    .header-symbol {
+      width: 36px;
+      height: 36px;
+    }
+
+    .brand-project,
+    .brand-nox {
+      font-size: 17.5px;
     }
 
     .desktop-nav {
       display: none;
     }
 
+    .header-actions {
+      gap: 10px;
+    }
+
+    .header-actions .icon-button {
+      width: 38px;
+      height: 38px;
+    }
+
+    .header-search-btn {
+      display: none !important;
+    }
+
+    .btn-login-nav {
+      padding: 7px 16px;
+      font-size: 13px;
+    }
+
+    .avatar-btn {
+      width: 38px;
+      height: 38px;
+    }
+
     .mobile-menu-btn {
-      display: flex;
+      display: inline-flex !important;
     }
 
     .mobile-drawer {
       display: block;
       position: absolute;
-      top: 72px;
+      top: 68px;
       left: 0;
       right: 0;
-      background: rgba(8, 10, 18, 0.96);
+      background: rgba(8, 10, 18, 0.97);
       border-bottom: 1px solid rgba(181, 154, 245, 0.2);
       backdrop-filter: blur(20px);
       padding: 20px 24px;
