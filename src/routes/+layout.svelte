@@ -40,6 +40,11 @@
     content={data.config.description ||
       'Mangás, manhwas e webtoons da Project Nox. Descubra sua próxima leitura, acompanhe capítulos e faça parte da comunidade.'}
   />
+  <meta property="og:site_name" content="Project Nox" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/brand/nox-symbol-256.webp" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:image" content="/brand/nox-symbol-256.webp" />
 </svelte:head>
 
 <a class="skip" href="#conteudo">Pular para conteúdo</a>
