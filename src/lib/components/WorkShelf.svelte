@@ -4,12 +4,13 @@
 
   type Props = {
     title: string;
+    subtitle?: string;
     badge?: string;
     viewAllUrl?: string;
     works: Work[];
   };
 
-  let { title, badge, viewAllUrl, works = [] }: Props = $props();
+  let { title, subtitle, badge, viewAllUrl, works = [] }: Props = $props();
 
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
@@ -40,12 +41,15 @@
           <span class="shelf-badge">{badge}</span>
         {/if}
         <h2 class="shelf-title">{title}</h2>
+        {#if subtitle}
+          <span class="shelf-subtitle">{subtitle}</span>
+        {/if}
       </div>
 
       <div class="shelf-actions">
         {#if viewAllUrl}
           <a href={viewAllUrl} class="view-all-link">
-            <span>Ver todos</span>
+            <span>Ver catálogo</span>
             <ArrowRight size={14} />
           </a>
         {/if}
@@ -85,8 +89,8 @@
                   src="/media/{work.cover_id}"
                   alt={work.title}
                   class="card-img"
-                  width="180"
-                  height="255"
+                  width="200"
+                  height="285"
                   loading="lazy"
                   decoding="async"
                 />
@@ -113,6 +117,7 @@
   .shelf-section {
     position: relative;
     margin-bottom: 3.5rem;
+    width: 100%;
   }
 
   .shelf-header {
@@ -120,20 +125,20 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.4rem;
-    padding-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .title-cluster {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.25rem;
   }
 
   .shelf-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #dfc28d;
@@ -141,11 +146,17 @@
 
   .shelf-title {
     margin: 0;
-    font-family: 'Cinzel', serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f1f3f9;
-    letter-spacing: -0.01em;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+  }
+
+  .shelf-subtitle {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #8c93a8;
   }
 
   .shelf-actions {
@@ -158,7 +169,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 600;
     color: #8e95a5;
     text-decoration: none;
@@ -176,8 +187,8 @@
   }
 
   .shelf-arrow {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.09);
@@ -216,14 +227,14 @@
 
   .shelf-track {
     display: flex;
-    gap: 1.25rem;
+    gap: 1.4rem;
     width: max-content;
   }
 
   .shelf-card {
     display: flex;
     flex-direction: column;
-    width: 180px;
+    width: 200px;
     scroll-snap-align: start;
     text-decoration: none;
     outline: none;
@@ -231,24 +242,24 @@
   }
 
   .shelf-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px);
   }
 
   .card-cover-box {
     position: relative;
-    width: 180px;
-    height: 255px;
-    border-radius: 10px;
+    width: 200px;
+    height: 285px;
+    border-radius: 12px;
     overflow: hidden;
     background: #11131c;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
   }
 
   .shelf-card:hover .card-cover-box {
-    border-color: rgba(223, 194, 141, 0.35);
-    box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.8), 0 0 16px -2px rgba(223, 194, 141, 0.2);
+    border-color: rgba(223, 194, 141, 0.4);
+    box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.85), 0 0 20px -2px rgba(223, 194, 141, 0.22);
   }
 
   .card-img {
@@ -264,8 +275,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Cinzel', serif;
-    font-weight: 700;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 800;
     color: #dfc28d;
     background: #161826;
   }
@@ -273,21 +284,21 @@
   .card-glow {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 65%, rgba(6, 7, 12, 0.8) 100%);
+    background: linear-gradient(180deg, transparent 60%, rgba(6, 7, 12, 0.85) 100%);
     pointer-events: none;
   }
 
   .card-kind-badge {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    padding: 0.2rem 0.5rem;
+    top: 9px;
+    right: 9px;
+    padding: 0.22rem 0.55rem;
     border-radius: 6px;
-    background: rgba(6, 7, 12, 0.8);
+    background: rgba(6, 7, 12, 0.82);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     color: #dfc28d;
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -296,14 +307,14 @@
   .card-info {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    margin-top: 0.75rem;
+    gap: 0.3rem;
+    margin-top: 0.8rem;
   }
 
   .card-work-title {
-    color: #e5e8f0;
-    font-size: 0.92rem;
-    font-weight: 600;
+    color: #eef1f8;
+    font-size: 0.96rem;
+    font-weight: 700;
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -320,7 +331,7 @@
 
   .card-author {
     color: #7b8396;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -328,16 +339,16 @@
 
   @media (max-width: 640px) {
     .shelf-card {
-      width: 140px;
+      width: 145px;
     }
 
     .card-cover-box {
-      width: 140px;
-      height: 200px;
+      width: 145px;
+      height: 206px;
     }
 
     .shelf-title {
-      font-size: 1.25rem;
+      font-size: 1.3rem;
     }
 
     .shelf-nav-arrows {

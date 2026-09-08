@@ -27,8 +27,8 @@
 <section id="lancamentos" class="releases-section">
   <div class="releases-header">
     <div class="title-cluster">
-      <span class="releases-badge">CAPÍTULOS RECÉM-SAÍDOS</span>
-      <h2 class="releases-title">Lançamentos Recentes</h2>
+      <h2 class="releases-title">LANÇAMENTOS</h2>
+      <span class="releases-subtitle">Capítulos recém-publicados</span>
     </div>
 
     <a href="/catalogo" class="view-all-link">
@@ -38,18 +38,18 @@
   </div>
 
   {#if releases.length > 0}
-    <div class="releases-grid">
+    <div class="releases-feed">
       {#each releases as rel (rel.workId)}
         <article class="release-row-card">
-          <!-- Cover Thumbnail -->
+          <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             {#if rel.coverId}
               <img
                 src="/media/{rel.coverId}"
                 alt={rel.workTitle}
                 class="thumb-img"
-                width="64"
-                height="88"
+                width="68"
+                height="96"
                 loading="lazy"
                 decoding="async"
               />
@@ -58,34 +58,37 @@
             {/if}
           </a>
 
-          <!-- Details & Direct Chapter Buttons -->
-          <div class="release-body">
-            <div class="work-headline">
-              <a href="/obra/{rel.workSlug}" class="work-link" title={rel.workTitle}>
-                {rel.workTitle}
-              </a>
-              <span class="kind-tag">{rel.kind}</span>
+          <!-- Details & Interactive Chapter Pills -->
+          <div class="release-main">
+            <div class="release-top-row">
+              <div class="work-title-group">
+                <a href="/obra/{rel.workSlug}" class="work-link" title={rel.workTitle}>
+                  {rel.workTitle}
+                </a>
+                <span class="kind-tag">{rel.kind}</span>
+              </div>
+
+              <!-- Relative Update Time in Upper Right Corner (Kuro Style) -->
+              <div class="timestamp-box">
+                <Clock size={12} class="time-clock" />
+                <time datetime={rel.latestPublishedAt}>
+                  {relativeTime(rel.latestPublishedAt)}
+                </time>
+              </div>
             </div>
 
-            <!-- Clickable Chapter Pills (Direct to reader) -->
+            <!-- Clickable Chapter Pills List -->
             <div class="chapter-pills-list">
-              {#each rel.chapters as ch}
+              {#each rel.chapters as ch, i}
                 <a
                   href="/ler/{ch.id}"
                   class="chapter-pill"
+                  class:latest-pill={i === 0}
                   title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${ch.title}` : ''}`}
                 >
                   <span class="ch-text">Cap. {ch.number}</span>
                 </a>
               {/each}
-            </div>
-
-            <!-- Timestamp -->
-            <div class="timestamp-row">
-              <Clock size={11} class="time-icon" />
-              <time datetime={rel.latestPublishedAt}>
-                {relativeTime(rel.latestPublishedAt)}
-              </time>
             </div>
           </div>
         </article>
@@ -93,7 +96,7 @@
     </div>
   {:else}
     <div class="empty-releases">
-      <BookOpen size={36} class="empty-icon" />
+      <BookOpen size={36} />
       <h3>Nenhum capítulo lançado recentemente</h3>
       <p>Novos lançamentos aparecerão aqui assim que forem publicados.</p>
     </div>
@@ -104,6 +107,7 @@
   .releases-section {
     position: relative;
     margin-bottom: 3.5rem;
+    width: 100%;
   }
 
   .releases-header {
@@ -111,39 +115,37 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.4rem;
-    padding-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .title-cluster {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .releases-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #dfc28d;
+    gap: 0.25rem;
   }
 
   .releases-title {
     margin: 0;
-    font-family: 'Cinzel', serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f1f3f9;
-    letter-spacing: -0.01em;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+  }
+
+  .releases-subtitle {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #8c93a8;
   }
 
   .view-all-link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 600;
     color: #8e95a5;
     text-decoration: none;
@@ -154,30 +156,32 @@
     color: #dfc28d;
   }
 
-  /* 2-column density grid */
-  .releases-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+  /* Single Wide Column Feed (Kuro Mangás Standard) */
+  .releases-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
   }
 
   .release-row-card {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.85rem;
-    background: rgba(14, 16, 24, 0.6);
+    gap: 1.25rem;
+    padding: 0.85rem 1.25rem;
+    background: rgba(14, 16, 26, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    min-height: 106px;
   }
 
   .release-row-card:hover {
-    background: rgba(20, 23, 35, 0.75);
-    border-color: rgba(181, 154, 245, 0.2);
-    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+    background: rgba(20, 24, 38, 0.85);
+    border-color: rgba(223, 194, 141, 0.25);
+    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(223, 194, 141, 0.1);
     transform: translateY(-2px);
   }
 
@@ -188,8 +192,8 @@
   }
 
   .thumb-img {
-    width: 64px;
-    height: 88px;
+    width: 68px;
+    height: 96px;
     object-fit: cover;
     border-radius: 8px;
     display: block;
@@ -199,49 +203,59 @@
   }
 
   .cover-thumb-link:hover .thumb-img {
-    border-color: rgba(223, 194, 141, 0.4);
+    border-color: rgba(223, 194, 141, 0.45);
     transform: scale(1.03);
   }
 
   .thumb-placeholder {
-    width: 64px;
-    height: 88px;
+    width: 68px;
+    height: 96px;
     border-radius: 8px;
     background: #161826;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Cinzel', serif;
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
     color: #dfc28d;
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .release-body {
+  .release-main {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.6rem;
     min-width: 0;
     flex: 1;
   }
 
-  .work-headline {
+  .release-top-row {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    justify-content: space-between;
+    gap: 1rem;
     min-width: 0;
   }
 
+  .work-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
   .work-link {
-    color: #e5e8f0;
-    font-size: 0.95rem;
+    color: #ffffff;
+    font-size: 1.05rem;
     font-weight: 700;
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color 0.2s ease;
+    letter-spacing: -0.01em;
   }
 
   .work-link:hover {
@@ -250,63 +264,81 @@
 
   .kind-tag {
     flex-shrink: 0;
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.05);
-    color: #a0a7ba;
-    font-size: 0.65rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 5px;
+    background: rgba(181, 154, 245, 0.1);
+    border: 1px solid rgba(181, 154, 245, 0.25);
+    color: #cbb4ff;
+    font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
+  .timestamp-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #7b8396;
+    font-size: 0.8rem;
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
   .chapter-pills-list {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
   }
 
   .chapter-pill {
     display: inline-flex;
     align-items: center;
-    padding: 0.28rem 0.65rem;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #cbd3e2;
-    font-size: 0.78rem;
+    padding: 0.32rem 0.8rem;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #d2d8e6;
+    font-size: 0.82rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .chapter-pill:hover {
-    background: rgba(223, 194, 141, 0.12);
-    border-color: rgba(223, 194, 141, 0.4);
+    background: rgba(223, 194, 141, 0.14);
+    border-color: rgba(223, 194, 141, 0.45);
     color: #dfc28d;
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(223, 194, 141, 0.15);
+    box-shadow: 0 2px 10px rgba(223, 194, 141, 0.18);
   }
 
-  .timestamp-row {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: #6c7487;
-    font-size: 0.72rem;
+  .chapter-pill.latest-pill {
+    background: rgba(223, 194, 141, 0.09);
+    border-color: rgba(223, 194, 141, 0.32);
+    color: #dfc28d;
+    font-weight: 700;
+  }
+
+  .chapter-pill.latest-pill:hover {
+    background: rgba(223, 194, 141, 0.2);
+    border-color: rgba(223, 194, 141, 0.6);
+    box-shadow: 0 2px 14px rgba(223, 194, 141, 0.28);
   }
 
   .empty-releases {
     padding: 3rem 1.5rem;
     text-align: center;
-    background: rgba(14, 16, 24, 0.4);
+    background: rgba(14, 16, 26, 0.4);
     border: 1px dashed rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
+    color: #555c6e;
   }
 
   .empty-releases h3 {
@@ -321,34 +353,42 @@
     font-size: 0.85rem;
   }
 
-  @media (max-width: 860px) {
-    .releases-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
+  /* Mobile Rules */
   @media (max-width: 640px) {
     .releases-title {
-      font-size: 1.25rem;
+      font-size: 1.35rem;
     }
 
     .release-row-card {
-      gap: 0.75rem;
+      gap: 0.9rem;
       padding: 0.75rem;
+      align-items: flex-start;
     }
 
-    .thumb-img, .thumb-placeholder {
-      width: 52px;
-      height: 72px;
+    .thumb-img,
+    .thumb-placeholder {
+      width: 56px;
+      height: 78px;
+    }
+
+    .release-top-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
     }
 
     .work-link {
-      font-size: 0.88rem;
+      font-size: 0.95rem;
+    }
+
+    .timestamp-box {
+      font-size: 0.72rem;
+      color: #6a7185;
     }
 
     .chapter-pill {
-      font-size: 0.72rem;
-      padding: 0.22rem 0.5rem;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
     }
   }
 </style>

@@ -106,6 +106,37 @@
       </nav>
 
       <div class="header-actions">
+        <!-- Official Desktop Community Links (Tracker style) -->
+        <div class="header-community-group">
+          <a
+            class="header-community-btn fluxer-btn"
+            href="https://web.canary.fluxer.app/invite/q456UCVt"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Fluxer Oficial"
+            title="Fluxer Oficial"
+          >
+            <svg viewBox="0 0 512 512" fill="none" class="community-svg" aria-hidden="true">
+              <path d="M187.53 266.057C171.987 266.057 157.206 269.562 143.187 276.571C129.321 283.581 118.044 294.781 109.359 310.171C103.743 320.3 100.041 332.574 98.2529 346.993C96.5986 360.334 107.829 371.2 121.271 371.2C135.049 371.2 145.336 359.626 148.673 346.259C150.564 338.68 153.612 332.67 157.815 328.229C165.891 319.695 176.101 315.429 188.444 315.429C196.673 315.429 204.216 317.486 211.073 321.6C217.93 325.562 226.844 332.343 237.815 341.943C254.577 356.724 269.359 367.467 282.159 374.171C294.959 380.724 309.13 384 324.673 384C340.216 384 354.997 380.495 369.016 373.486C383.035 366.476 394.387 355.276 403.073 339.886C408.811 329.718 412.521 317.389 414.202 302.899C415.745 289.597 404.498 278.857 391.106 278.857C377.243 278.858 366.904 290.561 363.218 303.927C361.421 310.442 358.706 315.952 355.073 320.457C347.454 329.905 337.016 334.629 323.759 334.629C315.53 334.629 308.063 332.647 301.359 328.686C294.806 324.571 285.816 317.714 274.387 308.114C257.473 293.943 242.615 283.429 229.815 276.571C217.168 269.562 203.073 266.057 187.53 266.057Z" fill="currentColor"/>
+              <path d="M187.53 128C171.987 128 157.206 131.505 143.187 138.514C129.321 145.524 118.044 156.724 109.359 172.114C103.743 182.243 100.041 194.517 98.2529 208.935C96.5985 222.276 107.829 233.142 121.271 233.143C135.049 233.143 145.336 221.569 148.673 208.202C150.564 200.623 153.612 194.613 157.815 190.171C165.891 181.638 176.101 177.371 188.444 177.371C196.673 177.371 204.216 179.429 211.073 183.543C217.93 187.505 226.844 194.286 237.815 203.886C254.577 218.667 269.359 229.41 282.159 236.114C294.959 242.667 309.13 245.943 324.673 245.943C340.216 245.943 354.997 242.438 369.016 235.429C383.035 228.419 394.387 217.219 403.073 201.829C408.811 191.661 412.521 179.332 414.202 164.842C415.745 151.539 404.498 140.8 391.106 140.8C377.243 140.8 366.904 152.504 363.218 165.87C361.421 172.385 358.706 177.895 355.073 182.4C347.454 191.848 337.016 196.571 323.759 196.571C315.53 196.571 308.063 194.59 301.359 190.629C294.806 186.514 285.816 179.657 274.387 170.057C257.473 155.886 242.615 145.371 229.815 138.514C217.168 131.505 203.073 128 187.53 128Z" fill="currentColor"/>
+            </svg>
+            <span class="community-btn-text">Fluxer</span>
+          </a>
+          <a
+            class="header-community-btn discord-btn"
+            href="https://discord.com/invite/qNAMYUEmGj"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Discord Oficial"
+            title="Discord Oficial"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" class="community-svg" aria-hidden="true">
+              <path d="M19.54 4.46A16.5 16.5 0 0 0 15.4 3.2l-.5 1.02a15.3 15.3 0 0 0-5.8 0L8.6 3.2a16.5 16.5 0 0 0-4.14 1.26C1.84 8.4 1.13 12.24 1.48 16.03A16.65 16.65 0 0 0 6.56 18.6l1.23-1.68a10.33 10.33 0 0 1-1.94-.93l.47-.36a11.92 11.92 0 0 0 11.36 0l.47.36c-.62.37-1.27.69-1.94.93l1.23 1.68a16.62 16.62 0 0 0 5.08-2.57c.41-4.4-.7-8.2-2.98-11.57ZM8.68 13.7c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Zm6.64 0c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Z"/>
+            </svg>
+            <span class="community-btn-text">Discord</span>
+          </a>
+        </div>
+
         <a class="icon-button header-search-btn" href="/catalogo" aria-label="Pesquisar catálogo">
           <Search size={18} />
         </a>
@@ -548,8 +579,85 @@
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     flex-shrink: 0;
+  }
+
+  /* Header Community Links (Tracker Style) */
+  .header-community-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-community-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
+  }
+
+  .header-community-btn .community-svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+  }
+
+  .header-community-btn.fluxer-btn {
+    background: rgba(22, 21, 44, 0.7);
+    color: #e9e4ff;
+    border-color: rgba(214, 162, 255, 0.2);
+  }
+
+  .header-community-btn.fluxer-btn:hover {
+    border-color: #d6a2ff;
+    background: rgba(162, 107, 222, 0.22);
+    color: #f1dcff;
+    transform: translateY(-1px);
+    box-shadow: 0 0 14px rgba(214, 162, 255, 0.25);
+  }
+
+  .header-community-btn.discord-btn {
+    background: rgba(22, 21, 44, 0.7);
+    color: #e9e4ff;
+    border-color: rgba(114, 137, 218, 0.2);
+  }
+
+  .header-community-btn.discord-btn:hover {
+    border-color: #7289da;
+    background: rgba(88, 101, 242, 0.2);
+    color: #bdc8ff;
+    transform: translateY(-1px);
+    box-shadow: 0 0 14px rgba(114, 137, 218, 0.25);
+  }
+
+  @media (max-width: 1120px) {
+    .header-community-btn {
+      padding: 0;
+      width: 38px;
+      height: 38px;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .header-community-btn .community-btn-text {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .header-community-group {
+      display: none !important;
+    }
   }
 
   .header-actions .icon-button {

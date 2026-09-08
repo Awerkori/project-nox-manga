@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, BookOpen, Clock } from '@lucide/svelte';
+  import { ArrowRight, Clock } from '@lucide/svelte';
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
@@ -16,17 +16,17 @@
 </svelte:head>
 
 <div class="home-wrapper">
-  <!-- Editorial Hero Carousel (Subtle 3D Cover + Atmospheric Backdrop) -->
+  <!-- 1. Editorial Hero Carousel (Large Cover on Left + Full-Bleed Atmospheric Backdrop) -->
   <HeroCarousel works={data.featuredList} continueReading={data.recent} />
 
-  <div class="container home-content">
-    <!-- Continue Reading (Only for logged-in readers with active progress) -->
+  <div class="home-content">
+    <!-- 2. Continue Reading (Strictly for authenticated readers with active reading progress) -->
     {#if data.recent && data.recent.length > 0}
       <section class="section-block continue-section">
         <div class="section-header">
           <div class="title-cluster">
-            <span class="section-badge"><Clock size={12} /> DE ONDE VOCÊ PAROU</span>
-            <h2 class="section-title">Continuar Lendo</h2>
+            <h2 class="section-title">CONTINUAR LENDO</h2>
+            <span class="section-subtitle">De onde você parou</span>
           </div>
           <a href="/historico" class="view-all-link">
             <span>Histórico</span>
@@ -62,27 +62,27 @@
       </section>
     {/if}
 
-    <!-- High Density Recent Releases (Kuro Mangás Style) -->
-    <RecentReleases releases={data.recentReleases} />
-
-    <!-- Novas Obras Shelf -->
+    <!-- 3. Novas Obras (Horizontal Shelf of Proportional Covers) -->
     {#if data.works && data.works.length > 0}
       <WorkShelf
-        title="Obras em Destaque"
-        badge="EXPLORE O CATÁLOGO"
+        title="Novas Obras"
+        subtitle="Adicionadas recentemente ao catálogo"
         works={data.works}
         viewAllUrl="/catalogo"
       />
     {/if}
 
-    <!-- Popular Works (Strictly shown only if real engagement metrics exist) -->
+    <!-- 4. Mais Bem Avaliados (Strictly conditional, requires verified real engagement) -->
     {#if data.popularWorks && data.popularWorks.length >= 2}
       <WorkShelf
-        title="Mais Populares"
-        badge="PREFERIDOS DOS LEITORES"
+        title="Mais Bem Avaliados"
+        subtitle="Obras com maior engajamento dos leitores"
         works={data.popularWorks}
       />
     {/if}
+
+    <!-- 5. Lançamentos (Single Wide Column High-Density Feed) -->
+    <RecentReleases releases={data.recentReleases} />
   </div>
 </div>
 
@@ -95,14 +95,14 @@
   }
 
   .home-content {
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
-    padding: 2.5rem 1.5rem 4rem;
+    padding: 1.5rem 2rem 4rem;
     width: 100%;
   }
 
   .section-block {
-    margin-bottom: 3.5rem;
+    margin-bottom: 3rem;
   }
 
   .section-header {
@@ -110,42 +110,37 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.4rem;
-    padding-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .title-cluster {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .section-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #dfc28d;
+    gap: 0.25rem;
   }
 
   .section-title {
     margin: 0;
-    font-family: 'Cinzel', serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f1f3f9;
-    letter-spacing: -0.01em;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+  }
+
+  .section-subtitle {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #8c93a8;
   }
 
   .view-all-link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 600;
     color: #8e95a5;
     text-decoration: none;
@@ -159,7 +154,7 @@
   /* Continue Reading Cards */
   .continue-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
     gap: 1rem;
   }
 
@@ -167,8 +162,8 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.8rem;
-    background: rgba(14, 16, 24, 0.65);
+    padding: 0.85rem;
+    background: rgba(14, 16, 26, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     text-decoration: none;
@@ -178,16 +173,16 @@
   }
 
   .continue-card:hover {
-    background: rgba(20, 23, 35, 0.85);
-    border-color: rgba(223, 194, 141, 0.3);
+    background: rgba(20, 24, 38, 0.85);
+    border-color: rgba(223, 194, 141, 0.35);
     box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(223, 194, 141, 0.15);
     transform: translateY(-2px);
   }
 
   .continue-thumb {
     flex-shrink: 0;
-    width: 60px;
-    height: 84px;
+    width: 62px;
+    height: 88px;
     border-radius: 8px;
     overflow: hidden;
     background: #11131c;
@@ -207,9 +202,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Cinzel', serif;
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 800;
     color: #dfc28d;
     background: #161826;
   }
@@ -223,8 +218,8 @@
   }
 
   .continue-work-title {
-    color: #f1f3f9;
-    font-size: 0.95rem;
+    color: #ffffff;
+    font-size: 0.96rem;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -233,14 +228,14 @@
 
   .continue-ch-info {
     color: #8f97aa;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 500;
   }
 
   .continue-cta {
     color: #dfc28d;
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: 0.8rem;
+    font-weight: 650;
     letter-spacing: 0.02em;
     margin-top: 0.1rem;
     display: inline-flex;
@@ -253,7 +248,7 @@
 
   @media (max-width: 640px) {
     .home-content {
-      padding: 1.5rem 1rem 3rem;
+      padding: 1.8rem 1rem 3.5rem;
     }
 
     .continue-grid {
@@ -261,7 +256,7 @@
     }
 
     .section-title {
-      font-size: 1.25rem;
+      font-size: 1.35rem;
     }
   }
 </style>

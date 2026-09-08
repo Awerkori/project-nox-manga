@@ -26,7 +26,11 @@
 
   // Check if current featured work has reading progress
   let progressItem = $derived(
-    currentWork ? continueReading.find((c: { workId: string; destinationUrl: string }) => c.workId === currentWork.id) : null
+    currentWork
+      ? continueReading.find(
+          (c: { workId: string; destinationUrl: string }) => c.workId === currentWork.id
+        )
+      : null
   );
 
   function nextSlide() {
@@ -114,7 +118,7 @@
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
   >
-    <!-- Atmospheric Blurred Backdrop -->
+    <!-- Full-Bleed Atmospheric Backdrop -->
     <div class="backdrop-wrapper" aria-hidden="true">
       {#if currentWork.cover_id}
         <img
@@ -130,13 +134,38 @@
       <div class="backdrop-noise"></div>
     </div>
 
-    <div class="container hero-content-container">
-      <div class="hero-slide-grid">
-        <!-- Left: Work Metadata and CTAs -->
+    <div class="hero-container">
+      <div class="hero-editorial-layout">
+        <!-- LEFT: Large Dominant Protagonist Cover (Kuro Standard) -->
+        <div class="hero-cover-col">
+          <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
+            <div class="cover-3d-card">
+              {#if currentWork.cover_id}
+                <img
+                  src="/media/{currentWork.cover_id}"
+                  alt={currentWork.title}
+                  class="cover-img"
+                  width="330"
+                  height="470"
+                  loading="eager"
+                  decoding="async"
+                />
+              {:else}
+                <div class="cover-placeholder">
+                  <span>NOX</span>
+                </div>
+              {/if}
+              <div class="cover-edge-accent"></div>
+              <div class="cover-gloss"></div>
+            </div>
+          </a>
+        </div>
+
+        <!-- RIGHT: Editorial Metadata + Title + Author + Synopsis + CTAs -->
         <div class="hero-info-col">
           <div class="badges-row">
             <span class="badge-destaque">
-              <Sparkles size={13} class="icon-sparkle" />
+              <Sparkles size={13} />
               <span>EM DESTAQUE</span>
             </span>
             <span class="badge-kind">{currentWork.kind}</span>
@@ -150,33 +179,30 @@
             <a href="/obra/{currentWork.slug}">{currentWork.title}</a>
           </h1>
 
-          <!-- Real Author / Artist metadata -->
           {#if currentWork.author || currentWork.artist}
             <div class="hero-authors">
               {#if currentWork.author}
                 <span class="meta-item">
-                  <span class="meta-label">Roteiro</span>
+                  <span class="meta-label">Roteiro:</span>
                   <span class="meta-val">{currentWork.author}</span>
                 </span>
               {/if}
               {#if currentWork.artist && currentWork.artist !== currentWork.author}
                 <span class="meta-sep">·</span>
                 <span class="meta-item">
-                  <span class="meta-label">Arte</span>
+                  <span class="meta-label">Arte:</span>
                   <span class="meta-val">{currentWork.artist}</span>
                 </span>
               {/if}
             </div>
           {/if}
 
-          <!-- Synopsis clamped -->
           {#if currentWork.synopsis}
             <p class="hero-synopsis">
               {currentWork.synopsis}
             </p>
           {/if}
 
-          <!-- Action Buttons -->
           <div class="hero-actions">
             {#if progressItem}
               <a href={progressItem.destinationUrl} class="btn-primary-hero">
@@ -196,35 +222,9 @@
             </a>
           </div>
         </div>
-
-        <!-- Right: Subtle 3D Protagonist Cover -->
-        <div class="hero-cover-col">
-          <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
-            <div class="cover-3d-card">
-              {#if currentWork.cover_id}
-                <img
-                  src="/media/{currentWork.cover_id}"
-                  alt={currentWork.title}
-                  class="cover-img"
-                  width="280"
-                  height="390"
-                  loading="eager"
-                  decoding="async"
-                />
-              {:else}
-                <div class="cover-placeholder">
-                  <span>NOX</span>
-                </div>
-              {/if}
-              <!-- Subtle Gold Seal Edge -->
-              <div class="cover-edge-accent"></div>
-              <div class="cover-gloss"></div>
-            </div>
-          </a>
-        </div>
       </div>
 
-      <!-- Navigation Arrows and Indicators (if multiple works) -->
+      <!-- Carousel Position Indicators (if multiple works) -->
       {#if works.length > 1}
         <div class="carousel-controls">
           <button
@@ -264,8 +264,9 @@
 <style>
   .hero-carousel {
     position: relative;
-    min-height: 480px;
-    padding: 2.5rem 0 3.5rem;
+    width: 100%;
+    min-height: 520px;
+    padding: 2.25rem 0 2rem;
     overflow: hidden;
     background: #06070c;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -273,7 +274,7 @@
     align-items: center;
   }
 
-  /* Atmospheric Backdrop */
+  /* Full-Bleed Atmospheric Backdrop */
   .backdrop-wrapper {
     position: absolute;
     inset: 0;
@@ -284,14 +285,14 @@
 
   .backdrop-img {
     position: absolute;
-    top: -20%;
-    right: -10%;
-    width: 80%;
-    height: 140%;
+    top: -25%;
+    left: -10%;
+    width: 120%;
+    height: 150%;
     object-fit: cover;
-    filter: blur(54px) brightness(0.28) saturate(1.3);
-    transform: scale(1.1);
-    opacity: 0.75;
+    filter: blur(64px) brightness(0.24) saturate(1.4);
+    transform: scale(1.15);
+    opacity: 0.85;
     transition: opacity 0.8s ease;
   }
 
@@ -300,8 +301,8 @@
     inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(6, 7, 12, 0.6) 0%,
-      rgba(6, 7, 12, 0.85) 60%,
+      rgba(6, 7, 12, 0.45) 0%,
+      rgba(6, 7, 12, 0.8) 60%,
       #06070c 100%
     );
   }
@@ -311,9 +312,9 @@
     inset: 0;
     background: linear-gradient(
       90deg,
-      #06070c 0%,
-      rgba(6, 7, 12, 0.75) 45%,
-      rgba(6, 7, 12, 0.35) 100%
+      rgba(6, 7, 12, 0.7) 0%,
+      rgba(6, 7, 12, 0.5) 40%,
+      rgba(6, 7, 12, 0.85) 100%
     );
   }
 
@@ -322,202 +323,29 @@
     inset: 0;
     background-image: radial-gradient(rgba(223, 194, 141, 0.04) 1px, transparent 0);
     background-size: 24px 24px;
-    opacity: 0.4;
+    opacity: 0.5;
   }
 
-  /* Content Layout */
-  .hero-content-container {
+  /* Container */
+  .hero-container {
     position: relative;
     z-index: 2;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
-    padding: 0 1.5rem;
+    padding: 0 2rem;
   }
 
-  .hero-slide-grid {
+  /* Desktop Layout: Cover on LEFT, Info on RIGHT (Kuro Mangás Layout) */
+  .hero-editorial-layout {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 3.5rem;
+    grid-template-columns: 320px 1fr;
+    gap: 4rem;
     align-items: center;
-    min-height: 410px;
+    min-height: 470px;
   }
 
-  /* Info Column */
-  .hero-info-col {
-    display: flex;
-    flex-direction: column;
-    gap: 1.15rem;
-    max-width: 800px;
-  }
-
-  .badges-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-
-  .badge-destaque {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.28rem 0.75rem;
-    border-radius: 9999px;
-    background: rgba(223, 194, 141, 0.12);
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    box-shadow: 0 2px 10px rgba(223, 194, 141, 0.15);
-  }
-
-  .badge-kind {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.28rem 0.65rem;
-    border-radius: 9999px;
-    background: rgba(181, 154, 245, 0.12);
-    border: 1px solid rgba(181, 154, 245, 0.35);
-    color: #cbb4ff;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
-  .badge-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.28rem 0.65rem;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #9da4b6;
-    font-size: 0.72rem;
-    font-weight: 500;
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #34d399;
-    box-shadow: 0 0 8px #34d399;
-  }
-
-  .hero-title {
-    margin: 0;
-    font-family: 'Cinzel', serif;
-    font-size: clamp(2.1rem, 3.8vw, 3.2rem);
-    font-weight: 800;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-  }
-
-  .hero-title a {
-    color: #ffffff;
-    text-decoration: none;
-    transition: color 0.2s ease;
-  }
-
-  .hero-title a:hover {
-    color: #dfc28d;
-  }
-
-  .hero-authors {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: 0.85rem;
-    color: #8c93a8;
-  }
-
-  .meta-label {
-    color: #656d82;
-    margin-right: 0.25rem;
-  }
-
-  .meta-val {
-    color: #c5cbd8;
-    font-weight: 500;
-  }
-
-  .meta-sep {
-    color: #4b5263;
-  }
-
-  .hero-synopsis {
-    margin: 0;
-    color: #9da5b8;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 720px;
-  }
-
-  .hero-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    margin-top: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .btn-primary-hero {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.8rem 1.6rem;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #dfc28d 0%, #c49c5e 100%);
-    color: #0d0c14;
-    font-weight: 700;
-    font-size: 0.92rem;
-    text-decoration: none;
-    box-shadow: 0 6px 20px -4px rgba(223, 194, 141, 0.45);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .btn-primary-hero:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 26px -4px rgba(223, 194, 141, 0.65);
-    filter: brightness(1.05);
-  }
-
-  .btn-secondary-hero {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.8rem 1.4rem;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #e4e7ee;
-    font-weight: 600;
-    font-size: 0.92rem;
-    text-decoration: none;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition: all 0.25s ease;
-  }
-
-  .btn-secondary-hero:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: #ffffff;
-    transform: translateY(-2px);
-  }
-
-  /* Cover Column: Subtle & Premium 3D */
+  /* Left Cover Column */
   .hero-cover-col {
     display: flex;
     justify-content: center;
@@ -533,25 +361,25 @@
 
   .cover-3d-card {
     position: relative;
-    width: 290px;
-    height: 410px;
-    border-radius: 14px;
+    width: 320px;
+    height: 460px;
+    border-radius: 16px;
     overflow: hidden;
-    transform: rotateY(-5deg) rotateX(2deg);
+    transform: rotateY(4deg) rotateX(1deg);
     transform-style: preserve-3d;
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
     box-shadow:
-      -12px 18px 40px -8px rgba(0, 0, 0, 0.85),
-      0 0 28px -4px rgba(181, 154, 245, 0.2),
+      -14px 20px 48px -6px rgba(0, 0, 0, 0.9),
+      0 0 32px -4px rgba(181, 154, 245, 0.22),
       0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
   .cover-perspective-frame:hover .cover-3d-card {
-    transform: rotateY(-1deg) rotateX(0deg) translateY(-4px);
+    transform: rotateY(1deg) rotateX(0deg) translateY(-4px);
     box-shadow:
-      -8px 24px 48px -6px rgba(0, 0, 0, 0.9),
-      0 0 34px -2px rgba(223, 194, 141, 0.28),
-      0 0 0 1px rgba(223, 194, 141, 0.3);
+      -8px 24px 54px -6px rgba(0, 0, 0, 0.95),
+      0 0 40px -2px rgba(223, 194, 141, 0.32),
+      0 0 0 1px rgba(223, 194, 141, 0.35);
   }
 
   .cover-img {
@@ -568,18 +396,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Cinzel', serif;
-    font-size: 2rem;
+    font-family: 'Manrope', sans-serif;
+    font-size: 2.2rem;
     font-weight: 800;
     color: #dfc28d;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
   }
 
   .cover-edge-accent {
     position: absolute;
     inset: 0;
-    border-radius: 14px;
-    border: 1px solid rgba(223, 194, 141, 0.18);
+    border-radius: 16px;
+    border: 1px solid rgba(223, 194, 141, 0.22);
     pointer-events: none;
   }
 
@@ -589,8 +417,183 @@
     left: 0;
     right: 0;
     height: 50%;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, transparent 100%);
     pointer-events: none;
+  }
+
+  /* Right Info Column */
+  .hero-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    max-width: 860px;
+  }
+
+  .badges-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-destaque {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 9999px;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.45);
+    color: #dfc28d;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 2px 12px rgba(223, 194, 141, 0.18);
+  }
+
+  .badge-kind {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    background: rgba(181, 154, 245, 0.12);
+    border: 1px solid rgba(181, 154, 245, 0.38);
+    color: #cbb4ff;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #9da4b6;
+    font-size: 0.74rem;
+    font-weight: 500;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 8px #34d399;
+  }
+
+  /* Dominant Title */
+  .hero-title {
+    margin: 0;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: clamp(2.4rem, 4.2vw, 3.8rem);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+  }
+
+  .hero-title a {
+    color: #ffffff;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .hero-title a:hover {
+    color: #dfc28d;
+  }
+
+  .hero-authors {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+    color: #8c93a8;
+  }
+
+  .meta-label {
+    color: #6a7185;
+    margin-right: 0.25rem;
+  }
+
+  .meta-val {
+    color: #c9d0df;
+    font-weight: 600;
+  }
+
+  .meta-sep {
+    color: #4b5263;
+  }
+
+  .hero-synopsis {
+    margin: 0;
+    color: #a0a8bb;
+    font-size: 1.02rem;
+    line-height: 1.68;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 820px;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.85rem 1.8rem;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #dfc28d 0%, #c49c5e 100%);
+    color: #0d0c14;
+    font-weight: 750;
+    font-size: 0.95rem;
+    text-decoration: none;
+    box-shadow: 0 6px 22px -4px rgba(223, 194, 141, 0.48);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-primary-hero:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px -4px rgba(223, 194, 141, 0.68);
+    filter: brightness(1.05);
+  }
+
+  .btn-secondary-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.6rem;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e4e7ee;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all 0.25s ease;
+  }
+
+  .btn-secondary-hero:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    transform: translateY(-2px);
   }
 
   /* Carousel Controls */
@@ -599,7 +602,7 @@
     align-items: center;
     justify-content: center;
     gap: 1.2rem;
-    margin-top: 2rem;
+    margin-top: 2.5rem;
   }
 
   .arrow-btn {
@@ -650,26 +653,30 @@
 
   /* Responsive Rules */
   @media (max-width: 980px) and (min-width: 769px) {
-    .hero-slide-grid {
-      grid-template-columns: 1fr 260px;
-      gap: 2rem;
+    .hero-editorial-layout {
+      grid-template-columns: 260px 1fr;
+      gap: 2.5rem;
     }
 
     .cover-3d-card {
-      width: 250px;
-      height: 350px;
+      width: 260px;
+      height: 370px;
+    }
+
+    .hero-title {
+      font-size: 2.4rem;
     }
   }
 
   @media (max-width: 768px) {
     .hero-carousel {
       min-height: auto;
-      padding: 1.5rem 0 2rem;
+      padding: 2rem 0 2.5rem;
     }
 
-    .hero-slide-grid {
+    .hero-editorial-layout {
       grid-template-columns: 1fr;
-      gap: 1.5rem;
+      gap: 1.8rem;
     }
 
     .hero-cover-col {
@@ -678,11 +685,11 @@
     }
 
     .cover-3d-card {
-      width: 160px;
-      height: 226px;
-      border-radius: 10px;
+      width: 170px;
+      height: 242px;
+      border-radius: 12px;
       transform: none;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.75);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8);
     }
 
     .cover-perspective-frame:hover .cover-3d-card {
@@ -692,7 +699,7 @@
     .hero-info-col {
       align-items: center;
       text-align: center;
-      gap: 0.85rem;
+      gap: 1rem;
     }
 
     .badges-row {
@@ -700,7 +707,7 @@
     }
 
     .hero-title {
-      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-size: clamp(1.7rem, 6vw, 2.3rem);
     }
 
     .hero-authors {
@@ -708,28 +715,31 @@
     }
 
     .hero-synopsis {
-      font-size: 0.88rem;
-      -webkit-line-clamp: 2;
-      line-clamp: 2;
+      font-size: 0.9rem;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
       text-align: center;
     }
 
+    /* Stacked CTAs on mobile per user instruction */
     .hero-actions {
-      justify-content: center;
+      flex-direction: column;
       width: 100%;
+      max-width: 320px;
+      margin: 0.8rem auto 0;
+      gap: 0.75rem;
     }
 
     .btn-primary-hero,
     .btn-secondary-hero {
-      flex: 1;
+      width: 100%;
       justify-content: center;
-      min-width: 135px;
-      padding: 0.75rem 1rem;
-      font-size: 0.88rem;
+      padding: 0.85rem 1rem;
+      font-size: 0.92rem;
     }
 
     .carousel-controls {
-      margin-top: 1.2rem;
+      margin-top: 1.5rem;
     }
   }
 
