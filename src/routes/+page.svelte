@@ -141,7 +141,7 @@
   .home-content {
     display: flex;
     flex-direction: column;
-    gap: 64px;
+    gap: 52px;
     padding-bottom: 72px;
   }
 

@@ -90,9 +90,15 @@ main {
   min-height: 65vh;
 }
 .container {
-  max-width: 1320px;
+  max-width: 1440px;
   margin: auto;
-  padding: 0 48px;
+  padding: 0 36px;
+}
+@media (min-width: 1600px) {
+  .container {
+    max-width: 1520px;
+    padding: 0 48px;
+  }
 }
 .site-header {
   height: 90px;
@@ -102,10 +108,10 @@ main {
   z-index: 20;
 }
 .header-inner {
-  max-width: 1320px;
+  max-width: 1440px;
   height: 100%;
   margin: auto;
-  padding: 0 48px;
+  padding: 0 36px;
   display: flex;
   align-items: center;
   gap: 72px;

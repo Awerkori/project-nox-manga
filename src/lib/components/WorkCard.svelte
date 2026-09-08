@@ -42,8 +42,10 @@
     <h3 class="card-title" title={work.title}>{work.title}</h3>
     <div class="card-sub">
       <span class="card-status">{statusLabels[work.status] || work.status}</span>
-      <span class="meta-dot">·</span>
-      <span class="card-year">{work.year || 'Project Nox'}</span>
+      {#if work.year}
+        <span class="meta-dot">·</span>
+        <span class="card-year">{work.year}</span>
+      {/if}
     </div>
   </div>
 </a>

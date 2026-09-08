@@ -11,14 +11,20 @@
     ArrowUpRight,
     BookOpen,
     Trophy,
+    Bookmark,
+    History,
+    LogOut,
     Shield
   } from '@lucide/svelte';
+  import { memberRank } from '$lib/types';
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
 
   let { data, children } = $props();
   let menu = $state(false);
+  let userMenuOpen = $state(false);
   let scrolled = $state(false);
   let reader = $derived(data.pathname.startsWith('/ler/'));
+  let rank = $derived(data.profile ? memberRank(data.profile.xp) : null);
 
   onMount(() => {
     function handleScroll() {
@@ -29,6 +35,21 @@
     return () => window.removeEventListener('scroll', handleScroll);
   });
 </script>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape') {
+      userMenuOpen = false;
+      menu = false;
+    }
+  }}
+  onclick={(e) => {
+    const target = e.target as HTMLElement | null;
+    if (userMenuOpen && target && !target.closest('.user-menu-container')) {
+      userMenuOpen = false;
+    }
+  }}
+/>
 
 <svelte:head>
   <title
@@ -71,7 +92,7 @@
       <nav class="desktop-nav" aria-label="Navegação principal">
         <a class:active={data.pathname === '/'} href="/">Início</a>
         <a class:active={data.pathname.startsWith('/catalogo')} href="/catalogo">Catálogo</a>
-        <a class:active={data.pathname === '/ranking'} href="/ranking">Comunidade</a>
+        <a class:active={data.pathname === '/ranking'} href="/ranking">Ranking</a>
       </nav>
 
       <div class="header-actions">
@@ -88,19 +109,100 @@
             <Bell size={18} />
             {#if data.unread}<i></i>{/if}
           </a>
-          <a class="avatar-link" href="/perfil" aria-label="Meu perfil">
-            {#if data.profile.avatar_id}
-              <img
-                src="/media/{data.profile.avatar_id}"
-                alt=""
-                width="34"
-                height="34"
-                class="avatar-img"
-              />
-            {:else}
-              <span class="avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
+
+          <div class="user-menu-container">
+            <button
+              type="button"
+              class="avatar-btn"
+              aria-label="Menu do usuário"
+              aria-expanded={userMenuOpen}
+              onclick={() => (userMenuOpen = !userMenuOpen)}
+            >
+              {#if data.profile.avatar_id}
+                <img
+                  src="/media/{data.profile.avatar_id}"
+                  alt=""
+                  width="34"
+                  height="34"
+                  class="avatar-img"
+                />
+              {:else}
+                <span class="avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
+              {/if}
+            </button>
+
+            {#if userMenuOpen}
+              <div class="user-dropdown" role="menu">
+                <a href="/perfil" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
+                  {#if data.profile.avatar_id}
+                    <img
+                      src="/media/{data.profile.avatar_id}"
+                      alt=""
+                      width="40"
+                      height="40"
+                      class="dropdown-avatar-img"
+                    />
+                  {:else}
+                    <span class="dropdown-avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
+                  {/if}
+                  <div class="dropdown-user-meta">
+                    <span class="dropdown-user-name">{data.profile.display_name}</span>
+                    <span class="dropdown-user-handle">@{data.profile.username || 'leitor'}</span>
+                    {#if rank}
+                      <span class="dropdown-rank-pill">{rank.title}</span>
+                    {/if}
+                  </div>
+                </a>
+
+                <div class="dropdown-divider"></div>
+
+                <div class="dropdown-links">
+                  <a href="/perfil" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <UserRound size={16} />
+                    <span>Meu Perfil</span>
+                  </a>
+                  <a href="/biblioteca" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Library size={16} />
+                    <span>Minha Biblioteca</span>
+                  </a>
+                  <a href="/favoritos" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Bookmark size={16} />
+                    <span>Favoritos</span>
+                  </a>
+                  <a href="/historico" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <History size={16} />
+                    <span>Histórico</span>
+                  </a>
+                  <a href="/notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Bell size={16} />
+                    <span>Notificações</span>
+                    {#if data.unread}
+                      <span class="dropdown-badge">{data.unread}</span>
+                    {/if}
+                  </a>
+                  <a href="/ranking" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Trophy size={16} />
+                    <span>Ranking Geral</span>
+                  </a>
+                  {#if data.role === 'ADMIN' || data.role === 'EDITOR'}
+                    <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                      <Shield size={16} />
+                      <span>Painel Editorial</span>
+                    </a>
+                  {/if}
+                </div>
+
+                <div class="dropdown-divider"></div>
+
+                <form method="POST" action="/auth/sair" class="dropdown-logout-form">
+                  <button type="submit" class="dropdown-logout-btn" role="menuitem">
+                    <LogOut size={16} />
+                    <span>Sair da conta</span>
+                  </button>
+                </form>
+              </div>
             {/if}
-          </a>
+          </div>
         {:else}
           <a class="btn-login-nav" href="/entrar">
             <span>Entrar</span>
@@ -132,7 +234,7 @@
           </a>
           <a class:active={data.pathname === '/ranking'} href="/ranking" onclick={() => (menu = false)}>
             <Trophy size={18} />
-            <span>Ranking & Comunidade</span>
+            <span>Ranking</span>
           </a>
           {#if data.profile}
             <a class:active={data.pathname === '/biblioteca'} href="/biblioteca" onclick={() => (menu = false)}>
@@ -222,14 +324,20 @@
   }
 
   .header-inner {
-    max-width: 1320px;
+    max-width: 1440px;
     height: 100%;
     margin: 0 auto;
-    padding: 0 32px;
+    padding: 0 36px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 32px;
+  }
+  @media (min-width: 1600px) {
+    .header-inner {
+      max-width: 1520px;
+      padding: 0 48px;
+    }
   }
 
   .brand {
@@ -330,21 +438,33 @@
     transform: translateY(-1px);
   }
 
-  .avatar-link {
+  .user-menu-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .avatar-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
     border-radius: 50%;
+    background: transparent;
     border: 1.5px solid rgba(181, 154, 245, 0.4);
+    box-shadow: 0 0 10px rgba(181, 154, 245, 0.15);
+    cursor: pointer;
     overflow: hidden;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .avatar-link:hover {
+  .avatar-btn:hover,
+  .avatar-btn:focus-visible {
     transform: scale(1.06);
     border-color: #b59af5;
+    box-shadow: 0 0 14px rgba(181, 154, 245, 0.35);
   }
 
   .avatar-img {
@@ -367,6 +487,184 @@
     user-select: none;
   }
 
+  /* Kuro-Style User Dropdown */
+  .user-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 260px;
+    background: rgba(11, 13, 24, 0.96);
+    border: 1px solid rgba(181, 154, 245, 0.22);
+    border-radius: 14px;
+    box-shadow: 0 18px 42px -8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(181, 154, 245, 0.08);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    padding: 10px;
+    z-index: 100;
+    animation: dropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes dropdownFade {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .dropdown-header-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .dropdown-header-link:hover {
+    background: rgba(181, 154, 245, 0.08);
+    border-color: rgba(181, 154, 245, 0.2);
+  }
+
+  .dropdown-avatar-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid rgba(181, 154, 245, 0.4);
+    flex-shrink: 0;
+  }
+
+  .dropdown-avatar-fallback {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #191c30;
+    color: #b59af5;
+    font-weight: 800;
+    font-size: 16px;
+    line-height: 1;
+    text-transform: uppercase;
+    border: 1.5px solid rgba(181, 154, 245, 0.4);
+    flex-shrink: 0;
+  }
+
+  .dropdown-user-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .dropdown-user-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dropdown-user-handle {
+    font-size: 11px;
+    color: #8c889f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dropdown-rank-pill {
+    display: inline-block;
+    margin-top: 4px;
+    align-self: flex-start;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(201, 170, 115, 0.12);
+    color: #dfc28d;
+    border: 1px solid rgba(201, 170, 115, 0.25);
+    white-space: nowrap;
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 8px 0;
+  }
+
+  .dropdown-links {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dropdown-links a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: #c2bed4;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .dropdown-links a:hover {
+    background: rgba(181, 154, 245, 0.1);
+    color: #ffffff;
+  }
+
+  .dropdown-admin-link {
+    color: #dfc28d !important;
+  }
+
+  .dropdown-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 800;
+    background: #ff4772;
+    color: #ffffff;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .dropdown-logout-form {
+    margin: 0;
+  }
+
+  .dropdown-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: #f87171;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .dropdown-logout-btn:hover {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fca5a5;
+  }
+
   .mobile-menu-btn {
     display: none;
   }
@@ -386,14 +684,20 @@
   }
 
   .footer-inner {
-    max-width: 1320px;
+    max-width: 1440px;
     margin: 0 auto;
-    padding: 0 32px;
+    padding: 0 36px;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 32px;
     flex-wrap: wrap;
+  }
+  @media (min-width: 1600px) {
+    .footer-inner {
+      max-width: 1520px;
+      padding: 0 48px;
+    }
   }
 
   .footer-brand-col {
@@ -449,14 +753,20 @@
   }
 
   .footer-bottom {
-    max-width: 1320px;
+    max-width: 1440px;
     margin: 32px auto 0;
-    padding: 24px 32px 0;
+    padding: 24px 36px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.04);
     display: flex;
     justify-content: space-between;
     font-size: 12px;
     color: #5c596b;
+  }
+  @media (min-width: 1600px) {
+    .footer-bottom {
+      max-width: 1520px;
+      padding: 24px 48px 0;
+    }
   }
 
   @media (max-width: 768px) {

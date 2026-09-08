@@ -22,43 +22,151 @@
   </div>
 
   {#if data.members.length}
-    {#if data.members.length >= 1}
-      <div class="podium-section">
-        {#each data.members.slice(0, 3) as top, idx (top.id)}
-          {@const r = memberRank(top.xp)}
-          <a
-            href="/u/{top.username}"
-            class="podium-card podium-tier-{idx + 1}"
-          >
-            <div class="podium-medal">
-              {#if idx === 0}🥇{:else if idx === 1}🥈{:else}🥉{/if}
-            </div>
+    <div
+      class="podium-section"
+      class:is-single={data.members.length === 1}
+      class:is-double={data.members.length === 2}
+      class:is-olympic={data.members.length >= 3}
+    >
+      {#if data.members.length >= 3}
+        <!-- Olympic Order: #2 Silver (Left), #1 Gold (Center, Dominant), #3 Bronze (Right) -->
+        {@const silver = data.members[1]}
+        {@const gold = data.members[0]}
+        {@const bronze = data.members[2]}
 
-            <div class="podium-avatar-wrap">
-              {#if top.avatar_id}
-                <img
-                  src="/media/{top.avatar_id}"
-                  alt=""
-                  width="64"
-                  height="64"
-                  class="podium-avatar-img"
-                />
-              {:else}
-                <span class="podium-avatar-fallback">{top.display_name[0] || 'N'}</span>
-              {/if}
-            </div>
+        <!-- Silver #2 -->
+        {@const r2 = memberRank(silver.xp)}
+        <a href="/u/{silver.username}" class="podium-card podium-tier-2 olympic-silver">
+          <div class="podium-medal">🥈</div>
+          <div class="podium-avatar-wrap">
+            {#if silver.avatar_id}
+              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name">{silver.display_name}</strong>
+          <span class="podium-user-handle">@{silver.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip silver-chip">{r2.title}</span>
+            <span class="xp-chip">{silver.xp} XP</span>
+          </div>
+        </a>
 
-            <strong class="podium-user-name">{top.display_name}</strong>
-            <span class="podium-user-handle">@{top.username}</span>
+        <!-- Gold #1 (Dominant Center) -->
+        {@const r1 = memberRank(gold.xp)}
+        <a href="/u/{gold.username}" class="podium-card podium-tier-1 olympic-gold">
+          <div class="gold-crown-tag">
+            <Sparkles size={13} />
+            <span>1º LUGAR</span>
+          </div>
+          <div class="podium-medal">🥇</div>
+          <div class="podium-avatar-wrap gold-avatar-halo">
+            {#if gold.avatar_id}
+              <img src="/media/{gold.avatar_id}" alt="" width="76" height="76" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name gold-name">{gold.display_name}</strong>
+          <span class="podium-user-handle">@{gold.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip gold-chip">{r1.title}</span>
+            <span class="xp-chip gold-xp">{gold.xp} XP</span>
+          </div>
+        </a>
 
-            <div class="podium-tags">
-              <span class="rank-title-chip">{r.title}</span>
-              <span class="xp-chip">Nível {r.level} · {top.xp} XP</span>
-            </div>
-          </a>
-        {/each}
-      </div>
-    {/if}
+        <!-- Bronze #3 -->
+        {@const r3 = memberRank(bronze.xp)}
+        <a href="/u/{bronze.username}" class="podium-card podium-tier-3 olympic-bronze">
+          <div class="podium-medal">🥉</div>
+          <div class="podium-avatar-wrap">
+            {#if bronze.avatar_id}
+              <img src="/media/{bronze.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback">{(bronze.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name">{bronze.display_name}</strong>
+          <span class="podium-user-handle">@{bronze.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip bronze-chip">{r3.title}</span>
+            <span class="xp-chip">{bronze.xp} XP</span>
+          </div>
+        </a>
+
+      {:else if data.members.length === 2}
+        <!-- 2 Readers: Gold & Silver side-by-side -->
+        {@const gold = data.members[0]}
+        {@const silver = data.members[1]}
+        {@const r1 = memberRank(gold.xp)}
+        {@const r2 = memberRank(silver.xp)}
+
+        <a href="/u/{gold.username}" class="podium-card podium-tier-1">
+          <div class="gold-crown-tag">
+            <Sparkles size={13} />
+            <span>1º LUGAR</span>
+          </div>
+          <div class="podium-medal">🥇</div>
+          <div class="podium-avatar-wrap gold-avatar-halo">
+            {#if gold.avatar_id}
+              <img src="/media/{gold.avatar_id}" alt="" width="72" height="72" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name">{gold.display_name}</strong>
+          <span class="podium-user-handle">@{gold.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip gold-chip">{r1.title}</span>
+            <span class="xp-chip gold-xp">{gold.xp} XP</span>
+          </div>
+        </a>
+
+        <a href="/u/{silver.username}" class="podium-card podium-tier-2">
+          <div class="podium-medal">🥈</div>
+          <div class="podium-avatar-wrap">
+            {#if silver.avatar_id}
+              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name">{silver.display_name}</strong>
+          <span class="podium-user-handle">@{silver.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip silver-chip">{r2.title}</span>
+            <span class="xp-chip">{silver.xp} XP</span>
+          </div>
+        </a>
+
+      {:else if data.members.length === 1}
+        <!-- 1 Reader: Single Dominant Card -->
+        {@const gold = data.members[0]}
+        {@const r1 = memberRank(gold.xp)}
+
+        <a href="/u/{gold.username}" class="podium-card podium-tier-1 single-gold-card">
+          <div class="gold-crown-tag">
+            <Sparkles size={13} />
+            <span>LÍDER DA NOX</span>
+          </div>
+          <div class="podium-medal">🥇</div>
+          <div class="podium-avatar-wrap gold-avatar-halo">
+            {#if gold.avatar_id}
+              <img src="/media/{gold.avatar_id}" alt="" width="80" height="80" class="podium-avatar-img" />
+            {:else}
+              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+            {/if}
+          </div>
+          <strong class="podium-user-name gold-name">{gold.display_name}</strong>
+          <span class="podium-user-handle">@{gold.username}</span>
+          <div class="podium-tags">
+            <span class="rank-title-chip gold-chip">{r1.title}</span>
+            <span class="xp-chip gold-xp">{gold.xp} XP</span>
+          </div>
+        </a>
+      {/if}
+    </div>
 
     <!-- Desktop Leaderboard Table -->
     <section class="leaderboard-table-card desktop-only">
@@ -186,7 +294,7 @@
 
 <style>
   .ranking-container {
-    max-width: 1040px;
+    max-width: 1200px;
     margin: 0 auto;
   }
 
@@ -197,8 +305,12 @@
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.12em;
-    color: #c9aa73;
+    color: #dfc28d;
     margin-bottom: 8px;
+    background: rgba(201, 170, 115, 0.12);
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(201, 170, 115, 0.25);
   }
 
   .ranking-title {
@@ -221,7 +333,26 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
-    margin-bottom: 40px;
+    margin-bottom: 48px;
+  }
+
+  .podium-section.is-single {
+    grid-template-columns: 1fr;
+    max-width: 360px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .podium-section.is-double {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 680px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .podium-section.is-olympic {
+    grid-template-columns: 1fr 1.15fr 1fr;
+    align-items: end;
   }
 
   .podium-card {
@@ -244,16 +375,78 @@
   }
 
   .podium-tier-1 {
-    border-color: rgba(201, 170, 115, 0.5);
-    box-shadow: 0 16px 40px -10px rgba(201, 170, 115, 0.2);
+    border-color: rgba(201, 170, 115, 0.55);
+    box-shadow: 0 16px 42px -10px rgba(201, 170, 115, 0.25), 0 0 20px rgba(201, 170, 115, 0.08);
+  }
+
+  .olympic-gold {
+    padding-top: 42px;
+    padding-bottom: 30px;
+    transform: translateY(-14px);
+    border-color: rgba(201, 170, 115, 0.65);
+    background: linear-gradient(180deg, rgba(201, 170, 115, 0.08) 0%, rgba(13, 16, 26, 0.85) 100%);
+  }
+
+  .olympic-gold:hover {
+    transform: translateY(-18px);
+  }
+
+  .gold-crown-tag {
+    position: absolute;
+    top: -12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #dfc28d, #c9aa73);
+    color: #120f06;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.12em;
+    box-shadow: 0 4px 16px rgba(201, 170, 115, 0.45);
+  }
+
+  .gold-avatar-halo {
+    border-color: #dfc28d !important;
+    box-shadow: 0 0 20px rgba(201, 170, 115, 0.35);
+  }
+
+  .gold-name {
+    font-size: 18px !important;
+    color: #ffffff;
+  }
+
+  .gold-chip {
+    background: rgba(201, 170, 115, 0.18) !important;
+    color: #f0daae !important;
+    border-color: rgba(201, 170, 115, 0.4) !important;
+  }
+
+  .gold-xp {
+    color: #dfc28d !important;
+  }
+
+  .silver-chip {
+    background: rgba(188, 193, 207, 0.14) !important;
+    color: #e2e5ee !important;
+    border-color: rgba(188, 193, 207, 0.35) !important;
+  }
+
+  .bronze-chip {
+    background: rgba(184, 130, 92, 0.14) !important;
+    color: #f0c5a3 !important;
+    border-color: rgba(184, 130, 92, 0.35) !important;
   }
 
   .podium-tier-2 {
     border-color: rgba(188, 193, 207, 0.4);
+    box-shadow: 0 12px 32px -10px rgba(188, 193, 207, 0.15);
   }
 
   .podium-tier-3 {
     border-color: rgba(184, 130, 92, 0.4);
+    box-shadow: 0 12px 32px -10px rgba(184, 130, 92, 0.15);
   }
 
   .podium-medal {
@@ -481,10 +674,28 @@
       gap: 10px;
     }
 
-    .podium-section {
+    .podium-section,
+    .podium-section.is-olympic,
+    .podium-section.is-double,
+    .podium-section.is-single {
       grid-template-columns: 1fr;
       gap: 14px;
       margin-bottom: 28px;
+      max-width: 100%;
+    }
+
+    .olympic-gold {
+      order: 1;
+      transform: none;
+      padding-top: 32px;
+    }
+
+    .olympic-silver {
+      order: 2;
+    }
+
+    .olympic-bronze {
+      order: 3;
     }
 
     .podium-card {
