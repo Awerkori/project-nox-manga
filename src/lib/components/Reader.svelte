@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import { action } from '$lib/actions';
@@ -13,17 +13,64 @@
     width = $state(850),
     gap = $state(false),
     notice = $state(''),
+    xpNotice = $state(''),
     fullscreen = $state(false);
   const visible = new SvelteSet<number>();
   let sending = false;
-  function seen(page: number, isVisible: boolean) {
-    if (isVisible) visible.add(page);
-    else visible.delete(page);
-    if (visible.size) current = Math.min(...visible);
+  let maxSeenPage = $state(1);
+  let chapterCompleted = $state(!!data.progress?.completed_at);
+  let previousChapterId = data.chapter.id;
+
+  $effect(() => {
+    if (data.chapter.id !== previousChapterId) {
+      previousChapterId = data.chapter.id;
+      visible.clear();
+      const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
+      current = saved;
+      maxSeenPage = saved;
+      chapterCompleted = !!data.progress?.completed_at;
+      requestAnimationFrame(() => jump(Math.min(data.pages.length, Math.max(1, saved))));
+    }
+  });
+
+  async function completeChapter() {
+    if (chapterCompleted || sending || !data.profile || data.preview) return;
+    chapterCompleted = true;
+    try {
+      const res = (await action('member', 'read_page', {
+        work_id: data.chapter.work_id,
+        chapter_id: data.chapter.id,
+        page: data.pages.length,
+        completed: true
+      })) as { ok?: boolean; completed?: boolean } | null;
+      if (res?.completed && !data.progress?.completed_at) {
+        xpNotice = '✦ Capítulo Concluído! +25 XP';
+        setTimeout(() => {
+          xpNotice = '';
+        }, 5000);
+      }
+    } catch {
+      chapterCompleted = false;
+    }
   }
+
+  function seen(page: number, isVisible: boolean) {
+    if (isVisible) {
+      visible.add(page);
+      if (page > maxSeenPage) maxSeenPage = page;
+    } else {
+      visible.delete(page);
+    }
+    if (visible.size) current = Math.min(...visible);
+    if (maxSeenPage >= data.pages.length && !chapterCompleted) {
+      void completeChapter();
+    }
+  }
+
   function jump(page: number) {
     document.getElementById(`pagina-${page}`)?.scrollIntoView({ behavior: 'instant' });
   }
+
   async function full() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -32,6 +79,7 @@
       notice = 'Tela cheia indisponível neste navegador.';
     }
   }
+
   onMount(() => {
     fullscreen = !!document.documentElement.requestFullscreen;
     try {
@@ -42,6 +90,7 @@
       /* Default preferences remain valid. */
     }
     const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
+    maxSeenPage = saved;
     requestAnimationFrame(() => jump(Math.min(data.pages.length, Math.max(1, saved))));
     if (data.profile && !data.preview)
       action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
@@ -49,9 +98,27 @@
           notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
         }
       );
+
+    const endEl = document.querySelector('.reader-end');
+    let endObserver: IntersectionObserver | null = null;
+    if (endEl && typeof IntersectionObserver !== 'undefined') {
+      endObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) {
+            maxSeenPage = data.pages.length;
+            current = data.pages.length;
+            void completeChapter();
+          }
+        },
+        { threshold: 0.1 }
+      );
+      endObserver.observe(endEl);
+    }
+
     const timer = setInterval(async () => {
-      if (document.visibilityState !== 'visible' || sending || !visible.size) return;
-      const locallySaved = savePreference(`nox-page:${data.chapter.id}`, String(current));
+      if (document.visibilityState !== 'visible' || sending) return;
+      const pageToSave = current;
+      const locallySaved = savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
       savePreference('nox-reader', JSON.stringify({ width, gap }));
       if (data.profile && !data.preview) {
         sending = true;
@@ -59,7 +126,8 @@
           await action('member', 'read_page', {
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
-            page: current
+            page: pageToSave,
+            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
           });
           notice = '';
         } catch {
@@ -71,9 +139,10 @@
         }
       }
     }, 3500);
+
     const saveOnExit = () => {
-      if (!visible.size) return;
-      savePreference(`nox-page:${data.chapter.id}`, String(current));
+      const pageToSave = current;
+      savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
       savePreference('nox-reader', JSON.stringify({ width, gap }));
       if (data.profile && !data.preview)
         void fetch('/api/action', {
@@ -83,13 +152,20 @@
           body: JSON.stringify({
             scope: 'member',
             action: 'read_page',
-            data: { work_id: data.chapter.work_id, chapter_id: data.chapter.id, page: current }
+            data: {
+              work_id: data.chapter.work_id,
+              chapter_id: data.chapter.id,
+              page: pageToSave,
+              completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
+            }
           })
         }).catch(() => {});
     };
+
     window.addEventListener('pagehide', saveOnExit);
     return () => {
       clearInterval(timer);
+      endObserver?.disconnect();
       window.removeEventListener('pagehide', saveOnExit);
       saveOnExit();
     };
@@ -135,6 +211,12 @@
       ><button class="button secondary compact" onclick={() => (settings = false)}>Fechar ajustes</button>
     </aside>{/if}
   {#if notice}<div class="notice reading-width" role="status">{notice}</div>{/if}
+  {#if xpNotice}
+    <div class="xp-toast" role="status">
+      <Sparkles size={16} />
+      <span>{xpNotice}</span>
+    </div>
+  {/if}
   <div class="page-stack" style="max-width:{width}px;gap:{gap ? '20px' : '0'}">
     {#each data.pages as page (page.position)}<ReaderPage {page} onSeen={seen} />{/each}
   </div>
@@ -300,5 +382,24 @@
     .reader-end h2 {
       font-size: 22px;
     }
+  }
+
+  .xp-toast {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(20, 16, 32, 0.95);
+    border: 1px solid rgba(201, 170, 115, 0.5);
+    color: #c9aa73;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(201, 170, 115, 0.25);
+    backdrop-filter: blur(12px);
   }
 </style>

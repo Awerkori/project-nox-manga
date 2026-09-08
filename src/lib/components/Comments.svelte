@@ -124,10 +124,10 @@
                 height="38"
                 style="border-radius:50%"
                 loading="lazy"
-              />{:else}{comment.members?.display_name[0] || 'N'}{/if}</span
+              />{:else}{(comment.members?.display_name[0] || 'N').toUpperCase()}{/if}</span
           >
           <div>
-            <a href="/u/{comment.members?.username}">{comment.members?.display_name || 'Leitor Nox'}</a><time
+            <a href="/u/{comment.members?.username}">{comment.members?.display_name || 'Leitor'}</a><time
               datetime={comment.created_at}>{date(comment.created_at)}</time
             >
           </div>

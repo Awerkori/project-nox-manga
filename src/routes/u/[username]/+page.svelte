@@ -13,7 +13,7 @@
   <div class="page-top">
     <div class="badge-tag">
       <Sparkles size={12} />
-      <span>COMUNIDADE NOX</span>
+      <span>LEITOR NOX</span>
     </div>
     <h1 class="profile-header-title">Perfil do Leitor</h1>
   </div>
@@ -31,7 +31,7 @@
           />
         {:else}
           <span class="profile-avatar-fallback">
-            {data.member.display_name[0] || 'N'}
+            {(data.member.display_name[0] || 'N').toUpperCase()}
           </span>
         {/if}
         <div class="avatar-glow"></div>
@@ -190,14 +190,16 @@
     border-radius: 50%;
     background: #1a1d33;
     color: #b59af5;
-    font-size: 34px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-size: 38px;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
     border: 2.5px solid #b59af5;
     position: relative;
     z-index: 2;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
   }
 
   .avatar-glow {

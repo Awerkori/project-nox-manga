@@ -98,7 +98,7 @@
                 class="avatar-img"
               />
             {:else}
-              <span class="avatar-fallback">{data.profile.display_name.slice(0, 1)}</span>
+              <span class="avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
             {/if}
           </a>
         {:else}
@@ -356,13 +356,15 @@
   .avatar-fallback {
     width: 100%;
     height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     background: #191c30;
     color: #b59af5;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 14px;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
   }
 
   .mobile-menu-btn {

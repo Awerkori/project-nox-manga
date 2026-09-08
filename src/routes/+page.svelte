@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, BookOpen, Clock, Trophy, Sparkles } from '@lucide/svelte';
+  import { ArrowRight, BookOpen, Clock, Trophy } from '@lucide/svelte';
   import Hero from '$lib/components/Hero.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
   import { memberRank } from '$lib/types';
@@ -16,19 +16,6 @@
   <Hero featuredWork={data.featured} />
 
   <div class="container home-content">
-    <!-- Quick Genre Tags Filter Strip -->
-    <div class="genre-strip">
-      <span class="genre-label"><Sparkles size={14} /> Gêneros</span>
-      <div class="genre-scroll">
-        <a href="/catalogo?tag=acao" class="genre-tag">Ação</a>
-        <a href="/catalogo?tag=fantasia" class="genre-tag">Fantasia</a>
-        <a href="/catalogo?tag=misterio" class="genre-tag">Mistério</a>
-        <a href="/catalogo?tag=sobrenatural" class="genre-tag">Sobrenatural</a>
-        <a href="/catalogo?tag=drama" class="genre-tag">Drama</a>
-        <a href="/catalogo?tag=ficcao" class="genre-tag">Ficção</a>
-      </div>
-    </div>
-
     <!-- Continue Reading (Logged in members with progress) -->
     {#if data.recent.length}
       <section class="section-block">
@@ -44,12 +31,12 @@
         </div>
 
         <div class="continue-grid">
-          {#each data.recent as item (item.chapters.id)}
-            <a href="/ler/{item.chapters.id}" class="continue-card">
+          {#each data.recent as item (item.workId)}
+            <a href={item.destinationUrl} class="continue-card">
               <div class="continue-thumb">
-                {#if item.chapters.works.cover_id}
+                {#if item.coverId}
                   <img
-                    src="/media/{item.chapters.works.cover_id}"
+                    src="/media/{item.coverId}"
                     alt=""
                     width="64"
                     height="90"
@@ -60,9 +47,9 @@
                 {/if}
               </div>
               <div class="continue-meta">
-                <strong class="continue-work-title">{item.chapters.works.title}</strong>
-                <span class="continue-ch-info">Capítulo {item.chapters.number} · Pág. {item.page}</span>
-                <span class="continue-cta">Retomar leitura ↗</span>
+                <strong class="continue-work-title">{item.workTitle}</strong>
+                <span class="continue-ch-info">{item.progressText}</span>
+                <span class="continue-cta">{item.actionLabel}</span>
               </div>
             </a>
           {/each}
@@ -129,7 +116,7 @@
                     class="avatar-img"
                   />
                 {:else}
-                  <span class="avatar-fallback">{reader.display_name[0] || 'N'}</span>
+                  <span class="avatar-fallback">{(reader.display_name[0] || 'N').toUpperCase()}</span>
                 {/if}
               </div>
               <div class="podium-details">
@@ -156,64 +143,6 @@
     flex-direction: column;
     gap: 64px;
     padding-bottom: 72px;
-  }
-
-  /* Genre tags strip */
-  .genre-strip {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 20px;
-    border-radius: 14px;
-    background: rgba(13, 16, 26, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(12px);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .genre-strip::-webkit-scrollbar {
-    display: none;
-  }
-
-  .genre-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #c9aa73;
-    white-space: nowrap;
-    padding-right: 8px;
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .genre-scroll {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .genre-tag {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #a6a3b8;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    transition: all 0.2s ease;
-    white-space: nowrap;
-  }
-
-  .genre-tag:hover {
-    color: #ffffff;
-    background: rgba(181, 154, 245, 0.12);
-    border-color: rgba(181, 154, 245, 0.3);
-    transform: translateY(-1px);
   }
 
   /* Sections */
@@ -438,6 +367,23 @@
     overflow: hidden;
     flex-shrink: 0;
     border: 2px solid rgba(181, 154, 245, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .podium-avatar .avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    background: #191c32;
+    color: #b59af5;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+    user-select: none;
   }
 
   .podium-details {
