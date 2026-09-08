@@ -1,10 +1,15 @@
 import { error } from '@sveltejs/kit';
 export const load = async ({ locals, params }) => {
-  const { data } = await locals.db
+  const { data: member } = await locals.db
     .from('members')
-    .select('username,display_name,bio,xp,created_at')
+    .select('id,username,display_name,bio,xp,avatar_id,created_at')
     .eq('username', params.username)
     .maybeSingle();
-  if (!data) error(404, 'Perfil não encontrado');
-  return { member: data };
+  if (!member) error(404, 'Perfil não encontrado');
+  const { data: stats } = await locals.db.rpc('member_public_stats', { p_user: member.id });
+  return {
+    member,
+    stats: stats?.[0] || { chapters_read: 0, completed_works: 0, favorites: 0 }
+  };
 };
+

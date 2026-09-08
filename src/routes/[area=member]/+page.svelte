@@ -6,6 +6,7 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import { pageLink } from '$lib/pagination';
   import { date, statusLabels } from '$lib/types';
+  import { BookOpen, MessageSquare, Trophy, Shield, Bell } from '@lucide/svelte';
   let { data } = $props();
   let notice = $state('');
   let busy = $state(false);
@@ -183,13 +184,31 @@
         >
       </div>
       <div class="stack">
-        {#each data.notifications as item (item.id)}<a
+        {#each data.notifications as item (item.id)}
+          <a
             class="panel"
-            style="border-color:{item.read_at ? 'var(--line)' : '#58416e'}"
+            style="border-color:{item.read_at ? 'var(--line)' : '#6e4f8d'};display:flex;align-items:flex-start;gap:16px"
             href={item.href}
-            ><span class="eyebrow">{date(item.created_at)}</span>
-            <p style="color:#ddd7e5;margin-bottom:0">{item.body}</p></a
-          >{/each}
+          >
+            <div style="color:{item.read_at ? 'var(--muted)' : 'var(--gold)'};margin-top:2px;flex-shrink:0">
+              {#if item.kind === 'chapter'}
+                <BookOpen size={20} />
+              {:else if item.kind === 'reply'}
+                <MessageSquare size={20} />
+              {:else if item.kind === 'achievement'}
+                <Trophy size={20} />
+              {:else if item.kind === 'editorial'}
+                <Shield size={20} />
+              {:else}
+                <Bell size={20} />
+              {/if}
+            </div>
+            <div style="flex:1">
+              <span class="eyebrow">{date(item.created_at)}</span>
+              <p style="color:#ddd7e5;margin-bottom:0">{item.body}</p>
+            </div>
+          </a>
+        {/each}
       </div>{:else}<Empty
         title="Tudo em dia por aqui."
         text="Novos capítulos das obras acompanhadas, respostas e conquistas aparecerão aqui."

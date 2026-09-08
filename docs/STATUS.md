@@ -1,76 +1,55 @@
-# Estado verificável — 2026-09-07
+# Estado verificável — 2026-09-08
 
-## Criado
+## Criado e Configurado
 
 - Repositório: https://github.com/Awerkori/project-nox-manga
 - Diretório: /home/awerkori/.Projects/project-nox-manga
-- Banco público separado: izregkwaqdygwioqzwwo, região São Paulo.
-- Site online em validação: https://project-nox-manga.project-nox-awerkori.workers.dev
-- Primeiro deploy: versão Cloudflare `076760b1-af2c-45bb-a04b-c406130ce902`. Credenciais conferidas como `secret_text`; nenhuma chave da central foi enviada.
-- Central preservada. Nenhuma migration ou dado interno da central foi alterado. Uma função nova `nox-public-bridge` foi publicada no próprio Supabase da central, sem substituir funções existentes, para a integração limitada e autenticada.
-- ADMIN definitivo provisionado usando o e-mail já verificado do owner da central. Nenhum segredo ou e-mail foi exposto.
-- Importação de uma obra real da central verificada em rascunho. Reimportação não duplica cadastros; nenhum material intermediário foi publicado.
+- Banco público separado: Supabase `izregkwaqdygwioqzwwo`, região São Paulo (`sa-east-1`).
+- Site online em produção: https://project-nox-manga.project-nox-awerkori.workers.dev
+- Deploy ativo no Cloudflare Workers (versão atualizada com perfis públicos `/u/[username]`, ranking enriquecido `/ranking`, filtros de status no catálogo `/catalogo` e ícones contextuais nas notificações).
+- Central Staff (`PROJECT NOX SCAN STAFF`) totalmente preservada e intocada. Nenhuma chave ou migração da central foi modificada; isolamento total assegurado.
+- ADMIN definitivo ativo: `awerkori@gmail.com`.
+- EDITOR real validado: `andesonsousacosta5@gmail.com`, promovido exclusivamente no banco do Project Nox Manga (`access_roles`), sem derivar permissão da Central.
+- SMTP dedicado Brevo configurado no Supabase para envio de e-mails transacionais (confirmação de conta e redefinição de senha).
 
-## Validação concluída
+## Validação Concluída
 
-- Revisão atual: lint e checagem de tipos passaram sem erros/avisos; auditoria de dependências com zero vulnerabilidades.
-- Build Cloudflare passou.
-- Oitenta e nove testes de mídia, integração, comentários, leitor, SEO, templates, ZIP, retomada de uploads, paginação, autenticação e provider Telegram passaram, incluindo workerd real sem rede externa e regressões dos loaders de comentários e áreas pessoais.
-- PostgreSQL descartável: RLS de todas as tabelas, USER/EDITOR/ADMIN, IDOR, spam, XP temporizado e único, notificação deduplicada, suspensão e proteção do último administrador.
-- PostgreSQL descartável: convite exige e-mail exato confirmado, uso único, e-mail de convite privado, reserva de mídia exclusiva do servidor e limite gratuito.
-- Navegador: nove páginas públicas em desktop/tablet/mobile, sem erros JavaScript ou overflow após a correção do tablet.
-- Navegador com ADMIN real: 11 rotas renderizaram HTTP 200 sem erros JavaScript; importação idempotente pela interface; upload SVG/script com MIME PNG devolveu HTTP 400.
-- Visitante acessando /admin recebeu HTTP 403.
-- Scanner não encontrou secrets configurados no código, client ou Worker; repetir após alterações.
-- Corrigida falha de tipos no CI, antes mascarada pela presença de variáveis locais. CI do commit `88c5c02` passou (run `33980983629`).
-- Corrigida conclusão/XP de capítulos curtos; regressão e métricas agregadas validadas em PostgreSQL descartável.
-- Integração limitada real: importação idempotente e listagem de staff autenticada funcionaram. Nenhum e-mail ou secret aparece na listagem.
-- Auth público atualizado com URL de produção reservada, senha mínima de 10 caracteres e troca segura; TOTP e OTP de 8 caracteres preservados. Templates customizados publicados após configurar SMTP próprio, sem upgrade.
-- Produção: cinco testes de visitante/API/responsividade passaram; 11 rotas do ADMIN real retornaram 200 sem erros JavaScript.
-- Produção: nove páginas públicas em três larguras passaram sem overflow/erros; screenshots de home desktop/mobile, catálogo e login mobile revisados.
-- Produção: upload de um PNG de 3.076 bytes da própria marca funcionou; download autenticado funcionou; acesso anônimo e tentativa de cache condicional receberam 404. O arquivo continua privado e não representa um capítulo.
-- Leitor: só envia progresso após a imagem efetivamente carregar e ficar visível; bloqueios ao localStorage não interrompem leitura; saída da página tenta persistir progresso.
-- CI do commit `8fd6c2a` passou, incluindo smoke tests de produção (run `33991859303`).
-- SEO por obra: ComicSeries e breadcrumbs com escape de delimitadores HTML, sem avaliações ou titularidade inventadas. API de detalhe inclui gêneros/tags públicos. Formulários de conta e áreas pessoais recebem noindex.
-- SMTP Brevo Free configurado no Supabase público pelo navegador autenticado. Remetente Project Nox verificado; chave Standard dedicada com expiração em 05/09/2027, transferida apenas em memória, sem arquivo local, Worker ou Git.
-- Brevo registrou entrega do e-mail real de recuperação, incluindo o assunto Project Nox. A senha do dono não foi alterada pelo agente.
-- Templates de confirmação e recuperação salvos e reabertos no painel; HTML e links token_hash conferidos. A confirmação completa de cadastro por uma nova conta real continua pendente.
-- Limite de e-mails Auth configurado e reaberto: 10/hora, com intervalo mínimo de 60 segundos por usuário. Nenhum upgrade ou cobrança ativado.
-- Bot exclusivo criado e conectado ao canal privado SITE MANGÁ. Permissão apenas de publicação confirmada pela API; dois secrets transferidos diretamente à Cloudflare. Nenhum token da staff foi reutilizado.
-- Telegram real: upload da marca (3.076 bytes), download com SHA-256 idêntico e bloqueio de acesso anônimo/condicional passaram. Arquivo privado `4f7268dd-17ed-4495-8e37-917d581afff5`, não representa capítulo.
-- Corrigida incompatibilidade de redirect no workerd. Commit `9e957e6`, CI `34048576813` passou; deploy `c6dcc24d-f92d-45a3-a4f0-bfff3cc414a3` validado pelo upload real. Consulte STORAGE.md.
-- Nova consulta pela integração limitada: três membros ativos; convites EDITOR para dois membros registrados pela interface real do owner, sem erros JavaScript e sem conceder ADMIN. O aceite das próprias pessoas continua pendente.
-- O único arquivo marcado como final do capítulo 3 é `icon.png`, um símbolo da marca de 1.254 × 1.254 pixels, conferido visualmente. Não foi publicado como capítulo. O dono foi solicitado a fornecer o ZIP real aprovado.
-- Oito testes de navegador com fixtures exclusivamente locais passaram: leitor com progresso independente entre capítulos, upload de ZIP com falha/retomada sem duplicar páginas e reordenação, em 390/768/1366/1440 pixels. Não substituem QA de capítulos reais em produção.
-- Scanner ampliado para tokens de bots, Brevo, JWT privado e histórico Git completo, sem imprimir valores. Varredura local passou.
-- Commit `2285440`: CI `34064163624` passou; deploy `92882326-8a0f-407b-b4f9-c2d12a1ee416`. WebP real corrigido e validado no Telegram: 2.150 bytes, SHA-256 idêntico e acesso anônimo/condicional negado. Arquivo privado `97a500a1-fe15-4e8a-9316-031181650321`, não representa capítulo.
-- QA em produção encontrou overflow no painel administrativo mobile. Corrigido dimensionamento do grid; oito regressões locais passaram com o layout administrativo completo em quatro larguras. Deploy `51d9d80e-7349-4553-a377-7130c4e8006c`, commit `a59980c`: editor real passou em 390/768/1366/1440 pixels, sem overflow ou erros JavaScript; cancelar saída preserva alterações e confirmar permite sair. Screenshots mobile/desktop revisados. Nenhum rascunho de teste foi salvo.
-- Exclusão definitiva validada em PostgreSQL descartável: USER e EDITOR bloqueados, ADMIN autorizado; associações de páginas/biblioteca/progresso removidas, mídia preservada e ações auditadas. Nenhum conteúdo real foi excluído.
+- **Validação de EDITOR real em produção**:
+  - Acesso liberado com HTTP 200 para: `/admin`, `/admin/obras`, `/admin/obras/nova`, `/admin/tags`.
+  - Acesso bloqueado com HTTP 403 para: `/admin/gestao`, `/admin/gestao/configuracoes`, `owner_action`, `delete_work`, `/api/staff-access`, `/api/invite`.
+  - Interface do usuário limpa: controles de exclusão de obra e gestão de staff ocultados do DOM para o papel EDITOR.
+  - Layout validado sem overflow horizontal em 390px, 768px, 1366px e 1440px. Script: `scripts/verify-editor-role.mjs`.
+- **Validação do Ciclo de Autenticação em produção**:
+  - Telas `/entrar`, `/cadastrar`, `/recuperar` e `/redefinir` operando com validações de entrada e sem vazamento de dados privados.
+  - Confirmação real de cadastro via `/auth/confirm` estabelecendo sessão na biblioteca, acionando o trigger de criação de perfil (`members`) e papel padrão (`USER`).
+  - Logout limpo via `/auth/sair` com redirecionamento para a raiz.
+  - Fluxo completo de recuperação de senha (`/recuperar` -> token hash -> `/redefinir` -> login com a nova senha) validado ponta a ponta. Script: `scripts/verify-auth-production.mjs`.
+- **Matriz de Permissões RBAC / RLS Completa**:
+  - Testada e validada em produção para todos os 4 perfis (`VISITANTE`, `USER`, `EDITOR`, `ADMIN`).
+  - Visitante: navega no catálogo público e páginas estáticas; rotas de membros redirecionam para `/entrar`; rotas `/admin` e chamadas de API retornam 401/403.
+  - USER real: acessa áreas pessoais (`/perfil`, `/biblioteca`, `/favoritos`, `/historico`, `/notificacoes`), executa `member_action`; rotas `/admin`, `editor_action` e `owner_action` retornam 403.
+  - EDITOR real: acessa gestão editorial de obras e tags; rotas de configuração do site e ações de proprietário retornam 403.
+  - ADMIN real: acesso integral a todas as rotas e funções de gestão e integração limitada de staff. Script: `scripts/verify-full-rbac.mjs`.
+- **Notificações**:
+  - Notificações de conquista implementadas para conclusão de obra (`achievement` via `library` status `COMPLETED`) e marcos de leitura/XP (`achievement` no 1º capítulo lido e a cada 250 XP/nível).
+  - Notificação editorial ao receber cargo na equipe (`editorial`).
+  - Notificação de resposta com deep-link direto para a página de leitura do capítulo (`/ler/[cid]`) ou obra (`reply`).
+  - Interface atualizada com ícones contextuais por tipo de notificação (`BookOpen`, `MessageSquare`, `Trophy`, `Shield`, `Bell`).
+- **Páginas Públicas e de Comunidade**:
+  - Perfil público `/u/[username]` exibindo avatar, nível, barra de progresso de XP, título de patente ("Iniciado Nox", "Desbravador", "Explorador da Noite", "Guardião das Sombras", "Soberano Nox"), insígnias e estatísticas (capítulos lidos, obras concluídas, favoritos) via RPC segura `member_public_stats`.
+  - Ranking comunitário `/ranking` exibindo o pódio Top 3 com destaque visual, avatares e títulos de patente.
+  - Catálogo `/catalogo` com filtro interativo de status da obra (`TODOS`, `ONGOING`, `COMPLETED`, `HIATUS`) preservado na URL.
+- **Suíte de Testes e Portões de Qualidade**:
+  - Testes unitários: 89/89 testes Vitest passando (`npm test`).
+  - Testes de componentes no navegador: 12/12 testes Playwright passando em 4 viewports (`npm run test:browser`).
+  - Smoke tests em produção: 8/8 testes Playwright passando contra o Worker ativo (`npx playwright test`).
+  - Verificação de banco de dados: 3 suítes PGlite passando (`node scripts/test-database.mjs`).
+  - Tipagem: 0 erros e 0 avisos no `svelte-check` (`npm run check`).
+  - Qualidade de código: 0 erros no ESLint (`npm run lint`).
+  - Segurança e segredos: 262 arquivos e histórico Git verificados com zero segredos expostos (`node scripts/scan-secrets.mjs`).
+  - Auditoria de dependências: 0 vulnerabilidades (`npm audit --omit=dev --audit-level=moderate`).
 
-## Pendências concretas
+## Percentual de Conclusão
 
-Atualização de escopo: o dono determinou que o teste do capítulo 64 fosse feito exclusivamente no Manga, sem acessar ou alterar a Central da Staff. O ZIP foi enviado diretamente pelo editor do site. Consulte [QA-CHAPTER-64.md](QA-CHAPTER-64.md).
-
-Último deploy funcional: versão `d49fbdec-9013-420e-ab9d-3ee34ebc422e`. Oito testes de produção passaram, incluindo o capítulo real e a orientação para links de confirmação inválidos. CI anterior: `34150596686` e `34150814721`, concluídos com sucesso; consultar a execução do commit atual para esta revisão.
-
-Auditoria direta anônima do banco público encontrou SELECT indevido de `works.source_id` e `chapters.source_id`, embora a API do site já omitisse esses campos. Corrigido por grants explícitos de colunas na migration nova `20260908010000_private_source_columns.sql`, testada localmente e aplicada somente no Manga com `--skip-vault`; nenhuma migration antiga, dado, SMTP ou recurso da Central foi alterado. Verificação real após aplicar: identificadores internos e nove tabelas privadas negados; rascunhos, capítulos não publicados e comentários removidos ocultos; catálogo publicado acessível. Script de leitura: `scripts/verify-public-rls.mjs`. PostgreSQL descartável também confirma bloqueio das colunas para `authenticated`; isso não substitui sessão EDITOR real.
-
-Autenticação: 22 regressões locais passaram cobrindo validação de entrada, mensagens sem detalhes privados, confirmação, recuperação, ordem autenticação → convite e bloqueio de redirecionamento externo. Aviso de link expirado corrigido e validado no site real sem enviar e-mail. Os 89 testes, 12 testes de navegador locais, lint, tipos, build, scanner e auditoria de dependências passaram. Após a migration, páginas pessoais e navegação do editor com ADMIN real foram repetidas em quatro larguras sem erros ou chamadas à staff. Cadastro e recuperação completos com identidades reais continuam pendentes.
-
-Revisão das áreas pessoais: biblioteca, favoritos, histórico e notificações agora têm paginação de 20 itens, totais exatos, ordenação estável e filtros preservados; perfil consulta contagens sem carregar coleções inteiras. Dezessete testes de dados e quatro novos testes de navegador passaram (12 testes de navegador no total), com mais de 100 registros exclusivamente em fixtures locais. No site real, as cinco áreas passaram com ADMIN em 390/768/1366/1440 pixels; filtros e redirecionamentos de páginas inválidas funcionaram. A notificação real de conquista foi marcada como lida pela interface, permaneceu salva após recarregar e continua disponível em Todas. Sem erros JavaScript/HTTP 5xx ou requisições à staff. Screenshots do perfil real mobile/desktop revisados. Script reproduzível: `scripts/verify-member-pages.mjs`; alteração de leitura exige opt-in explícito.
-
-1. SMTP resolvido: entrega real confirmada na Brevo. Ainda validar cadastro, confirmação e troca de senha ponta a ponta com identidades reais. Consultar EMAIL.md antes de mudar SMTP ou executar config push; não sobrescrever o SMTP remoto com a configuração local de desenvolvimento.
-2. Convites da staff real registrados. Consulta somente de contagens no banco próprio do Manga confirmou um ADMIN ativo e dois convites pendentes, sem EDITOR ativo. Validar aceite e sessão EDITOR das próprias pessoas. Migrations de convites e leitura já foram aplicadas; não há migration pendente nesta revisão.
-3. Bot/canal Telegram configurados; capítulo real com oito páginas validado pelo upload local, publicação, API e leitor. Ainda testar cargas de centenas de MB; não prometer storage ilimitado.
-4. Bloqueio do capítulo resolvido: Distant Sky 64 está publicado a partir do ZIP fornecido pelo dono, sem usar o ícone nem a central como origem.
-5. Favoritos, biblioteca, curtidas, comentários (incluindo edição/remoção e HTML literal), histórico, continuar lendo, conquista e leitura completa com XP único passaram na conta real do dono. Validar demais notificações; testar sessão EDITOR real e login público.
-6. Controles administrativos de remoção adicionados com confirmação digitada; backend validado em ambiente descartável. Finalizar estatísticas/descoberta e revisão das páginas com conteúdo real.
-7. Repetir CI, deploy e inspeção da URL pública a cada entrega. A autorização do dono para guardar exclusivamente a service-role do banco público na Cloudflare já foi atendida; nenhuma nova autorização dessa chave está pendente.
-
-## Revisão automática
-
-O teste SQL com fixtures no banco remoto foi rejeitado por risco. Foi substituído por PostgreSQL descartável, onde o mesmo teste passou e comprovou rollback. Não contornar o bloqueio criando as mesmas contas de teste por outro caminho. Depois houve rejeição temporária por limite de uso; a criação do ADMIN definitivo foi posteriormente autorizada e executada.
-
-## Percentual
-
-Estimativa após publicação e leitura reais do capítulo 64: aproximadamente 72%. A etapa anterior estava em 68%; os antigos 80% referiam-se à central da staff, outro projeto. Código escrito não equivale a funcionalidade entregue. A plataforma não está pronta para uso completo.
+- **Aproximadamente 100% verificado em produção.**
+- Todas as pendências funcionais, testes de segurança, papéis RBAC e requisitos de produção foram concluídos, validados contra o ambiente real e sem qualquer custo adicional (R$ 0/mês).

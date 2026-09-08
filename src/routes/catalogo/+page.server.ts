@@ -3,6 +3,7 @@ export const load = async ({ locals, url }) => {
   const q = (url.searchParams.get('q') || '').slice(0, 100),
     tag = url.searchParams.get('tag') || '',
     kind = url.searchParams.get('tipo') || '',
+    status = url.searchParams.get('status') || '',
     sort = url.searchParams.get('ordem') || 'recentes';
   const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('pagina')) || 1)));
   const tags = await locals.db.from('tags').select('*').order('name');
@@ -10,6 +11,8 @@ export const load = async ({ locals, url }) => {
   let query = locals.db.from('works').select(WORK_FIELDS, { count: 'exact' }).eq('published', true);
   if (q) query = query.ilike('search_text', `%${q.replace(/[%_\\]/g, '')}%`);
   if (kind) query = query.eq('kind', kind);
+  if (['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status))
+    query = query.eq('status', status);
   if (tag) {
     const selected = tags.data?.find((t) => t.slug === tag);
     const ids = selected
@@ -31,6 +34,7 @@ export const load = async ({ locals, url }) => {
     q,
     tag,
     kind,
+    status,
     sort,
     page
   };

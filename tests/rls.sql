@@ -83,6 +83,14 @@ select public.editor_action('publish','{"id":"40000000-0000-4000-8000-0000000000
 select public.editor_action('publish','{"id":"40000000-0000-4000-8000-000000000001","confirmed_final":true}');
 select set_config('request.jwt.claim.sub','10000003-0000-4000-8000-000000000003',true);
 select pg_temp.assert_true((select count(*)=1 from public.notifications where kind='chapter'),'publication notification deduplicated');
+select public.member_action('library','{"work_id":"30000000-0000-4000-8000-000000000001","status":"COMPLETED"}');
+select pg_temp.assert_true((select count(*)=1 from public.notifications where kind='achievement' and dedupe_key='completed:30000000-0000-4000-8000-000000000001'),'completion notification created');
+select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
+select public.owner_action('role','{"id":"10000003-0000-4000-8000-000000000003","role":"EDITOR"}');
+select set_config('request.jwt.claim.sub','10000003-0000-4000-8000-000000000003',true);
+select pg_temp.assert_true((select count(*)=1 from public.notifications where user_id='10000003-0000-4000-8000-000000000003' and kind='editorial'),'editorial notification created on promotion');
+select set_config('request.jwt.claim.sub','10000001-0000-4000-8000-000000000001',true);
+select public.owner_action('role','{"id":"10000003-0000-4000-8000-000000000003","role":"USER"}');
 select set_config('request.jwt.claim.sub','10000004-0000-4000-8000-000000000004',true);
 select pg_temp.assert_true(public.current_role() is null,'unconfirmed account denied');
 select pg_temp.denied('select public.member_action(''profile'',''{}'')','unconfirmed mutation denied');

@@ -728,6 +728,14 @@ export type Database = {
       revoke_editor_invite: { Args: { p_email: string }; Returns: undefined };
       show_limit: { Args: never; Returns: number };
       show_trgm: { Args: { '': string }; Returns: string[] };
+      member_public_stats: {
+        Args: { p_user: string };
+        Returns: {
+          chapters_read: number;
+          completed_works: number;
+          favorites: number;
+        }[];
+      };
       work_metrics: {
         Args: { p_work: string };
         Returns: {

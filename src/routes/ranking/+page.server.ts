@@ -3,7 +3,7 @@ export const load = async ({ locals }) => ({
     (
       await locals.db
         .from('members')
-        .select('id,username,display_name,xp,created_at')
+        .select('id,username,display_name,xp,avatar_id,created_at')
         .gt('xp', 0)
         .order('xp', { ascending: false })
         .limit(50)

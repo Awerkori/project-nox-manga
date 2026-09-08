@@ -1,10 +1,20 @@
 <script lang="ts">
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import WorkCard from '$lib/components/WorkCard.svelte';
   import Empty from '$lib/components/Empty.svelte';
-  import { kindLabels } from '$lib/types';
+  import { kindLabels, statusLabels } from '$lib/types';
   let { data } = $props();
-  const pageUrl = (n: number) =>
-    `?${new URLSearchParams({ q: data.q, tag: data.tag, tipo: data.kind, ordem: data.sort, pagina: String(n) })}`;
+  const pageUrl = (n: number) => {
+    const params = new SvelteURLSearchParams();
+    if (data.q) params.set('q', data.q);
+    if (data.tag) params.set('tag', data.tag);
+    if (data.kind) params.set('tipo', data.kind);
+    if (data.status) params.set('status', data.status);
+    if (data.sort && data.sort !== 'recentes') params.set('ordem', data.sort);
+    if (n > 1) params.set('pagina', String(n));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '/catalogo';
+  };
 </script>
 
 <svelte:head><title>Explorar mangás, manhwas e webtoons — Project Nox</title></svelte:head>
@@ -28,6 +38,10 @@
     ><select name="tipo" value={data.kind} aria-label="Tipo de obra"
       ><option value="">Formato</option
       >{#each Object.entries(kindLabels) as [value, label] (value)}<option {value}>{label}</option
+        >{/each}</select
+    ><select name="status" value={data.status} aria-label="Status da obra"
+      ><option value="">Status</option
+      >{#each ['ONGOING', 'COMPLETED', 'HIATUS'] as value (value)}<option {value}>{statusLabels[value]}</option
         >{/each}</select
     ><select name="ordem" value={data.sort} aria-label="Ordenação"
       ><option value="recentes">Atualizados recentemente</option><option value="titulo">Título A–Z</option
