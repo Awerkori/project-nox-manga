@@ -14,9 +14,14 @@
       id: 'usr-1',
       display_name: role === 'ADMIN' ? 'Awerkori' : 'Editor Convidado',
       username: role === 'ADMIN' ? 'awerkori' : 'editor_nox',
-      avatar_url: null
+      avatar_id: null as string | null,
+      bio: '',
+      created_at: new Date().toISOString(),
+      xp: 100
     },
     role: role,
+    unread: 0,
+    config: {},
     pathname: page === 'dashboard' ? '/admin' : `/admin/${page}`
   });
 
@@ -245,7 +250,7 @@
     {#if page === 'dashboard'}
       <Dashboard data={dashboardData} />
     {:else if page === 'obras'}
-      <Catalog data={catalogData} />
+      <Catalog data={catalogData as any} />
     {:else if page === 'tags'}
       <Tags data={tagsData} />
     {:else if page === 'gestao'}
@@ -253,7 +258,7 @@
     {:else if page === 'configuracoes'}
       <Config data={configData} />
     {:else if page === 'capitulo'}
-      <ChapterEditor data={chapterData} />
+      <ChapterEditor data={chapterData as any} />
     {/if}
   </AdminLayout>
 </main>

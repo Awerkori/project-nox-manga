@@ -8,9 +8,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!env.PUBLIC_SUPABASE_URL || !env.PUBLIC_SUPABASE_ANON_KEY)
     error(503, 'A plataforma está em manutenção. Volte em instantes.');
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method)) {
-    if (event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem inválida');
+    const isInternal = event.url.pathname.startsWith('/api/internal/');
+    if (!isInternal && event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem inválida');
     const max =
-      event.url.pathname === '/api/upload'
+      event.url.pathname === '/api/upload' || event.url.pathname === '/api/internal/storage/upload'
         ? 19_100_000
         : event.url.pathname === '/api/avatar'
           ? 300_000
