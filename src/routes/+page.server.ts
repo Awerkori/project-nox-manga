@@ -107,20 +107,90 @@ export const load = async ({ locals }) => {
     }
   }
 
-  const topReaders = await locals.db
-    .from('members')
-    .select('id,username,display_name,avatar_id,xp')
-    .gt('xp', 0)
-    .order('xp', { ascending: false })
-    .limit(3);
-
   const works = result.data || [];
-  const featured = works.find((w) => w.featured) || works[0] || null;
+  
+  // Featured works for hero carousel (works marked featured, or newest published works up to 5)
+  const featuredCandidates = works.filter((w) => w.featured);
+  const featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
+
+  // High-density recent releases (grouped by work, Kuro style)
+  const chaptersRes = await locals.db
+    .from('chapters')
+    .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published)')
+    .not('published_at', 'is', null)
+    .eq('works.published', true)
+    .order('published_at', { ascending: false })
+    .limit(30);
+
+  type ReleaseGroup = {
+    workId: string;
+    workSlug: string;
+    workTitle: string;
+    coverId: string | null;
+    kind: string;
+    latestPublishedAt: string;
+    chapters: Array<{
+      id: string;
+      number: number;
+      title: string | null;
+      publishedAt: string;
+    }>;
+  };
+
+  const releasesMap = new Map<string, ReleaseGroup>();
+  if (chaptersRes.data) {
+    for (const row of chaptersRes.data) {
+      const w = row.works as any;
+      if (!releasesMap.has(w.id)) {
+        releasesMap.set(w.id, {
+          workId: w.id,
+          workSlug: w.slug,
+          workTitle: w.title,
+          coverId: w.cover_id,
+          kind: w.kind,
+          latestPublishedAt: row.published_at,
+          chapters: []
+        });
+      }
+      const group = releasesMap.get(w.id)!;
+      if (group.chapters.length < 3) {
+        group.chapters.push({
+          id: row.id,
+          number: row.number,
+          title: row.title,
+          publishedAt: row.published_at
+        });
+      }
+    }
+  }
+
+  const recentReleases = Array.from(releasesMap.values());
+
+  // Check real metrics for popular works (only if real engagement exists)
+  // Per rule: "A seção Mais Populares só deve aparecer se houver métrica REAL suficiente para sustentá-la"
+  let popularWorks: typeof works = [];
+  if (works.length >= 2) {
+    const popularChecks = await Promise.all(
+      works.map(async (w) => {
+        const m = await locals.db.rpc('work_metrics', { p_work: w.id });
+        const data = m.data?.[0] || { favorites: 0, likes: 0, readers: 0 };
+        const score = Number(data.likes || 0) + Number(data.favorites || 0) * 2 + Number(data.readers || 0);
+        return { work: w, score };
+      })
+    );
+    const withEngagement = popularChecks.filter((item) => item.score > 0);
+    if (withEngagement.length >= 2) {
+      withEngagement.sort((a, b) => b.score - a.score);
+      popularWorks = withEngagement.map((item) => item.work);
+    }
+  }
 
   return {
     works,
-    featured,
-    recent: continueReading,
-    topReaders: topReaders?.data || []
+    featuredList,
+    recentReleases,
+    popularWorks,
+    recent: continueReading
   };
 };
+
