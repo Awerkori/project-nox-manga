@@ -169,11 +169,9 @@
     align-items: center;
     gap: 1.25rem;
     padding: 0.85rem 1.25rem;
-    background: rgba(14, 16, 26, 0.65);
+    background: #0e111d;
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     min-height: 106px;
   }

@@ -56,10 +56,9 @@
     flex-direction: column;
     position: relative;
     border-radius: 16px;
-    background: rgba(13, 16, 26, 0.65);
+    background: #0d101a;
     border: 1px solid rgba(255, 255, 255, 0.06);
     overflow: hidden;
-    backdrop-filter: blur(12px);
     transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     animation: cardFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
     animation-delay: var(--stagger, 0ms);
@@ -145,11 +144,10 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #e5c58a;
-    background: rgba(8, 10, 18, 0.82);
+    background: #080a12;
     padding: 3px 8px;
     border-radius: 6px;
     border: 1px solid rgba(201, 170, 115, 0.3);
-    backdrop-filter: blur(8px);
   }
 
   .featured-chip {
@@ -159,11 +157,10 @@
     font-size: 10px;
     font-weight: 700;
     color: #ffffff;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(109, 40, 217, 0.85));
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
     padding: 3px 8px;
     border-radius: 6px;
     border: 1px solid rgba(181, 154, 245, 0.4);
-    backdrop-filter: blur(8px);
   }
 
   .card-gradient {

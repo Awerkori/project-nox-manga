@@ -6,9 +6,7 @@
     ArrowDown,
     ArrowUp,
     Sparkles,
-    CheckCircle2,
-    ChevronDown,
-    ChevronUp
+    CheckCircle2
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import { goto } from '$app/navigation';
@@ -20,8 +18,7 @@
   let notice = $state(''),
     busy = $state(false),
     ascending = $state(false),
-    search = $state(''),
-    synopsisExpanded = $state(false);
+    search = $state('');
 
   let chapters = $derived(
     (ascending ? [...data.chapters].reverse() : data.chapters).filter(
@@ -149,28 +146,7 @@
         {/each}
       </div>
 
-      <div class="synopsis-wrap">
-        <p class="synopsis" class:clamp-synopsis={!synopsisExpanded && data.work.synopsis.length > 260}>
-          {data.work.synopsis}
-        </p>
-        {#if data.work.synopsis.length > 260}
-          <button
-            type="button"
-            class="btn-toggle-synopsis"
-            onclick={() => (synopsisExpanded = !synopsisExpanded)}
-          >
-            {#if synopsisExpanded}
-              <span>Ver menos</span>
-              <ChevronUp size={14} />
-            {:else}
-              <span>Ver mais</span>
-              <ChevronDown size={14} />
-            {/if}
-          </button>
-        {/if}
-      </div>
-
-      <div class="work-actions-block">
+  <div class="work-actions-block">
         {#if resume}
           <a class="btn-read-hero" href="/ler/{resume}">
             <BookOpen size={20} />
@@ -276,10 +252,10 @@
     <div class="notice" role="status">{notice}</div>
   {/if}
 
-  {#if data.work.description}
+  {#if data.work.description || data.work.synopsis}
     <section class="description-panel">
       <h2>Sobre a Obra</h2>
-      <p>{data.work.description}</p>
+      <p>{data.work.description || data.work.synopsis}</p>
     </section>
   {/if}
 
@@ -514,47 +490,6 @@
     color: #ffffff;
   }
 
-  /* Synopsis Expandable */
-  .synopsis-wrap {
-    margin-bottom: 24px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .synopsis {
-    font-size: 15px;
-    line-height: 1.7;
-    color: #d1cde0;
-    white-space: pre-wrap;
-    margin: 0;
-  }
-
-  .synopsis.clamp-synopsis {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .btn-toggle-synopsis {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: transparent;
-    border: none;
-    color: #b59af5;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 6px 0 0;
-    transition: color 0.2s ease;
-  }
-
-  .btn-toggle-synopsis:hover {
-    color: #dfc28d;
-  }
 
   /* Work Actions Block */
   .work-actions-block {
@@ -952,18 +887,7 @@
 
     .chips-row {
       justify-content: center;
-      margin-bottom: 12px;
-    }
-
-    .synopsis-wrap {
-      align-items: center;
-      text-align: center;
-      margin-bottom: 18px;
-    }
-
-    .synopsis {
-      font-size: 14px;
-      line-height: 1.6;
+      margin-bottom: 16px;
     }
 
     .work-actions-block {

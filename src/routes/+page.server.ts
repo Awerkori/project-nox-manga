@@ -1,13 +1,38 @@
 import { WORK_FIELDS, check } from '$lib/server/db';
 
+let popularCache: { timestamp: number; works: any[] } | null = null;
+const POPULAR_CACHE_TTL_MS = 60_000;
+
 export const load = async ({ locals }) => {
-  const result = await locals.db
-    .from('works')
-    .select(WORK_FIELDS)
-    .eq('published', true)
-    .order('updated_at', { ascending: false })
-    .limit(16);
-  check(result);
+  // Execute top-level independent queries concurrently in a single roundtrip batch
+  const [worksRes, chaptersRes, readingRes] = await Promise.all([
+    locals.db
+      .from('works')
+      .select(WORK_FIELDS)
+      .eq('published', true)
+      .order('updated_at', { ascending: false })
+      .limit(16),
+    locals.db
+      .from('chapters')
+      .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published)')
+      .not('published_at', 'is', null)
+      .eq('works.published', true)
+      .order('published_at', { ascending: false })
+      .limit(30),
+    locals.user
+      ? locals.db
+          .from('reading')
+          .select(
+            'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published))'
+          )
+          .not('chapters.published_at', 'is', null)
+          .eq('chapters.works.published', true)
+          .order('updated_at', { ascending: false })
+          .limit(30)
+      : Promise.resolve({ data: null, error: null })
+  ]);
+
+  check(worksRes);
 
   let continueReading: Array<{
     workId: string;
@@ -22,46 +47,43 @@ export const load = async ({ locals }) => {
     updatedAt: string;
   }> = [];
 
-  if (locals.user) {
-    const readingRes = await locals.db
-      .from('reading')
-      .select(
-        'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published))'
-      )
-      .not('chapters.published_at', 'is', null)
-      .eq('chapters.works.published', true)
-      .order('updated_at', { ascending: false })
-      .limit(30);
+  if (readingRes.data && readingRes.data.length > 0) {
+    const grouped = new Map<string, typeof readingRes.data>();
+    for (const row of readingRes.data) {
+      const wid = (row.chapters as any).work_id as string;
+      const list = grouped.get(wid) || [];
+      list.push(row);
+      grouped.set(wid, list);
+    }
 
-    if (readingRes.data && readingRes.data.length > 0) {
-      const grouped = new Map<string, typeof readingRes.data>();
-      for (const row of readingRes.data) {
-        const wid = (row.chapters as any).work_id as string;
-        const list = grouped.get(wid) || [];
-        list.push(row);
-        grouped.set(wid, list);
+    const needsNextChapter: Array<{ wid: string; rows: typeof readingRes.data; currentCh: any }> = [];
+
+    for (const [wid, rows] of grouped.entries()) {
+      const work = (rows[0].chapters as any).works;
+      const incomplete = rows.find((r) => !r.completed_at);
+      if (incomplete) {
+        const ch = incomplete.chapters as any;
+        continueReading.push({
+          workId: wid,
+          workTitle: work.title,
+          workSlug: work.slug,
+          coverId: work.cover_id,
+          chapterId: ch.id,
+          chapterNumber: ch.number,
+          destinationUrl: `/ler/${ch.id}`,
+          progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
+          actionLabel: 'Retomar leitura ↗',
+          updatedAt: incomplete.updated_at
+        });
+      } else {
+        needsNextChapter.push({ wid, rows, currentCh: rows[0].chapters as any });
       }
+    }
 
-      for (const [wid, rows] of grouped.entries()) {
-        const work = (rows[0].chapters as any).works;
-        const incomplete = rows.find((r) => !r.completed_at);
-        if (incomplete) {
-          const ch = incomplete.chapters as any;
-          continueReading.push({
-            workId: wid,
-            workTitle: work.title,
-            workSlug: work.slug,
-            coverId: work.cover_id,
-            chapterId: ch.id,
-            chapterNumber: ch.number,
-            destinationUrl: `/ler/${ch.id}`,
-            progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
-            actionLabel: 'Retomar leitura ↗',
-            updatedAt: incomplete.updated_at
-          });
-        } else {
-          const mostRecent = rows[0];
-          const currentCh = mostRecent.chapters as any;
+    // Batch all next-chapter queries in parallel instead of sequential loop
+    if (needsNextChapter.length > 0) {
+      const nextLookups = await Promise.all(
+        needsNextChapter.map(async ({ wid, rows, currentCh }) => {
           const nextChRes = await locals.db
             .from('chapters')
             .select('id,number')
@@ -70,58 +92,54 @@ export const load = async ({ locals }) => {
             .not('published_at', 'is', null)
             .order('number', { ascending: true })
             .limit(1);
+          return { wid, rows, currentCh, nextCh: nextChRes.data?.[0] };
+        })
+      );
 
-          const nextCh = nextChRes.data?.[0];
-          if (nextCh) {
-            continueReading.push({
-              workId: wid,
-              workTitle: work.title,
-              workSlug: work.slug,
-              coverId: work.cover_id,
-              chapterId: nextCh.id,
-              chapterNumber: nextCh.number,
-              destinationUrl: `/ler/${nextCh.id}`,
-              progressText: `Próximo: Capítulo ${nextCh.number}`,
-              actionLabel: 'Ler próximo ↗',
-              updatedAt: mostRecent.updated_at
-            });
-          } else {
-            continueReading.push({
-              workId: wid,
-              workTitle: work.title,
-              workSlug: work.slug,
-              coverId: work.cover_id,
-              chapterId: currentCh.id,
-              chapterNumber: currentCh.number,
-              destinationUrl: `/obra/${work.slug}`,
-              progressText: `Capítulo ${currentCh.number} · Concluído ✓`,
-              actionLabel: 'Ver obra ↗',
-              updatedAt: mostRecent.updated_at
-            });
-          }
+      for (const { wid, rows, currentCh, nextCh } of nextLookups) {
+        const work = (rows[0].chapters as any).works;
+        const mostRecent = rows[0];
+        if (nextCh) {
+          continueReading.push({
+            workId: wid,
+            workTitle: work.title,
+            workSlug: work.slug,
+            coverId: work.cover_id,
+            chapterId: nextCh.id,
+            chapterNumber: nextCh.number,
+            destinationUrl: `/ler/${nextCh.id}`,
+            progressText: `Próximo: Capítulo ${nextCh.number}`,
+            actionLabel: 'Ler próximo ↗',
+            updatedAt: mostRecent.updated_at
+          });
+        } else {
+          continueReading.push({
+            workId: wid,
+            workTitle: work.title,
+            workSlug: work.slug,
+            coverId: work.cover_id,
+            chapterId: currentCh.id,
+            chapterNumber: currentCh.number,
+            destinationUrl: `/obra/${work.slug}`,
+            progressText: `Capítulo ${currentCh.number} · Concluído ✓`,
+            actionLabel: 'Ver obra ↗',
+            updatedAt: mostRecent.updated_at
+          });
         }
       }
-
-      continueReading.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      continueReading = continueReading.slice(0, 4);
     }
+
+    continueReading.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    continueReading = continueReading.slice(0, 4);
   }
 
-  const works = result.data || [];
-  
+  const works = worksRes.data || [];
+
   // Featured works for hero carousel (works marked featured, or newest published works up to 5)
   const featuredCandidates = works.filter((w) => w.featured);
   const featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
 
   // High-density recent releases (grouped by work, Kuro style)
-  const chaptersRes = await locals.db
-    .from('chapters')
-    .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published)')
-    .not('published_at', 'is', null)
-    .eq('works.published', true)
-    .order('published_at', { ascending: false })
-    .limit(30);
-
   type ReleaseGroup = {
     workId: string;
     workSlug: string;
@@ -148,7 +166,7 @@ export const load = async ({ locals }) => {
           workTitle: w.title,
           coverId: w.cover_id,
           kind: w.kind,
-          latestPublishedAt: row.published_at,
+          latestPublishedAt: row.published_at || '',
           chapters: []
         });
       }
@@ -158,7 +176,7 @@ export const load = async ({ locals }) => {
           id: row.id,
           number: row.number,
           title: row.title,
-          publishedAt: row.published_at
+          publishedAt: row.published_at || ''
         });
       }
     }
@@ -170,18 +188,23 @@ export const load = async ({ locals }) => {
   // Per rule: "A seção Mais Populares só deve aparecer se houver métrica REAL suficiente para sustentá-la"
   let popularWorks: typeof works = [];
   if (works.length >= 2) {
-    const popularChecks = await Promise.all(
-      works.map(async (w) => {
-        const m = await locals.db.rpc('work_metrics', { p_work: w.id });
-        const data = m.data?.[0] || { favorites: 0, likes: 0, readers: 0 };
-        const score = Number(data.likes || 0) + Number(data.favorites || 0) * 2 + Number(data.readers || 0);
-        return { work: w, score };
-      })
-    );
-    const withEngagement = popularChecks.filter((item) => item.score > 0);
-    if (withEngagement.length >= 2) {
-      withEngagement.sort((a, b) => b.score - a.score);
-      popularWorks = withEngagement.map((item) => item.work);
+    if (popularCache && Date.now() - popularCache.timestamp < POPULAR_CACHE_TTL_MS) {
+      popularWorks = popularCache.works;
+    } else {
+      const popularChecks = await Promise.all(
+        works.map(async (w) => {
+          const m = await locals.db.rpc('work_metrics', { p_work: w.id });
+          const data = m.data?.[0] || { favorites: 0, likes: 0, readers: 0 };
+          const score = Number(data.likes || 0) + Number(data.favorites || 0) * 2 + Number(data.readers || 0);
+          return { work: w, score };
+        })
+      );
+      const withEngagement = popularChecks.filter((item) => item.score > 0);
+      if (withEngagement.length >= 2) {
+        withEngagement.sort((a, b) => b.score - a.score);
+        popularWorks = withEngagement.map((item) => item.work);
+      }
+      popularCache = { timestamp: Date.now(), works: popularWorks };
     }
   }
 

@@ -208,17 +208,15 @@
     align-items: center;
     gap: 1rem;
     padding: 0.85rem;
-    background: rgba(14, 16, 26, 0.65);
+    background: #0e111d;
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     text-decoration: none;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .continue-card:hover {
-    background: rgba(20, 24, 38, 0.85);
+    background: rgba(20, 24, 38, 0.95);
     border-color: rgba(223, 194, 141, 0.35);
     box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(223, 194, 141, 0.15);
     transform: translateY(-2px);
@@ -297,7 +295,26 @@
     }
 
     .continue-grid {
-      grid-template-columns: 1fr;
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      margin: 0 -1rem;
+      padding: 0.25rem 1rem 0.85rem;
+      gap: 0.85rem;
+    }
+
+    .continue-grid::-webkit-scrollbar {
+      display: none;
+    }
+
+    .continue-card {
+      flex: 0 0 82%;
+      min-width: 270px;
+      max-width: 85vw;
+      scroll-snap-align: start;
     }
 
     .section-title {
