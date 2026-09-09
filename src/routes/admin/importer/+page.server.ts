@@ -124,7 +124,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   // Active Focus Request (Prioridade Absoluta)
   const staffRequests = staffRequestsRes.data || [];
   const activeFocus = staffRequests.find(
-    (r) => r.status === 'QUEUED' || r.status === 'IMPORTING' || r.status === 'BLOCKED'
+    (r) => r.status === 'QUEUED' || r.status === 'IMPORTING' || r.status === 'RETRYING' || r.status === 'BLOCKED'
   ) || null;
 
   let activeFocusStats: {

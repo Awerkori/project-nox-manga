@@ -28,6 +28,7 @@
   let selectedWorkId = $state('');
   let reasonText = $state('');
   let showConflictModal = $state(false);
+  let showCancelConfirmModal = $state(false);
   let submitting = $state(false);
 
   // Search & Candidate state
@@ -212,7 +213,15 @@
 
           <div class="hero-meta">
             <div class="hero-badge-line">
-              {#if data.activeFocus.status === 'BLOCKED'}
+              {#if data.activeFocus.status === 'RETRYING'}
+                <span class="focus-pill retrying">
+                  <RotateCw size={13} class="spin-icon" />
+                  PRIORIDADE ABSOLUTA (RETRYING)
+                </span>
+                <span class="focus-pause-badge retry-badge">
+                  Aguardando retry técnico · Fila normal pausada
+                </span>
+              {:else if data.activeFocus.status === 'BLOCKED'}
                 <span class="focus-pill blocked">
                   <AlertTriangle size={13} />
                   PRIORIDADE BLOQUEADA
@@ -270,21 +279,44 @@
                 </button>
               </form>
             {/if}
-            <form method="POST" action="?/cancel" use:enhance={() => {
-              submitting = true;
-              return async ({ update }) => {
-                submitting = false;
-                await update();
-              };
-            }}>
-              <input type="hidden" name="request_id" value={data.activeFocus.id} />
-              <button type="submit" class="btn-cancel-priority" disabled={submitting}>
-                <X size={14} />
-                <span>{data.activeFocus.status === 'BLOCKED' ? 'Encerrar Prioridade e Retomar Fila' : 'Cancelar Foco'}</span>
-              </button>
-            </form>
+            <button
+              type="button"
+              class="btn-cancel-priority"
+              onclick={() => (showCancelConfirmModal = true)}
+            >
+              <X size={14} />
+              <span>Cancelar prioridade</span>
+            </button>
           </div>
         </div>
+
+        {#if data.activeFocus.status === 'RETRYING' || data.activeFocus.last_error}
+          <div class="hero-retry-info-card">
+            <div class="retry-header">
+              <AlertTriangle size={15} class="retry-icon" />
+              <span class="retry-label">Status da Prioridade:</span>
+              <strong class="status-badge-val {data.activeFocus.status.toLowerCase()}">{data.activeFocus.status}</strong>
+            </div>
+            <div class="retry-details-grid">
+              <div class="retry-detail-item wide">
+                <span class="detail-label">Motivo do Erro:</span>
+                <span class="detail-value error-text">{data.activeFocus.last_error || 'Aguardando recuperação técnica'}</span>
+              </div>
+              <div class="retry-detail-item">
+                <span class="detail-label">Tentativas:</span>
+                <span class="detail-value">{data.activeFocus.attempt_count || 1}</span>
+              </div>
+              <div class="retry-detail-item">
+                <span class="detail-label">Última tentativa:</span>
+                <span class="detail-value">{relativeTime(data.activeFocus.last_attempt_at || data.activeFocus.updated_at)}</span>
+              </div>
+              <div class="retry-detail-item">
+                <span class="detail-label">Próxima tentativa:</span>
+                <span class="detail-value highlight">{data.activeFocus.next_attempt_at ? relativeTime(data.activeFocus.next_attempt_at) : 'Em instantes'}</span>
+              </div>
+            </div>
+          </div>
+        {/if}
 
         {#if data.activeFocus.status === 'BLOCKED' && data.activeFocus.failure}
           <div class="hero-blocker-alert">
@@ -622,6 +654,14 @@
                   <div class="req-header-line">
                     <strong class="req-work-title">{req.works?.title || 'Obra'}</strong>
                     <span class="req-status-pill status-{req.status.toLowerCase()}">{req.status}</span>
+                    {#if req.cancel_reason}
+                      <span class="req-cancel-reason-tag">
+                        {req.cancel_reason === 'STAFF_CANCELLED' ? 'Cancelado pela Staff' : req.cancel_reason === 'REPLACED_BY_STAFF' ? 'Substituído pela Staff' : req.cancel_reason}
+                      </span>
+                    {/if}
+                    {#if req.status === 'RETRYING' && req.last_error}
+                      <span class="req-error-tag" title={req.last_error}>Retry: {req.last_error}</span>
+                    {/if}
                   </div>
                   <div class="req-details-line">
                     <span class="req-operator">Solicitado por: <strong>{req.members?.display_name || req.members?.username || 'Staff'}</strong></span>
@@ -957,12 +997,11 @@
       </div>
 
       <p class="modal-desc">
-        A obra <strong>{form.activeWorkTitle}</strong> já está em modo foco no Importer.
-        O sistema opera em modo de foco exclusivo (0 ou 1 obra por vez) para garantir máxima velocidade.
+        Já existe uma prioridade absoluta ativa: <strong>{form.activeWorkTitle}</strong>.
       </p>
 
       <p class="conflict-prompt">
-        Deseja cancelar o foco da obra anterior e priorizar imediatamente esta nova obra?
+        Deseja substituir a prioridade atual por esta nova obra?
       </p>
 
       <div class="modal-actions">
@@ -971,7 +1010,7 @@
           class="btn-modal-cancel"
           onclick={() => (showConflictModal = false)}
         >
-          Manter Anterior
+          Não
         </button>
         <form method="POST" action="?/prioritize" use:enhance={() => {
           submitting = true;
@@ -992,7 +1031,77 @@
               <span>Substituindo…</span>
             {:else}
               <Flame size={14} />
-              <span>Substituir e Focar Agora</span>
+              <span>Substituir prioridade</span>
+            {/if}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Modal: Confirmação de Cancelamento de Prioridade Absoluta -->
+{#if showCancelConfirmModal && data.activeFocus}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    onclick={() => (showCancelConfirmModal = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') showCancelConfirmModal = false; }}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal-card cancel-confirm-card"
+      role="document"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <AlertTriangle size={20} class="cancel-alert-icon" />
+          <h3 class="modal-title">Cancelar prioridade?</h3>
+        </div>
+        <button
+          type="button"
+          class="modal-close-btn"
+          onclick={() => (showCancelConfirmModal = false)}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <p class="modal-desc">
+        A obra <strong>{data.activeFocus.works?.title || 'atual'}</strong> deixará de receber prioridade absoluta e o Importer retomará a fila normal.
+      </p>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-modal-cancel"
+          onclick={() => (showCancelConfirmModal = false)}
+        >
+          Voltar
+        </button>
+        <form method="POST" action="?/cancel" use:enhance={() => {
+          submitting = true;
+          return async ({ update }) => {
+            submitting = false;
+            showCancelConfirmModal = false;
+            await update();
+          };
+        }}>
+          <input type="hidden" name="request_id" value={data.activeFocus.id} />
+          <button
+            type="submit"
+            class="btn-modal-danger"
+            disabled={submitting}
+          >
+            {#if submitting}
+              <span>Cancelando…</span>
+            {:else}
+              <X size={14} />
+              <span>Cancelar prioridade</span>
             {/if}
           </button>
         </form>
@@ -1109,6 +1218,12 @@
     border-radius: 999px;
   }
 
+  .focus-pill.retrying {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+  }
+
   .focus-pulse-dot {
     width: 6px;
     height: 6px;
@@ -1125,6 +1240,99 @@
     padding: 3px 8px;
     border-radius: 6px;
     border: 1px solid rgba(223, 194, 141, 0.2);
+  }
+
+  .focus-pause-badge.retry-badge {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.25);
+  }
+
+  /* Hero Retry Info Card */
+  .hero-retry-info-card {
+    background: rgba(15, 18, 29, 0.85);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .retry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .retry-icon {
+    color: #fbbf24;
+    flex-shrink: 0;
+  }
+
+  .retry-label {
+    color: #94a3b8;
+    font-size: 12px;
+  }
+
+  .status-badge-val {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .status-badge-val.retrying {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+  }
+
+  .retry-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px 16px;
+  }
+
+  .retry-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .retry-detail-item.wide {
+    grid-column: 1 / -1;
+  }
+
+  .detail-label {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .detail-value {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
+  .detail-value.error-text {
+    color: #f87171;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    word-break: break-word;
+    background: rgba(239, 68, 68, 0.08);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .detail-value.highlight {
+    color: #dfc28d;
+    font-weight: 700;
   }
 
   .hero-work-title {
@@ -2268,6 +2476,50 @@
   .btn-modal-submit:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .btn-modal-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 750;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-danger:hover:not(:disabled) {
+    background: #dc2626;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+  }
+
+  .btn-modal-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .cancel-confirm-card {
+    max-width: 460px;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .cancel-alert-icon {
+    color: #ef4444;
+  }
+
+  .req-cancel-reason-tag {
+    font-size: 11px;
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-weight: 500;
   }
 
   .count-pill.has-failures {

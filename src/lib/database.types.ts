@@ -582,6 +582,13 @@ export type Database = {
           status: string
           updated_at: string
           work_id: string
+          cancelled_by: string | null
+          cancelled_at: string | null
+          cancel_reason: string | null
+          last_error: string | null
+          last_attempt_at: string | null
+          next_attempt_at: string | null
+          attempt_count: number
         }
         Insert: {
           created_at?: string
@@ -592,6 +599,13 @@ export type Database = {
           status?: string
           updated_at?: string
           work_id: string
+          cancelled_by?: string | null
+          cancelled_at?: string | null
+          cancel_reason?: string | null
+          last_error?: string | null
+          last_attempt_at?: string | null
+          next_attempt_at?: string | null
+          attempt_count?: number
         }
         Update: {
           created_at?: string
@@ -602,6 +616,13 @@ export type Database = {
           status?: string
           updated_at?: string
           work_id?: string
+          cancelled_by?: string | null
+          cancelled_at?: string | null
+          cancel_reason?: string | null
+          last_error?: string | null
+          last_attempt_at?: string | null
+          next_attempt_at?: string | null
+          attempt_count?: number
         }
         Relationships: [
           {
