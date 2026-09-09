@@ -75,22 +75,13 @@ export const actions = {
       return fail(400, { error: 'Status inválido.' });
     }
 
-    const updatePayload: any = {
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
+    if (notes.length > 2000) return fail(400, { error: 'Notas não podem exceder 2000 caracteres.' });
 
-    if (newStatus === 'ATRIBUIDO' || newStatus === 'EM_ANALISE') {
-      updatePayload.assigned_to = locals.user.id;
-    }
-    if (notes) {
-      updatePayload.resolution_notes = notes;
-    }
-
-    const { error } = await locals.db
-      .from('reports')
-      .update(updatePayload)
-      .eq('id', reportId);
+    const { error } = await locals.db.rpc('moderate_report', {
+      p_report_id: reportId,
+      p_status: newStatus,
+      p_resolution_notes: notes || undefined
+    });
 
     if (error) {
       return fail(500, { error: 'Erro ao atualizar denúncia: ' + error.message });

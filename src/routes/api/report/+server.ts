@@ -6,8 +6,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     throw error(401, 'Autenticação necessária para enviar uma denúncia.');
   }
 
-  const body = await request.json();
-  const { targetType, workId, chapterId, commentId, targetUserId, reason, details } = body;
+  const parsed = await request.json().catch(() => null);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw error(400, 'Solicitação inválida.');
+  const body = parsed as Record<string, unknown>;
+  const targetType = typeof body.targetType === 'string' ? body.targetType : '';
+  const workId = typeof body.workId === 'string' ? body.workId : undefined;
+  const chapterId = typeof body.chapterId === 'string' ? body.chapterId : undefined;
+  const commentId = typeof body.commentId === 'string' ? body.commentId : undefined;
+  const targetUserId = typeof body.targetUserId === 'string' ? body.targetUserId : undefined;
+  const reason = typeof body.reason === 'string' ? body.reason : '';
+  const details = typeof body.details === 'string' ? body.details : '';
 
   if (!targetType || !['WORK', 'CHAPTER', 'USER', 'COMMENT'].includes(targetType)) {
     throw error(400, 'Tipo de denúncia inválido.');
@@ -23,24 +31,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     throw error(400, 'Detalhes não podem exceder 2000 caracteres.');
   }
 
-  // Anti-spam check: check if a pending report already exists from this user for this target
-  let existingCheck = locals.db
-    .from('reports')
-    .select('id')
-    .eq('reporter_id', locals.user.id)
-    .eq('target_type', targetType)
-    .in('status', ['NOVO', 'EM_ANALISE']);
+  const targetId =
+    targetType === 'WORK'
+      ? workId
+      : targetType === 'CHAPTER'
+        ? chapterId
+        : targetType === 'COMMENT'
+          ? commentId
+          : targetUserId;
+  if (typeof targetId !== 'string') throw error(400, 'Identificador do alvo é obrigatório.');
 
-  if (targetType === 'WORK' && workId) {
-    existingCheck = existingCheck.eq('work_id', workId);
-  } else if (targetType === 'CHAPTER' && chapterId) {
-    existingCheck = existingCheck.eq('chapter_id', chapterId);
-  } else if (targetType === 'COMMENT' && commentId) {
-    existingCheck = existingCheck.eq('comment_id', commentId);
+  const { data, error: submitError } = await locals.db.rpc('submit_report', {
+    p_target_type: targetType,
+    p_target_id: targetId,
+    p_reason: cleanReason,
+    p_details: cleanDetails || undefined
+  });
+  if (submitError) {
+    throw error(submitError.code === '42501' ? 403 : 400, 'Não foi possível registrar a denúncia.');
   }
-
-  const { data: existing } = await existingCheck.maybeSingle();
-  if (existing) {
+  const result = data as { ok?: boolean; rate_limited?: boolean; already_reported?: boolean; report_id?: string };
+  if (result.rate_limited) throw error(429, 'Limite de denúncias atingido. Tente novamente mais tarde.');
+  if (result.already_reported) {
     return json({
       ok: true,
       alreadyReported: true,
@@ -48,29 +60,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     });
   }
 
-  const { data: inserted, error: insertError } = await locals.db
-    .from('reports')
-    .insert({
-      reporter_id: locals.user.id,
-      target_type: targetType,
-      work_id: workId || null,
-      chapter_id: chapterId || null,
-      comment_id: commentId || null,
-      target_user_id: targetUserId || null,
-      reason: cleanReason,
-      details: cleanDetails || null,
-      status: 'NOVO'
-    })
-    .select('id')
-    .single();
-
-  if (insertError) {
-    throw error(500, 'Erro ao registrar denúncia: ' + insertError.message);
-  }
-
   return json({
     ok: true,
-    reportId: inserted.id,
+    reportId: result.report_id,
     message: 'Denúncia recebida pela equipe editorial com sucesso.'
   });
 };

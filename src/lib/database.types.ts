@@ -1167,6 +1167,48 @@ export type Database = {
           },
         ]
       }
+      report_audit: {
+        Row: {
+          actor_id: string
+          created_at: string
+          id: number
+          new_status: string
+          old_status: string | null
+          report_id: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          id?: never
+          new_status: string
+          old_status?: string | null
+          report_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          id?: never
+          new_status?: string
+          old_status?: string | null
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_audit_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_audit_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           key: string
@@ -1468,6 +1510,10 @@ export type Database = {
           xp: number
         }[]
       }
+      moderate_report: {
+        Args: { p_report_id: string; p_resolution_notes?: string; p_status: string }
+        Returns: Json
+      }
       member_public_stats: {
         Args: { p_user: string }
         Returns: {
@@ -1500,6 +1546,10 @@ export type Database = {
           key: string
           value: string
         }[]
+      }
+      submit_report: {
+        Args: { p_details?: string; p_reason: string; p_target_id: string; p_target_type: string }
+        Returns: Json
       }
       reserve_media: {
         Args: {
