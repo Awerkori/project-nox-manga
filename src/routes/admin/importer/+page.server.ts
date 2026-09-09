@@ -7,13 +7,15 @@ export const load: PageServerLoad = async ({ locals }) => {
     stagedCountRes,
     importingJobsRes,
     retryJobsRes,
+    pausedJobsRes,
     staffRequestsRes,
     nextQueuedRes,
     stagedRes,
     sourcesRes,
     worksListRes,
     workHealthRes,
-    recentManifestRes
+    recentManifestRes,
+    staffAuditRes
   ] = await Promise.all([
     // 1. Latest telemetry heartbeat
     locals.db
@@ -44,6 +46,14 @@ export const load: PageServerLoad = async ({ locals }) => {
       .eq('status', 'RETRY')
       .order('next_run_at', { ascending: true })
       .limit(24),
+
+    // 3c. Jobs paused by staff
+    locals.db
+      .from('importer_queue')
+      .select('*')
+      .eq('status', 'PAUSED_BY_STAFF')
+      .order('updated_at', { ascending: false })
+      .limit(16),
 
     // 4. Staff priority requests
     locals.db
@@ -95,33 +105,53 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from('importer_chapter_manifest')
       .select('id, work_id, chapter_number, chapter_sort_key, status, selected_source, available_sources, page_count, last_checked_at')
       .order('chapter_sort_key', { ascending: true })
-      .limit(100)
+      .limit(100),
+
+    // 11. Recent staff audit records
+    locals.db
+      .from('importer_staff_audit')
+      .select('*, actor:members!importer_staff_audit_actor_id_fkey(id, username, display_name)')
+      .order('created_at', { ascending: false })
+      .limit(10)
   ]);
 
   const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
   const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
 
   // Query status counts from importer_queue
-  const [queuedCount, importingCount, retryCount, completedCount, failedCount, failed1hRes, failed24hRes, recentFailuresRes] =
-    await Promise.all([
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'RETRY'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
-      locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6)
-    ]);
+  const [
+    queuedCount,
+    importingCount,
+    retryCount,
+    pausedCount,
+    cancelledCount,
+    completedCount,
+    failedCount,
+    failed1hRes,
+    failed24hRes,
+    recentFailuresRes
+  ] = await Promise.all([
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'RETRY'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'PAUSED_BY_STAFF'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'CANCELLED_BY_STAFF'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
+    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6)
+  ]);
 
   const importingJobs = importingJobsRes.data || [];
   const retryJobs = retryJobsRes.data || [];
+  const pausedJobs = pausedJobsRes.data || [];
   const queuedJobs = nextQueuedRes.data || [];
 
   // Enrich jobs with work titles & covers
   const neededWorkIds = Array.from(
     new Set(
-      [...importingJobs, ...retryJobs, ...queuedJobs]
+      [...importingJobs, ...retryJobs, ...pausedJobs, ...queuedJobs]
         .map((j) => (j.payload as any)?.workId)
         .filter(Boolean)
     )
@@ -228,6 +258,8 @@ export const load: PageServerLoad = async ({ locals }) => {
       queued: queuedCount.count || 0,
       importing: importingCount.count || 0,
       retry: retryCount.count || 0,
+      paused: pausedCount.count || 0,
+      cancelled: cancelledCount.count || 0,
       staged: stagedCountRes.count || 0,
       completed: completedCount.count || 0,
       failed: failedCount.count || 0,
@@ -235,11 +267,16 @@ export const load: PageServerLoad = async ({ locals }) => {
       failed24h: failed24hRes.count || 0
     },
     recentFailures: recentFailuresRes.data || [],
+    recentAudit: staffAuditRes.data || [],
     importingJobs: importingJobs.map((j) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
     retryJobs: retryJobs.map((j) => ({
+      ...j,
+      work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
+    })),
+    pausedJobs: pausedJobs.map((j) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
@@ -502,74 +539,125 @@ export const actions: Actions = {
   pauseJob: async ({ request, locals }) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
+    const reason = form.get('reason')?.toString() || 'Pausado via painel da Staff';
     if (!jobId) {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    // Postpone next_run_at by 24h
-    const { error } = await locals.db
-      .from('importer_queue')
-      .update({
-        status: 'RETRY',
-        next_run_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
+    const { error } = await (locals.db.rpc as any)('importer_staff_pause_job', {
+      p_job_id: jobId,
+      p_actor_id: locals.user?.id || null,
+      p_reason: reason
+    });
 
     if (error) {
       return fail(400, { error: error.message });
     }
 
-    return { success: true, message: 'Job pausado por 24 horas.' };
+    return { success: true, message: 'Job pausado pela Staff.' };
   },
 
-  cancelJob: async ({ request, locals }) => {
+  resumeJob: async ({ request, locals }) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     if (!jobId) {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { error } = await locals.db
-      .from('importer_queue')
-      .update({
-        status: 'FAILED',
-        last_error: 'Cancelado manualmente via painel administrativo',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
+    const { error } = await (locals.db.rpc as any)('importer_staff_resume_job', {
+      p_job_id: jobId,
+      p_actor_id: locals.user?.id || null
+    });
 
     if (error) {
       return fail(400, { error: error.message });
     }
 
-    return { success: true, message: 'Job cancelado com sucesso.' };
+    return { success: true, message: 'Job retomado e reenfileirado para execução!' };
+  },
+
+  postponeJob: async ({ request, locals }) => {
+    const form = await request.formData();
+    const jobId = form.get('job_id')?.toString();
+    const hours = parseInt(form.get('hours')?.toString() || '24', 10);
+    if (!jobId) {
+      return fail(400, { error: 'ID de job ausente.' });
+    }
+
+    const { error } = await (locals.db.rpc as any)('importer_staff_postpone_job', {
+      p_job_id: jobId,
+      p_delay: `${hours} hours`,
+      p_actor_id: locals.user?.id || null
+    });
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: `Job adiado por ${hours} horas.` };
+  },
+
+  cancelJob: async ({ request, locals }) => {
+    const form = await request.formData();
+    const jobId = form.get('job_id')?.toString();
+    const reason = form.get('reason')?.toString() || 'Cancelado via painel da Staff';
+    if (!jobId) {
+      return fail(400, { error: 'ID de job ausente.' });
+    }
+
+    const { data, error } = await (locals.db.rpc as any)('importer_staff_cancel_job', {
+      p_job_id: jobId,
+      p_actor_id: locals.user?.id || null,
+      p_reason: reason
+    });
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    const res = data as any;
+    return { success: true, message: res?.message || 'Job cancelado pela Staff.' };
   },
 
   freezeWork: async ({ request, locals }) => {
+    const form = await request.formData();
+    const workId = form.get('work_id')?.toString();
+    const reason = form.get('reason')?.toString() || 'Congelado via painel da Staff';
+    if (!workId) {
+      return fail(400, { error: 'ID de obra ausente.' });
+    }
+
+    const { data, error } = await (locals.db.rpc as any)('importer_staff_freeze_work', {
+      p_work_id: workId,
+      p_actor_id: locals.user?.id || null,
+      p_reason: reason
+    });
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    const res = data as any;
+    return { success: true, message: res?.message || 'Obra congelada com sucesso pela Staff.' };
+  },
+
+  unfreezeWork: async ({ request, locals }) => {
     const form = await request.formData();
     const workId = form.get('work_id')?.toString();
     if (!workId) {
       return fail(400, { error: 'ID de obra ausente.' });
     }
 
-    // Mark mappings as IGNORED
-    await locals.db
-      .from('importer_work_mappings')
-      .update({ sync_status: 'IGNORED', updated_at: new Date().toISOString() })
-      .eq('work_id', workId);
+    const { data, error } = await (locals.db.rpc as any)('importer_staff_unfreeze_work', {
+      p_work_id: workId,
+      p_actor_id: locals.user?.id || null
+    });
 
-    // Cancel queued / retry jobs for this work
-    await locals.db
-      .from('importer_queue')
-      .update({
-        status: 'FAILED',
-        last_error: 'Obra congelada manualmente pelo administrador',
-        updated_at: new Date().toISOString()
-      })
-      .in('status', ['QUEUED', 'RETRY'])
-      .filter('payload->>workId', 'eq', workId);
+    if (error) {
+      return fail(400, { error: error.message });
+    }
 
-    return { success: true, message: 'Obra congelada! Importações suspensas e jobs pendentes cancelados.' };
+    const res = data as any;
+    return { success: true, message: res?.message || 'Obra descongelada com sucesso. Reconciliação reativada.' };
   }
 };

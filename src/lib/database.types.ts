@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       access_roles: {
@@ -74,28 +99,25 @@ export type Database = {
       }
       chapter_reactions: {
         Row: {
-          id: string
           chapter_id: string
-          visitor_id: string
-          user_id: string | null
-          emoji: string
           created_at: string
+          emoji: string
+          id: string
+          visitor_id: string
         }
         Insert: {
-          id?: string
           chapter_id: string
-          visitor_id: string
-          user_id?: string | null
-          emoji: string
           created_at?: string
+          emoji: string
+          id?: string
+          visitor_id: string
         }
         Update: {
-          id?: string
           chapter_id?: string
-          visitor_id?: string
-          user_id?: string | null
-          emoji?: string
           created_at?: string
+          emoji?: string
+          id?: string
+          visitor_id?: string
         }
         Relationships: [
           {
@@ -104,7 +126,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "chapters"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       chapters: {
@@ -265,6 +287,53 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importer_chapter_manifest: {
+        Row: {
+          available_sources: Json
+          chapter_number: number
+          chapter_sort_key: number
+          chapter_title: string | null
+          id: string
+          last_checked_at: string
+          page_count: number | null
+          selected_source: string | null
+          status: string
+          work_id: string
+        }
+        Insert: {
+          available_sources?: Json
+          chapter_number: number
+          chapter_sort_key: number
+          chapter_title?: string | null
+          id?: string
+          last_checked_at?: string
+          page_count?: number | null
+          selected_source?: string | null
+          status: string
+          work_id: string
+        }
+        Update: {
+          available_sources?: Json
+          chapter_number?: number
+          chapter_sort_key?: number
+          chapter_title?: string | null
+          id?: string
+          last_checked_at?: string
+          page_count?: number | null
+          selected_source?: string | null
+          status?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importer_chapter_manifest_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
             referencedColumns: ["id"]
           },
         ]
@@ -462,6 +531,10 @@ export type Database = {
       importer_queue: {
         Row: {
           attempts: number
+          cancel_reason: string | null
+          cancel_requested: boolean
+          cancelled_at: string | null
+          cancelled_by: string | null
           chapter_sort_key: number | null
           created_at: string
           dedupe_key: string
@@ -474,6 +547,9 @@ export type Database = {
           locked_by: string | null
           max_attempts: number
           next_run_at: string
+          pause_reason: string | null
+          paused_at: string | null
+          paused_by: string | null
           payload: Json
           priority: number
           progress_current: number | null
@@ -488,6 +564,10 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          cancel_reason?: string | null
+          cancel_requested?: boolean
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           chapter_sort_key?: number | null
           created_at?: string
           dedupe_key: string
@@ -500,6 +580,9 @@ export type Database = {
           locked_by?: string | null
           max_attempts?: number
           next_run_at?: string
+          pause_reason?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
           payload?: Json
           priority?: number
           progress_current?: number | null
@@ -514,6 +597,10 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          cancel_reason?: string | null
+          cancel_requested?: boolean
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           chapter_sort_key?: number | null
           created_at?: string
           dedupe_key?: string
@@ -526,6 +613,9 @@ export type Database = {
           locked_by?: string | null
           max_attempts?: number
           next_run_at?: string
+          pause_reason?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
           payload?: Json
           priority?: number
           progress_current?: number | null
@@ -539,6 +629,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "importer_queue_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "importer_queue_paused_by_fkey"
+            columns: ["paused_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "importer_queue_source_fkey"
             columns: ["source"]
@@ -593,69 +697,116 @@ export type Database = {
         }
         Relationships: []
       }
-      importer_staff_requests: {
+      importer_staff_audit: {
         Row: {
+          action: string
+          actor_id: string | null
           created_at: string
           id: string
+          metadata: Json
+          new_state: string | null
+          old_state: string | null
+          reason: string | null
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_state?: string | null
+          old_state?: string | null
+          reason?: string | null
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_state?: string | null
+          old_state?: string | null
+          reason?: string | null
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importer_staff_audit_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importer_staff_requests: {
+        Row: {
+          attempt_count: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          next_attempt_at: string | null
           priority_boost: number
           reason: string | null
           requested_by: string
           status: string
           updated_at: string
           work_id: string
-          cancelled_by: string | null
-          cancelled_at: string | null
-          cancel_reason: string | null
-          last_error: string | null
-          last_attempt_at: string | null
-          next_attempt_at: string | null
-          attempt_count: number
         }
         Insert: {
+          attempt_count?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          next_attempt_at?: string | null
           priority_boost?: number
           reason?: string | null
           requested_by: string
           status?: string
           updated_at?: string
           work_id: string
-          cancelled_by?: string | null
-          cancelled_at?: string | null
-          cancel_reason?: string | null
-          last_error?: string | null
-          last_attempt_at?: string | null
-          next_attempt_at?: string | null
-          attempt_count?: number
         }
         Update: {
+          attempt_count?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          next_attempt_at?: string | null
           priority_boost?: number
           reason?: string | null
           requested_by?: string
           status?: string
           updated_at?: string
           work_id?: string
-          cancelled_by?: string | null
-          cancelled_at?: string | null
-          cancel_reason?: string | null
-          last_error?: string | null
-          last_attempt_at?: string | null
-          next_attempt_at?: string | null
-          attempt_count?: number
         }
         Relationships: [
           {
-            foreignKeyName: "importer_staff_requests_requested_by_fkey"
-            columns: ["requested_by"]
+            foreignKeyName: "importer_staff_requests_cancelled_by_fkey"
+            columns: ["cancelled_by"]
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "importer_staff_requests_cancelled_by_fkey"
-            columns: ["cancelled_by"]
+            foreignKeyName: "importer_staff_requests_requested_by_fkey"
+            columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
@@ -717,11 +868,73 @@ export type Database = {
         }
         Relationships: []
       }
-      importer_work_mappings: {
+      importer_work_health: {
         Row: {
           created_at: string
+          first_chapter_number: number | null
+          gaps: Json
+          health_status: string
+          last_reconciled_at: string
+          latest_chapter_number: number | null
+          missing_start: boolean
+          providers_summary: Json
+          total_imported_chapters: number
+          total_known_chapters: number
+          unresolved_gaps: Json
+          updated_at: string
+          work_id: string
+        }
+        Insert: {
+          created_at?: string
+          first_chapter_number?: number | null
+          gaps?: Json
+          health_status: string
+          last_reconciled_at?: string
+          latest_chapter_number?: number | null
+          missing_start?: boolean
+          providers_summary?: Json
+          total_imported_chapters?: number
+          total_known_chapters?: number
+          unresolved_gaps?: Json
+          updated_at?: string
+          work_id: string
+        }
+        Update: {
+          created_at?: string
+          first_chapter_number?: number | null
+          gaps?: Json
+          health_status?: string
+          last_reconciled_at?: string
+          latest_chapter_number?: number | null
+          missing_start?: boolean
+          providers_summary?: Json
+          total_imported_chapters?: number
+          total_known_chapters?: number
+          unresolved_gaps?: Json
+          updated_at?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importer_work_health_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: true
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importer_work_mappings: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          freeze_reason: string | null
+          frozen_at: string | null
+          frozen_by: string | null
           id: string
+          is_primary: boolean | null
           last_synced_at: string | null
+          match_method: string | null
           metadata: Json
           source: string
           source_slug: string
@@ -730,14 +943,17 @@ export type Database = {
           sync_status: string
           updated_at: string
           work_id: string | null
-          confidence_score: number | null
-          is_primary: boolean | null
-          match_method: string | null
         }
         Insert: {
+          confidence_score?: number | null
           created_at?: string
+          freeze_reason?: string | null
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
+          is_primary?: boolean | null
           last_synced_at?: string | null
+          match_method?: string | null
           metadata?: Json
           source: string
           source_slug: string
@@ -746,14 +962,17 @@ export type Database = {
           sync_status?: string
           updated_at?: string
           work_id?: string | null
-          confidence_score?: number | null
-          is_primary?: boolean | null
-          match_method?: string | null
         }
         Update: {
+          confidence_score?: number | null
           created_at?: string
+          freeze_reason?: string | null
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
+          is_primary?: boolean | null
           last_synced_at?: string | null
+          match_method?: string | null
           metadata?: Json
           source?: string
           source_slug?: string
@@ -762,11 +981,15 @@ export type Database = {
           sync_status?: string
           updated_at?: string
           work_id?: string | null
-          confidence_score?: number | null
-          is_primary?: boolean | null
-          match_method?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "importer_work_mappings_frozen_by_fkey"
+            columns: ["frozen_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "importer_work_mappings_source_fkey"
             columns: ["source"]
@@ -781,109 +1004,6 @@ export type Database = {
             referencedRelation: "works"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      importer_work_health: {
-        Row: {
-          work_id: string
-          health_status: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
-          total_known_chapters: number
-          total_imported_chapters: number
-          missing_start: boolean
-          first_chapter_number: number | null
-          latest_chapter_number: number | null
-          gaps: Json
-          unresolved_gaps: Json
-          providers_summary: Json
-          last_reconciled_at: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          work_id: string
-          health_status: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
-          total_known_chapters?: number
-          total_imported_chapters?: number
-          missing_start?: boolean
-          first_chapter_number?: number | null
-          latest_chapter_number?: number | null
-          gaps?: Json
-          unresolved_gaps?: Json
-          providers_summary?: Json
-          last_reconciled_at?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          work_id?: string
-          health_status?: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
-          total_known_chapters?: number
-          total_imported_chapters?: number
-          missing_start?: boolean
-          first_chapter_number?: number | null
-          latest_chapter_number?: number | null
-          gaps?: Json
-          unresolved_gaps?: Json
-          providers_summary?: Json
-          last_reconciled_at?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "importer_work_health_work_id_fkey"
-            columns: ["work_id"]
-            isOneToOne: true
-            referencedRelation: "works"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      importer_chapter_manifest: {
-        Row: {
-          id: string
-          work_id: string
-          chapter_number: number
-          chapter_sort_key: number
-          chapter_title: string | null
-          status: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
-          selected_source: string | null
-          available_sources: Json
-          page_count: number | null
-          last_checked_at: string
-        }
-        Insert: {
-          id?: string
-          work_id: string
-          chapter_number: number
-          chapter_sort_key: number
-          chapter_title?: string | null
-          status: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
-          selected_source?: string | null
-          available_sources?: Json
-          page_count?: number | null
-          last_checked_at?: string
-        }
-        Update: {
-          id?: string
-          work_id?: string
-          chapter_number?: number
-          chapter_sort_key?: number
-          chapter_title?: string | null
-          status?: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
-          selected_source?: string | null
-          available_sources?: Json
-          page_count?: number | null
-          last_checked_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "importer_chapter_manifest_work_id_fkey"
-            columns: ["work_id"]
-            isOneToOne: false
-            referencedRelation: "works"
-            referencedColumns: ["id"]
-          }
         ]
       }
       library: {
@@ -1023,6 +1143,8 @@ export type Database = {
           equipped_title_id: string | null
           id: string
           is_test: boolean
+          manual_badge: boolean
+          manual_title: boolean
           username: string
           xp: number
         }
@@ -1037,6 +1159,8 @@ export type Database = {
           equipped_title_id?: string | null
           id: string
           is_test?: boolean
+          manual_badge?: boolean
+          manual_title?: boolean
           username: string
           xp?: number
         }
@@ -1051,6 +1175,8 @@ export type Database = {
           equipped_title_id?: string | null
           id?: string
           is_test?: boolean
+          manual_badge?: boolean
+          manual_title?: boolean
           username?: string
           xp?: number
         }
@@ -1577,11 +1703,7 @@ export type Database = {
       current_role: { Args: never; Returns: string }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
       get_chapter_reactions: {
-        Args: { p_chapter_id: string; p_visitor_id: string }
-        Returns: Json
-      }
-      toggle_chapter_reaction: {
-        Args: { p_chapter_id: string; p_visitor_id: string; p_emoji: string }
+        Args: { p_chapter_id: string; p_visitor_id?: string }
         Returns: Json
       }
       importer_acquire_job: {
@@ -1621,14 +1743,16 @@ export type Database = {
           reason: string
         }[]
       }
-      importer_prioritize_work: {
-        Args: { p_reason?: string; p_work_id: string }
-        Returns: Json
-      }
-      importer_request_reconciliation: {
-        Args: { p_work_id: string }
-        Returns: Json
-      }
+      importer_prioritize_work:
+        | { Args: { p_reason?: string; p_work_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_force_replace?: boolean
+              p_reason?: string
+              p_work_id: string
+            }
+            Returns: Json
+          }
       importer_prune_telemetry: {
         Args: { p_job_metrics_days?: number; p_telemetry_hours?: number }
         Returns: undefined
@@ -1645,6 +1769,7 @@ export type Database = {
           p_error?: string
           p_job_id: string
           p_retry_delay?: string
+          p_retry_delay_minutes?: number
           p_status: string
           p_worker_id: string
         }
@@ -1657,6 +1782,34 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      importer_request_reconciliation: {
+        Args: { p_work_id: string }
+        Returns: Json
+      }
+      importer_staff_cancel_job: {
+        Args: { p_actor_id?: string; p_job_id: string; p_reason?: string }
+        Returns: Json
+      }
+      importer_staff_freeze_work: {
+        Args: { p_actor_id?: string; p_reason?: string; p_work_id: string }
+        Returns: Json
+      }
+      importer_staff_pause_job: {
+        Args: { p_actor_id?: string; p_job_id: string; p_reason?: string }
+        Returns: Json
+      }
+      importer_staff_postpone_job: {
+        Args: { p_actor_id?: string; p_delay: string; p_job_id: string }
+        Returns: Json
+      }
+      importer_staff_resume_job: {
+        Args: { p_actor_id?: string; p_job_id: string }
+        Returns: Json
+      }
+      importer_staff_unfreeze_work: {
+        Args: { p_actor_id?: string; p_work_id: string }
+        Returns: Json
       }
       invite_editor: { Args: { p_email: string }; Returns: undefined }
       is_editor: { Args: never; Returns: boolean }
@@ -1697,6 +1850,10 @@ export type Database = {
       revoke_editor_invite: { Args: { p_email: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      toggle_chapter_reaction: {
+        Args: { p_chapter_id: string; p_emoji: string; p_visitor_id: string }
+        Returns: Json
+      }
       work_metrics: {
         Args: { p_work: string }
         Returns: {
@@ -1833,6 +1990,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

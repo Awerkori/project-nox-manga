@@ -763,6 +763,22 @@
       <strong class="value">{data.counts.retry}</strong>
     </div>
 
+    {#if data.counts.paused > 0}
+      <div class="count-pill">
+        <div class="dot amber"></div>
+        <span class="label">Pausados (Staff):</span>
+        <strong class="value">{data.counts.paused}</strong>
+      </div>
+    {/if}
+
+    {#if data.counts.cancelled > 0}
+      <div class="count-pill">
+        <div class="dot gray"></div>
+        <span class="label">Cancelados (Staff):</span>
+        <strong class="value">{data.counts.cancelled}</strong>
+      </div>
+    {/if}
+
     <div class="count-pill" class:staged-alert={data.counts.staged > 0}>
       <div class="dot purple"></div>
       <span class="label">STAGED (Barreira):</span>
@@ -777,10 +793,10 @@
 
     <div class="count-pill" class:has-failures={data.counts.failed1h > 0}>
       <div class="dot red"></div>
-      <span class="label">Falhas (1h / 24h):</span>
+      <span class="label">Falhas Técnicas (1h / 24h):</span>
       <strong class="value">{data.counts.failed1h} / {data.counts.failed24h}</strong>
       {#if data.counts.failed > 0}
-        <span class="sub-val" title="Total histórico">({data.counts.failed})</span>
+        <span class="sub-val" title="Total histórico de falhas técnicas">({data.counts.failed})</span>
       {/if}
     </div>
   </section>
@@ -1232,13 +1248,42 @@
                         <span>Ver detalhes</span>
                       </button>
 
-                      <form method="POST" action="?/pauseJob" use:enhance={() => { activeMenuJobId = null; }}>
-                        <input type="hidden" name="job_id" value={job.id} />
-                        <button type="submit" class="dropdown-item">
-                          <Pause size={13} class="icon-amber" />
-                          <span>Pausar (24h)</span>
-                        </button>
-                      </form>
+                      {#if job.status === 'PAUSED_BY_STAFF'}
+                        <form method="POST" action="?/resumeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <button type="submit" class="dropdown-item item-success">
+                            <Play size={13} class="icon-emerald" />
+                            <span>Retomar job</span>
+                          </button>
+                        </form>
+                      {:else}
+                        <form method="POST" action="?/pauseJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <button type="submit" class="dropdown-item">
+                            <Pause size={13} class="icon-amber" />
+                            <span>Pausar (Staff)</span>
+                          </button>
+                        </form>
+                      {/if}
+
+                      <div class="dropdown-submenu-header">Adiar execução:</div>
+                      <div class="dropdown-btn-group">
+                        <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <input type="hidden" name="hours" value="1" />
+                          <button type="submit" class="dropdown-mini-btn" title="Adiar por 1 hora">+1h</button>
+                        </form>
+                        <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <input type="hidden" name="hours" value="6" />
+                          <button type="submit" class="dropdown-mini-btn" title="Adiar por 6 horas">+6h</button>
+                        </form>
+                        <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <input type="hidden" name="hours" value="24" />
+                          <button type="submit" class="dropdown-mini-btn" title="Adiar por 24 horas">+24h</button>
+                        </form>
+                      </div>
 
                       <form method="POST" action="?/cancelJob" use:enhance={() => { activeMenuJobId = null; }}>
                         <input type="hidden" name="job_id" value={job.id} />
@@ -1249,6 +1294,7 @@
                       </form>
 
                       {#if (job.payload as any)?.workId}
+                        <div class="dropdown-divider"></div>
                         <form method="POST" action="?/prioritize" use:enhance={() => { activeMenuJobId = null; }}>
                           <input type="hidden" name="work_id" value={(job.payload as any).workId} />
                           <button type="submit" class="dropdown-item">
@@ -1450,9 +1496,28 @@
                           <input type="hidden" name="job_id" value={job.id} />
                           <button type="submit" class="dropdown-item">
                             <Pause size={13} class="icon-amber" />
-                            <span>Pausar (24h)</span>
+                            <span>Pausar (Staff)</span>
                           </button>
                         </form>
+
+                        <div class="dropdown-submenu-header">Adiar execução:</div>
+                        <div class="dropdown-btn-group">
+                          <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                            <input type="hidden" name="job_id" value={job.id} />
+                            <input type="hidden" name="hours" value="1" />
+                            <button type="submit" class="dropdown-mini-btn" title="Adiar por 1 hora">+1h</button>
+                          </form>
+                          <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                            <input type="hidden" name="job_id" value={job.id} />
+                            <input type="hidden" name="hours" value="6" />
+                            <button type="submit" class="dropdown-mini-btn" title="Adiar por 6 horas">+6h</button>
+                          </form>
+                          <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                            <input type="hidden" name="job_id" value={job.id} />
+                            <input type="hidden" name="hours" value="24" />
+                            <button type="submit" class="dropdown-mini-btn" title="Adiar por 24 horas">+24h</button>
+                          </form>
+                        </div>
 
                         <form method="POST" action="?/cancelJob" use:enhance={() => { activeMenuJobId = null; }}>
                           <input type="hidden" name="job_id" value={job.id} />
@@ -1463,6 +1528,15 @@
                         </form>
 
                         {#if (job.payload as any)?.workId}
+                          <div class="dropdown-divider"></div>
+                          <form method="POST" action="?/prioritize" use:enhance={() => { activeMenuJobId = null; }}>
+                            <input type="hidden" name="work_id" value={(job.payload as any).workId} />
+                            <button type="submit" class="dropdown-item">
+                              <Flame size={13} class="icon-flame" />
+                              <span>Priorizar obra</span>
+                            </button>
+                          </form>
+
                           <form method="POST" action="?/freezeWork" use:enhance={() => { activeMenuJobId = null; }}>
                             <input type="hidden" name="work_id" value={(job.payload as any).workId} />
                             <button type="submit" class="dropdown-item item-warning">
@@ -1485,6 +1559,111 @@
           </div>
         {/if}
       </section>
+
+      <!-- Jobs Pausados pela Staff -->
+      {#if (data.pausedJobs || []).length > 0}
+        <section class="panel-card" style="margin-top: 24px; border-color: rgba(245, 158, 11, 0.3);">
+          <div class="panel-header">
+            <div>
+              <div class="title-with-badge">
+                <h2 class="panel-title">Jobs Pausados pela Staff</h2>
+                <span class="badge-amber">{(data.pausedJobs || []).length} retidos</span>
+              </div>
+              <p class="panel-sub">Jobs paralisados voluntariamente pela Staff até que sejam explicitamente retomados</p>
+            </div>
+          </div>
+
+          <div class="active-jobs-list">
+            {#each (data.pausedJobs || []) as job (job.id)}
+              <div class="active-job-card" style="border-left: 3px solid #fbbf24;">
+                <div class="job-thumb">
+                  {#if job.work?.cover_id}
+                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                  {:else}
+                    <div class="thumb-placeholder">NOX</div>
+                  {/if}
+                </div>
+
+                <div class="job-info">
+                  <div class="job-line-top">
+                    <strong class="job-work-title" title={job.work?.title || (job.payload as any)?.workTitle || 'Obra'}>
+                      {job.work?.title || (job.payload as any)?.workTitle || 'Obra'}
+                    </strong>
+                    <span class="job-status-chip" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);">
+                      PAUSED_BY_STAFF
+                    </span>
+                  </div>
+
+                  <div class="job-line-sub">
+                    <span class="job-source-tag">{job.source}</span>
+                    {#if job.chapter_sort_key}
+                      <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
+                    {/if}
+                    {#if job.pause_reason}
+                      <span style="font-size: 11px; color: #94a3b8;">Motivo: {job.pause_reason}</span>
+                    {/if}
+                  </div>
+                </div>
+
+                <div class="job-actions-wrap" style="display: flex; align-items: center; gap: 8px;">
+                  <form method="POST" action="?/resumeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                    <input type="hidden" name="job_id" value={job.id} />
+                    <button type="submit" class="btn-action-retry" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">
+                      <Play size={12} />
+                      <span>Retomar</span>
+                    </button>
+                  </form>
+
+                  <button
+                    type="button"
+                    class="btn-icon-dots"
+                    onclick={(e) => toggleMenu(job.id, e)}
+                    title="Menu de opções"
+                    aria-label="Opções"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+
+                  {#if activeMenuJobId === job.id}
+                    <div
+                      class="job-dropdown-menu"
+                      role="menu"
+                      tabindex="-1"
+                      onclick={(e) => e.stopPropagation()}
+                      onkeydown={(e) => { if (e.key === 'Escape') activeMenuJobId = null; }}
+                    >
+                      <button
+                        type="button"
+                        class="dropdown-item"
+                        onclick={() => { activeMenuJobId = null; selectedJobForDetails = job; }}
+                      >
+                        <Info size={13} class="icon-sky" />
+                        <span>Ver detalhes</span>
+                      </button>
+
+                      <form method="POST" action="?/resumeJob" use:enhance={() => { activeMenuJobId = null; }}>
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <button type="submit" class="dropdown-item item-success">
+                          <Play size={13} class="icon-emerald" />
+                          <span>Retomar job</span>
+                        </button>
+                      </form>
+
+                      <form method="POST" action="?/cancelJob" use:enhance={() => { activeMenuJobId = null; }}>
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <button type="submit" class="dropdown-item item-danger">
+                          <Ban size={13} class="icon-rose" />
+                          <span>Cancelar job</span>
+                        </button>
+                      </form>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
       <!-- 2. Prioridades da Staff -->
       <section class="panel-card" style="margin-top: 24px;">
@@ -1720,6 +1899,27 @@
             {:else}
               <p class="diag-empty">Nenhuma falha recente registrada no sistema.</p>
             {/if}
+
+            <!-- Staff Audit Log -->
+            {#if data.recentAudit?.length > 0}
+              <h4 class="diag-sub-heading" style="margin-top: 24px;">Auditoria de Intervenções da Staff</h4>
+              <div class="recent-failures-list">
+                {#each data.recentAudit as audit (audit.id)}
+                  <div class="recent-failure-item" style="border-left-color: #38bdf8;">
+                    <div class="fail-top">
+                      <span class="fail-source" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">{audit.action}</span>
+                      <span class="fail-ch">{audit.target_type} {audit.target_id.slice(0, 8)}...</span>
+                      <span class="fail-time">
+                        {audit.actor?.display_name || audit.actor?.username || 'Staff'} · {relativeTime(audit.created_at)}
+                      </span>
+                    </div>
+                    {#if audit.reason}
+                      <code class="fail-err-msg" style="color: #94a3b8;">Motivo: {audit.reason} ({audit.old_state || 'N/A'} &rarr; {audit.new_state})</code>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         </details>
       </section>
@@ -1864,11 +2064,30 @@
           </form>
         {/if}
 
-        <form method="POST" action="?/pauseJob" use:enhance={() => { selectedJobForDetails = null; }}>
+        {#if selectedJobForDetails.status === 'PAUSED_BY_STAFF'}
+          <form method="POST" action="?/resumeJob" use:enhance={() => { selectedJobForDetails = null; }}>
+            <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+            <button type="submit" class="btn-modal-submit">
+              <Play size={14} />
+              <span>Retomar Job</span>
+            </button>
+          </form>
+        {:else}
+          <form method="POST" action="?/pauseJob" use:enhance={() => { selectedJobForDetails = null; }}>
+            <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+            <button type="submit" class="btn-modal-cancel">
+              <Pause size={14} />
+              <span>Pausar (Staff)</span>
+            </button>
+          </form>
+        {/if}
+
+        <form method="POST" action="?/postponeJob" use:enhance={() => { selectedJobForDetails = null; }}>
           <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+          <input type="hidden" name="hours" value="6" />
           <button type="submit" class="btn-modal-cancel">
-            <Pause size={14} />
-            <span>Pausar (24h)</span>
+            <Clock size={14} />
+            <span>Adiar (+6h)</span>
           </button>
         </form>
 
@@ -3379,6 +3598,52 @@
   :global(.icon-amber) { color: #fbbf24; }
   :global(.icon-rose) { color: #f43f5e; }
   :global(.icon-cyan) { color: #06b6d4; }
+  :global(.icon-emerald) { color: #34d399; }
+
+  .dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 0;
+  }
+
+  .dropdown-submenu-header {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    padding: 4px 10px 2px;
+  }
+
+  .dropdown-btn-group {
+    display: flex;
+    gap: 4px;
+    padding: 0 6px 4px;
+  }
+
+  .dropdown-mini-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 0;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+
+  .dropdown-mini-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .dropdown-item.item-success:hover {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
 
   /* ERROS & RETRIES SECTION */
   .badge-amber {
