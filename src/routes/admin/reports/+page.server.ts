@@ -11,7 +11,8 @@ export const load = async ({ locals, url }) => {
 
   let query = locals.db
     .from('reports')
-    .select(`
+    .select(
+      `
       id,
       target_type,
       reason,
@@ -25,7 +26,8 @@ export const load = async ({ locals, url }) => {
       work:works(id, title, slug),
       chapter:chapters(id, number, title),
       comment:comments(id, body, user_id)
-    `)
+    `
+    )
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -38,19 +40,17 @@ export const load = async ({ locals, url }) => {
 
   const [reportsRes, countsRes] = await Promise.all([
     query,
-    locals.db
-      .from('reports')
-      .select('status, target_type')
+    locals.db.from('reports').select('status, target_type')
   ]);
 
   const allReports = countsRes.data || [];
   const statusCounts = {
     ALL: allReports.length,
-    NOVO: allReports.filter(r => r.status === 'NOVO').length,
-    EM_ANALISE: allReports.filter(r => r.status === 'EM_ANALISE').length,
-    ATRIBUIDO: allReports.filter(r => r.status === 'ATRIBUIDO').length,
-    RESOLVIDO: allReports.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: allReports.filter(r => r.status === 'REJEITADO').length
+    NOVO: allReports.filter((r) => r.status === 'NOVO').length,
+    EM_ANALISE: allReports.filter((r) => r.status === 'EM_ANALISE').length,
+    ATRIBUIDO: allReports.filter((r) => r.status === 'ATRIBUIDO').length,
+    RESOLVIDO: allReports.filter((r) => r.status === 'RESOLVIDO').length,
+    REJEITADO: allReports.filter((r) => r.status === 'REJEITADO').length
   };
 
   return {
@@ -70,7 +70,7 @@ export const actions = {
     const formData = await readRequestFormData(request);
     const reportId = formData.get('reportId') as string;
     const newStatus = formData.get('status') as string;
-    const notes = (formData.get('notes') as string || '').trim();
+    const notes = ((formData.get('notes') as string) || '').trim();
 
     if (!reportId || !['NOVO', 'EM_ANALISE', 'ATRIBUIDO', 'RESOLVIDO', 'REJEITADO'].includes(newStatus)) {
       return fail(400, { error: 'Status inválido.' });
@@ -85,7 +85,8 @@ export const actions = {
     });
 
     if (error) {
-      return fail(500, { error: 'Erro ao atualizar denúncia: ' + error.message });
+      console.warn('report_moderation_failed', { code: error.code });
+      return fail(500, { error: 'Não foi possível atualizar a denúncia.' });
     }
 
     return { success: true };

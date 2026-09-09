@@ -30,6 +30,8 @@ try {
   console.log(memberPrivacy.flatMap((r) => r.rows).filter((r) => r.result));
   const reports = await db.exec(readFileSync('tests/report-integrity.sql', 'utf8'));
   console.log(reports.flatMap((r) => r.rows).filter((r) => r.result));
+  const hardening = await db.exec(readFileSync('tests/security-hardening.sql', 'utf8'));
+  console.log(hardening.flatMap((r) => r.rows).filter((r) => r.result));
   const counts = await db.query('select count(*)::integer as users from auth.users');
   if (counts.rows[0].users !== 0) throw new Error('Test transaction was not rolled back');
   console.log('PASS: no test users or content retained. Local PostgreSQL only.');

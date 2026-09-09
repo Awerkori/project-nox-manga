@@ -13,10 +13,6 @@ export async function staffRequest(locals: App.Locals, action: string, id?: stri
     signal: AbortSignal.timeout(15000)
   });
   const result = await response.json();
-  if (!response.ok)
-    error(
-      response.status >= 500 ? 502 : response.status,
-      result.message || 'Falha na conexão com a central.'
-    );
+  if (!response.ok) error(response.status >= 500 ? 502 : response.status, 'Falha na conexão com a central.');
   return result;
 }

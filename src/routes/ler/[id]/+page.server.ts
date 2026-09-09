@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { check } from '$lib/server/db';
-export const load = async ({ locals, params, url, cookies }) => {
+export const load = async ({ locals, params, url }) => {
   const preview = url.searchParams.get('preview') === '1' && ['ADMIN', 'EDITOR'].includes(locals.role || '');
   let query = locals.db
     .from('chapters')
@@ -10,14 +10,10 @@ export const load = async ({ locals, params, url, cookies }) => {
   const { data: chapter } = await query.maybeSingle();
   if (!chapter || (!preview && !chapter.works?.published)) error(404, 'Capítulo indisponível');
 
-  if ((chapter.works as any)?.content_rating === 'ADULT_18') {
-    const rawAgeCookie = cookies.get('nox-age-status');
-    let ageStatus = rawAgeCookie;
-    if (locals.user) {
-      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-      if (p.data?.age_status) ageStatus = p.data.age_status;
-    }
-    if (ageStatus === 'MINOR') {
+  if (!preview && (chapter.works as any)?.content_rating === 'ADULT_18') {
+    const profile = locals.user ? await locals.db.rpc('member_self_profile') : null;
+    const ageStatus = profile?.data?.[0]?.age_status || 'UNKNOWN';
+    if (ageStatus !== 'ADULT') {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
     }
   }

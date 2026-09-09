@@ -22,6 +22,9 @@ export const POST = async ({ request, locals }) => {
     p_action: body.action,
     p_data: body.data as Json
   });
-  if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+  if (problem) {
+    console.warn('member_action_failed', { scope: body.scope, action: body.action, code: problem.code });
+    error(problem.code === '42501' ? 403 : 400, 'Não foi possível concluir a ação.');
+  }
   return json(data);
 };

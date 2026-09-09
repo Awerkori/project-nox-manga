@@ -10,8 +10,11 @@ export function privileged() {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 }
-export function check(result: { error: { message: string } | null }) {
-  if (result.error) error(400, result.error.message);
+export function check(result: { error: { code?: string; message: string } | null }) {
+  if (result.error) {
+    console.warn('database_request_failed', { code: result.error.code });
+    error(400, 'Não foi possível concluir a consulta.');
+  }
 }
 export function member(locals: App.Locals) {
   if (!locals.user || !locals.role) error(401, 'Entre em uma conta confirmada para continuar.');

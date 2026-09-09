@@ -13,7 +13,10 @@ export async function inviteEditor(locals: App.Locals, email: string) {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { error: problem } = await caller.rpc('invite_editor', { p_email: email });
-  if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+  if (problem) {
+    console.warn('invite_editor_failed', { code: problem.code });
+    error(problem.code === '42501' ? 403 : 400, 'Não foi possível processar o convite.');
+  }
 }
 export async function claimInvite(locals: App.Locals) {
   const {

@@ -60,8 +60,9 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
     error(400, 'O conteúdo não corresponde ao formato informado.');
   const db = privileged(),
     id = crypto.randomUUID();
-  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)), (b) =>
-    b.toString(16).padStart(2, '0')
+  const hash = Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)),
+    (b) => b.toString(16).padStart(2, '0')
   ).join('');
   const provider =
     env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID && purpose === 'editorial' ? 'telegram' : 'supabase';
@@ -76,13 +77,20 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
     p_sha256: hash,
     p_purpose: purpose
   });
-  if (reservation) error(400, reservation.message);
+  if (reservation) {
+    console.warn('media_reservation_failed', { code: reservation.code });
+    error(400, 'Não foi possível reservar espaço para a imagem.');
+  }
   let key: string = id;
   try {
     if (provider === 'telegram') {
       if (!env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_TOKEN)
         throw new Error('Armazenamento Telegram não configurado.');
-      key = await telegramStorage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID).upload(bytes as unknown as Uint8Array<ArrayBuffer>, info.mime, id);
+      key = await telegramStorage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID).upload(
+        bytes as unknown as Uint8Array<ArrayBuffer>,
+        info.mime,
+        id
+      );
     } else {
       const { error: problem } = await db.storage
         .from('nox-media')
