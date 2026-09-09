@@ -709,6 +709,9 @@ export type Database = {
           sync_status: string
           updated_at: string
           work_id: string | null
+          confidence_score: number | null
+          is_primary: boolean | null
+          match_method: string | null
         }
         Insert: {
           created_at?: string
@@ -722,6 +725,9 @@ export type Database = {
           sync_status?: string
           updated_at?: string
           work_id?: string | null
+          confidence_score?: number | null
+          is_primary?: boolean | null
+          match_method?: string | null
         }
         Update: {
           created_at?: string
@@ -735,6 +741,9 @@ export type Database = {
           sync_status?: string
           updated_at?: string
           work_id?: string | null
+          confidence_score?: number | null
+          is_primary?: boolean | null
+          match_method?: string | null
         }
         Relationships: [
           {
@@ -751,6 +760,109 @@ export type Database = {
             referencedRelation: "works"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      importer_work_health: {
+        Row: {
+          work_id: string
+          health_status: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
+          total_known_chapters: number
+          total_imported_chapters: number
+          missing_start: boolean
+          first_chapter_number: number | null
+          latest_chapter_number: number | null
+          gaps: Json
+          unresolved_gaps: Json
+          providers_summary: Json
+          last_reconciled_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          work_id: string
+          health_status: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
+          total_known_chapters?: number
+          total_imported_chapters?: number
+          missing_start?: boolean
+          first_chapter_number?: number | null
+          latest_chapter_number?: number | null
+          gaps?: Json
+          unresolved_gaps?: Json
+          providers_summary?: Json
+          last_reconciled_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          work_id?: string
+          health_status?: 'HEALTHY' | 'INCOMPLETE' | 'RECONCILING' | 'BLOCKED' | 'UNVERIFIED'
+          total_known_chapters?: number
+          total_imported_chapters?: number
+          missing_start?: boolean
+          first_chapter_number?: number | null
+          latest_chapter_number?: number | null
+          gaps?: Json
+          unresolved_gaps?: Json
+          providers_summary?: Json
+          last_reconciled_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importer_work_health_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: true
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      importer_chapter_manifest: {
+        Row: {
+          id: string
+          work_id: string
+          chapter_number: number
+          chapter_sort_key: number
+          chapter_title: string | null
+          status: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
+          selected_source: string | null
+          available_sources: Json
+          page_count: number | null
+          last_checked_at: string
+        }
+        Insert: {
+          id?: string
+          work_id: string
+          chapter_number: number
+          chapter_sort_key: number
+          chapter_title?: string | null
+          status: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
+          selected_source?: string | null
+          available_sources?: Json
+          page_count?: number | null
+          last_checked_at?: string
+        }
+        Update: {
+          id?: string
+          work_id?: string
+          chapter_number?: number
+          chapter_sort_key?: number
+          chapter_title?: string | null
+          status?: 'PUBLISHED' | 'QUEUED' | 'STAGED' | 'UNRESOLVED_GAP' | 'SKIPPED'
+          selected_source?: string | null
+          available_sources?: Json
+          page_count?: number | null
+          last_checked_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importer_chapter_manifest_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          }
         ]
       }
       library: {
@@ -1490,6 +1602,10 @@ export type Database = {
       }
       importer_prioritize_work: {
         Args: { p_reason?: string; p_work_id: string }
+        Returns: Json
+      }
+      importer_request_reconciliation: {
+        Args: { p_work_id: string }
         Returns: Json
       }
       importer_prune_telemetry: {

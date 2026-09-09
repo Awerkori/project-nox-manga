@@ -18,11 +18,64 @@
     ArrowRight,
     Link2,
     Search,
-    ExternalLink
+    ExternalLink,
+    GitCompare,
+    Layers,
+    FileText,
+    Check,
+    HelpCircle,
+    AlertOctagon,
+    Split
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
 
   let { data, form } = $props();
+
+  // Catalog Health & Manifest state
+  let healthSearchQuery = $state('');
+  let healthFilter = $state<'ALL' | 'INCOMPLETE' | 'HEALTHY' | 'RECONCILING' | 'UNRESOLVED'>('ALL');
+  let showManifestModal = $state(false);
+  let selectedManifestWork = $state<any>(null);
+  let manifestLoading = $state(false);
+  let manifestChapters = $state<any[]>([]);
+  let reconcilingWorkId = $state<string | null>(null);
+
+  async function openManifestModal(workHealthItem: any) {
+    selectedManifestWork = workHealthItem;
+    showManifestModal = true;
+    manifestLoading = true;
+    try {
+      const res = await fetch(`/api/internal/importer/manifest?workId=${workHealthItem.work_id}`);
+      if (res.ok) {
+        const json = await res.json();
+        manifestChapters = json.chapters || [];
+      } else {
+        manifestChapters = (data.chapterManifest || []).filter((m: any) => m.work_id === workHealthItem.work_id);
+      }
+    } catch {
+      manifestChapters = (data.chapterManifest || []).filter((m: any) => m.work_id === workHealthItem.work_id);
+    } finally {
+      manifestLoading = false;
+    }
+  }
+
+  const filteredWorkHealth = $derived(
+    (data.workHealth || []).filter((item: any) => {
+      const matchesSearch =
+        !healthSearchQuery.trim() ||
+        (item.work?.title || '').toLowerCase().includes(healthSearchQuery.toLowerCase()) ||
+        (item.work?.slug || '').toLowerCase().includes(healthSearchQuery.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      if (healthFilter === 'HEALTHY') return item.health_status === 'HEALTHY';
+      if (healthFilter === 'INCOMPLETE') return item.health_status === 'INCOMPLETE' || item.missing_start || (item.gaps && item.gaps.length > 0);
+      if (healthFilter === 'RECONCILING') return item.health_status === 'RECONCILING';
+      if (healthFilter === 'UNRESOLVED') return Array.isArray(item.unresolved_gaps) && item.unresolved_gaps.length > 0;
+
+      return true;
+    })
+  );
 
   let showPrioritizeModal = $state(false);
   let selectedWorkId = $state('');
@@ -556,6 +609,324 @@
         <span class="sub-val" title="Total histórico">({data.counts.failed})</span>
       {/if}
     </div>
+  </section>
+
+  <!-- 3. Saúde do Catálogo & Reconciliação Multi-Fonte -->
+  <section class="catalog-health-panel" aria-label="Saúde do Catálogo & Reconciliação Multi-Fonte">
+    <div class="health-header">
+      <div class="health-title-group">
+        <div class="health-icon-box">
+          <GitCompare size={22} class="text-crimson" />
+        </div>
+        <div>
+          <h2 class="health-title">Saúde do Catálogo & Reconciliação Multi-Fonte</h2>
+          <p class="health-subtitle">
+            Auditoria contínua de completude, descoberta cross-provider (Nexus, Kuro, MangaFlix, MangoToons, Manhastro) e eliminação determinística de lacunas sem duplicações.
+          </p>
+        </div>
+      </div>
+      <div class="health-actions-top">
+        <span class="coverage-badge">
+          <Layers size={13} />
+          {data.healthMetrics?.totalImportedChapters || 0} / {data.healthMetrics?.totalKnownChapters || 0} Capítulos Sincronizados
+        </span>
+      </div>
+    </div>
+
+    <!-- 4 KPI Health Cards -->
+    <div class="health-kpi-grid">
+      <div class="kpi-card card-healthy">
+        <div class="kpi-top">
+          <span class="kpi-label">100% Saudáveis</span>
+          <CheckCircle2 size={18} class="text-emerald" />
+        </div>
+        <div class="kpi-value text-emerald">{data.healthMetrics?.healthyCount || 0}</div>
+        <div class="kpi-sub">Obras sem lacunas nem início ausente</div>
+      </div>
+
+      <div class="kpi-card card-incomplete">
+        <div class="kpi-top">
+          <span class="kpi-label">Com Lacunas Detectadas</span>
+          <AlertTriangle size={18} class="text-amber" />
+        </div>
+        <div class="kpi-value text-amber">{data.healthMetrics?.incompleteCount || 0}</div>
+        <div class="kpi-sub">{data.healthMetrics?.totalGaps || 0} lacunas identificadas para backfill</div>
+      </div>
+
+      <div class="kpi-card card-reconciling">
+        <div class="kpi-top">
+          <span class="kpi-label">Em Reconciliação Ativa</span>
+          <RotateCw size={18} class="text-cyan animate-spin-slow" />
+        </div>
+        <div class="kpi-value text-cyan">{data.healthMetrics?.reconcilingCount || 0}</div>
+        <div class="kpi-sub">Cruzando provedores e baixando gaps</div>
+      </div>
+
+      <div class="kpi-card card-unresolved">
+        <div class="kpi-top">
+          <span class="kpi-label">Gaps Irresolvíveis</span>
+          <AlertOctagon size={18} class="text-purple" />
+        </div>
+        <div class="kpi-value text-purple">{data.healthMetrics?.totalUnresolvedGaps || 0}</div>
+        <div class="kpi-sub">Nenhum provedor possui esses capítulos</div>
+      </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="health-toolbar">
+      <div class="health-search-wrap">
+        <Search size={16} class="health-search-icon" />
+        <input
+          type="text"
+          placeholder="Filtrar obras auditadas por título ou slug..."
+          value={healthSearchQuery}
+          oninput={(e) => (healthSearchQuery = (e.target as HTMLInputElement).value)}
+          class="health-search-input"
+        />
+        {#if healthSearchQuery}
+          <button type="button" class="btn-clear-search" onclick={() => (healthSearchQuery = '')}>
+            <X size={14} />
+          </button>
+        {/if}
+      </div>
+
+      <div class="health-filter-chips">
+        <button
+          type="button"
+          class="filter-chip"
+          class:active={healthFilter === 'ALL'}
+          onclick={() => (healthFilter = 'ALL')}
+        >
+          Todas ({data.workHealth?.length || 0})
+        </button>
+        <button
+          type="button"
+          class="filter-chip chip-incomplete"
+          class:active={healthFilter === 'INCOMPLETE'}
+          onclick={() => (healthFilter = 'INCOMPLETE')}
+        >
+          Com Lacunas ({data.healthMetrics?.incompleteCount || 0})
+        </button>
+        <button
+          type="button"
+          class="filter-chip chip-healthy"
+          class:active={healthFilter === 'HEALTHY'}
+          onclick={() => (healthFilter = 'HEALTHY')}
+        >
+          Saudáveis ({data.healthMetrics?.healthyCount || 0})
+        </button>
+        <button
+          type="button"
+          class="filter-chip chip-reconciling"
+          class:active={healthFilter === 'RECONCILING'}
+          onclick={() => (healthFilter = 'RECONCILING')}
+        >
+          Reconciliando ({data.healthMetrics?.reconcilingCount || 0})
+        </button>
+        {#if (data.healthMetrics?.totalUnresolvedGaps || 0) > 0}
+          <button
+            type="button"
+            class="filter-chip chip-unresolved"
+            class:active={healthFilter === 'UNRESOLVED'}
+            onclick={() => (healthFilter = 'UNRESOLVED')}
+          >
+            Gaps Irresolvíveis ({data.healthMetrics?.totalUnresolvedGaps || 0})
+          </button>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Works Health Table / Grid -->
+    {#if filteredWorkHealth.length > 0}
+      <div class="health-works-table-wrap">
+        <table class="health-table">
+          <thead>
+            <tr>
+              <th>Obra</th>
+              <th>Status de Saúde</th>
+              <th>Início</th>
+              <th>Cobertura de Capítulos</th>
+              <th>Fontes Mapeadas (Cross-Provider)</th>
+              <th>Lacunas Detectadas</th>
+              <th class="th-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredWorkHealth as item (item.work_id)}
+              <tr class="health-row">
+                <!-- Obra -->
+                <td class="td-work">
+                  <div class="health-work-info">
+                    <div class="health-cover-box">
+                      {#if item.work?.cover_id}
+                        <img src="/media/{item.work.cover_id}" alt="" width="34" height="48" class="health-cover-img" />
+                      {:else}
+                        <div class="health-cover-fallback">NOX</div>
+                      {/if}
+                    </div>
+                    <div class="health-work-text">
+                      <a href="/obra/{item.work?.slug || ''}" target="_blank" class="health-work-link">
+                        {item.work?.title || 'Obra Desconhecida'}
+                        <ExternalLink size={12} />
+                      </a>
+                      <span class="health-work-slug">slug: {item.work?.slug || item.work_id.slice(0, 8)}</span>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Status de Saúde -->
+                <td class="td-status">
+                  {#if item.health_status === 'HEALTHY'}
+                    <span class="health-status-badge status-healthy">
+                      <CheckCircle2 size={13} />
+                      100% Saudável
+                    </span>
+                  {:else if item.health_status === 'RECONCILING' || reconcilingWorkId === item.work_id}
+                    <span class="health-status-badge status-reconciling">
+                      <RotateCw size={13} class="animate-spin" />
+                      Reconciliando
+                    </span>
+                  {:else if item.health_status === 'INCOMPLETE'}
+                    <span class="health-status-badge status-incomplete">
+                      <AlertTriangle size={13} />
+                      Lacunas Detectadas
+                    </span>
+                  {:else}
+                    <span class="health-status-badge status-unverified">
+                      <HelpCircle size={13} />
+                      Pendente Auditoria
+                    </span>
+                  {/if}
+                </td>
+
+                <!-- Início -->
+                <td class="td-start">
+                  {#if item.missing_start}
+                    <span class="start-badge badge-missing-start" title="Faltam capítulos anteriores ao primeiro conhecido">
+                      <AlertTriangle size={12} />
+                      Inicia no Cap. {item.first_chapter_number}
+                    </span>
+                  {:else}
+                    <span class="start-badge badge-start-ok">
+                      <Check size={12} />
+                      Início OK (Cap. {item.first_chapter_number || 1})
+                    </span>
+                  {/if}
+                </td>
+
+                <!-- Cobertura -->
+                <td class="td-coverage">
+                  <div class="coverage-cell">
+                    <div class="coverage-bar-track">
+                      <div
+                        class="coverage-bar-fill"
+                        class:fill-complete={item.total_imported_chapters >= item.total_known_chapters && item.total_known_chapters > 0}
+                        style="width: {Math.min(100, Math.round((item.total_imported_chapters / Math.max(1, item.total_known_chapters)) * 100))}%"
+                      ></div>
+                    </div>
+                    <div class="coverage-text">
+                      <strong>{item.total_imported_chapters}</strong> / {item.total_known_chapters} caps
+                      <span class="coverage-percent">
+                        ({Math.round((item.total_imported_chapters / Math.max(1, item.total_known_chapters)) * 100)}%)
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Fontes Mapeadas -->
+                <td class="td-providers">
+                  <div class="provider-badges-list">
+                    {#if Array.isArray(item.providers_summary) && item.providers_summary.length > 0}
+                      {#each item.providers_summary as prov}
+                        <span class="prov-tag prov-{prov.provider.toLowerCase()}" class:inactive={!prov.active}>
+                          <span class="prov-dot"></span>
+                          <span class="prov-name">{prov.provider}</span>
+                          <span class="prov-count">{prov.chaptersAvailable}c</span>
+                        </span>
+                      {/each}
+                    {:else}
+                      <span class="prov-empty">1 fonte</span>
+                    {/if}
+                  </div>
+                </td>
+
+                <!-- Lacunas Detectadas -->
+                <td class="td-gaps">
+                  <div class="gaps-list">
+                    {#if Array.isArray(item.gaps) && item.gaps.length > 0}
+                      {#each item.gaps as gap}
+                        <span class="gap-pill" class:gap-start={gap.type === 'MISSING_START'}>
+                          {#if gap.type === 'MISSING_START'}
+                            Falta 1..{gap.to}
+                          {:else}
+                            Falta {gap.from}..{gap.to}
+                          {/if}
+                        </span>
+                      {/each}
+                    {/if}
+                    {#if Array.isArray(item.unresolved_gaps) && item.unresolved_gaps.length > 0}
+                      <span class="gap-pill gap-unresolved" title="Nenhum provedor disponível possui estes capítulos">
+                        Irresolvível: {item.unresolved_gaps.slice(0, 3).join(', ')}{item.unresolved_gaps.length > 3 ? '…' : ''}
+                      </span>
+                    {/if}
+                    {#if (!item.gaps || item.gaps.length === 0) && (!item.unresolved_gaps || item.unresolved_gaps.length === 0) && !item.missing_start}
+                      <span class="gaps-none text-emerald">
+                        <Check size={12} />
+                        Sem lacunas
+                      </span>
+                    {/if}
+                  </div>
+                </td>
+
+                <!-- Ações -->
+                <td class="td-actions">
+                  <div class="action-btn-group">
+                    <form
+                      method="POST"
+                      action="?/reconcile"
+                      use:enhance={() => {
+                        reconcilingWorkId = item.work_id;
+                        return async ({ update }) => {
+                          await update();
+                          reconcilingWorkId = null;
+                        };
+                      }}
+                    >
+                      <input type="hidden" name="work_id" value={item.work_id} />
+                      <button
+                        type="submit"
+                        class="btn-reconcile-action"
+                        disabled={reconcilingWorkId === item.work_id || item.health_status === 'RECONCILING'}
+                        title="Executar reconciliação imediata em todas as fontes (Kuro, MangaFlix, Nexus, Manhastro, MangoToons)"
+                      >
+                        <RotateCw size={13} class={reconcilingWorkId === item.work_id || item.health_status === 'RECONCILING' ? 'animate-spin' : ''} />
+                        <span>{reconcilingWorkId === item.work_id ? 'Reconciliando...' : 'Reconciliar'}</span>
+                      </button>
+                    </form>
+
+                    <button
+                      type="button"
+                      class="btn-manifest-action"
+                      onclick={() => openManifestModal(item)}
+                      title="Abrir manifesto canônico unificado e proveniência de capítulos"
+                    >
+                      <FileText size={13} />
+                      <span>Manifesto</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <div class="health-empty-state">
+        <GitCompare size={36} class="text-zinc-500" />
+        <p class="empty-title">Nenhuma obra encontrada para este filtro</p>
+        <p class="empty-sub">Tente ajustar o termo de pesquisa ou selecionar a categoria "Todas".</p>
+      </div>
+    {/if}
   </section>
 
   <!-- Main Grid Layout -->
@@ -1105,6 +1476,160 @@
             {/if}
           </button>
         </form>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Modal: Manifesto Canônico Multi-Fonte -->
+{#if showManifestModal && selectedManifestWork}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    onclick={() => (showManifestModal = false)}
+    onkeydown={(e) => {
+      if (e.key === 'Escape') showManifestModal = false;
+    }}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal-card manifest-modal-card"
+      role="document"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="modal-header">
+        <div class="manifest-modal-title-wrap">
+          <div class="manifest-icon-badge">
+            <FileText size={20} class="text-crimson" />
+          </div>
+          <div>
+            <h3 class="modal-title">{selectedManifestWork.work?.title || 'Manifesto Canônico'}</h3>
+            <p class="manifest-sub-text">
+              Manifesto unificado de capítulos e proveniência multi-fonte (Zero duplicações na plataforma)
+            </p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick={() => (showManifestModal = false)}>
+          <X size={18} />
+        </button>
+      </div>
+
+      <div class="manifest-modal-body">
+        <div class="manifest-summary-strip">
+          <div class="manifest-kpi">
+            <span class="kpi-title">Capítulos Conhecidos:</span>
+            <strong class="kpi-num">{selectedManifestWork.total_known_chapters || 0}</strong>
+          </div>
+          <div class="manifest-kpi">
+            <span class="kpi-title">Importados:</span>
+            <strong class="kpi-num text-emerald">{selectedManifestWork.total_imported_chapters || 0}</strong>
+          </div>
+          <div class="manifest-kpi">
+            <span class="kpi-title">Status da Obra:</span>
+            <span class="health-status-badge status-{selectedManifestWork.health_status?.toLowerCase()}">
+              {selectedManifestWork.health_status}
+            </span>
+          </div>
+          {#if selectedManifestWork.missing_start}
+            <div class="manifest-kpi alert">
+              <AlertTriangle size={13} class="text-amber" />
+              <span class="text-amber">Falta início (1..{selectedManifestWork.first_chapter_number - 1})</span>
+            </div>
+          {/if}
+        </div>
+
+        {#if manifestLoading}
+          <div class="manifest-loading-box">
+            <RotateCw size={28} class="animate-spin text-crimson" />
+            <p>Carregando manifesto canônico da obra...</p>
+          </div>
+        {:else if manifestChapters.length > 0}
+          <div class="manifest-table-wrap">
+            <table class="manifest-table">
+              <thead>
+                <tr>
+                  <th>Capítulo</th>
+                  <th>Status Canônico</th>
+                  <th>Fonte Primária</th>
+                  <th>Fontes Disponíveis (Fallback)</th>
+                  <th>Páginas</th>
+                  <th>Verificado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each manifestChapters as ch}
+                  <tr class="manifest-row status-{ch.status?.toLowerCase()}">
+                    <td class="td-ch-num">
+                      <strong>Cap. {ch.chapter_sort_key ?? ch.chapter_number}</strong>
+                    </td>
+                    <td class="td-ch-status">
+                      <span class="ch-badge ch-{ch.status?.toLowerCase()}">
+                        {#if ch.status === 'PUBLISHED'}
+                          <CheckCircle2 size={12} />
+                          PUBLISHED
+                        {:else if ch.status === 'STAGED'}
+                          <Clock size={12} />
+                          STAGED
+                        {:else if ch.status === 'QUEUED'}
+                          <RotateCw size={12} class="animate-spin-slow" />
+                          QUEUED
+                        {:else if ch.status === 'UNRESOLVED_GAP'}
+                          <AlertOctagon size={12} />
+                          UNRESOLVED GAP
+                        {:else}
+                          {ch.status}
+                        {/if}
+                      </span>
+                    </td>
+                    <td class="td-ch-source">
+                      {#if ch.selected_source}
+                        <span class="source-tag source-{ch.selected_source}">
+                          {ch.selected_source}
+                        </span>
+                      {:else}
+                        <span class="source-none">—</span>
+                      {/if}
+                    </td>
+                    <td class="td-ch-fallbacks">
+                      <div class="fallback-sources-list">
+                        {#if Array.isArray(ch.available_sources) && ch.available_sources.length > 0}
+                          {#each ch.available_sources as s}
+                            <span class="fallback-tag" class:is-selected={s.source === ch.selected_source}>
+                              {s.source} ({s.page_count || '?'}p)
+                            </span>
+                          {/each}
+                        {:else}
+                          <span class="fallback-empty">Nenhum</span>
+                        {/if}
+                      </div>
+                    </td>
+                    <td class="td-ch-pages">
+                      {ch.page_count > 0 ? ch.page_count + ' páginas' : '—'}
+                    </td>
+                    <td class="td-ch-time">
+                      {ch.last_checked_at ? relativeTime(ch.last_checked_at) : '—'}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else}
+          <div class="manifest-empty-box">
+            <FileText size={32} class="text-zinc-500" />
+            <p>Nenhum capítulo cadastrado no manifesto desta obra ainda.</p>
+            <p class="sub">Execute uma reconciliação para descobrir todos os capítulos nas fontes cadastradas.</p>
+          </div>
+        {/if}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" onclick={() => (showManifestModal = false)}>
+          Fechar
+        </button>
       </div>
     </div>
   </div>
@@ -3101,4 +3626,719 @@
       box-sizing: border-box;
     }
   }
+
+  /* Catalog Health & Cross-Provider Reconciler Panel */
+  .catalog-health-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(16, 20, 32, 0.95) 0%, rgba(26, 17, 34, 0.85) 100%);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(220, 38, 38, 0.08);
+    margin-bottom: 24px;
+  }
+
+  .health-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 16px;
+  }
+
+  .health-title-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .health-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(220, 38, 38, 0.15);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .health-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.02em;
+  }
+
+  .health-subtitle {
+    font-size: 0.85rem;
+    color: #9ca3af;
+    margin: 0;
+    max-width: 800px;
+    line-height: 1.45;
+  }
+
+  .coverage-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    font-size: 0.82rem;
+    font-weight: 650;
+  }
+
+  .health-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+
+  @media (max-width: 1024px) {
+    .health-kpi-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .health-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .kpi-card {
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(15, 18, 28, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .kpi-card.card-healthy {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 18, 28, 0.8) 100%);
+  }
+
+  .kpi-card.card-incomplete {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 18, 28, 0.8) 100%);
+  }
+
+  .kpi-card.card-reconciling {
+    border-color: rgba(6, 182, 212, 0.3);
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(15, 18, 28, 0.8) 100%);
+  }
+
+  .kpi-card.card-unresolved {
+    border-color: rgba(168, 85, 247, 0.3);
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(15, 18, 28, 0.8) 100%);
+  }
+
+  .kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .kpi-label {
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .kpi-value {
+    font-size: 1.85rem;
+    font-weight: 850;
+    line-height: 1.1;
+  }
+
+  .kpi-sub {
+    font-size: 0.76rem;
+    color: #6b7280;
+  }
+
+  .health-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .health-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 320px;
+    max-width: 440px;
+  }
+
+  :global(.health-search-icon) {
+    position: absolute;
+    left: 14px;
+    color: #6b7280;
+    pointer-events: none;
+  }
+
+  .health-search-input {
+    width: 100%;
+    padding: 10px 38px 10px 38px;
+    background: rgba(10, 12, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 0.85rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  .health-search-input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+  }
+
+  .health-filter-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #9ca3af;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .filter-chip.active {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+  }
+
+  .filter-chip.chip-healthy.active {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #6ee7b7;
+  }
+
+  .filter-chip.chip-incomplete.active {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #fcd34d;
+  }
+
+  .filter-chip.chip-reconciling.active {
+    background: rgba(6, 182, 212, 0.2);
+    border-color: rgba(6, 182, 212, 0.5);
+    color: #67e8f9;
+  }
+
+  .filter-chip.chip-unresolved.active {
+    background: rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.5);
+    color: #d8b4fe;
+  }
+
+  .health-works-table-wrap {
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background: rgba(10, 12, 18, 0.6);
+  }
+
+  .health-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+  }
+
+  .health-table th {
+    text-align: left;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: #9ca3af;
+    font-weight: 650;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .health-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+  }
+
+  .health-row:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .health-work-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 220px;
+  }
+
+  .health-cover-box {
+    width: 34px;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #141724;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+
+  .health-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .health-cover-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 800;
+    color: #6b7280;
+  }
+
+  .health-work-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .health-work-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 700;
+    color: #ffffff;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .health-work-link:hover {
+    color: #f97316;
+  }
+
+  .health-work-slug {
+    font-size: 0.72rem;
+    color: #6b7280;
+    font-family: monospace;
+  }
+
+  .health-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .status-healthy {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+
+  .status-incomplete {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+
+  .status-reconciling {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+  }
+
+  .status-unverified {
+    background: rgba(107, 114, 128, 0.15);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.35);
+  }
+
+  .start-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .badge-missing-start {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .badge-start-ok {
+    background: rgba(16, 185, 129, 0.1);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .coverage-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+  }
+
+  .coverage-bar-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .coverage-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+
+  .coverage-bar-fill.fill-complete {
+    background: linear-gradient(90deg, #10b981, #059669);
+  }
+
+  .coverage-text {
+    font-size: 0.75rem;
+    color: #d1d5db;
+  }
+
+  .coverage-percent {
+    color: #9ca3af;
+    font-size: 0.72rem;
+  }
+
+  .provider-badges-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-width: 150px;
+  }
+
+  .prov-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 650;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+  }
+
+  .prov-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+  }
+
+  .prov-tag.inactive .prov-dot {
+    background: #ef4444;
+  }
+
+  .prov-count {
+    color: #fbbf24;
+    font-weight: 750;
+  }
+
+  .gaps-list {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    min-width: 160px;
+  }
+
+  .gap-pill {
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    font-size: 0.71rem;
+    font-weight: 650;
+  }
+
+  .gap-pill.gap-start {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+
+  .gap-pill.gap-unresolved {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.35);
+    color: #d8b4fe;
+  }
+
+  .gaps-none {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.74rem;
+    font-weight: 600;
+  }
+
+  .action-btn-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .btn-reconcile-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    background: rgba(6, 182, 212, 0.12);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: #22d3ee;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-reconcile-action:hover:not(:disabled) {
+    background: rgba(6, 182, 212, 0.25);
+    border-color: #22d3ee;
+  }
+
+  .btn-reconcile-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-manifest-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #d1d5db;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-manifest-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  /* Manifest Modal */
+  .manifest-modal-card {
+    max-width: 840px;
+    width: 95%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .manifest-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .manifest-icon-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .manifest-sub-text {
+    font-size: 0.78rem;
+    color: #9ca3af;
+    margin: 2px 0 0 0;
+  }
+
+  .manifest-modal-body {
+    padding: 16px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .manifest-summary-strip {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+
+  .manifest-kpi {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+  }
+
+  .manifest-kpi .kpi-title {
+    color: #9ca3af;
+  }
+
+  .manifest-table-wrap {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow-x: auto;
+  }
+
+  .manifest-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+
+  .manifest-table th {
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: #9ca3af;
+    text-align: left;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .manifest-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+  }
+
+  .ch-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .ch-published {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
+
+  .ch-staged {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+  }
+
+  .ch-queued {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+  }
+
+  .ch-unresolved_gap {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+
+  .fallback-sources-list {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .fallback-tag {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.69rem;
+    color: #9ca3af;
+  }
+
+  .fallback-tag.is-selected {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+
+  .manifest-loading-box,
+  .manifest-empty-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 36px 16px;
+    color: #9ca3af;
+    text-align: center;
+  }
+
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
+
+  .text-crimson { color: #ef4444; }
+  .text-emerald { color: #10b981; }
+  .text-amber { color: #f59e0b; }
+  .text-cyan { color: #06b6d4; }
+  .text-purple { color: #a855f7; }
 </style>

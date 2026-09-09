@@ -10,7 +10,9 @@ export const load: PageServerLoad = async ({ locals }) => {
     nextQueuedRes,
     stagedRes,
     sourcesRes,
-    worksListRes
+    worksListRes,
+    workHealthRes,
+    recentManifestRes
   ] = await Promise.all([
     // 1. Latest telemetry heartbeat
     locals.db
@@ -70,7 +72,21 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from('works')
       .select('id, title, slug, cover_id')
       .order('title', { ascending: true })
-      .limit(80)
+      .limit(80),
+
+    // 9. Catalog Work Health & Cross-Provider Reconciliations
+    locals.db
+      .from('importer_work_health')
+      .select('*, works(id, title, slug, cover_id)')
+      .order('last_reconciled_at', { ascending: false, nullsFirst: false })
+      .limit(60),
+
+    // 10. Chapter manifest entries
+    locals.db
+      .from('importer_chapter_manifest')
+      .select('id, work_id, chapter_number, chapter_sort_key, status, selected_source, available_sources, page_count, last_checked_at')
+      .order('chapter_sort_key', { ascending: true })
+      .limit(100)
   ]);
 
   const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
@@ -229,7 +245,22 @@ export const load: PageServerLoad = async ({ locals }) => {
     })),
     stagedChapters: stagedRes.data || [],
     sources: sourcesRes.data || [],
-    catalogWorks: worksListRes.data || []
+    catalogWorks: worksListRes.data || [],
+    workHealth: (workHealthRes.data || []).map((h: any) => ({
+      ...h,
+      work: h.works
+    })),
+    chapterManifest: recentManifestRes.data || [],
+    healthMetrics: {
+      healthyCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'HEALTHY').length,
+      incompleteCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'INCOMPLETE').length,
+      reconcilingCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'RECONCILING').length,
+      unverifiedCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'UNVERIFIED').length,
+      totalGaps: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (Array.isArray(h.gaps) ? h.gaps.length : 0), 0),
+      totalUnresolvedGaps: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.length : 0), 0),
+      totalKnownChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.total_known_chapters || 0), 0),
+      totalImportedChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.total_imported_chapters || 0), 0),
+    }
   };
 };
 
@@ -386,5 +417,24 @@ export const actions: Actions = {
       .eq('id', requestId);
 
     return { success: true, message: 'Prioridade reativada! Capítulos reenfileirados com prioridade 100.' };
+  },
+
+  reconcile: async ({ request, locals }) => {
+    const form = await request.formData();
+    const workId = form.get('work_id')?.toString();
+
+    if (!workId) {
+      return fail(400, { error: 'ID de obra inválido.' });
+    }
+
+    const { data, error } = await locals.db.rpc('importer_request_reconciliation', {
+      p_work_id: workId
+    });
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: 'Reconciliação multi-fonte iniciada com sucesso!' };
   }
 };
