@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { readRequestJson } from '$lib/server/request-body';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -6,7 +7,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     throw error(401, 'Autenticação necessária para enviar uma denúncia.');
   }
 
-  const parsed = await request.json().catch(() => null);
+  const parsed = await readRequestJson<unknown>(request);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw error(400, 'Solicitação inválida.');
   const body = parsed as Record<string, unknown>;
   const targetType = typeof body.targetType === 'string' ? body.targetType : '';

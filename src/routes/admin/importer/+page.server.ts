@@ -1,4 +1,5 @@
 import { fail } from '@sveltejs/kit';
+import { readRequestFormData } from '$lib/server/request-body';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -151,7 +152,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   prioritize: async ({ request, locals }) => {
-    const form = await request.formData();
+    const form = await readRequestFormData(request);
     const workId = form.get('work_id')?.toString();
     const reason = form.get('reason')?.toString() || null;
 
@@ -172,7 +173,7 @@ export const actions: Actions = {
   },
 
   cancel: async ({ request, locals }) => {
-    const form = await request.formData();
+    const form = await readRequestFormData(request);
     const requestId = form.get('request_id')?.toString();
 
     if (!requestId) {

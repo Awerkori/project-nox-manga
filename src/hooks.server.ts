@@ -14,10 +14,14 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.url.pathname === '/api/upload' || event.url.pathname === '/api/internal/storage/upload'
         ? 19_100_000
         : event.url.pathname === '/api/avatar'
-          ? 300_000
+          ? 400_000
           : 65_536;
-    if (Number(event.request.headers.get('content-length') || 0) > max)
-      error(413, 'Arquivo ou solicitação acima do limite');
+    const rawContentLength = event.request.headers.get('content-length');
+    if (rawContentLength !== null) {
+      if (!/^\d+$/.test(rawContentLength) || !Number.isSafeInteger(Number(rawContentLength)))
+        error(400, 'Content-Length inválido');
+      if (Number(rawContentLength) > max) error(413, 'Arquivo ou solicitação acima do limite');
+    }
   }
   event.locals.db = createServerClient<Database>(env.PUBLIC_SUPABASE_URL, env.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {

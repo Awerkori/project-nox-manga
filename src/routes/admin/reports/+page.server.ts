@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { readRequestFormData } from '$lib/server/request-body';
 
 export const load = async ({ locals, url }) => {
   if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
@@ -66,7 +67,7 @@ export const actions = {
       return fail(403, { error: 'Não autorizado.' });
     }
 
-    const formData = await request.formData();
+    const formData = await readRequestFormData(request);
     const reportId = formData.get('reportId') as string;
     const newStatus = formData.get('status') as string;
     const notes = (formData.get('notes') as string || '').trim();

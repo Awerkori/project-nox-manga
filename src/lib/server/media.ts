@@ -3,6 +3,7 @@ import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { inspectImage } from '$lib/media-validation';
 import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
+import { readRequestFormData } from '$lib/server/request-body';
 
 /** Thrown when Telegram returns 429 FloodWait. The caller must convert to a proper 429 Response. */
 export class RateLimitError extends Error {
@@ -19,7 +20,7 @@ export async function storeImage(request: Request, userId: string, purpose = 'ed
   let size = 0;
 
   if (isMultipart) {
-    const formData = await request.formData();
+    const formData = await readRequestFormData(request, max + 100_000);
     const file = formData.get('file');
     if (!file || !(file instanceof Blob)) error(400, 'Selecione uma imagem.');
     if (file.size > max) error(413, 'Imagem acima do limite permitido.');

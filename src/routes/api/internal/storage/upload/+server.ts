@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
+import { readRequestBytes } from '$lib/server/request-body';
 import type { RequestHandler } from './$types';
 
 // In-memory sliding-window rate limiter (120 requests / 60 seconds per IP)
@@ -80,18 +81,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     error(400, 'Identificador de mídia inválido');
   }
 
-  let arrayBuffer: ArrayBuffer;
-  try {
-    arrayBuffer = await request.arrayBuffer();
-  } catch {
-    error(400, 'Falha ao ler dados da imagem');
-  }
-
-  if (arrayBuffer.byteLength < 24 || arrayBuffer.byteLength > 19_000_000) {
+  const bytes = await readRequestBytes(request, 19_000_000);
+  if (bytes.byteLength < 24) {
     error(413, 'Cada página deve ter no máximo 19 MB e no mínimo 24 bytes');
   }
-
-  const bytes = new Uint8Array(arrayBuffer);
 
   let info;
   try {
