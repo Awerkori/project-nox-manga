@@ -21,7 +21,7 @@ function event(mode = 'entrar', fields = { email: 'reader@example.invalid', pass
     params: { auth: mode },
     url: new URL(`https://nox.invalid/${mode}`),
     locals: { db: { auth }, user: null },
-    request: { formData: async () => form }
+    request: new Request(`https://nox.invalid/${mode}`, { method: 'POST', body: form })
   } as any;
 }
 beforeEach(() => vi.clearAllMocks());

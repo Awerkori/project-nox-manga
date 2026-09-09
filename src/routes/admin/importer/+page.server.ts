@@ -1,4 +1,5 @@
 import { fail } from '@sveltejs/kit';
+import { readRequestFormData } from '$lib/server/request-body';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -60,34 +61,48 @@ export const load: PageServerLoad = async ({ locals }) => {
       .limit(8),
 
     // 7. Sources status & health
-    locals.db
-      .from('importer_sources')
-      .select('*')
-      .order('name', { ascending: true }),
+    locals.db.from('importer_sources').select('*').order('name', { ascending: true }),
 
     // 8. Works catalog for manual priority selection
-    locals.db
-      .from('works')
-      .select('id, title, slug, cover_id')
-      .order('title', { ascending: true })
-      .limit(80)
+    locals.db.from('works').select('id, title, slug, cover_id').order('title', { ascending: true }).limit(80)
   ]);
 
   const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
   const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
 
   // Query status counts from importer_queue
-  const [queuedCount, importingCount, retryCount, completedCount, failedCount, failed1hRes, failed24hRes, recentFailuresRes] =
-    await Promise.all([
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'RETRY'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
-      locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
-      locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6)
-    ]);
+  const [
+    queuedCount,
+    importingCount,
+    retryCount,
+    completedCount,
+    failedCount,
+    failed1hRes,
+    failed24hRes,
+    recentFailuresRes
+  ] = await Promise.all([
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'RETRY'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
+    locals.db
+      .from('importer_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'FAILED')
+      .gte('updated_at', oneHourAgo),
+    locals.db
+      .from('importer_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'FAILED')
+      .gte('updated_at', twentyFourHoursAgo),
+    locals.db
+      .from('importer_queue')
+      .select('id, source, chapter_sort_key, last_error, updated_at, payload')
+      .eq('status', 'FAILED')
+      .order('updated_at', { ascending: false })
+      .limit(6)
+  ]);
 
   // Enrich active jobs with work titles
   const activeJobs = activeJobsRes.data || [];
@@ -151,7 +166,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   prioritize: async ({ request, locals }) => {
-    const form = await request.formData();
+    const form = await readRequestFormData(request);
     const workId = form.get('work_id')?.toString();
     const reason = form.get('reason')?.toString() || null;
 
@@ -165,14 +180,15 @@ export const actions: Actions = {
     });
 
     if (error) {
-      return fail(400, { error: error.message });
+      console.warn('importer_prioritize_failed', { code: error.code });
+      return fail(400, { error: 'Não foi possível priorizar a obra.' });
     }
 
     return { success: true, message: (data as any)?.message || 'Obra priorizada com sucesso!' };
   },
 
   cancel: async ({ request, locals }) => {
-    const form = await request.formData();
+    const form = await readRequestFormData(request);
     const requestId = form.get('request_id')?.toString();
 
     if (!requestId) {
@@ -184,7 +200,8 @@ export const actions: Actions = {
     });
 
     if (error) {
-      return fail(400, { error: error.message });
+      console.warn('importer_cancel_failed', { code: error.code });
+      return fail(400, { error: 'Não foi possível cancelar a solicitação.' });
     }
 
     return { success: true, message: (data as any)?.message || 'Solicitação cancelada com sucesso.' };

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
+import { readRequestFormData } from '$lib/server/request-body';
 export const load = ({ params, url }) => ({
   mode: params.auth,
   error:
@@ -10,7 +11,7 @@ export const load = ({ params, url }) => ({
 });
 export const actions = {
   default: async ({ request, locals, params, url }) => {
-    const f = await request.formData(),
+    const f = await readRequestFormData(request),
       mode = params.auth;
     const email = String(f.get('email') || '').trim(),
       password = String(f.get('password') || '');

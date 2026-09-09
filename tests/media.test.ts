@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { inspectImage } from '../src/lib/media-validation';
 import { slugify } from '../src/lib/types';
 describe('public upload boundary', () => {
@@ -38,5 +39,12 @@ describe('public upload boundary', () => {
   it('normalizes Portuguese URLs without executable characters', () => {
     expect(slugify('Ação: Céu Distante!')).toBe('acao-ceu-distante');
     expect(slugify('<script>alert(1)</script>')).toBe('script-alert-1-script');
+  });
+  it('revalidates media authorization instead of serving a stale edge cache entry', () => {
+    const route = readFileSync(new URL('../src/routes/media/[id]/+server.ts', import.meta.url), 'utf8');
+    expect(route).not.toContain('cache.match');
+    expect(route).not.toContain('cache.put');
+    expect(route).not.toContain('immutable');
+    expect(route).toContain("'Cache-Control': 'private, no-store'");
   });
 });

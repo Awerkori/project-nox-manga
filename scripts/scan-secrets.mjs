@@ -15,10 +15,12 @@ function walk(dir) {
   );
 }
 const files = [
-  ...tracked,
-  ...(existsSync('.svelte-kit/output/client') ? walk('.svelte-kit/output/client') : []),
-  ...(existsSync('.svelte-kit/cloudflare') ? walk('.svelte-kit/cloudflare') : [])
-];
+  ...new Set([
+    ...tracked,
+    ...(existsSync('.svelte-kit/output/client') ? walk('.svelte-kit/output/client') : []),
+    ...(existsSync('.svelte-kit/cloudflare') ? walk('.svelte-kit/cloudflare') : [])
+  ])
+].filter((file) => existsSync(file));
 const failures = [];
 function containsSecret(text) {
   const privateJwt = [...text.matchAll(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)].some(

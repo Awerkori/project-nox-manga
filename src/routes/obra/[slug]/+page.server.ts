@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { WORK_FIELDS, check } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
-export const load = async ({ locals, params, url, cookies }) => {
+export const load = async ({ locals, params, url }) => {
   const result = await locals.db
     .from('works')
     .select(WORK_FIELDS)
@@ -12,13 +12,9 @@ export const load = async ({ locals, params, url, cookies }) => {
   if (!result.data) error(404, 'Obra não encontrada');
   const work = result.data;
   if ((work as any).content_rating === 'ADULT_18') {
-    const rawAgeCookie = cookies.get('nox-age-status');
-    let ageStatus = rawAgeCookie;
-    if (locals.user) {
-      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-      if (p.data?.age_status) ageStatus = p.data.age_status;
-    }
-    if (ageStatus === 'MINOR') {
+    const profile = locals.user ? await locals.db.rpc('member_self_profile') : null;
+    const ageStatus = profile?.data?.[0]?.age_status || 'UNKNOWN';
+    if (ageStatus !== 'ADULT') {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
