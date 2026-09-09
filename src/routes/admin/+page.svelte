@@ -280,6 +280,8 @@
     width: 100%;
     max-width: 1360px;
     margin: 0 auto;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   /* 1. Header */
@@ -468,6 +470,8 @@
     grid-template-columns: 1.6fr 1fr;
     gap: 28px;
     align-items: flex-start;
+    min-width: 0;
+    width: 100%;
   }
 
   @media (max-width: 1024px) {
@@ -476,19 +480,30 @@
     }
   }
 
+  .primary-editorial-col,
+  .secondary-editorial-col {
+    min-width: 0;
+    width: 100%;
+  }
+
   .workspace-section {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-width: 0;
+    width: 100%;
   }
 
   .section-title-bar {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: 16px;
+    gap: 12px;
     padding-bottom: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
   }
 
   .section-title-row {
@@ -552,6 +567,9 @@
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .draft-list-row:hover {
@@ -896,5 +914,72 @@
     font-size: 12px;
     color: #656d82;
     margin: 8px 0;
+  }
+
+  @media (max-width: 640px) {
+    .workspace-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+    }
+
+    .header-action-group {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .btn-primary-action,
+    .btn-secondary-action {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .metrics-summary-bar {
+      gap: 8px;
+    }
+
+    .metric-pill {
+      flex: 1 1 calc(50% - 8px);
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .section-title-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .section-corner-link {
+      align-self: flex-start;
+    }
+
+    .draft-list-row {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      grid-template-areas:
+        "thumb meta"
+        "action action";
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .draft-cover-thumb {
+      grid-area: thumb;
+    }
+
+    .draft-row-meta {
+      grid-area: meta;
+    }
+
+    .btn-edit-action {
+      grid-area: action;
+      justify-content: center;
+      width: 100%;
+      box-sizing: border-box;
+    }
   }
 </style>

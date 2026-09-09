@@ -60,6 +60,13 @@ export const load = async ({ locals, params, url, cookies }) => {
   ]);
   check(comments);
   const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
+  const isAdult = (work as any).content_rating === 'ADULT_18';
+  const metaImage = isAdult
+    ? `${url.origin}/brand/nox-symbol-256.webp`
+    : work.cover_id
+      ? `${url.origin}/media/${work.cover_id}`
+      : `${url.origin}/brand/nox-symbol-256.webp`;
+
   return {
     work,
     chapters: chapters.data || [],
@@ -71,6 +78,8 @@ export const load = async ({ locals, params, url, cookies }) => {
     progress: progress.data || [],
     metrics: metrics.data?.[0] || null,
     canonical: `${url.origin}/obra/${work.slug}`,
-    coverUrl: work.cover_id ? `${url.origin}/media/${work.cover_id}` : null
+    coverUrl: work.cover_id ? `${url.origin}/media/${work.cover_id}` : null,
+    metaImage,
+    hasCustomMetaImage: true
   };
 };

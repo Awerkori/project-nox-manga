@@ -85,9 +85,12 @@
   <meta name="description" content={data.work.synopsis.slice(0, 160)} />
   <meta property="og:title" content={data.work.title} />
   <meta property="og:description" content={data.work.synopsis.slice(0, 200)} />
-  {#if data.work.cover_id}
-    <meta property="og:image" content={data.coverUrl || ''} />
-  {/if}
+  <meta property="og:image" content={data.metaImage} />
+  <meta property="og:image:alt" content="Capa de {data.work.title}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content={data.metaImage} />
+  <meta name="twitter:title" content="{data.work.title} — Ler na Project Nox" />
+  <meta name="twitter:description" content={data.work.synopsis.slice(0, 200)} />
   <link rel="canonical" href={data.canonical} />
   <meta property="og:url" content={data.canonical} />
   <meta property="og:type" content="book" />
@@ -175,24 +178,24 @@
             </div>
           {/if}
           {#if isAdult}
-            <div class="meta-item">
+            <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
               <span class="meta-label">Classificação</span>
               <span class="meta-value adult-meta-val">+18 Adulto</span>
             </div>
           {:else if data.work.age_rating}
-            <div class="meta-item">
+            <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
               <span class="meta-label">Classificação</span>
               <span class="meta-value">{data.work.age_rating} anos</span>
             </div>
           {/if}
           {#if data.work.author}
-            <div class="meta-item full-width">
+            <div class="meta-item full-width row-style">
               <span class="meta-label">Autor</span>
               <span class="meta-value">{data.work.author}</span>
             </div>
           {/if}
           {#if data.work.artist}
-            <div class="meta-item full-width">
+            <div class="meta-item full-width row-style">
               <span class="meta-label">Arte</span>
               <span class="meta-value">{data.work.artist}</span>
             </div>
@@ -298,24 +301,24 @@
               </div>
             {/if}
             {#if isAdult}
-              <div class="meta-item">
+              <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
                 <span class="meta-label">Classificação</span>
                 <span class="meta-value adult-meta-val">+18 Adulto</span>
               </div>
             {:else if data.work.age_rating}
-              <div class="meta-item">
+              <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
                 <span class="meta-label">Classificação</span>
                 <span class="meta-value">{data.work.age_rating} anos</span>
               </div>
             {/if}
             {#if data.work.author}
-              <div class="meta-item full-width">
+              <div class="meta-item full-width row-style">
                 <span class="meta-label">Autor</span>
                 <span class="meta-value">{data.work.author}</span>
               </div>
             {/if}
             {#if data.work.artist}
-              <div class="meta-item full-width">
+              <div class="meta-item full-width row-style">
                 <span class="meta-label">Arte</span>
                 <span class="meta-value">{data.work.artist}</span>
               </div>
@@ -932,24 +935,36 @@
   .metadata-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 14px 18px;
-    align-items: start;
+    gap: 10px;
+    align-items: stretch;
   }
 
   .meta-item {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    justify-content: center;
+    gap: 4px;
     min-width: 0;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
   }
 
   .meta-item.full-width {
     grid-column: 1 / -1;
   }
 
+  .meta-item.row-style {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
   .meta-label {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10.5px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #8c899e;
@@ -962,7 +977,7 @@
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: normal;
-    line-height: 1.4;
+    line-height: 1.35;
   }
 
   .meta-status {
@@ -1212,32 +1227,39 @@
 
     .work-actions-block {
       width: 100%;
-      margin-bottom: 18px;
-      gap: 10px;
-    }
-
-    .btn-read-hero {
-      width: 100%;
-      padding: 14px 20px;
-      font-size: 15px;
+      margin-bottom: 24px;
+      gap: 12px;
     }
 
     .actions-secondary-row {
       width: 100%;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
 
     .btn-glass-action {
       width: 100%;
       justify-content: center;
-      padding: 11px 16px;
+      padding: 12px 14px;
+      font-size: 13px;
     }
 
     .library-dropdown {
       width: 100%;
       text-align: center;
-      padding: 11px 16px;
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+
+    .btn-read-hero {
+      width: 100%;
+      padding: 16px 20px;
+      font-size: 16px;
+      font-weight: 800;
+      justify-content: center;
+      margin-top: 4px;
+      box-shadow: 0 8px 30px -4px rgba(139, 92, 246, 0.55);
     }
 
     .sidebar-info {

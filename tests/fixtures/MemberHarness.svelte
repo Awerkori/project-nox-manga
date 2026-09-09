@@ -16,6 +16,7 @@
     pathname: `/${area}`,
     config: {},
     role: 'USER',
+    ageStatus: 'ADULT',
     unread: 125,
     profile: {
       id: 'local-reader',

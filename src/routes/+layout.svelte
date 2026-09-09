@@ -65,9 +65,20 @@
   />
   <meta property="og:site_name" content="Project Nox" />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/brand/nox-symbol-256.webp" />
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:image" content="/brand/nox-symbol-256.webp" />
+  {#if !data.pathname?.startsWith('/obra/')}
+    <meta
+      property="og:image"
+      content="{(data.siteUrl || 'https://manga.project-nox-awerkori.workers.dev')}/brand/nox-symbol-256.webp"
+    />
+    <meta property="og:image:type" content="image/webp" />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:image"
+      content="{(data.siteUrl || 'https://manga.project-nox-awerkori.workers.dev')}/brand/nox-symbol-256.webp"
+    />
+  {/if}
 </svelte:head>
 
 <a class="skip" href="#conteudo">Pular para conteúdo</a>
@@ -1292,18 +1303,92 @@
     }
 
     .site-footer {
-      padding-bottom: 84px; /* Space for mobile bottom bar */
+      padding: 40px 0 calc(96px + env(safe-area-inset-bottom));
+      margin-top: 48px;
     }
 
     .footer-inner {
       flex-direction: column;
+      align-items: stretch;
       padding: 0 20px;
+      gap: 24px;
+    }
+
+    .footer-brand-col {
+      max-width: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .footer-brand {
+      margin-bottom: 2px;
+    }
+
+    .footer-tagline {
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: #9d99ab;
+    }
+
+    .footer-links {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px 20px;
+      padding: 16px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      width: 100%;
+    }
+
+    .footer-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: #c2bed4;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-community {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .footer-col-heading {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: #b59af5;
+    }
+
+    .footer-community-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .footer-community-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-sizing: border-box;
     }
 
     .footer-bottom {
       padding: 20px 20px 0;
       flex-direction: column;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      margin: 0;
     }
   }
 </style>

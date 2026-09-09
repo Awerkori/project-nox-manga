@@ -6,6 +6,7 @@
   import Gestao from '../../src/routes/admin/gestao/+page.svelte';
   import Config from '../../src/routes/admin/gestao/configuracoes/+page.svelte';
   import ChapterEditor from '../../src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte';
+  import Importer from '../../src/routes/admin/importer/+page.svelte';
 
   let { page = 'dashboard', role = 'ADMIN' } = $props<{ page?: string; role?: 'ADMIN' | 'EDITOR' }>();
 
@@ -30,7 +31,8 @@
     config: {},
     pathname: page === 'dashboard' ? '/admin' : `/admin/${page}`,
     ageStatus: 'ADULT' as const,
-    blurNsfw: false
+    blurNsfw: false,
+    siteUrl: 'http://127.0.0.1:5173'
   });
 
   let dashboardData = $derived({
@@ -239,6 +241,39 @@
     ]
   });
 
+  let importerData = $derived({
+    ...baseData,
+    sources: [
+      { id: 'kuro', name: 'Kuro Mangas', base_url: 'https://kuromangas.com', status: 'ACTIVE', enabled: true, rate_limit_per_second: 2, sync_interval_minutes: 30, last_sync_at: new Date().toISOString(), cooldown_until: null },
+      { id: 'nexus', name: 'Nexus Mangas', base_url: 'https://www.nexusmangas.com', status: 'ACTIVE', enabled: true, rate_limit_per_second: 2, sync_interval_minutes: 30, last_sync_at: new Date().toISOString(), cooldown_until: null },
+      { id: 'mangotoons', name: 'Mango Toons', base_url: 'https://api.mangotoons.com', status: 'ACTIVE', enabled: true, rate_limit_per_second: 2, sync_interval_minutes: 30, last_sync_at: new Date().toISOString(), cooldown_until: null }
+    ],
+    counts: {
+      queued: 142,
+      importing: 18,
+      staged: 12,
+      retry: 4,
+      failed: 6,
+      completed: 890,
+      failed1h: 0,
+      failed24h: 3
+    },
+    recentFailures: [],
+    activeJobs: [],
+    staffRequests: [],
+    queuedJobs: [],
+    stagedChapters: [],
+    catalogWorks: [
+      { id: 'w-1', title: 'Vingança do Cão de Caça', slug: 'vinganca-do-cao-de-caca', kind: 'MANHWA', published: true, updated_at: new Date().toISOString() }
+    ],
+    telemetry: {
+      worker_id: 'discloud-worker-01',
+      rss_mb: 185,
+      event_loop_lag_ms: 4,
+      created_at: new Date().toISOString()
+    }
+  });
+
   let activeData = $derived(
     page === 'dashboard'
       ? dashboardData
@@ -250,7 +285,9 @@
             ? gestaoData
             : page === 'configuracoes'
               ? configData
-              : chapterData
+              : page === 'importer'
+                ? importerData
+                : chapterData
   );
 </script>
 
@@ -266,6 +303,8 @@
       <Gestao data={gestaoData} />
     {:else if page === 'configuracoes'}
       <Config data={configData} />
+    {:else if page === 'importer'}
+      <Importer data={importerData as any} form={null} />
     {:else if page === 'capitulo'}
       <ChapterEditor data={chapterData as any} />
     {/if}

@@ -39,6 +39,7 @@ export const load = async ({ locals, url, cookies }) => {
     pathname: url.pathname,
     config,
     ageStatus,
-    blurNsfw
+    blurNsfw,
+    siteUrl: url.origin
   };
 };

@@ -571,6 +571,8 @@
     width: 100%;
     max-width: 1360px;
     margin: 0 auto;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   /* Header */
@@ -788,6 +790,8 @@
     grid-template-columns: 1.6fr 1fr;
     gap: 28px;
     align-items: flex-start;
+    min-width: 0;
+    width: 100%;
   }
 
   @media (max-width: 1024px) {
@@ -1628,5 +1632,43 @@
     font-size: 12.5px;
     color: #8c93a8;
     margin: 0;
+  }
+
+  @media (max-width: 640px) {
+    .importer-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+    }
+
+    .header-action-wrap {
+      width: 100%;
+    }
+
+    .btn-prioritize {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .telemetry-pills-row {
+      gap: 6px;
+    }
+
+    .telemetry-pill {
+      flex: 1 1 calc(50% - 6px);
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .counts-pills-bar {
+      gap: 8px;
+    }
+
+    .count-pill {
+      flex: 1 1 calc(50% - 8px);
+      justify-content: center;
+      box-sizing: border-box;
+    }
   }
 </style>

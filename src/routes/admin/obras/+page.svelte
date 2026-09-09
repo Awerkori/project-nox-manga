@@ -629,6 +629,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
   }
 
   .filter-group-label {
@@ -818,6 +819,8 @@
     border-radius: 5px;
     font-size: 11px;
     font-weight: 650;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .status-live {
@@ -965,6 +968,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
   }
 
   .mobile-card-mid {
@@ -1055,12 +1060,26 @@
 
     .header-actions {
       width: 100%;
+      display: flex;
+      gap: 10px;
     }
 
     .btn-primary-add,
     .btn-secondary-sync {
       flex: 1;
       justify-content: center;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .header-actions {
+      flex-direction: column;
+    }
+
+    .btn-primary-add,
+    .btn-secondary-sync {
+      width: 100%;
+      box-sizing: border-box;
     }
   }
 </style>

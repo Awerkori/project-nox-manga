@@ -927,6 +927,11 @@ td {
 .spacer-bottom {
   padding-bottom: 70px;
 }
+@media (max-width: 768px) {
+  .spacer-bottom {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom));
+  }
+}
 .progress {
   height: 5px;
   background: #282331;

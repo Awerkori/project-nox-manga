@@ -651,7 +651,7 @@
       </a>
     </div>
     {#if data.notifications.length}
-      <div class="row between" style="margin-bottom:20px">
+      <div class="notif-header-row">
         <p class="small">{data.total} {data.total === 1 ? 'notificação' : 'notificações'}</p>
         <button class="button secondary compact" onclick={read} disabled={busy || !data.unread}>
           {busy ? 'Marcando…' : 'Marcar todas como lidas'}
@@ -1560,6 +1560,29 @@
 
     .profile-stats-grid {
       grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .notif-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 480px) {
+    .notif-header-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .notif-header-row :global(.button) {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
     }
   }
 </style>
