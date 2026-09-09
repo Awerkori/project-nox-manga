@@ -37,7 +37,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     // 4. Staff priority requests
     locals.db
       .from('importer_staff_requests')
-      .select('*, works(id, title, slug, cover_id), members(id, username, display_name)')
+      .select('*, works(id, title, slug, cover_id), requester:members!importer_staff_requests_requested_by_fkey(id, username, display_name), canceller:members!importer_staff_requests_cancelled_by_fkey(id, username, display_name)')
       .order('created_at', { ascending: false })
       .limit(12),
 

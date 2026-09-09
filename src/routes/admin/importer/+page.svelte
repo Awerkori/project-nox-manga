@@ -257,7 +257,7 @@
             {/if}
 
             <div class="hero-requester">
-              Solicitado por @{data.activeFocus.members?.username || 'staff'} · {relativeTime(data.activeFocus.created_at)}
+              Solicitado por @{data.activeFocus.requester?.username || 'staff'} · {relativeTime(data.activeFocus.created_at)}
             </div>
           </div>
 
@@ -664,7 +664,7 @@
                     {/if}
                   </div>
                   <div class="req-details-line">
-                    <span class="req-operator">Solicitado por: <strong>{req.members?.display_name || req.members?.username || 'Staff'}</strong></span>
+                    <span class="req-operator">Solicitado por: <strong>{req.requester?.display_name || req.requester?.username || 'Staff'}</strong></span>
                     <span class="req-date">· {relativeTime(req.created_at)}</span>
                     <span class="req-boost-tag">Boost +{req.priority_boost}</span>
                   </div>
