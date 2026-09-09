@@ -3862,7 +3862,7 @@
     .active-job-card,
     .retry-job-card {
       flex-direction: column;
-      align-items: flex-start;
+      align-items: stretch;
       gap: 10px;
     }
 
@@ -3873,7 +3873,8 @@
 
     .retry-card-actions {
       width: 100%;
-      justify-content: flex-end;
+      justify-content: flex-start;
+      flex-wrap: wrap;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
       padding-top: 8px;
     }
@@ -3882,19 +3883,32 @@
       grid-template-columns: 1fr;
     }
 
-    .group-pill-actions {
-      margin-top: 4px;
-      width: 100%;
-      justify-content: flex-end;
-    }
-
     .retry-group-pill {
       flex-direction: column;
-      align-items: flex-start;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .group-pill-left {
+      width: 100%;
+    }
+
+    .group-pill-actions {
+      margin-top: 2px;
+      width: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .retry-error-summary-box {
+      max-width: 100%;
     }
 
     .summary-error-text {
-      max-width: 240px;
+      max-width: 100%;
+      white-space: normal;
+      word-break: break-word;
     }
   }
 
