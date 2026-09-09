@@ -1,8 +1,10 @@
 <script lang="ts">
   import { date, memberRank } from '$lib/types';
+  import { getLevelProgress } from '$lib/levels';
   import { Award, BookOpen, Bookmark, Trophy, Sparkles } from '@lucide/svelte';
   let { data } = $props();
-  let rank = $derived(memberRank(data.member.xp));
+  let rank = $derived(memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id));
+  let progress = $derived(getLevelProgress(data.member.xp));
 </script>
 
 <svelte:head>
@@ -40,6 +42,11 @@
       <div class="profile-main-meta">
         <div class="name-and-title">
           <h2 class="profile-display-name">{data.member.display_name}</h2>
+          {#if rank.badgeSvg}
+            <img src={rank.badgeSvg} alt={rank.badge} width="24" height="24" class="profile-badge-vector" />
+          {:else if rank.badgeIcon}
+            <span class="badge-symbol" title="Insígnia equipada">{rank.badgeIcon}</span>
+          {/if}
           <span class="honorific-chip">{rank.title}</span>
         </div>
         <p class="profile-handle-row">
@@ -79,11 +86,15 @@
       <div class="xp-progress-track">
         <div
           class="xp-progress-fill"
-          style="width: {((data.member.xp % 250) / 250) * 100}%"
+          style="width: {progress.progressPercent}%"
         ></div>
       </div>
       <p class="xp-needed-text">
-        Faltam <strong>{250 - (data.member.xp % 250)} XP</strong> para o nível {rank.level + 1}
+        {#if progress.isMaxLevel}
+          <strong>Nível Máximo Alcançado (100)</strong>
+        {:else}
+          Faltam <strong>{progress.xpNeededForNext} XP</strong> para o nível {progress.nextLevel}
+        {/if}
       </p>
     </div>
 
@@ -240,6 +251,20 @@
     border-radius: 999px;
     background: rgba(201, 170, 115, 0.12);
     border: 1px solid rgba(201, 170, 115, 0.3);
+  }
+
+  .badge-symbol {
+    font-size: 14px;
+    line-height: 1;
+    color: #dfc28d;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.35);
   }
 
   .profile-handle-row {

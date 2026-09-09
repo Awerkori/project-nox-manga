@@ -1,9 +1,15 @@
 <script lang="ts">
   import type { Work } from '$lib/types';
   import { kindLabels, statusLabels } from '$lib/types';
-  import { BookOpen, Sparkles } from '@lucide/svelte';
+  import { BookOpen, Sparkles, AlertTriangle } from '@lucide/svelte';
+  import { page } from '$app/state';
 
-  let { work, index = 0 }: { work: Work; index?: number } = $props();
+  let { work, index = 0, blurNsfw }: { work: Work; index?: number; blurNsfw?: boolean } = $props();
+
+  let isAdult = $derived(work.content_rating === 'ADULT_18');
+  let effectiveBlur = $derived(
+    isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
+  );
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
@@ -16,6 +22,7 @@
         width="300"
         height="400"
         class="card-img"
+        class:blurred-cover={effectiveBlur}
       />
     {:else}
       <div class="card-fallback">
@@ -29,7 +36,19 @@
       {#if work.featured}
         <span class="featured-chip"><Sparkles size={11} /> Destaque</span>
       {/if}
+      {#if isAdult}
+        <span class="adult-badge">+18</span>
+      {/if}
     </div>
+
+    {#if effectiveBlur}
+      <div class="nsfw-overlay">
+        <div class="nsfw-tag">
+          <AlertTriangle size={13} />
+          <span>+18</span>
+        </div>
+      </div>
+    {/if}
 
     <div class="card-gradient"></div>
 
@@ -253,5 +272,47 @@
 
   .card-year {
     color: #7b788a;
+  }
+
+  .blurred-cover {
+    filter: blur(18px) brightness(0.65);
+    transform: scale(1.12);
+  }
+
+  .adult-badge {
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+  }
+
+  .nsfw-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .nsfw-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(15, 18, 29, 0.85);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   }
 </style>

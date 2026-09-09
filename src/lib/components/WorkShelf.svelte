@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, ArrowRight } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle } from '@lucide/svelte';
   import type { Work } from '$lib/types';
+  import { page } from '$app/state';
 
   type Props = {
     title: string;
@@ -82,6 +83,8 @@
     >
       <div class="shelf-track">
         {#each works as work (work.id)}
+          {@const isAdult = work.content_rating === 'ADULT_18'}
+          {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               {#if work.cover_id}
@@ -89,6 +92,7 @@
                   src="/media/{work.cover_id}"
                   alt={work.title}
                   class="card-img"
+                  class:blurred-cover={effectiveBlur}
                   width="200"
                   height="285"
                   loading="lazy"
@@ -99,6 +103,17 @@
               {/if}
               <div class="card-glow"></div>
               <span class="card-kind-badge">{work.kind}</span>
+              {#if isAdult}
+                <span class="adult-badge">+18</span>
+              {/if}
+              {#if effectiveBlur}
+                <div class="nsfw-overlay">
+                  <div class="nsfw-tag">
+                    <AlertTriangle size={12} />
+                    <span>+18</span>
+                  </div>
+                </div>
+              {/if}
             </div>
             <div class="card-info">
               <strong class="card-work-title" title={work.title}>{work.title}</strong>
@@ -354,5 +369,51 @@
     .shelf-nav-arrows {
       display: none;
     }
+  }
+
+  .blurred-cover {
+    filter: blur(18px) brightness(0.65);
+    transform: scale(1.12);
+  }
+
+  .adult-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+    z-index: 5;
+  }
+
+  .nsfw-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .nsfw-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(15, 18, 29, 0.85);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   }
 </style>

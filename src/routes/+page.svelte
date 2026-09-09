@@ -1,10 +1,31 @@
 <script lang="ts">
-  import { ArrowRight, Clock } from '@lucide/svelte';
+  import { ArrowRight, Clock, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
 
   let { data } = $props();
+
+  let continueContainer: HTMLDivElement | null = $state(null);
+  let canScrollContinueLeft = $state(false);
+  let canScrollContinueRight = $state(true);
+
+  function updateContinueScroll() {
+    if (!continueContainer) return;
+    canScrollContinueLeft = continueContainer.scrollLeft > 10;
+    canScrollContinueRight =
+      continueContainer.scrollLeft <
+      continueContainer.scrollWidth - continueContainer.clientWidth - 10;
+  }
+
+  function scrollContinue(direction: 'left' | 'right') {
+    if (!continueContainer) return;
+    const amount = continueContainer.clientWidth * 0.75;
+    continueContainer.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth'
+    });
+  }
 </script>
 
 <svelte:head>
@@ -28,14 +49,42 @@
             <h2 class="section-title">CONTINUAR LENDO</h2>
             <span class="section-subtitle">De onde você parou</span>
           </div>
-          <a href="/historico" class="view-all-link">
-            <span>Histórico</span>
-            <ArrowRight size={14} />
-          </a>
+
+          <div class="header-right-tools">
+            <div class="continue-nav-arrows">
+              <button
+                class="arrow-btn"
+                onclick={() => scrollContinue('left')}
+                disabled={!canScrollContinueLeft}
+                aria-label="Rolar para a esquerda"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                class="arrow-btn"
+                onclick={() => scrollContinue('right')}
+                disabled={!canScrollContinueRight}
+                aria-label="Rolar para a direita"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+
+            <a href="/historico" class="view-all-link">
+              <span>Histórico</span>
+              <ArrowRight size={14} />
+            </a>
+          </div>
         </div>
 
-        <div class="continue-grid">
+        <div
+          class="continue-track"
+          bind:this={continueContainer}
+          onscroll={updateContinueScroll}
+        >
           {#each data.recent as item (item.workId)}
+            {@const isAdult = item.contentRating === 'ADULT_18'}
+            {@const effectiveBlur = isAdult && (data.blurNsfw ?? true)}
             <a href={item.destinationUrl} class="continue-card">
               <div class="continue-thumb">
                 {#if item.coverId}
@@ -45,10 +94,14 @@
                     width="64"
                     height="90"
                     class="thumb-img"
+                    class:blurred-cover={effectiveBlur}
                     loading="lazy"
                   />
                 {:else}
                   <div class="thumb-placeholder">NOX</div>
+                {/if}
+                {#if isAdult}
+                  <span class="adult-badge-mini">+18</span>
                 {/if}
               </div>
               <div class="continue-meta">
@@ -196,14 +249,61 @@
     color: #dfc28d;
   }
 
-  /* Continue Reading Cards */
-  .continue-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  .header-right-tools {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .continue-nav-arrows {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .arrow-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #111420;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .arrow-btn:hover:not(:disabled) {
+    background: #181c2c;
+    border-color: rgba(181, 154, 245, 0.3);
+    color: #ffffff;
+  }
+
+  .arrow-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  /* Continue Reading Horizontal Track */
+  .continue-track {
+    display: flex;
     gap: 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 4px 2px 14px;
+  }
+
+  .continue-track::-webkit-scrollbar {
+    display: none;
   }
 
   .continue-card {
+    flex: 0 0 320px;
+    scroll-snap-align: start;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -223,6 +323,7 @@
   }
 
   .continue-thumb {
+    position: relative;
     flex-shrink: 0;
     width: 62px;
     height: 88px;
@@ -230,6 +331,25 @@
     overflow: hidden;
     background: #11131c;
     border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .blurred-cover {
+    filter: blur(14px) brightness(0.65);
+    transform: scale(1.15);
+  }
+
+  .adult-badge-mini {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    z-index: 2;
   }
 
   .thumb-img {
@@ -294,27 +414,20 @@
       padding: 1.8rem 1rem 3.5rem;
     }
 
-    .continue-grid {
-      display: flex;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
+    .continue-nav-arrows {
+      display: none;
+    }
+
+    .continue-track {
       margin: 0 -1rem;
       padding: 0.25rem 1rem 0.85rem;
       gap: 0.85rem;
-    }
-
-    .continue-grid::-webkit-scrollbar {
-      display: none;
     }
 
     .continue-card {
       flex: 0 0 82%;
       min-width: 270px;
       max-width: 85vw;
-      scroll-snap-align: start;
     }
 
     .section-title {

@@ -14,7 +14,7 @@ export const load = async ({ locals }) => {
       .limit(16),
     locals.db
       .from('chapters')
-      .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published)')
+      .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published,content_rating)')
       .not('published_at', 'is', null)
       .eq('works.published', true)
       .order('published_at', { ascending: false })
@@ -23,7 +23,7 @@ export const load = async ({ locals }) => {
       ? locals.db
           .from('reading')
           .select(
-            'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published))'
+            'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
           )
           .not('chapters.published_at', 'is', null)
           .eq('chapters.works.published', true)
@@ -39,6 +39,7 @@ export const load = async ({ locals }) => {
     workTitle: string;
     workSlug: string;
     coverId: string | null;
+    contentRating?: string;
     chapterId: string;
     chapterNumber: number;
     destinationUrl: string;
@@ -68,6 +69,7 @@ export const load = async ({ locals }) => {
           workTitle: work.title,
           workSlug: work.slug,
           coverId: work.cover_id,
+          contentRating: work.content_rating,
           chapterId: ch.id,
           chapterNumber: ch.number,
           destinationUrl: `/ler/${ch.id}`,
@@ -105,6 +107,7 @@ export const load = async ({ locals }) => {
             workTitle: work.title,
             workSlug: work.slug,
             coverId: work.cover_id,
+            contentRating: work.content_rating,
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
@@ -118,6 +121,7 @@ export const load = async ({ locals }) => {
             workTitle: work.title,
             workSlug: work.slug,
             coverId: work.cover_id,
+            contentRating: work.content_rating,
             chapterId: currentCh.id,
             chapterNumber: currentCh.number,
             destinationUrl: `/obra/${work.slug}`,
@@ -130,7 +134,7 @@ export const load = async ({ locals }) => {
     }
 
     continueReading.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    continueReading = continueReading.slice(0, 4);
+    continueReading = continueReading.slice(0, 10);
   }
 
   const works = worksRes.data || [];
@@ -146,6 +150,7 @@ export const load = async ({ locals }) => {
     workTitle: string;
     coverId: string | null;
     kind: string;
+    contentRating?: string;
     latestPublishedAt: string;
     chapters: Array<{
       id: string;
@@ -166,6 +171,7 @@ export const load = async ({ locals }) => {
           workTitle: w.title,
           coverId: w.cover_id,
           kind: w.kind,
+          contentRating: w.content_rating,
           latestPublishedAt: row.published_at || '',
           chapters: []
         });

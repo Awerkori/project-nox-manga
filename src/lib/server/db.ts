@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { databaseConfig } from './config';
 import { error } from '@sveltejs/kit';
 export const WORK_FIELDS =
-  'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at';
+  'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at,content_rating';
 export function privileged() {
   if (!env.SUPABASE_SERVICE_ROLE_KEY) error(503, 'Armazenamento temporariamente indisponível');
   return createClient(databaseConfig().url, env.SUPABASE_SERVICE_ROLE_KEY, {

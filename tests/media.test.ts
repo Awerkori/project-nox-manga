@@ -22,6 +22,12 @@ describe('public upload boundary', () => {
     );
     expect(inspectImage(bytes)).toEqual({ mime: 'image/png', width: 1, height: 1 });
   });
+  it('reads real GIF dimensions and mime', () => {
+    const bytes = Uint8Array.from(
+      Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
+    );
+    expect(inspectImage(bytes)).toEqual({ mime: 'image/gif', width: 1, height: 1 });
+  });
   it('rejects appended PNG payloads', () => {
     const bytes = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',

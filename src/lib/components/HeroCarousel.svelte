@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { BookOpen, ChevronLeft, ChevronRight, Info, Sparkles } from '@lucide/svelte';
+  import { BookOpen, ChevronLeft, ChevronRight, Info, Sparkles, AlertTriangle } from '@lucide/svelte';
   import type { Work } from '$lib/types';
+  import { page } from '$app/state';
 
   type Props = {
     works: Work[];
@@ -23,6 +24,8 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
+  let isAdult = $derived(currentWork?.content_rating === 'ADULT_18');
+  let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 
   // Check if current featured work has reading progress
   let progressItem = $derived(
@@ -125,6 +128,7 @@
           src="/media/{currentWork.cover_id}"
           alt=""
           class="backdrop-img"
+          class:blurred-cover={effectiveBlur}
           loading="eager"
           decoding="async"
         />
@@ -145,6 +149,7 @@
                   src="/media/{currentWork.cover_id}"
                   alt={currentWork.title}
                   class="cover-img"
+                  class:blurred-cover={effectiveBlur}
                   width="330"
                   height="470"
                   loading="eager"
@@ -153,6 +158,17 @@
               {:else}
                 <div class="cover-placeholder">
                   <span>NOX</span>
+                </div>
+              {/if}
+              {#if isAdult}
+                <span class="adult-badge-hero">+18</span>
+              {/if}
+              {#if effectiveBlur}
+                <div class="nsfw-overlay-hero">
+                  <div class="nsfw-tag-hero">
+                    <AlertTriangle size={15} />
+                    <span>CONTEÚDO +18</span>
+                  </div>
                 </div>
               {/if}
               <div class="cover-edge-accent"></div>
@@ -755,5 +771,51 @@
       transition: none !important;
       transform: none !important;
     }
+  }
+
+  .blurred-cover {
+    filter: blur(24px) brightness(0.6);
+    transform: scale(1.15);
+  }
+
+  .adult-badge-hero {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.05em;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.6);
+    z-index: 5;
+  }
+
+  .nsfw-overlay-hero {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .nsfw-tag-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(15, 18, 29, 0.9);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
   }
 </style>

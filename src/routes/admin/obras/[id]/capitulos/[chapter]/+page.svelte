@@ -3,7 +3,7 @@
   import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { expandFiles, normalizePage } from '$lib/uploads';
-  import { flushUploads } from '$lib/upload-queue';
+  import { flushUploads, UploadRateLimitError } from '$lib/upload-queue';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
   import {
     ArrowLeft,
@@ -124,6 +124,11 @@
             headers: { 'Content-Type': image.type },
             body: image
           });
+          if (response.status === 429) {
+            const body = await response.json().catch(() => ({}));
+            const retryAfter = Number(response.headers.get('Retry-After') || body.retryAfter) || 15;
+            throw new UploadRateLimitError(retryAfter, body.error || 'Rate limit temporário');
+          }
           const result = await response.json();
           if (!response.ok) throw new Error(result.message);
           return result;
@@ -132,7 +137,13 @@
           pages.push({ id: result.id, name: file.name });
           progress = Math.round(((batchTotal - pendingUploads.length) / batchTotal) * 100);
         },
-        () => pauseRequested
+        () => pauseRequested,
+        {
+          maxRetries: 6,
+          onRetry: (_file, attempt, waitSeconds) => {
+            notice = `Aguardando ${waitSeconds}s antes de tentar novamente (tentativa ${attempt})…`;
+          }
+        }
       );
       notice = pendingUploads.length
         ? 'Envio pausado. As páginas já enviadas foram preservadas.'

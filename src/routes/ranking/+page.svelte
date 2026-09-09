@@ -35,7 +35,7 @@
         {@const bronze = data.members[2]}
 
         <!-- Silver #2 -->
-        {@const r2 = memberRank(silver.xp)}
+        {@const r2 = memberRank(silver.xp, silver.equipped_title_id, silver.equipped_badge_id)}
         <a href="/u/{silver.username}" class="podium-card podium-tier-2 olympic-silver">
           <div class="podium-medal">🥈</div>
           <div class="podium-avatar-wrap">
@@ -48,13 +48,16 @@
           <strong class="podium-user-name">{silver.display_name}</strong>
           <span class="podium-user-handle">@{silver.username}</span>
           <div class="podium-tags">
+            {#if r2.badgeSvg}
+              <img src={r2.badgeSvg} alt={r2.badge} width="20" height="20" class="podium-badge-vector" />
+            {/if}
             <span class="rank-title-chip silver-chip">{r2.title}</span>
             <span class="xp-chip">{silver.xp} XP</span>
           </div>
         </a>
 
         <!-- Gold #1 (Dominant Center) -->
-        {@const r1 = memberRank(gold.xp)}
+        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 olympic-gold">
           <div class="gold-crown-tag">
             <Sparkles size={13} />
@@ -71,13 +74,16 @@
           <strong class="podium-user-name gold-name">{gold.display_name}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
           <div class="podium-tags">
+            {#if r1.badgeSvg}
+              <img src={r1.badgeSvg} alt={r1.badge} width="22" height="22" class="podium-badge-vector" />
+            {/if}
             <span class="rank-title-chip gold-chip">{r1.title}</span>
             <span class="xp-chip gold-xp">{gold.xp} XP</span>
           </div>
         </a>
 
         <!-- Bronze #3 -->
-        {@const r3 = memberRank(bronze.xp)}
+        {@const r3 = memberRank(bronze.xp, bronze.equipped_title_id, bronze.equipped_badge_id)}
         <a href="/u/{bronze.username}" class="podium-card podium-tier-3 olympic-bronze">
           <div class="podium-medal">🥉</div>
           <div class="podium-avatar-wrap">
@@ -90,6 +96,9 @@
           <strong class="podium-user-name">{bronze.display_name}</strong>
           <span class="podium-user-handle">@{bronze.username}</span>
           <div class="podium-tags">
+            {#if r3.badgeSvg}
+              <img src={r3.badgeSvg} alt={r3.badge} width="20" height="20" class="podium-badge-vector" />
+            {/if}
             <span class="rank-title-chip bronze-chip">{r3.title}</span>
             <span class="xp-chip">{bronze.xp} XP</span>
           </div>
@@ -99,8 +108,8 @@
         <!-- 2 Readers: Gold & Silver side-by-side -->
         {@const gold = data.members[0]}
         {@const silver = data.members[1]}
-        {@const r1 = memberRank(gold.xp)}
-        {@const r2 = memberRank(silver.xp)}
+        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
+        {@const r2 = memberRank(silver.xp, silver.equipped_title_id, silver.equipped_badge_id)}
 
         <a href="/u/{gold.username}" class="podium-card podium-tier-1">
           <div class="gold-crown-tag">
@@ -143,7 +152,7 @@
       {:else if data.members.length === 1}
         <!-- 1 Reader: Single Dominant Card -->
         {@const gold = data.members[0]}
-        {@const r1 = memberRank(gold.xp)}
+        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
 
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 single-gold-card">
           <div class="gold-crown-tag">
@@ -182,7 +191,7 @@
         </thead>
         <tbody>
           {#each data.members as member, i (member.id)}
-            {@const r = memberRank(member.xp)}
+            {@const r = memberRank(member.xp, member.equipped_title_id, member.equipped_badge_id)}
             <tr class="leaderboard-row" class:is-top-three={i < 3}>
               <td class="rank-col">
                 {#if i === 0}
@@ -235,7 +244,7 @@
     <!-- Mobile Leaderboard Cards -->
     <section class="ranking-mobile-list mobile-only">
       {#each data.members as member, i (member.id)}
-        {@const r = memberRank(member.xp)}
+        {@const r = memberRank(member.xp, member.equipped_title_id, member.equipped_badge_id)}
         <a href="/u/{member.username}" class="ranking-mobile-card" class:top-card={i < 3}>
           <div class="ranking-mobile-pos">
             {#if i === 0}

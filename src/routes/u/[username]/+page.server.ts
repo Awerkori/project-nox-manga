@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 export const load = async ({ locals, params }) => {
   const { data: member } = await locals.db
     .from('members')
-    .select('id,username,display_name,bio,xp,avatar_id,created_at')
+    .select('id,username,display_name,bio,xp,avatar_id,created_at,equipped_title_id,equipped_badge_id')
     .eq('username', params.username)
     .maybeSingle();
   if (!member) error(404, 'Perfil não encontrado');

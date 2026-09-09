@@ -19,6 +19,7 @@
   } from '@lucide/svelte';
   import { memberRank } from '$lib/types';
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
+  import AgeGateModal from '$lib/components/AgeGateModal.svelte';
 
   let { data, children } = $props();
   let menu = $state(false);
@@ -70,6 +71,8 @@
 </svelte:head>
 
 <a class="skip" href="#conteudo">Pular para conteúdo</a>
+
+<AgeGateModal status={data.ageStatus} isLoggedIn={!!data.profile} />
 
 {#if !reader}
   <ParticleBackground />

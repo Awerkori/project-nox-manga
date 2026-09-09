@@ -17,12 +17,20 @@
       avatar_id: null as string | null,
       bio: '',
       created_at: new Date().toISOString(),
-      xp: 100
+      xp: 100,
+      age_status: 'ADULT',
+      blur_nsfw: false,
+      is_test: false,
+      equipped_title_id: 'iniciado-nox',
+      equipped_badge_id: 'marca-inicial'
     },
     role: role,
     unread: 0,
+    pendingReportsCount: 0,
     config: {},
-    pathname: page === 'dashboard' ? '/admin' : `/admin/${page}`
+    pathname: page === 'dashboard' ? '/admin' : `/admin/${page}`,
+    ageStatus: 'ADULT' as const,
+    blurNsfw: false
   });
 
   let dashboardData = $derived({
@@ -31,6 +39,7 @@
     chapters: 86,
     draftsCount: 3,
     tagsCount: 32,
+    importerActiveCount: 4,
     drafts: [
       {
         id: 'ch-draft-1',

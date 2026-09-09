@@ -41,13 +41,7 @@ function authenticate(request: Request, getClientAddress: () => string, url: URL
   // 2. Rate limit defensive check
   const ip = request.headers.get('cf-connecting-ip') || getClientAddress() || '127.0.0.1';
   if (!checkRateLimit(ip)) {
-    return new Response(JSON.stringify({ error: 'Limite de requisições excedido. Tente novamente em instantes.' }), {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'Retry-After': '15'
-      }
-    });
+    error(429, 'Limite de requisições excedido. Tente novamente em instantes.');
   }
 
   // 3. Constant-time token verification against dedicated NOX_STORAGE_BRIDGE_TOKEN

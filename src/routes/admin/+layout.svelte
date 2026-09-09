@@ -9,7 +9,9 @@
     Menu,
     X,
     Shield,
-    Sparkles
+    Sparkles,
+    Activity,
+    Flag
   } from '@lucide/svelte';
 
   let { data, children } = $props();
@@ -167,7 +169,38 @@
         </a>
       </div>
 
-      <!-- Group: SISTEMA (Restrito ao ADMIN) -->
+      <!-- Group: IMPORTER -->
+      <div class="nav-group">
+        <span class="group-label">IMPORTER</span>
+        <a
+          href="/admin/importer"
+          class="nav-link"
+          class:active={isActive('/admin/importer')}
+          onclick={closeMobile}
+        >
+          <Activity size={17} class="nav-icon" />
+          <span>Monitor do Importer</span>
+        </a>
+      </div>
+
+      <!-- Group: MODERAÇÃO -->
+      <div class="nav-group">
+        <span class="group-label">MODERAÇÃO</span>
+        <a
+          href="/admin/reports"
+          class="nav-link"
+          class:active={isActive('/admin/reports')}
+          onclick={closeMobile}
+        >
+          <Flag size={17} class="nav-icon" />
+          <span>Denúncias</span>
+          {#if (data.pendingReportsCount ?? 0) > 0}
+            <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
+          {/if}
+        </a>
+      </div>
+
+      <!-- Group: GESTÃO (Restrito ao ADMIN) -->
       {#if data.role === 'ADMIN'}
         <div class="nav-group">
           <span class="group-label">GESTÃO DO SISTEMA</span>
@@ -480,6 +513,23 @@
     color: #ffffff;
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 750;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    line-height: 1.4;
+  }
+
+  .nav-badge.alert {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
   }
 
   .nav-link.active {

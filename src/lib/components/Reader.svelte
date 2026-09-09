@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles, Flag } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
+  import ReportModal from '$lib/components/ReportModal.svelte';
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
   import type { PageData } from '../../routes/ler/[id]/$types';
@@ -12,16 +13,51 @@
     settings = $state(false),
     width = $state(850),
     gap = $state(false),
+    preloadMode = $state<'full' | 'off'>('full'),
     notice = $state(''),
     xpNotice = $state(''),
     fullscreen = $state(false),
-    uiVisible = $state(true);
+    uiVisible = $state(true),
+    showReportModal = $state(false);
   const visible = new SvelteSet<number>();
   let sending = false;
   let maxSeenPage = $state(1);
   let chapterCompleted = $state(false);
+  let xpAwardConfirmed = $state(false);
+  let xpClaimInFlight = false;
   let previousChapterId = $state('');
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
+  const preloadedMedia = new Set<string>();
+  const inFlightPreloads = new Set<string>();
+  const MAX_CONCURRENT_PRELOADS = 3;
+
+  function pumpPreload() {
+    if (preloadMode !== 'full' || typeof window === 'undefined' || !data.pages?.length) return;
+    if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) return;
+
+    const startIdx = Math.max(0, current - 1);
+    const ordered = [
+      ...data.pages.slice(startIdx),
+      ...data.pages.slice(0, startIdx)
+    ];
+
+    for (const page of ordered) {
+      if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) break;
+      const id = page.media_id;
+      if (!id || preloadedMedia.has(id) || inFlightPreloads.has(id)) continue;
+
+      inFlightPreloads.add(id);
+      const img = new Image();
+      const onDone = () => {
+        inFlightPreloads.delete(id);
+        preloadedMedia.add(id);
+        pumpPreload();
+      };
+      img.onload = onDone;
+      img.onerror = onDone;
+      img.src = `/media/${id}`;
+    }
+  }
 
   function resetHideTimer() {
     uiVisible = true;
@@ -46,14 +82,53 @@
     if (data.chapter?.id && data.chapter.id !== previousChapterId) {
       previousChapterId = data.chapter.id;
       visible.clear();
+      preloadedMedia.clear();
+      inFlightPreloads.clear();
       const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
       current = saved;
       maxSeenPage = saved;
       chapterCompleted = !!data.progress?.completed_at;
-      requestAnimationFrame(() => jump(Math.min(data.pages.length, Math.max(1, saved))));
+      xpAwardConfirmed = chapterCompleted;
+      xpClaimInFlight = false;
+      requestAnimationFrame(() => {
+        jump(Math.min(data.pages.length, Math.max(1, saved)));
+        pumpPreload();
+      });
       resetHideTimer();
     }
   });
+
+  async function claimXp(retries = 3) {
+    if (xpAwardConfirmed || xpClaimInFlight || !data.profile || data.preview) return;
+    xpClaimInFlight = true;
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const res = (await action('member', 'claim_xp', {
+          chapter_id: data.chapter.id
+        })) as { awarded?: boolean; reason?: string } | null;
+        if (res?.awarded) {
+          xpAwardConfirmed = true;
+          xpNotice = '✦ Capítulo Concluído! +25 XP';
+          setTimeout(() => { xpNotice = ''; }, 5000);
+          break;
+        }
+        // Server says not ready yet (e.g. reading_time_not_met) — retry after a delay.
+        if (res?.reason === 'not_finished' || res?.reason === 'reading_time_not_met') {
+          if (attempt < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
+        // Already awarded or other terminal reason — stop retrying.
+        if (res?.reason === 'already_awarded') {
+          xpAwardConfirmed = true;
+          break;
+        }
+        break;
+      } catch {
+        if (attempt < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      }
+    }
+    xpClaimInFlight = false;
+  }
 
   async function completeChapter() {
     if (chapterCompleted || sending || !data.profile || data.preview) return;
@@ -66,10 +141,8 @@
         completed: true
       })) as { ok?: boolean; completed?: boolean } | null;
       if (res?.completed && !data.progress?.completed_at) {
-        xpNotice = '✦ Capítulo Concluído! +25 XP';
-        setTimeout(() => {
-          xpNotice = '';
-        }, 5000);
+        // Completion registered — now claim XP separately with retry.
+        void claimXp();
       }
     } catch {
       chapterCompleted = false;
@@ -83,7 +156,10 @@
     } else {
       visible.delete(page);
     }
-    if (visible.size) current = Math.min(...visible);
+    if (visible.size) {
+      current = Math.min(...visible);
+      pumpPreload();
+    }
     if (maxSeenPage >= data.pages.length && !chapterCompleted) {
       void completeChapter();
     }
@@ -112,12 +188,16 @@
       const prefs = JSON.parse(readPreference('nox-reader') || '{}');
       width = Math.min(1200, Math.max(400, Number(prefs.width) || 850));
       gap = !!prefs.gap;
+      preloadMode = prefs.preload === 'off' ? 'off' : 'full';
     } catch {
       /* Default preferences remain valid. */
     }
     const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
     maxSeenPage = saved;
-    requestAnimationFrame(() => jump(Math.min(data.pages.length, Math.max(1, saved))));
+    requestAnimationFrame(() => {
+      jump(Math.min(data.pages.length, Math.max(1, saved)));
+      pumpPreload();
+    });
     if (data.profile && !data.preview)
       action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
         () => {
@@ -145,7 +225,7 @@
       if (document.visibilityState !== 'visible' || sending) return;
       const pageToSave = current;
       const locallySaved = savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
-      savePreference('nox-reader', JSON.stringify({ width, gap }));
+      savePreference('nox-reader', JSON.stringify({ width, gap, preload: preloadMode }));
       if (data.profile && !data.preview) {
         sending = true;
         try {
@@ -169,7 +249,7 @@
     const saveOnExit = () => {
       const pageToSave = current;
       savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
-      savePreference('nox-reader', JSON.stringify({ width, gap }));
+      savePreference('nox-reader', JSON.stringify({ width, gap, preload: preloadMode }));
       if (data.profile && !data.preview)
         void fetch('/api/action', {
           method: 'POST',
@@ -193,6 +273,8 @@
       if (hideTimer) clearTimeout(hideTimer);
       clearInterval(timer);
       endObserver?.disconnect();
+      preloadedMedia.clear();
+      inFlightPreloads.clear();
       window.removeEventListener('pagehide', saveOnExit);
       saveOnExit();
     };
@@ -253,6 +335,17 @@
       <span class="pages-count">{current}/{data.pages.length}</span>
       <button
         class="icon-button"
+        aria-label="Reportar problema"
+        title="Reportar problema neste capítulo"
+        onclick={() => {
+          showReportModal = true;
+          uiVisible = true;
+        }}
+      >
+        <Flag size={18} />
+      </button>
+      <button
+        class="icon-button"
         aria-label="Ajustes de leitura"
         onclick={() => {
           settings = !settings;
@@ -278,7 +371,21 @@
       <label class="small">
         <input type="checkbox" bind:checked={gap} /> Separar páginas tradicionais
       </label>
-      <label class="field" style="margin-top:20px">
+      <label class="field" style="margin-top:14px">
+        Pré-carregamento
+        <select
+          value={preloadMode}
+          onchange={(e) => {
+            preloadMode = e.currentTarget.value as 'full' | 'off';
+            savePreference('nox-reader', JSON.stringify({ width, gap, preload: preloadMode }));
+            if (preloadMode === 'full') pumpPreload();
+          }}
+        >
+          <option value="full">Capítulo inteiro (Padrão)</option>
+          <option value="off">Desativado (Economia de dados/RAM)</option>
+        </select>
+      </label>
+      <label class="field" style="margin-top:14px">
         Ir para página
         <select value={current} onchange={(e) => jump(Number(e.currentTarget.value))}>
           {#each data.pages as page (page.position)}
@@ -336,6 +443,16 @@
         </a>
       {/if}
     </div>
+    <div class="end-report-wrap">
+      <button
+        type="button"
+        class="btn-report-subtle"
+        onclick={() => (showReportModal = true)}
+      >
+        <Flag size={13} />
+        <span>Reportar problema neste capítulo (páginas quebradas, ordem incorreta)</span>
+      </button>
+    </div>
   </div>
   <div class="reader-comments">
     {#if !data.preview}<Comments
@@ -349,9 +466,47 @@
     ><ChevronUp /></button
   >
   <div class="reader-progress" style="width:{(current / Math.max(1, data.pages.length)) * 100}%"></div>
+
+  {#if showReportModal}
+    <ReportModal
+      targetType="CHAPTER"
+      chapterId={data.chapter.id}
+      targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${data.chapter.number}`}
+      onclose={() => (showReportModal = false)}
+      onsuccess={() => {
+        showReportModal = false;
+        notice = 'Denúncia enviada com sucesso para a moderação.';
+      }}
+    />
+  {/if}
 </div>
 
 <style>
+  .end-report-wrap {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .btn-report-subtle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #8c899a;
+    font-size: 12px;
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-report-subtle:hover {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+  }
   .reader-shell {
     background: #06070c;
     min-height: 100vh;

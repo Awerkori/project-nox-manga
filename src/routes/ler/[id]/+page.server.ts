@@ -1,14 +1,26 @@
 import { error } from '@sveltejs/kit';
 import { check } from '$lib/server/db';
-export const load = async ({ locals, params, url }) => {
+export const load = async ({ locals, params, url, cookies }) => {
   const preview = url.searchParams.get('preview') === '1' && ['ADMIN', 'EDITOR'].includes(locals.role || '');
   let query = locals.db
     .from('chapters')
-    .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published)')
+    .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
     .eq('id', params.id);
   if (!preview) query = query.not('published_at', 'is', null);
   const { data: chapter } = await query.maybeSingle();
   if (!chapter || (!preview && !chapter.works?.published)) error(404, 'Capítulo indisponível');
+
+  if ((chapter.works as any)?.content_rating === 'ADULT_18') {
+    const rawAgeCookie = cookies.get('nox-age-status');
+    let ageStatus = rawAgeCookie;
+    if (locals.user) {
+      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
+      if (p.data?.age_status) ageStatus = p.data.age_status;
+    }
+    if (ageStatus === 'MINOR') {
+      error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
+    }
+  }
   const [pages, siblings, progress, comments] = await Promise.all([
     locals.db
       .from('pages')

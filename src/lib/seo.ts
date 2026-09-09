@@ -28,7 +28,14 @@ export function workStructuredData(work: Work, tags: { name: string; kind: strin
         dateModified: work.updated_at,
         ...(work.author ? { author: { '@type': 'Person', name: work.author } } : {}),
         ...(work.artist ? { illustrator: { '@type': 'Person', name: work.artist } } : {}),
-        ...(work.cover_id ? { image: `${origin}/media/${work.cover_id}` } : {}),
+        ...(work.cover_id
+          ? {
+              image:
+                work.content_rating === 'ADULT_18'
+                  ? `${origin}/brand/nox-symbol-256.webp`
+                  : `${origin}/media/${work.cover_id}`
+            }
+          : {}),
         genre: tags.filter((tag) => tag.kind === 'GENRE').map((tag) => tag.name),
         keywords: tags.map((tag) => tag.name),
         isAccessibleForFree: true

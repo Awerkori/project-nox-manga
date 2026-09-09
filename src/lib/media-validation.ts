@@ -1,4 +1,4 @@
-export type ImageInfo = { mime: 'image/png' | 'image/jpeg' | 'image/webp'; width: number; height: number };
+export type ImageInfo = { mime: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; width: number; height: number };
 const text = (a: Uint8Array, start: number, length: number) =>
   String.fromCharCode(...a.slice(start, start + length));
 export function inspectImage(a: Uint8Array): ImageInfo {
@@ -58,7 +58,11 @@ export function inspectImage(a: Uint8Array): ImageInfo {
       width = (bits & 0x3fff) + 1;
       height = ((bits >> 14) & 0x3fff) + 1;
     }
-  } else throw new Error('Formato não permitido. Use PNG, JPEG ou WebP.');
+  } else if (text(a, 0, 3) === 'GIF' && (text(a, 3, 3) === '89a' || text(a, 3, 3) === '87a')) {
+    mime = 'image/gif';
+    width = d.getUint16(6, true);
+    height = d.getUint16(8, true);
+  } else throw new Error('Formato não permitido. Use PNG, JPEG, WebP ou GIF.');
   if (!width || !height || width > 10000 || height > 40000 || width * height > 40_000_000)
     throw new Error('Dimensões inválidas ou imagem muito grande.');
   return { mime, width, height };

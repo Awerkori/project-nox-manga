@@ -4,6 +4,7 @@
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, slugify } from '$lib/types';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
+  import BatchChapterModal from '$lib/components/BatchChapterModal.svelte';
   import {
     ArrowLeft,
     ExternalLink,
@@ -15,7 +16,9 @@
     Save,
     ArrowRight,
     BookOpen,
-    Clock
+    Clock,
+    FolderArchive,
+    Flame
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -28,8 +31,34 @@
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let busy = $state(false);
   let uploading = $state(false);
+  let showBatchModal = $state(false);
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let selected = $state<string[]>(initial.selected);
+  let prioritizing = $state(false);
+
+  async function prioritizeWork() {
+    if (!data.work?.id || prioritizing) return;
+    prioritizing = true;
+    notice = '';
+    try {
+      const formData = new FormData();
+      formData.append('work_id', data.work.id);
+      formData.append('reason', 'Priorizado via Ficha da Obra');
+      const res = await fetch('/admin/importer?/prioritize', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || 'Erro ao priorizar obra.');
+      noticeType = 'success';
+      notice = 'Obra priorizada no Importer com sucesso! O worker processará seus capítulos prioritariamente.';
+    } catch (e) {
+      noticeType = 'error';
+      notice = (e as Error).message;
+    } finally {
+      prioritizing = false;
+    }
+  }
 
   async function upload(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
@@ -38,8 +67,8 @@
     notice = '';
     saveState = 'idle';
     try {
-      const { normalizePage } = await import('$lib/uploads');
-      const image = await normalizePage(file);
+      const { normalizeCover } = await import('$lib/uploads');
+      const image = await normalizeCover(file);
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': image.type },
@@ -139,17 +168,30 @@
       {/if}
     </div>
 
-    {#if data.work?.published}
+    {#if data.work}
       <div class="header-actions">
-        <a
-          href="/obra/{data.work.slug}"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn-view-public"
+        <button
+          type="button"
+          class="btn-prioritize-importer"
+          disabled={busy || prioritizing}
+          onclick={prioritizeWork}
+          title="Solicitar priorização no worker do Importer"
         >
-          <span>Ver no site público</span>
-          <ExternalLink size={14} />
-        </a>
+          <Flame size={14} />
+          <span>{prioritizing ? 'Priorizando…' : 'Priorizar no Importer'}</span>
+        </button>
+
+        {#if data.work.published}
+          <a
+            href="/obra/{data.work.slug}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-view-public"
+          >
+            <span>Ver no site público</span>
+            <ExternalLink size={14} />
+          </a>
+        {/if}
       </div>
     {/if}
   </header>
@@ -189,7 +231,7 @@
       <div class="cover-actions-col">
         <h3 class="cover-heading">Capa Oficial</h3>
         <p class="cover-hint">
-          Selecione uma imagem vertical de alta resolução (proporção aproximada 1:1.4). Formatos suportados: WebP, PNG ou JPEG.
+          Selecione uma imagem vertical de alta resolução (proporção aproximada 1:1.4). Formatos suportados: WebP, PNG, JPEG ou GIF animado.
         </p>
 
         <label class="btn-select-cover" class:disabled={uploading}>
@@ -197,7 +239,7 @@
           <span>{uploading ? 'Processando capa…' : 'Selecionar Imagem da Capa'}</span>
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/png,image/jpeg,image/webp,image/gif"
             disabled={uploading}
             onchange={upload}
             style="display:none"
@@ -342,6 +384,16 @@
           {/each}
         </select>
       </label>
+
+      <!-- Content Rating (+18) -->
+      <label class="field-wrap col-full">
+        <span class="field-label">Classificação Editorial de Conteúdo (+18)</span>
+        <select name="content_rating" class="field-select" value={(data.work as any)?.content_rating || 'GENERAL'}>
+          <option value="GENERAL">Geral — Recomendado para todos os leitores</option>
+          <option value="ADULT_18">Adulto (+18) — Conteúdo adulto/explícito (aplica tags automáticas e blur)</option>
+        </select>
+        <small class="field-hint">Obras marcadas como Adulto (+18) recebem a tag "Adulto (+18)" (e "Pornhwa" se for Manhwa) e têm capas borradas por padrão para proteção de menores.</small>
+      </label>
     </div>
 
     <!-- Tags & Gêneros Selector -->
@@ -406,13 +458,23 @@
           <span class="chapters-subtitle">Acompanhe páginas, rascunhos e publicação da obra</span>
         </div>
 
-        <a
-          href="/admin/obras/{data.work.id}/capitulos/novo"
-          class="btn-add-chapter"
-        >
-          <Plus size={15} />
-          <span>Adicionar Capítulo</span>
-        </a>
+        <div class="chapters-action-buttons">
+          <button
+            type="button"
+            class="btn-batch-zip"
+            onclick={() => (showBatchModal = true)}
+          >
+            <FolderArchive size={15} />
+            <span>Importar Lote (ZIP)</span>
+          </button>
+          <a
+            href="/admin/obras/{data.work.id}/capitulos/novo"
+            class="btn-add-chapter"
+          >
+            <Plus size={15} />
+            <span>Adicionar Capítulo</span>
+          </a>
+        </div>
       </div>
 
       {#if data.chapters.length > 0}
@@ -438,20 +500,18 @@
                   <td class="td-ch-status">
                     {#if ch.published_at}
                       <span class="status-badge status-live">
-                        <span class="status-dot-live"></span>
+                        <CheckCircle2 size={11} />
                         <span>Publicado</span>
                       </span>
                     {:else}
                       <span class="status-badge status-draft">
-                        <span class="status-dot-draft"></span>
+                        <Clock size={11} />
                         <span>Rascunho</span>
                       </span>
                     {/if}
                   </td>
                   <td class="td-ch-date">
-                    <span class="date-text">
-                      {ch.published_at ? 'Publicado' : 'Em preparo'}
-                    </span>
+                    <span>{ch.published_at ? new Date(ch.published_at).toLocaleDateString('pt-BR') : '—'}</span>
                   </td>
                   <td class="td-ch-action">
                     <a
@@ -472,16 +532,38 @@
           <BookOpen size={30} class="empty-ch-icon" />
           <h3>Nenhum capítulo cadastrado ainda</h3>
           <p>Adicione o primeiro capítulo para iniciar a leitura desta obra.</p>
-          <a
-            href="/admin/obras/{data.work.id}/capitulos/novo"
-            class="btn-primary-add-first"
-          >
-            <Plus size={15} />
-            <span>Cadastrar Capítulo 1</span>
-          </a>
+          <div class="empty-action-row">
+            <button
+              type="button"
+              class="btn-batch-zip"
+              onclick={() => (showBatchModal = true)}
+            >
+              <FolderArchive size={15} />
+              <span>Importar Lote (ZIP)</span>
+            </button>
+            <a
+              href="/admin/obras/{data.work.id}/capitulos/novo"
+              class="btn-primary-add-first"
+            >
+              <Plus size={15} />
+              <span>Cadastrar Capítulo 1</span>
+            </a>
+          </div>
         </div>
       {/if}
     </section>
+  {/if}
+
+  {#if showBatchModal && data.work}
+    <BatchChapterModal
+      work={data.work}
+      existingChapters={data.chapters}
+      onClose={() => (showBatchModal = false)}
+      onSuccess={async () => {
+        showBatchModal = false;
+        await invalidateAll();
+      }}
+    />
   {/if}
 </div>
 
@@ -586,6 +668,32 @@
     background: rgba(223, 194, 141, 0.12);
     border-color: rgba(223, 194, 141, 0.35);
     color: #dfc28d;
+  }
+
+  .btn-prioritize-importer {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-prioritize-importer:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: rgba(245, 158, 11, 0.6);
+    transform: translateY(-1px);
+  }
+
+  .btn-prioritize-importer:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* Notice */
@@ -958,6 +1066,34 @@
     color: #7b8396;
   }
 
+  .chapters-action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-batch-zip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(181, 154, 245, 0.12);
+    border: 1px solid rgba(181, 154, 245, 0.3);
+    color: #e2d9fc;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-batch-zip:hover {
+    background: rgba(181, 154, 245, 0.22);
+    border-color: rgba(181, 154, 245, 0.5);
+    color: #ffffff;
+  }
+
   .btn-add-chapter {
     display: inline-flex;
     align-items: center;
@@ -976,6 +1112,15 @@
   .btn-add-chapter:hover {
     background: rgba(223, 194, 141, 0.22);
     border-color: rgba(223, 194, 141, 0.5);
+  }
+
+  .empty-action-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   /* Chapters Table */
@@ -1051,30 +1196,10 @@
     color: #6ee7b7;
   }
 
-  .status-dot-live {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #10b981;
-    box-shadow: 0 0 6px #10b981;
-  }
-
   .status-draft {
     background: rgba(245, 158, 11, 0.1);
     border: 1px solid rgba(245, 158, 11, 0.3);
     color: #fbbf24;
-  }
-
-  .status-dot-draft {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #f59e0b;
-  }
-
-  .date-text {
-    font-size: 12px;
-    color: #7b8396;
   }
 
   .th-action,
