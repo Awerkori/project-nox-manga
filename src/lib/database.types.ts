@@ -467,6 +467,8 @@ export type Database = {
           dedupe_key: string
           id: string
           last_error: string | null
+          last_error_at: string | null
+          last_recovered_error: string | null
           lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
@@ -474,6 +476,8 @@ export type Database = {
           next_run_at: string
           payload: Json
           priority: number
+          recovered_at: string | null
+          retry_reason: string | null
           source: string
           status: string
           task_type: string
@@ -486,6 +490,8 @@ export type Database = {
           dedupe_key: string
           id?: string
           last_error?: string | null
+          last_error_at?: string | null
+          last_recovered_error?: string | null
           lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
@@ -493,6 +499,8 @@ export type Database = {
           next_run_at?: string
           payload?: Json
           priority?: number
+          recovered_at?: string | null
+          retry_reason?: string | null
           source: string
           status?: string
           task_type: string
@@ -505,6 +513,8 @@ export type Database = {
           dedupe_key?: string
           id?: string
           last_error?: string | null
+          last_error_at?: string | null
+          last_recovered_error?: string | null
           lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
@@ -512,6 +522,8 @@ export type Database = {
           next_run_at?: string
           payload?: Json
           priority?: number
+          recovered_at?: string | null
+          retry_reason?: string | null
           source?: string
           status?: string
           task_type?: string

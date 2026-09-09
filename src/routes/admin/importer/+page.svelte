@@ -974,13 +974,23 @@
                       {job.priority >= 90 ? 'P:90 BLOCKER' : job.priority >= 85 ? 'P:85 STAFF' : job.priority >= 80 ? 'P:80 NOVO' : job.priority >= 70 ? 'P:70 GAP' : 'P:' + job.priority}
                     </span>
                   </div>
-                  {#if job.status === 'RETRY' && job.next_run_at}
+                  {#if job.status === 'IMPORTING'}
+                    {#if job.last_recovered_error}
+                      <div class="job-recovered-note" title={"Último incidente recuperado: " + job.last_recovered_error}>
+                        <span>Recuperado: {job.last_recovered_error.slice(0, 80)}…</span>
+                      </div>
+                    {/if}
+                  {:else if job.status === 'RETRY'}
                     <div class="job-retry-note">
                       <Clock size={11} />
-                      <span>Tentativa {job.attempts}/{job.max_attempts} · Retry {relativeTime(job.next_run_at)}</span>
+                      <span>Tentativa {job.attempts}/{job.max_attempts} · Retry {job.next_run_at ? relativeTime(job.next_run_at) : 'em breve'}</span>
                     </div>
-                  {/if}
-                  {#if job.last_error}
+                    {#if job.last_error}
+                      <div class="job-error-preview" title={job.last_error}>
+                        {job.last_error.slice(0, 100)}…
+                      </div>
+                    {/if}
+                  {:else if job.last_error}
                     <div class="job-error-preview" title={job.last_error}>
                       {job.last_error.slice(0, 100)}…
                     </div>
@@ -2545,6 +2555,14 @@
   .job-error-preview {
     font-size: 10.5px;
     color: #f87171;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .job-recovered-note {
+    font-size: 10.5px;
+    color: #94a3b8;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
