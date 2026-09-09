@@ -1455,12 +1455,41 @@ export type Database = {
       is_member: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       member_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
+      member_public_ranking: {
+        Args: never
+        Returns: {
+          avatar_id: string | null
+          created_at: string
+          display_name: string
+          equipped_badge_id: string | null
+          equipped_title_id: string | null
+          id: string
+          username: string
+          xp: number
+        }[]
+      }
       member_public_stats: {
         Args: { p_user: string }
         Returns: {
           chapters_read: number
           completed_works: number
           favorites: number
+        }[]
+      }
+      member_self_profile: {
+        Args: never
+        Returns: {
+          age_status: string
+          avatar_id: string | null
+          bio: string
+          blur_nsfw: boolean
+          created_at: string
+          display_name: string
+          equipped_badge_id: string | null
+          equipped_title_id: string | null
+          id: string
+          username: string
+          xp: number
         }[]
       }
       owner_action: { Args: { p_action: string; p_data: Json }; Returns: Json }

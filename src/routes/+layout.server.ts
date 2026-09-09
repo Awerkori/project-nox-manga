@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { databaseConfig } from '$lib/server/config';
 export const load = async ({ locals, url, cookies }) => {
   const profile = locals.user
-    ? (await locals.db.from('members').select('*').eq('id', locals.user.id).maybeSingle()).data
+    ? (await locals.db.rpc('member_self_profile')).data?.[0] || null
     : null;
   const unread = locals.user
     ? (await locals.db.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null))
