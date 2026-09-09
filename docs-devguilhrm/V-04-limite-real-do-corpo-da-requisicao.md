@@ -16,7 +16,7 @@ O resultado era uma diferença entre o limite anunciado e o limite realmente apl
 
 ### 1. O reconhecimento
 
-Caio se apresenta como pentester, mas age sem autorização. Ele navega pela tela de login e observa que formulários e chamadas de API retornam 413 quando o navegador envia um `Content-Length` alto.
+Caio se apresenta como pentester, mas age sem autorização. Como o projeto é open source, ele lê o hook global e identifica a comparação baseada apenas em `Content-Length`. Depois navega pela tela de login e confirma que formulários e chamadas de API retornam 413 quando o navegador envia um valor alto nesse header.
 
 Ao revisar o comportamento, Caio suspeita de uma validação baseada apenas no header. Essa é uma pista conhecida: aplicações frequentemente usam `Content-Length` como se fosse uma medição confiável, embora ele seja apenas uma declaração do remetente e possa estar ausente em corpos transmitidos progressivamente.
 

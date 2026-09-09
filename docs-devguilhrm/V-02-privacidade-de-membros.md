@@ -17,9 +17,9 @@ No PostgreSQL, o `GRANT SELECT` sobre a tabela cobre também colunas adicionadas
 
 ### 1. Ele começa sem credenciais
 
-Rafael se apresenta como pentester, mas não tem autorização. Ele visita a aplicação como qualquer usuário e abre as ferramentas de desenvolvedor. No bundle do frontend encontra `PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_ANON_KEY`.
+Rafael se apresenta como pentester, mas não tem autorização. Como o projeto é open source, ele pode ler diretamente as migrations, descobrir a tabela `members` e estudar seus grants e policies. Ao visitar a aplicação, também encontra `PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_ANON_KEY` no bundle do frontend.
 
-Isso, isoladamente, não é falha: a chave `anon` é pública por design. Rafael sabe que a segurança real de um projeto Supabase depende dos grants e da RLS.
+Nada disso, isoladamente, é falha: o código e a chave `anon` são públicos por design. Rafael sabe que a segurança real de um projeto Supabase open source depende dos grants e da RLS, nunca de esconder o schema.
 
 ### 2. Ele identifica a tabela de perfis
 

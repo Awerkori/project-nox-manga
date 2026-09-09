@@ -17,9 +17,9 @@ O endpoint da aplicação reduzia parte do risco, mas não era uma fronteira suf
 
 ### 1. Reconhecimento
 
-Bruno cria uma conta comum e observa, nas ferramentas de desenvolvimento, uma chamada para `/api/report`. No bundle também estão a URL pública do Supabase e a chave `anon`, o que é normal em aplicações Supabase.
+Bruno lê o repositório open source e encontra diretamente o schema de `reports`, seus grants, suas policies e o endpoint `/api/report`. No bundle também estão a URL pública do Supabase e a chave `anon`, o que é normal em aplicações Supabase.
 
-Ele sabe que sua sessão autenticada pode ser usada diretamente na Data API. Em vez de presumir que todas as operações precisam passar pelo servidor SvelteKit, ele examina o formato da tabela `reports` observado nas respostas e no comportamento da interface.
+Como o cadastro é aberto, Bruno cria sua própria conta e obtém legitimamente uma sessão autenticada. Ele não precisa invadir a conta de outra pessoa. O código público mostra que essa sessão pode ser usada diretamente na Data API e que nem todas as operações precisam passar pelo servidor SvelteKit.
 
 ### 2. Descoberta da escrita direta
 
