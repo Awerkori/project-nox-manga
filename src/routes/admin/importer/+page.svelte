@@ -25,7 +25,14 @@
     Check,
     HelpCircle,
     AlertOctagon,
-    Split
+    Split,
+    MoreVertical,
+    Pause,
+    Play,
+    Ban,
+    Snowflake,
+    Info,
+    Filter
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
 
@@ -150,17 +157,184 @@
     }
   });
 
+  // UX State: Importing Now, Retries & Forensics
+  let selectedJobForDetails = $state<any | null>(null);
+  let activeMenuJobId = $state<string | null>(null);
+  let retryFilterGroup = $state<{ source: string; pattern: string; label: string } | null>(null);
+
+  function toggleMenu(jobId: string, event: MouseEvent) {
+    event.stopPropagation();
+    activeMenuJobId = activeMenuJobId === jobId ? null : jobId;
+  }
+
+  function formatAttempts(attempts: number | null | undefined): string {
+    const count = attempts || 0;
+    return `${count} ${count === 1 ? 'tentativa total' : 'tentativas totais'}`;
+  }
+
+  function formatCountdown(nextRunAt: string | null | undefined): string {
+    if (!nextRunAt) return 'em breve';
+    const diffMs = new Date(nextRunAt).getTime() - Date.now();
+    if (diffMs <= 0) return 'agora';
+    const mins = Math.ceil(diffMs / 60000);
+    if (mins < 1) return 'em instantes';
+    if (mins === 1) return 'em 1 min';
+    if (mins < 60) return `em ${mins} min`;
+    const hours = Math.floor(mins / 60);
+    return `em ${hours}h ${mins % 60}m`;
+  }
+
+  function summarizeError(raw: string | null | undefined): string {
+    if (!raw) return 'Falha transitória na operação';
+    const clean = raw.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+
+    if (clean.includes('Cloudflare') || clean.includes('403') || clean.includes('cf-chl')) {
+      return 'Cloudflare 403 (Proteção ativa)';
+    }
+    if (clean.includes('session expired') || clean.includes('invalid credentials') || clean.includes('authentication')) {
+      return 'Credenciais expiradas (Requer autenticação)';
+    }
+    if (clean.includes('404') || clean.includes('Not Found')) {
+      const pageMatch = clean.match(/page\s*(\d+)/i) || clean.match(/página\s*(\d+)/i);
+      return pageMatch ? `Página ${pageMatch[1]} indisponível (HTTP 404)` : 'Recurso ou página indisponível (HTTP 404)';
+    }
+    if (clean.includes('Lease expirado') || clean.includes('stalled') || clean.includes('lease_expires_at')) {
+      return 'Lease expirado (recuperado automaticamente)';
+    }
+    if (clean.includes('ETIMEDOUT') || clean.includes('ECONNRESET') || clean.includes('timed out') || clean.includes('Timeout')) {
+      return 'Timeout de conexão com o provider';
+    }
+    if (clean.includes('429') || clean.includes('rate limit') || clean.includes('RateLimit')) {
+      return 'Rate limit atingido (Cooldown ativado)';
+    }
+    if (clean.includes('0 pages') || clean.includes('returned 0 pages')) {
+      return 'Fonte retornou 0 páginas';
+    }
+    if (clean.includes('Verification failed') || clean.includes('integrity check')) {
+      return 'Falha na validação de integridade';
+    }
+    if (clean.includes('Cancelado manualmente')) {
+      return 'Cancelado manualmente via painel';
+    }
+
+    return clean.length > 85 ? clean.slice(0, 82) + '…' : clean;
+  }
+
+  interface RetryGroup {
+    source: string;
+    patternName: string;
+    patternKey: string;
+    jobsCount: number;
+    affectedWorksCount: number;
+    jobs: any[];
+  }
+
+  const groupedRetries = $derived.by(() => {
+    const jobs = data.retryJobs || [];
+    if (jobs.length === 0) return [];
+
+    const groupsMap = new Map<string, {
+      source: string;
+      patternName: string;
+      patternKey: string;
+      works: Set<string>;
+      jobs: any[];
+    }>();
+
+    for (const job of jobs) {
+      const src = (job.source || 'desconhecido').toLowerCase();
+      const raw = (job.last_error || '').toLowerCase();
+      let patternKey = 'outros';
+      let patternName = 'Falha transitória';
+
+      if (raw.includes('403') || raw.includes('cloudflare')) {
+        patternKey = '403';
+        patternName = 'Cloudflare 403';
+      } else if (raw.includes('404')) {
+        patternKey = '404';
+        patternName = 'Páginas 404';
+      } else if (raw.includes('lease') || raw.includes('stalled')) {
+        patternKey = 'lease';
+        patternName = 'Lease expirado';
+      } else if (raw.includes('timeout') || raw.includes('timed out') || raw.includes('etimedout') || raw.includes('econnreset')) {
+        patternKey = 'timeout';
+        patternName = 'Timeout de conexão';
+      } else if (raw.includes('429') || raw.includes('rate limit')) {
+        patternKey = '429';
+        patternName = 'Rate limit (429)';
+      } else if (raw.includes('credentials') || raw.includes('session expired') || raw.includes('authentication')) {
+        patternKey = 'auth';
+        patternName = 'Credenciais expiradas';
+      }
+
+      const groupKey = `${src}::${patternKey}`;
+      let group = groupsMap.get(groupKey);
+      if (!group) {
+        group = {
+          source: job.source,
+          patternName,
+          patternKey,
+          works: new Set<string>(),
+          jobs: []
+        };
+        groupsMap.set(groupKey, group);
+      }
+      group.jobs.push(job);
+      const wId = (job.payload as any)?.workId;
+      if (wId) group.works.add(wId);
+    }
+
+    const result: RetryGroup[] = [];
+    for (const g of groupsMap.values()) {
+      result.push({
+        source: g.source,
+        patternName: g.patternName,
+        patternKey: g.patternKey,
+        jobsCount: g.jobs.length,
+        affectedWorksCount: g.works.size,
+        jobs: g.jobs
+      });
+    }
+
+    return result.sort((a, b) => b.jobsCount - a.jobsCount);
+  });
+
+  const filteredRetryJobs = $derived(
+    (data.retryJobs || []).filter((job: any) => {
+      if (!retryFilterGroup) return true;
+      if (retryFilterGroup.source && job.source.toLowerCase() !== retryFilterGroup.source.toLowerCase()) {
+        return false;
+      }
+      if (retryFilterGroup.pattern) {
+        const err = (job.last_error || '').toLowerCase();
+        if (retryFilterGroup.pattern === '403' && !err.includes('403') && !err.includes('cloudflare')) return false;
+        if (retryFilterGroup.pattern === '404' && !err.includes('404')) return false;
+        if (retryFilterGroup.pattern === 'lease' && !err.includes('lease') && !err.includes('stalled')) return false;
+        if (retryFilterGroup.pattern === 'timeout' && !err.includes('timeout') && !err.includes('etimedout') && !err.includes('econnreset')) return false;
+        if (retryFilterGroup.pattern === '429' && !err.includes('429') && !err.includes('rate limit')) return false;
+        if (retryFilterGroup.pattern === 'auth' && !err.includes('credentials') && !err.includes('session') && !err.includes('authentication')) return false;
+      }
+      return true;
+    })
+  );
+
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Real-time live polling every 5s while tab is visible
+  // Real-time live polling every 4s while tab is visible
   onMount(() => {
+    const handleGlobalClick = () => {
+      activeMenuJobId = null;
+    };
+    window.addEventListener('click', handleGlobalClick);
+
     pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         invalidateAll();
       }
-    }, 5000);
+    }, 4000);
 
     return () => {
+      window.removeEventListener('click', handleGlobalClick);
       if (pollInterval) clearInterval(pollInterval);
     };
   });
@@ -933,12 +1107,15 @@
   <div class="importer-grid">
     <!-- Left Column: Active Jobs, Staff Priorities, STAGED Blockers -->
     <div class="grid-primary-col">
-      <!-- 1. Importando Agora -->
-      <section class="panel-card">
+      <!-- 1. Importando Agora (Apenas jobs status === 'IMPORTING') -->
+      <section class="panel-card" id="sec-importing-now">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">Importando Agora</h2>
-            <p class="panel-sub">Jobs em execução ativa ou aguardando próximo intervalo de retry</p>
+            <div class="title-with-badge">
+              <h2 class="panel-title">Importando Agora</h2>
+              <span class="badge-accent">{(data.importingJobs || []).length} ativos</span>
+            </div>
+            <p class="panel-sub">Capítulos em execução concorrente no worker (download, validação e storage)</p>
           </div>
           <span class="live-tag">
             <span class="live-dot"></span>
@@ -946,25 +1123,31 @@
           </span>
         </div>
 
-        {#if (data.activeJobs || []).length > 0}
+        {#if (data.importingJobs || []).length > 0}
           <div class="active-jobs-list">
-            {#each (data.activeJobs || []) as job (job.id)}
-              <div class="active-job-row" class:is-retry={job.status === 'RETRY'}>
+            {#each (data.importingJobs || []) as job (job.id)}
+              <div class="active-job-card">
                 <!-- Work Thumb -->
                 <div class="job-thumb">
                   {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="36" height="50" class="thumb-img" />
+                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
                 </div>
 
-                <!-- Job Details -->
+                <!-- Job Info -->
                 <div class="job-info">
                   <div class="job-line-top">
-                    <strong class="job-work-title">{job.work?.title || (job.payload as any)?.workTitle || 'Obra Sincronizando'}</strong>
-                    <span class="job-status-chip status-{job.status.toLowerCase()}">{job.status}</span>
+                    <strong class="job-work-title" title={job.work?.title || (job.payload as any)?.workTitle || 'Obra'}>
+                      {job.work?.title || (job.payload as any)?.workTitle || 'Obra Sincronizando'}
+                    </strong>
+                    <span class="job-status-chip status-importing">
+                      <span class="live-dot-inline"></span>
+                      IMPORTING
+                    </span>
                   </div>
+
                   <div class="job-line-sub">
                     <span class="job-source-tag">{job.source}</span>
                     {#if job.chapter_sort_key}
@@ -974,25 +1157,114 @@
                       {job.priority >= 90 ? 'P:90 BLOCKER' : job.priority >= 85 ? 'P:85 STAFF' : job.priority >= 80 ? 'P:80 NOVO' : job.priority >= 70 ? 'P:70 GAP' : 'P:' + job.priority}
                     </span>
                   </div>
-                  {#if job.status === 'IMPORTING'}
-                    {#if job.last_recovered_error}
-                      <div class="job-recovered-note" title={"Último incidente recuperado: " + job.last_recovered_error}>
-                        <span>Recuperado: {job.last_recovered_error.slice(0, 80)}…</span>
+
+                  <!-- Real-time Progress Bar & Stage -->
+                  <div class="job-progress-block">
+                    {#if job.progress_total && job.progress_total > 0}
+                      <div class="progress-bar-track">
+                        <div
+                          class="progress-bar-fill"
+                          style="width: {Math.min(100, Math.max(5, Math.round(((job.progress_current || 0) / job.progress_total) * 100)))}%"
+                        ></div>
+                      </div>
+                      <div class="progress-meta-row">
+                        <span class="progress-page-count">
+                          Página {job.progress_current || 0} / {job.progress_total}
+                        </span>
+                        <span class="progress-stage-pill stage-{(job.progress_stage || 'UPLOADING').toLowerCase()}">
+                          {job.progress_stage || 'UPLOADING'}
+                        </span>
+                      </div>
+                    {:else}
+                      <div class="progress-meta-row">
+                        <span class="progress-stage-pill stage-{(job.progress_stage || 'DOWNLOADING').toLowerCase()}">
+                          <span class="pulse-stage-dot"></span>
+                          {job.progress_stage === 'DOWNLOADING' ? 'Baixando páginas…' : (job.progress_stage || 'Processando capítulo…')}
+                        </span>
                       </div>
                     {/if}
-                  {:else if job.status === 'RETRY'}
-                    <div class="job-retry-note">
-                      <Clock size={11} />
-                      <span>Tentativa {job.attempts}/{job.max_attempts} · Retry {job.next_run_at ? relativeTime(job.next_run_at) : 'em breve'}</span>
-                    </div>
-                    {#if job.last_error}
-                      <div class="job-error-preview" title={job.last_error}>
-                        {job.last_error.slice(0, 100)}…
-                      </div>
-                    {/if}
-                  {:else if job.last_error}
-                    <div class="job-error-preview" title={job.last_error}>
-                      {job.last_error.slice(0, 100)}…
+                  </div>
+
+                  <!-- Discrete Neutral Note for Recovered Incident (NEVER RED!) -->
+                  {#if job.last_recovered_error}
+                    <button
+                      type="button"
+                      class="job-recovered-badge"
+                      onclick={() => (selectedJobForDetails = job)}
+                      title="Incidente anterior superado com sucesso. Clique para detalhes."
+                    >
+                      <CheckCircle2 size={12} class="recovered-icon-check" />
+                      <span class="recovered-text">Incidente anterior recuperado</span>
+                      <Info size={11} class="recovered-icon-info" />
+                    </button>
+                  {/if}
+                </div>
+
+                <!-- Action Menu ⋮ -->
+                <div class="job-actions-wrap">
+                  <button
+                    type="button"
+                    class="btn-icon-dots"
+                    onclick={(e) => toggleMenu(job.id, e)}
+                    title="Menu de opções"
+                    aria-label="Opções"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+
+                  {#if activeMenuJobId === job.id}
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div
+                      class="job-dropdown-menu"
+                      role="menu"
+                      tabindex="-1"
+                      onclick={(e) => e.stopPropagation()}
+                      onkeydown={(e) => { if (e.key === 'Escape') activeMenuJobId = null; }}
+                    >
+                      <button
+                        type="button"
+                        class="dropdown-item"
+                        onclick={() => { activeMenuJobId = null; selectedJobForDetails = job; }}
+                      >
+                        <Info size={13} class="icon-sky" />
+                        <span>Ver detalhes</span>
+                      </button>
+
+                      <form method="POST" action="?/pauseJob" use:enhance={() => { activeMenuJobId = null; }}>
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <button type="submit" class="dropdown-item">
+                          <Pause size={13} class="icon-amber" />
+                          <span>Pausar (24h)</span>
+                        </button>
+                      </form>
+
+                      <form method="POST" action="?/cancelJob" use:enhance={() => { activeMenuJobId = null; }}>
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <button type="submit" class="dropdown-item item-danger">
+                          <Ban size={13} class="icon-rose" />
+                          <span>Cancelar job</span>
+                        </button>
+                      </form>
+
+                      {#if (job.payload as any)?.workId}
+                        <form method="POST" action="?/prioritize" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="work_id" value={(job.payload as any).workId} />
+                          <button type="submit" class="dropdown-item">
+                            <Flame size={13} class="icon-flame" />
+                            <span>Priorizar obra</span>
+                          </button>
+                        </form>
+
+                        <form method="POST" action="?/freezeWork" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="work_id" value={(job.payload as any).workId} />
+                          <button type="submit" class="dropdown-item item-warning">
+                            <Snowflake size={13} class="icon-cyan" />
+                            <span>Congelar obra</span>
+                          </button>
+                        </form>
+                      {/if}
                     </div>
                   {/if}
                 </div>
@@ -1002,7 +1274,214 @@
         {:else}
           <div class="empty-panel-notice">
             <CheckCircle2 size={24} class="empty-icon" />
-            <p>Nenhum job em execução concorrente no exato momento. O worker consulta a fila continuamente.</p>
+            <p>Nenhum job em importação ativa no exato momento. O worker consulta a fila continuamente.</p>
+          </div>
+        {/if}
+      </section>
+
+      <!-- 1b. Área Dedicada: Erros & Retries -->
+      <section class="panel-card" style="margin-top: 24px;" id="sec-retries">
+        <div class="panel-header">
+          <div>
+            <div class="title-with-badge">
+              <h2 class="panel-title">Erros & Retries</h2>
+              <span class="badge-amber">{(data.retryJobs || []).length} aguardando retry</span>
+            </div>
+            <p class="panel-sub">
+              Incidentes ativos com backoff progressivo gerenciados automaticamente pelo Importer
+            </p>
+          </div>
+          {#if (data.retryJobs || []).length > 0}
+            <form method="POST" action="?/retryAll" use:enhance>
+              <input type="hidden" name="source" value="ALL" />
+              <button type="submit" class="btn-retry-all-header" title="Reenfileirar todos os jobs em retry para agora">
+                <RotateCw size={13} />
+                <span>Retry todos ({(data.retryJobs || []).length})</span>
+              </button>
+            </form>
+          {/if}
+        </div>
+
+        <!-- Grouped Retries Summary -->
+        {#if groupedRetries.length > 0}
+          <div class="retry-groups-container">
+            <span class="retry-groups-title">Padrões de Incidentes Detectados:</span>
+            <div class="retry-groups-grid">
+              {#each groupedRetries as gr}
+                <div class="retry-group-pill" class:active-filter={retryFilterGroup?.source === gr.source && retryFilterGroup?.pattern === gr.patternKey}>
+                  <div class="group-pill-left">
+                    <strong class="group-source">{gr.source}</strong>
+                    <span class="group-sep">—</span>
+                    <span class="group-pattern">{gr.patternName}</span>
+                    <span class="group-counts">({gr.jobsCount} {gr.jobsCount === 1 ? 'job' : 'jobs'}, {gr.affectedWorksCount} {gr.affectedWorksCount === 1 ? 'obra' : 'obras'})</span>
+                  </div>
+                  <div class="group-pill-actions">
+                    <button
+                      type="button"
+                      class="btn-group-filter"
+                      onclick={() => {
+                        if (retryFilterGroup?.source === gr.source && retryFilterGroup?.pattern === gr.patternKey) {
+                          retryFilterGroup = null;
+                        } else {
+                          retryFilterGroup = { source: gr.source, pattern: gr.patternKey, label: `${gr.source} — ${gr.patternName}` };
+                        }
+                      }}
+                    >
+                      {retryFilterGroup?.source === gr.source && retryFilterGroup?.pattern === gr.patternKey ? 'Ver todos' : 'Ver jobs'}
+                    </button>
+                    <form method="POST" action="?/retryAll" use:enhance>
+                      <input type="hidden" name="source" value={gr.source} />
+                      <input type="hidden" name="pattern" value={gr.patternKey} />
+                      <button type="submit" class="btn-group-retry" title="Reenfileirar este grupo">
+                        Retry grupo
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              {/each}
+            </div>
+
+            {#if retryFilterGroup}
+              <div class="active-filter-bar">
+                <span>Filtrando por: <strong>{retryFilterGroup.label}</strong></span>
+                <button type="button" class="btn-clear-filter" onclick={() => (retryFilterGroup = null)}>
+                  Limpar filtro
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if (filteredRetryJobs || []).length > 0}
+          <div class="retry-jobs-list">
+            {#each filteredRetryJobs as job (job.id)}
+              <div class="retry-job-card">
+                <!-- Work Thumb -->
+                <div class="job-thumb">
+                  {#if job.work?.cover_id}
+                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                  {:else}
+                    <div class="thumb-placeholder">NOX</div>
+                  {/if}
+                </div>
+
+                <!-- Job Info -->
+                <div class="job-info">
+                  <div class="job-line-top">
+                    <strong class="job-work-title" title={job.work?.title || (job.payload as any)?.workTitle || 'Obra'}>
+                      {job.work?.title || (job.payload as any)?.workTitle || 'Obra Sincronizando'}
+                    </strong>
+                    <span class="job-status-chip status-retry">RETRY</span>
+                  </div>
+
+                  <div class="job-line-sub">
+                    <span class="job-source-tag">{job.source}</span>
+                    {#if job.chapter_sort_key}
+                      <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
+                    {/if}
+                    <span class="retry-countdown-badge">
+                      <Clock size={11} />
+                      <span>Retry {formatCountdown(job.next_run_at)}</span>
+                    </span>
+                    <span class="retry-attempts-count" title="Total de tentativas executadas sem teto artificial">
+                      {formatAttempts(job.attempts)}
+                    </span>
+                  </div>
+
+                  <!-- Clean Summarized Error Badge (NO HTML, NO STACK TRACE) -->
+                  <div class="retry-error-summary-box" title={job.last_error || ''}>
+                    <AlertTriangle size={13} class="summary-warn-icon" />
+                    <span class="summary-error-text">{summarizeError(job.last_error)}</span>
+                  </div>
+                </div>
+
+                <!-- Card Actions -->
+                <div class="retry-card-actions">
+                  <form method="POST" action="?/retryJob" use:enhance>
+                    <input type="hidden" name="job_id" value={job.id} />
+                    <button type="submit" class="btn-action-retry-now" title="Executar retry agora">
+                      <RotateCw size={12} />
+                      <span>Retry agora</span>
+                    </button>
+                  </form>
+
+                  <button
+                    type="button"
+                    class="btn-action-details"
+                    onclick={() => (selectedJobForDetails = job)}
+                    title="Ver diagnóstico completo"
+                  >
+                    Detalhes
+                  </button>
+
+                  <!-- Overflow Menu ⋮ -->
+                  <div class="job-actions-wrap">
+                    <button
+                      type="button"
+                      class="btn-icon-dots"
+                      onclick={(e) => toggleMenu(job.id, e)}
+                      title="Mais opções"
+                      aria-label="Mais opções"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+
+                    {#if activeMenuJobId === job.id}
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <div
+                        class="job-dropdown-menu"
+                        role="menu"
+                        tabindex="-1"
+                        onclick={(e) => e.stopPropagation()}
+                        onkeydown={(e) => { if (e.key === 'Escape') activeMenuJobId = null; }}
+                      >
+                        <button
+                          type="button"
+                          class="dropdown-item"
+                          onclick={() => { activeMenuJobId = null; selectedJobForDetails = job; }}
+                        >
+                          <Info size={13} class="icon-sky" />
+                          <span>Ver detalhes</span>
+                        </button>
+
+                        <form method="POST" action="?/pauseJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <button type="submit" class="dropdown-item">
+                            <Pause size={13} class="icon-amber" />
+                            <span>Pausar (24h)</span>
+                          </button>
+                        </form>
+
+                        <form method="POST" action="?/cancelJob" use:enhance={() => { activeMenuJobId = null; }}>
+                          <input type="hidden" name="job_id" value={job.id} />
+                          <button type="submit" class="dropdown-item item-danger">
+                            <Ban size={13} class="icon-rose" />
+                            <span>Cancelar job</span>
+                          </button>
+                        </form>
+
+                        {#if (job.payload as any)?.workId}
+                          <form method="POST" action="?/freezeWork" use:enhance={() => { activeMenuJobId = null; }}>
+                            <input type="hidden" name="work_id" value={(job.payload as any).workId} />
+                            <button type="submit" class="dropdown-item item-warning">
+                              <Snowflake size={13} class="icon-cyan" />
+                              <span>Congelar obra</span>
+                            </button>
+                          </form>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="empty-panel-notice">
+            <CheckCircle2 size={24} class="empty-icon text-emerald-400" />
+            <p>Nenhum job aguardando retry no momento. Todos os jobs em fila estão saudáveis ou importando.</p>
           </div>
         {/if}
       </section>
@@ -1247,6 +1726,171 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Detalhes e Diagnóstico do Job -->
+{#if selectedJobForDetails}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    onclick={() => (selectedJobForDetails = null)}
+    onkeydown={(e) => { if (e.key === 'Escape') selectedJobForDetails = null; }}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal-card modal-card-lg"
+      role="document"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <Info size={18} class="flame-icon" />
+          <div>
+            <h3 class="modal-title">
+              {selectedJobForDetails.work?.title || (selectedJobForDetails.payload as any)?.workTitle || 'Detalhes do Job'}
+            </h3>
+            <p class="modal-sub">
+              Fonte: <strong>{selectedJobForDetails.source.toUpperCase()}</strong> · Capítulo {selectedJobForDetails.chapter_sort_key || (selectedJobForDetails.payload as any)?.chapterNumber || '—'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="modal-close-btn"
+          onclick={() => (selectedJobForDetails = null)}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div class="diagnostic-body">
+        <!-- Operational Status Box -->
+        <div class="diagnostic-status-box status-{selectedJobForDetails.status.toLowerCase()}">
+          {#if selectedJobForDetails.status === 'IMPORTING'}
+            <div class="diag-status-header">
+              <div class="live-dot"></div>
+              <strong class="diag-status-title">IMPORTANDO NORMALMENTE</strong>
+              <span class="diag-status-badge-ok">Worker Concorrente Ativo</span>
+            </div>
+
+            {#if selectedJobForDetails.last_recovered_error}
+              <div class="diag-incident-box recovered">
+                <div class="incident-box-head">
+                  <CheckCircle2 size={15} class="text-emerald-400" />
+                  <strong>Incidente Anterior Recuperado</strong>
+                </div>
+                <div class="incident-meta-row">
+                  <span>Recuperado em: <strong>{selectedJobForDetails.recovered_at ? new Date(selectedJobForDetails.recovered_at).toLocaleString() : 'Recentemente'}</strong></span>
+                </div>
+                <div class="incident-pre-wrap">
+                  {selectedJobForDetails.last_recovered_error}
+                </div>
+              </div>
+            {/if}
+          {:else if selectedJobForDetails.status === 'RETRY'}
+            <div class="diag-status-header">
+              <Clock size={16} class="text-amber-400" />
+              <strong class="diag-status-title">AGUARDANDO RETRY</strong>
+              <span class="diag-status-badge-retry">{formatAttempts(selectedJobForDetails.attempts)}</span>
+            </div>
+
+            <div class="diag-retry-countdown-line">
+              Próxima tentativa em: <strong>{formatCountdown(selectedJobForDetails.next_run_at)}</strong>
+              ({selectedJobForDetails.next_run_at ? new Date(selectedJobForDetails.next_run_at).toLocaleString() : 'em instantes'})
+            </div>
+
+            {#if selectedJobForDetails.last_error}
+              <div class="diag-incident-box active-error">
+                <div class="incident-box-head">
+                  <AlertTriangle size={15} class="text-rose-400" />
+                  <strong>Erro Ativo do Incidente</strong>
+                </div>
+                <div class="incident-pre-wrap">
+                  {selectedJobForDetails.last_error}
+                </div>
+              </div>
+            {/if}
+          {/if}
+        </div>
+
+        <!-- Telemetry Attributes Grid -->
+        <div class="diag-attributes-grid">
+          <div class="diag-attr">
+            <span class="attr-label">Job ID</span>
+            <code class="attr-code">{selectedJobForDetails.id}</code>
+          </div>
+          <div class="diag-attr">
+            <span class="attr-label">Prioridade</span>
+            <span class="attr-val font-semibold">{selectedJobForDetails.priority}</span>
+          </div>
+          <div class="diag-attr">
+            <span class="attr-label">Worker / Locked By</span>
+            <span class="attr-val">{selectedJobForDetails.locked_by || 'Aguardando worker'}</span>
+          </div>
+          <div class="diag-attr">
+            <span class="attr-label">Lease Expira Em</span>
+            <span class="attr-val">{selectedJobForDetails.lease_expires_at ? new Date(selectedJobForDetails.lease_expires_at).toLocaleTimeString() : 'N/A'}</span>
+          </div>
+          <div class="diag-attr">
+            <span class="attr-label">Progresso Atual</span>
+            <span class="attr-val">
+              {selectedJobForDetails.progress_current || 0} / {selectedJobForDetails.progress_total || 0} páginas ({selectedJobForDetails.progress_stage || 'N/A'})
+            </span>
+          </div>
+          <div class="diag-attr">
+            <span class="attr-label">Tentativas Totais</span>
+            <span class="attr-val font-semibold">{formatAttempts(selectedJobForDetails.attempts)}</span>
+          </div>
+        </div>
+
+        <!-- Payload JSON -->
+        <div class="diag-payload-wrap">
+          <span class="attr-label">Payload Completo do Job</span>
+          <pre class="payload-json-pre">{JSON.stringify(selectedJobForDetails.payload, null, 2)}</pre>
+        </div>
+      </div>
+
+      <!-- Modal Actions -->
+      <div class="modal-actions">
+        {#if selectedJobForDetails.status === 'RETRY'}
+          <form method="POST" action="?/retryJob" use:enhance={() => { selectedJobForDetails = null; }}>
+            <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+            <button type="submit" class="btn-modal-submit">
+              <RotateCw size={14} />
+              <span>Retry Agora</span>
+            </button>
+          </form>
+        {/if}
+
+        <form method="POST" action="?/pauseJob" use:enhance={() => { selectedJobForDetails = null; }}>
+          <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+          <button type="submit" class="btn-modal-cancel">
+            <Pause size={14} />
+            <span>Pausar (24h)</span>
+          </button>
+        </form>
+
+        <form method="POST" action="?/cancelJob" use:enhance={() => { selectedJobForDetails = null; }}>
+          <input type="hidden" name="job_id" value={selectedJobForDetails.id} />
+          <button type="submit" class="btn-modal-danger">
+            <Ban size={14} />
+            <span>Cancelar Job</span>
+          </button>
+        </form>
+
+        <button
+          type="button"
+          class="btn-modal-cancel"
+          onclick={() => (selectedJobForDetails = null)}
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Modal: Priorizar Obra Manualmente -->
 {#if showPrioritizeModal}
@@ -2418,43 +3062,40 @@
     animation: pulse 1.5s infinite ease-in-out;
   }
 
-  /* Active Jobs List */
+  /* Active Jobs List & Cards */
   .active-jobs-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
-  .active-job-row {
+  .active-job-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    position: relative;
     transition: all 0.2s ease;
   }
 
-  .active-job-row:hover {
+  .active-job-card:hover {
     background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .active-job-row.is-retry {
-    border-color: rgba(245, 158, 11, 0.3);
-    background: rgba(245, 158, 11, 0.03);
+    border-color: rgba(56, 189, 248, 0.35);
   }
 
   .job-thumb {
-    width: 36px;
-    height: 50px;
+    width: 38px;
+    height: 52px;
     border-radius: 6px;
     overflow: hidden;
     background: #111420;
     flex-shrink: 0;
     display: grid;
     place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .thumb-img {
@@ -2473,7 +3114,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
   }
 
@@ -2498,6 +3139,9 @@
     padding: 1px 7px;
     border-radius: 999px;
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
 
   .job-status-chip.status-importing {
@@ -2512,11 +3156,20 @@
     border: 1px solid rgba(245, 158, 11, 0.3);
   }
 
+  .live-dot-inline {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #38bdf8;
+    animation: livePulse 1.8s infinite;
+  }
+
   .job-line-sub {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 11.5px;
+    flex-wrap: wrap;
   }
 
   .job-source-tag {
@@ -2531,7 +3184,7 @@
   }
 
   .job-priority-pill {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 4px;
@@ -2544,28 +3197,705 @@
     color: #fbbf24;
   }
 
-  .job-retry-note {
+  /* Real-time Progress Bar */
+  .job-progress-block {
     display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 2px;
+  }
+
+  .progress-bar-track {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, #818cf8);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .progress-page-count {
+    color: #93c5fd;
+    font-weight: 600;
+  }
+
+  .progress-stage-pill {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .progress-stage-pill.stage-downloading {
+    color: #93c5fd;
+    background: rgba(56, 189, 248, 0.1);
+  }
+
+  .progress-stage-pill.stage-uploading {
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.1);
+  }
+
+  .progress-stage-pill.stage-validating {
+    color: #fcd34d;
+    background: rgba(252, 211, 77, 0.1);
+  }
+
+  .progress-stage-pill.stage-staged {
+    color: #6ee7b7;
+    background: rgba(110, 231, 183, 0.1);
+  }
+
+  .pulse-stage-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: livePulse 1.5s infinite;
+  }
+
+  /* Discrete Neutral Recovered Incident Badge (NEVER RED!) */
+  .job-recovered-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #cbd5e1;
+    cursor: pointer;
+    width: fit-content;
+    margin-top: 2px;
+    transition: all 0.15s ease;
+  }
+
+  .job-recovered-badge:hover {
+    background: rgba(148, 163, 184, 0.15);
+    border-color: rgba(148, 163, 184, 0.35);
+  }
+
+  :global(.recovered-icon-check) {
+    color: #34d399;
+  }
+
+  :global(.recovered-icon-info) {
+    color: #94a3b8;
+  }
+
+  /* Action Menu ⋮ */
+  .job-actions-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .btn-icon-dots {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-icon-dots:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .job-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 170px;
+    background: #121524;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .dropdown-item.item-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+
+  .dropdown-item.item-warning:hover {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+  }
+
+  :global(.icon-sky) { color: #38bdf8; }
+  :global(.icon-amber) { color: #fbbf24; }
+  :global(.icon-rose) { color: #f43f5e; }
+  :global(.icon-cyan) { color: #06b6d4; }
+
+  /* ERROS & RETRIES SECTION */
+  .badge-amber {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .btn-retry-all-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-retry-all-header:hover {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #ffffff;
+  }
+
+  /* Grouped Retries Summary */
+  .retry-groups-container {
+    background: rgba(245, 158, 11, 0.04);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .retry-groups-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fbbf24;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .retry-groups-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .retry-group-pill {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.15s ease;
+  }
+
+  .retry-group-pill:hover,
+  .retry-group-pill.active-filter {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+
+  .group-pill-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .group-source {
+    color: #a78bfa;
+    text-transform: capitalize;
+  }
+
+  .group-sep {
+    color: #4b5266;
+  }
+
+  .group-pattern {
+    color: #f1f3fa;
+    font-weight: 600;
+  }
+
+  .group-counts {
+    color: #94a3b8;
+    font-size: 11px;
+  }
+
+  .group-pill-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .btn-group-filter {
+    font-size: 11px;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-group-filter:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .btn-group-retry {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-group-retry:hover {
+    background: rgba(245, 158, 11, 0.22);
+    color: #ffffff;
+  }
+
+  .active-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11.5px;
+    color: #fbbf24;
+    padding-top: 4px;
+    border-top: 1px solid rgba(245, 158, 11, 0.15);
+  }
+
+  .btn-clear-filter {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-clear-filter:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Retry Jobs List & Cards */
+  .retry-jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .retry-job-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.025);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    transition: all 0.2s ease;
+  }
+
+  .retry-job-card:hover {
+    background: rgba(245, 158, 11, 0.04);
+    border-color: rgba(245, 158, 11, 0.38);
+  }
+
+  .retry-countdown-badge {
+    display: inline-flex;
     align-items: center;
     gap: 4px;
     font-size: 11px;
     color: #fbbf24;
+    font-weight: 600;
   }
 
-  .job-error-preview {
+  .retry-attempts-count {
     font-size: 10.5px;
-    color: #f87171;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .job-recovered-note {
-    font-size: 10.5px;
+    font-weight: 700;
     color: #94a3b8;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .retry-error-summary-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.18);
+    padding: 4px 8px;
+    border-radius: 6px;
+    margin-top: 2px;
+    max-width: fit-content;
+  }
+
+  :global(.summary-warn-icon) {
+    color: #f87171;
+    flex-shrink: 0;
+  }
+
+  .summary-error-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 480px;
+  }
+
+  .retry-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .btn-action-retry-now {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 11px;
+    border-radius: 7px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-retry-now:hover {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: rgba(245, 158, 11, 0.55);
+    color: #ffffff;
+  }
+
+  .btn-action-details {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 11px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-details:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  /* Diagnostic Details Modal */
+  .modal-card-lg {
+    max-width: 680px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .diagnostic-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 16px 0;
+  }
+
+  .diagnostic-status-box {
+    padding: 14px 16px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .diagnostic-status-box.status-importing {
+    background: rgba(56, 189, 248, 0.06);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+  }
+
+  .diagnostic-status-box.status-retry {
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+
+  .diag-status-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .diag-status-title {
+    color: #ffffff;
+  }
+
+  .diag-status-badge-ok {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+  }
+
+  .diag-status-badge-retry {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .diag-retry-countdown-line {
+    font-size: 12px;
+    color: #cbd5e1;
+  }
+
+  .diag-retry-countdown-line strong {
+    color: #fbbf24;
+  }
+
+  .diag-incident-box {
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .diag-incident-box.recovered {
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+  }
+
+  .diag-incident-box.active-error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .incident-box-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #ffffff;
+  }
+
+  .incident-meta-row {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .incident-pre-wrap {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: #e2e8f0;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .diag-attributes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .diag-attr {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .attr-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .attr-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: #93c5fd;
+    word-break: break-all;
+  }
+
+  .attr-val {
+    font-size: 12.5px;
+    color: #cbd5e1;
+  }
+
+  .diag-payload-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .payload-json-pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: #e2e8f0;
+    background: #0d101d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 180px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .btn-modal-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-danger:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.55);
+    color: #ffffff;
+  }
+
+  /* Responsive Rules for Mobile */
+  @media (max-width: 768px) {
+    .active-job-card,
+    .retry-job-card {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .active-job-card .job-thumb,
+    .retry-job-card .job-thumb {
+      display: none;
+    }
+
+    .retry-card-actions {
+      width: 100%;
+      justify-content: flex-end;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 8px;
+    }
+
+    .diag-attributes-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .group-pill-actions {
+      margin-top: 4px;
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .retry-group-pill {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .summary-error-text {
+      max-width: 240px;
+    }
   }
 
   /* Staff Requests */

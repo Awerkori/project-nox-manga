@@ -476,6 +476,9 @@ export type Database = {
           next_run_at: string
           payload: Json
           priority: number
+          progress_current: number | null
+          progress_stage: string | null
+          progress_total: number | null
           recovered_at: string | null
           retry_reason: string | null
           source: string
@@ -499,6 +502,9 @@ export type Database = {
           next_run_at?: string
           payload?: Json
           priority?: number
+          progress_current?: number | null
+          progress_stage?: string | null
+          progress_total?: number | null
           recovered_at?: string | null
           retry_reason?: string | null
           source: string
@@ -522,6 +528,9 @@ export type Database = {
           next_run_at?: string
           payload?: Json
           priority?: number
+          progress_current?: number | null
+          progress_stage?: string | null
+          progress_total?: number | null
           recovered_at?: string | null
           retry_reason?: string | null
           source?: string

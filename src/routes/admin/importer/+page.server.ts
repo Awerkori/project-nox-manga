@@ -5,7 +5,8 @@ export const load: PageServerLoad = async ({ locals }) => {
   const [
     telemetryRes,
     stagedCountRes,
-    activeJobsRes,
+    importingJobsRes,
+    retryJobsRes,
     staffRequestsRes,
     nextQueuedRes,
     stagedRes,
@@ -28,13 +29,21 @@ export const load: PageServerLoad = async ({ locals }) => {
       .select('id', { count: 'exact', head: true })
       .eq('status', 'STAGED'),
 
-    // 3. Currently active importing or retry jobs
+    // 3. Currently active importing jobs (ONLY IMPORTING)
     locals.db
       .from('importer_queue')
       .select('*')
-      .in('status', ['IMPORTING', 'RETRY'])
+      .eq('status', 'IMPORTING')
       .order('updated_at', { ascending: false })
-      .limit(8),
+      .limit(16),
+
+    // 3b. Jobs awaiting retry (DEDICATED RETRIES AREA)
+    locals.db
+      .from('importer_queue')
+      .select('*')
+      .eq('status', 'RETRY')
+      .order('next_run_at', { ascending: true })
+      .limit(24),
 
     // 4. Staff priority requests
     locals.db
@@ -105,35 +114,27 @@ export const load: PageServerLoad = async ({ locals }) => {
       locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6)
     ]);
 
-  // Enrich active jobs with work titles
-  const activeJobs = activeJobsRes.data || [];
-  const activeWorkIds = Array.from(
-    new Set(activeJobs.map((j) => (j.payload as any)?.workId).filter(Boolean))
+  const importingJobs = importingJobsRes.data || [];
+  const retryJobs = retryJobsRes.data || [];
+  const queuedJobs = nextQueuedRes.data || [];
+
+  // Enrich jobs with work titles & covers
+  const neededWorkIds = Array.from(
+    new Set(
+      [...importingJobs, ...retryJobs, ...queuedJobs]
+        .map((j) => (j.payload as any)?.workId)
+        .filter(Boolean)
+    )
   );
-  let activeWorksMap: Record<string, any> = {};
-  if (activeWorkIds.length > 0) {
+
+  let worksMap: Record<string, any> = {};
+  if (neededWorkIds.length > 0) {
     const { data: worksFound } = await locals.db
       .from('works')
-      .select('id, title, cover_id')
-      .in('id', activeWorkIds);
+      .select('id, title, cover_id, slug')
+      .in('id', neededWorkIds);
     if (worksFound) {
-      activeWorksMap = Object.fromEntries(worksFound.map((w) => [w.id, w]));
-    }
-  }
-
-  // Enrich queued jobs with work titles
-  const queuedJobs = nextQueuedRes.data || [];
-  const queuedWorkIds = Array.from(
-    new Set(queuedJobs.map((j) => (j.payload as any)?.workId).filter(Boolean))
-  );
-  let queuedWorksMap: Record<string, any> = {};
-  if (queuedWorkIds.length > 0) {
-    const { data: qWorksFound } = await locals.db
-      .from('works')
-      .select('id, title, cover_id')
-      .in('id', queuedWorkIds);
-    if (qWorksFound) {
-      queuedWorksMap = Object.fromEntries(qWorksFound.map((w) => [w.id, w]));
+      worksMap = Object.fromEntries(worksFound.map((w) => [w.id, w]));
     }
   }
 
@@ -234,14 +235,22 @@ export const load: PageServerLoad = async ({ locals }) => {
       failed24h: failed24hRes.count || 0
     },
     recentFailures: recentFailuresRes.data || [],
-    activeJobs: activeJobs.map((j) => ({
+    importingJobs: importingJobs.map((j) => ({
       ...j,
-      work: (j.payload as any)?.workId ? activeWorksMap[(j.payload as any).workId] : null
+      work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
+    })),
+    retryJobs: retryJobs.map((j) => ({
+      ...j,
+      work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
+    })),
+    activeJobs: [...importingJobs, ...retryJobs].map((j) => ({
+      ...j,
+      work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
     staffRequests,
     queuedJobs: queuedJobs.map((j) => ({
       ...j,
-      work: (j.payload as any)?.workId ? queuedWorksMap[(j.payload as any).workId] : null
+      work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
     stagedChapters: stagedRes.data || [],
     sources: sourcesRes.data || [],
@@ -436,5 +445,131 @@ export const actions: Actions = {
     }
 
     return { success: true, message: 'Reconciliação multi-fonte iniciada com sucesso!' };
+  },
+
+  retryJob: async ({ request, locals }) => {
+    const form = await request.formData();
+    const jobId = form.get('job_id')?.toString();
+    if (!jobId) {
+      return fail(400, { error: 'ID de job ausente.' });
+    }
+
+    const { error } = await locals.db
+      .from('importer_queue')
+      .update({
+        status: 'QUEUED',
+        next_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: 'Job reenfileirado para execução imediata!' };
+  },
+
+  retryAll: async ({ request, locals }) => {
+    const form = await request.formData();
+    const source = form.get('source')?.toString();
+    const pattern = form.get('pattern')?.toString();
+
+    let query = locals.db
+      .from('importer_queue')
+      .update({
+        status: 'QUEUED',
+        next_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('status', 'RETRY');
+
+    if (source && source !== 'ALL') {
+      query = query.eq('source', source);
+    }
+    if (pattern && pattern.trim()) {
+      query = query.ilike('last_error', `%${pattern.trim()}%`);
+    }
+
+    const { error } = await query;
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: 'Todos os jobs do grupo reenfileirados para retry!' };
+  },
+
+  pauseJob: async ({ request, locals }) => {
+    const form = await request.formData();
+    const jobId = form.get('job_id')?.toString();
+    if (!jobId) {
+      return fail(400, { error: 'ID de job ausente.' });
+    }
+
+    // Postpone next_run_at by 24h
+    const { error } = await locals.db
+      .from('importer_queue')
+      .update({
+        status: 'RETRY',
+        next_run_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: 'Job pausado por 24 horas.' };
+  },
+
+  cancelJob: async ({ request, locals }) => {
+    const form = await request.formData();
+    const jobId = form.get('job_id')?.toString();
+    if (!jobId) {
+      return fail(400, { error: 'ID de job ausente.' });
+    }
+
+    const { error } = await locals.db
+      .from('importer_queue')
+      .update({
+        status: 'FAILED',
+        last_error: 'Cancelado manualmente via painel administrativo',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    if (error) {
+      return fail(400, { error: error.message });
+    }
+
+    return { success: true, message: 'Job cancelado com sucesso.' };
+  },
+
+  freezeWork: async ({ request, locals }) => {
+    const form = await request.formData();
+    const workId = form.get('work_id')?.toString();
+    if (!workId) {
+      return fail(400, { error: 'ID de obra ausente.' });
+    }
+
+    // Mark mappings as IGNORED
+    await locals.db
+      .from('importer_work_mappings')
+      .update({ sync_status: 'IGNORED', updated_at: new Date().toISOString() })
+      .eq('work_id', workId);
+
+    // Cancel queued / retry jobs for this work
+    await locals.db
+      .from('importer_queue')
+      .update({
+        status: 'FAILED',
+        last_error: 'Obra congelada manualmente pelo administrador',
+        updated_at: new Date().toISOString()
+      })
+      .in('status', ['QUEUED', 'RETRY'])
+      .filter('payload->>workId', 'eq', workId);
+
+    return { success: true, message: 'Obra congelada! Importações suspensas e jobs pendentes cancelados.' };
   }
 };
