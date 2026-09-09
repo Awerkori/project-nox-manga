@@ -152,6 +152,8 @@
           () => isPaused,
           {
             maxRetries: 6,
+            concurrency: 2,
+            basePaceMs: 250,
             onRetry: (_file, attempt, waitSeconds) => {
               currentRetryNotice = `Aguardando ${waitSeconds}s (tentativa ${attempt}) antes de prosseguir…`;
             }

@@ -379,7 +379,7 @@
           </div>
 
           {#if resume}
-            <a class="btn-read-hero" href="/ler/{resume}">
+            <a class="btn-read-hero mobile-only" href="/ler/{resume}">
               <BookOpen size={20} />
               <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
             </a>
@@ -405,11 +405,19 @@
       <!-- Chapters Section -->
       <section class="chapters-section">
         <div class="chapters-header">
-          <div>
+          <div class="chapters-header-info">
             <span class="badge-mini">CONTEÚDO</span>
             <h2 class="chapters-heading">Capítulos Disponíveis ({chapters.length})</h2>
           </div>
-          <span class="small muted">Atualizado em {date(data.work.updated_at)}</span>
+          <div class="chapters-header-right">
+            {#if resume}
+              <a class="btn-read-chapters-desktop desktop-only" href="/ler/{resume}">
+                <BookOpen size={18} />
+                <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
+              </a>
+            {/if}
+            <span class="small muted">Atualizado em {date(data.work.updated_at)}</span>
+          </div>
         </div>
 
         <div class="chapters-toolbar">
@@ -998,6 +1006,37 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .chapters-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .btn-read-chapters-desktop {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 750;
+    color: #ffffff;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    box-shadow: 0 4px 16px rgba(109, 40, 217, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+  }
+
+  .btn-read-chapters-desktop:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #9333ea, #7c3aed);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.4);
   }
 
   .badge-mini {
@@ -1206,8 +1245,28 @@
       gap: 20px;
     }
 
+    .kuro-sidebar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      margin: 0 auto;
+    }
+
     .work-cover-wrap {
       max-width: 170px;
+      width: 170px;
+      margin: 0 auto 16px auto;
+      display: flex;
+      justify-content: center;
+      align-self: center;
+    }
+
+    .work-cover {
+      width: 100%;
+      margin: 0 auto;
+      display: block;
     }
 
     .work-title {

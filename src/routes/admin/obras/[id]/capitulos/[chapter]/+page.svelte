@@ -16,7 +16,8 @@
     Loader2,
     Trash2,
     Layers,
-    FileText
+    FileText,
+    Clock
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -34,7 +35,10 @@
   let pendingUploads = $state<File[]>([]),
     pauseRequested = $state(false),
     uploading = $state(false);
-  let batchTotal = 0,
+  let uploadSpeedMBs = $state(0),
+    inCooldown = $state(false),
+    cooldownSeconds = $state(0);
+  let batchTotal = $state(0),
     savedNavigation = false;
   let savedVersion = $state(
     JSON.stringify({
@@ -140,8 +144,19 @@
         () => pauseRequested,
         {
           maxRetries: 6,
+          concurrency: 2,
+          basePaceMs: 250,
           onRetry: (_file, attempt, waitSeconds) => {
+            inCooldown = true;
+            cooldownSeconds = waitSeconds;
             notice = `Aguardando ${waitSeconds}s antes de tentar novamente (tentativa ${attempt})…`;
+          },
+          onProgress: (stats) => {
+            uploadSpeedMBs = stats.speedMBs;
+            inCooldown = stats.inCooldown;
+            if (stats.cooldownSecondsRemaining !== undefined) {
+              cooldownSeconds = stats.cooldownSecondsRemaining;
+            }
           }
         }
       );
@@ -370,7 +385,32 @@
         </div>
       {/if}
 
-      {#if busy && progress > 0}
+      {#if uploading}
+        <div class="upload-live-metrics-card">
+          <div class="metrics-header-row">
+            <span class="metrics-title">
+              Enviando página <strong>{pages.length + 1}</strong> de <strong>{batchTotal}</strong>
+            </span>
+            <div class="metrics-chips">
+              {#if uploadSpeedMBs > 0}
+                <span class="metric-chip speed">{uploadSpeedMBs} MB/s</span>
+              {/if}
+              <span class="metric-chip percent">{progress}%</span>
+            </div>
+          </div>
+
+          <div class="progress" style="margin:8px 0">
+            <span style="width:{progress}%"></span>
+          </div>
+
+          {#if inCooldown && cooldownSeconds > 0}
+            <div class="cooldown-alert">
+              <Clock size={13} class="spin" />
+              <span>Rate limit temporário. Cooldown ativo: <strong>{cooldownSeconds}s</strong> (retomará na velocidade normal).</span>
+            </div>
+          {/if}
+        </div>
+      {:else if busy && progress > 0}
         <div class="progress" style="margin:20px 0">
           <span style="width:{progress}%"></span>
         </div>
@@ -992,5 +1032,72 @@
 
   .page-controls button:last-child {
     margin-left: auto;
+  }
+
+  .upload-live-metrics-card {
+    background: rgba(223, 194, 141, 0.04);
+    border: 1px solid rgba(223, 194, 141, 0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 18px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .metrics-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .metrics-title {
+    color: #e2e8f0;
+  }
+
+  .metrics-title strong {
+    color: #dfc28d;
+  }
+
+  .metrics-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .metric-chip {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-chip.speed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .metric-chip.percent {
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.3);
+  }
+
+  .cooldown-alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    margin-top: 4px;
   }
 </style>

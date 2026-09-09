@@ -20,8 +20,13 @@
       profile: null,
       preview: false,
       progress: null,
-      previous: null,
-      next: null
+      previous: number > 1 ? { id: 'qa-first', number: 1 } : null,
+      next: number < 3 ? { id: `qa-${number + 1}`, number: number + 1 } : null,
+      siblings: [
+        { id: 'qa-first', number: 1 },
+        { id: 'qa-second', number: 2 },
+        { id: 'qa-third', number: 3 }
+      ]
     };
   }
   let data = $state<any>(chapter('qa-first', 1, 3));

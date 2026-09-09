@@ -10,7 +10,11 @@
     XCircle,
     ArrowUpRight,
     Search,
-    Shield
+    Shield,
+    ChevronDown,
+    ChevronUp,
+    Layers,
+    List
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { enhance } from '$app/forms';
@@ -20,6 +24,16 @@
   let resolvingId = $state<string | null>(null);
   let resolveAction = $state<'RESOLVIDO' | 'REJEITADO'>('RESOLVIDO');
   let resolutionNotes = $state('');
+
+  let viewMode = $state<'CLUSTERED' | 'LIST'>('CLUSTERED');
+  let expandedClusters = $state<Record<string, boolean>>({});
+  let batchResolvingCluster = $state<any | null>(null);
+  let batchAction = $state<'RESOLVIDO' | 'REJEITADO'>('RESOLVIDO');
+  let batchNotes = $state('');
+
+  function toggleCluster(key: string) {
+    expandedClusters[key] = !expandedClusters[key];
+  }
 
   function getStatusBadge(status: string) {
     switch (status) {
@@ -158,198 +172,451 @@
     </div>
   </div>
 
-  <!-- Reports List -->
-  {#if data.reports.length > 0}
-    <div class="reports-list">
-      {#each data.reports as report (report.id)}
-        {@const statusMeta = getStatusBadge(report.status)}
-        {@const TargetIcon = getTargetIcon(report.target_type)}
-        <div class="report-card" class:card-novo={report.status === 'NOVO'}>
-          <div class="report-card-header">
-            <div class="target-badge-cluster">
-              <span class="target-type-badge">
-                <TargetIcon size={12} />
-                <span>{getTargetLabel(report.target_type)}</span>
-              </span>
-              <span class="report-status-badge {statusMeta.class}">
-                {statusMeta.label}
-              </span>
-            </div>
+  <!-- View Mode Switcher -->
+  <div class="view-mode-bar">
+    <div class="view-mode-tabs">
+      <button
+        type="button"
+        class="view-mode-btn"
+        class:active={viewMode === 'CLUSTERED'}
+        onclick={() => (viewMode = 'CLUSTERED')}
+      >
+        <Layers size={14} />
+        <span>Agrupado por Alvo ({data.clusters.length})</span>
+      </button>
+      <button
+        type="button"
+        class="view-mode-btn"
+        class:active={viewMode === 'LIST'}
+        onclick={() => (viewMode = 'LIST')}
+      >
+        <List size={14} />
+        <span>Lista Detalhada ({data.reports.length})</span>
+      </button>
+    </div>
+    <span class="view-mode-hint">
+      {viewMode === 'CLUSTERED'
+        ? 'Denúncias sobre o mesmo alvo são unificadas para resolução rápida em lote.'
+        : 'Exibindo cada registro de denúncia individualmente.'}
+    </span>
+  </div>
 
-            <span class="report-timestamp">
-              <Clock size={12} />
-              <span>{relativeTime(report.created_at)}</span>
-            </span>
-          </div>
+  <!-- Reports Display -->
+  {#if viewMode === 'CLUSTERED'}
+    {#if data.clusters.length > 0}
+      <div class="clusters-list">
+        {#each data.clusters as cluster (cluster.clusterKey)}
+          {@const statusMeta = getStatusBadge(cluster.status)}
+          {@const TargetIcon = getTargetIcon(cluster.targetType)}
+          {@const isExpanded = expandedClusters[cluster.clusterKey]}
 
-          <!-- Target context -->
-          <div class="target-context">
-            {#if report.target_type === 'WORK' && report.work}
-              <div class="target-item">
-                <span class="target-label">Obra:</span>
-                <a href="/admin/obras/{report.work.id}" class="target-link" target="_blank">
-                  <strong>{report.work.title}</strong>
-                  <ArrowUpRight size={12} />
-                </a>
-              </div>
-            {:else if report.target_type === 'CHAPTER' && report.chapter}
-              <div class="target-item">
-                <span class="target-label">Capítulo:</span>
-                <span class="target-text">
-                  Capítulo {report.chapter.number} {report.chapter.title ? `— ${report.chapter.title}` : ''}
+          <div class="cluster-card" class:card-novo={cluster.status === 'NOVO'}>
+            <div class="cluster-card-header">
+              <div class="target-badge-cluster">
+                <span class="target-type-badge">
+                  <TargetIcon size={12} />
+                  <span>{getTargetLabel(cluster.targetType)}</span>
                 </span>
+                <span class="report-status-badge {statusMeta.class}">
+                  {statusMeta.label}
+                </span>
+                {#if cluster.count > 1}
+                  <span class="cluster-count-badge" class:has-new={cluster.newCount > 0}>
+                    {cluster.count} denúncias acumuladas
+                  </span>
+                {/if}
               </div>
-            {:else if report.target_type === 'COMMENT' && report.comment}
-              <div class="target-item comment-preview">
-                <span class="target-label">Comentário:</span>
-                <blockquote class="target-quote">"{report.comment.body}"</blockquote>
+
+              <span class="report-timestamp">
+                <Clock size={12} />
+                <span>Última {relativeTime(cluster.latestCreatedAt)}</span>
+              </span>
+            </div>
+
+            <!-- Target Title and Link -->
+            <div class="cluster-target-title-block">
+              {#if cluster.targetLink}
+                <a href={cluster.targetLink} class="cluster-target-link" target="_blank">
+                  <h3 class="cluster-target-heading">{cluster.targetTitle}</h3>
+                  <ArrowUpRight size={14} />
+                </a>
+              {:else}
+                <h3 class="cluster-target-heading">{cluster.targetTitle}</h3>
+              {/if}
+            </div>
+
+            <!-- Reasons Tags -->
+            <div class="cluster-reasons-wrap">
+              <span class="cluster-reasons-label">Motivos apontados:</span>
+              <div class="cluster-reasons-list">
+                {#each cluster.reasons as r}
+                  <span class="cluster-reason-pill">{r}</span>
+                {/each}
               </div>
-            {/if}
-          </div>
-
-          <!-- Report Reason & Details -->
-          <div class="report-body">
-            <div class="reason-block">
-              <span class="reason-label">Motivo:</span>
-              <span class="reason-text">{report.reason}</span>
             </div>
-            {#if report.details}
-              <p class="details-text">{report.details}</p>
-            {/if}
-          </div>
 
-          <!-- Reporter & Assigned meta -->
-          <div class="report-actors">
-            <div class="actor-info">
-              <User size={13} />
-              <span>Denunciado por: <strong>{report.reporter?.display_name || report.reporter?.username || 'Usuário'}</strong></span>
-            </div>
-            {#if report.assigned}
-              <div class="actor-info assigned">
-                <Shield size={13} />
-                <span>Atribuído a: <strong>{report.assigned.display_name || report.assigned.username}</strong></span>
-              </div>
-            {/if}
-          </div>
+            <!-- Action Bar -->
+            <div class="cluster-action-bar">
+              <div class="cluster-primary-actions">
+                {#if cluster.status === 'NOVO'}
+                  <form method="POST" action="?/resolveBatch" use:enhance>
+                    <input type="hidden" name="reportIds" value={cluster.reportIds.join(',')} />
+                    <input type="hidden" name="status" value="EM_ANALISE" />
+                    <button type="submit" class="btn-action btn-analise">
+                      <Clock size={13} />
+                      <span>Assumir Análise ({cluster.count})</span>
+                    </button>
+                  </form>
+                {/if}
 
-          <!-- Resolution notes (if already resolved or rejected) -->
-          {#if report.resolution_notes}
-            <div class="resolution-notes-box">
-              <span class="notes-label">Parecer da moderação:</span>
-              <p class="notes-text">{report.resolution_notes}</p>
-            </div>
-          {/if}
-
-          <!-- Action bar -->
-          <div class="report-actions">
-            {#if report.status === 'NOVO'}
-              <form method="POST" action="?/updateStatus" use:enhance>
-                <input type="hidden" name="reportId" value={report.id} />
-                <input type="hidden" name="status" value="EM_ANALISE" />
-                <button type="submit" class="btn-action btn-analise">
-                  <Clock size={13} />
-                  <span>Assumir Análise</span>
-                </button>
-              </form>
-            {/if}
-
-            {#if report.status !== 'RESOLVIDO' && report.status !== 'REJEITADO'}
-              <button
-                type="button"
-                class="btn-action btn-resolvido"
-                onclick={() => {
-                  resolvingId = report.id;
-                  resolveAction = 'RESOLVIDO';
-                  resolutionNotes = '';
-                }}
-              >
-                <CheckCircle2 size={13} />
-                <span>Concluir / Resolver</span>
-              </button>
-
-              <button
-                type="button"
-                class="btn-action btn-rejeitado"
-                onclick={() => {
-                  resolvingId = report.id;
-                  resolveAction = 'REJEITADO';
-                  resolutionNotes = '';
-                }}
-              >
-                <XCircle size={13} />
-                <span>Rejeitar</span>
-              </button>
-            {/if}
-          </div>
-
-          <!-- Inline resolution dialog -->
-          {#if resolvingId === report.id}
-            <div class="inline-resolve-panel">
-              <form
-                method="POST"
-                action="?/updateStatus"
-                use:enhance={() => {
-                  return async ({ result }) => {
-                    if (result.type === 'success') {
-                      resolvingId = null;
-                    }
-                  };
-                }}
-              >
-                <input type="hidden" name="reportId" value={report.id} />
-                <input type="hidden" name="status" value={resolveAction} />
-                
-                <label for="notes-{report.id}" class="resolve-label">
-                  Parecer da Moderação ({resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Motivo da Rejeição'}):
-                </label>
-                <textarea
-                  id="notes-{report.id}"
-                  name="notes"
-                  bind:value={resolutionNotes}
-                  class="resolve-textarea"
-                  rows="2"
-                  placeholder="Explique sucintamente a medida tomada ou o motivo..."
-                  required
-                ></textarea>
-
-                <div class="resolve-form-btns">
-                  <button
-                    type="submit"
-                    class="btn-resolve-submit"
-                    class:btn-resolvido-solid={resolveAction === 'RESOLVIDO'}
-                    class:btn-rejeitado-solid={resolveAction === 'REJEITADO'}
-                  >
-                    Confirmar {resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Rejeição'}
-                  </button>
+                {#if cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO'}
                   <button
                     type="button"
-                    class="btn-cancel"
-                    onclick={() => (resolvingId = null)}
+                    class="btn-action btn-resolvido"
+                    onclick={() => {
+                      batchResolvingCluster = cluster;
+                      batchAction = 'RESOLVIDO';
+                      batchNotes = '';
+                    }}
                   >
-                    Cancelar
+                    <CheckCircle2 size={13} />
+                    <span>Resolver Alvo ({cluster.count})</span>
                   </button>
-                </div>
-              </form>
+
+                  <button
+                    type="button"
+                    class="btn-action btn-rejeitado"
+                    onclick={() => {
+                      batchResolvingCluster = cluster;
+                      batchAction = 'REJEITADO';
+                      batchNotes = '';
+                    }}
+                  >
+                    <XCircle size={13} />
+                    <span>Rejeitar</span>
+                  </button>
+                {/if}
+              </div>
+
+              <button
+                type="button"
+                class="btn-expand-cluster"
+                onclick={() => toggleCluster(cluster.clusterKey)}
+              >
+                <span>{isExpanded ? 'Ocultar' : 'Inspecionar'} {cluster.count} denúncia{cluster.count > 1 ? 's' : ''}</span>
+                {#if isExpanded}
+                  <ChevronUp size={14} />
+                {:else}
+                  <ChevronDown size={14} />
+                {/if}
+              </button>
             </div>
-          {/if}
-        </div>
-      {/each}
-    </div>
-  {:else}
-    <div class="reports-empty">
-      <div class="empty-icon-circle">
-        <CheckCircle2 size={32} />
+
+            <!-- Inline Batch Resolution Panel -->
+            {#if batchResolvingCluster?.clusterKey === cluster.clusterKey}
+              <div class="inline-resolve-panel">
+                <form
+                  method="POST"
+                  action="?/resolveBatch"
+                  use:enhance={() => {
+                    return async ({ result }) => {
+                      if (result.type === 'success') {
+                        batchResolvingCluster = null;
+                      }
+                    };
+                  }}
+                >
+                  <input type="hidden" name="reportIds" value={cluster.reportIds.join(',')} />
+                  <input type="hidden" name="status" value={batchAction} />
+
+                  <label for="cluster-notes-{cluster.clusterKey}" class="resolve-label">
+                    Parecer da Moderação ({batchAction === 'RESOLVIDO' ? `Resolução das ${cluster.count} denúncias` : 'Motivo da Rejeição'}):
+                  </label>
+                  <textarea
+                    id="cluster-notes-{cluster.clusterKey}"
+                    name="notes"
+                    bind:value={batchNotes}
+                    class="resolve-textarea"
+                    rows="2"
+                    placeholder="Explique sucintamente a medida tomada (ex: imagens reupadas, numeração corrigida)..."
+                    required
+                  ></textarea>
+
+                  <div class="resolve-form-btns">
+                    <button
+                      type="submit"
+                      class="btn-resolve-submit"
+                      class:btn-resolvido-solid={batchAction === 'RESOLVIDO'}
+                      class:btn-rejeitado-solid={batchAction === 'REJEITADO'}
+                    >
+                      Confirmar {batchAction === 'RESOLVIDO' ? 'Resolução em Lote' : 'Rejeição em Lote'}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-cancel"
+                      onclick={() => (batchResolvingCluster = null)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            {/if}
+
+            <!-- Expanded Drawer with individual report records -->
+            {#if isExpanded}
+              <div class="cluster-expanded-drawer">
+                <h4 class="drawer-heading">Denúncias registradas para este alvo ({cluster.reports.length})</h4>
+                <div class="drawer-reports-list">
+                  {#each cluster.reports as rep (rep.id)}
+                    <div class="drawer-report-row">
+                      <div class="drawer-report-header">
+                        <div class="drawer-reporter-meta">
+                          <User size={12} />
+                          <strong class="drawer-reporter-name">
+                            {rep.reporter?.display_name || rep.reporter?.username || 'Usuário anônimo'}
+                          </strong>
+                          <span class="drawer-dot">·</span>
+                          <span class="drawer-time">{relativeTime(rep.created_at)}</span>
+                        </div>
+                        <span class="report-status-badge {getStatusBadge(rep.status).class}">
+                          {getStatusBadge(rep.status).label}
+                        </span>
+                      </div>
+
+                      <div class="drawer-report-reason">
+                        <strong>Motivo:</strong> {rep.reason}
+                      </div>
+
+                      {#if rep.details}
+                        <div class="drawer-report-details">
+                          "{rep.details}"
+                        </div>
+                      {/if}
+
+                      {#if rep.resolution_notes}
+                        <div class="drawer-report-notes">
+                          <strong>Parecer da Staff:</strong> {rep.resolution_notes}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/each}
       </div>
-      <h3 class="empty-heading">Nenhuma denúncia encontrada</h3>
-      <p class="empty-paragraph">
-        {data.statusFilter !== 'ALL'
-          ? `Não há denúncias com o filtro "${data.statusFilter}".`
-          : 'A comunidade está pacífica e nenhuma infração foi reportada no momento.'}
-      </p>
-      {#if data.statusFilter !== 'ALL' || data.typeFilter !== 'ALL'}
-        <a href="/admin/reports" class="btn-clear-filters">Limpar filtros</a>
-      {/if}
-    </div>
+    {:else}
+      <div class="reports-empty">
+        <div class="empty-icon-circle">
+          <CheckCircle2 size={32} />
+        </div>
+        <h3 class="empty-heading">Nenhuma denúncia encontrada</h3>
+        <p class="empty-paragraph">
+          {data.statusFilter !== 'ALL'
+            ? `Não há denúncias com o filtro "${data.statusFilter}".`
+            : 'A comunidade está pacífica e nenhuma infração foi reportada no momento.'}
+        </p>
+        {#if data.statusFilter !== 'ALL' || data.typeFilter !== 'ALL'}
+          <a href="/admin/reports" class="btn-clear-filters">Limpar filtros</a>
+        {/if}
+      </div>
+    {/if}
+  {:else}
+    <!-- Detailed Flat List View -->
+    {#if data.reports.length > 0}
+      <div class="reports-list">
+        {#each data.reports as report (report.id)}
+          {@const statusMeta = getStatusBadge(report.status)}
+          {@const TargetIcon = getTargetIcon(report.target_type)}
+          <div class="report-card" class:card-novo={report.status === 'NOVO'}>
+            <div class="report-card-header">
+              <div class="target-badge-cluster">
+                <span class="target-type-badge">
+                  <TargetIcon size={12} />
+                  <span>{getTargetLabel(report.target_type)}</span>
+                </span>
+                <span class="report-status-badge {statusMeta.class}">
+                  {statusMeta.label}
+                </span>
+              </div>
+
+              <span class="report-timestamp">
+                <Clock size={12} />
+                <span>{relativeTime(report.created_at)}</span>
+              </span>
+            </div>
+
+            <!-- Target context -->
+            <div class="target-context">
+              {#if report.target_type === 'WORK' && report.work}
+                <div class="target-item">
+                  <span class="target-label">Obra:</span>
+                  <a href="/admin/obras/{report.work.id}" class="target-link" target="_blank">
+                    <strong>{report.work.title}</strong>
+                    <ArrowUpRight size={12} />
+                  </a>
+                </div>
+              {:else if report.target_type === 'CHAPTER' && report.chapter}
+                <div class="target-item">
+                  <span class="target-label">Capítulo:</span>
+                  <span class="target-text">
+                    Capítulo {report.chapter.number} {report.chapter.title ? `— ${report.chapter.title}` : ''}
+                  </span>
+                </div>
+              {:else if report.target_type === 'COMMENT' && report.comment}
+                <div class="target-item comment-preview">
+                  <span class="target-label">Comentário:</span>
+                  <blockquote class="target-quote">"{report.comment.body}"</blockquote>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Report Reason & Details -->
+            <div class="report-body">
+              <div class="reason-block">
+                <span class="reason-label">Motivo:</span>
+                <span class="reason-text">{report.reason}</span>
+              </div>
+              {#if report.details}
+                <p class="details-text">{report.details}</p>
+              {/if}
+            </div>
+
+            <!-- Reporter & Assigned meta -->
+            <div class="report-actors">
+              <div class="actor-info">
+                <User size={13} />
+                <span>Denunciado por: <strong>{report.reporter?.display_name || report.reporter?.username || 'Usuário'}</strong></span>
+              </div>
+              {#if report.assigned}
+                <div class="actor-info assigned">
+                  <Shield size={13} />
+                  <span>Atribuído a: <strong>{report.assigned.display_name || report.assigned.username}</strong></span>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Resolution notes (if already resolved or rejected) -->
+            {#if report.resolution_notes}
+              <div class="resolution-notes-box">
+                <span class="notes-label">Parecer da moderação:</span>
+                <p class="notes-text">{report.resolution_notes}</p>
+              </div>
+            {/if}
+
+            <!-- Action bar -->
+            <div class="report-actions">
+              {#if report.status === 'NOVO'}
+                <form method="POST" action="?/updateStatus" use:enhance>
+                  <input type="hidden" name="reportId" value={report.id} />
+                  <input type="hidden" name="status" value="EM_ANALISE" />
+                  <button type="submit" class="btn-action btn-analise">
+                    <Clock size={13} />
+                    <span>Assumir Análise</span>
+                  </button>
+                </form>
+              {/if}
+
+              {#if report.status !== 'RESOLVIDO' && report.status !== 'REJEITADO'}
+                <button
+                  type="button"
+                  class="btn-action btn-resolvido"
+                  onclick={() => {
+                    resolvingId = report.id;
+                    resolveAction = 'RESOLVIDO';
+                    resolutionNotes = '';
+                  }}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Concluir / Resolver</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-action btn-rejeitado"
+                  onclick={() => {
+                    resolvingId = report.id;
+                    resolveAction = 'REJEITADO';
+                    resolutionNotes = '';
+                  }}
+                >
+                  <XCircle size={13} />
+                  <span>Rejeitar</span>
+                </button>
+              {/if}
+            </div>
+
+            <!-- Inline resolution dialog -->
+            {#if resolvingId === report.id}
+              <div class="inline-resolve-panel">
+                <form
+                  method="POST"
+                  action="?/updateStatus"
+                  use:enhance={() => {
+                    return async ({ result }) => {
+                      if (result.type === 'success') {
+                        resolvingId = null;
+                      }
+                    };
+                  }}
+                >
+                  <input type="hidden" name="reportId" value={report.id} />
+                  <input type="hidden" name="status" value={resolveAction} />
+                  
+                  <label for="notes-{report.id}" class="resolve-label">
+                    Parecer da Moderação ({resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Motivo da Rejeição'}):
+                  </label>
+                  <textarea
+                    id="notes-{report.id}"
+                    name="notes"
+                    bind:value={resolutionNotes}
+                    class="resolve-textarea"
+                    rows="2"
+                    placeholder="Explique sucintamente a medida tomada ou o motivo..."
+                    required
+                  ></textarea>
+
+                  <div class="resolve-form-btns">
+                    <button
+                      type="submit"
+                      class="btn-resolve-submit"
+                      class:btn-resolvido-solid={resolveAction === 'RESOLVIDO'}
+                      class:btn-rejeitado-solid={resolveAction === 'REJEITADO'}
+                    >
+                      Confirmar {resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Rejeição'}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-cancel"
+                      onclick={() => (resolvingId = null)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="reports-empty">
+        <div class="empty-icon-circle">
+          <CheckCircle2 size={32} />
+        </div>
+        <h3 class="empty-heading">Nenhuma denúncia encontrada</h3>
+        <p class="empty-paragraph">
+          {data.statusFilter !== 'ALL'
+            ? `Não há denúncias com o filtro "${data.statusFilter}".`
+            : 'A comunidade está pacífica e nenhuma infração foi reportada no momento.'}
+        </p>
+        {#if data.statusFilter !== 'ALL' || data.typeFilter !== 'ALL'}
+          <a href="/admin/reports" class="btn-clear-filters">Limpar filtros</a>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -485,6 +752,287 @@
     background: rgba(181, 154, 245, 0.15);
     color: #cbb4ff;
     font-weight: 700;
+  }
+
+  /* View Mode Switcher */
+  .view-mode-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .view-mode-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9px;
+  }
+
+  .view-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 7px;
+    background: transparent;
+    border: none;
+    color: #8c93a8;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .view-mode-btn:hover {
+    color: #ffffff;
+  }
+
+  .view-mode-btn.active {
+    background: rgba(223, 194, 141, 0.14);
+    color: #dfc28d;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .view-mode-hint {
+    font-size: 12px;
+    color: #7b8396;
+  }
+
+  /* Clusters List */
+  .clusters-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .cluster-card {
+    background: rgba(18, 22, 34, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 0.2s ease;
+  }
+
+  .cluster-card.card-novo {
+    border-left: 4px solid #ef4444;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.04) 0%, rgba(18, 22, 34, 0.7) 100%);
+  }
+
+  .cluster-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .cluster-count-badge {
+    font-size: 11px;
+    font-weight: 750;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .cluster-count-badge.has-new {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+
+  .cluster-target-title-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cluster-target-heading {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  .cluster-target-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #ffffff;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .cluster-target-link:hover {
+    color: #dfc28d;
+  }
+
+  .cluster-reasons-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
+  .cluster-reasons-label {
+    font-size: 11px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #7b8396;
+  }
+
+  .cluster-reasons-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .cluster-reason-pill {
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(223, 194, 141, 0.1);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.25);
+  }
+
+  .cluster-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .cluster-primary-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-expand-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #c9cddb;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-expand-cluster:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .cluster-expanded-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 4px;
+  }
+
+  .drawer-heading {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #dfc28d;
+  }
+
+  .drawer-reports-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .drawer-report-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .drawer-report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .drawer-reporter-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  .drawer-reporter-name {
+    color: #ffffff;
+  }
+
+  .drawer-dot {
+    color: #4b5266;
+  }
+
+  .drawer-time {
+    color: #646b80;
+    font-size: 11px;
+  }
+
+  .drawer-report-reason {
+    font-size: 12.5px;
+    color: #e2e8f0;
+  }
+
+  .drawer-report-details {
+    font-size: 12px;
+    color: #94a3b8;
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 6px 10px;
+    border-radius: 5px;
+  }
+
+  .drawer-report-notes {
+    font-size: 11.5px;
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.08);
+    padding: 6px 10px;
+    border-radius: 5px;
   }
 
   /* Reports List */

@@ -10,7 +10,12 @@
     Clock,
     CheckCircle2,
     Activity,
-    Layers
+    Layers,
+    Flag,
+    Users,
+    AlertTriangle,
+    ShieldAlert,
+    Settings
   } from '@lucide/svelte';
   import { relativeTime, kindLabels } from '$lib/types';
 
@@ -27,24 +32,28 @@
     month: 'long'
   }).format(new Date());
   const capitalizedToday = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
+
+  let hasAttentionItems = $derived(
+    data.pendingReportsCount > 0 || data.draftsCount > 0 || (data.unrecoveredFailures || 0) > 0
+  );
 </script>
 
 <svelte:head>
-  <title>Visão Geral — Painel Editorial Project Nox</title>
+  <title>Visão Geral — Painel de Controle Project Nox</title>
 </svelte:head>
 
 <div class="editorial-workspace">
-  <!-- 1. Header: Greeting & Date -->
+  <!-- 1. Header: Greeting, Date & Main Actions -->
   <header class="workspace-header">
     <div class="header-text-block">
       <div class="eyebrow-line">
-        <span class="eyebrow-tag">PAINEL EDITORIAL</span>
+        <span class="eyebrow-tag">PAINEL DE CONTROLE</span>
         <span class="eyebrow-sep">·</span>
         <span class="eyebrow-date">{capitalizedToday}</span>
       </div>
       <h1 class="greeting-heading">Olá, {firstName}</h1>
       <p class="greeting-sub">
-        Acompanhe a mesa de edição, publique novos capítulos e monitore o fluxo de importação.
+        Central de operações: acompanhe a mesa de edição, modere denúncias, gerencie a equipe e monitore o fluxo de importação.
       </p>
     </div>
 
@@ -56,40 +65,122 @@
       </a>
       <a href="/admin/importer" class="btn-secondary-action">
         <Activity size={15} />
-        <span>Importer</span>
+        <span>Central do Importer</span>
+      </a>
+      <a href="/admin/reports" class="btn-secondary-action" class:has-reports-alert={data.pendingReportsCount > 0}>
+        <Flag size={15} />
+        <span>Denúncias</span>
+        {#if data.pendingReportsCount > 0}
+          <span class="reports-header-badge">{data.pendingReportsCount}</span>
+        {/if}
+      </a>
+      <a href="/admin/staff" class="btn-secondary-action">
+        <Users size={15} />
+        <span>Gestão da Staff</span>
       </a>
     </div>
   </header>
 
-  <!-- 2. Light Metric Summary Bar (Spacious Pills) -->
-  <section class="metrics-summary-bar" aria-label="Resumo do Catálogo">
-    <a href="/admin/obras" class="metric-pill">
-      <div class="pill-dot gold"></div>
-      <span class="pill-label">Obras:</span>
-      <strong class="pill-value">{data.works}</strong>
-    </a>
-
-    <div class="metric-pill">
-      <div class="pill-dot purple"></div>
-      <span class="pill-label">Capítulos no ar:</span>
-      <strong class="pill-value">{data.chapters}</strong>
+  <!-- 2. "Precisa de Atenção" Triage Section -->
+  <section class="triage-section" aria-label="Itens que precisam de atenção">
+    <div class="triage-header">
+      <div class="triage-title-group">
+        <span class="triage-indicator" class:alert={hasAttentionItems} class:green={!hasAttentionItems}></span>
+        <h2 class="triage-title">Precisa de Atenção</h2>
+      </div>
+      {#if hasAttentionItems}
+        <span class="triage-counter-tag">Ações prioritárias pendentes</span>
+      {/if}
     </div>
 
-    <a href="#mesa-de-edicao" class="metric-pill" class:has-alert={data.draftsCount > 0}>
-      <div class="pill-dot amber" class:pulse={data.draftsCount > 0}></div>
-      <span class="pill-label">Na Mesa:</span>
-      <strong class="pill-value">{data.draftsCount}</strong>
-      {#if data.draftsCount > 0}
-        <span class="pill-badge">pendentes</span>
-      {/if}
-    </a>
+    {#if hasAttentionItems}
+      <div class="triage-grid">
+        {#if data.pendingReportsCount > 0}
+          <a href="/admin/reports" class="triage-card triage-crimson">
+            <div class="triage-card-icon crimson">
+              <ShieldAlert size={20} />
+            </div>
+            <div class="triage-card-body">
+              <div class="triage-card-top">
+                <span class="triage-card-badge crimson">Moderação</span>
+                <span class="triage-card-count">{data.pendingReportsCount}</span>
+              </div>
+              <strong class="triage-card-title">
+                {data.pendingReportsCount} denúncia{data.pendingReportsCount > 1 ? 's' : ''} pendente{data.pendingReportsCount > 1 ? 's' : ''}
+              </strong>
+              <p class="triage-card-desc">
+                Conteúdos e comentários sinalizados pela comunidade aguardando revisão.
+              </p>
+            </div>
+            <div class="triage-card-action crimson">
+              <span>Moderar</span>
+              <ArrowRight size={13} />
+            </div>
+          </a>
+        {/if}
 
-    <a href="/admin/importer" class="metric-pill">
-      <div class="pill-dot green pulse"></div>
-      <span class="pill-label">Importer:</span>
-      <strong class="pill-value">{data.importerActiveCount}</strong>
-      <span class="pill-badge">em fila</span>
-    </a>
+        {#if data.draftsCount > 0}
+          <a href="#mesa-de-edicao" class="triage-card triage-amber">
+            <div class="triage-card-icon amber">
+              <FileEdit size={20} />
+            </div>
+            <div class="triage-card-body">
+              <div class="triage-card-top">
+                <span class="triage-card-badge amber">Editorial</span>
+                <span class="triage-card-count">{data.draftsCount}</span>
+              </div>
+              <strong class="triage-card-title">
+                {data.draftsCount} capítulo{data.draftsCount > 1 ? 's' : ''} em rascunho
+              </strong>
+              <p class="triage-card-desc">
+                Capítulos criados na mesa de edição aguardando upload final e publicação.
+              </p>
+            </div>
+            <div class="triage-card-action amber">
+              <span>Ver Mesa</span>
+              <ArrowRight size={13} />
+            </div>
+          </a>
+        {/if}
+
+        {#if (data.unrecoveredFailures || 0) > 0}
+          <a href="/admin/importer" class="triage-card triage-rose">
+            <div class="triage-card-icon rose">
+              <AlertTriangle size={20} />
+            </div>
+            <div class="triage-card-body">
+              <div class="triage-card-top">
+                <span class="triage-card-badge rose">Importer</span>
+                <span class="triage-card-count">{data.unrecoveredFailures}</span>
+              </div>
+              <strong class="triage-card-title">
+                {data.unrecoveredFailures} falha{data.unrecoveredFailures > 1 ? 's' : ''} crítica{data.unrecoveredFailures > 1 ? 's' : ''} pendente{data.unrecoveredFailures > 1 ? 's' : ''}
+              </strong>
+              <p class="triage-card-desc">
+                Incidentes não recuperados automaticamente. ({data.recoveredFailures || 0} retries foram tratados com sucesso).
+              </p>
+            </div>
+            <div class="triage-card-action rose">
+              <span>Ver Importer</span>
+              <ArrowRight size={13} />
+            </div>
+          </a>
+        {/if}
+      </div>
+    {:else}
+      <!-- All Clear State -->
+      <div class="triage-all-clear">
+        <div class="clear-icon-wrap">
+          <CheckCircle2 size={22} />
+        </div>
+        <div class="clear-text">
+          <strong class="clear-title">Tudo em ordem na plataforma</strong>
+          <p class="clear-desc">
+            Nenhuma denúncia pendente, nenhum rascunho travado na mesa e importer sem falhas nas últimas 24 horas.
+          </p>
+        </div>
+      </div>
+    {/if}
   </section>
 
   <!-- 3. Primary Focused Workspace Grid -->
@@ -187,12 +278,9 @@
           </div>
         {/if}
       </section>
-    </main>
 
-    <!-- Right / Secondary Column: Últimas Publicações & Radar -->
-    <aside class="secondary-editorial-col">
       <!-- Section: Últimas Publicações -->
-      <section class="workspace-section">
+      <section class="workspace-section" style="margin-top: 12px;">
         <div class="section-title-bar">
           <div>
             <h2 class="section-heading">Últimas Publicações</h2>
@@ -226,10 +314,71 @@
           <p class="empty-state-hint">Nenhum capítulo publicado recentemente.</p>
         {/if}
       </section>
+    </main>
+
+    <!-- Right / Secondary Column: Resumo Operacional, Radar & Atalhos -->
+    <aside class="secondary-editorial-col">
+      <!-- Section: Resumo Operacional (4 Stat Tiles) -->
+      <section class="workspace-section">
+        <div class="section-title-bar">
+          <div>
+            <h2 class="section-heading">Resumo Operacional</h2>
+            <p class="section-subheading">Métricas chave da plataforma</p>
+          </div>
+        </div>
+
+        <div class="stats-matrix">
+          <a href="/admin/obras" class="stat-card">
+            <div class="stat-card-header">
+              <span class="stat-icon-wrap gold">
+                <BookOpen size={16} />
+              </span>
+              <span class="stat-trend">Catálogo</span>
+            </div>
+            <strong class="stat-value">{data.works}</strong>
+            <span class="stat-label">Obras Registradas</span>
+          </a>
+
+          <div class="stat-card">
+            <div class="stat-card-header">
+              <span class="stat-icon-wrap purple">
+                <Layers size={16} />
+              </span>
+              <span class="stat-trend">Público</span>
+            </div>
+            <strong class="stat-value">{data.chapters}</strong>
+            <span class="stat-label">Capítulos Publicados</span>
+          </div>
+
+          <a href="/admin/staff" class="stat-card">
+            <div class="stat-card-header">
+              <span class="stat-icon-wrap amber">
+                <Users size={16} />
+              </span>
+              <span class="stat-trend">Equipe</span>
+            </div>
+            <strong class="stat-value">{data.staffCount}</strong>
+            <span class="stat-label">Membros Staff</span>
+          </a>
+
+          <a href="/admin/importer" class="stat-card">
+            <div class="stat-card-header">
+              <span class="stat-icon-wrap green">
+                <Activity size={16} />
+              </span>
+              <span class="stat-trend" class:active-pulse={data.importerActiveCount > 0}>
+                {data.importerActiveCount > 0 ? 'Ativo' : 'Ocioso'}
+              </span>
+            </div>
+            <strong class="stat-value">{data.importerActiveCount}</strong>
+            <span class="stat-label">Em Fila Importer</span>
+          </a>
+        </div>
+      </section>
 
       <!-- Section: Obras no Radar -->
       {#if data.recentWorks.length > 0}
-        <section class="workspace-section" style="margin-top: 24px;">
+        <section class="workspace-section" style="margin-top: 12px;">
           <div class="section-title-bar">
             <div>
               <h2 class="section-heading">Obras no Radar</h2>
@@ -268,6 +417,57 @@
           </div>
         </section>
       {/if}
+
+      <!-- Section: Atalhos Rápidos -->
+      <section class="workspace-section" style="margin-top: 12px;">
+        <div class="section-title-bar">
+          <div>
+            <h2 class="section-heading">Atalhos do Sistema</h2>
+            <p class="section-subheading">Acesso rápido aos módulos administrativos</p>
+          </div>
+        </div>
+
+        <div class="quick-links-list">
+          <a href="/admin/tags" class="quick-shortcut-row">
+            <div class="shortcut-icon">
+              <Tags size={15} />
+            </div>
+            <div class="shortcut-info">
+              <span class="shortcut-name">Gêneros e Tags</span>
+              <span class="shortcut-desc">Gerencie taxonomia e classificações</span>
+            </div>
+            <span class="shortcut-arrow">
+              <ArrowRight size={14} />
+            </span>
+          </a>
+
+          <a href="/admin/gestao" class="quick-shortcut-row">
+            <div class="shortcut-icon">
+              <Users size={15} />
+            </div>
+            <div class="shortcut-info">
+              <span class="shortcut-name">Membros & Leitores</span>
+              <span class="shortcut-desc">Diretório de usuários e suspensões</span>
+            </div>
+            <span class="shortcut-arrow">
+              <ArrowRight size={14} />
+            </span>
+          </a>
+
+          <a href="/admin/gestao/configuracoes" class="quick-shortcut-row">
+            <div class="shortcut-icon">
+              <Settings size={15} />
+            </div>
+            <div class="shortcut-info">
+              <span class="shortcut-name">Configurações Gerais</span>
+              <span class="shortcut-desc">Regras de negócio e manutenções</span>
+            </div>
+            <span class="shortcut-arrow">
+              <ArrowRight size={14} />
+            </span>
+          </a>
+        </div>
+      </section>
     </aside>
   </div>
 </div>
@@ -344,7 +544,8 @@
   .header-action-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .btn-primary-action {
@@ -372,7 +573,7 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 10px 16px;
+    padding: 10px 15px;
     border-radius: 9px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -382,6 +583,7 @@
     text-decoration: none;
     transition: all 0.2s ease;
     white-space: nowrap;
+    position: relative;
   }
 
   .btn-secondary-action:hover {
@@ -390,78 +592,272 @@
     transform: translateY(-1px);
   }
 
-  /* 2. Light Metric Summary Bar */
-  .metrics-summary-bar {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
+  .btn-secondary-action.has-reports-alert {
+    border-color: rgba(244, 63, 94, 0.3);
+    background: rgba(244, 63, 94, 0.08);
   }
 
-  .metric-pill {
+  .reports-header-badge {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 6px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    text-decoration: none;
-    color: #8c93a8;
-    font-size: 12.5px;
-    transition: all 0.2s ease;
-  }
-
-  .metric-pill:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.12);
+    background: #f43f5e;
     color: #ffffff;
+    line-height: 1.2;
   }
 
-  .metric-pill.has-alert {
-    background: rgba(245, 158, 11, 0.08);
-    border-color: rgba(245, 158, 11, 0.25);
+  /* 2. Precisa de Atenção (Triage) Section */
+  .triage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 20px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-sizing: border-box;
   }
 
-  .pill-dot {
-    width: 7px;
-    height: 7px;
+  .triage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .triage-title-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .triage-indicator {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
   }
 
-  .pill-dot.gold { background: #dfc28d; }
-  .pill-dot.purple { background: #a78bfa; }
-  .pill-dot.amber { background: #f59e0b; }
-  .pill-dot.green { background: #10b981; }
-
-  .pill-dot.pulse {
-    box-shadow: 0 0 8px currentColor;
-    animation: pulseGlow 2s infinite ease-in-out;
+  .triage-indicator.alert {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+    animation: triagePulse 2s infinite ease-in-out;
   }
 
-  @keyframes pulseGlow {
+  .triage-indicator.green {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+
+  @keyframes triagePulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.2); }
+    50% { opacity: 0.6; transform: scale(1.25); }
   }
 
-  .pill-label {
-    font-weight: 500;
-  }
-
-  .pill-value {
-    color: #ffffff;
+  .triage-title {
+    font-size: 14px;
     font-weight: 750;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.01em;
   }
 
-  .pill-badge {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+  .triage-counter-tag {
+    font-size: 11px;
+    font-weight: 600;
     color: #dfc28d;
+    background: rgba(223, 194, 141, 0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .triage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+
+  .triage-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .triage-card:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Crimson: Reports */
+  .triage-crimson {
+    background: linear-gradient(145deg, rgba(244, 63, 94, 0.08) 0%, rgba(244, 63, 94, 0.02) 100%);
+    border: 1px solid rgba(244, 63, 94, 0.22);
+  }
+  .triage-crimson:hover {
+    border-color: rgba(244, 63, 94, 0.45);
+    box-shadow: 0 6px 20px rgba(244, 63, 94, 0.15);
+  }
+
+  /* Amber: Drafts */
+  .triage-amber {
+    background: linear-gradient(145deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+  }
+  .triage-amber:hover {
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.15);
+  }
+
+  /* Rose: Failed Jobs */
+  .triage-rose {
+    background: linear-gradient(145deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.22);
+  }
+  .triage-rose:hover {
+    border-color: rgba(239, 68, 68, 0.45);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
+  }
+
+  .triage-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+  }
+  .triage-card-icon.crimson {
+    background: rgba(244, 63, 94, 0.15);
+    color: #f43f5e;
+  }
+  .triage-card-icon.amber {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+  }
+  .triage-card-icon.rose {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .triage-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .triage-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .triage-card-badge {
+    font-size: 10px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .triage-card-badge.crimson {
+    background: rgba(244, 63, 94, 0.16);
+    color: #fb7185;
+  }
+  .triage-card-badge.amber {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fcd34d;
+  }
+  .triage-card-badge.rose {
+    background: rgba(239, 68, 68, 0.16);
+    color: #fca5a5;
+  }
+
+  .triage-card-count {
+    font-size: 16px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .triage-card-title {
+    font-size: 13.5px;
+    font-weight: 750;
+    color: #ffffff;
+    line-height: 1.3;
+  }
+
+  .triage-card-desc {
+    font-size: 11.5px;
+    color: #8c93a8;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .triage-card-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    margin-top: 4px;
+    transition: transform 0.15s ease;
+  }
+  .triage-card:hover .triage-card-action {
+    transform: translateX(3px);
+  }
+  .triage-card-action.crimson { color: #fb7185; }
+  .triage-card-action.amber { color: #fcd34d; }
+  .triage-card-action.rose { color: #fca5a5; }
+
+  /* Triage All Clear */
+  .triage-all-clear {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.18);
+  }
+
+  .clear-icon-wrap {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    flex-shrink: 0;
+  }
+
+  .clear-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .clear-title {
+    font-size: 13px;
+    font-weight: 750;
+    color: #ffffff;
+  }
+
+  .clear-desc {
+    font-size: 12px;
+    color: #8c93a8;
+    margin: 0;
   }
 
   /* 3. Primary Workspace Grid */
@@ -910,6 +1306,143 @@
     color: #dfc28d;
   }
 
+  /* Stats Matrix: 4 Tiles */
+  .stats-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .stat-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .stat-icon-wrap {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+  }
+  .stat-icon-wrap.gold { background: rgba(223, 194, 141, 0.12); color: #dfc28d; }
+  .stat-icon-wrap.purple { background: rgba(167, 139, 250, 0.12); color: #a78bfa; }
+  .stat-icon-wrap.amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .stat-icon-wrap.green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+
+  .stat-trend {
+    font-size: 10px;
+    font-weight: 700;
+    color: #656d82;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-trend.active-pulse {
+    color: #10b981;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: #8c93a8;
+    font-weight: 500;
+  }
+
+  /* Quick Shortcuts */
+  .quick-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .quick-shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .quick-shortcut-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(223, 194, 141, 0.2);
+    transform: translateX(2px);
+  }
+
+  .shortcut-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #dfc28d;
+    flex-shrink: 0;
+  }
+
+  .shortcut-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .shortcut-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .shortcut-desc {
+    font-size: 11px;
+    color: #7b8396;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .shortcut-arrow {
+    color: #4b5266;
+    transition: all 0.15s ease;
+  }
+
+  .quick-shortcut-row:hover .shortcut-arrow {
+    color: #dfc28d;
+    transform: translateX(2px);
+  }
+
   .empty-state-hint {
     font-size: 12px;
     color: #656d82;
@@ -924,8 +1457,8 @@
     }
 
     .header-action-group {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr;
       width: 100%;
       gap: 8px;
     }
@@ -937,14 +1470,12 @@
       box-sizing: border-box;
     }
 
-    .metrics-summary-bar {
-      gap: 8px;
+    .triage-grid {
+      grid-template-columns: 1fr;
     }
 
-    .metric-pill {
-      flex: 1 1 calc(50% - 8px);
-      justify-content: center;
-      box-sizing: border-box;
+    .stats-matrix {
+      grid-template-columns: 1fr 1fr;
     }
 
     .section-title-bar {

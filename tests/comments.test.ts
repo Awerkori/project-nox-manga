@@ -12,3 +12,13 @@ it('preserves replies whose original comment is outside the current page', () =>
   const orphan = { id: 'reply', parent_id: 'older', created_at: '2026-09-05' };
   expect(threadComments([orphan])).toEqual([orphan]);
 });
+
+it('correctly parses [spoiler] tags into interactive chunks', async () => {
+  const { parseCommentBody } = await import('../src/lib/comments');
+  const parsed = parseCommentBody('Início [spoiler]o vilão morre[/spoiler] e fim.');
+  expect(parsed).toEqual([
+    { type: 'text', content: 'Início ' },
+    { type: 'spoiler', content: 'o vilão morre' },
+    { type: 'text', content: ' e fim.' }
+  ]);
+});

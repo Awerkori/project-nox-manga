@@ -1280,19 +1280,110 @@
   }
 
   @media (max-width: 768px) {
-    .cover-studio-row {
+    .page-header {
       flex-direction: column;
       align-items: flex-start;
+      gap: 14px;
+    }
+
+    .header-actions {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-prioritize-importer,
+    .btn-view-public {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .cover-studio-row {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px 14px;
+    }
+
+    .cover-preview-box {
+      margin: 0 auto;
+    }
+
+    .cover-actions-col {
+      align-items: center;
+      width: 100%;
+    }
+
+    .btn-select-cover {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
     }
 
     .fields-grid {
       grid-template-columns: 1fr;
+      gap: 16px;
+      width: 100%;
     }
 
-    .page-header {
+    .field-wrap {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    .field-input,
+    .field-textarea,
+    .field-select {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      font-size: 15px;
+    }
+
+    .tag-chips-wrap {
+      max-height: 250px;
+      overflow-y: auto;
+      gap: 8px;
+    }
+
+    .tag-chip-label {
+      padding: 7px 12px;
+      font-size: 12.5px;
+    }
+
+    .form-actions-footer {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
+      width: 100%;
+      gap: 10px;
+    }
+
+    .btn-submit-save,
+    .btn-archive-work {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .chapters-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+    }
+
+    .chapters-action-buttons {
+      flex-direction: column;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .btn-batch-zip,
+    .btn-add-chapter {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
     }
   }
 </style>

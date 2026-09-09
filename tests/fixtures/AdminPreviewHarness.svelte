@@ -7,6 +7,7 @@
   import Config from '../../src/routes/admin/gestao/configuracoes/+page.svelte';
   import ChapterEditor from '../../src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte';
   import Importer from '../../src/routes/admin/importer/+page.svelte';
+  import Staff from '../../src/routes/admin/staff/+page.svelte';
 
   let { page = 'dashboard', role = 'ADMIN' } = $props<{ page?: string; role?: 'ADMIN' | 'EDITOR' }>();
 
@@ -42,6 +43,11 @@
     draftsCount: 3,
     tagsCount: 32,
     importerActiveCount: 4,
+    staffCount: 5,
+    failedJobs24h: 1,
+    unrecoveredFailures: 0,
+    recoveredFailures: 1,
+    pendingReportsCount: 2,
     drafts: [
       {
         id: 'ch-draft-1',
@@ -263,6 +269,31 @@
     staffRequests: [],
     queuedJobs: [],
     stagedChapters: [],
+    activeFocus: {
+      id: 'req-priority-1',
+      work_id: 'w-1',
+      reason: 'Lançamento simultâneo com a Coreia',
+      created_at: new Date().toISOString(),
+      works: {
+        id: 'w-1',
+        title: 'Vingança do Cão de Caça',
+        slug: 'vinganca-do-cao-de-caca',
+        cover_id: 'sample-cover-1'
+      },
+      members: {
+        username: 'awerkori',
+        display_name: 'Awerkori'
+      },
+      stats: {
+        totalDiscovered: 120,
+        completed: 85,
+        staged: 2,
+        pending: 33,
+        published: 85,
+        percent: 71,
+        currentChapter: 86
+      }
+    },
     catalogWorks: [
       { id: 'w-1', title: 'Vingança do Cão de Caça', slug: 'vinganca-do-cao-de-caca', kind: 'MANHWA', published: true, updated_at: new Date().toISOString() }
     ],
@@ -272,6 +303,16 @@
       event_loop_lag_ms: 4,
       created_at: new Date().toISOString()
     }
+  });
+
+  let staffData = $derived({
+    ...baseData,
+    isAdmin: role === 'ADMIN',
+    staff: [
+      { userId: 'usr-1', displayName: 'Awerkori', username: 'awerkori', avatarId: null, role: 'ADMIN', createdAt: '2026-01-01T00:00:00Z', suspended: false, xp: 1200 },
+      { userId: 'usr-2', displayName: 'Vitor Editor', username: 'vitor', avatarId: null, role: 'EDITOR', createdAt: '2026-02-01T00:00:00Z', suspended: false, xp: 450 }
+    ],
+    counts: { total: 2, admins: 1, editors: 1, suspended: 0 }
   });
 
   let activeData = $derived(
@@ -287,7 +328,9 @@
               ? configData
               : page === 'importer'
                 ? importerData
-                : chapterData
+                : page === 'staff'
+                  ? staffData
+                  : chapterData
   );
 </script>
 
@@ -305,6 +348,8 @@
       <Config data={configData} />
     {:else if page === 'importer'}
       <Importer data={importerData as any} form={null} />
+    {:else if page === 'staff'}
+      <Staff data={staffData as any} form={null} />
     {:else if page === 'capitulo'}
       <ChapterEditor data={chapterData as any} />
     {/if}

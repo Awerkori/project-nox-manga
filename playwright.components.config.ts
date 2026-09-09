@@ -7,7 +7,7 @@ export default defineConfig({
     command: 'npm run dev -- --port 5173 --strictPort',
     env: { NOX_COMPONENT_TEST: '1' },
     url: 'http://127.0.0.1:5173/@vite/client',
-    reuseExistingServer: false
+    reuseExistingServer: true
   },
   reporter: 'list'
 });

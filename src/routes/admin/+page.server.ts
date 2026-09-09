@@ -1,4 +1,6 @@
 export const load = async ({ locals }) => {
+  const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
+
   const [
     works,
     publishedChapters,
@@ -8,7 +10,10 @@ export const load = async ({ locals }) => {
     recentPublished,
     recentWorks,
     importerQueue,
-    pendingReports
+    pendingReports,
+    staffCountRes,
+    failedJobsRes,
+    failedMappingsRes
   ] = await Promise.all([
     locals.db.from('works').select('id', { count: 'exact', head: true }),
     locals.db
@@ -46,8 +51,26 @@ export const load = async ({ locals }) => {
     locals.db
       .from('reports')
       .select('id', { count: 'exact', head: true })
-      .in('status', ['NOVO', 'EM_ANALISE'])
+      .in('status', ['NOVO', 'EM_ANALISE']),
+    locals.db
+      .from('access_roles')
+      .select('user_id', { count: 'exact', head: true })
+      .in('role', ['ADMIN', 'EDITOR'])
+      .eq('suspended', false),
+    locals.db
+      .from('importer_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'FAILED')
+      .gte('updated_at', twentyFourHoursAgo),
+    locals.db
+      .from('importer_chapter_mappings')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['FAILED', 'VERIFICATION_FAILED'])
   ]);
+
+  const totalFailedJobs24h = failedJobsRes.count || 0;
+  const unrecoveredFailures = failedMappingsRes.count || 0;
+  const recoveredFailures = Math.max(0, totalFailedJobs24h - unrecoveredFailures);
 
   return {
     works: works.count || 0,
@@ -58,6 +81,10 @@ export const load = async ({ locals }) => {
     recentPublished: (recentPublished.data as any[]) || [],
     recentWorks: (recentWorks.data as any[]) || [],
     importerActiveCount: importerQueue.count || 0,
-    pendingReportsCount: pendingReports.count || 0
+    pendingReportsCount: pendingReports.count || 0,
+    staffCount: staffCountRes.count || 0,
+    failedJobs24h: totalFailedJobs24h,
+    unrecoveredFailures,
+    recoveredFailures
   };
 };

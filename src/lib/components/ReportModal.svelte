@@ -8,6 +8,7 @@
     chapterId,
     commentId,
     targetTitle,
+    pageNumber,
     onclose,
     onsuccess
   }: {
@@ -17,6 +18,7 @@
     chapterId?: string;
     commentId?: string;
     targetTitle?: string;
+    pageNumber?: number;
     onclose?: () => void;
     onsuccess?: () => void;
   } = $props();
@@ -30,31 +32,38 @@
 
   const REASONS_BY_TYPE = {
     WORK: [
+      'Informações incorretas (título, capa ou sinopse)',
+      'Metadados errados (autor, artista, tipo ou status)',
+      'Gêneros ou tags incorretos',
       'Conteúdo adulto sem classificação +18',
-      'Informações/capa incorretas',
+      'Capítulos faltando, duplicados ou fora de ordem',
       'Obra duplicada no catálogo',
       'Violação das diretrizes da comunidade',
       'Outro motivo'
     ],
     CHAPTER: [
+      'Imagens quebradas ou falha no carregamento',
       'Páginas faltando ou incompletas',
       'Páginas fora de ordem',
-      'Imagens ilegíveis ou com falha de carregamento',
-      'Capítulo duplicado ou numeração errada',
-      'Tradução em outro idioma',
+      'Capítulo incorreto, arquivo errado ou numeração trocada',
+      'Capítulo duplicado',
+      'Tradução ilegível ou em outro idioma',
       'Outro motivo'
     ],
     COMMENT: [
-      'Discurso de ódio ou ofensas',
-      'Spoiler sem marcação',
-      'Spam ou link malicioso',
-      'Assédio a outros leitores',
+      'Spam, divulgação ou link suspeito',
+      'Assédio, ofensas ou discurso de ódio',
+      'Spoiler não marcado',
+      'Conteúdo impróprio ou abusivo',
+      'Impersonação (se passando por outro usuário/staff)',
       'Outro motivo'
     ],
     USER: [
-      'Comportamento tóxico recorrente',
-      'Foto de perfil ou nome impróprio',
-      'Spam/Bots',
+      'Spam ou conta automatizada (bot)',
+      'Assédio, ofensas ou comportamento tóxico',
+      'Foto de perfil, nome ou bio impróprios',
+      'Impersonação de outro usuário ou staff',
+      'Abuso do sistema ou conduta nociva',
       'Outro motivo'
     ]
   };
@@ -81,6 +90,9 @@
     loading = true;
     errorMessage = '';
 
+    const pagePrefix = pageNumber ? `[Página ${pageNumber}] ` : '';
+    const finalDetails = details.trim() ? `${pagePrefix}${details.trim()}` : (pagePrefix ? `[Página ${pageNumber}]` : '');
+
     try {
       const res = await fetch('/api/report', {
         method: 'POST',
@@ -91,7 +103,7 @@
           chapterId,
           commentId,
           reason: finalReason,
-          details: details.trim()
+          details: finalDetails
         })
       });
 
@@ -125,6 +137,9 @@
             <h3 class="modal-title">Reportar Conteúdo</h3>
             {#if targetTitle}
               <p class="modal-sub">{targetTitle}</p>
+            {/if}
+            {#if pageNumber}
+              <span class="page-context-chip">Página {pageNumber}</span>
             {/if}
           </div>
         </div>
@@ -440,5 +455,42 @@
     color: #94a3b8;
     line-height: 1.5;
     max-width: 360px;
+  }
+
+  .page-context-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.25);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 3px;
+  }
+
+  @media (max-width: 600px) {
+    .modal-backdrop {
+      align-items: flex-end;
+      padding: 0;
+    }
+
+    .modal-container {
+      max-width: 100%;
+      border-radius: 20px 20px 0 0;
+      max-height: 90vh;
+      overflow-y: auto;
+      border-bottom: none;
+      animation: sheetSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  }
+
+  @keyframes sheetSlideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
 </style>

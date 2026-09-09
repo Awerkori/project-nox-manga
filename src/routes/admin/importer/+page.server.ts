@@ -121,8 +121,92 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
   }
 
+  // Active Focus Request (Prioridade Absoluta)
+  const staffRequests = staffRequestsRes.data || [];
+  const activeFocus = staffRequests.find(
+    (r) => r.status === 'QUEUED' || r.status === 'IMPORTING' || r.status === 'BLOCKED'
+  ) || null;
+
+  let activeFocusStats: {
+    totalDiscovered: number;
+    completed: number;
+    staged: number;
+    pending: number;
+    published: number;
+    percent: number;
+    currentChapter: string | number | null;
+  } | null = null;
+
+  let activeFocusFailure: {
+    lastError: string | null;
+    source: string | null;
+    chapterNumber: string | number | null;
+    updatedAt: string | null;
+    attempts: number;
+  } | null = null;
+
+  if (activeFocus) {
+    const focusWorkId = activeFocus.work_id;
+    const [mappingsRes, publishedCountRes, currentJobRes, failedJobRes] = await Promise.all([
+      locals.db
+        .from('importer_chapter_mappings')
+        .select('id, status, chapter_number, chapter_sort_key')
+        .eq('work_id', focusWorkId),
+      locals.db
+        .from('chapters')
+        .select('id', { count: 'exact', head: true })
+        .eq('work_id', focusWorkId)
+        .not('published_at', 'is', null),
+      locals.db
+        .from('importer_queue')
+        .select('task_type, status, chapter_sort_key, payload')
+        .eq('status', 'IMPORTING')
+        .limit(1)
+        .maybeSingle(),
+      locals.db
+        .from('importer_queue')
+        .select('source, last_error, updated_at, attempts, payload, chapter_sort_key')
+        .eq('status', 'FAILED')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ]);
+
+    const mappings = mappingsRes.data || [];
+    const totalDiscovered = mappings.length;
+    const completed = mappings.filter((m) => m.status === 'COMPLETED').length;
+    const staged = mappings.filter((m) => m.status === 'STAGED').length;
+    const pending = mappings.filter((m) => m.status === 'PENDING' || m.status === 'DOWNLOADING').length;
+    const published = publishedCountRes.count || 0;
+    const percent = totalDiscovered > 0 ? Math.round((completed / totalDiscovered) * 100) : 0;
+    const currentChapter = currentJobRes.data
+      ? ((currentJobRes.data.payload as any)?.chapterNumber ?? currentJobRes.data.chapter_sort_key)
+      : null;
+
+    activeFocusStats = {
+      totalDiscovered,
+      completed,
+      staged,
+      pending,
+      published,
+      percent,
+      currentChapter
+    };
+
+    if (failedJobRes.data && (failedJobRes.data.payload as any)?.workId === focusWorkId) {
+      activeFocusFailure = {
+        lastError: failedJobRes.data.last_error,
+        source: failedJobRes.data.source,
+        chapterNumber: (failedJobRes.data.payload as any)?.chapterNumber ?? failedJobRes.data.chapter_sort_key,
+        updatedAt: failedJobRes.data.updated_at,
+        attempts: failedJobRes.data.attempts
+      };
+    }
+  }
+
   return {
     telemetry: telemetryRes.data || null,
+    activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
     counts: {
       queued: queuedCount.count || 0,
       importing: importingCount.count || 0,
@@ -138,7 +222,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       ...j,
       work: (j.payload as any)?.workId ? activeWorksMap[(j.payload as any).workId] : null
     })),
-    staffRequests: staffRequestsRes.data || [],
+    staffRequests,
     queuedJobs: queuedJobs.map((j) => ({
       ...j,
       work: (j.payload as any)?.workId ? queuedWorksMap[(j.payload as any).workId] : null
@@ -149,11 +233,69 @@ export const load: PageServerLoad = async ({ locals }) => {
   };
 };
 
+function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export const actions: Actions = {
   prioritize: async ({ request, locals }) => {
     const form = await request.formData();
-    const workId = form.get('work_id')?.toString();
+    let workId = form.get('work_id')?.toString() || null;
+    const candidateTitle = form.get('candidate_title')?.toString()?.trim() || null;
+    const source = form.get('source')?.toString() || 'nexus';
+    const sourceWorkId = form.get('source_work_id')?.toString() || null;
+    const sourceUrl = form.get('source_url')?.toString() || null;
     const reason = form.get('reason')?.toString() || null;
+    const forceReplace = form.get('force_replace')?.toString() === 'true';
+
+    // If workId is not provided but candidate details were passed, resolve or create
+    if (!workId && candidateTitle && sourceWorkId) {
+      const slug = slugify(candidateTitle);
+
+      const { data: existingWork } = await locals.db
+        .from('works')
+        .select('id, title, slug')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (existingWork?.id) {
+        workId = existingWork.id;
+      } else {
+        const { data: newWork, error: newWorkErr } = await locals.db
+          .from('works')
+          .insert({
+            title: candidateTitle,
+            slug,
+            kind: 'MANHWA',
+            published: true,
+            description: 'Obra descoberta e sincronizada via Prioridade Absoluta'
+          })
+          .select('id')
+          .single();
+
+        if (newWorkErr) {
+          return fail(400, { error: 'Falha ao registrar nova obra: ' + newWorkErr.message });
+        }
+        workId = newWork.id;
+      }
+
+      await locals.db
+        .from('importer_work_mappings')
+        .upsert({
+          work_id: workId,
+          source,
+          source_work_id: sourceWorkId,
+          source_slug: slug,
+          source_title: candidateTitle,
+          metadata: sourceUrl ? { sourceUrl } : {},
+          sync_status: 'PENDING'
+        }, { onConflict: 'source,source_work_id' });
+    }
 
     if (!workId) {
       return fail(400, { error: 'Selecione uma obra para priorizar.' });
@@ -161,14 +303,26 @@ export const actions: Actions = {
 
     const { data, error } = await locals.db.rpc('importer_prioritize_work', {
       p_work_id: workId,
-      p_reason: reason || undefined
+      p_reason: reason || undefined,
+      p_force_replace: forceReplace
     });
 
     if (error) {
       return fail(400, { error: error.message });
     }
 
-    return { success: true, message: (data as any)?.message || 'Obra priorizada com sucesso!' };
+    const res = data as any;
+    if (res?.conflict) {
+      return {
+        conflict: true,
+        workId,
+        activeWorkId: res.active_work_id,
+        activeWorkTitle: res.active_work_title,
+        message: res.message
+      };
+    }
+
+    return { success: true, message: res?.message || 'Obra colocada em Prioridade Absoluta com sucesso!' };
   },
 
   cancel: async ({ request, locals }) => {
@@ -187,6 +341,50 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
-    return { success: true, message: (data as any)?.message || 'Solicitação cancelada com sucesso.' };
+    const res = data as any;
+    if (!res?.success) {
+      return fail(400, { error: res?.message || 'Não foi possível cancelar a prioridade.' });
+    }
+
+    return { success: true, message: res?.message || 'Prioridade cancelada com sucesso.' };
+  },
+
+  retryBlocked: async ({ request, locals }) => {
+    const form = await request.formData();
+    const requestId = form.get('request_id')?.toString();
+    const workId = form.get('work_id')?.toString();
+
+    if (!requestId || !workId) {
+      return fail(400, { error: 'Parâmetros inválidos para reativação.' });
+    }
+
+    const { data: failedJobs } = await locals.db
+      .from('importer_queue')
+      .select('id, payload')
+      .eq('status', 'FAILED');
+
+    const matchingIds = (failedJobs || [])
+      .filter((j: any) => (j.payload as any)?.workId === workId)
+      .map((j: any) => j.id);
+
+    if (matchingIds.length > 0) {
+      await locals.db
+        .from('importer_queue')
+        .update({
+          status: 'QUEUED',
+          attempts: 0,
+          next_run_at: new Date().toISOString(),
+          priority: 100,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', matchingIds);
+    }
+
+    await locals.db
+      .from('importer_staff_requests')
+      .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
+      .eq('id', requestId);
+
+    return { success: true, message: 'Prioridade reativada! Capítulos reenfileirados com prioridade 100.' };
   }
 };

@@ -32,47 +32,39 @@
     const TARGET_FPS_INTERVAL = 1000 / 30; // Smooth, battery-friendly 30 FPS for background ambiance
 
     function isMobile() {
-      return window.innerWidth < 768;
+      return typeof window !== 'undefined' && window.innerWidth < 768;
     }
 
     function initSize() {
       if (!canvas) return;
-      if (isMobile()) {
-        // Disable canvas particle simulation on mobile to preserve 100% GPU/battery
-        if (animId !== null) {
-          cancelAnimationFrame(animId);
-          animId = null;
-        }
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const mobile = isMobile();
+      const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.0 : 1.5);
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const count = 36;
-      if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
-        particles = Array.from({ length: count }, () => createParticle(true));
+      // Lightweight 18 particles on mobile, 36 on desktop
+      const count = mobile ? 18 : 36;
+      if (particles.length === 0 || Math.abs(particles.length - count) > 6) {
+        particles = Array.from({ length: count }, () => createParticle(true, mobile));
       }
     }
 
-    function createParticle(randomY = false): Particle {
-      const radius = 0.8 + Math.random() * 1.4;
-      const baseAlpha = 0.15 + Math.random() * 0.45;
+    function createParticle(randomY = false, mobile = false): Particle {
+      const radius = mobile ? (0.6 + Math.random() * 1.0) : (0.8 + Math.random() * 1.4);
+      const baseAlpha = mobile ? (0.12 + Math.random() * 0.35) : (0.15 + Math.random() * 0.45);
       return {
         x: Math.random() * width,
         y: randomY ? Math.random() * height : -10,
         radius,
         alpha: baseAlpha,
         baseAlpha,
-        speedY: 0.15 + Math.random() * 0.3,
+        speedY: (mobile ? 0.12 : 0.15) + Math.random() * (mobile ? 0.22 : 0.3),
         angle: Math.random() * Math.PI * 2,
         angleSpeed: 0.005 + Math.random() * 0.012,
-        sway: 0.15 + Math.random() * 0.3,
+        sway: (mobile ? 0.10 : 0.15) + Math.random() * (mobile ? 0.20 : 0.3),
         hue: Math.random() > 0.35 ? 215 : 260
       };
     }
@@ -101,14 +93,13 @@
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        // Zero shadowBlur to eliminate GPU rasterization thrashing
         ctx.fillStyle = `hsla(${p.hue}, 75%, 85%, ${p.alpha})`;
         ctx.fill();
       }
     }
 
     function loop(timestamp: number) {
-      if (document.hidden || isMobile() || isScrolling) return;
+      if (document.hidden || isScrolling) return;
 
       const elapsed = timestamp - lastFrameTime;
       if (elapsed >= TARGET_FPS_INTERVAL) {
@@ -120,13 +111,13 @@
     }
 
     initSize();
-    if (!isMobile() && !reducedMotion) {
+    if (!reducedMotion) {
       renderFrame();
       animId = requestAnimationFrame(loop);
     }
 
     function onVisibilityChange() {
-      if (document.hidden || isMobile()) {
+      if (document.hidden) {
         if (animId !== null) {
           cancelAnimationFrame(animId);
           animId = null;
@@ -137,7 +128,6 @@
     }
 
     function onScroll() {
-      if (isMobile()) return;
       isScrolling = true;
       if (animId !== null) {
         cancelAnimationFrame(animId);
@@ -157,11 +147,9 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         initSize();
-        if (!isMobile()) {
-          renderFrame();
-          if (!reducedMotion && animId === null && !document.hidden && !isScrolling) {
-            animId = requestAnimationFrame(loop);
-          }
+        renderFrame();
+        if (!reducedMotion && animId === null && !document.hidden && !isScrolling) {
+          animId = requestAnimationFrame(loop);
         }
       }, 150);
     }

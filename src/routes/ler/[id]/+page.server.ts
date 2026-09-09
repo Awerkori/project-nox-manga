@@ -59,6 +59,7 @@ export const load = async ({ locals, params, url, cookies }) => {
     pages: pages.data || [],
     previous: all[index - 1] || null,
     next: all[index + 1] || null,
+    siblings: all,
     progress: progress.data,
     comments: comments.data || [],
     preview

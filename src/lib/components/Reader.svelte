@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles, Flag } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles, Flag, List, X, BookOpen } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
@@ -18,11 +18,72 @@
     xpNotice = $state(''),
     fullscreen = $state(false),
     uiVisible = $state(true),
-    showReportModal = $state(false);
+    showReportModal = $state(false),
+    showChaptersDrawer = $state(false);
   const visible = new SvelteSet<number>();
   let sending = false;
   let maxSeenPage = $state(1);
   let chapterCompleted = $state(false);
+
+  const REACTION_CONFIG = [
+    { id: 'heart', emoji: '❤️', label: 'Amei' },
+    { id: 'fire', emoji: '🔥', label: 'Épico' },
+    { id: 'cry', emoji: '😭', label: 'Emocionante' },
+    { id: 'shock', emoji: '😱', label: 'Chocado' },
+    { id: 'laugh', emoji: '😂', label: 'Hilário' }
+  ];
+
+  let reactionCounts = $state<Record<string, number>>({});
+  let userReactions = $state(new Set<string>());
+  let reactionsLoading = $state(false);
+
+  async function loadReactions(chapterId: string) {
+    if (!chapterId || typeof window === 'undefined') return;
+    try {
+      const res = await fetch(`/api/chapter-reactions?chapterId=${encodeURIComponent(chapterId)}`);
+      if (res.ok) {
+        const d = await res.json();
+        reactionCounts = d.counts || {};
+        userReactions = new Set(d.userReactions || []);
+      }
+    } catch {
+      // silent fallback
+    }
+  }
+
+  async function toggleReaction(emoji: string) {
+    if (!data.chapter?.id || reactionsLoading || typeof window === 'undefined') return;
+    reactionsLoading = true;
+    const had = userReactions.has(emoji);
+    const newSet = new Set(userReactions);
+    const newCounts = { ...reactionCounts };
+    if (had) {
+      newSet.delete(emoji);
+      newCounts[emoji] = Math.max(0, (newCounts[emoji] || 1) - 1);
+    } else {
+      newSet.add(emoji);
+      newCounts[emoji] = (newCounts[emoji] || 0) + 1;
+    }
+    userReactions = newSet;
+    reactionCounts = newCounts;
+
+    try {
+      const res = await fetch('/api/chapter-reactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chapterId: data.chapter.id, emoji })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        reactionCounts = d.counts || {};
+        userReactions = new Set(d.userReactions || []);
+      }
+    } catch {
+      // Keep optimistic state
+    } finally {
+      reactionsLoading = false;
+    }
+  }
   let xpAwardConfirmed = $state(false);
   let xpClaimInFlight = false;
   let previousChapterId = $state('');
@@ -84,6 +145,7 @@
       visible.clear();
       preloadedMedia.clear();
       inFlightPreloads.clear();
+      loadReactions(data.chapter.id);
       const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
       current = saved;
       maxSeenPage = saved;
@@ -306,6 +368,8 @@
   onkeydown={(e) => {
     if (e.key === 'Escape') {
       settings = false;
+      showChaptersDrawer = false;
+      showReportModal = false;
       resetHideTimer();
     }
   }}
@@ -333,6 +397,19 @@
     </div>
     <div class="reader-tools">
       <span class="pages-count">{current}/{data.pages.length}</span>
+      {#if data.siblings && data.siblings.length > 1}
+        <button
+          class="icon-button"
+          aria-label="Lista de capítulos"
+          title="Ver todos os capítulos"
+          onclick={() => {
+            showChaptersDrawer = true;
+            uiVisible = true;
+          }}
+        >
+          <List size={19} />
+        </button>
+      {/if}
       <button
         class="icon-button"
         aria-label="Reportar problema"
@@ -424,24 +501,62 @@
     <p class="end-sub">
       {data.chapter.works?.title} · Edição Oficial Project Nox
     </p>
-    <div class="end-nav-row">
-      {#if data.previous}
-        <a class="btn-nav-prev" href="/ler/{data.previous.id}">
-          <ArrowLeft size={16} />
-          <span>Cap. {data.previous.number}</span>
+
+    <div class="chapter-reactions-box">
+      <span class="reactions-title">O que achou deste capítulo?</span>
+      <div class="chapter-reactions-cluster">
+        {#each REACTION_CONFIG as item}
+          <button
+            type="button"
+            class="reaction-btn"
+            class:active={userReactions.has(item.id)}
+            onclick={() => toggleReaction(item.id)}
+            title={item.label}
+            aria-label={item.label}
+          >
+            <span class="reaction-emoji">{item.emoji}</span>
+            <span class="reaction-label">{item.label}</span>
+            {#if (reactionCounts[item.id] || 0) > 0}
+              <span class="reaction-count">{reactionCounts[item.id]}</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <div class="end-nav-cluster">
+      <div class="end-nav-primary">
+        {#if data.previous}
+          <a class="btn-nav-prev" href="/ler/{data.previous.id}">
+            <ArrowLeft size={16} />
+            <span>Capítulo Anterior</span>
+          </a>
+        {/if}
+        {#if data.next}
+          <a class="btn-nav-next hero-next" href="/ler/{data.next.id}">
+            <span>Próximo Capítulo</span>
+            <ArrowRight size={16} />
+          </a>
+        {/if}
+      </div>
+
+      <div class="end-nav-secondary">
+        {#if data.siblings && data.siblings.length > 0}
+          <button
+            type="button"
+            class="btn-nav-secondary-action btn-nav-drawer"
+            onclick={() => (showChaptersDrawer = true)}
+            aria-label="Ver todos os capítulos"
+          >
+            <List size={16} />
+            <span>Ver Todos os Capítulos</span>
+          </button>
+        {/if}
+        <a class="btn-nav-secondary-action btn-nav-work" href="/obra/{data.chapter.works?.slug}">
+          <BookOpen size={16} />
+          <span>Ver Página da Obra</span>
         </a>
-      {/if}
-      {#if data.next}
-        <a class="btn-nav-next" href="/ler/{data.next.id}">
-          <span>Próximo: Cap. {data.next.number}</span>
-          <ArrowRight size={16} />
-        </a>
-      {:else}
-        <a class="btn-nav-next" href="/obra/{data.chapter.works?.slug}">
-          <span>Voltar para a obra</span>
-          <ArrowRight size={16} />
-        </a>
-      {/if}
+      </div>
     </div>
     <div class="end-report-wrap">
       <button
@@ -462,9 +577,14 @@
         profile={data.profile}
       />{/if}
   </div>
-  <button class="back-top icon-button" aria-label="Voltar ao topo" onclick={() => jump(1)}
-    ><ChevronUp /></button
+  <button
+    class="back-top icon-button"
+    class:ui-hidden={!uiVisible && !settings}
+    aria-label="Voltar ao topo"
+    onclick={() => jump(1)}
   >
+    <ChevronUp />
+  </button>
   <div class="reader-progress" style="width:{(current / Math.max(1, data.pages.length)) * 100}%"></div>
 
   {#if showReportModal}
@@ -472,12 +592,61 @@
       targetType="CHAPTER"
       chapterId={data.chapter.id}
       targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${data.chapter.number}`}
+      pageNumber={current}
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
         showReportModal = false;
         notice = 'Denúncia enviada com sucesso para a moderação.';
       }}
     />
+  {/if}
+
+  {#if showChaptersDrawer}
+    <div
+      class="drawer-backdrop"
+      onclick={() => (showChaptersDrawer = false)}
+      onkeydown={(e) => { if (e.key === 'Escape') showChaptersDrawer = false; }}
+      role="button"
+      tabindex="0"
+      aria-label="Fechar lista de capítulos"
+    ></div>
+    <aside class="drawer-panel" aria-label="Navegação de Capítulos">
+      <div class="drawer-header">
+        <div class="drawer-title-box">
+          <BookOpen size={17} class="drawer-header-icon" />
+          <span class="drawer-title">Capítulos</span>
+          <span class="drawer-count">{data.siblings?.length || 0}</span>
+        </div>
+        <button
+          type="button"
+          class="btn-drawer-close"
+          onclick={() => (showChaptersDrawer = false)}
+          aria-label="Fechar lista de capítulos"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <div class="drawer-work-info">
+        <span>Obra:</span>
+        <strong>{data.chapter.works?.title}</strong>
+      </div>
+      <div class="drawer-list">
+        {#each (data.siblings || []) as sibling}
+          {@const isCurrent = sibling.id === data.chapter.id}
+          <a
+            href="/ler/{sibling.id}"
+            class="drawer-item"
+            class:current={isCurrent}
+            onclick={() => (showChaptersDrawer = false)}
+          >
+            <span class="drawer-item-number">Capítulo {sibling.number}</span>
+            {#if isCurrent}
+              <span class="drawer-current-badge">Lendo agora</span>
+            {/if}
+          </a>
+        {/each}
+      </div>
+    </aside>
   {/if}
 </div>
 
@@ -640,12 +809,31 @@
     margin: 0 0 20px;
   }
 
-  .end-nav-row {
+  .end-nav-cluster {
     display: flex;
+    flex-direction: column;
     gap: 14px;
+    align-items: center;
+    width: 100%;
+    max-width: 620px;
+  }
+
+  .end-nav-primary {
+    display: flex;
+    gap: 12px;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .end-nav-secondary {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
   }
 
   .btn-nav-prev {
@@ -689,6 +877,279 @@
     box-shadow: 0 8px 28px rgba(139, 92, 246, 0.55);
   }
 
+  .btn-nav-next.hero-next {
+    background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+    box-shadow: 0 6px 24px rgba(124, 58, 237, 0.45);
+    font-weight: 700;
+  }
+
+  .btn-nav-next.hero-next:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 10px 32px rgba(124, 58, 237, 0.65);
+  }
+
+  .btn-nav-secondary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #b5b0cb;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-nav-secondary-action:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(181, 154, 245, 0.35);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  /* Chapter Reactions */
+  .chapter-reactions-box {
+    margin: 8px 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 540px;
+  }
+
+  .reactions-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #9d98b3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .chapter-reactions-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    color: #cfcbe2;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  .reaction-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(181, 154, 245, 0.3);
+    transform: translateY(-2px);
+    color: #ffffff;
+  }
+
+  .reaction-btn:active {
+    transform: scale(0.96);
+  }
+
+  .reaction-btn.active {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.25);
+  }
+
+  .reaction-emoji {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .reaction-label {
+    font-size: 12.5px;
+  }
+
+  .reaction-count {
+    font-size: 11.5px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: 2px;
+  }
+
+  .reaction-btn.active .reaction-count {
+    background: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+  }
+
+  /* Chapter Drawer Component */
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 5, 10, 0.75);
+    backdrop-filter: blur(6px);
+    z-index: 900;
+    border: none;
+    cursor: pointer;
+  }
+
+  .drawer-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 88vw);
+    background: #0d0f18;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.85);
+    z-index: 901;
+    display: flex;
+    flex-direction: column;
+    animation: drawerSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes drawerSlideIn {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .drawer-title-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.drawer-header-icon) {
+    color: #dfc28d;
+  }
+
+  .drawer-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .drawer-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: #dfc28d;
+    background: rgba(201, 170, 115, 0.12);
+    border: 1px solid rgba(201, 170, 115, 0.3);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .btn-drawer-close {
+    background: transparent;
+    border: none;
+    color: #8c889f;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-drawer-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .drawer-work-info {
+    padding: 10px 20px;
+    font-size: 12px;
+    color: #8c889f;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .drawer-work-info strong {
+    color: #d1cde0;
+    margin-left: 4px;
+  }
+
+  .drawer-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .drawer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+    color: #cfcbe2;
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+
+  .drawer-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .drawer-item.current {
+    background: rgba(139, 92, 246, 0.14);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #dfc28d;
+    font-weight: 700;
+  }
+
+  .drawer-current-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #dfc28d;
+    background: rgba(201, 170, 115, 0.15);
+    border: 1px solid rgba(201, 170, 115, 0.3);
+    padding: 2px 7px;
+    border-radius: 999px;
+  }
+
   .reader-comments {
     max-width: 850px;
     margin: auto;
@@ -722,8 +1183,14 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
     cursor: pointer;
     color: #d1cde0;
-    transition: all 0.2s ease;
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, color 0.2s ease;
     z-index: 40;
+  }
+
+  .back-top.ui-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(16px);
   }
 
   .back-top:hover {
@@ -767,6 +1234,31 @@
     }
     .end-heading {
       font-size: 22px;
+    }
+    .end-nav-cluster,
+    .end-nav-primary,
+    .end-nav-secondary {
+      width: 100%;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-nav-prev,
+    .btn-nav-next,
+    .btn-nav-secondary-action {
+      width: 100%;
+      justify-content: center;
+      padding: 13px 18px;
+      box-sizing: border-box;
+    }
+    .chapter-reactions-cluster {
+      gap: 6px;
+    }
+    .reaction-btn {
+      padding: 8px 11px;
+      font-size: 12px;
+    }
+    .drawer-panel {
+      width: 100vw;
     }
   }
 

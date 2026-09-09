@@ -15,7 +15,10 @@
     Flame,
     Zap,
     Cpu,
-    ArrowRight
+    ArrowRight,
+    Link2,
+    Search,
+    ExternalLink
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
 
@@ -24,7 +27,75 @@
   let showPrioritizeModal = $state(false);
   let selectedWorkId = $state('');
   let reasonText = $state('');
+  let showConflictModal = $state(false);
   let submitting = $state(false);
+
+  // Search & Candidate state
+  let searchQuery = $state('');
+  let candidateResults = $state<any[]>([]);
+  let searchLoading = $state(false);
+  let searchDone = $state(false);
+  let isUrlQuery = $state(false);
+  let detectedProvider = $state<string | null>(null);
+  let searchDebounceTimeout: any = null;
+
+  function detectProvider(val: string): string | null {
+    const lower = val.toLowerCase();
+    if (lower.includes('kuro')) return 'kuro';
+    if (lower.includes('nexus')) return 'nexus';
+    if (lower.includes('mangaflix')) return 'mangaflix';
+    if (lower.includes('manhastro')) return 'manhastro';
+    if (lower.includes('mangotoons')) return 'mangotoons';
+    return null;
+  }
+
+  function handleSearchInput(e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    searchQuery = val;
+    clearTimeout(searchDebounceTimeout);
+    detectedProvider = detectProvider(val);
+    isUrlQuery = val.trim().startsWith('http') || val.includes('.com') || val.includes('.org');
+
+    if (val.trim().length < 2) {
+      candidateResults = [];
+      searchLoading = false;
+      searchDone = false;
+      return;
+    }
+
+    searchLoading = true;
+    searchDebounceTimeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/internal/importer/search-candidates?q=${encodeURIComponent(val.trim())}`);
+        if (res.ok) {
+          const json = await res.json();
+          candidateResults = json.candidates || [];
+          isUrlQuery = Boolean(json.isUrl);
+        }
+      } catch {
+        candidateResults = [];
+      } finally {
+        searchLoading = false;
+        searchDone = true;
+      }
+    }, isUrlQuery ? 100 : 300);
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    candidateResults = [];
+    searchLoading = false;
+    searchDone = false;
+    isUrlQuery = false;
+    detectedProvider = null;
+  }
+
+  $effect(() => {
+    if (form?.conflict) {
+      showConflictModal = true;
+    }
+  });
+
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   // Real-time live polling every 5s while tab is visible
@@ -122,6 +193,297 @@
     </div>
   {/if}
 
+  <!-- Hero: Prioridade Absoluta Ativa (Modo Foco) -->
+  {#if data.activeFocus}
+    <section class="priority-hero-card" aria-label="Prioridade Absoluta Ativa">
+      <div class="hero-left-accent"></div>
+      <div class="hero-content">
+        <div class="hero-work-row">
+          <div class="hero-cover-wrap">
+            {#if data.activeFocus.works?.cover_id}
+              <img src="/media/{data.activeFocus.works.cover_id}" alt="" class="hero-cover-img" />
+            {:else}
+              <div class="hero-cover-placeholder">NOX</div>
+            {/if}
+            <div class="hero-flame-badge" title="Foco Total">
+              <Flame size={14} />
+            </div>
+          </div>
+
+          <div class="hero-meta">
+            <div class="hero-badge-line">
+              {#if data.activeFocus.status === 'BLOCKED'}
+                <span class="focus-pill blocked">
+                  <AlertTriangle size={13} />
+                  PRIORIDADE BLOQUEADA
+                </span>
+                <span class="focus-pause-badge error-badge">
+                  Falha persistente na ingestão
+                </span>
+              {:else}
+                <span class="focus-pill">
+                  <span class="focus-pulse-dot"></span>
+                  PRIORIDADE ABSOLUTA ATIVA
+                </span>
+                <span class="focus-pause-badge">
+                  Fila regular pausada (Modo Foco)
+                </span>
+              {/if}
+            </div>
+
+            <h2 class="hero-work-title">
+              {#if data.activeFocus.works?.slug}
+                <a href="/obra/{data.activeFocus.works.slug}" class="hero-work-link">
+                  {data.activeFocus.works?.title || 'Obra Priorizada'}
+                </a>
+              {:else}
+                {data.activeFocus.works?.title || 'Obra Priorizada'}
+              {/if}
+            </h2>
+
+            {#if data.activeFocus.reason}
+              <p class="hero-reason">
+                <strong>Motivo:</strong> {data.activeFocus.reason}
+              </p>
+            {/if}
+
+            <div class="hero-requester">
+              Solicitado por @{data.activeFocus.members?.username || 'staff'} · {relativeTime(data.activeFocus.created_at)}
+            </div>
+          </div>
+
+          <!-- Hero Action -->
+          <div class="hero-actions">
+            {#if data.activeFocus.status === 'BLOCKED'}
+              <form method="POST" action="?/retryBlocked" use:enhance={() => {
+                submitting = true;
+                return async ({ update }) => {
+                  submitting = false;
+                  await update();
+                };
+              }}>
+                <input type="hidden" name="request_id" value={data.activeFocus.id} />
+                <input type="hidden" name="work_id" value={data.activeFocus.work_id} />
+                <button type="submit" class="btn-retry-priority" disabled={submitting}>
+                  <RotateCw size={14} />
+                  <span>Tentar Novamente</span>
+                </button>
+              </form>
+            {/if}
+            <form method="POST" action="?/cancel" use:enhance={() => {
+              submitting = true;
+              return async ({ update }) => {
+                submitting = false;
+                await update();
+              };
+            }}>
+              <input type="hidden" name="request_id" value={data.activeFocus.id} />
+              <button type="submit" class="btn-cancel-priority" disabled={submitting}>
+                <X size={14} />
+                <span>{data.activeFocus.status === 'BLOCKED' ? 'Encerrar Prioridade e Retomar Fila' : 'Cancelar Foco'}</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {#if data.activeFocus.status === 'BLOCKED' && data.activeFocus.failure}
+          <div class="hero-blocker-alert">
+            <div class="blocker-alert-header">
+              <AlertTriangle size={15} class="blocker-icon" />
+              <strong>Motivo do Bloqueio:</strong>
+              <span class="blocker-error-msg">{data.activeFocus.failure.lastError || 'Falha persistente na fonte remota.'}</span>
+            </div>
+            <div class="blocker-meta-row">
+              {#if data.activeFocus.failure.source}<span><strong>Fonte:</strong> {data.activeFocus.failure.source.toUpperCase()}</span>{/if}
+              {#if data.activeFocus.failure.chapterNumber}<span><strong>Capítulo:</strong> {data.activeFocus.failure.chapterNumber}</span>{/if}
+              {#if data.activeFocus.failure.attempts}<span><strong>Tentativas:</strong> {data.activeFocus.failure.attempts}</span>{/if}
+              {#if data.activeFocus.failure.updatedAt}<span><strong>Última tentativa:</strong> {relativeTime(data.activeFocus.failure.updatedAt)}</span>{/if}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Progress Bar & Stats -->
+        {#if data.activeFocus.stats}
+          <div class="hero-progress-section">
+            <div class="hero-progress-labels">
+              <span class="progress-left-label">
+                {#if data.activeFocus.stats.currentChapter}
+                  <strong>Processando:</strong> Capítulo {data.activeFocus.stats.currentChapter}
+                {:else if data.activeFocus.stats.pending > 0}
+                  <strong>Sincronizando capítulos...</strong>
+                {:else}
+                  <strong>Finalizando sincronização...</strong>
+                {/if}
+              </span>
+              <span class="progress-right-label">
+                {data.activeFocus.stats.completed} de {data.activeFocus.stats.totalDiscovered} capítulos ({data.activeFocus.stats.percent}%)
+              </span>
+            </div>
+
+            <div class="hero-progress-track">
+              <div class="hero-progress-fill" style="width: {Math.max(4, Math.min(100, data.activeFocus.stats.percent))}%;"></div>
+            </div>
+
+            <div class="hero-stats-chips">
+              <span class="hero-chip done">
+                <CheckCircle2 size={12} />
+                {data.activeFocus.stats.completed} concluídos
+              </span>
+              {#if data.activeFocus.stats.staged > 0}
+                <span class="hero-chip staged">
+                  <Shield size={12} />
+                  {data.activeFocus.stats.staged} em STAGED
+                </span>
+              {/if}
+              {#if data.activeFocus.stats.pending > 0}
+                <span class="hero-chip pending">
+                  <RotateCw size={12} class="spin-icon" />
+                  {data.activeFocus.stats.pending} pendentes
+                </span>
+              {/if}
+              <span class="hero-chip info">
+                {data.activeFocus.stats.published} publicados no catálogo
+              </span>
+            </div>
+          </div>
+        {/if}
+      </div>
+    </section>
+  {/if}
+
+  <!-- Card Principal: Busca e Entrada da Prioridade Absoluta -->
+  <section class="priority-entry-card" aria-label="Iniciar Prioridade Absoluta">
+    <div class="priority-entry-header">
+      <div class="priority-entry-title-wrap">
+        <div class="flame-pulse-icon">
+          <Flame size={18} />
+        </div>
+        <div>
+          <h2 class="priority-entry-heading">Prioridade Absoluta</h2>
+          <p class="priority-entry-desc">
+            Cole a URL de qualquer fonte suportada (Nexus, Kuro, MangaFlix, Manhastro, MangoToons) ou busque pelo título para dedicar 100% da capacidade do Importer à obra selecionada.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="priority-search-box">
+      <div class="search-input-wrap">
+        {#if isUrlQuery}
+          <Link2 size={18} class="input-mode-icon link-mode" />
+        {:else}
+          <Search size={18} class="input-mode-icon" />
+        {/if}
+        <input
+          type="text"
+          class="priority-search-input"
+          placeholder="Cole o link da obra ou digite o nome (ex: Vingança do Cão de Caça)..."
+          bind:value={searchQuery}
+          oninput={handleSearchInput}
+        />
+        {#if searchLoading}
+          <RotateCw size={16} class="search-spin-icon" />
+        {:else if searchQuery}
+          <button type="button" class="btn-clear-search" onclick={clearSearch} aria-label="Limpar busca">
+            <X size={16} />
+          </button>
+        {/if}
+      </div>
+
+      {#if detectedProvider}
+        <div class="provider-detected-tag">
+          <span>Fonte detectada:</span>
+          <strong class="provider-name">{detectedProvider.toUpperCase()}</strong>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Candidate Results / Preview -->
+    {#if candidateResults.length > 0}
+      <div class="candidates-container">
+        <div class="candidates-header-line">
+          <span class="candidates-count-tag">
+            {candidateResults.length} {candidateResults.length === 1 ? 'obra encontrada' : 'obras encontradas'}
+          </span>
+          {#if isUrlQuery}
+            <span class="url-mode-badge">Resolução de URL Direta</span>
+          {/if}
+        </div>
+
+        <div class="candidates-grid">
+          {#each candidateResults as candidate (candidate.sourceWorkId || candidate.slug)}
+            <div class="candidate-card" class:is-direct-url={isUrlQuery}>
+              <div class="candidate-cover-box">
+                {#if candidate.coverId}
+                  <img src="/media/{candidate.coverId}" alt="" class="candidate-cover-img" />
+                {:else}
+                  <div class="candidate-cover-placeholder">NOX</div>
+                {/if}
+                <span class="candidate-provider-badge provider-{candidate.provider}">
+                  {candidate.provider}
+                </span>
+              </div>
+
+              <div class="candidate-info">
+                <strong class="candidate-title">{candidate.title}</strong>
+                <div class="candidate-sub-tags">
+                  {#if candidate.existsInNox}
+                    <span class="status-pill in-nox">No Catálogo Nox</span>
+                  {:else}
+                    <span class="status-pill new-work">Nova Obra</span>
+                  {/if}
+
+                  {#if candidate.chapterCount}
+                    <span class="status-pill ch-count">{candidate.chapterCount} capítulos</span>
+                  {/if}
+                </div>
+
+                {#if candidate.sourceUrl}
+                  <span class="candidate-source-url" title={candidate.sourceUrl}>
+                    {candidate.sourceUrl}
+                  </span>
+                {/if}
+              </div>
+
+              <div class="candidate-action-wrap">
+                <form method="POST" action="?/prioritize" use:enhance={() => {
+                  submitting = true;
+                  return async ({ update }) => {
+                    submitting = false;
+                    clearSearch();
+                    await update();
+                  };
+                }}>
+                  {#if candidate.workId}
+                    <input type="hidden" name="work_id" value={candidate.workId} />
+                  {:else}
+                    <input type="hidden" name="candidate_title" value={candidate.title} />
+                    <input type="hidden" name="source" value={candidate.provider} />
+                    <input type="hidden" name="source_work_id" value={candidate.sourceWorkId} />
+                    {#if candidate.sourceUrl}
+                      <input type="hidden" name="source_url" value={candidate.sourceUrl} />
+                    {/if}
+                  {/if}
+                  <input type="hidden" name="reason" value="Prioridade Absoluta solicitada via Central do Importer" />
+
+                  <button type="submit" class="btn-prioritize-card" disabled={submitting}>
+                    <Flame size={14} />
+                    <span>Priorizar Obra</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {:else if searchQuery && !searchLoading && searchDone}
+      <div class="search-empty-state">
+        <AlertTriangle size={18} />
+        <span>Nenhuma obra correspondente encontrada para "{searchQuery}". Tente colar o link direto da obra na fonte de origem.</span>
+      </div>
+    {/if}
+  </section>
+
   <!-- Metric Summary Pills -->
   <section class="counts-pills-bar" aria-label="Métricas da Fila">
     <div class="count-pill">
@@ -181,9 +543,9 @@
           </span>
         </div>
 
-        {#if data.activeJobs.length > 0}
+        {#if (data.activeJobs || []).length > 0}
           <div class="active-jobs-list">
-            {#each data.activeJobs as job (job.id)}
+            {#each (data.activeJobs || []) as job (job.id)}
               <div class="active-job-row" class:is-retry={job.status === 'RETRY'}>
                 <!-- Work Thumb -->
                 <div class="job-thumb">
@@ -238,15 +600,15 @@
           <div>
             <div class="title-with-badge">
               <h2 class="panel-title">Prioridades da Staff</h2>
-              <span class="badge-accent">{data.staffRequests.length} registradas</span>
+              <span class="badge-accent">{(data.staffRequests || []).length} registradas</span>
             </div>
             <p class="panel-sub">Obras com boost de prioridade manual atribuído por editores e administradores</p>
           </div>
         </div>
 
-        {#if data.staffRequests.length > 0}
+        {#if (data.staffRequests || []).length > 0}
           <div class="staff-requests-list">
-            {#each data.staffRequests as req (req.id)}
+            {#each (data.staffRequests || []) as req (req.id)}
               <div class="staff-request-row">
                 <div class="req-work-thumb">
                   {#if req.works?.cover_id}
@@ -305,9 +667,9 @@
           </div>
         </div>
 
-        {#if data.stagedChapters.length > 0}
+        {#if (data.stagedChapters || []).length > 0}
           <div class="staged-chapters-list">
-            {#each data.stagedChapters as staged (staged.id)}
+            {#each (data.stagedChapters || []) as staged (staged.id)}
               <div class="staged-row">
                 <div class="staged-info">
                   <strong class="staged-work">{staged.works?.title || 'Obra'}</strong>
@@ -340,9 +702,9 @@
           </div>
         </div>
 
-        {#if data.queuedJobs.length > 0}
+        {#if (data.queuedJobs || []).length > 0}
           <div class="queued-jobs-list">
-            {#each data.queuedJobs as q (q.id)}
+            {#each (data.queuedJobs || []) as q (q.id)}
               <div class="queued-row">
                 <div class="queued-meta">
                   <strong class="queued-title">{q.work?.title || (q.payload as any)?.workTitle || q.task_type}</strong>
@@ -563,7 +925,443 @@
   </div>
 {/if}
 
+<!-- Modal: Conflito de Prioridade Absoluta -->
+{#if form?.conflict && showConflictModal}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    onclick={() => (showConflictModal = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') showConflictModal = false; }}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal-card conflict-card"
+      role="document"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <AlertTriangle size={20} class="conflict-alert-icon" />
+          <h3 class="modal-title">Substituir Prioridade Absoluta?</h3>
+        </div>
+        <button
+          type="button"
+          class="modal-close-btn"
+          onclick={() => (showConflictModal = false)}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <p class="modal-desc">
+        A obra <strong>{form.activeWorkTitle}</strong> já está em modo foco no Importer.
+        O sistema opera em modo de foco exclusivo (0 ou 1 obra por vez) para garantir máxima velocidade.
+      </p>
+
+      <p class="conflict-prompt">
+        Deseja cancelar o foco da obra anterior e priorizar imediatamente esta nova obra?
+      </p>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-modal-cancel"
+          onclick={() => (showConflictModal = false)}
+        >
+          Manter Anterior
+        </button>
+        <form method="POST" action="?/prioritize" use:enhance={() => {
+          submitting = true;
+          return async ({ update }) => {
+            submitting = false;
+            showConflictModal = false;
+            await update();
+          };
+        }}>
+          <input type="hidden" name="work_id" value={form.workId} />
+          <input type="hidden" name="force_replace" value="true" />
+          <button
+            type="submit"
+            class="btn-modal-submit replace-btn"
+            disabled={submitting}
+          >
+            {#if submitting}
+              <span>Substituindo…</span>
+            {:else}
+              <Flame size={14} />
+              <span>Substituir e Focar Agora</span>
+            {/if}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  /* Hero Priority Card */
+  .priority-hero-card {
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(239, 107, 74, 0.08) 0%, rgba(20, 24, 38, 0.95) 45%, rgba(139, 92, 246, 0.06) 100%);
+    border: 1px solid rgba(239, 107, 74, 0.35);
+    border-radius: 16px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(239, 107, 74, 0.12);
+  }
+
+  .hero-left-accent {
+    width: 6px;
+    background: linear-gradient(180deg, #ef6b4a 0%, #dfc28d 50%, #8b5cf6 100%);
+    flex-shrink: 0;
+  }
+
+  .hero-content {
+    flex: 1;
+    min-width: 0;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .hero-work-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .hero-cover-wrap {
+    position: relative;
+    width: 54px;
+    height: 76px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .hero-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .hero-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #1c2132;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #dfc28d;
+  }
+
+  .hero-flame-badge {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    background: #ef6b4a;
+    color: #fff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+
+  .hero-meta {
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .hero-badge-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .focus-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 107, 74, 0.18);
+    border: 1px solid rgba(239, 107, 74, 0.45);
+    color: #ff9b82;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  .focus-pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef6b4a;
+    box-shadow: 0 0 8px #ef6b4a;
+    animation: pulse-dot 1.4s ease-in-out infinite alternate;
+  }
+
+  .focus-pause-badge {
+    font-size: 11px;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.1);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(223, 194, 141, 0.2);
+  }
+
+  .hero-work-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 750;
+    color: #f1f3fa;
+    line-height: 1.25;
+  }
+
+  .hero-work-link {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .hero-work-link:hover {
+    color: #dfc28d;
+  }
+
+  .hero-reason {
+    margin: 0;
+    font-size: 12px;
+    color: #a0a6be;
+  }
+
+  .hero-requester {
+    font-size: 11px;
+    color: #6d7592;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+  }
+
+  .btn-cancel-priority {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .focus-pill.blocked {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+  }
+
+  .focus-pause-badge.error-badge {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .btn-retry-priority {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #86efac;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-right: 8px;
+  }
+
+  .btn-retry-priority:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.25);
+    border-color: rgba(34, 197, 94, 0.6);
+    color: #ffffff;
+  }
+
+  .hero-blocker-alert {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .blocker-alert-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #fca5a5;
+  }
+
+  :global(.blocker-icon) {
+    color: #ef4444;
+    flex-shrink: 0;
+  }
+
+  .blocker-error-msg {
+    color: #fee2e2;
+    font-weight: 500;
+  }
+
+  .blocker-meta-row {
+    display: flex;
+    gap: 16px;
+    font-size: 11.5px;
+    color: #9d98b3;
+    flex-wrap: wrap;
+  }
+
+  .blocker-meta-row span strong {
+    color: #cbd2e8;
+  }
+
+  .btn-cancel-priority:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+  }
+
+  .hero-progress-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .hero-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .progress-left-label {
+    color: #cbd2e8;
+  }
+
+  .progress-right-label {
+    color: #dfc28d;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero-progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .hero-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ef6b4a 0%, #dfc28d 60%, #10b981 100%);
+    border-radius: 999px;
+    transition: width 0.4s ease;
+  }
+
+  .hero-stats-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 6px;
+  }
+
+  .hero-chip.done {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .hero-chip.staged {
+    background: rgba(139, 92, 246, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+  }
+
+  .hero-chip.pending {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+
+  .hero-chip.info {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .spin-icon {
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .conflict-alert-icon {
+    color: #f59e0b;
+  }
+
+  .conflict-prompt {
+    font-size: 13px;
+    color: #cbd2e8;
+    font-weight: 600;
+    margin: 8px 0 0 0;
+  }
+
+  .btn-modal-submit.replace-btn {
+    background: linear-gradient(135deg, #ef6b4a 0%, #dc2626 100%);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  }
   .importer-dashboard {
     display: flex;
     flex-direction: column;
@@ -1634,7 +2432,387 @@
     margin: 0;
   }
 
+  /* Priority Search & Entry Card */
+  .priority-entry-card {
+    background: linear-gradient(180deg, rgba(26, 18, 42, 0.7) 0%, rgba(13, 15, 24, 0.9) 100%);
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(249, 115, 22, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .priority-entry-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .priority-entry-title-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .flame-pulse-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(249, 115, 22, 0.15);
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    color: #f97316;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.2);
+  }
+
+  .priority-entry-heading {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .priority-entry-desc {
+    font-size: 13px;
+    color: #9d98b3;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  .priority-search-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  :global(.input-mode-icon) {
+    position: absolute;
+    left: 16px;
+    color: #8c889f;
+    pointer-events: none;
+  }
+
+  :global(.input-mode-icon.link-mode) {
+    color: #f97316;
+  }
+
+  .priority-search-input {
+    width: 100%;
+    padding: 14px 44px 14px 46px;
+    background: rgba(10, 12, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  .priority-search-input:focus {
+    border-color: #f97316;
+    background: rgba(14, 16, 28, 0.95);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+  }
+
+  .priority-search-input::placeholder {
+    color: #6b6680;
+  }
+
+  :global(.search-spin-icon) {
+    position: absolute;
+    right: 16px;
+    color: #f97316;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .btn-clear-search {
+    position: absolute;
+    right: 12px;
+    background: transparent;
+    border: none;
+    color: #8c889f;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-clear-search:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .provider-detected-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #9d98b3;
+    padding: 4px 12px;
+    background: rgba(249, 115, 22, 0.08);
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    border-radius: 999px;
+    width: fit-content;
+  }
+
+  .provider-name {
+    color: #f97316;
+    letter-spacing: 0.06em;
+  }
+
+  /* Candidates List */
+  .candidates-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .candidates-header-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .candidates-count-tag {
+    color: #8c889f;
+    font-weight: 600;
+  }
+
+  .url-mode-badge {
+    color: #f97316;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 11px;
+    background: rgba(249, 115, 22, 0.1);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .candidates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+  }
+
+  .candidate-card {
+    background: rgba(14, 16, 26, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .candidate-card:hover {
+    border-color: rgba(249, 115, 22, 0.4);
+    background: rgba(20, 22, 36, 0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .candidate-card.is-direct-url {
+    border-color: rgba(249, 115, 22, 0.45);
+    background: rgba(26, 20, 36, 0.95);
+  }
+
+  .candidate-cover-box {
+    position: relative;
+    width: 44px;
+    height: 60px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #080910;
+    flex-shrink: 0;
+  }
+
+  .candidate-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .candidate-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #4a455a;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .candidate-provider-badge {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 8.5px;
+    font-weight: 800;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 1px 0;
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .candidate-provider-badge.provider-kuro { background: rgba(124, 58, 237, 0.95); }
+  .candidate-provider-badge.provider-nexus { background: rgba(37, 99, 235, 0.95); }
+  .candidate-provider-badge.provider-mangaflix { background: rgba(217, 119, 6, 0.95); }
+  .candidate-provider-badge.provider-manhastro { background: rgba(5, 150, 105, 0.95); }
+  .candidate-provider-badge.provider-mangotoons { background: rgba(225, 29, 72, 0.95); }
+
+  .candidate-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .candidate-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .candidate-sub-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .status-pill {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .status-pill.in-nox {
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .status-pill.new-work {
+    background: rgba(249, 115, 22, 0.12);
+    color: #fb923c;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+  }
+
+  .status-pill.ch-count {
+    background: rgba(255, 255, 255, 0.06);
+    color: #d1cde0;
+  }
+
+  .candidate-source-url {
+    font-size: 11px;
+    color: #6b6680;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .candidate-action-wrap {
+    flex-shrink: 0;
+  }
+
+  .btn-prioritize-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-prioritize-card:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(234, 88, 12, 0.5);
+  }
+
+  .btn-prioritize-card:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .search-empty-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 10px;
+    color: #fca5a5;
+    font-size: 13px;
+  }
+
   @media (max-width: 640px) {
+    .candidates-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .candidate-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .candidate-card > .candidate-cover-box {
+      align-self: flex-start;
+    }
+
+    .btn-prioritize-card {
+      width: 100%;
+      justify-content: center;
+    }
+
     .importer-header {
       flex-direction: column;
       align-items: stretch;

@@ -23,6 +23,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     throw error(400, 'Detalhes não podem exceder 2000 caracteres.');
   }
 
+  // Rate limit / cooldown: max 6 reports in 10 minutes per user
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { count: recentCount } = await locals.db
+    .from('reports')
+    .select('id', { count: 'exact', head: true })
+    .eq('reporter_id', locals.user.id)
+    .gte('created_at', tenMinutesAgo);
+
+  if ((recentCount || 0) >= 6) {
+    throw error(429, 'Limite de denúncias atingido. Aguarde alguns minutos antes de enviar outro reporte.');
+  }
+
   // Anti-spam check: check if a pending report already exists from this user for this target
   let existingCheck = locals.db
     .from('reports')
@@ -37,6 +49,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     existingCheck = existingCheck.eq('chapter_id', chapterId);
   } else if (targetType === 'COMMENT' && commentId) {
     existingCheck = existingCheck.eq('comment_id', commentId);
+  } else if (targetType === 'USER' && targetUserId) {
+    existingCheck = existingCheck.eq('target_user_id', targetUserId);
   }
 
   const { data: existing } = await existingCheck.maybeSingle();

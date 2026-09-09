@@ -11,7 +11,8 @@
     Shield,
     Sparkles,
     Activity,
-    Flag
+    Flag,
+    UserCheck
   } from '@lucide/svelte';
 
   let { data, children } = $props();
@@ -35,37 +36,21 @@
 </svelte:head>
 
 <div class="admin-shell">
-  <!-- Mobile Admin Top Bar (< 950px) -->
-  <header class="admin-mobile-bar">
-    <div class="mobile-bar-brand">
-      <img
-        src="/brand/nox-symbol-64.webp"
-        alt="Nox"
-        width="30"
-        height="30"
-        class="mobile-bar-symbol"
-      />
-      <div class="mobile-bar-titles">
-        <span class="mobile-brand-name">NOX EDITORIAL</span>
-        <span class="mobile-role-badge" class:badge-admin={data.role === 'ADMIN'}>
-          {data.role === 'ADMIN' ? 'Admin' : 'Editor'}
-        </span>
-      </div>
-    </div>
-
-    <button
-      type="button"
-      class="mobile-menu-btn"
-      aria-label={mobileDrawerOpen ? 'Fechar menu' : 'Abrir menu de navegação'}
-      onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
-    >
-      {#if mobileDrawerOpen}
-        <X size={20} />
-      {:else}
-        <Menu size={20} />
-      {/if}
-    </button>
-  </header>
+  <!-- Mobile Admin Drawer Floating Trigger (< 950px) -->
+  <button
+    type="button"
+    class="mobile-admin-fab"
+    aria-label={mobileDrawerOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'}
+    onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
+  >
+    {#if mobileDrawerOpen}
+      <X size={18} />
+      <span>Fechar</span>
+    {:else}
+      <Menu size={18} />
+      <span>Painel Nox</span>
+    {/if}
+  </button>
 
   <!-- Mobile Backdrop Overlay -->
   {#if mobileDrawerOpen}
@@ -89,10 +74,20 @@
           class="sidebar-symbol"
         />
         <div class="brand-text">
-          <span class="brand-editorial">NOX EDITORIAL</span>
-          <span class="brand-sub">Central de Conteúdo</span>
+          <span class="brand-editorial">PROJECT NOX</span>
+          <span class="brand-sub">Painel de Controle</span>
         </div>
       </div>
+
+      <!-- Mobile Close Button inside Drawer -->
+      <button
+        type="button"
+        class="drawer-close-btn"
+        aria-label="Fechar menu do painel"
+        onclick={closeMobile}
+      >
+        <X size={18} />
+      </button>
 
       <!-- Operator Identity Card -->
       <div class="operator-card">
@@ -130,7 +125,7 @@
       </div>
     </div>
 
-    <!-- Grouped Editorial Navigation -->
+    <!-- Grouped Admin Navigation -->
     <nav class="sidebar-nav" aria-label="Navegação administrativa">
       <!-- Group: GERAL -->
       <div class="nav-group">
@@ -169,9 +164,9 @@
         </a>
       </div>
 
-      <!-- Group: IMPORTER -->
+      <!-- Group: OPERAÇÕES -->
       <div class="nav-group">
-        <span class="group-label">IMPORTER</span>
+        <span class="group-label">OPERAÇÕES</span>
         <a
           href="/admin/importer"
           class="nav-link"
@@ -179,13 +174,8 @@
           onclick={closeMobile}
         >
           <Activity size={17} class="nav-icon" />
-          <span>Monitor do Importer</span>
+          <span>Central do Importer</span>
         </a>
-      </div>
-
-      <!-- Group: MODERAÇÃO -->
-      <div class="nav-group">
-        <span class="group-label">MODERAÇÃO</span>
         <a
           href="/admin/reports"
           class="nav-link"
@@ -193,17 +183,31 @@
           onclick={closeMobile}
         >
           <Flag size={17} class="nav-icon" />
-          <span>Denúncias</span>
+          <span>Denúncias & Moderação</span>
           {#if (data.pendingReportsCount ?? 0) > 0}
             <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
           {/if}
         </a>
       </div>
 
-      <!-- Group: GESTÃO (Restrito ao ADMIN) -->
+      <!-- Group: EQUIPE -->
       {#if data.role === 'ADMIN'}
         <div class="nav-group">
-          <span class="group-label">GESTÃO DO SISTEMA</span>
+          <span class="group-label">EQUIPE</span>
+          <a
+            href="/admin/staff"
+            class="nav-link"
+            class:active={isActive('/admin/staff')}
+            onclick={closeMobile}
+          >
+            <UserCheck size={17} class="nav-icon" />
+            <span>Gestão da Staff</span>
+          </a>
+        </div>
+
+        <!-- Group: SISTEMA (Restrito ao ADMIN) -->
+        <div class="nav-group">
+          <span class="group-label">SISTEMA</span>
           <a
             href="/admin/gestao"
             class="nav-link"
@@ -211,7 +215,7 @@
             onclick={closeMobile}
           >
             <Users size={17} class="nav-icon" />
-            <span>Usuários e Moderação</span>
+            <span>Membros & Leitores</span>
           </a>
           <a
             href="/admin/gestao/configuracoes"
@@ -251,74 +255,50 @@
     position: relative;
   }
 
-  /* Mobile Top Bar (< 950px) */
-  .admin-mobile-bar {
+  /* Mobile Admin Floating Action Button (< 950px) */
+  .mobile-admin-fab {
     display: none;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 20px;
-    background: rgba(10, 12, 20, 0.95);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    position: sticky;
-    top: 78px;
-    z-index: 35;
-    backdrop-filter: blur(14px);
-  }
-
-  .mobile-bar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .mobile-bar-titles {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .mobile-brand-name {
-    font-family: var(--font-heading, 'Manrope', sans-serif);
-    font-size: 13px;
-    font-weight: 800;
+    gap: 8px;
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(14, 17, 28, 0.94);
+    border: 1px solid rgba(223, 194, 141, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 14px rgba(223, 194, 141, 0.2);
+    backdrop-filter: blur(16px);
     color: #ffffff;
-    letter-spacing: 0.06em;
+    font-weight: 750;
+    font-size: 13px;
+    cursor: pointer;
+    z-index: 55;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .mobile-role-badge {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(223, 194, 141, 0.12);
-    color: #dfc28d;
-    border: 1px solid rgba(223, 194, 141, 0.3);
-    width: fit-content;
+  .mobile-admin-fab:hover {
+    transform: translateY(-2px);
+    border-color: rgba(223, 194, 141, 0.65);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 20px rgba(223, 194, 141, 0.35);
   }
 
-  .mobile-role-badge.badge-admin {
-    background: rgba(181, 154, 245, 0.15);
-    color: #cbb4ff;
-    border-color: rgba(181, 154, 245, 0.35);
-  }
-
-  .mobile-menu-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e5e0f0;
-    display: flex;
+  .drawer-close-btn {
+    display: none;
     align-items: center;
     justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #d1cde0;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
-  .mobile-menu-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+  .drawer-close-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
     color: #ffffff;
   }
 
@@ -597,8 +577,19 @@
       grid-template-columns: 1fr;
     }
 
-    .admin-mobile-bar {
+    .mobile-admin-fab {
+      display: inline-flex;
+    }
+
+    .drawer-close-btn {
       display: flex;
+      position: absolute;
+      top: 0;
+      right: 0;
+    }
+
+    .sidebar-header {
+      position: relative;
     }
 
     .mobile-backdrop {

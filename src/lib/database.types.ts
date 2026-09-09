@@ -72,6 +72,41 @@ export type Database = {
           },
         ]
       }
+      chapter_reactions: {
+        Row: {
+          id: string
+          chapter_id: string
+          visitor_id: string
+          user_id: string | null
+          emoji: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          chapter_id: string
+          visitor_id: string
+          user_id?: string | null
+          emoji: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          chapter_id?: string
+          visitor_id?: string
+          user_id?: string | null
+          emoji?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapter_reactions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       chapters: {
         Row: {
           created_at: string
@@ -1380,6 +1415,14 @@ export type Database = {
       claim_editor_invite: { Args: never; Returns: boolean }
       current_role: { Args: never; Returns: string }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
+      get_chapter_reactions: {
+        Args: { p_chapter_id: string; p_visitor_id: string }
+        Returns: Json
+      }
+      toggle_chapter_reaction: {
+        Args: { p_chapter_id: string; p_visitor_id: string; p_emoji: string }
+        Returns: Json
+      }
       importer_acquire_job: {
         Args: {
           p_lease_duration?: string

@@ -136,21 +136,6 @@
 
     <!-- 5. Lançamentos (Single Wide Column High-Density Feed) -->
     <RecentReleases releases={data.recentReleases} />
-
-    <!-- 6. Explore Catalog CTA -->
-    <div class="explore-catalog-banner">
-      <div class="explore-copy">
-        <span class="eyebrow">TODO O UNIVERSO NOX</span>
-        <h2>Encontre sua próxima grande leitura</h2>
-        <p class="small muted">
-          Explore o catálogo completo com filtros detalhados de formato, status e dezenas de gêneros.
-        </p>
-      </div>
-      <a href="/catalogo" class="button primary explore-cta">
-        <span>Encontrar minha próxima leitura</span>
-        <ArrowRight size={16} />
-      </a>
-    </div>
   </div>
 </div>
 
@@ -171,36 +156,6 @@
 
   .section-block {
     margin-bottom: 3rem;
-  }
-
-  .explore-catalog-banner {
-    margin-top: 3rem;
-    background: linear-gradient(135deg, rgba(29, 19, 46, 0.7) 0%, rgba(14, 10, 22, 0.9) 100%);
-    border: 1px solid rgba(168, 85, 247, 0.2);
-    border-radius: 16px;
-    padding: 2.25rem 2.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .explore-copy h2 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin: 0.25rem 0 0.5rem;
-  }
-
-  .explore-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0.85rem 1.75rem;
-    font-weight: 600;
-    white-space: nowrap;
-    text-decoration: none;
   }
 
   .section-header {

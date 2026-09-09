@@ -242,7 +242,7 @@
                   {#if data.role === 'ADMIN' || data.role === 'EDITOR'}
                     <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
                       <Shield size={16} />
-                      <span>Painel Editorial</span>
+                      <span>Painel de Controle</span>
                     </a>
                   {/if}
                 </div>
@@ -371,43 +371,6 @@
         <a href="/ranking">Ranking</a>
         <a href="/sobre">Sobre a Nox</a>
         <a href="/privacidade">Privacidade</a>
-        {#if data.role === 'ADMIN' || data.role === 'EDITOR'}
-          <a href="/admin" class="footer-admin-link">
-            <Shield size={14} />
-            <span>Editorial</span>
-          </a>
-        {/if}
-      </div>
-
-      <div class="footer-community">
-        <span class="footer-col-heading">Comunidade</span>
-        <div class="footer-community-btns">
-          <a
-            href="https://web.canary.fluxer.app/invite/q456UCVt"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="footer-community-btn btn-fluxer"
-            title="Entrar no Fluxer oficial do Project Nox"
-          >
-            <svg viewBox="0 0 512 512" fill="none" class="community-svg" aria-hidden="true">
-              <path d="M187.53 266.057C171.987 266.057 157.206 269.562 143.187 276.571C129.321 283.581 118.044 294.781 109.359 310.171C103.743 320.3 100.041 332.574 98.2529 346.993C96.5986 360.334 107.829 371.2 121.271 371.2C135.049 371.2 145.336 359.626 148.673 346.259C150.564 338.68 153.612 332.67 157.815 328.229C165.891 319.695 176.101 315.429 188.444 315.429C196.673 315.429 204.216 317.486 211.073 321.6C217.93 325.562 226.844 332.343 237.815 341.943C254.577 356.724 269.359 367.467 282.159 374.171C294.959 380.724 309.13 384 324.673 384C340.216 384 354.997 380.495 369.016 373.486C383.035 366.476 394.387 355.276 403.073 339.886C408.811 329.718 412.521 317.389 414.202 302.899C415.745 289.597 404.498 278.857 391.106 278.857C377.243 278.858 366.904 290.561 363.218 303.927C361.421 310.442 358.706 315.952 355.073 320.457C347.454 329.905 337.016 334.629 323.759 334.629C315.53 334.629 308.063 332.647 301.359 328.686C294.806 324.571 285.816 317.714 274.387 308.114C257.473 155.886 242.615 145.371 229.815 138.514C217.168 131.505 203.073 128 187.53 128Z" fill="currentColor"/>
-              <path d="M187.53 128C171.987 128 157.206 131.505 143.187 138.514C129.321 145.524 118.044 156.724 109.359 172.114C103.743 182.243 100.041 194.517 98.2529 208.935C96.5985 222.276 107.829 233.142 121.271 233.143C135.049 233.143 145.336 221.569 148.673 208.202C150.564 200.623 153.612 194.613 157.815 190.171C165.891 181.638 176.101 177.371 188.444 177.371C196.673 177.371 204.216 179.429 211.073 183.543C217.93 187.505 226.844 194.286 237.815 203.886C254.577 218.667 269.359 229.41 282.159 236.114C294.959 242.667 309.13 245.943 324.673 245.943C340.216 245.943 354.997 242.438 369.016 235.429C383.035 228.419 394.387 217.219 403.073 201.829C408.811 191.661 412.521 179.332 414.202 164.842C415.745 151.539 404.498 140.8 391.106 140.8C377.243 140.8 366.904 152.504 363.218 165.87C361.421 172.385 358.706 177.895 355.073 182.4C347.454 191.848 337.016 196.571 323.759 196.571C315.53 196.571 308.063 194.59 301.359 190.629C294.806 186.514 285.816 179.657 274.387 170.057C257.473 155.886 242.615 145.371 229.815 138.514C217.168 131.505 203.073 128 187.53 128Z" fill="currentColor"/>
-            </svg>
-            <span>Fluxer</span>
-          </a>
-          <a
-            href="https://discord.com/invite/qNAMYUEmGj"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="footer-community-btn btn-discord"
-            title="Entrar no Discord oficial do Project Nox"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" class="community-svg" aria-hidden="true">
-              <path d="M19.54 4.46A16.5 16.5 0 0 0 15.4 3.2l-.5 1.02a15.3 15.3 0 0 0-5.8 0L8.6 3.2a16.5 16.5 0 0 0-4.14 1.26C1.84 8.4 1.13 12.24 1.48 16.03A16.65 16.65 0 0 0 6.56 18.6l1.23-1.68a10.33 10.33 0 0 1-1.94-.93l.47-.36a11.92 11.92 0 0 0 11.36 0l.47.36c-.62.37-1.27.69-1.94.93l1.23 1.68a16.62 16.62 0 0 0 5.08-2.57c.41-4.4-.7-8.2-2.98-11.57ZM8.68 13.7c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Zm6.64 0c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Z"/>
-            </svg>
-            <span>Discord</span>
-          </a>
-        </div>
       </div>
     </div>
 
@@ -1099,80 +1062,6 @@
     color: #ffffff;
   }
 
-  .footer-admin-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #c9aa73 !important;
-  }
-
-  /* Footer Community Buttons */
-  .footer-community {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .footer-col-heading {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #8c889c;
-  }
-
-  .footer-community-btns {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .footer-community-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .footer-community-btn .community-svg {
-    width: 17px;
-    height: 17px;
-    flex-shrink: 0;
-  }
-
-  .footer-community-btn.btn-fluxer {
-    background: rgba(214, 162, 255, 0.08);
-    border: 1px solid rgba(214, 162, 255, 0.25);
-    color: #d6a2ff;
-  }
-
-  .footer-community-btn.btn-fluxer:hover {
-    background: rgba(214, 162, 255, 0.16);
-    border-color: rgba(214, 162, 255, 0.5);
-    color: #f1dcff;
-    box-shadow: 0 0 16px rgba(214, 162, 255, 0.25);
-    transform: translateY(-1px);
-  }
-
-  .footer-community-btn.btn-discord {
-    background: rgba(114, 137, 218, 0.08);
-    border: 1px solid rgba(114, 137, 218, 0.25);
-    color: #9cb0ff;
-  }
-
-  .footer-community-btn.btn-discord:hover {
-    background: rgba(114, 137, 218, 0.16);
-    border-color: rgba(114, 137, 218, 0.5);
-    color: #ffffff;
-    box-shadow: 0 0 16px rgba(114, 137, 218, 0.25);
-    transform: translateY(-1px);
-  }
-
   .footer-bottom {
     max-width: 1440px;
     margin: 32px auto 0;
@@ -1349,37 +1238,6 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-    }
-
-    .footer-community {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .footer-col-heading {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      color: #b59af5;
-    }
-
-    .footer-community-btns {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      width: 100%;
-    }
-
-    .footer-community-btn {
-      width: 100%;
-      justify-content: center;
-      padding: 12px 14px;
-      border-radius: 10px;
-      font-size: 13.5px;
-      font-weight: 600;
-      box-sizing: border-box;
     }
 
     .footer-bottom {

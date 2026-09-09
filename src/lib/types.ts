@@ -32,13 +32,18 @@ export const kindLabels: Record<string, string> = {
   MANHUA: 'Manhua',
   WEBTOON: 'Webtoon'
 };
-export const date = (value: string) =>
-  new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(
-    new Date(value)
-  );
+export const date = (value?: string | null) => {
+  if (!value) return 'Data indefinida';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return 'Data indefinida';
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+};
 
-export function relativeTime(value: string): string {
-  const ms = Date.now() - new Date(value).getTime();
+export function relativeTime(value?: string | null): string {
+  if (!value) return 'recentemente';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return 'recentemente';
+  const ms = Date.now() - d.getTime();
   const seconds = Math.max(0, Math.floor(ms / 1000));
   if (seconds < 60) return 'agora há pouco';
   const minutes = Math.floor(seconds / 60);
