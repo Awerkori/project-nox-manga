@@ -47,7 +47,8 @@ export const load = async ({ locals, params }) => {
     bannerRes,
     favoritesRes,
     readingRes,
-    scanRolesRes
+    scanRolesRes,
+    staffRoleRes
   ] = await Promise.all([
     locals.db.rpc('member_public_profile_stats', { p_user: member.id }),
     locals.db.from('user_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', member.id),
@@ -175,7 +176,13 @@ export const load = async ({ locals, params }) => {
         )
       `)
       .eq('user_id', member.id)
-      .eq('scans.status', 'ACTIVE')
+      .eq('scans.status', 'ACTIVE'),
+    locals.db
+      .from('access_roles')
+      .select('role')
+      .eq('user_id', member.id)
+      .eq('suspended', false)
+      .maybeSingle()
   ]);
 
   // Format unlocked achievements
@@ -406,6 +413,7 @@ export const load = async ({ locals, params }) => {
     canViewCosmetics,
     canViewFavorites,
     canViewReadingHistory,
-    viewerAuthenticated: !!locals.user
+    viewerAuthenticated: !!locals.user,
+    staffRole: staffRoleRes.data?.role || null
   };
 };

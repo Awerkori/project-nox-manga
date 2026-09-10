@@ -278,6 +278,18 @@
             {:else if rank.title}
               <span class="rank-title-pill">{rank.title}</span>
             {/if}
+
+            {#if data.staffRole === 'ADMIN'}
+              <span class="staff-role-badge admin">
+                <ShieldCheck size={13} />
+                <span>Administrador</span>
+              </span>
+            {:else if data.staffRole === 'EDITOR'}
+              <span class="staff-role-badge editor">
+                <ShieldCheck size={13} />
+                <span>Editor Nox</span>
+              </span>
+            {/if}
           </div>
 
           <div class="meta-line">
@@ -1006,7 +1018,26 @@
   .profile-banner-fallback {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0d101a 100%);
+    background:
+      radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.28), transparent 60%),
+      radial-gradient(ellipse at 20% 80%, rgba(223, 194, 141, 0.18), transparent 50%),
+      linear-gradient(135deg, #181b2e 0%, #0c0e18 100%);
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .profile-banner-fallback::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.015) 0,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 0,
+      transparent 20px
+    );
+    pointer-events: none;
   }
 
   .profile-body {
@@ -1122,6 +1153,32 @@
     color: #c4b5fd;
     font-size: 0.78rem;
     font-weight: 600;
+  }
+
+  .staff-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 750;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .staff-role-badge.admin {
+    background: rgba(139, 92, 246, 0.16);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    color: #c4b5fd;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
+  }
+
+  .staff-role-badge.editor {
+    background: rgba(223, 194, 141, 0.16);
+    border: 1px solid rgba(223, 194, 141, 0.45);
+    color: #dfc28d;
+    box-shadow: 0 0 12px rgba(223, 194, 141, 0.2);
   }
 
   .meta-line {

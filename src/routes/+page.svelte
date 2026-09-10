@@ -121,7 +121,7 @@
         title="Novas Obras"
         subtitle="Adicionadas recentemente ao catálogo"
         works={data.works}
-        viewAllUrl="/catalogo"
+        loadMoreSort="latest"
       />
     {/if}
 
@@ -131,7 +131,7 @@
         title="Mais Lidos"
         subtitle="Obras mais populares e acessadas pelos leitores"
         works={data.mostReadWorks}
-        viewAllUrl="/ranking"
+        loadMoreSort="most_read"
       />
     {/if}
 

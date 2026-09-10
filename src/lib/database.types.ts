@@ -2026,6 +2026,58 @@ export type Database = {
           },
         ]
       }
+      scan_transfer_requests: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          responded_at: string | null
+          scan_id: string
+          status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          responded_at?: string | null
+          scan_id: string
+          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          responded_at?: string | null
+          scan_id?: string
+          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          to_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_transfer_requests_from_user_id_fkey"
+            columns: ["from_user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_transfer_requests_to_user_id_fkey"
+            columns: ["to_user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_transfer_requests_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scans: {
         Row: {
           banner_id: string | null
@@ -2250,18 +2302,21 @@ export type Database = {
           created_at: string
           is_primary: boolean
           scan_id: string
+          status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
           work_id: string
         }
         Insert: {
           created_at?: string
           is_primary?: boolean
           scan_id: string
+          status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
           work_id: string
         }
         Update: {
           created_at?: string
           is_primary?: boolean
           scan_id?: string
+          status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
           work_id?: string
         }
         Relationships: [
@@ -2484,6 +2539,30 @@ export type Database = {
       }
       transfer_scan_ownership: {
         Args: { p_scan_id: string; p_new_owner_id: string }
+        Returns: Json
+      }
+      request_scan_ownership_transfer: {
+        Args: { p_scan_id: string; p_target_user_id: string }
+        Returns: Json
+      }
+      respond_scan_ownership_transfer: {
+        Args: { p_request_id: string; p_accept: boolean }
+        Returns: Json
+      }
+      cancel_scan_transfer_request: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      cancel_scan_project_request: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      cancel_scan_partner_request: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      update_work_scan_status: {
+        Args: { p_scan_id: string; p_work_id: string; p_status: string }
         Returns: Json
       }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }

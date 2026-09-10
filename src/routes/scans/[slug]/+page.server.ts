@@ -17,6 +17,7 @@ export const load = async ({ locals, params }) => {
       .from('work_scans')
       .select(`
         is_primary,
+        status,
         works!inner(${WORK_FIELDS})
       `)
       .eq('scan_id', scan.id)
@@ -56,7 +57,11 @@ export const load = async ({ locals, params }) => {
       .order('role', { ascending: true })
   ]);
 
-  const works = (worksRes.data || []).map((row: any) => row.works).filter(Boolean);
+  const works = (worksRes.data || []).map((row: any) => ({
+    ...row.works,
+    scan_status: row.status || 'ACTIVE',
+    is_primary: row.is_primary
+  })).filter(Boolean);
   const chapters = (chaptersRes.data || []).map((row: any) => row.chapters).filter(Boolean);
   const members = (membersRes.data || []).map((row: any) => ({
     role: row.role,

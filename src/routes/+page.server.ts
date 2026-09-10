@@ -1,5 +1,7 @@
 import { WORK_FIELDS, check } from '$lib/server/db';
 
+const HOME_WORK_FIELDS = `${WORK_FIELDS}, work_scans(is_primary, status, scans(id, name, slug, logo_id, is_official))`;
+
 let popularCache: { timestamp: number; works: any[] } | null = null;
 const POPULAR_CACHE_TTL_MS = 60_000;
 
@@ -8,7 +10,7 @@ export const load = async ({ locals }) => {
   const [worksRes, chaptersRes, readingRes] = await Promise.all([
     locals.db
       .from('works')
-      .select(WORK_FIELDS)
+      .select(HOME_WORK_FIELDS)
       .eq('published', true)
       .order('updated_at', { ascending: false })
       .limit(16),
@@ -194,7 +196,7 @@ export const load = async ({ locals }) => {
   let mostReadWorks: typeof works = [];
   const mostReadRes = await locals.db
     .from('works')
-    .select(WORK_FIELDS)
+    .select(HOME_WORK_FIELDS)
     .eq('published', true)
     .gt('views_total', 0)
     .order('views_total', { ascending: false })
@@ -206,7 +208,7 @@ export const load = async ({ locals }) => {
     // Fallback: sort by views_total DESC, updated_at DESC
     const fallbackRes = await locals.db
       .from('works')
-      .select(WORK_FIELDS)
+      .select(HOME_WORK_FIELDS)
       .eq('published', true)
       .order('views_total', { ascending: false })
       .order('updated_at', { ascending: false })

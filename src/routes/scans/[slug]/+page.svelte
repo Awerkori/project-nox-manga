@@ -23,11 +23,21 @@
     return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(n);
   }
 
+  let currentWorks = $derived(
+    data.works.filter((w: any) => !w.scan_status || w.scan_status === 'ACTIVE' || w.scan_status === 'PAUSED')
+  );
+  let completedWorks = $derived(
+    data.works.filter((w: any) => w.scan_status === 'COMPLETED')
+  );
+  let previousWorks = $derived(
+    data.works.filter((w: any) => w.scan_status === 'ABANDONED')
+  );
+
   const ROLE_LABELS: Record<string, string> = {
-    OWNER: 'Líder & Fundador',
-    ADMIN: 'Administrador',
-    UPLOADER: 'Uploader / Revisor',
-    MEMBER: 'Tradutor / Membro'
+    OWNER: 'Dono',
+    ADMIN: 'Admin da Scan',
+    UPLOADER: 'Uploader',
+    MEMBER: 'Staff'
   };
 </script>
 
@@ -185,10 +195,48 @@
     <main class="tab-pane">
       {#if activeTab === 'works'}
         {#if data.works.length > 0}
-          <div class="works-grid">
-            {#each data.works as work (work.id)}
-              <WorkCard {work} />
-            {/each}
+          <div class="works-groups-container">
+            {#if currentWorks.length > 0}
+              <section class="works-group">
+                <div class="group-header">
+                  <h2 class="group-title">Projetos Atuais</h2>
+                  <span class="group-count">{currentWorks.length}</span>
+                </div>
+                <div class="works-grid">
+                  {#each currentWorks as work (work.id)}
+                    <WorkCard {work} />
+                  {/each}
+                </div>
+              </section>
+            {/if}
+
+            {#if completedWorks.length > 0}
+              <section class="works-group">
+                <div class="group-header">
+                  <h2 class="group-title">Projetos Concluídos</h2>
+                  <span class="group-count">{completedWorks.length}</span>
+                </div>
+                <div class="works-grid">
+                  {#each completedWorks as work (work.id)}
+                    <WorkCard {work} />
+                  {/each}
+                </div>
+              </section>
+            {/if}
+
+            {#if previousWorks.length > 0}
+              <section class="works-group">
+                <div class="group-header">
+                  <h2 class="group-title">Projetos Anteriores</h2>
+                  <span class="group-count">{previousWorks.length}</span>
+                </div>
+                <div class="works-grid">
+                  {#each previousWorks as work (work.id)}
+                    <WorkCard {work} />
+                  {/each}
+                </div>
+              </section>
+            {/if}
           </div>
         {:else}
           <div class="empty-box">
@@ -309,7 +357,26 @@
   .banner-placeholder {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0d101a 100%);
+    background:
+      radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.28), transparent 60%),
+      radial-gradient(ellipse at 20% 80%, rgba(223, 194, 141, 0.18), transparent 50%),
+      linear-gradient(135deg, #181b2e 0%, #0c0e18 100%);
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .banner-placeholder::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.015) 0,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 0,
+      transparent 20px
+    );
+    pointer-events: none;
   }
 
   .hero-body {
@@ -521,6 +588,47 @@
   }
 
   /* Panes */
+  .works-groups-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .works-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .group-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .group-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.6rem;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.25);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #dfc28d;
+  }
+
   .works-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

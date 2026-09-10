@@ -34,7 +34,7 @@
   const capitalizedToday = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
 
   let hasAttentionItems = $derived(
-    data.pendingReportsCount > 0 || data.draftsCount > 0 || (data.unrecoveredFailures || 0) > 0
+    data.pendingReportsCount > 0 || data.draftsCount > 0
   );
 </script>
 
@@ -142,30 +142,6 @@
             </div>
           </a>
         {/if}
-
-        {#if (data.unrecoveredFailures || 0) > 0}
-          <a href="/admin/importer" class="triage-card triage-rose">
-            <div class="triage-card-icon rose">
-              <AlertTriangle size={20} />
-            </div>
-            <div class="triage-card-body">
-              <div class="triage-card-top">
-                <span class="triage-card-badge rose">Importer</span>
-                <span class="triage-card-count">{data.unrecoveredFailures}</span>
-              </div>
-              <strong class="triage-card-title">
-                {data.unrecoveredFailures} falha{data.unrecoveredFailures > 1 ? 's' : ''} crítica{data.unrecoveredFailures > 1 ? 's' : ''} pendente{data.unrecoveredFailures > 1 ? 's' : ''}
-              </strong>
-              <p class="triage-card-desc">
-                Incidentes não recuperados automaticamente. ({data.recoveredFailures || 0} retries foram tratados com sucesso).
-              </p>
-            </div>
-            <div class="triage-card-action rose">
-              <span>Ver Importer</span>
-              <ArrowRight size={13} />
-            </div>
-          </a>
-        {/if}
       </div>
     {:else}
       <!-- All Clear State -->
@@ -176,7 +152,7 @@
         <div class="clear-text">
           <strong class="clear-title">Tudo em ordem na plataforma</strong>
           <p class="clear-desc">
-            Nenhuma denúncia pendente, nenhum rascunho travado na mesa e importer sem falhas nas últimas 24 horas.
+            Nenhuma denúncia pendente e nenhum rascunho travado na mesa editorial.
           </p>
         </div>
       </div>

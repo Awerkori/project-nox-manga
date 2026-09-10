@@ -32,18 +32,31 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     .eq('user_id', locals.user.id);
 
   if (!memberRows || memberRows.length === 0) {
-    const { data: partnerRequests } = await locals.db
-      .from('scan_partner_requests')
-      .select('*')
-      .eq('user_id', locals.user.id)
-      .order('created_at', { ascending: false });
+    const [partnerRequestsRes, incomingTransferRes] = await Promise.all([
+      locals.db
+        .from('scan_partner_requests')
+        .select('*')
+        .eq('user_id', locals.user.id)
+        .order('created_at', { ascending: false }),
+      locals.db
+        .from('scan_transfer_requests')
+        .select(`
+          *,
+          scans(id, name, slug),
+          from_user:from_user_id(id, username, display_name)
+        `)
+        .eq('to_user_id', locals.user.id)
+        .eq('status', 'PENDING')
+        .maybeSingle()
+    ]);
 
     return {
       authenticated: true,
       isMember: false,
       userId: locals.user.id,
       myScans: [],
-      partnerRequests: partnerRequests || [],
+      partnerRequests: partnerRequestsRes.data || [],
+      incomingTransfer: incomingTransferRes.data || null,
       currentScan: null,
       userRole: null,
       works: [],
@@ -52,6 +65,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       totalViews: 0,
       invites: [],
       projectRequests: [],
+      transferRequests: [],
       catalogWorks: []
     };
   }
@@ -64,11 +78,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const activeScanId = url.searchParams.get('id') || myScans[0].id;
   const currentScan = myScans.find((s: any) => s.id === activeScanId) || myScans[0];
 
-  const [worksRes, chaptersRes, teamRes, invitesRes, projectRequestsRes, catalogWorksRes] = await Promise.all([
+  const [worksRes, chaptersRes, teamRes, invitesRes, projectRequestsRes, catalogWorksRes, transferRequestsRes, incomingTransferRes] = await Promise.all([
     locals.db
       .from('work_scans')
       .select(`
         is_primary,
+        status,
         created_at,
         works!inner(${WORK_FIELDS})
       `)
@@ -124,10 +139,33 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .select('id, title, slug, cover_id')
       .eq('published', true)
       .order('title')
-      .limit(100)
+      .limit(100),
+    locals.db
+      .from('scan_transfer_requests')
+      .select(`
+        *,
+        from_user:from_user_id(id, username, display_name),
+        to_user:to_user_id(id, username, display_name)
+      `)
+      .eq('scan_id', currentScan.id)
+      .order('created_at', { ascending: false }),
+    locals.db
+      .from('scan_transfer_requests')
+      .select(`
+        *,
+        scans(id, name, slug),
+        from_user:from_user_id(id, username, display_name)
+      `)
+      .eq('to_user_id', locals.user.id)
+      .eq('status', 'PENDING')
+      .maybeSingle()
   ]);
 
-  const works = (worksRes.data || []).map((r: any) => r.works).filter(Boolean);
+  const works = (worksRes.data || []).map((r: any) => ({
+    ...r.works,
+    project_status: r.status || 'ACTIVE',
+    is_primary: r.is_primary
+  })).filter(Boolean);
   const chapters = (chaptersRes.data || []).map((r: any) => r.chapters).filter(Boolean);
   const team = (teamRes.data || []).map((r: any) => ({
     role: r.role,
@@ -136,6 +174,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const invites = invitesRes.data || [];
   const projectRequests = projectRequestsRes.data || [];
   const catalogWorks = catalogWorksRes.data || [];
+  const transferRequests = transferRequestsRes.data || [];
+  const incomingTransfer = incomingTransferRes.data || null;
 
   const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
 
@@ -152,6 +192,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     totalViews,
     invites,
     projectRequests,
+    transferRequests,
+    incomingTransfer,
     partnerRequests: [],
     catalogWorks
   };
@@ -344,15 +386,43 @@ export const actions: Actions = {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
-    const newOwnerId = formData.get('new_owner_id') as string;
+    const targetUserId = formData.get('target_user_id') as string || formData.get('new_owner_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('transfer_scan_ownership', {
+    const { data, error: rpcErr } = await locals.db.rpc('request_scan_ownership_transfer', {
       p_scan_id: scanId,
-      p_new_owner_id: newOwnerId
+      p_target_user_id: targetUserId
     });
 
     if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, transferred: true };
+    return { success: true, transferRequested: true };
+  },
+
+  respondOwnershipTransfer: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const requestId = formData.get('request_id') as string;
+    const accept = formData.get('accept') === 'true';
+
+    const { data, error: rpcErr } = await locals.db.rpc('respond_scan_ownership_transfer', {
+      p_request_id: requestId,
+      p_accept: accept
+    });
+
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, transferResponded: true, accepted: accept };
+  },
+
+  cancelOwnershipTransfer: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const requestId = formData.get('request_id') as string;
+
+    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_transfer_request', {
+      p_request_id: requestId
+    });
+
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, transferCancelled: true };
   },
 
   requestProject: async ({ request, locals }) => {
@@ -377,5 +447,48 @@ export const actions: Actions = {
 
     if (insErr) return fail(400, { message: insErr.message });
     return { success: true, projectRequested: true };
+  },
+
+  cancelProjectRequest: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const requestId = formData.get('request_id') as string;
+
+    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_project_request', {
+      p_request_id: requestId
+    });
+
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, projectRequestCancelled: true };
+  },
+
+  cancelPartnerRequest: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const requestId = formData.get('request_id') as string;
+
+    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_partner_request', {
+      p_request_id: requestId
+    });
+
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, partnerRequestCancelled: true };
+  },
+
+  updateProjectStatus: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const scanId = formData.get('scan_id') as string;
+    const workId = formData.get('work_id') as string;
+    const status = formData.get('status') as string;
+
+    const { data, error: rpcErr } = await locals.db.rpc('update_work_scan_status', {
+      p_scan_id: scanId,
+      p_work_id: workId,
+      p_status: status
+    });
+
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, projectStatusUpdated: true, newStatus: status };
   }
 };

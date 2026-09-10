@@ -37,22 +37,6 @@
 </svelte:head>
 
 <div class="admin-shell">
-  <!-- Mobile Admin Drawer Floating Trigger (< 950px) -->
-  <button
-    type="button"
-    class="mobile-admin-fab"
-    aria-label={mobileDrawerOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'}
-    onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
-  >
-    {#if mobileDrawerOpen}
-      <X size={18} />
-      <span>Fechar</span>
-    {:else}
-      <Menu size={18} />
-      <span>Painel Nox</span>
-    {/if}
-  </button>
-
   <!-- Mobile Backdrop Overlay -->
   {#if mobileDrawerOpen}
     <div
@@ -155,15 +139,6 @@
           <span>Obras e Capítulos</span>
         </a>
         <a
-          href="/admin/scans"
-          class="nav-link"
-          class:active={isActive('/admin/scans')}
-          onclick={closeMobile}
-        >
-          <Users size={17} class="nav-icon" />
-          <span>Gestão de Scans</span>
-        </a>
-        <a
           href="/admin/tags"
           class="nav-link"
           class:active={isActive('/admin/tags')}
@@ -172,14 +147,19 @@
           <Tags size={17} class="nav-icon" />
           <span>Gêneros e Tags</span>
         </a>
+      </div>
+
+      <!-- Group: PARCEIROS -->
+      <div class="nav-group">
+        <span class="group-label">PARCEIROS</span>
         <a
-          href="/admin/loja"
+          href="/admin/scans"
           class="nav-link"
-          class:active={isActive('/admin/loja')}
+          class:active={isActive('/admin/scans')}
           onclick={closeMobile}
         >
-          <ShoppingBag size={17} class="nav-icon" />
-          <span>Gestão da Loja</span>
+          <Users size={17} class="nav-icon" />
+          <span>Gestão de Scans</span>
         </a>
       </div>
 
@@ -195,6 +175,11 @@
           <Activity size={17} class="nav-icon" />
           <span>Central do Importer</span>
         </a>
+      </div>
+
+      <!-- Group: STAFF -->
+      <div class="nav-group">
+        <span class="group-label">STAFF</span>
         <a
           href="/admin/reports"
           class="nav-link"
@@ -209,10 +194,10 @@
         </a>
       </div>
 
-      <!-- Group: EQUIPE -->
-      {#if data.role === 'ADMIN'}
-        <div class="nav-group">
-          <span class="group-label">EQUIPE</span>
+      <!-- Group: ADMINISTRAÇÃO -->
+      <div class="nav-group">
+        <span class="group-label">ADMINISTRAÇÃO</span>
+        {#if data.role === 'ADMIN'}
           <a
             href="/admin/staff"
             class="nav-link"
@@ -222,11 +207,6 @@
             <UserCheck size={17} class="nav-icon" />
             <span>Gestão da Staff</span>
           </a>
-        </div>
-
-        <!-- Group: SISTEMA (Restrito ao ADMIN) -->
-        <div class="nav-group">
-          <span class="group-label">SISTEMA</span>
           <a
             href="/admin/gestao"
             class="nav-link"
@@ -236,6 +216,17 @@
             <Users size={17} class="nav-icon" />
             <span>Membros & Leitores</span>
           </a>
+        {/if}
+        <a
+          href="/admin/loja"
+          class="nav-link"
+          class:active={isActive('/admin/loja')}
+          onclick={closeMobile}
+        >
+          <ShoppingBag size={17} class="nav-icon" />
+          <span>Gestão da Loja</span>
+        </a>
+        {#if data.role === 'ADMIN'}
           <a
             href="/admin/gestao/configuracoes"
             class="nav-link"
@@ -245,8 +236,8 @@
             <Settings size={17} class="nav-icon" />
             <span>Configurações</span>
           </a>
-        </div>
-      {/if}
+        {/if}
+      </div>
 
       <!-- Group: ATALHOS EXTERNOS -->
       <div class="nav-group nav-group-bottom">
@@ -260,6 +251,19 @@
 
   <!-- Main Content Workspace -->
   <main class="admin-content">
+    <!-- Mobile Header Trigger -->
+    <div class="mobile-admin-header">
+      <button
+        type="button"
+        class="mobile-expand-btn"
+        onclick={() => (mobileDrawerOpen = true)}
+        aria-label="Expandir painel de controle"
+      >
+        <Menu size={17} />
+        <span>Expandir painel de controle</span>
+      </button>
+    </div>
+
     {@render children()}
   </main>
 </div>
@@ -274,32 +278,35 @@
     position: relative;
   }
 
-  /* Mobile Admin Floating Action Button (< 950px) */
-  .mobile-admin-fab {
+  /* Mobile Admin Top Header (< 950px) */
+  .mobile-admin-header {
     display: none;
-    align-items: center;
-    gap: 8px;
-    position: fixed;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-    right: calc(18px + env(safe-area-inset-right, 0px));
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: rgba(14, 17, 28, 0.94);
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 14px rgba(223, 194, 141, 0.2);
-    backdrop-filter: blur(16px);
-    color: #ffffff;
-    font-weight: 750;
-    font-size: 13px;
-    cursor: pointer;
-    z-index: 55;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .mobile-admin-fab:hover {
-    transform: translateY(-2px);
-    border-color: rgba(223, 194, 141, 0.65);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 20px rgba(223, 194, 141, 0.35);
+  .mobile-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+    border-radius: 10px;
+    background: rgba(18, 22, 34, 0.85);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    font-weight: 750;
+    font-size: 13.5px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+  }
+
+  .mobile-expand-btn:hover {
+    background: rgba(223, 194, 141, 0.12);
+    border-color: #dfc28d;
   }
 
   .drawer-close-btn {
@@ -596,8 +603,8 @@
       grid-template-columns: 1fr;
     }
 
-    .mobile-admin-fab {
-      display: inline-flex;
+    .mobile-admin-header {
+      display: block;
     }
 
     .drawer-close-btn {

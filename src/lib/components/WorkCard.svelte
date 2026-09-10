@@ -19,13 +19,23 @@
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
 
-  let scan = $derived.by(() => {
-    if (work.primary_scan) return work.primary_scan;
-    if (work.work_scans && work.work_scans.length > 0) {
-      const primary = work.work_scans.find((ws: any) => ws.is_primary);
-      return primary?.scans || work.work_scans[0]?.scans || null;
+  let scanInfo = $derived.by(() => {
+    const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
+    if (list.length === 0) {
+      if (work.primary_scan?.name) {
+        return { name: work.primary_scan.name, logo_id: work.primary_scan.logo_id, is_official: work.primary_scan.is_official, extraCount: 0 };
+      }
+      return null;
     }
-    return null;
+    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primary = primaryRow.scans;
+    const extraCount = list.length - 1;
+    return {
+      name: primary.name,
+      logo_id: primary.logo_id,
+      is_official: primary.is_official,
+      extraCount
+    };
   });
 
   function formatViews(n?: number): string {
@@ -69,29 +79,25 @@
       <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
     </div>
 
-    <!-- 3. +18: Inferior Esquerdo (Bottom-Left) -->
+    <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
     {#if isAdult}
       <span class="adult-badge-bottom-left">+18</span>
     {/if}
 
-    <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox) -->
-    {#if scan}
-      <div class="card-scan-bottom-right" title="Traduzido por {scan.name}">
-        {#if scan.logo_id}
-          <img src="/media/{scan.logo_id}" alt="" class="scan-chip-logo" />
-        {:else if scan.is_official}
+    <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox, múltiplos compactos) -->
+    {#if scanInfo}
+      <div class="card-scan-bottom-right" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
+        {#if scanInfo.logo_id}
+          <img src="/media/{scanInfo.logo_id}" alt="" class="scan-chip-logo" />
+        {:else if scanInfo.is_official}
           <ShieldCheck size={11} class="scan-official-icon" />
         {/if}
-        <span class="scan-chip-name">{scan.name}</span>
-      </div>
-    {/if}
-
-    {#if effectiveBlur}
-      <div class="nsfw-overlay">
-        <div class="nsfw-tag">
-          <AlertTriangle size={13} />
-          <span>+18</span>
-        </div>
+        <span class="scan-chip-name">
+          {scanInfo.name}
+          {#if scanInfo.extraCount > 0}
+            <span class="scan-extra-tag">× +{scanInfo.extraCount}</span>
+          {/if}
+        </span>
       </div>
     {/if}
 
@@ -257,6 +263,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .scan-extra-tag {
+    font-size: 9px;
+    font-weight: 700;
+    color: #dfc28d;
+    margin-left: 3px;
   }
 
   .card-badges-top-right {

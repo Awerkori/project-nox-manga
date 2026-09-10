@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle, Eye, ShieldCheck, Loader2 } from '@lucide/svelte';
   import type { Work } from '$lib/types';
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
@@ -9,10 +9,20 @@
     subtitle?: string;
     badge?: string;
     viewAllUrl?: string;
+    loadMoreSort?: 'latest' | 'most_read';
     works: Work[];
   };
 
-  let { title, subtitle, badge, viewAllUrl, works = [] }: Props = $props();
+  let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [] }: Props = $props();
+
+  let currentWorks = $state<Work[]>([]);
+  let isExpanded = $state(false);
+  let loadingMore = $state(false);
+  let hasMore = $state(true);
+
+  $effect(() => {
+    currentWorks = [...works];
+  });
 
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
@@ -23,6 +33,30 @@
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + 'M';
     if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + 'k';
     return String(n);
+  }
+
+  function getScanInfo(work: any) {
+    const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
+    if (list.length === 0) {
+      if (work.primary_scan?.name) {
+        return {
+          name: work.primary_scan.name,
+          logo_id: work.primary_scan.logo_id,
+          is_official: work.primary_scan.is_official,
+          extraCount: 0
+        };
+      }
+      return null;
+    }
+    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primary = primaryRow.scans;
+    const extraCount = list.length - 1;
+    return {
+      name: primary.name,
+      logo_id: primary.logo_id,
+      is_official: primary.is_official,
+      extraCount
+    };
   }
 
   function updateScrollState() {
@@ -40,9 +74,43 @@
       behavior: 'smooth'
     });
   }
+
+  async function handleLoadMore() {
+    if (!loadMoreSort || loadingMore || !hasMore) return;
+    isExpanded = true;
+    loadingMore = true;
+    try {
+      const res = await fetch(`/api/works?sort=${loadMoreSort}&offset=${currentWorks.length}&limit=8`);
+      if (!res.ok) throw new Error('Falha ao carregar mais obras');
+      const data = await res.json();
+      const newItems: Work[] = data.works || [];
+      if (newItems.length === 0) {
+        hasMore = false;
+      } else {
+        const existingIds = new Set(currentWorks.map((w) => w.id));
+        const uniqueItems = newItems.filter((w) => !existingIds.has(w.id));
+        if (uniqueItems.length === 0 || !data.hasMore) {
+          hasMore = false;
+        }
+        currentWorks = [...currentWorks, ...uniqueItems];
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      loadingMore = false;
+    }
+  }
+
+  function toggleExpand() {
+    if (!isExpanded) {
+      handleLoadMore();
+    } else {
+      isExpanded = false;
+    }
+  }
 </script>
 
-{#if works.length > 0}
+{#if currentWorks.length > 0}
   <section class="shelf-section">
     <div class="shelf-header">
       <div class="title-cluster">
@@ -56,44 +124,67 @@
       </div>
 
       <div class="shelf-actions">
-        {#if viewAllUrl}
+        {#if loadMoreSort}
+          <button
+            type="button"
+            class="expand-inline-btn"
+            onclick={toggleExpand}
+            disabled={loadingMore}
+            aria-label={isExpanded ? 'Recolher estante' : 'Carregar mais obras nesta seção'}
+          >
+            {#if loadingMore}
+              <Loader2 size={13} class="spin" />
+              <span>Carregando...</span>
+            {:else if isExpanded}
+              <span>Recolher</span>
+            {:else}
+              <span>Ver mais</span>
+              <ArrowRight size={13} />
+            {/if}
+          </button>
+        {/if}
+
+        {#if viewAllUrl && !isExpanded}
           <a href={viewAllUrl} class="view-all-link">
             <span>Ver catálogo</span>
             <ArrowRight size={14} />
           </a>
         {/if}
 
-        <div class="shelf-nav-arrows">
-          <button
-            class="shelf-arrow"
-            disabled={!canScrollLeft}
-            onclick={() => scroll('left')}
-            aria-label="Rolar para a esquerda"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button
-            class="shelf-arrow"
-            disabled={!canScrollRight}
-            onclick={() => scroll('right')}
-            aria-label="Rolar para a direita"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
+        {#if !isExpanded}
+          <div class="shelf-nav-arrows">
+            <button
+              class="shelf-arrow"
+              disabled={!canScrollLeft}
+              onclick={() => scroll('left')}
+              aria-label="Rolar para a esquerda"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              class="shelf-arrow"
+              disabled={!canScrollRight}
+              onclick={() => scroll('right')}
+              aria-label="Rolar para a direita"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
 
     <div
       class="shelf-scroll-container"
+      class:is-expanded={isExpanded}
       bind:this={scrollContainer}
       onscroll={updateScrollState}
     >
-      <div class="shelf-track">
-        {#each works as work (work.id)}
+      <div class="shelf-track" class:is-expanded={isExpanded}>
+        {#each currentWorks as work (work.id)}
           {@const isAdult = work.content_rating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-          {@const scan = (work as any).primary_scan || (work as any).work_scans?.[0]?.scans}
+          {@const scanInfo = getScanInfo(work)}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               {#if work.cover_id}
@@ -121,29 +212,25 @@
               <!-- 2. Type: Superior Direito (Top-Right) -->
               <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
 
-              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) -->
+              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
               {#if isAdult}
                 <span class="adult-badge-bottom-left">+18</span>
               {/if}
 
-              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback) -->
-              {#if scan}
-                <div class="card-scan-badge" title="Traduzido por {scan.name}">
-                  {#if scan.logo_id}
-                    <img src="/media/{scan.logo_id}" alt="" class="scan-badge-logo" />
-                  {:else if scan.is_official}
+              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, múltiplos compactos) -->
+              {#if scanInfo}
+                <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
+                  {#if scanInfo.logo_id}
+                    <img src="/media/{scanInfo.logo_id}" alt="" class="scan-badge-logo" />
+                  {:else if scanInfo.is_official}
                     <ShieldCheck size={10} />
                   {/if}
-                  <span class="scan-badge-name">{scan.name}</span>
-                </div>
-              {/if}
-
-              {#if effectiveBlur}
-                <div class="nsfw-overlay">
-                  <div class="nsfw-tag">
-                    <AlertTriangle size={12} />
-                    <span>+18</span>
-                  </div>
+                  <span class="scan-badge-name">
+                    {scanInfo.name}
+                    {#if scanInfo.extraCount > 0}
+                      <span class="scan-extra-tag">× +{scanInfo.extraCount}</span>
+                    {/if}
+                  </span>
                 </div>
               {/if}
             </div>
@@ -156,18 +243,64 @@
           </a>
         {/each}
 
-        {#if viewAllUrl}
-          <a href={viewAllUrl} class="shelf-card-view-more" title="Ver mais obras">
+        {#if !isExpanded && loadMoreSort && hasMore}
+          <button
+            type="button"
+            class="shelf-card-view-more btn-reset"
+            onclick={handleLoadMore}
+            disabled={loadingMore}
+            title="Carregar mais obras e expandir estante"
+          >
             <div class="view-more-box">
               <div class="view-more-icon-circle">
-                <ArrowRight size={20} />
+                {#if loadingMore}
+                  <Loader2 size={20} class="spin" />
+                {:else}
+                  <ArrowRight size={20} />
+                {/if}
               </div>
-              <span class="view-more-text">Ver Mais</span>
+              <span class="view-more-text">
+                {#if loadingMore}
+                  Carregando...
+                {:else}
+                  Ver Mais
+                {/if}
+              </span>
             </div>
-          </a>
+          </button>
         {/if}
       </div>
     </div>
+
+    {#if isExpanded}
+      <div class="expanded-footer">
+        {#if hasMore}
+          <button
+            type="button"
+            class="btn-load-more-inline"
+            onclick={handleLoadMore}
+            disabled={loadingMore}
+          >
+            {#if loadingMore}
+              <Loader2 size={16} class="spin" />
+              <span>Carregando mais obras...</span>
+            {:else}
+              <span>Carregar mais obras</span>
+              <ArrowRight size={16} />
+            {/if}
+          </button>
+        {:else}
+          <span class="all-loaded-text">Todas as obras desta seção foram carregadas.</span>
+        {/if}
+        <button
+          type="button"
+          class="btn-collapse"
+          onclick={() => (isExpanded = false)}
+        >
+          Recolher estante ↑
+        </button>
+      </div>
+    {/if}
   </section>
 {/if}
 
@@ -238,6 +371,57 @@
     color: #dfc28d;
   }
 
+  .expand-inline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 8px;
+    background: rgba(223, 194, 141, 0.1);
+    border: 1px solid rgba(223, 194, 141, 0.3);
+    color: #dfc28d;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .expand-inline-btn:hover:not(:disabled) {
+    background: rgba(223, 194, 141, 0.2);
+    border-color: #dfc28d;
+    transform: translateY(-1px);
+  }
+
+  .expand-inline-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-reset {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: inherit;
+  }
+
+  .view-more-box.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  :global(.spin) {
+    animation: spinAnimation 1s linear infinite;
+  }
+
+  @keyframes spinAnimation {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
   .shelf-nav-arrows {
     display: flex;
     align-items: center;
@@ -287,6 +471,35 @@
     display: flex;
     gap: 1.4rem;
     width: max-content;
+  }
+
+  .shelf-scroll-container.is-expanded {
+    overflow-x: visible;
+    scroll-snap-type: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .shelf-track.is-expanded {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.25rem;
+    width: 100%;
+  }
+
+  .shelf-track.is-expanded .shelf-card {
+    width: 100%;
+  }
+
+  .shelf-track.is-expanded .card-cover-box {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 200 / 285;
+  }
+
+  .shelf-track.is-expanded .card-img {
+    width: 100%;
+    height: 100%;
   }
 
   .shelf-card {
@@ -533,51 +746,83 @@
     .shelf-nav-arrows {
       display: none;
     }
+
+    .shelf-track.is-expanded {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .shelf-track.is-expanded .card-cover-box {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 145 / 206;
+    }
+  }
+
+  .scan-extra-tag {
+    font-size: 0.6rem;
+    color: #dfc28d;
+    font-weight: 700;
+    margin-left: 2px;
+  }
+
+  .expanded-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-load-more-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.4rem;
+    border-radius: 999px;
+    background: rgba(223, 194, 141, 0.14);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-load-more-inline:hover:not(:disabled) {
+    background: rgba(223, 194, 141, 0.25);
+    border-color: #dfc28d;
+    color: #fff;
+    transform: translateY(-1px);
+  }
+
+  .btn-collapse {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.3rem 0.6rem;
+    transition: color 0.15s ease;
+  }
+
+  .btn-collapse:hover {
+    color: #e2e8f0;
+    text-decoration: underline;
+  }
+
+  .all-loaded-text {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-style: italic;
   }
 
   .blurred-cover {
     filter: blur(18px) brightness(0.65);
     transform: scale(1.12);
-  }
-
-  .adult-badge {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    background: #dc2626;
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
-    letter-spacing: 0.04em;
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.55);
-    z-index: 5;
-  }
-
-  .nsfw-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 4;
-    pointer-events: none;
-  }
-
-  .nsfw-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(15, 18, 29, 0.85);
-    border: 1px solid rgba(239, 68, 68, 0.5);
-    color: #fca5a5;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   }
 </style>

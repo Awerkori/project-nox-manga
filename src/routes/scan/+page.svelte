@@ -77,10 +77,10 @@
   }
 
   const ROLE_LABELS: Record<string, string> = {
-    OWNER: 'Líder / Proprietário',
-    ADMIN: 'Administrador',
-    UPLOADER: 'Uploader / Revisor',
-    MEMBER: 'Tradutor / Membro'
+    OWNER: 'Dono',
+    ADMIN: 'Admin da Scan',
+    UPLOADER: 'Uploader',
+    MEMBER: 'Staff'
   };
 
   function copyInviteLink(code: string) {
@@ -109,6 +109,41 @@
 
 <div class="scan-dashboard-page">
   <div class="dashboard-container">
+    {#if data.incomingTransfer}
+      <div class="transfer-alert-card">
+        <div class="transfer-alert-left">
+          <div class="transfer-icon-ring">
+            <Crown size={24} />
+          </div>
+          <div class="transfer-alert-text">
+            <h3>Proposta de Liderança Recebida</h3>
+            <p>
+              <strong>{data.incomingTransfer.from_user?.display_name || data.incomingTransfer.from_user?.username || 'O líder atual'}</strong>
+              propôs transferir a liderança da scan <strong>{data.incomingTransfer.scans?.name}</strong> para você.
+            </p>
+          </div>
+        </div>
+        <div class="transfer-alert-actions">
+          <form method="POST" action="?/respondOwnershipTransfer" use:enhance>
+            <input type="hidden" name="request_id" value={data.incomingTransfer.id} />
+            <input type="hidden" name="accept" value="true" />
+            <button type="submit" class="btn-transfer-accept">
+              <Check size={16} />
+              <span>Aceitar Liderança</span>
+            </button>
+          </form>
+          <form method="POST" action="?/respondOwnershipTransfer" use:enhance>
+            <input type="hidden" name="request_id" value={data.incomingTransfer.id} />
+            <input type="hidden" name="accept" value="false" />
+            <button type="submit" class="btn-transfer-reject">
+              <X size={16} />
+              <span>Recusar</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    {/if}
+
     {#if !data.authenticated}
       <!-- Unauthenticated State -->
       <section class="onboarding-hero">
@@ -153,9 +188,17 @@
                       <strong class="track-scan-name">{req.scan_name}</strong>
                       <span class="track-scan-slug font-mono">/{req.scan_slug}</span>
                     </div>
-                    <span class="status-pill status-{req.status.toLowerCase()}">
-                      {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'}
-                    </span>
+                    <div class="track-status-cell">
+                      <span class="status-pill status-{req.status.toLowerCase()}">
+                        {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
+                      </span>
+                      {#if req.status === 'PENDING'}
+                        <form method="POST" action="?/cancelPartnerRequest" use:enhance>
+                          <input type="hidden" name="request_id" value={req.id} />
+                          <button type="submit" class="btn-cancel-req">Cancelar Solicitação</button>
+                        </form>
+                      {/if}
+                    </div>
                   </div>
 
                   {#if req.description}
@@ -171,6 +214,11 @@
                     <div class="track-approved-msg">
                       <CheckCircle2 size={14} />
                       <span>Parceria aprovada! Você foi nomeado líder. Recarregue a página para acessar seu painel.</span>
+                    </div>
+                  {:else if req.status === 'CANCELLED'}
+                    <div class="track-cancelled-msg">
+                      <X size={14} />
+                      <span>Solicitação cancelada por você.</span>
                     </div>
                   {:else}
                     <div class="track-pending-msg">
@@ -599,6 +647,26 @@
               </div>
             {/if}
 
+            {#if data.transferRequests && data.transferRequests.some((t: any) => t.status === 'PENDING')}
+              <div class="pending-transfers-block">
+                <span class="sub-section-title"><Crown size={14} class="inline mr-1" /> Transferência Pendente</span>
+                {#each data.transferRequests.filter((t: any) => t.status === 'PENDING') as tr (tr.id)}
+                  <div class="pending-transfer-item">
+                    <div class="transfer-to-info">
+                      <span class="transfer-to-name">Proposta para <strong>{tr.to_user?.display_name || tr.to_user?.username}</strong></span>
+                      <span class="transfer-to-sub">Aguardando aceite do membro</span>
+                    </div>
+                    {#if data.userRole === 'OWNER'}
+                      <form method="POST" action="?/cancelOwnershipTransfer" use:enhance>
+                        <input type="hidden" name="request_id" value={tr.id} />
+                        <button type="submit" class="btn-cancel-req">Cancelar Proposta</button>
+                      </form>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
             <div class="team-list">
               {#each team as member (member.id)}
                 <div class="team-member-item">
@@ -623,9 +691,9 @@
                           class="role-select"
                           onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
                         >
-                          <option value="MEMBER">Membro</option>
+                          <option value="MEMBER">Staff</option>
                           <option value="UPLOADER">Uploader</option>
-                          <option value="ADMIN">Administrador</option>
+                          <option value="ADMIN">Admin da Scan</option>
                         </select>
                       </form>
 
@@ -691,21 +759,49 @@
             {#if works.length > 0}
               <div class="works-list">
                 {#each works as work (work.id)}
-                  <a href="/obra/{work.slug}" class="dash-work-item">
-                    {#if work.cover_id}
-                      <img src="/media/{work.cover_id}" alt={work.title} class="work-mini-cover" />
-                    {:else}
-                      <div class="work-mini-placeholder">NOX</div>
-                    {/if}
-                    <div class="work-mini-info">
-                      <span class="work-mini-title">{work.title}</span>
-                      <span class="work-mini-views">
-                        <Eye size={12} />
-                        <span>{formatNumber(work.views_total || 0)} leituras</span>
-                      </span>
+                  <div class="dash-work-row">
+                    <a href="/obra/{work.slug}" class="dash-work-item">
+                      {#if work.cover_id}
+                        <img src="/media/{work.cover_id}" alt={work.title} class="work-mini-cover" />
+                      {:else}
+                        <div class="work-mini-placeholder">NOX</div>
+                      {/if}
+                      <div class="work-mini-info">
+                        <span class="work-mini-title">{work.title}</span>
+                        <span class="work-mini-views">
+                          <Eye size={12} />
+                          <span>{formatNumber(work.views_total || 0)} leituras</span>
+                        </span>
+                      </div>
+                      <ArrowRight size={15} class="work-arrow" />
+                    </a>
+
+                    <div class="dash-work-status-cell">
+                      {#if ['OWNER', 'ADMIN'].includes(data.userRole)}
+                        <form method="POST" action="?/updateProjectStatus" use:enhance class="project-status-form">
+                          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+                          <input type="hidden" name="work_id" value={work.id} />
+                          <label for="work-status-{work.id}" class="sr-only">Status do Projeto</label>
+                          <select
+                            id="work-status-{work.id}"
+                            name="status"
+                            value={work.project_status || 'ACTIVE'}
+                            class="project-status-select status-{(work.project_status || 'ACTIVE').toLowerCase()}"
+                            onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                          >
+                            <option value="ACTIVE">Ativo</option>
+                            <option value="PAUSED">Pausado</option>
+                            <option value="COMPLETED">Concluído</option>
+                            <option value="ABANDONED">Abandonado</option>
+                          </select>
+                        </form>
+                      {:else}
+                        <span class="status-pill status-{(work.project_status || 'ACTIVE').toLowerCase()}">
+                          {work.project_status === 'ACTIVE' ? 'Ativo' : work.project_status === 'PAUSED' ? 'Pausado' : work.project_status === 'COMPLETED' ? 'Concluído' : 'Abandonado'}
+                        </span>
+                      {/if}
                     </div>
-                    <ArrowRight size={15} class="work-arrow" />
-                  </a>
+                  </div>
                 {/each}
               </div>
             {:else}
@@ -736,9 +832,17 @@
                           </span>
                         {/if}
                       </div>
-                      <span class="status-pill status-{req.status.toLowerCase()}">
-                        {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'}
-                      </span>
+                      <div class="proj-actions-cell">
+                        <span class="status-pill status-{req.status.toLowerCase()}">
+                          {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
+                        </span>
+                        {#if req.status === 'PENDING' && ['OWNER', 'ADMIN'].includes(data.userRole)}
+                          <form method="POST" action="?/cancelProjectRequest" use:enhance>
+                            <input type="hidden" name="request_id" value={req.id} />
+                            <button type="submit" class="btn-cancel-req">Cancelar Pedido</button>
+                          </form>
+                        {/if}
+                      </div>
                     </div>
                   {/each}
                 </div>
@@ -905,23 +1009,23 @@
           class="modal-form"
         >
           <input type="hidden" name="scan_id" value={data.currentScan?.id} />
-          <input type="hidden" name="new_owner_id" value={transferTarget.id} />
+          <input type="hidden" name="target_user_id" value={transferTarget.id} />
           <div class="warning-alert-box">
             <AlertTriangle size={24} class="warning-alert-icon" />
             <div>
-              <strong>Atenção: Ação irreversível!</strong>
+              <strong>Atenção: Confirmação em duas etapas</strong>
               <p>
-                Você está prestes a transferir a liderança da scan <strong>{data.currentScan?.name}</strong> para
+                Você está prestes a propor a transferência de liderança da scan <strong>{data.currentScan?.name}</strong> para
                 <strong>{transferTarget.display_name || transferTarget.username}</strong> (@{transferTarget.username}).
-                Seu cargo será rebaixado para Administrador.
+                O membro receberá um alerta e precisará aceitar a transferência para se tornar o novo Dono.
               </p>
             </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick={() => (transferTarget = null)}>Cancelar</button>
-            <button type="submit" class="btn-danger-action" disabled={transferSubmitting}>
+            <button type="submit" class="btn-primary" disabled={transferSubmitting}>
               <Crown size={15} />
-              <span>{transferSubmitting ? 'Transferindo...' : 'Confirmar Transferência'}</span>
+              <span>{transferSubmitting ? 'Enviando Proposta...' : 'Enviar Proposta de Transferência'}</span>
             </button>
           </div>
         </form>
@@ -2303,9 +2407,231 @@
     color: #fca5a5;
   }
 
+  /* Transfer Alert Card */
+  .transfer-alert-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    background: linear-gradient(135deg, rgba(223, 194, 141, 0.15) 0%, rgba(18, 20, 32, 0.95) 100%);
+    border: 1px solid rgba(223, 194, 141, 0.4);
+    box-shadow: 0 8px 32px rgba(223, 194, 141, 0.1);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .transfer-alert-left {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .transfer-icon-ring {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(223, 194, 141, 0.2);
+    border: 1px solid rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .transfer-alert-text h3 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #fef08a;
+    margin: 0 0 0.25rem 0;
+  }
+
+  .transfer-alert-text p {
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .transfer-alert-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .btn-transfer-accept {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #10b981;
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.6rem 1.1rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .btn-transfer-accept:hover {
+    background: #059669;
+  }
+
+  .btn-transfer-reject {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.6rem 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-transfer-reject:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ffffff;
+  }
+
+  /* Status and Action Buttons */
+  .track-status-cell,
+  .proj-actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-cancel-req {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-cancel-req:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #ffffff;
+  }
+
+  /* Pending Transfers Block */
+  .pending-transfers-block {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .pending-transfer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    background: rgba(223, 194, 141, 0.06);
+    border: 1px solid rgba(223, 194, 141, 0.15);
+    border-radius: 8px;
+  }
+
+  .transfer-to-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.82rem;
+    color: #ffffff;
+  }
+
+  .transfer-to-sub {
+    font-size: 0.72rem;
+    color: #dfc28d;
+  }
+
+  /* Work Rows and Project Status Selector */
+  .dash-work-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .dash-work-row .dash-work-item {
+    flex: 1;
+    background: transparent;
+    padding: 0;
+  }
+
+  .dash-work-row .dash-work-item:hover {
+    background: transparent;
+    transform: none;
+  }
+
+  .project-status-select {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    background: #141828;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .project-status-select:hover {
+    border-color: rgba(223, 194, 141, 0.5);
+  }
+
+  .project-status-select.status-active {
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .project-status-select.status-paused {
+    color: #fcd34d;
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .project-status-select.status-completed {
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .project-status-select.status-abandoned {
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .status-pill.status-cancelled {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+  }
+
   @media (max-width: 900px) {
     .dash-columns {
       grid-template-columns: 1fr;
+    }
+    .transfer-alert-card {
+      flex-direction: column;
+      align-items: flex-start;
     }
   }
 </style>

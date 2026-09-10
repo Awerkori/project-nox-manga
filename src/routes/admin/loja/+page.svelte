@@ -44,7 +44,7 @@
   let formId = $state('');
   let formName = $state('');
   let formDescription = $state('');
-  let formKind = $state<'AVATAR_FRAME' | 'COMMENT_BANNER' | 'PROFILE_BANNER' | 'NAME_COLOR' | 'TITLE' | 'BADGE'>('AVATAR_FRAME');
+  let formKind = $state<'AVATAR_FRAME' | 'COMMENT_BANNER' | 'NAME_COLOR' | 'TITLE' | 'BADGE'>('AVATAR_FRAME');
   let formRarity = $state<'COMUM' | 'INCOMUM' | 'RARA' | 'EPICA' | 'LENDARIA' | 'MITICA'>('COMUM');
   let formPriceXp = $state(500);
   let formMinLevel = $state(1);
@@ -400,13 +400,6 @@
       </button>
       <button
         class="filter-chip"
-        class:active={kindFilter === 'PROFILE_BANNER'}
-        onclick={() => (kindFilter = 'PROFILE_BANNER')}
-      >
-        Banners Perfil ({data.items.filter((i: any) => i.kind === 'PROFILE_BANNER').length})
-      </button>
-      <button
-        class="filter-chip"
         class:active={kindFilter === 'NAME_COLOR'}
         onclick={() => (kindFilter = 'NAME_COLOR')}
       >
@@ -459,13 +452,6 @@
               <Crown size={12} />
               <span>{item.name}</span>
             </span>
-          {:else if item.kind === 'PROFILE_BANNER'}
-            <div
-              class="preview-banner-box"
-              style={item.asset_url ? `background-image: url(${item.asset_url}); background-size: cover; background-position: center;` : style.background ? `background: ${style.background};` : 'background: #1e1b4b;'}
-            >
-              <span>{item.name}</span>
-            </div>
           {:else if item.kind === 'COMMENT_BANNER'}
             <div
               class="preview-comment-banner-box"
@@ -613,21 +599,6 @@
                 </div>
               </div>
 
-            {:else if formKind === 'PROFILE_BANNER'}
-              <div
-                class="modal-profile-banner-preview"
-                style={formAssetUrl ? `background-image: url(${formAssetUrl}); background-size: cover; background-position: center;` : parseStyle(formStyleJson).background ? `background: ${parseStyle(formStyleJson).background};` : 'background: linear-gradient(135deg, #1e1b4b, #312e81);'}
-              >
-                <div class="profile-banner-glass-bar">
-                  <UserAvatar
-                    avatarId={data.profile?.avatar_id}
-                    displayName="ProjetoNox"
-                    size={44}
-                  />
-                  <span class="profile-banner-title">{formName || 'Banner de Perfil'}</span>
-                </div>
-              </div>
-
             {:else if formKind === 'NAME_COLOR'}
               <div class="modal-color-preview-group">
                 <div class="color-preview-sample">
@@ -726,7 +697,6 @@
               <select id="item-kind" class="form-select" bind:value={formKind}>
                 <option value="AVATAR_FRAME">Moldura de Avatar</option>
                 <option value="COMMENT_BANNER">Banner de Comentário</option>
-                <option value="PROFILE_BANNER">Banner de Perfil</option>
                 <option value="NAME_COLOR">Cor de Nome</option>
                 <option value="TITLE">Título Cósmico</option>
                 <option value="BADGE">Emblema / Medalha</option>
