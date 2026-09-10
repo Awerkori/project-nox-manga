@@ -70,8 +70,9 @@ export const load = async ({ locals, params }) => {
           .from('member_inventory')
           .select(`
             item_id,
+            origin,
             acquired_at,
-            shop_items!inner(
+            shop_items(
               id,
               name,
               description,
@@ -140,11 +141,14 @@ export const load = async ({ locals, params }) => {
     featuredAchievement = sorted[0] || null;
   }
 
-  // Format cosmetic items and deduplicate (inventory + legacy equipped)
+  // Format cosmetic items and deduplicate (canonical inventory + legacy items)
   const cosmeticsMap = new Map<string, any>();
   for (const row of inventoryRes.data || []) {
-    if (row.shop_items?.id && !cosmeticsMap.has(row.shop_items.id)) {
-      cosmeticsMap.set(row.shop_items.id, {
+    const itemKey = row.item_id || row.shop_items?.id;
+    if (!itemKey || cosmeticsMap.has(itemKey)) continue;
+
+    if (row.shop_items?.id) {
+      cosmeticsMap.set(itemKey, {
         id: row.shop_items.id,
         name: row.shop_items.name,
         description: row.shop_items.description,
@@ -152,8 +156,40 @@ export const load = async ({ locals, params }) => {
         rarity: row.shop_items.rarity || 'COMUM',
         is_animated: row.shop_items.is_animated,
         style_data: row.shop_items.style_data,
+        origin: row.origin || 'SHOP',
         acquired_at: row.acquired_at
       });
+    } else {
+      const noxTitle = NOX_TITLES.find(
+        (t) =>
+          t.id.toLowerCase() === itemKey.toLowerCase() ||
+          t.name.toLowerCase() === itemKey.toLowerCase()
+      );
+      if (noxTitle) {
+        cosmeticsMap.set(itemKey, {
+          id: noxTitle.id,
+          name: noxTitle.name,
+          description: noxTitle.description,
+          kind: 'TITLE',
+          rarity: 'COMUM',
+          is_animated: false,
+          style_data: null,
+          origin: row.origin || 'LEGACY',
+          acquired_at: row.acquired_at
+        });
+      } else {
+        cosmeticsMap.set(itemKey, {
+          id: itemKey,
+          name: itemKey,
+          description: 'Item cosmético desbloqueado',
+          kind: 'COSMETIC',
+          rarity: 'COMUM',
+          is_animated: false,
+          style_data: null,
+          origin: row.origin || 'LEGACY',
+          acquired_at: row.acquired_at
+        });
+      }
     }
   }
 
@@ -180,6 +216,7 @@ export const load = async ({ locals, params }) => {
           rarity: item.rarity || 'COMUM',
           is_animated: item.is_animated,
           style_data: item.style_data,
+          origin: 'LEGACY',
           acquired_at: member.created_at
         });
       }
@@ -202,6 +239,7 @@ export const load = async ({ locals, params }) => {
         rarity: 'COMUM',
         is_animated: false,
         style_data: null,
+        origin: 'LEGACY',
         acquired_at: member.created_at
       });
     }
@@ -217,20 +255,22 @@ export const load = async ({ locals, params }) => {
       rarity: 'RARA',
       is_animated: false,
       style_data: { color: member.name_color },
+      origin: 'LEGACY',
       acquired_at: member.created_at
     });
   }
 
   const cosmetics = Array.from(cosmeticsMap.values());
 
-  const profileStats = statsRes.data?.[0] || {
-    chapters_read: 0,
-    total_works: 0,
-    completed_works: 0,
-    favorites: 0,
+  const rpcStats = statsRes.data?.[0];
+  const profileStats = {
+    chapters_read: Number(rpcStats?.chapters_read ?? 0),
+    total_works: Number(rpcStats?.total_works ?? 0),
+    completed_works: Number(rpcStats?.completed_works ?? 0),
+    favorites: Number(rpcStats?.favorites ?? 0),
     achievements_unlocked: achievements.length,
-    achievements_total: 0,
-    cosmetics_count: cosmetics.length
+    achievements_total: Number(rpcStats?.achievements_total ?? 0),
+    cosmetics_count: Math.max(Number(rpcStats?.cosmetics_count ?? 0), cosmetics.length)
   };
 
   const isFollowing = !!isFollowingRes.data;

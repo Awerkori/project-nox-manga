@@ -376,7 +376,7 @@
           </div>
           <div class="profile-stat-item">
             <span class="stat-number highlight-gold">{data.profile.xp}</span>
-            <span class="stat-name">XP Total</span>
+            <span class="stat-name">XP</span>
           </div>
           <div class="profile-stat-item">
             <span class="stat-number">{data.completed}</span>

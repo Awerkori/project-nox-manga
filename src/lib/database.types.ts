@@ -1352,16 +1352,19 @@ export type Database = {
         Row: {
           acquired_at: string
           item_id: string
+          origin: string
           user_id: string
         }
         Insert: {
           acquired_at?: string
           item_id: string
+          origin?: string
           user_id: string
         }
         Update: {
           acquired_at?: string
           item_id?: string
+          origin?: string
           user_id?: string
         }
         Relationships: [
@@ -2250,6 +2253,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      buy_shop_item: { Args: { p_item_id: string }; Returns: Json }
+      can_manage_scan_members: {
+        Args: { p_scan_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      can_manage_scan_works: {
+        Args: { p_scan_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       claim_chapter_xp: {
         Args: { p_chapter_id: string; p_source?: string }
         Returns: Json
@@ -2264,6 +2276,10 @@ export type Database = {
       get_chapter_reactions: {
         Args: { p_chapter_id: string; p_visitor_id?: string }
         Returns: Json
+      }
+      grant_member_cosmetic: {
+        Args: { p_item_id: string; p_origin?: string; p_user: string }
+        Returns: boolean
       }
       importer_acquire_job: {
         Args: {
@@ -2371,6 +2387,10 @@ export type Database = {
       is_editor: { Args: never; Returns: boolean }
       is_member: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
+      is_scan_member: {
+        Args: { p_scan_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       member_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
       member_public_profile_stats: {
         Args: { p_user: string }

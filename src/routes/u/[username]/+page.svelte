@@ -163,6 +163,23 @@
         return { label: 'Comum', border: '#64748b', text: '#cbd5e1', bg: 'rgba(148, 163, 184, 0.1)', glow: 'none' };
     }
   }
+
+  function getOriginLabel(origin: string = 'SHOP'): { label: string; bg: string; text: string } {
+    switch (origin.toUpperCase()) {
+      case 'SHOP':
+        return { label: 'Loja', bg: 'rgba(234, 179, 8, 0.12)', text: '#fde047' };
+      case 'ACHIEVEMENT':
+        return { label: 'Conquista', bg: 'rgba(168, 85, 247, 0.12)', text: '#d8b4fe' };
+      case 'EVENT':
+        return { label: 'Evento', bg: 'rgba(236, 72, 153, 0.12)', text: '#f472b6' };
+      case 'ADMIN_SPECIAL':
+        return { label: 'Especial', bg: 'rgba(59, 130, 246, 0.12)', text: '#93c5fd' };
+      case 'LEGACY':
+        return { label: 'Legado', bg: 'rgba(148, 163, 184, 0.12)', text: '#cbd5e1' };
+      default:
+        return { label: 'Coleção', bg: 'rgba(148, 163, 184, 0.12)', text: '#cbd5e1' };
+    }
+  }
 </script>
 
 <svelte:head>
@@ -287,7 +304,7 @@
             <div class="xp-rank-badge">
               <span class="xp-rank-level">Nível {rank.level}</span>
               <span class="xp-rank-dot">·</span>
-              <span class="xp-rank-xp">{data.member.xp.toLocaleString('pt-BR')} XP Total</span>
+              <span class="xp-rank-xp">{data.member.xp.toLocaleString('pt-BR')} XP</span>
             </div>
             <div class="xp-status-text">
               {#if progress.isMaxLevel}
@@ -709,6 +726,15 @@
                             {rInfo.label}
                           </span>
                           <span class="cosmetic-kind-pill">{getCosmeticKindLabel(item.kind)}</span>
+                          {#if item.origin}
+                            {@const oInfo = getOriginLabel(item.origin)}
+                            <span
+                              class="cosmetic-origin-pill"
+                              style="color: {oInfo.text}; background: {oInfo.bg};"
+                            >
+                              {oInfo.label}
+                            </span>
+                          {/if}
                         </div>
 
                         <h4 class="cosmetic-title">{item.name}</h4>
@@ -1772,6 +1798,15 @@
     background: rgba(255, 255, 255, 0.05);
     padding: 0.1rem 0.4rem;
     border-radius: 4px;
+  }
+
+  .cosmetic-origin-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .cosmetic-title {
