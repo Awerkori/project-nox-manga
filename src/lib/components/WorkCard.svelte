@@ -1,15 +1,39 @@
 <script lang="ts">
   import type { Work } from '$lib/types';
   import { kindLabels, statusLabels } from '$lib/types';
-  import { BookOpen, Sparkles, AlertTriangle } from '@lucide/svelte';
+  import { BookOpen, Sparkles, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
 
-  let { work, index = 0, blurNsfw }: { work: Work; index?: number; blurNsfw?: boolean } = $props();
+  let {
+    work,
+    index = 0,
+    blurNsfw
+  }: {
+    work: Work & { work_scans?: any[]; primary_scan?: any };
+    index?: number;
+    blurNsfw?: boolean;
+  } = $props();
 
   let isAdult = $derived(work.content_rating === 'ADULT_18');
   let effectiveBlur = $derived(
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
+
+  let scan = $derived.by(() => {
+    if (work.primary_scan) return work.primary_scan;
+    if (work.work_scans && work.work_scans.length > 0) {
+      const primary = work.work_scans.find((ws: any) => ws.is_primary);
+      return primary?.scans || work.work_scans[0]?.scans || null;
+    }
+    return null;
+  });
+
+  function formatViews(n?: number): string {
+    if (!n) return '0';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + 'k';
+    return String(n);
+  }
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
@@ -31,16 +55,36 @@
       </div>
     {/if}
 
-    {#if isAdult}
-      <span class="adult-badge-top-left">+18</span>
-    {/if}
+    <!-- 1. Views: Superior Esquerdo (Top-Left) -->
+    <div class="card-views-top-left" title="{work.views_total || 0} visualizações">
+      <Eye size={11} />
+      <span>{formatViews(work.views_total)}</span>
+    </div>
 
+    <!-- 2. Type: Superior Direito (Top-Right) -->
     <div class="card-badges-top-right">
       {#if work.featured}
         <span class="featured-chip"><Sparkles size={11} /> Destaque</span>
       {/if}
       <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
     </div>
+
+    <!-- 3. +18: Inferior Esquerdo (Bottom-Left) -->
+    {#if isAdult}
+      <span class="adult-badge-bottom-left">+18</span>
+    {/if}
+
+    <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox) -->
+    {#if scan}
+      <div class="card-scan-bottom-right" title="Traduzido por {scan.name}">
+        {#if scan.logo_id}
+          <img src="/media/{scan.logo_id}" alt="" class="scan-chip-logo" />
+        {:else if scan.is_official}
+          <ShieldCheck size={11} class="scan-official-icon" />
+        {/if}
+        <span class="scan-chip-name">{scan.name}</span>
+      </div>
+    {/if}
 
     {#if effectiveBlur}
       <div class="nsfw-overlay">
@@ -146,9 +190,28 @@
     color: #ffffff;
   }
 
-  .adult-badge-top-left {
+  .card-views-top-left {
     position: absolute;
     top: 9px;
+    left: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    background: rgba(10, 12, 20, 0.78);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 700;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .adult-badge-bottom-left {
+    position: absolute;
+    bottom: 9px;
     left: 9px;
     background: #dc2626;
     color: #ffffff;
@@ -160,6 +223,40 @@
     box-shadow: 0 2px 8px rgba(220, 38, 38, 0.55);
     z-index: 5;
     pointer-events: none;
+  }
+
+  .card-scan-bottom-right {
+    position: absolute;
+    bottom: 9px;
+    right: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(10, 12, 20, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    font-size: 10px;
+    font-weight: 600;
+    max-width: 140px;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .scan-chip-logo {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .scan-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .card-badges-top-right {

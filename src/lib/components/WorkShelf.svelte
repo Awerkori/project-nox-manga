@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
   import type { Work } from '$lib/types';
+  import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
 
   type Props = {
@@ -16,6 +17,13 @@
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
   let canScrollRight = $state(true);
+
+  function formatViews(n?: number): string {
+    if (!n) return '0';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + 'k';
+    return String(n);
+  }
 
   function updateScrollState() {
     if (!scrollContainer) return;
@@ -85,6 +93,7 @@
         {#each works as work (work.id)}
           {@const isAdult = work.content_rating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
+          {@const scan = (work as any).primary_scan || (work as any).work_scans?.[0]?.scans}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               {#if work.cover_id}
@@ -102,10 +111,33 @@
                 <div class="card-placeholder">NOX</div>
               {/if}
               <div class="card-glow"></div>
-              <span class="card-kind-badge">{work.kind}</span>
+
+              <!-- 1. Views: Superior Esquerdo (Top-Left) -->
+              <div class="card-views-badge" title="{work.views_total || 0} visualizações">
+                <Eye size={10} />
+                <span>{formatViews(work.views_total)}</span>
+              </div>
+
+              <!-- 2. Type: Superior Direito (Top-Right) -->
+              <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
+
+              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) -->
               {#if isAdult}
-                <span class="adult-badge">+18</span>
+                <span class="adult-badge-bottom-left">+18</span>
               {/if}
+
+              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback) -->
+              {#if scan}
+                <div class="card-scan-badge" title="Traduzido por {scan.name}">
+                  {#if scan.logo_id}
+                    <img src="/media/{scan.logo_id}" alt="" class="scan-badge-logo" />
+                  {:else if scan.is_official}
+                    <ShieldCheck size={10} />
+                  {/if}
+                  <span class="scan-badge-name">{scan.name}</span>
+                </div>
+              {/if}
+
               {#if effectiveBlur}
                 <div class="nsfw-overlay">
                   <div class="nsfw-tag">
@@ -123,6 +155,17 @@
             </div>
           </a>
         {/each}
+
+        {#if viewAllUrl}
+          <a href={viewAllUrl} class="shelf-card-view-more" title="Ver mais obras">
+            <div class="view-more-box">
+              <div class="view-more-icon-circle">
+                <ArrowRight size={20} />
+              </div>
+              <span class="view-more-text">Ver Mais</span>
+            </div>
+          </a>
+        {/if}
       </div>
     </div>
   </section>
@@ -303,6 +346,24 @@
     pointer-events: none;
   }
 
+  .card-views-badge {
+    position: absolute;
+    top: 9px;
+    left: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    background: rgba(6, 7, 12, 0.82);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #cbd5e1;
+    font-size: 0.68rem;
+    font-weight: 700;
+    z-index: 4;
+  }
+
   .card-kind-badge {
     position: absolute;
     top: 9px;
@@ -317,6 +378,109 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    z-index: 4;
+  }
+
+  .adult-badge-bottom-left {
+    position: absolute;
+    bottom: 9px;
+    left: 9px;
+    padding: 0.2rem 0.48rem;
+    border-radius: 5px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.6);
+    z-index: 4;
+  }
+
+  .card-scan-badge {
+    position: absolute;
+    bottom: 9px;
+    right: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    background: rgba(6, 7, 12, 0.88);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    font-size: 0.66rem;
+    font-weight: 600;
+    max-width: 120px;
+    z-index: 4;
+  }
+
+  .scan-badge-logo {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .scan-badge-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shelf-card-view-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 140px;
+    text-decoration: none;
+    outline: none;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+
+  .view-more-box {
+    width: 100%;
+    height: 285px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: #94a3b8;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .view-more-box:hover {
+    background: rgba(223, 194, 141, 0.06);
+    border-color: rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    transform: translateY(-4px);
+  }
+
+  .view-more-icon-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s ease;
+  }
+
+  .view-more-box:hover .view-more-icon-circle {
+    transform: translateX(3px);
+    background: rgba(223, 194, 141, 0.2);
+  }
+
+  .view-more-text {
+    font-size: 0.85rem;
+    font-weight: 700;
   }
 
   .card-info {

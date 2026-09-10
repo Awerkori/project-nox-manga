@@ -1,4 +1,9 @@
-export type ImageInfo = { mime: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'image/avif'; width: number; height: number };
+export type ImageInfo = {
+  mime: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'image/avif';
+  width: number;
+  height: number;
+  isAnimated?: boolean;
+};
 const text = (a: Uint8Array, start: number, length: number) =>
   String.fromCharCode(...a.slice(start, start + length));
 
@@ -40,10 +45,11 @@ function parseAvifDimensions(a: Uint8Array, d: DataView): { width: number; heigh
 }
 
 export function inspectImage(a: Uint8Array): ImageInfo {
-  if (a.length < 24 || a.length > 19_000_000) throw new Error('Cada página deve ter no máximo 19 MB.');
+  if (a.length < 24 || a.length > 52_428_800) throw new Error('O arquivo deve ter no máximo 50 MB.');
   const d = new DataView(a.buffer, a.byteOffset, a.byteLength);
   let width = 0,
     height = 0;
+  let isAnimated = false;
   let mime: ImageInfo['mime'];
   if (a[0] === 137 && text(a, 1, 3) === 'PNG' && d.getUint32(4) === 0x0d0a1a0a) {
     mime = 'image/png';
@@ -85,7 +91,7 @@ export function inspectImage(a: Uint8Array): ImageInfo {
     mime = 'image/webp';
     const format = text(a, 12, 4);
     if (format === 'VP8X' && a.length >= 30) {
-      if (a[20] & 2) throw new Error('Imagens animadas não são aceitas.');
+      if (a[20] & 2) isAnimated = true;
       width = 1 + a[24] + (a[25] << 8) + (a[26] << 16);
       height = 1 + a[27] + (a[28] << 8) + (a[29] << 16);
     } else if (format === 'VP8 ' && a.length >= 30 && a[23] === 0x9d && a[24] === 1 && a[25] === 0x2a) {
@@ -100,6 +106,15 @@ export function inspectImage(a: Uint8Array): ImageInfo {
     mime = 'image/gif';
     width = d.getUint16(6, true);
     height = d.getUint16(8, true);
+    // Count frames to detect animation
+    let frames = 0;
+    for (let i = 10; i < a.length - 1; i++) {
+      if (a[i] === 0x2c) frames++;
+      if (frames > 1) {
+        isAnimated = true;
+        break;
+      }
+    }
   } else if (a.length >= 16 && text(a, 4, 4) === 'ftyp') {
     const ftypLen = d.getUint32(0);
     const majorBrand = text(a, 8, 4);
@@ -125,5 +140,5 @@ export function inspectImage(a: Uint8Array): ImageInfo {
   } else throw new Error('Formato não permitido. Use PNG, JPEG, WebP, GIF ou AVIF.');
   if (!width || !height || width > 10000 || height > 60000 || width * height > 80_000_000)
     throw new Error('Dimensões inválidas ou imagem muito grande.');
-  return { mime, width, height };
+  return { mime, width, height, isAnimated };
 }

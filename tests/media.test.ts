@@ -20,13 +20,13 @@ describe('public upload boundary', () => {
         'base64'
       )
     );
-    expect(inspectImage(bytes)).toEqual({ mime: 'image/png', width: 1, height: 1 });
+    expect(inspectImage(bytes)).toEqual({ mime: 'image/png', width: 1, height: 1, isAnimated: false });
   });
   it('reads real GIF dimensions and mime', () => {
     const bytes = Uint8Array.from(
       Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
     );
-    expect(inspectImage(bytes)).toEqual({ mime: 'image/gif', width: 1, height: 1 });
+    expect(inspectImage(bytes)).toEqual({ mime: 'image/gif', width: 1, height: 1, isAnimated: false });
   });
   it('rejects appended PNG payloads', () => {
     const bytes = Buffer.from(

@@ -17,6 +17,7 @@ export type Work = {
   updated_at: string;
   created_at: string;
   content_rating?: string;
+  views_total?: number;
 };
 export const statusLabels: Record<string, string> = {
   ONGOING: 'Em andamento',

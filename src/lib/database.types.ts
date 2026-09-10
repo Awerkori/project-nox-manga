@@ -1409,6 +1409,8 @@ export type Database = {
           name_color: string | null
           privacy_show_achievements: boolean
           privacy_show_cosmetics: boolean
+          privacy_show_favorites: boolean
+          privacy_show_reading_history: boolean
           username: string
           xp: number
         }
@@ -1436,6 +1438,8 @@ export type Database = {
           name_color?: string | null
           privacy_show_achievements?: boolean
           privacy_show_cosmetics?: boolean
+          privacy_show_favorites?: boolean
+          privacy_show_reading_history?: boolean
           username: string
           xp?: number
         }
@@ -1463,6 +1467,8 @@ export type Database = {
           name_color?: string | null
           privacy_show_achievements?: boolean
           privacy_show_cosmetics?: boolean
+          privacy_show_favorites?: boolean
+          privacy_show_reading_history?: boolean
           username?: string
           xp?: number
         }
@@ -1789,6 +1795,67 @@ export type Database = {
           },
         ]
       }
+      scan_invites: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          revoked: boolean
+          role: string
+          scan_id: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          revoked?: boolean
+          role: string
+          scan_id: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          revoked?: boolean
+          role?: string
+          scan_id?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_invites_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_invites_used_by_fkey"
+            columns: ["used_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scan_members: {
         Row: {
           created_at: string
@@ -1821,6 +1888,140 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_partner_requests: {
+        Row: {
+          created_at: string
+          description: string | null
+          discord: string | null
+          fluxer: string | null
+          id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sample_links: string | null
+          scan_name: string
+          scan_slug: string
+          status: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          discord?: string | null
+          fluxer?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_links?: string | null
+          scan_name: string
+          scan_slug: string
+          status?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          discord?: string | null
+          fluxer?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_links?: string | null
+          scan_name?: string
+          scan_slug?: string
+          status?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_partner_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_partner_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_project_requests: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          scan_id: string
+          status: string
+          user_id: string
+          work_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scan_id: string
+          status?: string
+          user_id: string
+          work_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scan_id?: string
+          status?: string
+          user_id?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_project_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_project_requests_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_project_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_project_requests_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
             referencedColumns: ["id"]
           },
         ]
@@ -2267,7 +2468,24 @@ export type Database = {
         Returns: Json
       }
       claim_editor_invite: { Args: never; Returns: boolean }
+      claim_scan_invite: { Args: { p_code: string }; Returns: Json }
+      create_scan_invite: {
+        Args: { p_scan_id: string; p_role?: string; p_hours?: number }
+        Returns: Json
+      }
       current_role: { Args: never; Returns: string }
+      review_scan_partner_request: {
+        Args: { p_request_id: string; p_action: string; p_reason?: string }
+        Returns: Json
+      }
+      review_scan_project_request: {
+        Args: { p_request_id: string; p_action: string; p_reason?: string }
+        Returns: Json
+      }
+      transfer_scan_ownership: {
+        Args: { p_scan_id: string; p_new_owner_id: string }
+        Returns: Json
+      }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
       equip_cosmetic_item: {
         Args: { p_item_id: string; p_kind: string }

@@ -20,6 +20,8 @@ export const load = async ({ locals, params }) => {
       featured_achievement_id,
       privacy_show_achievements,
       privacy_show_cosmetics,
+      privacy_show_favorites,
+      privacy_show_reading_history,
       created_at
     `)
     .eq('username', params.username)
@@ -30,8 +32,10 @@ export const load = async ({ locals, params }) => {
   }
 
   const isSelf = locals.user?.id === member.id;
-  const canViewAchievements = member.privacy_show_achievements || isSelf;
-  const canViewCosmetics = member.privacy_show_cosmetics || isSelf;
+  const canViewAchievements = (member.privacy_show_achievements ?? true) || isSelf;
+  const canViewCosmetics = (member.privacy_show_cosmetics ?? true) || isSelf;
+  const canViewFavorites = (member.privacy_show_favorites ?? true) || isSelf;
+  const canViewReadingHistory = (member.privacy_show_reading_history ?? true) || isSelf;
 
   const [
     statsRes,
@@ -40,7 +44,10 @@ export const load = async ({ locals, params }) => {
     achievementsRes,
     inventoryRes,
     isFollowingRes,
-    bannerRes
+    bannerRes,
+    favoritesRes,
+    readingRes,
+    scanRolesRes
   ] = await Promise.all([
     locals.db.rpc('member_public_profile_stats', { p_user: member.id }),
     locals.db.from('user_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', member.id),
@@ -99,7 +106,76 @@ export const load = async ({ locals, params }) => {
           .select('id, style_data')
           .eq('id', member.equipped_banner_id)
           .maybeSingle()
-      : Promise.resolve({ data: null })
+      : Promise.resolve({ data: null }),
+    canViewFavorites
+      ? locals.db
+          .from('library')
+          .select(`
+            favorite,
+            updated_at,
+            works!inner(
+              id,
+              slug,
+              title,
+              cover_id,
+              kind,
+              status,
+              year,
+              content_rating,
+              views_total
+            )
+          `)
+          .eq('user_id', member.id)
+          .eq('favorite', true)
+          .eq('works.published', true)
+          .order('updated_at', { ascending: false })
+          .limit(24)
+      : Promise.resolve({ data: [] }),
+    canViewReadingHistory
+      ? locals.db
+          .from('reading')
+          .select(`
+            chapter_id,
+            page,
+            max_page,
+            completed_at,
+            updated_at,
+            chapters!inner(
+              id,
+              number,
+              title,
+              work_id,
+              works!inner(
+                id,
+                slug,
+                title,
+                cover_id,
+                kind,
+                status,
+                content_rating
+              )
+            )
+          `)
+          .eq('user_id', member.id)
+          .eq('chapters.works.published', true)
+          .order('updated_at', { ascending: false })
+          .limit(80)
+      : Promise.resolve({ data: [] }),
+    locals.db
+      .from('scan_members')
+      .select(`
+        role,
+        scans!inner(
+          id,
+          name,
+          slug,
+          logo_id,
+          is_official,
+          status
+        )
+      `)
+      .eq('user_id', member.id)
+      .eq('scans.status', 'ACTIVE')
   ]);
 
   // Format unlocked achievements
@@ -273,6 +349,39 @@ export const load = async ({ locals, params }) => {
     cosmetics_count: Math.max(Number(rpcStats?.cosmetics_count ?? 0), cosmetics.length)
   };
 
+  const favorites = (favoritesRes.data || []).map((r: any) => r.works).filter(Boolean);
+
+  const readingMap = new Map<string, any>();
+  for (const r of (readingRes.data || []) as any[]) {
+    const ch = r.chapters;
+    if (!ch || !ch.works) continue;
+    const wid = ch.work_id || ch.works.id;
+    if (!readingMap.has(wid)) {
+      readingMap.set(wid, {
+        workId: wid,
+        workTitle: ch.works.title,
+        workSlug: ch.works.slug,
+        coverId: ch.works.cover_id,
+        contentRating: ch.works.content_rating,
+        kind: ch.works.kind,
+        chapterId: ch.id,
+        chapterNumber: ch.number,
+        chapterTitle: ch.title,
+        page: r.page,
+        maxPage: r.max_page,
+        completedAt: r.completed_at,
+        updatedAt: r.updated_at
+      });
+    }
+    if (readingMap.size >= 16) break;
+  }
+  const recentReadings = Array.from(readingMap.values());
+
+  const scanRoles = (scanRolesRes.data || []).map((r: any) => ({
+    role: r.role,
+    scan: r.scans
+  }));
+
   const isFollowing = !!isFollowingRes.data;
 
   return {
@@ -288,10 +397,15 @@ export const load = async ({ locals, params }) => {
     rarityCounts,
     featuredAchievement,
     cosmetics,
+    favorites,
+    recentReadings,
+    scanRoles,
     isSelf,
     isFollowing,
     canViewAchievements,
     canViewCosmetics,
+    canViewFavorites,
+    canViewReadingHistory,
     viewerAuthenticated: !!locals.user
   };
 };

@@ -1060,6 +1060,32 @@
                 />
               </div>
 
+              <div class="settings-row">
+                <div>
+                  <h4>Exibir favoritos no Perfil Público</h4>
+                  <p>Permite que outros leitores vejam suas obras favoritas no seu perfil público.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  name="privacy_show_favorites"
+                  checked={data.member.privacy_show_favorites ?? true}
+                  class="toggle-input"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <h4>Exibir últimas leituras no Perfil Público</h4>
+                  <p>Permite que outros leitores vejam seu histórico recente de capítulos lidos.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  name="privacy_show_reading_history"
+                  checked={data.member.privacy_show_reading_history ?? true}
+                  class="toggle-input"
+                />
+              </div>
+
               <button type="submit" class="btn-primary">Salvar Configurações</button>
             </form>
           </div>

@@ -12,10 +12,18 @@
     CheckCircle2,
     Settings,
     Clock,
-    AlertCircle
+    AlertCircle,
+    Copy,
+    Check,
+    Plus,
+    X,
+    UserMinus,
+    Crown,
+    AlertTriangle,
+    Send
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
-  import { relativeTime } from '$lib/types';
+  import { relativeTime, slugify } from '$lib/types';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data, form } = $props();
@@ -27,6 +35,43 @@
   let saving = $state(false);
   let showSuccess = $state(false);
 
+  // Non-member request form state
+  let reqScanName = $state('');
+  let reqScanSlug = $state('');
+  let reqSlugCustomized = $state(false);
+  let reqSubmitting = $state(false);
+
+  function handleReqNameChange(val: string) {
+    reqScanName = val;
+    if (!reqSlugCustomized) {
+      reqScanSlug = slugify(val);
+    }
+  }
+
+  // Active member modals state
+  let showInviteModal = $state(false);
+  let inviteRole = $state('MEMBER');
+  let inviteHours = $state(24);
+  let inviteSubmitting = $state(false);
+  let copiedCode = $state<string | null>(null);
+
+  let createdInvite = $derived(
+    form && typeof form === 'object' && 'createdInvite' in form && form.createdInvite
+      ? (form.createdInvite as { code: string; expires_at: string; role: string; id: string })
+      : null
+  );
+
+  let showProjectModal = $state(false);
+  let selectedWorkId = $state('');
+  let projectMessage = $state('');
+  let projectSubmitting = $state(false);
+
+  let transferTarget = $state<any>(null);
+  let transferSubmitting = $state(false);
+
+  let removeTarget = $state<any>(null);
+  let removeSubmitting = $state(false);
+
   function formatNumber(n: number = 0) {
     return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(n);
   }
@@ -37,6 +82,15 @@
     UPLOADER: 'Uploader / Revisor',
     MEMBER: 'Tradutor / Membro'
   };
+
+  function copyInviteLink(code: string) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://noxscans.com';
+    navigator.clipboard.writeText(`${origin}/convite/${code}`);
+    copiedCode = code;
+    setTimeout(() => {
+      if (copiedCode === code) copiedCode = null;
+    }, 3000);
+  }
 
   $effect(() => {
     if (form?.success) {
@@ -85,6 +139,52 @@
           </p>
         </header>
 
+        {#if data.partnerRequests && data.partnerRequests.length > 0}
+          <div class="my-partner-requests-card">
+            <div class="requests-card-header">
+              <Clock size={18} />
+              <h2>Suas Solicitações de Parceria ({data.partnerRequests.length})</h2>
+            </div>
+            <div class="requests-track-list">
+              {#each data.partnerRequests as req (req.id)}
+                <div class="track-item status-{req.status.toLowerCase()}">
+                  <div class="track-header">
+                    <div class="track-scan-info">
+                      <strong class="track-scan-name">{req.scan_name}</strong>
+                      <span class="track-scan-slug font-mono">/{req.scan_slug}</span>
+                    </div>
+                    <span class="status-pill status-{req.status.toLowerCase()}">
+                      {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'}
+                    </span>
+                  </div>
+
+                  {#if req.description}
+                    <p class="track-desc">{req.description}</p>
+                  {/if}
+
+                  {#if req.status === 'REJECTED' && req.rejection_reason}
+                    <div class="track-rejection-msg">
+                      <AlertTriangle size={14} />
+                      <span>Motivo da recusa: {req.rejection_reason}</span>
+                    </div>
+                  {:else if req.status === 'APPROVED'}
+                    <div class="track-approved-msg">
+                      <CheckCircle2 size={14} />
+                      <span>Parceria aprovada! Você foi nomeado líder. Recarregue a página para acessar seu painel.</span>
+                    </div>
+                  {:else}
+                    <div class="track-pending-msg">
+                      <Clock size={14} />
+                      <span>Sua solicitação está sendo revisada por nossa equipe editorial.</span>
+                    </div>
+                  {/if}
+                  <span class="track-date">Enviado em {new Date(req.created_at).toLocaleDateString('pt-BR')}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <div class="perks-grid">
           <div class="perk-card">
             <div class="perk-icon">
@@ -119,12 +219,146 @@
           </div>
         </div>
 
+        <!-- In-Platform Partnership Request Form -->
+        <div class="partner-form-card">
+          <div class="partner-form-header">
+            <Sparkles size={20} class="accent-icon" />
+            <div>
+              <h2>Solicitar Parceria Direta</h2>
+              <p>Envie os dados do seu grupo para cadastro e validação pela equipe Project Nox.</p>
+            </div>
+          </div>
+
+          {#if showSuccess && form?.partnerRequested}
+            <div class="success-banner">
+              <CheckCircle2 size={16} />
+              <span>Solicitação enviada com sucesso! Nossa equipe analisará sua solicitação em breve.</span>
+            </div>
+          {/if}
+
+          {#if form?.message}
+            <div class="error-banner">
+              <AlertCircle size={16} />
+              <span>{form.message}</span>
+            </div>
+          {/if}
+
+          <form
+            method="POST"
+            action="?/requestPartner"
+            use:enhance={() => {
+              reqSubmitting = true;
+              return async ({ update }) => {
+                reqSubmitting = false;
+                await update();
+              };
+            }}
+            class="partner-request-form"
+          >
+            <div class="form-row">
+              <div class="form-field flex-1">
+                <label for="req-name">Nome da Scan *</label>
+                <input
+                  id="req-name"
+                  name="scan_name"
+                  type="text"
+                  required
+                  placeholder="Ex: Hanami Scans, Moonlight Traduções"
+                  value={reqScanName}
+                  oninput={(e) => handleReqNameChange((e.currentTarget as HTMLInputElement).value)}
+                />
+              </div>
+
+              <div class="form-field flex-1">
+                <label for="req-slug">Slug da Scan (URL única) *</label>
+                <input
+                  id="req-slug"
+                  name="scan_slug"
+                  type="text"
+                  required
+                  class="font-mono"
+                  placeholder="ex: hanami-scans"
+                  value={reqScanSlug}
+                  oninput={(e) => {
+                    reqSlugCustomized = true;
+                    reqScanSlug = (e.currentTarget as HTMLInputElement).value;
+                  }}
+                />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="req-desc">Descrição / Apresentação do Grupo</label>
+              <textarea
+                id="req-desc"
+                name="description"
+                rows={3}
+                placeholder="Conte um pouco sobre sua scan, gêneros favoritos, histórico de projetos..."
+              ></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field flex-1">
+                <label for="req-discord">Link do Discord *</label>
+                <input
+                  id="req-discord"
+                  name="discord"
+                  type="url"
+                  required
+                  placeholder="https://discord.gg/seugrupo"
+                />
+              </div>
+
+              <div class="form-field flex-1">
+                <label for="req-fluxer">Comunidade Fluxer (opcional)</label>
+                <input
+                  id="req-fluxer"
+                  name="fluxer"
+                  type="text"
+                  placeholder="Nome ou link no Fluxer"
+                />
+              </div>
+
+              <div class="form-field flex-1">
+                <label for="req-website">Website Oficial (opcional)</label>
+                <input
+                  id="req-website"
+                  name="website"
+                  type="url"
+                  placeholder="https://suascan.com"
+                />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="req-samples">Amostras de Tradução / Obras Lançadas</label>
+              <textarea
+                id="req-samples"
+                name="sample_links"
+                rows={2}
+                placeholder="Links de leitores online, Mangadex, ou drive com amostras do trabalho da scan..."
+              ></textarea>
+            </div>
+
+            <div class="form-actions-bar">
+              <button type="submit" class="btn-submit-request" disabled={reqSubmitting}>
+                {#if reqSubmitting}
+                  <span>Enviando solicitação...</span>
+                {:else}
+                  <Send size={16} />
+                  <span>Enviar Solicitação de Parceria</span>
+                {/if}
+              </button>
+            </div>
+          </form>
+        </div>
+
         <div class="cta-box">
-          <h2>Pronto para fazer parte?</h2>
-          <p>Entre no nosso Discord oficial e abra um ticket na aba <strong>#parcerias-scan</strong> com o link do seu grupo.</p>
+          <h2>Dúvidas antes de solicitar?</h2>
+          <p>Entre no nosso Discord oficial e converse diretamente com a moderação na aba <strong>#parcerias-scan</strong>.</p>
           <a href="https://discord.gg/projectnox" target="_blank" rel="noopener noreferrer" class="btn-discord-cta">
             <MessageSquare size={18} />
-            <span>Solicitar Parceria no Discord</span>
+            <span>Falar no Discord Oficial</span>
           </a>
         </div>
       </section>
@@ -279,11 +513,91 @@
           {/if}
 
           <!-- Team Section -->
+          <!-- Team Section -->
           <section class="card-section">
-            <div class="section-top">
-              <Users size={18} />
-              <h2>Membros da Equipe ({team.length})</h2>
+            <div class="section-top space-between">
+              <div class="section-title-wrap">
+                <Users size={18} />
+                <h2>Membros da Equipe ({team.length})</h2>
+              </div>
+              {#if ['OWNER', 'ADMIN'].includes(data.userRole)}
+                <button type="button" class="btn-sm-action" onclick={() => (showInviteModal = true)}>
+                  <Plus size={14} />
+                  <span>Gerar Convite</span>
+                </button>
+              {/if}
             </div>
+
+            {#if createdInvite}
+              <div class="created-invite-banner">
+                <div class="invite-banner-header">
+                  <CheckCircle2 size={16} />
+                  <span>Convite gerado com sucesso!</span>
+                </div>
+                <div class="invite-copy-group">
+                  <input
+                    type="text"
+                    readonly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/convite/${createdInvite.code}` : `/convite/${createdInvite.code}`}
+                    class="invite-copy-input font-mono"
+                  />
+                  <button
+                    type="button"
+                    class="btn-copy-action"
+                    onclick={() => copyInviteLink(createdInvite.code)}
+                  >
+                    {#if copiedCode === createdInvite.code}
+                      <Check size={14} />
+                      <span>Copiado</span>
+                    {:else}
+                      <Copy size={14} />
+                      <span>Copiar Link</span>
+                    {/if}
+                  </button>
+                </div>
+                <span class="invite-hint-txt">Link de uso único válido até {createdInvite.expires_at ? new Date(createdInvite.expires_at).toLocaleString('pt-BR') : 'expirar'}.</span>
+              </div>
+            {/if}
+
+            {#if data.invites && data.invites.length > 0}
+              <div class="active-invites-block">
+                <span class="sub-section-title">Convites Ativos ({data.invites.length})</span>
+                <div class="invites-list">
+                  {#each data.invites as inv (inv.id)}
+                    <div class="active-invite-item">
+                      <div class="invite-info-left">
+                        <span class="invite-role-tag">{ROLE_LABELS[inv.role] || inv.role}</span>
+                        <span class="invite-exp-tag">
+                          <Clock size={11} />
+                          <span>Expira {relativeTime(inv.expires_at)}</span>
+                        </span>
+                      </div>
+                      <div class="invite-actions-right">
+                        <button
+                          type="button"
+                          class="btn-icon-sq"
+                          title="Copiar Link"
+                          onclick={() => copyInviteLink(inv.code)}
+                        >
+                          {#if copiedCode === inv.code}
+                            <Check size={13} class="text-green" />
+                          {:else}
+                            <Copy size={13} />
+                          {/if}
+                        </button>
+                        <form method="POST" action="?/revokeInvite" use:enhance>
+                          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+                          <input type="hidden" name="invite_id" value={inv.id} />
+                          <button type="submit" class="btn-revoke-sq" title="Revogar Convite">
+                            <X size={13} />
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
 
             <div class="team-list">
               {#each team as member (member.id)}
@@ -297,7 +611,60 @@
                     <span class="member-display">{member.display_name || member.username}</span>
                     <span class="member-user">@{member.username}</span>
                   </div>
-                  <span class="role-pill">{ROLE_LABELS[member.role] || member.role}</span>
+
+                  {#if data.userRole === 'OWNER' && member.id !== data.userId}
+                    <div class="member-controls">
+                      <form method="POST" action="?/updateMemberRole" use:enhance class="role-form">
+                        <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+                        <input type="hidden" name="user_id" value={member.id} />
+                        <select
+                          name="role"
+                          value={member.role}
+                          class="role-select"
+                          onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                        >
+                          <option value="MEMBER">Membro</option>
+                          <option value="UPLOADER">Uploader</option>
+                          <option value="ADMIN">Administrador</option>
+                        </select>
+                      </form>
+
+                      <button
+                        type="button"
+                        class="btn-icon-member crown"
+                        title="Transferir Liderança"
+                        onclick={() => (transferTarget = member)}
+                      >
+                        <Crown size={14} />
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-icon-member remove"
+                        title="Remover da Equipe"
+                        onclick={() => (removeTarget = member)}
+                      >
+                        <UserMinus size={14} />
+                      </button>
+                    </div>
+                  {:else if data.userRole === 'ADMIN' && member.id !== data.userId && ['MEMBER', 'UPLOADER'].includes(member.role)}
+                    <div class="member-controls">
+                      <span class="role-pill">{ROLE_LABELS[member.role] || member.role}</span>
+                      <button
+                        type="button"
+                        class="btn-icon-member remove"
+                        title="Remover da Equipe"
+                        onclick={() => (removeTarget = member)}
+                      >
+                        <UserMinus size={14} />
+                      </button>
+                    </div>
+                  {:else}
+                    <span class="role-pill" class:is-owner={member.role === 'OWNER'}>
+                      {#if member.role === 'OWNER'}<Crown size={12} class="mr-1 inline" />{/if}
+                      {ROLE_LABELS[member.role] || member.role}
+                    </span>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -308,9 +675,17 @@
         <div class="dash-col-right">
           <!-- Works Section -->
           <section class="card-section">
-            <div class="section-top">
-              <BookOpen size={18} />
-              <h2>Obras Atribuídas ({works.length})</h2>
+            <div class="section-top space-between">
+              <div class="section-title-wrap">
+                <BookOpen size={18} />
+                <h2>Obras Atribuídas ({works.length})</h2>
+              </div>
+              {#if ['OWNER', 'ADMIN', 'UPLOADER'].includes(data.userRole)}
+                <button type="button" class="btn-sm-action" onclick={() => (showProjectModal = true)}>
+                  <Plus size={14} />
+                  <span>Solicitar Obra</span>
+                </button>
+              {/if}
             </div>
 
             {#if works.length > 0}
@@ -335,6 +710,39 @@
               </div>
             {:else}
               <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
+            {/if}
+
+            <!-- Project Requests tracker for this scan -->
+            {#if data.projectRequests && data.projectRequests.length > 0}
+              <div class="project-requests-block">
+                <span class="sub-section-title">Solicitações de Obras ({data.projectRequests.length})</span>
+                <div class="proj-requests-list">
+                  {#each data.projectRequests as req (req.id)}
+                    <div class="proj-req-item status-{req.status.toLowerCase()}">
+                      {#if req.works?.cover_id}
+                        <img src="/media/{req.works.cover_id}" alt="" class="proj-cover-mini" />
+                      {:else}
+                        <div class="proj-cover-fallback">NOX</div>
+                      {/if}
+                      <div class="proj-info">
+                        <strong class="proj-title">{req.works?.title}</strong>
+                        {#if req.message}
+                          <span class="proj-msg">"{req.message}"</span>
+                        {/if}
+                        {#if req.status === 'REJECTED' && req.rejection_reason}
+                          <span class="proj-rejection-note">
+                            <AlertTriangle size={12} />
+                            <span>Motivo: {req.rejection_reason}</span>
+                          </span>
+                        {/if}
+                      </div>
+                      <span class="status-pill status-{req.status.toLowerCase()}">
+                        {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'}
+                      </span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
             {/if}
           </section>
 
@@ -371,6 +779,199 @@
       </div>
     {/if}
   </div>
+
+  <!-- Modals -->
+  {#if showInviteModal}
+    <div class="modal-backdrop" onclick={() => (showInviteModal = false)}>
+      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Gerar Convite de Equipe</h2>
+          <button class="btn-close-modal" onclick={() => (showInviteModal = false)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/createInvite"
+          use:enhance={() => {
+            inviteSubmitting = true;
+            return async ({ update }) => {
+              inviteSubmitting = false;
+              showInviteModal = false;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+          <div class="form-field">
+            <label for="inv-role">Cargo Concedido:</label>
+            <select id="inv-role" name="role" bind:value={inviteRole} class="form-select">
+              <option value="MEMBER">Membro / Tradutor</option>
+              <option value="UPLOADER">Uploader / Revisor</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="inv-hours">Validade do Link:</label>
+            <select id="inv-hours" name="hours" bind:value={inviteHours} class="form-select">
+              <option value={24}>24 Horas (1 dia)</option>
+              <option value={48}>48 Horas (2 dias)</option>
+              <option value={168}>7 Dias</option>
+              <option value={720}>30 Dias</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (showInviteModal = false)}>Cancelar</button>
+            <button type="submit" class="btn-primary" disabled={inviteSubmitting}>
+              <Plus size={15} />
+              <span>{inviteSubmitting ? 'Gerando...' : 'Gerar Convite'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  {#if showProjectModal}
+    <div class="modal-backdrop" onclick={() => (showProjectModal = false)}>
+      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Solicitar Obra do Catálogo</h2>
+          <button class="btn-close-modal" onclick={() => (showProjectModal = false)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/requestProject"
+          use:enhance={() => {
+            projectSubmitting = true;
+            return async ({ update }) => {
+              projectSubmitting = false;
+              showProjectModal = false;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+          <div class="form-field">
+            <label for="proj-work">Selecione a Obra Desejada:</label>
+            <select id="proj-work" name="work_id" bind:value={selectedWorkId} required class="form-select">
+              <option value="" disabled>Escolha uma obra...</option>
+              {#each data.catalogWorks as w}
+                <option value={w.id}>{w.title}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="proj-msg">Mensagem / Justificativa (Opcional):</label>
+            <textarea
+              id="proj-msg"
+              name="message"
+              rows={3}
+              bind:value={projectMessage}
+              placeholder="Ex: Nossa equipe já traduz essa obra há 2 anos e gostaríamos de vincular nossos lançamentos..."
+              class="form-textarea"
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (showProjectModal = false)}>Cancelar</button>
+            <button type="submit" class="btn-primary" disabled={projectSubmitting || !selectedWorkId}>
+              <Send size={15} />
+              <span>{projectSubmitting ? 'Enviando...' : 'Enviar Solicitação'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  {#if transferTarget}
+    <div class="modal-backdrop" onclick={() => (transferTarget = null)}>
+      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Transferir Liderança</h2>
+          <button class="btn-close-modal" onclick={() => (transferTarget = null)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/transferOwnership"
+          use:enhance={() => {
+            transferSubmitting = true;
+            return async ({ update }) => {
+              transferSubmitting = false;
+              transferTarget = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+          <input type="hidden" name="new_owner_id" value={transferTarget.id} />
+          <div class="warning-alert-box">
+            <AlertTriangle size={24} class="warning-alert-icon" />
+            <div>
+              <strong>Atenção: Ação irreversível!</strong>
+              <p>
+                Você está prestes a transferir a liderança da scan <strong>{data.currentScan?.name}</strong> para
+                <strong>{transferTarget.display_name || transferTarget.username}</strong> (@{transferTarget.username}).
+                Seu cargo será rebaixado para Administrador.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (transferTarget = null)}>Cancelar</button>
+            <button type="submit" class="btn-danger-action" disabled={transferSubmitting}>
+              <Crown size={15} />
+              <span>{transferSubmitting ? 'Transferindo...' : 'Confirmar Transferência'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  {#if removeTarget}
+    <div class="modal-backdrop" onclick={() => (removeTarget = null)}>
+      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Remover Membro</h2>
+          <button class="btn-close-modal" onclick={() => (removeTarget = null)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/removeMember"
+          use:enhance={() => {
+            removeSubmitting = true;
+            return async ({ update }) => {
+              removeSubmitting = false;
+              removeTarget = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+          <input type="hidden" name="user_id" value={removeTarget.id} />
+          <div class="warning-alert-box danger">
+            <UserMinus size={24} class="warning-alert-icon text-red" />
+            <div>
+              <strong>Remover da equipe?</strong>
+              <p>
+                Tem certeza que deseja remover <strong>{removeTarget.display_name || removeTarget.username}</strong> (@{removeTarget.username}) da equipe?
+                Ele perderá o acesso às permissões de uploader e edição da scan.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (removeTarget = null)}>Cancelar</button>
+            <button type="submit" class="btn-danger-action" disabled={removeSubmitting}>
+              <UserMinus size={15} />
+              <span>{removeSubmitting ? 'Removendo...' : 'Remover Membro'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -996,6 +1597,710 @@
     font-size: 0.88rem;
     color: #64748b;
     margin: 0;
+  }
+
+  .font-mono {
+    font-family: monospace;
+  }
+
+  .text-green {
+    color: #34d399 !important;
+  }
+
+  .text-red {
+    color: #f87171 !important;
+  }
+
+  /* Non-member Request Tracking */
+  .my-partner-requests-card {
+    background: #0e111d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .requests-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #dfc28d;
+  }
+
+  .requests-card-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .requests-track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .track-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+  }
+
+  .track-item.status-pending {
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  .track-item.status-approved {
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  .track-item.status-rejected {
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .track-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .track-scan-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  .track-scan-name {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .track-scan-slug {
+    font-size: 0.82rem;
+    color: #8c899e;
+  }
+
+  .track-desc {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  .track-rejection-msg {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 0.82rem;
+  }
+
+  .track-approved-msg {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    color: #6ee7b7;
+    font-size: 0.82rem;
+  }
+
+  .track-pending-msg {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 8px;
+    color: #c4b5fd;
+    font-size: 0.82rem;
+  }
+
+  .track-date {
+    font-size: 0.75rem;
+    color: #64748b;
+    align-self: flex-end;
+  }
+
+  /* In-Platform Application Form Card */
+  .partner-form-card {
+    background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.1), transparent 60%), #0e111d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 2.2rem;
+  }
+
+  .partner-form-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .partner-form-header h2 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.25rem;
+  }
+
+  .partner-form-header p {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  .accent-icon {
+    color: #dfc28d;
+    margin-top: 3px;
+  }
+
+  .partner-request-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .flex-1 {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .form-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+  }
+
+  .btn-submit-request {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 2rem;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-submit-request:hover:not(:disabled) {
+    background: linear-gradient(135deg, #9333ea, #8b5cf6);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .btn-submit-request:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Member Team Section Controls & Invites */
+  .space-between {
+    justify-content: space-between;
+  }
+
+  .section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .btn-sm-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.9rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-sm-action:hover {
+    background: rgba(139, 92, 246, 0.25);
+    color: #ffffff;
+  }
+
+  .created-invite-banner {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .invite-banner-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #6ee7b7;
+    font-weight: 700;
+    font-size: 0.88rem;
+  }
+
+  .invite-copy-group {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .invite-copy-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    color: #ffffff;
+    font-size: 0.85rem;
+    outline: none;
+  }
+
+  .btn-copy-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: #10b981;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .btn-copy-action:hover {
+    background: #059669;
+  }
+
+  .invite-hint-txt {
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  .active-invites-block {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .sub-section-title {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #8c899e;
+    margin-bottom: 0.75rem;
+  }
+
+  .invites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .active-invite-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.85rem;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+  }
+
+  .invite-info-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .invite-role-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .invite-exp-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  .invite-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .btn-icon-sq {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-icon-sq:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .btn-revoke-sq {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-revoke-sq:hover {
+    background: rgba(239, 68, 68, 0.22);
+  }
+
+  .member-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .role-form {
+    margin: 0;
+  }
+
+  .role-select {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cbd5e1;
+    font-size: 0.75rem;
+    padding: 3px 6px;
+    outline: none;
+  }
+
+  .btn-icon-member {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-icon-member.crown {
+    color: #dfc28d;
+  }
+
+  .btn-icon-member.crown:hover {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.35);
+  }
+
+  .btn-icon-member.remove {
+    color: #f87171;
+  }
+
+  .btn-icon-member.remove:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  .role-pill.is-owner {
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    font-weight: 700;
+  }
+
+  /* Project Requests Tracker */
+  .project-requests-block {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .proj-requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .proj-req-item {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  .proj-cover-mini {
+    width: 36px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .proj-cover-fallback {
+    width: 36px;
+    height: 50px;
+    border-radius: 6px;
+    background: #1a1d2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #8c899e;
+  }
+
+  .proj-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0.2rem;
+  }
+
+  .proj-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .proj-msg {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .proj-rejection-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: #fca5a5;
+  }
+
+  .status-pill {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .status-pill.status-pending {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+  }
+
+  .status-pill.status-approved {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .status-pill.status-rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  /* Modals */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    padding: 20px;
+  }
+
+  .modal-card {
+    background: #0f121d;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    width: 100%;
+    max-width: 560px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  }
+
+  .mini-modal {
+    max-width: 480px;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .modal-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .btn-close-modal {
+    background: transparent;
+    border: none;
+    color: #8c899e;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .btn-close-modal:hover {
+    color: #ffffff;
+  }
+
+  .modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .form-select {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: #ffffff;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .form-select:focus {
+    border-color: #8b5cf6;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-danger-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .btn-danger-action:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .btn-danger-action:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .warning-alert-box {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
+    color: #fde68a;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .warning-alert-box strong {
+    display: block;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    color: #fbbf24;
+  }
+
+  .warning-alert-box p {
+    margin: 0;
+    color: #fde68a;
+  }
+
+  .warning-alert-box.danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .warning-alert-box.danger strong {
+    color: #f87171;
+  }
+
+  .warning-alert-box.danger p {
+    color: #fca5a5;
   }
 
   @media (max-width: 900px) {

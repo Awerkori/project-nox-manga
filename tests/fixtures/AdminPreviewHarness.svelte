@@ -37,7 +37,9 @@
       name_color: null as string | null,
       featured_achievement_id: null as string | null,
       privacy_show_achievements: true,
-      privacy_show_cosmetics: true
+      privacy_show_cosmetics: true,
+      privacy_show_favorites: true,
+      privacy_show_reading_history: true
     },
     role: role,
     unread: 0,

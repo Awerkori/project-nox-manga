@@ -21,10 +21,14 @@
     Palette,
     CheckCircle2,
     Flame,
-    ExternalLink
+    ExternalLink,
+    Heart,
+    Clock,
+    ShieldCheck
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import AchievementIcon from '$lib/components/AchievementIcon.svelte';
+  import WorkCard from '$lib/components/WorkCard.svelte';
 
   let { data } = $props();
 
@@ -38,7 +42,7 @@
   let followBusy = $state(false);
 
   // Active public profile tab
-  let activeTab = $state<'achievements' | 'cosmetics'>('achievements');
+  let activeTab = $state<'favorites' | 'reading' | 'achievements' | 'cosmetics'>('favorites');
   let cosmeticFilter = $state<string>('ALL');
 
   $effect(() => {
@@ -49,14 +53,18 @@
   onMount(() => {
     // Check URL query param or hash to preset tab
     const tabParam = page.url.searchParams.get('tab');
-    if (tabParam === 'cosmeticos' || tabParam === 'cosmetics' || window.location.hash === '#cosmeticos') {
+    if (tabParam === 'favoritos' || tabParam === 'favorites' || window.location.hash === '#favoritos') {
+      activeTab = 'favorites';
+    } else if (tabParam === 'leituras' || tabParam === 'historico' || tabParam === 'reading' || window.location.hash === '#leituras') {
+      activeTab = 'reading';
+    } else if (tabParam === 'cosmeticos' || tabParam === 'cosmetics' || window.location.hash === '#cosmeticos') {
       activeTab = 'cosmetics';
     } else if (tabParam === 'conquistas' || tabParam === 'achievements' || window.location.hash === '#conquistas') {
       activeTab = 'achievements';
     }
   });
 
-  function switchTab(tab: 'achievements' | 'cosmetics') {
+  function switchTab(tab: 'favorites' | 'reading' | 'achievements' | 'cosmetics') {
     activeTab = tab;
     const anchor = document.getElementById('profile-content-anchor');
     if (anchor) {
@@ -281,6 +289,32 @@
             </span>
           </div>
 
+          {#if data.scanRoles && data.scanRoles.length > 0}
+            <div class="scan-badges-row">
+              {#each data.scanRoles as sr}
+                <a
+                  href="/scans/{sr.scan.slug}"
+                  class="scan-staff-badge"
+                  class:owner={sr.role === 'OWNER'}
+                  class:admin={sr.role === 'ADMIN'}
+                  class:uploader={sr.role === 'UPLOADER'}
+                  title="Membro da equipe {sr.scan.name}"
+                >
+                  {#if sr.scan.logo_id}
+                    <img src="/media/{sr.scan.logo_id}" alt="" class="scan-badge-logo" />
+                  {:else}
+                    <ShieldCheck size={13} />
+                  {/if}
+                  <span class="scan-badge-role">
+                    {sr.role === 'OWNER' ? 'Líder' : sr.role === 'ADMIN' ? 'Admin Scan' : sr.role === 'UPLOADER' ? 'Uploader' : 'Staff'}
+                  </span>
+                  <span class="scan-badge-dot">·</span>
+                  <span class="scan-badge-name">{sr.scan.name}</span>
+                </a>
+              {/each}
+            </div>
+          {/if}
+
           <!-- Social Counts -->
           <div class="social-counts-row">
             <div class="social-count-item">
@@ -321,27 +355,59 @@
 
         <!-- High-Impact Profile Stats Grid -->
         <div class="stats-grid" id="stats-summary">
-          <!-- 1. Capítulos Lidos -->
-          <div class="stat-card" title="Total de capítulos lidos por este usuário">
+          <!-- 1. Capítulos Lidos (Últimas Leituras) -->
+          <button
+            type="button"
+            class="stat-card stat-card-interactive"
+            class:active-card={activeTab === 'reading'}
+            onclick={() => switchTab('reading')}
+            title="Clique para ver o histórico recente de leituras"
+          >
             <div class="stat-card-icon">
               <BookOpen size={20} />
             </div>
             <div class="stat-card-data">
-              <span class="stat-card-num">{data.stats.chapters_read.toLocaleString('pt-BR')}</span>
-              <span class="stat-card-label">Capítulos Lidos</span>
+              {#if !data.canViewReadingHistory}
+                <div class="stat-private-row">
+                  <Lock size={14} />
+                  <span class="stat-private-txt">Privado</span>
+                </div>
+              {:else}
+                <span class="stat-card-num">{data.stats.chapters_read.toLocaleString('pt-BR')}</span>
+              {/if}
+              <div class="stat-label-wrap">
+                <span class="stat-card-label">Capítulos Lidos</span>
+                <span class="stat-click-hint">Ver</span>
+              </div>
             </div>
-          </div>
+          </button>
 
-          <!-- 2. Obras na Coleção -->
-          <div class="stat-card" title="Total de obras acompanhadas na biblioteca">
-            <div class="stat-card-icon">
-              <BookMarked size={20} />
+          <!-- 2. Favoritos -->
+          <button
+            type="button"
+            class="stat-card stat-card-interactive"
+            class:active-card={activeTab === 'favorites'}
+            onclick={() => switchTab('favorites')}
+            title="Clique para ver as obras favoritas do leitor"
+          >
+            <div class="stat-card-icon heart-icon">
+              <Heart size={20} />
             </div>
             <div class="stat-card-data">
-              <span class="stat-card-num">{data.stats.total_works.toLocaleString('pt-BR')}</span>
-              <span class="stat-card-label">Obras na Coleção</span>
+              {#if !data.canViewFavorites}
+                <div class="stat-private-row">
+                  <Lock size={14} />
+                  <span class="stat-private-txt">Privado</span>
+                </div>
+              {:else}
+                <span class="stat-card-num">{data.favorites.length || data.stats.favorites || 0}</span>
+              {/if}
+              <div class="stat-label-wrap">
+                <span class="stat-card-label">Favoritos</span>
+                <span class="stat-click-hint">Ver</span>
+              </div>
             </div>
-          </div>
+          </button>
 
           <!-- 3. Conquistas (Desbloqueadas / Total) -->
           <button
@@ -463,8 +529,42 @@
           <button
             type="button"
             class="profile-tab-btn"
+            class:active={activeTab === 'favorites'}
+            onclick={() => switchTab('favorites')}
+          >
+            <Heart size={17} />
+            <span>Favoritos</span>
+            <span class="tab-count-pill">
+              {#if !data.canViewFavorites}
+                <Lock size={11} />
+              {:else}
+                {data.favorites.length}
+              {/if}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="profile-tab-btn"
+            class:active={activeTab === 'reading'}
+            onclick={() => switchTab('reading')}
+          >
+            <Clock size={17} />
+            <span>Últimas Leituras</span>
+            <span class="tab-count-pill">
+              {#if !data.canViewReadingHistory}
+                <Lock size={11} />
+              {:else}
+                {data.recentReadings.length}
+              {/if}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="profile-tab-btn"
             class:active={activeTab === 'achievements'}
-            onclick={() => (activeTab = 'achievements')}
+            onclick={() => switchTab('achievements')}
           >
             <Trophy size={17} />
             <span>Conquistas</span>
@@ -481,7 +581,7 @@
             type="button"
             class="profile-tab-btn"
             class:active={activeTab === 'cosmetics'}
-            onclick={() => (activeTab = 'cosmetics')}
+            onclick={() => switchTab('cosmetics')}
           >
             <Sparkles size={17} />
             <span>Coleção Cosmética</span>
@@ -495,8 +595,111 @@
           </button>
         </div>
 
-        <!-- TAB 1: CONQUISTAS -->
-        {#if activeTab === 'achievements'}
+        <!-- TAB: FAVORITOS -->
+        {#if activeTab === 'favorites'}
+          <section class="tab-pane favorites-pane">
+            {#if !data.canViewFavorites}
+              <div class="privacy-notice-card">
+                <div class="privacy-icon-wrap">
+                  <Lock size={32} />
+                </div>
+                <h3>Favoritos Privados</h3>
+                <p>Este leitor optou por manter suas obras favoritas privadas no seu perfil público.</p>
+              </div>
+            {:else}
+              {#if data.isSelf && !data.member.privacy_show_favorites}
+                <div class="self-privacy-hint">
+                  <Lock size={14} />
+                  <span>Seus favoritos estão configurados como privados e são visíveis apenas para você.</span>
+                </div>
+              {/if}
+
+              {#if data.favorites.length > 0}
+                <div class="works-cards-grid">
+                  {#each data.favorites as work (work.id)}
+                    <WorkCard {work} />
+                  {/each}
+                </div>
+              {:else}
+                <div class="empty-tab-state">
+                  <Heart size={40} class="empty-tab-icon" />
+                  <h4>Nenhuma obra favoritada</h4>
+                  <p>As histórias adicionadas aos favoritos serão exibidas aqui.</p>
+                </div>
+              {/if}
+            {/if}
+          </section>
+
+        <!-- TAB: ÚLTIMAS LEITURAS -->
+        {:else if activeTab === 'reading'}
+          <section class="tab-pane reading-pane">
+            {#if !data.canViewReadingHistory}
+              <div class="privacy-notice-card">
+                <div class="privacy-icon-wrap">
+                  <Lock size={32} />
+                </div>
+                <h3>Histórico de Leituras Privado</h3>
+                <p>Este leitor optou por manter seu histórico recente de leituras privado.</p>
+              </div>
+            {:else}
+              {#if data.isSelf && !data.member.privacy_show_reading_history}
+                <div class="self-privacy-hint">
+                  <Lock size={14} />
+                  <span>Seu histórico de leituras está configurado como privado e é visível apenas para você.</span>
+                </div>
+              {/if}
+
+              {#if data.recentReadings.length > 0}
+                <div class="readings-list-grid">
+                  {#each data.recentReadings as r (r.workId)}
+                    <div class="reading-history-card">
+                      <a href="/obra/{r.workSlug}" class="reading-cover-wrap">
+                        {#if r.coverId}
+                          <img
+                            src="/media/{r.coverId}"
+                            alt={r.workTitle}
+                            class="reading-cover-img"
+                            class:blurred-cover={r.contentRating === 'ADULT_18' && (page.data?.blurNsfw ?? true)}
+                            loading="lazy"
+                          />
+                        {:else}
+                          <div class="reading-cover-placeholder">NOX</div>
+                        {/if}
+                        {#if r.contentRating === 'ADULT_18'}
+                          <span class="reading-adult-tag">+18</span>
+                        {/if}
+                      </a>
+                      <div class="reading-details">
+                        <a href="/obra/{r.workSlug}" class="reading-work-title">{r.workTitle}</a>
+                        <div class="reading-ch-row">
+                          <a href="/ler/{r.chapterId}" class="reading-chapter-badge">
+                            <span>Capítulo {r.chapterNumber}</span>
+                            <ExternalLink size={11} />
+                          </a>
+                          {#if r.page}
+                            <span class="reading-page-info">Pág. {r.page}</span>
+                          {/if}
+                        </div>
+                        <span class="reading-timestamp">
+                          <Clock size={12} />
+                          <span>Lido em {date(r.updatedAt)}</span>
+                        </span>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <div class="empty-tab-state">
+                  <Clock size={40} class="empty-tab-icon" />
+                  <h4>Nenhuma leitura recente</h4>
+                  <p>Os capítulos lidos pelo leitor serão listados aqui cronologicamente.</p>
+                </div>
+              {/if}
+            {/if}
+          </section>
+
+        <!-- TAB: CONQUISTAS -->
+        {:else if activeTab === 'achievements'}
           <section class="tab-pane achievements-pane">
             {#if !data.canViewAchievements}
               <div class="privacy-notice-card">
@@ -1901,5 +2104,220 @@
     .achievements-catalog-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  .scan-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .scan-staff-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 9999px;
+    font-size: 0.76rem;
+    color: #e2e8f0;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .scan-staff-badge:hover {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .scan-staff-badge.owner {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #fef08a;
+  }
+
+  .scan-badge-logo {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .scan-badge-role {
+    font-weight: 700;
+  }
+
+  .scan-badge-dot {
+    opacity: 0.5;
+  }
+
+  .scan-badge-name {
+    font-weight: 600;
+  }
+
+  .heart-icon {
+    color: #f43f5e;
+  }
+
+  .works-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .readings-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .reading-history-card {
+    display: flex;
+    gap: 0.85rem;
+    background: rgba(15, 18, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 0.75rem;
+    transition: all 0.2s ease;
+  }
+
+  .reading-history-card:hover {
+    border-color: rgba(181, 154, 245, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .reading-cover-wrap {
+    position: relative;
+    width: 60px;
+    height: 84px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #090a12;
+  }
+
+  .reading-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .reading-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #191c32;
+    font-size: 11px;
+    font-weight: 800;
+    color: #b59af5;
+  }
+
+  .reading-adult-tag {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .reading-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .reading-work-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reading-work-title:hover {
+    color: #dfc28d;
+  }
+
+  .reading-ch-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .reading-chapter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    text-decoration: none;
+  }
+
+  .reading-chapter-badge:hover {
+    background: rgba(139, 92, 246, 0.25);
+  }
+
+  .reading-page-info {
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  .reading-timestamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.74rem;
+    color: #64748b;
+  }
+
+  .self-privacy-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    border-radius: 8px;
+    color: #fde047;
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .empty-tab-state {
+    padding: 3.5rem 1.5rem;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    color: #64748b;
+  }
+
+  .empty-tab-state h4 {
+    color: #f1f5f9;
+    margin: 0.75rem 0 0.25rem;
+    font-size: 1.05rem;
+  }
+
+  .empty-tab-state p {
+    font-size: 0.85rem;
+    margin: 0;
   }
 </style>

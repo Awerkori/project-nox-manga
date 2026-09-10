@@ -5,6 +5,7 @@
     displayName: string;
     size?: number;
     frameId?: string | null;
+    frameUrl?: string | null;
     class?: string;
   };
 
@@ -14,6 +15,7 @@
     displayName,
     size = 40,
     frameId = null,
+    frameUrl = null,
     class: className = ''
   }: Props = $props();
 
@@ -23,7 +25,7 @@
 
 <div
   class="user-avatar-root {className}"
-  class:has-frame={!!frameId}
+  class:has-frame={!!frameId || !!frameUrl}
   class:frame-aurora={frameId === 'frame_aurora_mystic'}
   class:frame-cyber={frameId === 'frame_cyber_neon'}
   class:frame-void={frameId === 'frame_void_nebula'}
@@ -48,7 +50,9 @@
     {/if}
   </div>
 
-  {#if frameId}
+  {#if frameUrl}
+    <img src={frameUrl} alt="" class="avatar-frame-image" aria-hidden="true" />
+  {:else if frameId}
     <div class="avatar-frame-overlay" aria-hidden="true"></div>
   {/if}
 </div>
@@ -98,6 +102,16 @@
     position: absolute;
     inset: -3px;
     border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .avatar-frame-image {
+    position: absolute;
+    inset: -14%;
+    width: 128%;
+    height: 128%;
+    object-fit: contain;
     pointer-events: none;
     z-index: 2;
   }

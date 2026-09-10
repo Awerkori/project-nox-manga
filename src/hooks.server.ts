@@ -11,13 +11,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     const isInternal = event.url.pathname.startsWith('/api/internal/');
     if (!isInternal && event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem inválida');
     const max =
-      event.url.pathname === '/api/upload' || event.url.pathname === '/api/internal/storage/upload'
-        ? 19_100_000
-        : event.url.pathname === '/api/avatar'
-          ? 10_000_000
-          : event.url.pathname === '/api/banner'
-            ? 15_000_000
-            : 1_000_000;
+      event.url.pathname === '/api/upload' ||
+      event.url.pathname === '/api/internal/storage/upload' ||
+      event.url.pathname === '/api/avatar' ||
+      event.url.pathname === '/api/banner'
+        ? 52_428_800
+        : 10_000_000;
     if (Number(event.request.headers.get('content-length') || 0) > max)
       error(413, 'Arquivo ou solicitação acima do limite');
   }

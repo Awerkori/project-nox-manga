@@ -9,6 +9,7 @@
     Edit3,
     Trash2,
     Shield,
+    ShieldCheck,
     ExternalLink,
     CheckCircle2,
     X,
@@ -16,16 +17,69 @@
     BookOpen,
     Layers,
     Globe,
-    MessageCircle
+    MessageCircle,
+    Sparkles,
+    Clock,
+    AlertTriangle,
+    Check,
+    Ban
   } from '@lucide/svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { enhance } from '$app/forms';
 
-  let { data } = $props();
+  let { data, form } = $props();
+
+  // Navigation sections: Scans, Partner Requests, Project Requests
+  let activeSection = $state<'scans' | 'partner_requests' | 'project_requests'>('scans');
 
   let search = $state('');
   let statusFilter = $state<'ALL' | 'ACTIVE' | 'INACTIVE' | 'ENDED'>('ALL');
+  let partnerFilter = $state<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  let projectFilter = $state<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+
   let notice = $state('');
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let busy = $state(false);
+
+  // Review modal state
+  let rejectModalId = $state<string | null>(null);
+  let rejectModalType = $state<'partner' | 'project' | null>(null);
+  let rejectReason = $state('');
+  let reviewLoading = $state(false);
+
+  // Counters
+  let pendingPartnersCount = $derived(
+    (data.partnerRequests || []).filter((r: any) => r.status === 'PENDING').length
+  );
+  let pendingProjectsCount = $derived(
+    (data.projectRequests || []).filter((r: any) => r.status === 'PENDING').length
+  );
+
+  // Filtered lists
+  let filteredPartners = $derived(
+    (data.partnerRequests || []).filter((r: any) => {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        r.scan_name.toLowerCase().includes(q) ||
+        r.scan_slug.toLowerCase().includes(q) ||
+        (r.members?.username || '').toLowerCase().includes(q) ||
+        (r.members?.display_name || '').toLowerCase().includes(q);
+      const matchesStatus = partnerFilter === 'ALL' || r.status === partnerFilter;
+      return matchesSearch && matchesStatus;
+    })
+  );
+
+  let filteredProjects = $derived(
+    (data.projectRequests || []).filter((r: any) => {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        (r.works?.title || '').toLowerCase().includes(q) ||
+        (r.scans?.name || '').toLowerCase().includes(q) ||
+        (r.members?.username || '').toLowerCase().includes(q);
+      const matchesStatus = projectFilter === 'ALL' || r.status === projectFilter;
+      return matchesSearch && matchesStatus;
+    })
+  );
 
   // Modal / Editor State
   let editingScan = $state<any>(null);
@@ -175,143 +229,513 @@
     </div>
   {/if}
 
-  <!-- Toolbar & Filters -->
-  <div class="toolbar-card">
-    <div class="search-box">
-      <Search size={16} class="search-icon" />
-      <input
-        type="text"
-        placeholder="Buscar scan por nome ou slug…"
-        bind:value={search}
-        class="search-input"
-      />
-    </div>
+  <!-- Admin Tabs Bar -->
+  <div class="admin-tabs-bar">
+    <button
+      type="button"
+      class="admin-tab-btn"
+      class:active={activeSection === 'scans'}
+      onclick={() => (activeSection = 'scans')}
+    >
+      <Users size={16} />
+      <span>Scans Cadastradas ({data.scans.length})</span>
+    </button>
 
-    <div class="filter-group">
-      <button
-        class="filter-chip"
-        class:active={statusFilter === 'ALL'}
-        onclick={() => (statusFilter = 'ALL')}
-      >
-        Todas ({data.scans.length})
-      </button>
-      <button
-        class="filter-chip"
-        class:active={statusFilter === 'ACTIVE'}
-        onclick={() => (statusFilter = 'ACTIVE')}
-      >
-        Ativas ({data.scans.filter((s: any) => s.status === 'ACTIVE').length})
-      </button>
-      <button
-        class="filter-chip"
-        class:active={statusFilter === 'INACTIVE'}
-        onclick={() => (statusFilter = 'INACTIVE')}
-      >
-        Inativas ({data.scans.filter((s: any) => s.status === 'INACTIVE').length})
-      </button>
-      <button
-        class="filter-chip"
-        class:active={statusFilter === 'ENDED'}
-        onclick={() => (statusFilter = 'ENDED')}
-      >
-        Encerradas ({data.scans.filter((s: any) => s.status === 'ENDED').length})
-      </button>
-    </div>
+    <button
+      type="button"
+      class="admin-tab-btn"
+      class:active={activeSection === 'partner_requests'}
+      onclick={() => (activeSection = 'partner_requests')}
+    >
+      <Sparkles size={16} />
+      <span>Pedidos de Parceria</span>
+      {#if pendingPartnersCount > 0}
+        <span class="count-badge-glow">{pendingPartnersCount}</span>
+      {/if}
+    </button>
+
+    <button
+      type="button"
+      class="admin-tab-btn"
+      class:active={activeSection === 'project_requests'}
+      onclick={() => (activeSection = 'project_requests')}
+    >
+      <BookOpen size={16} />
+      <span>Solicitações de Projetos</span>
+      {#if pendingProjectsCount > 0}
+        <span class="count-badge-glow">{pendingProjectsCount}</span>
+      {/if}
+    </button>
   </div>
 
-  <!-- Scans List Grid -->
-  <div class="scans-grid">
-    {#each filteredScans as scan (scan.id)}
-      <div class="scan-card" class:is-official={scan.is_official}>
-        <div class="scan-card-header">
-          <div class="scan-title-group">
-            <h3 class="scan-name">{scan.name}</h3>
-            <span class="scan-slug">/{scan.slug}</span>
+  {#if activeSection === 'scans'}
+    <!-- Toolbar & Filters -->
+    <div class="toolbar-card">
+      <div class="search-box">
+        <Search size={16} class="search-icon" />
+        <input
+          type="text"
+          placeholder="Buscar scan por nome ou slug…"
+          bind:value={search}
+          class="search-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <button
+          class="filter-chip"
+          class:active={statusFilter === 'ALL'}
+          onclick={() => (statusFilter = 'ALL')}
+        >
+          Todas ({data.scans.length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={statusFilter === 'ACTIVE'}
+          onclick={() => (statusFilter = 'ACTIVE')}
+        >
+          Ativas ({data.scans.filter((s: any) => s.status === 'ACTIVE').length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={statusFilter === 'INACTIVE'}
+          onclick={() => (statusFilter = 'INACTIVE')}
+        >
+          Inativas ({data.scans.filter((s: any) => s.status === 'INACTIVE').length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={statusFilter === 'ENDED'}
+          onclick={() => (statusFilter = 'ENDED')}
+        >
+          Encerradas ({data.scans.filter((s: any) => s.status === 'ENDED').length})
+        </button>
+      </div>
+    </div>
+
+    <!-- Scans List Grid -->
+    <div class="scans-grid">
+      {#each filteredScans as scan (scan.id)}
+        <div class="scan-card" class:is-official={scan.is_official}>
+          <div class="scan-card-header">
+            <div class="scan-title-group">
+              <h3 class="scan-name">{scan.name}</h3>
+              <span class="scan-slug">/{scan.slug}</span>
+            </div>
+
+            <div class="scan-badges">
+              {#if scan.is_official}
+                <span class="badge-official">
+                  <Shield size={12} />
+                  <span>OFICIAL NOX</span>
+                </span>
+              {/if}
+              <span class="status-pill status-{scan.status.toLowerCase()}">
+                {scan.status === 'ACTIVE' ? 'Ativa' : scan.status === 'INACTIVE' ? 'Inativa' : 'Encerrada'}
+              </span>
+            </div>
           </div>
 
-          <div class="scan-badges">
-            {#if scan.is_official}
-              <span class="badge-official">
-                <Shield size={12} />
-                <span>OFICIAL NOX</span>
-              </span>
-            {/if}
-            <span class="status-pill status-{scan.status.toLowerCase()}">
-              {scan.status === 'ACTIVE' ? 'Ativa' : scan.status === 'INACTIVE' ? 'Inativa' : 'Encerrada'}
+          {#if scan.description}
+            <p class="scan-description">{scan.description}</p>
+          {:else}
+            <p class="scan-description muted">Nenhuma descrição cadastrada.</p>
+          {/if}
+
+          <!-- Metrics -->
+          <div class="scan-metrics-row">
+            <div class="metric-item" title="Obras atribuídas a esta scan">
+              <BookOpen size={14} />
+              <span class="metric-val">{scan.works_count}</span>
+              <span class="metric-lbl">obras</span>
+            </div>
+            <div class="metric-item" title="Capítulos atribuídos">
+              <Layers size={14} />
+              <span class="metric-val">{scan.chapters_count}</span>
+              <span class="metric-lbl">capítulos</span>
+            </div>
+            <div class="metric-item" title="Membros cadastrados na scan">
+              <Users size={14} />
+              <span class="metric-val">{scan.members_count}</span>
+              <span class="metric-lbl">membros</span>
+            </div>
+          </div>
+
+          <!-- Links & Actions -->
+          <div class="scan-card-footer">
+            <div class="footer-links">
+              {#if scan.website}
+                <a href={scan.website} target="_blank" rel="noopener noreferrer" class="link-btn" title="Website oficial">
+                  <Globe size={14} />
+                </a>
+              {/if}
+              {#if scan.discord}
+                <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="link-btn" title="Servidor do Discord">
+                  <MessageCircle size={14} />
+                </a>
+              {/if}
+              <a href="/scans/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Página pública no site">
+                <ExternalLink size={14} />
+              </a>
+            </div>
+
+            <div class="footer-actions">
+              <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
+                <Edit3 size={15} />
+                <span>Editar</span>
+              </button>
+              {#if !scan.is_official}
+                <button
+                  class="btn-icon delete"
+                  onclick={() => handleDeleteScan(scan)}
+                  title="Excluir scan"
+                  disabled={busy}
+                >
+                  <Trash2 size={15} />
+                </button>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/each}
+
+      {#if !filteredScans.length}
+        <div class="empty-state">
+          <Users size={40} class="empty-icon" />
+          <p class="empty-text">Nenhuma scan encontrada com os filtros atuais.</p>
+        </div>
+      {/if}
+    </div>
+
+  {:else if activeSection === 'partner_requests'}
+    <!-- Partner Requests Toolbar -->
+    <div class="toolbar-card">
+      <div class="search-box">
+        <Search size={16} class="search-icon" />
+        <input
+          type="text"
+          placeholder="Buscar pedido por scan ou solicitante…"
+          bind:value={search}
+          class="search-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <button
+          class="filter-chip"
+          class:active={partnerFilter === 'ALL'}
+          onclick={() => (partnerFilter = 'ALL')}
+        >
+          Todos ({data.partnerRequests.length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={partnerFilter === 'PENDING'}
+          onclick={() => (partnerFilter = 'PENDING')}
+        >
+          Pendentes ({pendingPartnersCount})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={partnerFilter === 'APPROVED'}
+          onclick={() => (partnerFilter = 'APPROVED')}
+        >
+          Aprovados ({data.partnerRequests.filter((r: any) => r.status === 'APPROVED').length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={partnerFilter === 'REJECTED'}
+          onclick={() => (partnerFilter = 'REJECTED')}
+        >
+          Rejeitados ({data.partnerRequests.filter((r: any) => r.status === 'REJECTED').length})
+        </button>
+      </div>
+    </div>
+
+    <!-- Partner Requests Grid -->
+    <div class="requests-grid">
+      {#each filteredPartners as req (req.id)}
+        <div class="request-card status-{req.status.toLowerCase()}">
+          <div class="request-header">
+            <div class="request-user">
+              <UserAvatar
+                avatarId={req.members?.avatar_id}
+                displayName={req.members?.display_name || req.members?.username || 'Usuário'}
+                size={40}
+              />
+              <div class="request-user-meta">
+                <span class="request-user-name">{req.members?.display_name || req.members?.username}</span>
+                <span class="request-user-sub">@{req.members?.username}</span>
+              </div>
+            </div>
+
+            <span class="status-pill status-{req.status.toLowerCase()}">
+              {req.status === 'PENDING' ? 'Pendente' : req.status === 'APPROVED' ? 'Aprovado' : 'Rejeitado'}
             </span>
           </div>
-        </div>
 
-        {#if scan.description}
-          <p class="scan-description">{scan.description}</p>
-        {:else}
-          <p class="scan-description muted">Nenhuma descrição cadastrada.</p>
-        {/if}
+          <div class="request-body">
+            <div class="request-target-box">
+              <span class="req-target-label">Scan Proposta:</span>
+              <strong class="req-target-name">{req.scan_name}</strong>
+              <span class="req-target-slug font-mono">/{req.scan_slug}</span>
+            </div>
 
-        <!-- Metrics -->
-        <div class="scan-metrics-row">
-          <div class="metric-item" title="Obras atribuídas a esta scan">
-            <BookOpen size={14} />
-            <span class="metric-val">{scan.works_count}</span>
-            <span class="metric-lbl">obras</span>
-          </div>
-          <div class="metric-item" title="Capítulos atribuídos">
-            <Layers size={14} />
-            <span class="metric-val">{scan.chapters_count}</span>
-            <span class="metric-lbl">capítulos</span>
-          </div>
-          <div class="metric-item" title="Membros cadastrados na scan">
-            <Users size={14} />
-            <span class="metric-val">{scan.members_count}</span>
-            <span class="metric-lbl">membros</span>
-          </div>
-        </div>
-
-        <!-- Links & Actions -->
-        <div class="scan-card-footer">
-          <div class="footer-links">
-            {#if scan.website}
-              <a href={scan.website} target="_blank" rel="noopener noreferrer" class="link-btn" title="Website oficial">
-                <Globe size={14} />
-              </a>
+            {#if req.description}
+              <p class="request-desc">{req.description}</p>
             {/if}
-            {#if scan.discord}
-              <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="link-btn" title="Servidor do Discord">
-                <MessageCircle size={14} />
-              </a>
+
+            <div class="request-links-row">
+              {#if req.discord}
+                <a href={req.discord} target="_blank" rel="noopener noreferrer" class="link-chip">
+                  <MessageCircle size={13} />
+                  <span>Discord</span>
+                </a>
+              {/if}
+              {#if req.fluxer}
+                <span class="link-chip">Fluxer: {req.fluxer}</span>
+              {/if}
+              {#if req.website}
+                <a href={req.website} target="_blank" rel="noopener noreferrer" class="link-chip">
+                  <Globe size={13} />
+                  <span>Website</span>
+                </a>
+              {/if}
+            </div>
+
+            {#if req.sample_links}
+              <div class="sample-links-box">
+                <span class="sample-lbl">Amostras / Trabalhos:</span>
+                <p class="sample-txt">{req.sample_links}</p>
+              </div>
             {/if}
-            <a href="/scan/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Página pública no site">
-              <ExternalLink size={14} />
-            </a>
+
+            {#if req.status === 'REJECTED' && req.rejection_reason}
+              <div class="rejection-box">
+                <AlertTriangle size={14} />
+                <span>Motivo da recusa: {req.rejection_reason}</span>
+              </div>
+            {/if}
           </div>
 
-          <div class="footer-actions">
-            <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
-              <Edit3 size={15} />
-              <span>Editar</span>
-            </button>
-            {#if !scan.is_official}
+          {#if req.status === 'PENDING'}
+            <div class="request-actions-row">
+              <form method="POST" action="?/reviewPartner" use:enhance>
+                <input type="hidden" name="request_id" value={req.id} />
+                <input type="hidden" name="action" value="APPROVE" />
+                <button type="submit" class="btn-action-approve">
+                  <Check size={14} />
+                  <span>Aprovar Scan e Nomear Líder</span>
+                </button>
+              </form>
+
               <button
-                class="btn-icon delete"
-                onclick={() => handleDeleteScan(scan)}
-                title="Excluir scan"
-                disabled={busy}
+                type="button"
+                class="btn-action-reject"
+                onclick={() => {
+                  rejectModalId = req.id;
+                  rejectModalType = 'partner';
+                  rejectReason = '';
+                }}
               >
-                <Trash2 size={15} />
+                <Ban size={14} />
+                <span>Rejeitar</span>
               </button>
+            </div>
+          {/if}
+        </div>
+      {/each}
+
+      {#if !filteredPartners.length}
+        <div class="empty-state">
+          <Sparkles size={40} class="empty-icon" />
+          <p class="empty-text">Nenhum pedido de parceria encontrado com os filtros atuais.</p>
+        </div>
+      {/if}
+    </div>
+
+  {:else if activeSection === 'project_requests'}
+    <!-- Project Requests Toolbar -->
+    <div class="toolbar-card">
+      <div class="search-box">
+        <Search size={16} class="search-icon" />
+        <input
+          type="text"
+          placeholder="Buscar projeto por obra ou scan…"
+          bind:value={search}
+          class="search-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <button
+          class="filter-chip"
+          class:active={projectFilter === 'ALL'}
+          onclick={() => (projectFilter = 'ALL')}
+        >
+          Todos ({data.projectRequests.length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={projectFilter === 'PENDING'}
+          onclick={() => (projectFilter = 'PENDING')}
+        >
+          Pendentes ({pendingProjectsCount})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={projectFilter === 'APPROVED'}
+          onclick={() => (projectFilter = 'APPROVED')}
+        >
+          Aprovados ({data.projectRequests.filter((r: any) => r.status === 'APPROVED').length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={projectFilter === 'REJECTED'}
+          onclick={() => (projectFilter = 'REJECTED')}
+        >
+          Rejeitados ({data.projectRequests.filter((r: any) => r.status === 'REJECTED').length})
+        </button>
+      </div>
+    </div>
+
+    <!-- Project Requests Grid -->
+    <div class="requests-grid">
+      {#each filteredProjects as req (req.id)}
+        <div class="request-card status-{req.status.toLowerCase()}">
+          <div class="request-header">
+            <div class="request-user">
+              {#if req.scans?.logo_id}
+                <img src="/media/{req.scans.logo_id}" alt="" class="scan-mini-logo" />
+              {:else}
+                <div class="scan-mini-fallback"><Users size={16} /></div>
+              {/if}
+              <div class="request-user-meta">
+                <span class="request-user-name">{req.scans?.name}</span>
+                <span class="request-user-sub">Solicitado por @{req.members?.username}</span>
+              </div>
+            </div>
+
+            <span class="status-pill status-{req.status.toLowerCase()}">
+              {req.status === 'PENDING' ? 'Pendente' : req.status === 'APPROVED' ? 'Aprovado' : 'Rejeitado'}
+            </span>
+          </div>
+
+          <div class="request-body">
+            <div class="obra-target-card">
+              {#if req.works?.cover_id}
+                <img src="/media/{req.works.cover_id}" alt="" class="obra-mini-cover" />
+              {:else}
+                <div class="obra-mini-placeholder">NOX</div>
+              {/if}
+              <div class="obra-target-info">
+                <span class="obra-target-label">Obra Solicitada:</span>
+                <strong class="obra-target-title">{req.works?.title}</strong>
+                <a href="/obra/{req.works?.slug}" target="_blank" class="obra-link">Ver no catálogo ↗</a>
+              </div>
+            </div>
+
+            {#if req.message}
+              <p class="request-desc">"{req.message}"</p>
+            {/if}
+
+            {#if req.status === 'REJECTED' && req.rejection_reason}
+              <div class="rejection-box">
+                <AlertTriangle size={14} />
+                <span>Motivo da recusa: {req.rejection_reason}</span>
+              </div>
             {/if}
           </div>
-        </div>
-      </div>
-    {/each}
 
-    {#if !filteredScans.length}
-      <div class="empty-state">
-        <Users size={40} class="empty-icon" />
-        <p class="empty-text">Nenhuma scan encontrada com os filtros atuais.</p>
+          {#if req.status === 'PENDING'}
+            <div class="request-actions-row">
+              <form method="POST" action="?/reviewProject" use:enhance>
+                <input type="hidden" name="request_id" value={req.id} />
+                <input type="hidden" name="action" value="APPROVE" />
+                <button type="submit" class="btn-action-approve">
+                  <Check size={14} />
+                  <span>Vincular Obra à Scan</span>
+                </button>
+              </form>
+
+              <button
+                type="button"
+                class="btn-action-reject"
+                onclick={() => {
+                  rejectModalId = req.id;
+                  rejectModalType = 'project';
+                  rejectReason = '';
+                }}
+              >
+                <Ban size={14} />
+                <span>Rejeitar</span>
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/each}
+
+      {#if !filteredProjects.length}
+        <div class="empty-state">
+          <BookOpen size={40} class="empty-icon" />
+          <p class="empty-text">Nenhuma solicitação de projeto encontrada com os filtros atuais.</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Rejection Modal -->
+  {#if rejectModalId}
+    <div class="modal-backdrop" onclick={() => (rejectModalId = null)}>
+      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Recusar Solicitação</h2>
+          <button class="btn-close-modal" onclick={() => (rejectModalId = null)}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form
+          method="POST"
+          action={rejectModalType === 'partner' ? '?/reviewPartner' : '?/reviewProject'}
+          use:enhance={() => {
+            reviewLoading = true;
+            return async ({ update }) => {
+              reviewLoading = false;
+              rejectModalId = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="request_id" value={rejectModalId} />
+          <input type="hidden" name="action" value="REJECT" />
+
+          <div class="form-group">
+            <label for="reject-reason" class="form-label">Motivo da Recusa (Opcional — exibido para o solicitante)</label>
+            <textarea
+              id="reject-reason"
+              name="reason"
+              rows={3}
+              class="form-textarea"
+              bind:value={rejectReason}
+              placeholder="Ex: Já existe equipe ativa responsável por este projeto..."
+            ></textarea>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (rejectModalId = null)}>
+              Cancelar
+            </button>
+            <button type="submit" class="btn-danger-confirm" disabled={reviewLoading}>
+              <Ban size={15} />
+              <span>Confirmar Recusa</span>
+            </button>
+          </div>
+        </form>
       </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 
   <!-- Create / Edit Modal -->
   {#if showModal}
@@ -999,11 +1423,378 @@
     }
   }
 
+  /* Tabs Bar */
+  .admin-tabs-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .admin-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #8c899e;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .admin-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #ffffff;
+  }
+
+  .admin-tab-btn.active {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+  }
+
+  .count-badge-glow {
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #8b5cf6;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+  }
+
+  /* Requests Grid */
+  .requests-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 18px;
+  }
+
+  .request-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 20px;
+    backdrop-filter: blur(12px);
+    transition: all 0.2s ease;
+  }
+
+  .request-card.status-pending {
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  .request-card.status-approved {
+    border-color: rgba(16, 185, 129, 0.25);
+  }
+
+  .request-card.status-rejected {
+    border-color: rgba(239, 68, 68, 0.2);
+    opacity: 0.85;
+  }
+
+  .request-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .request-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .request-user-meta {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .request-user-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .request-user-sub {
+    font-size: 12px;
+    color: #8c899e;
+  }
+
+  .request-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex: 1;
+  }
+
+  .request-target-box {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  .req-target-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8c899e;
+    font-weight: 700;
+  }
+
+  .req-target-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-top: 2px;
+  }
+
+  .req-target-slug {
+    font-size: 12px;
+    color: #c4b5fd;
+  }
+
+  .request-desc {
+    font-size: 13px;
+    color: #b5b1c7;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .request-links-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .link-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .link-chip:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .sample-links-box {
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+  }
+
+  .sample-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: #8c899e;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .sample-txt {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin: 0;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+
+  .rejection-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 12.5px;
+  }
+
+  .request-actions-row {
+    display: flex;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-action-approve {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-approve:hover {
+    background: rgba(16, 185, 129, 0.25);
+    color: #6ee7b7;
+  }
+
+  .btn-action-reject {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-reject:hover {
+    background: rgba(239, 68, 68, 0.22);
+    color: #fca5a5;
+  }
+
+  .scan-mini-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+
+  .scan-mini-fallback {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c4b5fd;
+  }
+
+  .obra-target-card {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+  }
+
+  .obra-mini-cover {
+    width: 48px;
+    height: 68px;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  .obra-mini-placeholder {
+    width: 48px;
+    height: 68px;
+    background: #1a1d2e;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #8c899e;
+  }
+
+  .obra-target-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .obra-target-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #8c899e;
+    font-weight: 700;
+  }
+
+  .obra-target-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .obra-link {
+    font-size: 12px;
+    color: #8b5cf6;
+    text-decoration: none;
+  }
+
+  .obra-link:hover {
+    text-decoration: underline;
+  }
+
+  .mini-reject-modal {
+    max-width: 480px;
+  }
+
+  .btn-danger-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-danger-confirm:hover {
+    background: #dc2626;
+  }
+
   @media (max-width: 600px) {
     .admin-page {
       padding: 16px;
     }
-    .scans-grid {
+    .scans-grid,
+    .requests-grid {
       grid-template-columns: 1fr;
     }
   }

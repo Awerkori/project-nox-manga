@@ -11,15 +11,20 @@ export class RateLimitError extends Error {
   }
 }
 
-export async function storeImage(request: Request, userId: string, purpose = 'editorial') {
+export async function storeImage(request: Request, userId: string, defaultPurpose = 'editorial') {
+  let purpose = request.headers.get('x-media-purpose') || defaultPurpose;
   const rawContentType = request.headers.get('content-type')?.toLowerCase() || '';
   const isMultipart = rawContentType.includes('multipart/form-data');
-  const max = purpose === 'avatar' ? 10_000_000 : purpose === 'banner' ? 15_000_000 : 19_000_000;
+  const max = 52_428_800;
   let bytes: Uint8Array;
   let size = 0;
 
   if (isMultipart) {
     const formData = await request.formData();
+    const purposeField = formData.get('purpose');
+    if (typeof purposeField === 'string' && purposeField.trim()) {
+      purpose = purposeField.trim();
+    }
     const file = formData.get('file');
     if (!file || !(file instanceof Blob)) error(400, 'Selecione uma imagem.');
     if (file.size > max) error(413, 'Imagem acima do limite permitido.');

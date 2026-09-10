@@ -37,6 +37,8 @@ export const load: PageServerLoad = async ({ locals }) => {
         featured_achievement_id,
         privacy_show_achievements,
         privacy_show_cosmetics,
+        privacy_show_favorites,
+        privacy_show_reading_history,
         created_at
       `)
       .eq('id', locals.user.id)
@@ -157,13 +159,17 @@ export const actions: Actions = {
     const blurNsfw = formData.get('blur_nsfw') === 'on';
     const privacyShowAchievements = formData.get('privacy_show_achievements') === 'on';
     const privacyShowCosmetics = formData.get('privacy_show_cosmetics') === 'on';
+    const privacyShowFavorites = formData.get('privacy_show_favorites') === 'on';
+    const privacyShowReadingHistory = formData.get('privacy_show_reading_history') === 'on';
 
     const { error } = await locals.db
       .from('members')
       .update({
         blur_nsfw: blurNsfw,
         privacy_show_achievements: privacyShowAchievements,
-        privacy_show_cosmetics: privacyShowCosmetics
+        privacy_show_cosmetics: privacyShowCosmetics,
+        privacy_show_favorites: privacyShowFavorites,
+        privacy_show_reading_history: privacyShowReadingHistory
       })
       .eq('id', locals.user.id);
 
