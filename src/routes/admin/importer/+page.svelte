@@ -1812,19 +1812,49 @@
         <div class="panel-header">
           <div>
             <h2 class="panel-title">Saúde das Fontes</h2>
-            <p class="panel-sub">Estado operacional e conectividade dos provedores</p>
+            <p class="panel-sub">Estado operacional e conectividade dos provedores ({data.activeSourcesCount ?? 5}/{data.totalSourcesCount ?? 6} ativas)</p>
           </div>
         </div>
 
+        {#if data.providerBlockers && data.providerBlockers.length > 0}
+          <div class="provider-blockers-container">
+            {#each data.providerBlockers as blocker (blocker.sourceId)}
+              <div class="provider-blocker-card">
+                <div class="blocker-header">
+                  <div class="blocker-title-line">
+                    <AlertTriangle size={14} class="blocker-icon" />
+                    <strong class="blocker-name">{blocker.sourceName}</strong>
+                    <span class="blocker-badge">UPSTREAM BLOCKED</span>
+                  </div>
+                  <span class="blocker-jobs-tag">{blocker.affectedJobsCount} jobs retidos</span>
+                </div>
+                <p class="blocker-lead-text">
+                  Cloudflare bloqueia o ambiente atual do Importer.
+                </p>
+                <div class="blocker-env-grid">
+                  <span class="env-pill env-local">Local/Mihon: HTTP {blocker.localStatus} (funcional)</span>
+                  <span class="env-pill env-discloud">DIScloud: HTTP {blocker.remoteStatus} (bloqueado)</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         <div class="sources-list">
           {#each data.sources as src (src.id)}
-            <div class="source-card">
+            <div class="source-card {src.status === 'UPSTREAM_BLOCKED' ? 'source-card-blocked' : ''}">
               <div class="source-top">
                 <strong class="source-name">{src.name}</strong>
                 <span class="source-status-tag status-{src.status.toLowerCase()}">
-                  {src.status}
+                  {src.status.replace('_', ' ')}
                 </span>
               </div>
+              {#if src.status === 'UPSTREAM_BLOCKED'}
+                <div class="source-blocked-micro">
+                  <span class="micro-title">Cloudflare bloqueia o ambiente atual do Importer.</span>
+                  <span class="micro-desc">Local/Mihon: funcional · DIScloud: HTTP 403</span>
+                </div>
+              {/if}
               <div class="source-details">
                 <span class="source-rate">Taxa: {src.rate_limit_per_second} req/s</span>
                 <span class="source-sync">Ciclo: {src.sync_interval_minutes}m</span>
@@ -4454,6 +4484,129 @@
     background: rgba(245, 158, 11, 0.12);
     color: #fbbf24;
     border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .source-status-tag.status-upstream_blocked {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .source-card-blocked {
+    border-color: rgba(239, 68, 68, 0.25) !important;
+    background: rgba(239, 68, 68, 0.02) !important;
+  }
+
+  .source-blocked-micro {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 2px 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+  }
+
+  .source-blocked-micro .micro-title {
+    font-size: 10px;
+    font-weight: 650;
+    color: #fca5a5;
+    line-height: 1.25;
+  }
+
+  .source-blocked-micro .micro-desc {
+    font-size: 9.5px;
+    color: #94a3b8;
+    font-family: var(--font-mono, monospace);
+  }
+
+  .provider-blockers-container {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .provider-blocker-card {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .provider-blocker-card .blocker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .provider-blocker-card .blocker-title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .provider-blocker-card :global(.blocker-icon) {
+    color: #f87171;
+    flex-shrink: 0;
+  }
+
+  .provider-blocker-card .blocker-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+
+  .provider-blocker-card .blocker-badge {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .provider-blocker-card .blocker-jobs-tag {
+    font-size: 10.5px;
+    color: #94a3b8;
+    font-family: var(--font-mono, monospace);
+  }
+
+  .provider-blocker-card .blocker-lead-text {
+    font-size: 11.5px;
+    color: #cbd5e1;
+    margin: 0 0 8px 0;
+    line-height: 1.4;
+  }
+
+  .provider-blocker-card .blocker-env-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .provider-blocker-card .env-pill {
+    font-size: 10px;
+    font-family: var(--font-mono, monospace);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .provider-blocker-card .env-local {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .provider-blocker-card .env-discloud {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
   }
 
   .source-details {

@@ -129,7 +129,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     failedCount,
     failed1hRes,
     failed24hRes,
-    recentFailuresRes
+    recentFailuresRes,
+    blockedUpstreamCount
   ] = await Promise.all([
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
@@ -140,7 +141,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
-    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6)
+    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6),
+    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'BLOCKED_BY_UPSTREAM')
   ]);
 
   const importingJobs = importingJobsRes.data || [];
@@ -251,6 +253,18 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
   }
 
+  const sourcesList = sourcesRes.data || [];
+  const blockedSources = sourcesList.filter((s: any) => s.status === 'UPSTREAM_BLOCKED');
+  const providerBlockers = blockedSources.map((s: any) => ({
+    sourceId: s.id,
+    sourceName: s.name,
+    reason: s.blocked_reason || 'CLOUDFLARE_DATACENTER_BLOCK',
+    message: (s.blocked_details as any)?.message || 'Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276). Local/Mihon: funcional; DIScloud: HTTP 403.',
+    affectedJobsCount: blockedUpstreamCount.count || 0,
+    localStatus: (s.blocked_details as any)?.local_status ?? 200,
+    remoteStatus: (s.blocked_details as any)?.discloud_status ?? 403
+  }));
+
   return {
     telemetry: telemetryRes.data || null,
     activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
@@ -260,12 +274,16 @@ export const load: PageServerLoad = async ({ locals }) => {
       retry: retryCount.count || 0,
       paused: pausedCount.count || 0,
       cancelled: cancelledCount.count || 0,
+      blockedByUpstream: blockedUpstreamCount.count || 0,
       staged: stagedCountRes.count || 0,
       completed: completedCount.count || 0,
       failed: failedCount.count || 0,
       failed1h: failed1hRes.count || 0,
       failed24h: failed24hRes.count || 0
     },
+    providerBlockers,
+    activeSourcesCount: sourcesList.filter((s: any) => s.status === 'ACTIVE').length,
+    totalSourcesCount: sourcesList.length,
     recentFailures: recentFailuresRes.data || [],
     recentAudit: staffAuditRes.data || [],
     importingJobs: importingJobs.map((j) => ({

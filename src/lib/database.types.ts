@@ -655,11 +655,14 @@ export type Database = {
       importer_sources: {
         Row: {
           base_url: string
+          blocked_details: Json
+          blocked_reason: string | null
           config: Json
           cooldown_until: string | null
           created_at: string
           enabled: boolean
           id: string
+          last_health_check_at: string | null
           last_sync_at: string | null
           name: string
           rate_limit_per_second: number
@@ -669,11 +672,14 @@ export type Database = {
         }
         Insert: {
           base_url: string
+          blocked_details?: Json
+          blocked_reason?: string | null
           config?: Json
           cooldown_until?: string | null
           created_at?: string
           enabled?: boolean
           id: string
+          last_health_check_at?: string | null
           last_sync_at?: string | null
           name: string
           rate_limit_per_second?: number
@@ -683,11 +689,14 @@ export type Database = {
         }
         Update: {
           base_url?: string
+          blocked_details?: Json
+          blocked_reason?: string | null
           config?: Json
           cooldown_until?: string | null
           created_at?: string
           enabled?: boolean
           id?: string
+          last_health_check_at?: string | null
           last_sync_at?: string | null
           name?: string
           rate_limit_per_second?: number
