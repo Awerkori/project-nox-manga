@@ -39,12 +39,20 @@ export const POST: RequestHandler = async ({ request }) => {
     error(400, 'Invalid target URL');
   }
 
-  try {
-    const upstreamRes = await fetch(url, {
-      method,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
+  const isNexusToons = url.includes('nx-toons.xyz') || url.includes('nexustoons.com');
+
+  const defaultHeaders: Record<string, string> = isNexusToons
+    ? {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        Referer: url.includes('nx-toons.xyz') ? 'https://nx-toons.xyz/' : 'https://nexustoons.com/',
+      }
+    : {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
         'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
         'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
         'sec-ch-ua-mobile': '?0',
@@ -52,9 +60,16 @@ export const POST: RequestHandler = async ({ request }) => {
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
-        ...headers
+      };
+
+  try {
+    const upstreamRes = await fetch(url, {
+      method,
+      headers: {
+        ...defaultHeaders,
+        ...headers,
       },
-      body: body ? (typeof body === 'object' ? JSON.stringify(body) : body) : undefined
+      body: body ? (typeof body === 'object' ? JSON.stringify(body) : body) : undefined,
     });
 
     const contentType = upstreamRes.headers.get('content-type') || '';
