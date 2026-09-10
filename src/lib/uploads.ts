@@ -7,7 +7,7 @@ export async function normalizePage(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file).catch(() => {
     throw new Error(`${file.name}: imagem corrompida ou formato não suportado.`);
   });
-  if (bitmap.width * bitmap.height > 40_000_000 || bitmap.height > 40000 || bitmap.width > 10000) {
+  if (bitmap.width * bitmap.height > 80_000_000 || bitmap.height > 60000 || bitmap.width > 10000) {
     bitmap.close();
     throw new Error(`${file.name}: dimensões acima do limite.`);
   }
