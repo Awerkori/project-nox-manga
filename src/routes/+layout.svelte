@@ -15,11 +15,14 @@
     History,
     LogOut,
     Shield,
-    ExternalLink
+    ExternalLink,
+    ShoppingBag,
+    Users
   } from '@lucide/svelte';
   import { memberRank } from '$lib/types';
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
   import AgeGateModal from '$lib/components/AgeGateModal.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data, children } = $props();
   let menu = $state(false);
@@ -117,6 +120,12 @@
         <a class:active={data.pathname === '/ranking'} href="/ranking">
           <span>Ranking</span>
         </a>
+        <a class:active={data.pathname.startsWith('/scans')} href="/scans">
+          <span>Scans</span>
+        </a>
+        <a class:active={data.pathname.startsWith('/loja')} href="/loja">
+          <span>Loja</span>
+        </a>
       </nav>
 
       <div class="header-actions">
@@ -173,35 +182,25 @@
               aria-expanded={userMenuOpen}
               onclick={() => (userMenuOpen = !userMenuOpen)}
             >
-              {#if data.profile.avatar_id}
-                <img
-                  src="/media/{data.profile.avatar_id}"
-                  alt=""
-                  width="34"
-                  height="34"
-                  class="avatar-img"
-                />
-              {:else}
-                <span class="avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
-              {/if}
+              <UserAvatar
+                avatarId={data.profile.avatar_id}
+                displayName={data.profile.display_name}
+                frameId={data.profile.avatar_frame_id}
+                size={34}
+              />
             </button>
 
             {#if userMenuOpen}
               <div class="user-dropdown" role="menu">
-                <a href="/perfil" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
-                  {#if data.profile.avatar_id}
-                    <img
-                      src="/media/{data.profile.avatar_id}"
-                      alt=""
-                      width="40"
-                      height="40"
-                      class="dropdown-avatar-img"
-                    />
-                  {:else}
-                    <span class="dropdown-avatar-fallback">{data.profile.display_name.slice(0, 1).toUpperCase()}</span>
-                  {/if}
+                <a href="/u/{data.profile.username}" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
+                  <UserAvatar
+                    avatarId={data.profile.avatar_id}
+                    displayName={data.profile.display_name}
+                    frameId={data.profile.avatar_frame_id}
+                    size={42}
+                  />
                   <div class="dropdown-user-meta">
-                    <span class="dropdown-user-name">{data.profile.display_name}</span>
+                    <span class="dropdown-user-name" style={data.profile.name_color ? `color: ${data.profile.name_color};` : ''}>{data.profile.display_name}</span>
                     <span class="dropdown-user-handle">@{data.profile.username || 'leitor'}</span>
                     {#if rank}
                       <span class="dropdown-rank-pill">{rank.title}</span>
@@ -212,33 +211,43 @@
                 <div class="dropdown-divider"></div>
 
                 <div class="dropdown-links">
-                  <a href="/perfil" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/me" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <UserRound size={16} />
-                    <span>Meu Perfil</span>
+                    <span>Meu Espaço</span>
                   </a>
-                  <a href="/biblioteca" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/u/{data.profile.username}" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <BookOpen size={16} />
+                    <span>Perfil Público</span>
+                  </a>
+                  <a href="/me?tab=biblioteca" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Library size={16} />
                     <span>Minha Biblioteca</span>
                   </a>
-                  <a href="/favoritos" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/me?tab=favoritos" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Bookmark size={16} />
                     <span>Favoritos</span>
                   </a>
-                  <a href="/historico" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/me?tab=historico" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <History size={16} />
                     <span>Histórico</span>
                   </a>
-                  <a href="/notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/me?tab=notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Bell size={16} />
                     <span>Notificações</span>
                     {#if data.unread}
                       <span class="dropdown-badge">{data.unread}</span>
                     {/if}
                   </a>
-                  <a href="/ranking" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <Trophy size={16} />
-                    <span>Ranking Geral</span>
+                  <a href="/loja" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <ShoppingBag size={16} />
+                    <span>Loja de Cosméticos</span>
                   </a>
+                  {#if data.role === 'SCAN_PARTNER' || data.role === 'ADMIN'}
+                    <a href="/scan" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                      <Users size={16} />
+                      <span>Painel de Scan</span>
+                    </a>
+                  {/if}
                   {#if data.role === 'ADMIN' || data.role === 'EDITOR'}
                     <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
                       <Shield size={16} />
@@ -326,14 +335,27 @@
             <Trophy size={18} />
             <span>Ranking</span>
           </a>
+          <a class:active={data.pathname.startsWith('/scans')} href="/scans" onclick={() => (menu = false)}>
+            <Users size={18} />
+            <span>Scans Parceiras</span>
+          </a>
+          <a class:active={data.pathname.startsWith('/loja')} href="/loja" onclick={() => (menu = false)}>
+            <ShoppingBag size={18} />
+            <span>Loja de Cosméticos</span>
+          </a>
           {#if data.profile}
-            <a class:active={data.pathname === '/biblioteca'} href="/biblioteca" onclick={() => (menu = false)}>
-              <Library size={18} />
-              <span>Minha Biblioteca</span>
-            </a>
-            <a class:active={data.pathname === '/perfil'} href="/perfil" onclick={() => (menu = false)}>
+            <a class:active={data.pathname.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
               <UserRound size={18} />
-              <span>Meu Perfil</span>
+              <span>Meu Espaço</span>
+            </a>
+            <a href="/u/{data.profile.username}" onclick={() => (menu = false)}>
+              <UserRound size={18} />
+              <span>Meu Perfil Público</span>
+            </a>
+          {:else}
+            <a href="/entrar" onclick={() => (menu = false)}>
+              <UserRound size={18} />
+              <span>Entrar / Criar Conta</span>
             </a>
           {/if}
         </nav>
@@ -369,6 +391,8 @@
       <div class="footer-links">
         <a href="/catalogo">Catálogo</a>
         <a href="/ranking">Ranking</a>
+        <a href="/scans">Scans</a>
+        <a href="/loja">Loja</a>
         <a href="/sobre">Sobre a Nox</a>
         <a href="/privacidade">Privacidade</a>
       </div>
@@ -383,9 +407,9 @@
   <nav class="mobile-bottom" aria-label="Atalhos">
     <a href="/" class:active={data.pathname === '/'}><BookOpen size={20} /><span>Início</span></a>
     <a href="/catalogo" class:active={data.pathname.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
-    <a href="/biblioteca" class:active={data.pathname === '/biblioteca'}><Library size={20} /><span>Biblioteca</span></a>
-    <a href="/ranking" class:active={data.pathname === '/ranking'}><Trophy size={20} /><span>Ranking</span></a>
-    <a href="/perfil" class:active={data.pathname === '/perfil'}><UserRound size={20} /><span>Perfil</span></a>
+    <a href="/scans" class:active={data.pathname.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
+    <a href="/loja" class:active={data.pathname.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
+    <a href={data.profile ? '/me' : '/entrar'} class:active={data.pathname.startsWith('/me') || data.pathname.startsWith('/u/')}><UserRound size={20} /><span>{data.profile ? 'Espaço' : 'Entrar'}</span></a>
   </nav>
 {/if}
 
@@ -478,36 +502,40 @@
   }
 
   .brand-text {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
+    gap: 1px;
   }
 
   .brand-project {
     font-family: var(--font-heading, Manrope, sans-serif);
-    font-size: 22px;
-    font-weight: 850;
-    letter-spacing: 0.04em;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
     color: #dfc28d;
     background: linear-gradient(135deg, #ffffff 0%, #f6e4c7 35%, #dfc28d 75%, #b89352 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 2px 10px rgba(223, 194, 141, 0.25));
+    filter: drop-shadow(0 1px 6px rgba(223, 194, 141, 0.2));
   }
 
   .brand-nox {
     font-family: var(--font-heading, Manrope, sans-serif);
-    font-size: 22px;
-    font-weight: 850;
-    letter-spacing: 0.05em;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     color: #b59af5;
     background: linear-gradient(135deg, #ffffff 0%, #e6dcfe 35%, #b59af5 75%, #8b5cf6 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 2px 14px rgba(181, 154, 245, 0.35));
+    filter: drop-shadow(0 2px 12px rgba(181, 154, 245, 0.35));
   }
 
   /* Desktop Navigation in Segmented Glass Capsule */
@@ -633,7 +661,25 @@
 
   @media (max-width: 768px) {
     .header-community-group {
+      display: inline-flex !important;
+      gap: 5px;
+    }
+    .header-community-btn {
+      height: 38px;
+      width: 38px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .header-community-btn .community-btn-text {
       display: none !important;
+    }
+    .header-actions {
+      gap: 6px;
+    }
+    .header-actions .icon-button {
+      width: 38px;
+      height: 38px;
     }
   }
 
@@ -1024,17 +1070,22 @@
   }
 
   .footer-brand-text {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    line-height: 1;
   }
 
   .footer-brand-text .brand-project {
-    font-size: 19px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
   }
 
   .footer-brand-text .brand-nox {
-    font-size: 19px;
+    font-size: 15px;
+    letter-spacing: 0.18em;
   }
 
   .footer-tagline {

@@ -24,7 +24,16 @@
       blur_nsfw: false,
       is_test: false,
       equipped_title_id: 'iniciado-nox',
-      equipped_badge_id: 'marca-inicial'
+      equipped_badge_id: 'marca-inicial',
+      avatar_frame_id: null as string | null,
+      banner_id: null as string | null,
+      banner_position: 'center',
+      equipped_medal_id: null as string | null,
+      equipped_comment_banner_id: null as string | null,
+      is_onboarded: true,
+      manual_badge: false,
+      manual_title: false,
+      name_color: null as string | null
     },
     role: role,
     unread: 0,

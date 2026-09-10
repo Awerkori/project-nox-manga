@@ -31,14 +31,15 @@
       </div>
     {/if}
 
-    <div class="card-badges">
-      <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
+    {#if isAdult}
+      <span class="adult-badge-top-left">+18</span>
+    {/if}
+
+    <div class="card-badges-top-right">
       {#if work.featured}
         <span class="featured-chip"><Sparkles size={11} /> Destaque</span>
       {/if}
-      {#if isAdult}
-        <span class="adult-badge">+18</span>
-      {/if}
+      <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
     </div>
 
     {#if effectiveBlur}
@@ -145,15 +146,30 @@
     color: #ffffff;
   }
 
-  .card-badges {
+  .adult-badge-top-left {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
+    top: 9px;
+    left: 9px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 5px;
+    letter-spacing: 0.04em;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.55);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .card-badges-top-right {
+    position: absolute;
+    top: 9px;
+    right: 9px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    z-index: 2;
+    gap: 5px;
+    z-index: 5;
     pointer-events: none;
   }
 

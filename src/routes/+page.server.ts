@@ -18,7 +18,7 @@ export const load = async ({ locals }) => {
       .not('published_at', 'is', null)
       .eq('works.published', true)
       .order('published_at', { ascending: false })
-      .limit(30),
+      .limit(80),
     locals.user
       ? locals.db
           .from('reading')
@@ -190,35 +190,35 @@ export const load = async ({ locals }) => {
 
   const recentReleases = Array.from(releasesMap.values());
 
-  // Check real metrics for popular works (only if real engagement exists)
-  // Per rule: "A seção Mais Populares só deve aparecer se houver métrica REAL suficiente para sustentá-la"
-  let popularWorks: typeof works = [];
-  if (works.length >= 2) {
-    if (popularCache && Date.now() - popularCache.timestamp < POPULAR_CACHE_TTL_MS) {
-      popularWorks = popularCache.works;
-    } else {
-      const popularChecks = await Promise.all(
-        works.map(async (w) => {
-          const m = await locals.db.rpc('work_metrics', { p_work: w.id });
-          const data = m.data?.[0] || { favorites: 0, likes: 0, readers: 0 };
-          const score = Number(data.likes || 0) + Number(data.favorites || 0) * 2 + Number(data.readers || 0);
-          return { work: w, score };
-        })
-      );
-      const withEngagement = popularChecks.filter((item) => item.score > 0);
-      if (withEngagement.length >= 2) {
-        withEngagement.sort((a, b) => b.score - a.score);
-        popularWorks = withEngagement.map((item) => item.work);
-      }
-      popularCache = { timestamp: Date.now(), works: popularWorks };
-    }
+  // Most Read works based on views_total (real views)
+  let mostReadWorks: typeof works = [];
+  const mostReadRes = await locals.db
+    .from('works')
+    .select(WORK_FIELDS)
+    .eq('published', true)
+    .gt('views_total', 0)
+    .order('views_total', { ascending: false })
+    .limit(16);
+
+  if (mostReadRes.data && mostReadRes.data.length >= 2) {
+    mostReadWorks = mostReadRes.data;
+  } else {
+    // Fallback: sort by views_total DESC, updated_at DESC
+    const fallbackRes = await locals.db
+      .from('works')
+      .select(WORK_FIELDS)
+      .eq('published', true)
+      .order('views_total', { ascending: false })
+      .order('updated_at', { ascending: false })
+      .limit(16);
+    mostReadWorks = fallbackRes.data || [];
   }
 
   return {
     works,
     featuredList,
     recentReleases,
-    popularWorks,
+    mostReadWorks,
     recent: continueReading
   };
 };

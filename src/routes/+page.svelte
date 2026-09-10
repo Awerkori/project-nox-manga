@@ -125,12 +125,13 @@
       />
     {/if}
 
-    <!-- 4. Mais Bem Avaliados (Strictly conditional, requires verified real engagement) -->
-    {#if data.popularWorks && data.popularWorks.length >= 2}
+    <!-- 4. Mais Lidos (Strictly based on real read counts / views_total) -->
+    {#if data.mostReadWorks && data.mostReadWorks.length >= 2}
       <WorkShelf
-        title="Mais Bem Avaliados"
-        subtitle="Obras com maior engajamento dos leitores"
-        works={data.popularWorks}
+        title="Mais Lidos"
+        subtitle="Obras mais populares e acessadas pelos leitores"
+        works={data.mostReadWorks}
+        viewAllUrl="/ranking"
       />
     {/if}
 
@@ -296,7 +297,7 @@
   .adult-badge-mini {
     position: absolute;
     top: 4px;
-    right: 4px;
+    left: 4px;
     background: #dc2626;
     color: #ffffff;
     font-size: 9px;

@@ -83,7 +83,7 @@
   async function submitReport() {
     const finalReason = selectedReason === 'Outro motivo' ? customReason.trim() : selectedReason;
     if (!finalReason) {
-      errorMessage = 'Selecione ou descreva o motivo da denúncia.';
+      errorMessage = 'Selecione ou descreva o motivo do reporte.';
       return;
     }
 
@@ -109,7 +109,7 @@
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Erro ao enviar denúncia.');
+        throw new Error(data.message || 'Erro ao enviar reporte.');
       }
 
       submitted = true;
@@ -154,7 +154,7 @@
           <div class="success-icon">
             <CheckCircle2 size={36} />
           </div>
-          <h4 class="success-heading">Denúncia Enviada</h4>
+          <h4 class="success-heading">Reporte Enviado</h4>
           <p class="success-text">
             Obrigado por ajudar a manter a comunidade da Project Nox saudável. Nossa equipe editorial irá analisar.
           </p>
@@ -169,7 +169,7 @@
           {/if}
 
           <div class="form-group">
-            <span class="form-label">Qual o motivo da denúncia?</span>
+            <span class="form-label">Qual o motivo do reporte?</span>
             <div class="reason-options">
               {#each reasons as r}
                 <label class="reason-option-label" class:selected={selectedReason === r}>
@@ -218,7 +218,7 @@
               Cancelar
             </button>
             <button type="submit" class="btn-submit" disabled={loading || !selectedReason}>
-              {loading ? 'Enviando...' : 'Enviar Denúncia'}
+              {loading ? 'Enviando...' : 'Enviar Reporte'}
             </button>
           </footer>
         </form>

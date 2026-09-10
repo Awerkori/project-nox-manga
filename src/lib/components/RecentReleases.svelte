@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, BookOpen, Clock, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { ArrowRight, BookOpen, Clock, ChevronDown } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
 
@@ -25,24 +25,12 @@
 
   let { releases = [] }: Props = $props();
 
-  let scrollContainer: HTMLDivElement | null = $state(null);
-  let canScrollLeft = $state(false);
-  let canScrollRight = $state(true);
+  let visibleCount = $state(12);
+  let displayedReleases = $derived(releases.slice(0, visibleCount));
+  let hasMore = $derived(releases.length > visibleCount);
 
-  function updateScrollState() {
-    if (!scrollContainer) return;
-    canScrollLeft = scrollContainer.scrollLeft > 10;
-    canScrollRight =
-      scrollContainer.scrollLeft < scrollContainer.scrollWidth - scrollContainer.clientWidth - 10;
-  }
-
-  function scroll(direction: 'left' | 'right') {
-    if (!scrollContainer) return;
-    const amount = scrollContainer.clientWidth * 0.75;
-    scrollContainer.scrollBy({
-      left: direction === 'left' ? -amount : amount,
-      behavior: 'smooth'
-    });
+  function loadMore() {
+    visibleCount += 12;
   }
 </script>
 
@@ -54,25 +42,6 @@
     </div>
 
     <div class="header-right-tools">
-      <div class="releases-nav-arrows">
-        <button
-          class="arrow-btn"
-          onclick={() => scroll('left')}
-          disabled={!canScrollLeft}
-          aria-label="Rolar lançamentos para a esquerda"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <button
-          class="arrow-btn"
-          onclick={() => scroll('right')}
-          disabled={!canScrollRight}
-          aria-label="Rolar lançamentos para a direita"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
       <a href="/catalogo" class="view-all-link">
         <span>Ver catálogo completo</span>
         <ArrowRight size={14} />
@@ -81,12 +50,8 @@
   </div>
 
   {#if releases.length > 0}
-    <div
-      class="releases-track"
-      bind:this={scrollContainer}
-      onscroll={updateScrollState}
-    >
-      {#each releases as rel (rel.workId)}
+    <div class="releases-grid">
+      {#each displayedReleases as rel (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
@@ -150,6 +115,15 @@
         </article>
       {/each}
     </div>
+
+    {#if hasMore}
+      <div class="load-more-wrap">
+        <button type="button" class="btn-load-more" onclick={loadMore}>
+          <span>Carregar mais lançamentos</span>
+          <ChevronDown size={16} />
+        </button>
+      </div>
+    {/if}
   {:else}
     <div class="empty-releases">
       <BookOpen size={36} />
@@ -203,37 +177,6 @@
     gap: 1.25rem;
   }
 
-  .releases-nav-arrows {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .arrow-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: #111420;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #cbd5e1;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .arrow-btn:hover:not(:disabled) {
-    background: #181c2c;
-    border-color: rgba(181, 154, 245, 0.3);
-    color: #ffffff;
-  }
-
-  .arrow-btn:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-
   .view-all-link {
     display: inline-flex;
     align-items: center;
@@ -249,24 +192,15 @@
     color: #dfc28d;
   }
 
-  /* Horizontal Track */
-  .releases-track {
-    display: flex;
+  /* Grid Feed */
+  .releases-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 1rem;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    padding: 4px 2px 14px;
-  }
-
-  .releases-track::-webkit-scrollbar {
-    display: none;
+    width: 100%;
   }
 
   .release-row-card {
-    flex: 0 0 350px;
-    scroll-snap-align: start;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -276,6 +210,37 @@
     border-radius: 12px;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     min-height: 102px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .btn-load-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.75rem;
+    background: rgba(22, 27, 44, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-load-more:hover {
+    background: rgba(30, 36, 60, 0.95);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
 
   .release-row-card:hover {
@@ -317,7 +282,7 @@
   .adult-badge-mini {
     position: absolute;
     top: 4px;
-    right: 4px;
+    left: 4px;
     background: #dc2626;
     color: #ffffff;
     font-size: 9px;
@@ -457,13 +422,9 @@
   }
 
   @media (max-width: 640px) {
-    .release-row-card {
-      flex: 0 0 84vw;
-      max-width: 320px;
-    }
-
-    .releases-nav-arrows {
-      display: none;
+    .releases-grid {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }
   }
 </style>

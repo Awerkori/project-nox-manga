@@ -65,6 +65,51 @@ export type Database = {
           },
         ]
       }
+      achievements: {
+        Row: {
+          badge_color: string
+          category: string
+          condition_type: string
+          condition_value: number
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          is_secret: boolean
+          order_index: number
+          title: string
+          xp_reward: number
+        }
+        Insert: {
+          badge_color?: string
+          category: string
+          condition_type: string
+          condition_value?: number
+          created_at?: string
+          description: string
+          icon?: string
+          id: string
+          is_secret?: boolean
+          order_index?: number
+          title: string
+          xp_reward?: number
+        }
+        Update: {
+          badge_color?: string
+          category?: string
+          condition_type?: string
+          condition_value?: number
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_secret?: boolean
+          order_index?: number
+          title?: string
+          xp_reward?: number
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -129,6 +174,91 @@ export type Database = {
           },
         ]
       }
+      chapter_scans: {
+        Row: {
+          chapter_id: string
+          created_at: string
+          scan_id: string
+        }
+        Insert: {
+          chapter_id: string
+          created_at?: string
+          scan_id: string
+        }
+        Update: {
+          chapter_id?: string
+          created_at?: string
+          scan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapter_scans_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chapter_views: {
+        Row: {
+          anonymous_hash: string | null
+          chapter_id: string
+          id: string
+          origin: string
+          user_id: string | null
+          viewed_at: string
+          work_id: string
+        }
+        Insert: {
+          anonymous_hash?: string | null
+          chapter_id: string
+          id?: string
+          origin?: string
+          user_id?: string | null
+          viewed_at?: string
+          work_id: string
+        }
+        Update: {
+          anonymous_hash?: string | null
+          chapter_id?: string
+          id?: string
+          origin?: string
+          user_id?: string | null
+          viewed_at?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapter_views_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_views_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_views_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chapters: {
         Row: {
           created_at: string
@@ -138,6 +268,7 @@ export type Database = {
           published_at: string | null
           source_id: string | null
           title: string
+          views_total: number
           work_id: string
         }
         Insert: {
@@ -148,6 +279,7 @@ export type Database = {
           published_at?: string | null
           source_id?: string | null
           title?: string
+          views_total?: number
           work_id: string
         }
         Update: {
@@ -158,6 +290,7 @@ export type Database = {
           published_at?: string | null
           source_id?: string | null
           title?: string
+          views_total?: number
           work_id?: string
         }
         Relationships: [
@@ -194,6 +327,39 @@ export type Database = {
           {
             foreignKeyName: "comment_likes_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comment_mentions: {
+        Row: {
+          comment_id: string
+          created_at: string
+          mentioned_user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          mentioned_user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          mentioned_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_mentions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_mentions_mentioned_user_id_fkey"
+            columns: ["mentioned_user_id"]
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
@@ -1140,52 +1306,139 @@ export type Database = {
           },
         ]
       }
+      member_achievements: {
+        Row: {
+          achievement_id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_achievements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_inventory: {
+        Row: {
+          acquired_at: string
+          item_id: string
+          user_id: string
+        }
+        Insert: {
+          acquired_at?: string
+          item_id: string
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string
+          item_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_inventory_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "shop_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_inventory_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       members: {
         Row: {
           age_status: string
+          avatar_frame_id: string | null
           avatar_id: string | null
+          banner_id: string | null
+          banner_position: string
           bio: string
           blur_nsfw: boolean
           created_at: string
           display_name: string
           equipped_badge_id: string | null
+          equipped_comment_banner_id: string | null
+          equipped_medal_id: string | null
           equipped_title_id: string | null
           id: string
+          is_onboarded: boolean
           is_test: boolean
           manual_badge: boolean
           manual_title: boolean
+          name_color: string | null
           username: string
           xp: number
         }
         Insert: {
           age_status?: string
+          avatar_frame_id?: string | null
           avatar_id?: string | null
+          banner_id?: string | null
+          banner_position?: string
           bio?: string
           blur_nsfw?: boolean
           created_at?: string
           display_name: string
           equipped_badge_id?: string | null
+          equipped_comment_banner_id?: string | null
+          equipped_medal_id?: string | null
           equipped_title_id?: string | null
           id: string
+          is_onboarded?: boolean
           is_test?: boolean
           manual_badge?: boolean
           manual_title?: boolean
+          name_color?: string | null
           username: string
           xp?: number
         }
         Update: {
           age_status?: string
+          avatar_frame_id?: string | null
           avatar_id?: string | null
+          banner_id?: string | null
+          banner_position?: string
           bio?: string
           blur_nsfw?: boolean
           created_at?: string
           display_name?: string
           equipped_badge_id?: string | null
+          equipped_comment_banner_id?: string | null
+          equipped_medal_id?: string | null
           equipped_title_id?: string | null
           id?: string
+          is_onboarded?: boolean
           is_test?: boolean
           manual_badge?: boolean
           manual_title?: boolean
+          name_color?: string | null
           username?: string
           xp?: number
         }
@@ -1193,6 +1446,13 @@ export type Database = {
           {
             foreignKeyName: "members_avatar_id_fkey"
             columns: ["avatar_id"]
+            isOneToOne: false
+            referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_banner_id_fkey"
+            columns: ["banner_id"]
             isOneToOne: false
             referencedRelation: "media"
             referencedColumns: ["id"]
@@ -1498,6 +1758,105 @@ export type Database = {
           },
         ]
       }
+      scan_members: {
+        Row: {
+          created_at: string
+          role: string
+          scan_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          role?: string
+          scan_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          role?: string
+          scan_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_members_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scans: {
+        Row: {
+          banner_id: string | null
+          created_at: string
+          description: string
+          discord: string
+          fluxer: string
+          id: string
+          is_official: boolean
+          logo_id: string | null
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+          website: string
+        }
+        Insert: {
+          banner_id?: string | null
+          created_at?: string
+          description?: string
+          discord?: string
+          fluxer?: string
+          id?: string
+          is_official?: boolean
+          logo_id?: string | null
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+          website?: string
+        }
+        Update: {
+          banner_id?: string | null
+          created_at?: string
+          description?: string
+          discord?: string
+          fluxer?: string
+          id?: string
+          is_official?: boolean
+          logo_id?: string | null
+          name?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scans_banner_id_fkey"
+            columns: ["banner_id"]
+            isOneToOne: false
+            referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scans_logo_id_fkey"
+            columns: ["logo_id"]
+            isOneToOne: false
+            referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           key: string
@@ -1510,6 +1869,51 @@ export type Database = {
         Update: {
           key?: string
           value?: string
+        }
+        Relationships: []
+      }
+      shop_items: {
+        Row: {
+          asset_url: string
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          is_animated: boolean
+          kind: string
+          min_level: number
+          name: string
+          order_index: number
+          price_xp: number
+          style_data: Json
+        }
+        Insert: {
+          asset_url?: string
+          created_at?: string
+          description?: string
+          id: string
+          is_active?: boolean
+          is_animated?: boolean
+          kind: string
+          min_level?: number
+          name: string
+          order_index?: number
+          price_xp: number
+          style_data?: Json
+        }
+        Update: {
+          asset_url?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          is_animated?: boolean
+          kind?: string
+          min_level?: number
+          name?: string
+          order_index?: number
+          price_xp?: number
+          style_data?: Json
         }
         Relationships: []
       }
@@ -1533,6 +1937,108 @@ export type Database = {
           slug?: string
         }
         Relationships: []
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          blocked_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          blocked_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_scans: {
+        Row: {
+          created_at: string
+          is_primary: boolean
+          scan_id: string
+          work_id: string
+        }
+        Insert: {
+          created_at?: string
+          is_primary?: boolean
+          scan_id: string
+          work_id: string
+        }
+        Update: {
+          created_at?: string
+          is_primary?: boolean
+          scan_id?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_scans_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       work_tags: {
         Row: {
@@ -1589,6 +2095,7 @@ export type Database = {
           synopsis: string
           title: string
           updated_at: string
+          views_total: number
           year: number | null
         }
         Insert: {
@@ -1612,6 +2119,7 @@ export type Database = {
           synopsis?: string
           title: string
           updated_at?: string
+          views_total?: number
           year?: number | null
         }
         Update: {
@@ -1635,6 +2143,7 @@ export type Database = {
           synopsis?: string
           title?: string
           updated_at?: string
+          views_total?: number
           year?: number | null
         }
         Relationships: [
@@ -1711,6 +2220,10 @@ export type Database = {
       claim_editor_invite: { Args: never; Returns: boolean }
       current_role: { Args: never; Returns: string }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
+      equip_cosmetic_item: {
+        Args: { p_item_id: string; p_kind: string }
+        Returns: Json
+      }
       get_chapter_reactions: {
         Args: { p_chapter_id: string; p_visitor_id?: string }
         Returns: Json
@@ -1752,16 +2265,14 @@ export type Database = {
           reason: string
         }[]
       }
-      importer_prioritize_work:
-        | { Args: { p_reason?: string; p_work_id: string }; Returns: Json }
-        | {
-            Args: {
-              p_force_replace?: boolean
-              p_reason?: string
-              p_work_id: string
-            }
-            Returns: Json
-          }
+      importer_prioritize_work: {
+        Args: {
+          p_force_replace?: boolean
+          p_reason?: string
+          p_work_id: string
+        }
+        Returns: Json
+      }
       importer_prune_telemetry: {
         Args: { p_job_metrics_days?: number; p_telemetry_hours?: number }
         Returns: undefined
@@ -1778,7 +2289,6 @@ export type Database = {
           p_error?: string
           p_job_id: string
           p_retry_delay?: string
-          p_retry_delay_minutes?: number
           p_status: string
           p_worker_id: string
         }
@@ -1842,6 +2352,16 @@ export type Database = {
           value: string
         }[]
       }
+      purchase_shop_item: { Args: { p_item_id: string }; Returns: Json }
+      record_chapter_view: {
+        Args: {
+          p_anon_hash?: string
+          p_chapter_id: string
+          p_origin?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       reserve_media: {
         Args: {
           p_bytes: number
@@ -1863,6 +2383,7 @@ export type Database = {
         Args: { p_chapter_id: string; p_emoji: string; p_visitor_id: string }
         Returns: Json
       }
+      toggle_follow_user: { Args: { p_target_user_id: string }; Returns: Json }
       work_metrics: {
         Args: { p_work: string }
         Returns: {

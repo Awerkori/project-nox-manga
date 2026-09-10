@@ -10,7 +10,9 @@
     ChevronDown,
     ChevronUp,
     AlertTriangle,
-    Flag
+    Flag,
+    Eye,
+    Users
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import { goto } from '$app/navigation';
@@ -28,8 +30,13 @@
     synopsisExpanded = $state(false),
     showReportModal = $state(false);
 
+  function formatViews(n: number = 0) {
+    return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(n);
+  }
+
   let isAdult = $derived(data.work.content_rating === 'ADULT_18');
-  let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
+  // Unblur automatically when visiting the individual work page per UX requirements
+  let effectiveBlur = false;
 
   let chapters = $derived(
     (ascending ? [...data.chapters].reverse() : data.chapters).filter(
@@ -140,15 +147,12 @@
         {#if isAdult}
           <span class="adult-badge-work">+18</span>
         {/if}
-        {#if effectiveBlur}
-          <div class="nsfw-overlay-work">
-            <div class="nsfw-tag-work">
-              <AlertTriangle size={14} />
-              <span>CONTEÚDO ADULTO</span>
-            </div>
+        {#if data.scans && data.scans.length > 0}
+          <div class="cover-scan-seal">
+            <Users size={12} />
+            <span>{data.scans.map((s) => s.name).join(' × ')}</span>
           </div>
         {/if}
-        <span class="cover-edition-seal">EDIÇÃO PROJECT NOX</span>
       </div>
 
       <!-- INFORMAÇÕES Card (Under Cover on Desktop) -->
@@ -374,7 +378,7 @@
               title="Reportar problema nesta obra"
             >
               <Flag size={18} />
-              <span>Denunciar</span>
+              <span>Reportar</span>
             </button>
           </div>
 
@@ -437,15 +441,25 @@
           {#each chapters as chapter (chapter.id)}
             {@const isRead = data.progress.some((p) => p.chapter_id === chapter.id && p.completed_at)}
             {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
+            {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : 'Project Nox')}
             <a href="/ler/{chapter.id}" class="chapter-item" class:is-read={isRead}>
               <div class="chapter-left">
-                <span class="chapter-num">Capítulo {chapter.number}</span>
-                {#if isNew}
-                  <span class="chapter-badge-new">NOVO</span>
-                {/if}
-                {#if chapter.title}
-                  <span class="chapter-title">{chapter.title}</span>
-                {/if}
+                <div class="chapter-primary-row">
+                  <span class="chapter-num">Cap. {chapter.number}</span>
+                  {#if isNew}
+                    <span class="chapter-badge-new">NOVO</span>
+                  {/if}
+                  {#if chapter.title}
+                    <span class="chapter-title">{chapter.title}</span>
+                  {/if}
+                </div>
+                <div class="chapter-meta-row">
+                  <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.views_total || 0)}</span>
+                  <span class="chapter-meta-dot">·</span>
+                  <span class="chapter-meta-scan">{scanLabel}</span>
+                  <span class="chapter-meta-dot">·</span>
+                  <time class="chapter-meta-date">{date(chapter.published_at!)}</time>
+                </div>
               </div>
               <div class="chapter-right">
                 {#if isRead}
@@ -454,7 +468,6 @@
                     <span>Lido</span>
                   </span>
                 {/if}
-                <time>{date(chapter.published_at!)}</time>
                 <BookOpen size={16} class="read-arrow" />
               </div>
             </a>
@@ -569,7 +582,7 @@
   .adult-badge-work {
     position: absolute;
     top: 12px;
-    right: 12px;
+    left: 12px;
     background: rgba(239, 68, 68, 0.9);
     backdrop-filter: blur(4px);
     color: #fff;
@@ -619,21 +632,26 @@
     padding: 20px;
   }
 
-  .cover-edition-seal {
+  .cover-scan-seal {
     position: absolute;
     bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.04em;
     color: #dfc28d;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    padding: 2px 10px;
+    background: rgba(8, 10, 18, 0.88);
+    backdrop-filter: blur(8px);
+    padding: 3px 12px;
     border-radius: 999px;
     white-space: nowrap;
-    border: 1px solid rgba(223, 194, 141, 0.3);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    z-index: 3;
   }
 
 
@@ -1117,8 +1135,16 @@
 
   .chapter-left {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .chapter-primary-row {
+    display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .chapter-num {
@@ -1128,8 +1154,37 @@
   }
 
   .chapter-title {
-    font-size: 13px;
+    font-size: 13.5px;
+    color: #b5b1c7;
+  }
+
+  .chapter-meta-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     color: #8c899a;
+  }
+
+  .chapter-meta-views {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #a78bfa;
+    font-weight: 600;
+  }
+
+  .chapter-meta-scan {
+    color: #dfc28d;
+    font-weight: 600;
+  }
+
+  .chapter-meta-date {
+    color: #7b788a;
+  }
+
+  .chapter-meta-dot {
+    color: #4b4859;
   }
 
   .chapter-right {

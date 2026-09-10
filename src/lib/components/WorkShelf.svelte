@@ -379,7 +379,7 @@
   .adult-badge {
     position: absolute;
     top: 8px;
-    right: 8px;
+    left: 8px;
     background: #dc2626;
     color: #ffffff;
     font-size: 10px;
@@ -387,7 +387,7 @@
     padding: 2px 6px;
     border-radius: 4px;
     letter-spacing: 0.04em;
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.55);
     z-index: 5;
   }
 

@@ -1,417 +1,638 @@
 <script lang="ts">
   import { date, memberRank } from '$lib/types';
   import { getLevelProgress } from '$lib/levels';
-  import { Award, BookOpen, Bookmark, Trophy, Sparkles } from '@lucide/svelte';
+  import {
+    Sparkles,
+    BookOpen,
+    Bookmark,
+    Trophy,
+    UserPlus,
+    UserCheck,
+    Settings,
+    Crown,
+    Calendar,
+    Award
+  } from '@lucide/svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { invalidateAll } from '$app/navigation';
+
   let { data } = $props();
+
   let rank = $derived(memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id));
   let progress = $derived(getLevelProgress(data.member.xp));
+
+  let isFollowing = $state(false);
+  let followersCount = $state(0);
+  let followBusy = $state(false);
+
+  $effect(() => {
+    isFollowing = data.isFollowing;
+    followersCount = data.followersCount;
+  });
+
+  async function toggleFollow() {
+    if (!data.viewerAuthenticated) {
+      window.location.href = '/entrar';
+      return;
+    }
+    if (followBusy) return;
+    followBusy = true;
+
+    // Optimistic update
+    const willFollow = !isFollowing;
+    isFollowing = willFollow;
+    followersCount += willFollow ? 1 : -1;
+
+    try {
+      const res = await fetch('/api/social/follow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: data.member.id })
+      });
+      if (!res.ok) {
+        // Revert on error
+        isFollowing = !willFollow;
+        followersCount += willFollow ? -1 : 1;
+      } else {
+        await invalidateAll();
+      }
+    } catch {
+      isFollowing = !willFollow;
+      followersCount += willFollow ? -1 : 1;
+    } finally {
+      followBusy = false;
+    }
+  }
 </script>
 
 <svelte:head>
   <title>{data.member.display_name} (@{data.member.username}) — Project Nox</title>
+  <meta
+    name="description"
+    content={data.member.bio || `Perfil de ${data.member.display_name} no Project Nox.`}
+  />
 </svelte:head>
 
-<div class="container profile-container spacer-bottom">
-  <div class="page-top">
-    <div class="badge-tag">
-      <Sparkles size={12} />
-      <span>LEITOR NOX</span>
-    </div>
-    <h1 class="profile-header-title">Perfil do Leitor</h1>
-  </div>
-
-  <section class="profile-glass-card">
-    <div class="profile-header-row">
-      <div class="profile-avatar-wrap">
-        {#if data.member.avatar_id}
+<div class="profile-page">
+  <div class="profile-container">
+    <!-- Profile Card Container -->
+    <article class="profile-card">
+      <!-- Profile Banner -->
+      <div class="profile-banner-wrap">
+        {#if data.member.banner_id}
           <img
-            src="/media/{data.member.avatar_id}"
-            alt="Avatar de {data.member.display_name}"
-            width="88"
-            height="88"
-            class="profile-avatar-img"
+            src="/media/{data.member.banner_id}"
+            alt="Banner de {data.member.display_name}"
+            class="profile-banner-img"
           />
         {:else}
-          <span class="profile-avatar-fallback">
-            {(data.member.display_name[0] || 'N').toUpperCase()}
-          </span>
+          <div class="profile-banner-fallback"></div>
         {/if}
-        <div class="avatar-glow"></div>
       </div>
 
-      <div class="profile-main-meta">
-        <div class="name-and-title">
-          <h2 class="profile-display-name">{data.member.display_name}</h2>
-          {#if rank.badgeSvg}
-            <img src={rank.badgeSvg} alt={rank.badge} width="24" height="24" class="profile-badge-vector" />
-          {:else if rank.badgeIcon}
-            <span class="badge-symbol" title="Insígnia equipada">{rank.badgeIcon}</span>
-          {/if}
-          <span class="honorific-chip">{rank.title}</span>
+      <!-- Profile Header Body -->
+      <div class="profile-body">
+        <div class="identity-row">
+          <!-- Avatar with cosmetic frame -->
+          <div class="avatar-holder">
+            <UserAvatar
+              avatarId={data.member.avatar_id}
+              frameId={data.member.frame_id}
+              displayName={data.member.display_name}
+              size={96}
+            />
+          </div>
+
+          <!-- Actions: Follow / Edit -->
+          <div class="action-buttons">
+            {#if data.isSelf}
+              <a href="/me" class="btn-profile-action self">
+                <Settings size={16} />
+                <span>Meu Espaço</span>
+              </a>
+            {:else}
+              <button
+                type="button"
+                class="btn-profile-action follow"
+                class:following={isFollowing}
+                disabled={followBusy}
+                onclick={toggleFollow}
+              >
+                {#if isFollowing}
+                  <UserCheck size={16} />
+                  <span>Seguindo</span>
+                {:else}
+                  <UserPlus size={16} />
+                  <span>Seguir</span>
+                {/if}
+              </button>
+            {/if}
+          </div>
         </div>
-        <p class="profile-handle-row">
-          @{data.member.username} · Na Nox desde {date(data.member.created_at)}
-        </p>
-      </div>
-    </div>
 
-    {#if data.member.bio}
-      <p class="profile-bio">{data.member.bio}</p>
-    {/if}
+        <!-- Name & Details -->
+        <div class="info-block">
+          <div class="name-line">
+            <h1
+              class="display-name"
+              style={data.member.name_color ? `color: ${data.member.name_color}` : ''}
+            >
+              {data.member.display_name}
+            </h1>
 
-    <div class="stats-counter-row">
-      <div class="stat-box">
-        <span class="stat-box-val">{rank.level}</span>
-        <span class="stat-box-label">Nível</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-box-val highlight-gold">{data.member.xp}</span>
-        <span class="stat-box-label">XP Total</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-box-val">{data.stats.chapters_read}</span>
-        <span class="stat-box-label">Capítulos</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-box-val">{data.stats.completed_works}</span>
-        <span class="stat-box-label">Concluídas</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-box-val">{data.stats.favorites}</span>
-        <span class="stat-box-label">Favoritos</span>
-      </div>
-    </div>
+            {#if data.member.equipped_title_id}
+              <span class="cosmetic-title-pill">
+                <Crown size={13} />
+                <span>{data.member.equipped_title_id}</span>
+              </span>
+            {:else if rank.title}
+              <span class="rank-title-pill">{rank.title}</span>
+            {/if}
+          </div>
 
-    <div class="xp-level-bar-section">
-      <div class="xp-progress-track">
-        <div
-          class="xp-progress-fill"
-          style="width: {progress.progressPercent}%"
-        ></div>
-      </div>
-      <p class="xp-needed-text">
-        {#if progress.isMaxLevel}
-          <strong>Nível Máximo Alcançado (100)</strong>
-        {:else}
-          Faltam <strong>{progress.xpNeededForNext} XP</strong> para o nível {progress.nextLevel}
-        {/if}
-      </p>
-    </div>
+          <div class="meta-line">
+            <span class="username-tag">@{data.member.username}</span>
+            <span class="meta-dot">·</span>
+            <span class="join-date">
+              <Calendar size={13} />
+              <span>Na Nox desde {date(data.member.created_at)}</span>
+            </span>
+          </div>
 
-    <div class="achievements-section">
-      <h3 class="achievements-title">Conquistas na Nox</h3>
-      <div class="achievements-chips">
-        {#if data.stats.chapters_read > 0}
-          <span class="achievement-pill">
-            <BookOpen size={14} />
-            <span>Primeiro Capítulo</span>
-          </span>
-        {/if}
-        {#if data.stats.chapters_read >= 5}
-          <span class="achievement-pill gold">
-            <Trophy size={14} />
-            <span>Leitor Dedicado</span>
-          </span>
-        {/if}
-        {#if data.stats.completed_works > 0}
-          <span class="achievement-pill">
-            <Award size={14} />
-            <span>Obra Concluída</span>
-          </span>
-        {/if}
-        {#if data.stats.favorites > 0}
-          <span class="achievement-pill">
-            <Bookmark size={14} />
-            <span>Colecionador</span>
-          </span>
-        {/if}
-        {#if data.member.xp >= 250}
-          <span class="achievement-pill purple">
-            <span>✦ Nível {rank.level}</span>
-          </span>
-        {/if}
-        {#if data.stats.chapters_read === 0 && data.member.xp === 0}
-          <span class="small muted">A jornada deste leitor está apenas começando.</span>
-        {/if}
+          <!-- Social Counts -->
+          <div class="social-counts-row">
+            <div class="social-count-item">
+              <strong>{followersCount}</strong>
+              <span>{followersCount === 1 ? 'Seguidor' : 'Seguidores'}</span>
+            </div>
+            <div class="social-count-item">
+              <strong>{data.followingCount}</strong>
+              <span>Seguindo</span>
+            </div>
+          </div>
+
+          {#if data.member.bio}
+            <p class="bio-text">{data.member.bio}</p>
+          {/if}
+        </div>
+
+        <!-- Stats Strip -->
+        <div class="stats-strip">
+          <div class="stat-cell">
+            <span class="stat-num">{rank.level}</span>
+            <span class="stat-txt">Nível</span>
+          </div>
+          <div class="stat-cell gold">
+            <span class="stat-num">{data.member.xp}</span>
+            <span class="stat-txt">XP Total</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-num">{data.stats.chapters_read}</span>
+            <span class="stat-txt">Capítulos</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-num">{data.stats.completed_works}</span>
+            <span class="stat-txt">Concluídas</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-num">{data.stats.favorites}</span>
+            <span class="stat-txt">Favoritos</span>
+          </div>
+        </div>
+
+        <!-- Level Progress -->
+        <div class="xp-progress-section">
+          <div class="xp-bar-track">
+            <div class="xp-bar-fill" style="width: {progress.progressPercent}%"></div>
+          </div>
+          <p class="xp-status-text">
+            {#if progress.isMaxLevel}
+              <strong>✦ Nível Máximo de Maestria Alcançado (100)</strong>
+            {:else}
+              Faltam <strong>{progress.xpNeededForNext} XP</strong> para o Nível {progress.nextLevel}
+            {/if}
+          </p>
+        </div>
+
+        <!-- Achievements Shelf -->
+        <section class="achievements-section">
+          <div class="achievements-header">
+            <div class="sec-title-wrap">
+              <Trophy size={18} class="sec-icon" />
+              <h2>Conquistas Desbloqueadas</h2>
+            </div>
+            <span class="achievements-count">{data.achievements.length}</span>
+          </div>
+
+          {#if data.achievements.length > 0}
+            <div class="achievements-grid">
+              {#each data.achievements as ach (ach.id)}
+                <div class="achievement-card" style="border-left-color: {ach.badge_color || '#8b5cf6'}">
+                  <div class="ach-icon-circle" style="background: {ach.badge_color ? `${ach.badge_color}22` : 'rgba(139, 92, 246, 0.15)'}; color: {ach.badge_color || '#c4b5fd'}">
+                    <Award size={18} />
+                  </div>
+                  <div class="ach-details">
+                    <h3 class="ach-title">{ach.title}</h3>
+                    <p class="ach-desc">{ach.description}</p>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="achievements-empty">
+              <Sparkles size={28} />
+              <p>Este leitor ainda está desbravando o catálogo e forjando suas conquistas.</p>
+            </div>
+          {/if}
+        </section>
       </div>
-    </div>
-  </section>
+    </article>
+  </div>
 </div>
 
 <style>
+  .profile-page {
+    min-height: 100vh;
+    padding: 2rem 1.5rem 5rem;
+    color: #e2e8f0;
+  }
+
   .profile-container {
-    max-width: 780px;
+    max-width: 860px;
     margin: 0 auto;
   }
 
-  .badge-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    color: #c9aa73;
-    margin-bottom: 8px;
-  }
-
-  .profile-header-title {
-    font-size: clamp(32px, 4vw, 44px);
-    font-weight: 800;
-    margin: 0 0 32px;
-    color: #ffffff;
-  }
-
-  .profile-glass-card {
-    padding: 36px 32px;
-    border-radius: 24px;
-    background: rgba(13, 16, 26, 0.7);
+  .profile-card {
+    background: #0e111d;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.6);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.6);
   }
 
-  .profile-header-row {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    margin-bottom: 24px;
-  }
-
-  .profile-avatar-wrap {
+  .profile-banner-wrap {
+    height: 220px;
+    width: 100%;
     position: relative;
-    width: 88px;
-    height: 88px;
-    flex-shrink: 0;
+    background: #141724;
+    overflow: hidden;
   }
 
-  .profile-avatar-img {
+  .profile-banner-img {
     width: 100%;
     height: 100%;
-    border-radius: 50%;
     object-fit: cover;
-    border: 2.5px solid #b59af5;
-    position: relative;
-    z-index: 2;
   }
 
-  .profile-avatar-fallback {
+  .profile-banner-fallback {
     width: 100%;
     height: 100%;
-    border-radius: 50%;
-    background: #1a1d33;
-    color: #b59af5;
-    font-size: 38px;
-    font-weight: 800;
-    display: grid;
-    place-items: center;
-    border: 2.5px solid #b59af5;
-    position: relative;
-    z-index: 2;
-    line-height: 1;
-    text-transform: uppercase;
-    user-select: none;
+    background: linear-gradient(135deg, #1e1b4b 0%, #0d101a 100%);
   }
 
-  .avatar-glow {
-    position: absolute;
-    inset: -6px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(181, 154, 245, 0.4), transparent 70%);
-    filter: blur(10px);
-    z-index: 1;
+  .profile-body {
+    padding: 0 2rem 2.5rem;
   }
 
-  .profile-main-meta {
+  .identity-row {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: -48px;
+    margin-bottom: 1.25rem;
   }
 
-  .name-and-title {
+  .avatar-holder {
+    position: relative;
+  }
+
+  .action-buttons {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
-  .profile-display-name {
-    font-size: 26px;
-    font-weight: 800;
-    color: #ffffff;
-    margin: 0;
-  }
-
-  .honorific-chip {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: #c9aa73;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: rgba(201, 170, 115, 0.12);
-    border: 1px solid rgba(201, 170, 115, 0.3);
-  }
-
-  .badge-symbol {
-    font-size: 14px;
-    line-height: 1;
-    color: #dfc28d;
+  .btn-profile-action {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.35);
+    gap: 0.5rem;
+    padding: 0.65rem 1.4rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
   }
 
-  .profile-handle-row {
-    font-size: 13px;
-    color: #8c899a;
+  .btn-profile-action.self {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+  }
+
+  .btn-profile-action.self:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .btn-profile-action.follow {
+    background: #8b5cf6;
+    border: none;
+    color: #ffffff;
+  }
+
+  .btn-profile-action.follow:hover {
+    background: #7c3aed;
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+  }
+
+  .btn-profile-action.follow.following {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #cbd5e1;
+  }
+
+  .btn-profile-action.follow.following:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+  }
+
+  /* Info */
+  .info-block {
+    margin-bottom: 2rem;
+  }
+
+  .name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+  }
+
+  .display-name {
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #ffffff;
     margin: 0;
   }
 
-  .profile-bio {
-    font-size: 14px;
-    line-height: 1.65;
-    color: #d1cde0;
-    margin: 0 0 28px;
-    white-space: pre-wrap;
-    padding: 14px 18px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+  .cosmetic-title-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.4);
+    border-radius: 9999px;
+    color: #dfc28d;
+    font-size: 0.78rem;
+    font-weight: 700;
   }
 
-  .stats-counter-row {
+  .rank-title-pill {
+    padding: 0.25rem 0.65rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 9999px;
+    color: #c4b5fd;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .meta-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 0.85rem;
+  }
+
+  .username-tag {
+    font-weight: 600;
+    color: #94a3b8;
+  }
+
+  .join-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .social-counts-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .social-count-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.88rem;
+    color: #94a3b8;
+  }
+
+  .social-count-item strong {
+    color: #ffffff;
+  }
+
+  .bio-text {
+    font-size: 0.95rem;
+    color: #cbd5e1;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 680px;
+  }
+
+  /* Stats Strip */
+  .stats-strip {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.75rem;
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    margin-bottom: 1.75rem;
+    text-align: center;
   }
 
-  .stat-box {
+  .stat-cell {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 14px 10px;
-    border-radius: 14px;
-    background: rgba(18, 22, 36, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 0.2rem;
   }
 
-  .stat-box-val {
-    font-size: 20px;
+  .stat-num {
+    font-size: 1.4rem;
     font-weight: 800;
     color: #ffffff;
   }
 
-  .stat-box-val.highlight-gold {
-    color: #c9aa73;
-  }
-
-  .stat-box-label {
-    font-size: 11px;
-    color: #7b788a;
-    margin-top: 2px;
+  .stat-txt {
+    font-size: 0.75rem;
+    color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    font-weight: 600;
   }
 
-  .xp-level-bar-section {
-    margin-bottom: 32px;
+  .stat-cell.gold .stat-num {
+    color: #dfc28d;
   }
 
-  .xp-progress-track {
-    width: 100%;
+  /* Level Progress */
+  .xp-progress-section {
+    margin-bottom: 2.5rem;
+  }
+
+  .xp-bar-track {
     height: 8px;
     background: rgba(255, 255, 255, 0.06);
-    border-radius: 999px;
+    border-radius: 9999px;
     overflow: hidden;
-    margin-bottom: 8px;
+    margin-bottom: 0.6rem;
   }
 
-  .xp-progress-fill {
+  .xp-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #8b5cf6, #c9aa73);
-    border-radius: 999px;
-    box-shadow: 0 0 10px rgba(181, 154, 245, 0.5);
+    background: linear-gradient(90deg, #8b5cf6, #dfc28d);
+    border-radius: 9999px;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
     transition: width 0.4s ease;
   }
 
-  .xp-needed-text {
-    font-size: 12px;
-    color: #8c899a;
+  .xp-status-text {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin: 0;
+    text-align: right;
+  }
+
+  .xp-status-text strong {
+    color: #dfc28d;
+  }
+
+  /* Achievements */
+  .achievements-section {
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .achievements-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+
+  .sec-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :global(.sec-icon) {
+    color: #dfc28d;
+  }
+
+  .achievements-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #ffffff;
     margin: 0;
   }
 
-  .xp-needed-text strong {
-    color: #c9aa73;
+  .achievements-count {
+    padding: 0.2rem 0.6rem;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #cbd5e1;
   }
 
-  .achievements-section {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding-top: 24px;
+  .achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.85rem;
   }
 
-  .achievements-title {
-    font-size: 15px;
+  .achievement-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 3px solid #8b5cf6;
+    border-radius: 10px;
+  }
+
+  .ach-icon-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .ach-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .ach-title {
+    font-size: 0.88rem;
     font-weight: 700;
     color: #ffffff;
-    margin: 0 0 14px;
+    margin: 0;
   }
 
-  .achievements-chips {
+  .ach-desc {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .achievements-empty {
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .achievement-pill {
-    display: inline-flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #d1cde0;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    gap: 0.75rem;
   }
 
-  .achievement-pill.gold {
-    color: #c9aa73;
-    border-color: rgba(201, 170, 115, 0.3);
-    background: rgba(201, 170, 115, 0.08);
+  .achievements-empty p {
+    font-size: 0.9rem;
+    margin: 0;
   }
 
-  .achievement-pill.purple {
-    color: #b59af5;
-    border-color: rgba(181, 154, 245, 0.3);
-    background: rgba(181, 154, 245, 0.08);
-  }
-
-  @media (max-width: 600px) {
-    .profile-glass-card {
-      padding: 24px 20px;
-    }
-
-    .profile-header-row {
-      flex-direction: column;
-      text-align: center;
-      gap: 16px;
-    }
-
-    .name-and-title {
-      justify-content: center;
-    }
-
-    .stats-counter-row {
+  @media (max-width: 640px) {
+    .stats-strip {
       grid-template-columns: repeat(3, 1fr);
+    }
+
+    .profile-banner-wrap {
+      height: 150px;
+    }
+
+    .identity-row {
+      margin-top: -36px;
     }
   }
 </style>

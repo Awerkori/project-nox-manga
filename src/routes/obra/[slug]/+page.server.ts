@@ -22,10 +22,10 @@ export const load = async ({ locals, params, url, cookies }) => {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
-  const [chapters, tags, comments, library, likes, progress, metrics] = await Promise.all([
+  const [chapters, tags, comments, library, likes, progress, metrics, workScans] = await Promise.all([
     locals.db
       .from('chapters')
-      .select('id,number,title,published_at')
+      .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
       .eq('work_id', work.id)
       .not('published_at', 'is', null)
       .order('number', { ascending: false }),
@@ -56,10 +56,15 @@ export const load = async ({ locals, params, url, cookies }) => {
           .eq('chapters.work_id', work.id)
           .order('updated_at', { ascending: false })
       : Promise.resolve({ data: [] }),
-    locals.db.rpc('work_metrics', { p_work: work.id })
+    locals.db.rpc('work_metrics', { p_work: work.id }),
+    locals.db
+      .from('work_scans')
+      .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
+      .eq('work_id', work.id)
   ]);
   check(comments);
   const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
+  const scansList = (workScans.data || []).map((ws: any) => ws.scans).filter(Boolean);
   const isAdult = (work as any).content_rating === 'ADULT_18';
   const metaImage = isAdult
     ? `${url.origin}/brand/nox-symbol-256.webp`
@@ -71,6 +76,7 @@ export const load = async ({ locals, params, url, cookies }) => {
     work,
     chapters: chapters.data || [],
     tags: publicTags,
+    scans: scansList,
     structuredData: structuredDataScript(workStructuredData(work, publicTags, url.origin)),
     comments: comments.data || [],
     library: library.data,

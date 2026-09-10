@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, Sparkles, Flag, List, X, BookOpen } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
+  import { saveChapterOffline } from '$lib/offline-storage';
   import type { PageData } from '../../routes/ler/[id]/$types';
   let { data }: { data: PageData } = $props();
   let current = $state(1),
@@ -84,6 +86,31 @@
       reactionsLoading = false;
     }
   }
+
+  let downloadingOffline = $state(false);
+
+  async function handleDownloadChapter() {
+    if (downloadingOffline || !data.chapter || !data.pages?.length) return;
+    downloadingOffline = true;
+    notice = 'Baixando páginas para leitura offline...';
+    try {
+      await saveChapterOffline(
+        data.chapter,
+        data.chapter.works || { title: 'Obra', slug: '' },
+        data.pages,
+        (loaded, total) => {
+          notice = `Baixando para offline: ${loaded}/${total} páginas...`;
+        }
+      );
+      notice = '✦ Capítulo salvo com sucesso para leitura offline!';
+      setTimeout(() => { notice = ''; }, 4000);
+    } catch {
+      notice = 'Falha ao salvar capítulo para leitura offline.';
+    } finally {
+      downloadingOffline = false;
+    }
+  }
+
   let xpAwardConfirmed = $state(false);
   let xpClaimInFlight = false;
   let previousChapterId = $state('');
@@ -156,6 +183,9 @@
         jump(Math.min(data.pages.length, Math.max(1, saved)));
         pumpPreload();
       });
+      if (!data.preview) {
+        fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
+      }
       resetHideTimer();
     }
   });
@@ -260,6 +290,9 @@
       jump(Math.min(data.pages.length, Math.max(1, saved)));
       pumpPreload();
     });
+    if (!data.preview) {
+      fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
+    }
     if (data.profile && !data.preview)
       action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
         () => {
@@ -366,11 +399,36 @@
     toggleUi();
   }}
   onkeydown={(e) => {
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) {
+      return;
+    }
     if (e.key === 'Escape') {
       settings = false;
       showChaptersDrawer = false;
       showReportModal = false;
       resetHideTimer();
+    } else if (e.key === 'ArrowUp' || e.key === 'Home') {
+      if (!showChaptersDrawer && !showReportModal) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (e.key === 'ArrowDown' || e.key === 'End') {
+      if (!showChaptersDrawer && !showReportModal) {
+        e.preventDefault();
+        document.getElementById('chapter-end')?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else if (e.key === 'ArrowLeft') {
+      if (!showChaptersDrawer && !showReportModal && data.previous?.id) {
+        e.preventDefault();
+        goto(`/ler/${data.previous.id}`);
+      }
+    } else if (e.key === 'ArrowRight') {
+      if (!showChaptersDrawer && !showReportModal && data.next?.id) {
+        e.preventDefault();
+        goto(`/ler/${data.next.id}`);
+      }
     }
   }}
 />
@@ -410,6 +468,15 @@
           <List size={19} />
         </button>
       {/if}
+      <button
+        class="icon-button"
+        aria-label="Baixar capítulo para ler offline"
+        title="Baixar capítulo para ler offline"
+        onclick={handleDownloadChapter}
+        disabled={downloadingOffline}
+      >
+        <Download size={18} />
+      </button>
       <button
         class="icon-button"
         aria-label="Reportar problema"
@@ -492,14 +559,14 @@
     {/each}
   </div>
 
-  <div class="reader-end">
+  <div class="reader-end" id="chapter-end">
     <div class="celebration-seal">
       <Sparkles size={15} />
       <span>CAPÍTULO CONCLUÍDO</span>
     </div>
     <h2 class="end-heading">Fim do Capítulo {data.chapter.number}</h2>
     <p class="end-sub">
-      {data.chapter.works?.title} · Edição Oficial Project Nox
+      {data.chapter.works?.title} · {data.scans?.length ? data.scans.map((s) => s.name).join(' × ') : 'Project Nox'}
     </p>
 
     <div class="chapter-reactions-box">
@@ -577,14 +644,24 @@
         profile={data.profile}
       />{/if}
   </div>
-  <button
-    class="back-top icon-button"
-    class:ui-hidden={!uiVisible && !settings}
-    aria-label="Voltar ao topo"
-    onclick={() => jump(1)}
-  >
-    <ChevronUp />
-  </button>
+  <div class="scroll-nav-cluster" class:ui-hidden={!uiVisible && !settings}>
+    <button
+      class="scroll-nav-btn icon-button"
+      aria-label="Voltar ao topo"
+      title="Voltar ao topo (↑ ou Home)"
+      onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    >
+      <ChevronUp size={20} />
+    </button>
+    <button
+      class="scroll-nav-btn icon-button"
+      aria-label="Ir ao fim do capítulo"
+      title="Ir ao fim do capítulo (↓ ou End)"
+      onclick={() => document.getElementById('chapter-end')?.scrollIntoView({ behavior: 'smooth' })}
+    >
+      <ChevronDown size={20} />
+    </button>
+  </div>
   <div class="reader-progress" style="width:{(current / Math.max(1, data.pages.length)) * 100}%"></div>
 
   {#if showReportModal}
@@ -596,7 +673,7 @@
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
         showReportModal = false;
-        notice = 'Denúncia enviada com sucesso para a moderação.';
+        notice = 'Reporte enviado com sucesso para a moderação.';
       }}
     />
   {/if}
@@ -1167,11 +1244,25 @@
     transition: width 0.3s ease;
   }
 
-  .back-top {
+  .scroll-nav-cluster {
     position: fixed;
     bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-    right: calc(24px + env(safe-area-inset-right, 0px));
-    background: rgba(18, 22, 36, 0.85);
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 40;
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .scroll-nav-cluster.ui-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(16px);
+  }
+
+  .scroll-nav-btn {
+    background: rgba(18, 22, 36, 0.88);
     border: 1px solid rgba(181, 154, 245, 0.3);
     border-radius: 50%;
     width: 44px;
@@ -1183,19 +1274,13 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
     cursor: pointer;
     color: #d1cde0;
-    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, color 0.2s ease;
-    z-index: 40;
+    transition: all 0.2s ease;
   }
 
-  .back-top.ui-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(16px);
-  }
-
-  .back-top:hover {
+  .scroll-nav-btn:hover {
     color: #ffffff;
     border-color: #b59af5;
+    background: rgba(181, 154, 245, 0.2);
     transform: translateY(-2px);
   }
 

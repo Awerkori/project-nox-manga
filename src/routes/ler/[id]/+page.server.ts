@@ -21,7 +21,7 @@ export const load = async ({ locals, params, url, cookies }) => {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
     }
   }
-  const [pages, siblings, progress, comments] = await Promise.all([
+  const [pages, siblings, progress, comments, chapterScansRes] = await Promise.all([
     locals.db
       .from('pages')
       .select('position,media_id,width,height')
@@ -49,9 +49,22 @@ export const load = async ({ locals, params, url, cookies }) => {
       .eq('chapter_id', chapter.id)
       .eq('removed', false)
       .order('created_at', { ascending: false })
-      .limit(100)
+      .limit(100),
+    locals.db
+      .from('chapter_scans')
+      .select('scans(id,name,slug)')
+      .eq('chapter_id', chapter.id)
   ]);
   check(comments);
+
+  let scans = ((chapterScansRes.data || []) as any[])
+    .map((cs) => cs.scans)
+    .filter(Boolean);
+  if (!scans.length) {
+    const ws = await locals.db.from('work_scans').select('scans(id,name,slug)').eq('work_id', chapter.work_id);
+    scans = ((ws.data || []) as any[]).map((s) => s.scans).filter(Boolean);
+  }
+
   const all = siblings.data || [],
     index = all.findIndex((c) => c.id === chapter.id);
   return {
@@ -62,6 +75,7 @@ export const load = async ({ locals, params, url, cookies }) => {
     siblings: all,
     progress: progress.data,
     comments: comments.data || [],
+    scans,
     preview
   };
 };
