@@ -28,7 +28,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
   const { url, method = 'GET', headers = {}, body } = await request.json();
 
-  if (!url || typeof url !== 'string' || (!url.startsWith('https://kuromangas.com') && !url.startsWith('https://cdn.kuromangas.com'))) {
+  const allowedPrefixes = [
+    'https://kuromangas.com',
+    'https://cdn.kuromangas.com',
+    'https://nx-toons.xyz',
+    'https://nexustoons.com',
+    'https://img.nx-toons.xyz'
+  ];
+  if (!url || typeof url !== 'string' || !allowedPrefixes.some(p => url.startsWith(p))) {
     error(400, 'Invalid target URL');
   }
 
