@@ -3,9 +3,9 @@ insert into public.importer_sources (id, name, base_url, enabled, status, rate_l
 values (
   'nexus_toons',
   'Nexus Toons',
-  'https://nexustoons.com',
-  true,
-  'ACTIVE',
+  'https://nx-toons.xyz',
+  false,
+  'PAUSED',
   2.00,
   10,
   jsonb_build_object(
