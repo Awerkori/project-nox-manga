@@ -22,13 +22,19 @@ export const load = async ({ locals, params, url, cookies }) => {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
+  const isStaff = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  let chaptersQuery = locals.db
+    .from('chapters')
+    .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
+    .eq('work_id', work.id)
+    .order('number', { ascending: false });
+
+  if (!isStaff) {
+    chaptersQuery = chaptersQuery.not('published_at', 'is', null);
+  }
+
   const [chapters, tags, comments, library, likes, progress, metrics, workScans] = await Promise.all([
-    locals.db
-      .from('chapters')
-      .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
-      .eq('work_id', work.id)
-      .not('published_at', 'is', null)
-      .order('number', { ascending: false }),
+    chaptersQuery,
     locals.db.from('work_tags').select('tags(id,name,slug,kind)').eq('work_id', work.id),
     locals.db
       .from('comments')
@@ -62,6 +68,7 @@ export const load = async ({ locals, params, url, cookies }) => {
       .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
       .eq('work_id', work.id)
   ]);
+  check(chapters);
   check(comments);
   const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
   const scansList = (workScans.data || []).map((ws: any) => ws.scans).filter(Boolean);

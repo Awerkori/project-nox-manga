@@ -74,11 +74,15 @@ export async function saveChapterOffline(
   for (const page of pages) {
     try {
       const res = await fetch(`/media/${page.media_id}`);
-      if (!res.ok) throw new Error(`Falha ao baixar imagem: ${page.media_id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const reader = new FileReader();
-      const base64Data = await new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve(reader.result as string);
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          if (reader.result) resolve(reader.result as string);
+          else reject(new Error('Falha ao ler blob da imagem'));
+        };
+        reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
       });
 
@@ -87,12 +91,9 @@ export async function saveChapterOffline(
         mediaId: page.media_id,
         blobUrl: base64Data
       });
-    } catch {
-      // Fallback placeholder if single page fails
-      fetchedPages.push({
-        position: page.position,
-        mediaId: page.media_id
-      });
+    } catch (err) {
+      // Strict rule: Any page failure aborts the download and prevents saving incomplete chapters
+      throw new Error(`Falha ao baixar a página ${page.position}. Download incompleto não foi salvo.`);
     }
 
     completed++;
@@ -148,6 +149,11 @@ export async function getOfflineChapter(chapterId: string): Promise<OfflineChapt
     req.onsuccess = () => resolve(req.result || null);
     req.onerror = () => reject(req.error);
   });
+}
+
+export async function isChapterDownloaded(chapterId: string): Promise<boolean> {
+  const chapter = await getOfflineChapter(chapterId);
+  return chapter !== null && (chapter.pages?.length || 0) > 0;
 }
 
 export async function removeOfflineChapter(chapterId: string): Promise<void> {

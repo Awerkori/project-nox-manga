@@ -29,6 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         name_color,
         equipped_title_id,
         equipped_badge_id,
+        equipped_banner_id,
         equipped_comment_banner_id,
         xp,
         age_status,

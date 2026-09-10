@@ -4,8 +4,17 @@ import { member } from '$lib/server/db';
 export const POST = async ({ request, locals }) => {
   member(locals);
   const body = await request.json().catch(() => ({}));
-  const kind = String(body.kind || '').trim();
+  let kind = String(body.kind || '').trim();
   const itemId = String(body.itemId || '').trim();
+
+  if (!kind && itemId) {
+    const { data: item } = await locals.db
+      .from('shop_items')
+      .select('kind')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (item?.kind) kind = item.kind;
+  }
 
   if (!kind) {
     error(400, 'Tipo de cosmético não fornecido.');

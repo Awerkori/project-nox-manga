@@ -6,12 +6,13 @@ export const load = async ({ locals }) => {
     .order('order_index', { ascending: true });
 
   let userInventory: string[] = [];
-  let userProfile: {
+    let userProfile: {
     id: string;
     username: string;
     display_name: string | null;
     avatar_id: string | null;
     banner_id: string | null;
+    equipped_banner_id: string | null;
     xp: number;
     frame_id: string | null;
     name_color: string | null;
@@ -26,7 +27,7 @@ export const load = async ({ locals }) => {
         .eq('user_id', locals.user.id),
       locals.db
         .from('members')
-        .select('id, username, display_name, avatar_id, banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
+        .select('id, username, display_name, avatar_id, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
         .eq('id', locals.user.id)
         .maybeSingle()
     ]);
@@ -40,6 +41,7 @@ export const load = async ({ locals }) => {
         display_name: p.display_name,
         avatar_id: p.avatar_id,
         banner_id: p.banner_id,
+        equipped_banner_id: p.equipped_banner_id,
         xp: p.xp,
         frame_id: p.avatar_frame_id,
         name_color: p.name_color,

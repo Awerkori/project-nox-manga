@@ -231,6 +231,10 @@
                     <History size={16} />
                     <span>Histórico</span>
                   </a>
+                  <a href="/me?tab=conquistas" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Trophy size={16} />
+                    <span>Conquistas</span>
+                  </a>
                   <a href="/me?tab=notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Bell size={16} />
                     <span>Notificações</span>

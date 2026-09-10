@@ -11,6 +11,7 @@ export const load = async ({ locals, params }) => {
       xp,
       avatar_id,
       banner_id,
+      equipped_banner_id,
       avatar_frame_id,
       name_color,
       equipped_title_id,
@@ -24,7 +25,7 @@ export const load = async ({ locals, params }) => {
     error(404, 'Perfil não encontrado');
   }
 
-  const [statsRes, followersCountRes, followingCountRes, achievementsRes, isFollowingRes] =
+  const [statsRes, followersCountRes, followingCountRes, achievementsRes, isFollowingRes, bannerRes] =
     await Promise.all([
       locals.db.rpc('member_public_stats', { p_user: member.id }),
       locals.db.from('user_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', member.id),
@@ -52,6 +53,13 @@ export const load = async ({ locals, params }) => {
             .eq('follower_id', locals.user.id)
             .eq('following_id', member.id)
             .maybeSingle()
+        : Promise.resolve({ data: null }),
+      member.equipped_banner_id
+        ? locals.db
+            .from('shop_items')
+            .select('id, style_data')
+            .eq('id', member.equipped_banner_id)
+            .maybeSingle()
         : Promise.resolve({ data: null })
     ]);
 
@@ -68,6 +76,7 @@ export const load = async ({ locals, params }) => {
       ...member,
       frame_id: member.avatar_frame_id
     },
+    cosmetic_banner: (bannerRes.data?.style_data as any) || null,
     stats: statsRes.data?.[0] || { chapters_read: 0, completed_works: 0, favorites: 0 },
     followersCount: followersCountRes.count ?? 0,
     followingCount: followingCountRes.count ?? 0,

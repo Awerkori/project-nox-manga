@@ -85,6 +85,11 @@
             alt="Banner de {data.member.display_name}"
             class="profile-banner-img"
           />
+        {:else if data.cosmetic_banner?.background}
+          <div
+            class="profile-banner-fallback"
+            style="background: {data.cosmetic_banner.background};"
+          ></div>
         {:else}
           <div class="profile-banner-fallback"></div>
         {/if}

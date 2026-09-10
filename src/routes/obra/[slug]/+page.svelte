@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import {
     BookOpen,
     Heart,
@@ -12,7 +13,9 @@
     AlertTriangle,
     Flag,
     Eye,
-    Users
+    Users,
+    Download,
+    Loader2
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import { goto } from '$app/navigation';
@@ -21,6 +24,12 @@
   import { kindLabels, statusLabels, date } from '$lib/types';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
+  import {
+    getOfflineChapters,
+    saveChapterOffline,
+    removeOfflineChapter,
+    isOfflineSupported
+  } from '$lib/offline-storage';
 
   let { data } = $props();
   let notice = $state(''),
@@ -29,6 +38,121 @@
     search = $state(''),
     synopsisExpanded = $state(false),
     showReportModal = $state(false);
+
+  let downloadedChapterIds = $state<Set<string>>(new Set());
+  let downloadingChapterIds = $state<Record<string, number>>({});
+  let batchDownloading = $state(false);
+  let batchProgress = $state({ current: 0, total: 0 });
+
+  onMount(async () => {
+    if (isOfflineSupported()) {
+      try {
+        const offlineList = await getOfflineChapters();
+        const currentWorkOffline = offlineList.filter((oc) => oc.workId === data.work.id);
+        downloadedChapterIds = new Set(currentWorkOffline.map((oc) => oc.chapterId));
+      } catch (err) {
+        console.error('Falha ao carregar capítulos offline:', err);
+      }
+    }
+  });
+
+  async function handleToggleDownload(chapter: any, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (downloadingChapterIds[chapter.id] !== undefined) return;
+
+    if (downloadedChapterIds.has(chapter.id)) {
+      if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
+        await removeOfflineChapter(chapter.id);
+        const next = new Set(downloadedChapterIds);
+        next.delete(chapter.id);
+        downloadedChapterIds = next;
+        notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
+      }
+      return;
+    }
+
+    try {
+      downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
+      const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+      if (!res.ok) throw new Error('Não foi possível obter páginas do capítulo');
+      const payload = await res.json();
+      if (!payload.pages || !payload.pages.length) throw new Error('Capítulo não contém páginas');
+
+      await saveChapterOffline(
+        { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
+        { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
+        payload.pages,
+        (loaded, total) => {
+          const pct = Math.round((loaded / total) * 100);
+          downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
+        }
+      );
+
+      const next = new Set(downloadedChapterIds);
+      next.add(chapter.id);
+      downloadedChapterIds = next;
+      notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
+    } catch (err: any) {
+      notice = `Erro ao baixar capítulo ${chapter.number}: ${err.message}`;
+    } finally {
+      const copy = { ...downloadingChapterIds };
+      delete copy[chapter.id];
+      downloadingChapterIds = copy;
+    }
+  }
+
+  async function handleBatchDownload() {
+    if (batchDownloading || !data.chapters.length) return;
+    const toDownload = data.chapters.filter((c) => !downloadedChapterIds.has(c.id));
+    if (!toDownload.length) {
+      notice = 'Todos os capítulos já estão disponíveis offline!';
+      return;
+    }
+
+    batchDownloading = true;
+    batchProgress = { current: 0, total: toDownload.length };
+
+    try {
+      for (let i = 0; i < toDownload.length; i++) {
+        const chapter = toDownload[i];
+        batchProgress = { current: i + 1, total: toDownload.length };
+        downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
+
+        try {
+          const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const payload = await res.json();
+          if (payload.pages && payload.pages.length) {
+            await saveChapterOffline(
+              { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
+              { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
+              payload.pages,
+              (loaded, total) => {
+                const pct = Math.round((loaded / total) * 100);
+                downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
+              }
+            );
+            const next = new Set(downloadedChapterIds);
+            next.add(chapter.id);
+            downloadedChapterIds = next;
+          }
+        } catch (e: any) {
+          console.error(`Erro ao baixar capítulo ${chapter.number}:`, e);
+        } finally {
+          const copy = { ...downloadingChapterIds };
+          delete copy[chapter.id];
+          downloadingChapterIds = copy;
+        }
+      }
+      notice = 'Download dos capítulos concluído!';
+    } catch (err: any) {
+      notice = `Erro no download em lote: ${err.message}`;
+    } finally {
+      batchDownloading = false;
+    }
+  }
 
   function formatViews(n: number = 0) {
     return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(n);
@@ -39,9 +163,13 @@
   let effectiveBlur = false;
 
   let chapters = $derived(
-    (ascending ? [...data.chapters].reverse() : data.chapters).filter(
-      (c) => String(c.number).includes(search) || c.title.toLowerCase().includes(search.toLowerCase())
-    )
+    (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
+      const term = search.trim().toLowerCase();
+      if (!term) return true;
+      const matchNum = String(c.number).includes(term);
+      const matchTitle = (c.title || '').toLowerCase().includes(term);
+      return matchNum || matchTitle;
+    })
   );
 
   let resume = $derived(data.progress[0]?.chapter_id || data.chapters.at(-1)?.id);
@@ -431,17 +559,36 @@
             placeholder="Buscar por número ou título…"
             aria-label="Buscar capítulo"
           />
-          <button class="btn-sort" onclick={() => (ascending = !ascending)}>
-            {#if ascending}<ArrowUp size={16} />{:else}<ArrowDown size={16} />{/if}
-            <span>{ascending ? 'Mais antigos primeiro' : 'Mais recentes primeiro'}</span>
-          </button>
+          <div class="toolbar-actions">
+            <button class="btn-sort" onclick={() => (ascending = !ascending)}>
+              {#if ascending}<ArrowUp size={16} />{:else}<ArrowDown size={16} />{/if}
+              <span>{ascending ? 'Mais antigos' : 'Mais recentes'}</span>
+            </button>
+            <button
+              class="btn-batch-dl"
+              class:is-busy={batchDownloading}
+              onclick={handleBatchDownload}
+              disabled={batchDownloading || !data.chapters.length}
+              title="Baixar todos os capítulos para leitura offline"
+            >
+              {#if batchDownloading}
+                <Loader2 size={15} class="spin" />
+                <span>Baixando ({batchProgress.current}/{batchProgress.total})</span>
+              {:else}
+                <Download size={15} />
+                <span>Baixar Todos</span>
+              {/if}
+            </button>
+          </div>
         </div>
 
         <div class="chapters-list-card">
           {#each chapters as chapter (chapter.id)}
             {@const isRead = data.progress.some((p) => p.chapter_id === chapter.id && p.completed_at)}
             {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
-            {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : 'Project Nox')}
+            {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
+            {@const isDl = downloadedChapterIds.has(chapter.id)}
+            {@const dlProgress = downloadingChapterIds[chapter.id]}
             <a href="/ler/{chapter.id}" class="chapter-item" class:is-read={isRead}>
               <div class="chapter-left">
                 <div class="chapter-primary-row">
@@ -455,13 +602,37 @@
                 </div>
                 <div class="chapter-meta-row">
                   <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.views_total || 0)}</span>
-                  <span class="chapter-meta-dot">·</span>
-                  <span class="chapter-meta-scan">{scanLabel}</span>
-                  <span class="chapter-meta-dot">·</span>
-                  <time class="chapter-meta-date">{date(chapter.published_at!)}</time>
+                  {#if scanLabel}
+                    <span class="chapter-meta-dot">·</span>
+                    <span class="chapter-meta-scan">{scanLabel}</span>
+                  {/if}
+                  {#if chapter.published_at}
+                    <span class="chapter-meta-dot">·</span>
+                    <time class="chapter-meta-date">{date(chapter.published_at)}</time>
+                  {/if}
                 </div>
               </div>
               <div class="chapter-right">
+                <button
+                  type="button"
+                  class="btn-chapter-dl"
+                  class:is-downloaded={isDl}
+                  class:is-downloading={dlProgress !== undefined}
+                  onclick={(e) => handleToggleDownload(chapter, e)}
+                  title={isDl ? 'Disponível offline (clique para remover)' : 'Baixar capítulo'}
+                >
+                  {#if dlProgress !== undefined}
+                    <Loader2 size={13} class="spin" />
+                    <span>{dlProgress}%</span>
+                  {:else if isDl}
+                    <CheckCircle2 size={13} class="icon-success" />
+                    <span>Baixado</span>
+                  {:else}
+                    <Download size={13} />
+                    <span>Baixar</span>
+                  {/if}
+                </button>
+
                 {#if isRead}
                   <span class="read-indicator">
                     <CheckCircle2 size={14} />
@@ -475,7 +646,11 @@
 
           {#if !chapters.length}
             <div class="empty-chapters">
-              <p>Nenhum capítulo encontrado para "{search}".</p>
+              {#if search}
+                <p>Nenhum capítulo encontrado para "{search}".</p>
+              {:else}
+                <p>Nenhum capítulo disponível no momento.</p>
+              {/if}
             </div>
           {/if}
         </div>
@@ -1105,6 +1280,95 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-sort:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-batch-dl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-batch-dl:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+  }
+
+  .btn-batch-dl:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-chapter-dl {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #a7a3b8;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 2;
+  }
+
+  .btn-chapter-dl:hover {
+    background: rgba(181, 154, 245, 0.15);
+    border-color: rgba(181, 154, 245, 0.35);
+    color: #ffffff;
+  }
+
+  .btn-chapter-dl.is-downloaded {
+    background: rgba(52, 211, 153, 0.12);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: #34d399;
+  }
+
+  .btn-chapter-dl.is-downloading {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
+  }
+
+  :global(.icon-success) {
+    color: #34d399;
+  }
+
+  :global(.spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .chapters-list-card {

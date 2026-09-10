@@ -4,7 +4,7 @@
     page,
     onSeen
   }: {
-    page: { position: number; media_id: string; width: number; height: number };
+    page: { position: number; media_id: string; width: number; height: number; blobUrl?: string };
     onSeen: (page: number, visible: boolean) => void;
   } = $props();
   let root: HTMLDivElement;
@@ -49,7 +49,7 @@
   style="aspect-ratio:{page.width}/{page.height}"
 >
   {#if near && !broken}<img
-      src="/media/{page.media_id}{retry ? '?retry=' + retry : ''}"
+      src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry : ''}`}
       alt="Página {page.position}"
       width={page.width}
       height={page.height}

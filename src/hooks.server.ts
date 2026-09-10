@@ -14,8 +14,10 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.url.pathname === '/api/upload' || event.url.pathname === '/api/internal/storage/upload'
         ? 19_100_000
         : event.url.pathname === '/api/avatar'
-          ? 300_000
-          : 65_536;
+          ? 10_000_000
+          : event.url.pathname === '/api/banner'
+            ? 15_000_000
+            : 1_000_000;
     if (Number(event.request.headers.get('content-length') || 0) > max)
       error(413, 'Arquivo ou solicitação acima do limite');
   }

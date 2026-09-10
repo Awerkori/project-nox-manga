@@ -29,10 +29,48 @@ export const actions = {
       redirect(303, '/biblioteca');
     }
     if (mode === 'cadastrar') {
+      const displayName = String(f.get('displayName') || f.get('display_name') || '').trim();
+      const rawUsername = String(f.get('username') || '').trim().toLowerCase();
+
+      if (displayName && (displayName.length < 2 || displayName.length > 50)) {
+        return fail(400, { message: 'Nome de exibição deve ter entre 2 e 50 caracteres.' });
+      }
+      if (rawUsername) {
+        if (rawUsername.length < 3 || rawUsername.length > 30) {
+          return fail(400, { message: 'O nome de usuário (@) deve ter entre 3 e 30 caracteres.' });
+        }
+        if (!/^[a-z0-9_]+$/.test(rawUsername)) {
+          return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
+        }
+
+        // Check username collision if locals.db.from exists
+        if (typeof locals.db.from === 'function') {
+          const { data: collision } = await locals.db
+            .from('members')
+            .select('id')
+            .ilike('username', rawUsername)
+            .maybeSingle();
+
+          if (collision) {
+            return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
+          }
+        }
+      }
+
+      const signUpOptions: { emailRedirectTo: string; data?: Record<string, string> } = {
+        emailRedirectTo: `${url.origin}/auth/confirm`
+      };
+      if (rawUsername || displayName) {
+        signUpOptions.data = {
+          ...(rawUsername ? { username: rawUsername } : {}),
+          ...(displayName ? { display_name: displayName } : {})
+        };
+      }
+
       const { error } = await locals.db.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${url.origin}/auth/confirm` }
+        options: signUpOptions
       });
       if (error)
         return fail(400, {

@@ -12,7 +12,8 @@
     Sparkles,
     Activity,
     Flag,
-    UserCheck
+    UserCheck,
+    ShoppingBag
   } from '@lucide/svelte';
 
   let { data, children } = $props();
@@ -154,6 +155,15 @@
           <span>Obras e Capítulos</span>
         </a>
         <a
+          href="/admin/scans"
+          class="nav-link"
+          class:active={isActive('/admin/scans')}
+          onclick={closeMobile}
+        >
+          <Users size={17} class="nav-icon" />
+          <span>Gestão de Scans</span>
+        </a>
+        <a
           href="/admin/tags"
           class="nav-link"
           class:active={isActive('/admin/tags')}
@@ -161,6 +171,15 @@
         >
           <Tags size={17} class="nav-icon" />
           <span>Gêneros e Tags</span>
+        </a>
+        <a
+          href="/admin/loja"
+          class="nav-link"
+          class:active={isActive('/admin/loja')}
+          onclick={closeMobile}
+        >
+          <ShoppingBag size={17} class="nav-icon" />
+          <span>Gestão da Loja</span>
         </a>
       </div>
 

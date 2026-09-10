@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download, CheckCircle2 } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
-  import { saveChapterOffline } from '$lib/offline-storage';
+  import { saveChapterOffline, getOfflineChapter } from '$lib/offline-storage';
   import type { PageData } from '../../routes/ler/[id]/$types';
   let { data }: { data: PageData } = $props();
   let current = $state(1),
@@ -88,11 +88,12 @@
   }
 
   let downloadingOffline = $state(false);
+  let isDownloadedOffline = $state(false);
 
   async function handleDownloadChapter() {
     if (downloadingOffline || !data.chapter || !data.pages?.length) return;
     downloadingOffline = true;
-    notice = 'Baixando páginas para leitura offline...';
+    notice = 'Iniciando download do capítulo...';
     try {
       await saveChapterOffline(
         data.chapter,
@@ -102,10 +103,11 @@
           notice = `Baixando para offline: ${loaded}/${total} páginas...`;
         }
       );
-      notice = '✦ Capítulo salvo com sucesso para leitura offline!';
+      isDownloadedOffline = true;
+      notice = '✓ Capítulo salvo com sucesso para leitura offline!';
       setTimeout(() => { notice = ''; }, 4000);
-    } catch {
-      notice = 'Falha ao salvar capítulo para leitura offline.';
+    } catch (err) {
+      notice = (err as Error).message || 'Falha ao salvar capítulo para leitura offline.';
     } finally {
       downloadingOffline = false;
     }
@@ -274,6 +276,18 @@
     chapterCompleted = !!data.progress?.completed_at;
     previousChapterId = data.chapter.id;
     resetHideTimer();
+
+    if (data.chapter?.id) {
+      getOfflineChapter(data.chapter.id).then((off) => {
+        if (off && off.pages?.length) {
+          isDownloadedOffline = true;
+          data.pages = data.pages.map((p) => {
+            const match = off.pages.find((op) => op.position === p.position);
+            return match?.blobUrl ? { ...p, blobUrl: match.blobUrl } : p;
+          });
+        }
+      }).catch(() => {});
+    }
 
     fullscreen = !!document.documentElement.requestFullscreen;
     try {
@@ -470,12 +484,17 @@
       {/if}
       <button
         class="icon-button"
-        aria-label="Baixar capítulo para ler offline"
-        title="Baixar capítulo para ler offline"
+        class:is-downloaded={isDownloadedOffline}
+        aria-label={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
+        title={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
         onclick={handleDownloadChapter}
         disabled={downloadingOffline}
       >
-        <Download size={18} />
+        {#if isDownloadedOffline}
+          <CheckCircle2 size={18} class="text-emerald-400" />
+        {:else}
+          <Download size={18} />
+        {/if}
       </button>
       <button
         class="icon-button"
@@ -566,7 +585,7 @@
     </div>
     <h2 class="end-heading">Fim do Capítulo {data.chapter.number}</h2>
     <p class="end-sub">
-      {data.chapter.works?.title} · {data.scans?.length ? data.scans.map((s) => s.name).join(' × ') : 'Project Nox'}
+      {data.chapter.works?.title}{data.scans && data.scans.length > 0 ? ` · ${data.scans.map((s) => s.name).join(' × ')}` : ''}
     </p>
 
     <div class="chapter-reactions-box">

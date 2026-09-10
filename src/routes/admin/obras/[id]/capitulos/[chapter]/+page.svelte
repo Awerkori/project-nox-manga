@@ -17,7 +17,9 @@
     Trash2,
     Layers,
     FileText,
-    Clock
+    Clock,
+    Shield,
+    Users
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -29,6 +31,7 @@
     busy = $state(false),
     progress = $state(0),
     confirmed = $state(false);
+  let selectedScanIds = $state<string[]>((initial.chapterScans || []).map((cs: any) => cs.scan_id));
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
   let loadingFinals = $state(false), finalsChecked = $state(false);
@@ -186,7 +189,8 @@
         work_id: data.work.id,
         number,
         title,
-        pages: pages.map((p) => p.id)
+        pages: pages.map((p) => p.id),
+        scans: selectedScanIds
       });
       savedVersion = JSON.stringify({ number, title, pages: pages.map((p) => p.id) });
       confirmed = false;
@@ -364,6 +368,38 @@
             disabled={!!data.chapter?.published_at}
           />
         </label>
+
+        <!-- Scan Attribution Selector -->
+        <div class="field col-full">
+          <span class="field-label">Scans / Tradução deste Capítulo</span>
+          <div class="chapter-scans-chips">
+            {#each data.allScans as scan (scan.id)}
+              <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.is_official}>
+                <input
+                  type="checkbox"
+                  bind:group={selectedScanIds}
+                  value={scan.id}
+                  class="scan-checkbox"
+                  disabled={!!data.chapter?.published_at}
+                />
+                {#if scan.is_official}
+                  <Shield size={13} class="icon-gold" />
+                {/if}
+                <span>{scan.name}</span>
+                {#if scan.is_official}
+                  <span class="badge-official-mini">OFICIAL</span>
+                {/if}
+              </label>
+            {/each}
+          </div>
+          <small class="small muted">
+            {#if !selectedScanIds.length}
+              Nenhuma scan selecionada (o capítulo não exibirá nome de scan falso).
+            {:else}
+              Scan(s) vinculada(s): {data.allScans.filter((s: any) => selectedScanIds.includes(s.id)).map((s: any) => s.name).join(' × ')}
+            {/if}
+          </small>
+        </div>
       </div>
 
       {#if !data.chapter?.published_at}
@@ -857,6 +893,79 @@
   .field input:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .col-full {
+    grid-column: 1 / -1;
+  }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #dfc28d;
+  }
+
+  .chapter-scans-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .scan-chip-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .scan-chip-label:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .scan-chip-label.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .scan-chip-label.is-official {
+    border-color: rgba(201, 170, 115, 0.35);
+  }
+
+  .scan-chip-label.is-official.active {
+    background: rgba(201, 170, 115, 0.2);
+    border-color: rgba(201, 170, 115, 0.6);
+    color: #fef08a;
+  }
+
+  .scan-checkbox {
+    accent-color: #8b5cf6;
+    cursor: pointer;
+  }
+
+  :global(.icon-gold) {
+    color: #dfc28d;
+  }
+
+  .badge-official-mini {
+    font-size: 8.5px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(201, 170, 115, 0.2);
+    color: #dfc28d;
+    border: 1px solid rgba(201, 170, 115, 0.4);
+    letter-spacing: 0.06em;
   }
 
   /* Upload dropzone */

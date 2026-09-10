@@ -14,7 +14,7 @@ export class RateLimitError extends Error {
 export async function storeImage(request: Request, userId: string, purpose = 'editorial') {
   const rawContentType = request.headers.get('content-type')?.toLowerCase() || '';
   const isMultipart = rawContentType.includes('multipart/form-data');
-  const max = purpose === 'avatar' ? 5_000_000 : purpose === 'banner' ? 10_000_000 : 19_000_000;
+  const max = purpose === 'avatar' ? 10_000_000 : purpose === 'banner' ? 15_000_000 : 19_000_000;
   let bytes: Uint8Array;
   let size = 0;
 

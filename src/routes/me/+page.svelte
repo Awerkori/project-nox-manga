@@ -21,11 +21,29 @@
     Trash2,
     Eye,
     Upload,
-    Check
+    Check,
+    Lock,
+    Moon,
+    Flame,
+    Heart,
+    Star,
+    Zap,
+    Shield,
+    Compass,
+    Award,
+    Feather,
+    Swords,
+    Target,
+    Gem,
+    Coffee,
+    Gift,
+    Search,
+    Users,
+    Library
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
-  import { relativeTime } from '$lib/types';
+  import { relativeTime, date } from '$lib/types';
   import {
     getOfflineChapters,
     removeOfflineChapter,
@@ -33,6 +51,58 @@
   } from '$lib/offline-storage';
 
   let { data, form } = $props();
+
+  let achStatusFilter = $state<'ALL' | 'UNLOCKED' | 'LOCKED' | 'SECRET'>('ALL');
+  let achCategoryFilter = $state<string>('ALL');
+
+  const categoryLabels: Record<string, string> = {
+    ALL: 'Todas as Categorias',
+    INICIACAO: 'Iniciação',
+    LEITURA: 'Leitura',
+    MARATONA: 'Maratonas',
+    OBRAS: 'Obras',
+    CONCLUSAO: 'Conclusões',
+    BIBLIOTECA: 'Biblioteca',
+    FAVORITOS: 'Favoritos',
+    GENEROS: 'Gêneros',
+    EXPLORACAO: 'Exploração',
+    SCANS: 'Scans & Parcerias',
+    COMUNIDADE: 'Comunidade',
+    OFFLINE: 'Offline',
+    PROGRESSAO: 'Progressão',
+    LOJA: 'Loja',
+    SECRETAS: 'Secretas'
+  };
+
+  let filteredAchievements = $derived(
+    (data.achievements || []).filter((ach: any) => {
+      if (achStatusFilter === 'UNLOCKED' && !ach.unlocked) return false;
+      if (achStatusFilter === 'LOCKED' && (ach.unlocked || ach.is_secret)) return false;
+      if (achStatusFilter === 'SECRET' && !ach.is_secret) return false;
+      if (achCategoryFilter !== 'ALL' && ach.category !== achCategoryFilter) return false;
+      return true;
+    })
+  );
+
+  let achStats = $derived.by(() => {
+    const list = data.achievements || [];
+    const unlocked = list.filter((a: any) => a.unlocked);
+    const totalXp = unlocked.reduce((acc: number, a: any) => acc + (a.xp_reward || 0), 0);
+    const rarities = ['COMUM', 'INCOMUM', 'RARA', 'EPICA', 'LENDARIA', 'MITICA'] as const;
+    const byRarity: Record<string, { total: number; unlocked: number }> = {};
+    for (const r of rarities) {
+      const items = list.filter((a: any) => a.rarity === r);
+      const unl = items.filter((a: any) => a.unlocked);
+      byRarity[r] = { total: items.length, unlocked: unl.length };
+    }
+    return {
+      total: list.length,
+      unlockedCount: unlocked.length,
+      percentage: list.length ? Math.round((unlocked.length / list.length) * 100) : 0,
+      totalXp,
+      byRarity
+    };
+  });
 
   // Active tab synchronized with URL param
   type TabId =
@@ -47,12 +117,35 @@
     | 'edit'
     | 'settings';
 
+  const tabAliases: Record<string, TabId> = {
+    overview: 'overview',
+    geral: 'overview',
+    library: 'library',
+    biblioteca: 'library',
+    favorites: 'favorites',
+    favoritos: 'favorites',
+    history: 'history',
+    historico: 'history',
+    achievements: 'achievements',
+    conquistas: 'achievements',
+    inventory: 'inventory',
+    inventario: 'inventory',
+    downloads: 'downloads',
+    baixados: 'downloads',
+    notifications: 'notifications',
+    notificacoes: 'notifications',
+    edit: 'edit',
+    editar: 'edit',
+    settings: 'settings',
+    configuracoes: 'settings'
+  };
+
   let activeTab = $state<TabId>('overview');
 
   $effect(() => {
-    const tabParam = page.url.searchParams.get('tab') as TabId;
-    if (tabParam && tabParam !== activeTab) {
-      activeTab = tabParam;
+    const rawParam = page.url.searchParams.get('tab')?.toLowerCase();
+    if (rawParam && tabAliases[rawParam] && tabAliases[rawParam] !== activeTab) {
+      activeTab = tabAliases[rawParam];
     }
   });
 
@@ -475,30 +568,223 @@
           </div>
 
         {:else if activeTab === 'achievements'}
-          <!-- 5. Achievements -->
-          <div class="pane-section">
-            <h2 class="pane-title">Conquistas & Distintivos ({data.achievements.filter((a: any) => a.unlocked).length}/{data.achievements.length})</h2>
+          <!-- 5. Achievements (Redesigned) -->
+          <div class="pane-section achievements-pane">
+            <div class="ach-header-block">
+              <div class="ach-header-title-row">
+                <div>
+                  <h2 class="pane-title">Conquistas & Distintivos Cósmicos</h2>
+                  <p class="ach-header-sub">
+                    {achStats.unlockedCount} de {achStats.total} desbloqueadas ({achStats.percentage}%) · <strong>+{achStats.totalXp} XP</strong> conquistados
+                  </p>
+                </div>
+                <div class="ach-progress-pill">
+                  <div class="ach-progress-fill" style="width: {achStats.percentage}%"></div>
+                  <span class="ach-progress-num">{achStats.percentage}%</span>
+                </div>
+              </div>
+
+              <!-- Rarity counters row -->
+              <div class="ach-rarity-breakdown">
+                <div class="rarity-stat-chip rarity-comum">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Comum</span>
+                  <span class="r-count">{achStats.byRarity['COMUM']?.unlocked || 0}/{achStats.byRarity['COMUM']?.total || 0}</span>
+                </div>
+                <div class="rarity-stat-chip rarity-incomum">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Incomum</span>
+                  <span class="r-count">{achStats.byRarity['INCOMUM']?.unlocked || 0}/{achStats.byRarity['INCOMUM']?.total || 0}</span>
+                </div>
+                <div class="rarity-stat-chip rarity-rara">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Rara</span>
+                  <span class="r-count">{achStats.byRarity['RARA']?.unlocked || 0}/{achStats.byRarity['RARA']?.total || 0}</span>
+                </div>
+                <div class="rarity-stat-chip rarity-epica">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Épica</span>
+                  <span class="r-count">{achStats.byRarity['EPICA']?.unlocked || 0}/{achStats.byRarity['EPICA']?.total || 0}</span>
+                </div>
+                <div class="rarity-stat-chip rarity-lendaria">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Lendária</span>
+                  <span class="r-count">{achStats.byRarity['LENDARIA']?.unlocked || 0}/{achStats.byRarity['LENDARIA']?.total || 0}</span>
+                </div>
+                <div class="rarity-stat-chip rarity-mitica">
+                  <span class="r-dot"></span>
+                  <span class="r-name">Mítica</span>
+                  <span class="r-count">{achStats.byRarity['MITICA']?.unlocked || 0}/{achStats.byRarity['MITICA']?.total || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="ach-toolbar">
+              <div class="ach-status-chips">
+                <button
+                  type="button"
+                  class="ach-tab-chip"
+                  class:active={achStatusFilter === 'ALL'}
+                  onclick={() => (achStatusFilter = 'ALL')}
+                >
+                  Todas ({achStats.total})
+                </button>
+                <button
+                  type="button"
+                  class="ach-tab-chip"
+                  class:active={achStatusFilter === 'UNLOCKED'}
+                  onclick={() => (achStatusFilter = 'UNLOCKED')}
+                >
+                  Desbloqueadas ({achStats.unlockedCount})
+                </button>
+                <button
+                  type="button"
+                  class="ach-tab-chip"
+                  class:active={achStatusFilter === 'LOCKED'}
+                  onclick={() => (achStatusFilter = 'LOCKED')}
+                >
+                  Bloqueadas ({achStats.total - achStats.unlockedCount})
+                </button>
+                <button
+                  type="button"
+                  class="ach-tab-chip"
+                  class:active={achStatusFilter === 'SECRET'}
+                  onclick={() => (achStatusFilter = 'SECRET')}
+                >
+                  Secretas ({data.achievements.filter((a: any) => a.is_secret).length})
+                </button>
+              </div>
+
+              <div class="ach-category-select-wrap">
+                <select class="ach-category-select" bind:value={achCategoryFilter}>
+                  {#each Object.entries(categoryLabels) as [catKey, catLabel]}
+                    <option value={catKey}>{catLabel}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+
+            <!-- Achievements Cards Grid -->
             <div class="achievements-catalog-grid">
-              {#each data.achievements as ach (ach.id)}
-                <div class="ach-catalog-card" class:unlocked={ach.unlocked}>
+              {#each filteredAchievements as ach (ach.id)}
+                {@const isSecretLocked = ach.is_secret && !ach.unlocked}
+                {@const rarityClass = `rarity-${ach.rarity.toLowerCase()}`}
+                <div
+                  class="ach-catalog-card {rarityClass}"
+                  class:unlocked={ach.unlocked}
+                  class:is-secret-locked={isSecretLocked}
+                >
                   <div
                     class="ach-icon-circle"
-                    style="background: {ach.unlocked ? `${ach.badge_color || '#8b5cf6'}22` : 'rgba(255, 255, 255, 0.05)'}; color: {ach.unlocked ? (ach.badge_color || '#c4b5fd') : '#64748b'}"
+                    style="background: {ach.unlocked ? `${ach.badge_color || '#8b5cf6'}22` : 'rgba(255, 255, 255, 0.04)'}; color: {ach.unlocked ? (ach.badge_color || '#c4b5fd') : '#64748b'}"
                   >
-                    <Trophy size={18} />
+                    {#if isSecretLocked}
+                      <Lock size={18} />
+                    {:else if ach.icon === 'Moon'}
+                      <Moon size={18} />
+                    {:else if ach.icon === 'Flame'}
+                      <Flame size={18} />
+                    {:else if ach.icon === 'Heart'}
+                      <Heart size={18} />
+                    {:else if ach.icon === 'Eye'}
+                      <Eye size={18} />
+                    {:else if ach.icon === 'Download'}
+                      <Download size={18} />
+                    {:else if ach.icon === 'Crown'}
+                      <Crown size={18} />
+                    {:else if ach.icon === 'Star'}
+                      <Star size={18} />
+                    {:else if ach.icon === 'Zap'}
+                      <Zap size={18} />
+                    {:else if ach.icon === 'Shield'}
+                      <Shield size={18} />
+                    {:else if ach.icon === 'Compass'}
+                      <Compass size={18} />
+                    {:else if ach.icon === 'Award'}
+                      <Award size={18} />
+                    {:else if ach.icon === 'Feather'}
+                      <Feather size={18} />
+                    {:else if ach.icon === 'Swords'}
+                      <Swords size={18} />
+                    {:else if ach.icon === 'Target'}
+                      <Target size={18} />
+                    {:else if ach.icon === 'Gem'}
+                      <Gem size={18} />
+                    {:else if ach.icon === 'Coffee'}
+                      <Coffee size={18} />
+                    {:else if ach.icon === 'Gift'}
+                      <Gift size={18} />
+                    {:else if ach.icon === 'Search'}
+                      <Search size={18} />
+                    {:else if ach.icon === 'Users'}
+                      <Users size={18} />
+                    {:else if ach.icon === 'CheckCircle2'}
+                      <CheckCircle2 size={18} />
+                    {:else if ach.icon === 'Library'}
+                      <Library size={18} />
+                    {:else if ach.icon === 'Sparkles'}
+                      <Sparkles size={18} />
+                    {:else if ach.icon === 'BookOpen'}
+                      <BookOpen size={18} />
+                    {:else}
+                      <Trophy size={18} />
+                    {/if}
                   </div>
+
                   <div class="ach-content">
                     <div class="ach-top">
-                      <h4 class="ach-title">{ach.title}</h4>
+                      <div class="ach-tags-row">
+                        <span class="ach-rarity-badge">{ach.rarity}</span>
+                        <span class="ach-category-tag">{categoryLabels[ach.category] || ach.category}</span>
+                      </div>
                       <span class="ach-xp">+{ach.xp_reward} XP</span>
                     </div>
-                    <p class="ach-desc">{ach.description}</p>
-                    {#if ach.unlocked}
-                      <span class="unlocked-tag">Desbloqueada</span>
-                    {/if}
+
+                    <h4 class="ach-title">
+                      {#if isSecretLocked}
+                        ???
+                      {:else}
+                        {ach.title}
+                      {/if}
+                    </h4>
+
+                    <p class="ach-desc">
+                      {#if isSecretLocked}
+                        Conquista secreta oculta nas sombras. Continue explorando o Project Nox para desvendá-la.
+                      {:else}
+                        {ach.description}
+                      {/if}
+                    </p>
+
+                    <div class="ach-footer">
+                      {#if ach.unlocked}
+                        <span class="unlocked-tag">
+                          <CheckCircle2 size={12} />
+                          <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
+                        </span>
+                      {:else if isSecretLocked}
+                        <span class="secret-tag">
+                          <Lock size={12} />
+                          <span>Conquista Secreta</span>
+                        </span>
+                      {:else}
+                        <span class="locked-tag">
+                          <Lock size={12} />
+                          <span>Bloqueada</span>
+                        </span>
+                      {/if}
+                    </div>
                   </div>
                 </div>
               {/each}
+
+              {#if !filteredAchievements.length}
+                <div class="empty-state col-span-all">
+                  <Trophy size={36} class="muted" />
+                  <p>Nenhuma conquista encontrada com os filtros selecionados.</p>
+                </div>
+              {/if}
             </div>
           </div>
 
@@ -1015,67 +1301,352 @@
     color: #64748b;
   }
 
-  /* Achievements catalog */
+  /* Achievements Pane & Catalog */
+  .achievements-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .ach-header-block {
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    backdrop-filter: blur(12px);
+  }
+
+  .ach-header-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .ach-header-sub {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin: 0.25rem 0 0;
+  }
+
+  .ach-header-sub strong {
+    color: #dfc28d;
+  }
+
+  .ach-progress-pill {
+    position: relative;
+    width: 140px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ach-progress-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #8b5cf6, #c084fc);
+    border-radius: 12px;
+    transition: width 0.4s ease;
+  }
+
+  .ach-progress-num {
+    position: relative;
+    z-index: 2;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+
+  .ach-rarity-breakdown {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .rarity-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.72rem;
+  }
+
+  .r-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .rarity-comum .r-dot { background: #94a3b8; }
+  .rarity-incomum .r-dot { background: #34d399; }
+  .rarity-rara .r-dot { background: #60a5fa; }
+  .rarity-epica .r-dot { background: #c084fc; }
+  .rarity-lendaria .r-dot { background: #fbbf24; }
+  .rarity-mitica .r-dot { background: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
+
+  .r-name {
+    color: #cbd5e1;
+    font-weight: 600;
+  }
+
+  .r-count {
+    color: #8c899e;
+    font-weight: 700;
+  }
+
+  /* Toolbar */
+  .ach-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .ach-status-chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .ach-tab-chip {
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .ach-tab-chip:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .ach-tab-chip.active {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.45);
+    color: #ffffff;
+  }
+
+  .ach-category-select-wrap {
+    min-width: 180px;
+  }
+
+  .ach-category-select {
+    width: 100%;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(13, 16, 26, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .ach-category-select:focus {
+    border-color: #8b5cf6;
+  }
+
+  /* Cards Grid */
   .achievements-catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
     gap: 1rem;
   }
 
   .ach-catalog-card {
     display: flex;
     gap: 1rem;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    padding: 1.1rem;
+    background: rgba(13, 16, 26, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
     opacity: 0.65;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+  }
+
+  .ach-catalog-card:hover {
+    opacity: 0.85;
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-2px);
   }
 
   .ach-catalog-card.unlocked {
     opacity: 1;
-    background: rgba(139, 92, 246, 0.06);
-    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(18, 22, 34, 0.85);
+  }
+
+  .ach-catalog-card.unlocked.rarity-comum {
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+
+  .ach-catalog-card.unlocked.rarity-incomum {
+    border-color: rgba(52, 211, 153, 0.4);
+    box-shadow: 0 4px 16px rgba(52, 211, 153, 0.08);
+  }
+
+  .ach-catalog-card.unlocked.rarity-rara {
+    border-color: rgba(96, 165, 250, 0.4);
+    box-shadow: 0 4px 18px rgba(96, 165, 250, 0.1);
+  }
+
+  .ach-catalog-card.unlocked.rarity-epica {
+    border-color: rgba(192, 132, 252, 0.45);
+    box-shadow: 0 4px 22px rgba(192, 132, 252, 0.15);
+  }
+
+  .ach-catalog-card.unlocked.rarity-lendaria {
+    border-color: rgba(251, 191, 36, 0.5);
+    box-shadow: 0 4px 26px rgba(251, 191, 36, 0.18);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.05) 0%, rgba(18, 22, 34, 0.85) 100%);
+  }
+
+  .ach-catalog-card.unlocked.rarity-mitica {
+    border-color: rgba(244, 63, 94, 0.6);
+    box-shadow: 0 4px 30px rgba(244, 63, 94, 0.25);
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.08) 0%, rgba(18, 22, 34, 0.9) 100%);
+  }
+
+  .ach-catalog-card.is-secret-locked {
+    border-style: dashed;
+    background: rgba(10, 12, 20, 0.4);
+  }
+
+  .ach-icon-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .ach-content {
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 0.25rem;
+    min-width: 0;
+    gap: 0.35rem;
   }
 
   .ach-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .ach-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .ach-rarity-badge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .rarity-comum .ach-rarity-badge { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+  .rarity-incomum .ach-rarity-badge { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .rarity-rara .ach-rarity-badge { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+  .rarity-epica .ach-rarity-badge { background: rgba(192, 132, 252, 0.15); color: #c084fc; }
+  .rarity-lendaria .ach-rarity-badge { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .rarity-mitica .ach-rarity-badge { background: rgba(244, 63, 94, 0.15); color: #f43f5e; }
+
+  .ach-category-tag {
+    font-size: 0.65rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .ach-xp {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #dfc28d;
+    flex-shrink: 0;
   }
 
   .ach-title {
-    font-size: 0.95rem;
-    font-weight: 700;
+    font-size: 0.92rem;
+    font-weight: 750;
     color: #ffffff;
     margin: 0;
   }
 
-  .ach-xp {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #dfc28d;
-  }
-
   .ach-desc {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    line-height: 1.3;
+    line-height: 1.35;
     margin: 0;
   }
 
+  .ach-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: auto;
+    padding-top: 0.35rem;
+  }
+
   .unlocked-tag {
-    font-size: 0.72rem;
-    color: #10b981;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #34d399;
     font-weight: 700;
-    margin-top: 0.25rem;
+  }
+
+  .secret-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #c084fc;
+    font-weight: 600;
+  }
+
+  .locked-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .col-span-all {
+    grid-column: 1 / -1;
   }
 
   /* Offline Downloads */

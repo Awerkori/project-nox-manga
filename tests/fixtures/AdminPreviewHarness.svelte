@@ -29,6 +29,7 @@
       banner_id: null as string | null,
       banner_position: 'center',
       equipped_medal_id: null as string | null,
+      equipped_banner_id: null as string | null,
       equipped_comment_banner_id: null as string | null,
       is_onboarded: true,
       manual_badge: false,

@@ -77,6 +77,8 @@ export type Database = {
           id: string
           is_secret: boolean
           order_index: number
+          rarity: string
+          reward_item_id: string | null
           title: string
           xp_reward: number
         }
@@ -91,6 +93,8 @@ export type Database = {
           id: string
           is_secret?: boolean
           order_index?: number
+          rarity?: string
+          reward_item_id?: string | null
           title: string
           xp_reward?: number
         }
@@ -105,6 +109,8 @@ export type Database = {
           id?: string
           is_secret?: boolean
           order_index?: number
+          rarity?: string
+          reward_item_id?: string | null
           title?: string
           xp_reward?: number
         }
@@ -116,6 +122,7 @@ export type Database = {
           actor_id: string | null
           created_at: string
           id: number
+          metadata: Json
           target_id: string | null
         }
         Insert: {
@@ -123,6 +130,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           id?: never
+          metadata?: Json
           target_id?: string | null
         }
         Update: {
@@ -130,6 +138,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           id?: never
+          metadata?: Json
           target_id?: string | null
         }
         Relationships: [
@@ -1384,6 +1393,7 @@ export type Database = {
           created_at: string
           display_name: string
           equipped_badge_id: string | null
+          equipped_banner_id: string | null
           equipped_comment_banner_id: string | null
           equipped_medal_id: string | null
           equipped_title_id: string | null
@@ -1407,6 +1417,7 @@ export type Database = {
           created_at?: string
           display_name: string
           equipped_badge_id?: string | null
+          equipped_banner_id?: string | null
           equipped_comment_banner_id?: string | null
           equipped_medal_id?: string | null
           equipped_title_id?: string | null
@@ -1430,6 +1441,7 @@ export type Database = {
           created_at?: string
           display_name?: string
           equipped_badge_id?: string | null
+          equipped_banner_id?: string | null
           equipped_comment_banner_id?: string | null
           equipped_medal_id?: string | null
           equipped_title_id?: string | null
@@ -1885,7 +1897,10 @@ export type Database = {
           name: string
           order_index: number
           price_xp: number
+          rarity: string
+          status: string
           style_data: Json
+          thumbnail_url: string | null
         }
         Insert: {
           asset_url?: string
@@ -1899,7 +1914,10 @@ export type Database = {
           name: string
           order_index?: number
           price_xp: number
+          rarity?: string
+          status?: string
           style_data?: Json
+          thumbnail_url?: string | null
         }
         Update: {
           asset_url?: string
@@ -1913,7 +1931,10 @@ export type Database = {
           name?: string
           order_index?: number
           price_xp?: number
+          rarity?: string
+          status?: string
           style_data?: Json
+          thumbnail_url?: string | null
         }
         Relationships: []
       }

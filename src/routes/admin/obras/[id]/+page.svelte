@@ -18,7 +18,10 @@
     BookOpen,
     Clock,
     FolderArchive,
-    Flame
+    Flame,
+    Users,
+    Zap,
+    Shield
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -35,6 +38,50 @@
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let selected = $state<string[]>(initial.selected);
   let prioritizing = $state(false);
+
+  let selectedScanIds = $state<string[]>((initial.workScans || []).map((ws: any) => ws.scan_id));
+  let primaryScanId = $state<string>(
+    initial.workScans?.find((ws: any) => ws.is_primary)?.scan_id || selectedScanIds[0] || ''
+  );
+  let applyToExistingChapters = $state(false);
+  let applyingScans = $state(false);
+
+  async function applyScansToChapters() {
+    if (!data.work?.id) return;
+    if (!selectedScanIds.length) {
+      alert('Selecione pelo menos uma scan antes de aplicar aos capítulos.');
+      return;
+    }
+    const ok = confirm(
+      'Deseja replicar as scans selecionadas para TODOS os capítulos existentes desta obra?'
+    );
+    if (!ok) return;
+
+    applyingScans = true;
+    notice = '';
+    try {
+      // First save the work's scans
+      const scansPayload = selectedScanIds.map((sid) => ({
+        scan_id: sid,
+        is_primary: sid === primaryScanId
+      }));
+      await action('editor', 'work', {
+        id: data.work.id,
+        title: title,
+        slug: slug,
+        scans: scansPayload,
+        apply_to_chapters: true
+      });
+      await invalidateAll();
+      noticeType = 'success';
+      notice = 'Scans aplicadas com sucesso a todos os capítulos da obra!';
+    } catch (e: any) {
+      noticeType = 'error';
+      notice = e.message || 'Erro ao replicar scans aos capítulos.';
+    } finally {
+      applyingScans = false;
+    }
+  }
 
   async function prioritizeWork() {
     if (!data.work?.id || prioritizing) return;
@@ -102,7 +149,12 @@
           .map((s) => s.trim())
           .filter(Boolean),
         tags: selected,
-        cover_id: cover
+        cover_id: cover,
+        scans: selectedScanIds.map((sid) => ({
+          scan_id: sid,
+          is_primary: sid === primaryScanId
+        })),
+        apply_to_chapters: applyToExistingChapters
       });
 
       if (!data.work) {
@@ -408,6 +460,83 @@
           </label>
         {/each}
       </div>
+    </fieldset>
+
+    <!-- Scans / Tradução Selector -->
+    <fieldset class="scans-fieldset">
+      <div class="scans-fieldset-header">
+        <div>
+          <legend class="scans-legend">
+            <Users size={15} />
+            <span>Scans / Tradução & Créditos</span>
+          </legend>
+          <p class="scans-subtext">
+            Associe as scans parceiras ou a scan oficial Project Nox a esta obra. Obras sem scan selecionada não exibirão scan falsa publicamente.
+          </p>
+        </div>
+
+        {#if data.work?.id}
+          <button
+            type="button"
+            class="btn-apply-chapters"
+            onclick={applyScansToChapters}
+            disabled={busy || applyingScans || !selectedScanIds.length}
+            title="Replicar imediatamente estas scans para todos os capítulos desta obra"
+          >
+            <Zap size={14} />
+            <span>{applyingScans ? 'Replicando…' : 'Replicar nos Capítulos'}</span>
+          </button>
+        {/if}
+      </div>
+
+      <div class="scans-chips-wrap">
+        {#each data.allScans as scan (scan.id)}
+          <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.is_official}>
+            <input
+              type="checkbox"
+              bind:group={selectedScanIds}
+              value={scan.id}
+              class="scan-checkbox"
+              onchange={() => {
+                if (!selectedScanIds.includes(primaryScanId)) {
+                  primaryScanId = selectedScanIds[0] || '';
+                }
+              }}
+            />
+            {#if scan.is_official}
+              <Shield size={13} class="icon-gold" />
+            {/if}
+            <span class="scan-name">{scan.name}</span>
+            {#if scan.is_official}
+              <span class="badge-official-mini">OFICIAL</span>
+            {/if}
+          </label>
+        {/each}
+
+        {#if !data.allScans?.length}
+          <p class="no-scans-text">Nenhuma scan cadastrada no sistema. Cadastre na <a href="/admin/scans">Gestão de Scans</a>.</p>
+        {/if}
+      </div>
+
+      {#if selectedScanIds.length > 1}
+        <div class="primary-scan-row">
+          <label for="primary-scan-select" class="field-label-sm">Scan Principal (Destaque editorial):</label>
+          <select id="primary-scan-select" class="primary-select" bind:value={primaryScanId}>
+            {#each data.allScans.filter((s: any) => selectedScanIds.includes(s.id)) as s (s.id)}
+              <option value={s.id}>{s.name} {s.is_official ? '(Oficial Nox)' : ''}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
+
+      {#if data.work?.id}
+        <div class="scans-options-row">
+          <label class="checkbox-option">
+            <input type="checkbox" bind:checked={applyToExistingChapters} />
+            <span>Replicar estas scans para todos os capítulos existentes ao salvar esta obra</span>
+          </label>
+        </div>
+      {/if}
     </fieldset>
 
     <!-- Save & Action Footer -->
@@ -951,6 +1080,182 @@
   .tag-prefix {
     color: #dfc28d;
     font-size: 10px;
+  }
+
+  /* Scans Fieldset */
+  .scans-fieldset {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 20px 20px;
+    background: rgba(18, 22, 34, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .scans-fieldset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .scans-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 750;
+    color: #dfc28d;
+    letter-spacing: 0.02em;
+    padding: 0 4px;
+  }
+
+  .scans-subtext {
+    font-size: 12px;
+    color: #8c899e;
+    margin: 4px 0 0;
+  }
+
+  .btn-apply-chapters {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-apply-chapters:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.6);
+    color: #ffffff;
+  }
+
+  .btn-apply-chapters:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .scans-chips-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .scan-chip-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 13px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    color: #b5b1c7;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .scan-chip-label:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .scan-chip-label.active {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .scan-chip-label.is-official {
+    border-color: rgba(201, 170, 115, 0.3);
+  }
+
+  .scan-chip-label.is-official.active {
+    background: rgba(201, 170, 115, 0.18);
+    border-color: rgba(201, 170, 115, 0.6);
+    color: #fef08a;
+  }
+
+  .scan-checkbox {
+    accent-color: #8b5cf6;
+    cursor: pointer;
+  }
+
+  :global(.icon-gold) {
+    color: #dfc28d;
+  }
+
+  .badge-official-mini {
+    font-size: 8.5px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(201, 170, 115, 0.2);
+    color: #dfc28d;
+    border: 1px solid rgba(201, 170, 115, 0.4);
+    letter-spacing: 0.06em;
+  }
+
+  .no-scans-text {
+    font-size: 12px;
+    color: #8c899e;
+    margin: 0;
+  }
+
+  .no-scans-text a {
+    color: #c4b5fd;
+  }
+
+  .primary-scan-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 6px;
+    flex-wrap: wrap;
+  }
+
+  .field-label-sm {
+    font-size: 12px;
+    font-weight: 600;
+    color: #dfc28d;
+  }
+
+  .primary-select {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: #ffffff;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .scans-options-row {
+    padding-top: 4px;
+  }
+
+  .checkbox-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #b5b1c7;
+    cursor: pointer;
+  }
+
+  .checkbox-option input {
+    accent-color: #8b5cf6;
+    cursor: pointer;
   }
 
   /* Footer Actions */
