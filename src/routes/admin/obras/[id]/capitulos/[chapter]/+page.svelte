@@ -406,7 +406,7 @@
           {#if inCooldown && cooldownSeconds > 0}
             <div class="cooldown-alert">
               <Clock size={13} class="spin" />
-              <span>Rate limit temporário. Cooldown ativo: <strong>{cooldownSeconds}s</strong> (retomará na velocidade normal).</span>
+              <span>Rate limit temporário. Cooldown: <strong>{cooldownSeconds}s</strong> · Retomada gradual automática.</span>
             </div>
           {/if}
         </div>

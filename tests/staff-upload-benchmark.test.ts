@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { flushUploads } from '../src/lib/upload-queue';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { flushUploads, _resetAdaptiveStateForTesting } from '../src/lib/upload-queue';
 
 describe('Staff Upload Pipeline Benchmark', () => {
+  beforeEach(() => {
+    _resetAdaptiveStateForTesting();
+  });
   const SIZES = [1, 5, 10, 12, 25, 30];
   const PAGE_SIZE_BYTES = 600 * 1024; // 600 KB realistic average WebP page
   const NETWORK_LATENCY_MS = 120; // 120ms network RTT

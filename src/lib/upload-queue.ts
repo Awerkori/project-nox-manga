@@ -1,10 +1,12 @@
 /**
- * Resilient upload queue with adaptive pacing, bounded concurrency, and retry-after cooldown recovery.
+ * Resilient upload queue with AIMD adaptive pacing, bounded concurrency, and retry-after cooldown recovery.
  *
  * Design principles:
- * - Cooldown from 429 Retry-After is strictly observed, but pacing returns to normal (250ms) immediately after expiry.
- * - Concurrency defaults to 1 (backward-compatible, deterministic FIFO) and supports bounded concurrency (e.g. 2) with in-order completion buffering.
- * - Real-time progress metrics: speed tracking (MB/s), cooldown countdowns, and completion percentages.
+ * - Cooldown from 429 Retry-After is strictly observed.
+ * - After cooldown, pacing resumes at a CONSERVATIVELY slower rate, then ramps up gradually (AIMD).
+ * - Repeated 429s escalate cooldown duration proportionally and deepen the rate reduction.
+ * - Concurrency drops to 1 during recovery to avoid simultaneous re-triggers.
+ * - After a sustained healthy window (4 successful uploads), concurrency and pacing restore to baseline.
  */
 
 export interface ProgressStats {
@@ -13,6 +15,8 @@ export interface ProgressStats {
   speedMBs: number;
   inCooldown: boolean;
   cooldownSecondsRemaining?: number;
+  /** True when operating at reduced speed after a rate limit recovery */
+  inRecovery?: boolean;
 }
 
 export interface FlushOptions {
@@ -41,7 +45,92 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── Adaptive pacing state (module-level, shared across calls within the same session) ──
+
 let rateLimitCooldownUntil = 0;
+let lastRateLimitTime = 0;
+
+/** How many consecutive 429s have occurred without a full recovery in between */
+let consecutive429Count = 0;
+
+/** Current effective pacing interval (increases after 429, gradually decreases on success) */
+let currentPaceMs = 0;
+
+/** How many successful uploads since the last 429 */
+let successesSinceLastThrottle = 0;
+
+/** Effective concurrency override (0 = use options.concurrency) */
+let concurrencyOverride = 0;
+
+const RECOVERY_WINDOW = 4; // uploads of sustained success before restoring full concurrency
+const MAX_PACE_MULTIPLIER = 8; // max pacing slowdown factor
+
+/** Full reset of all module-level adaptive state. For testing only. */
+export function _resetAdaptiveStateForTesting(): void {
+  rateLimitCooldownUntil = 0;
+  lastRateLimitTime = 0;
+  consecutive429Count = 0;
+  currentPaceMs = 0;
+  successesSinceLastThrottle = 0;
+  concurrencyOverride = 0;
+}
+
+function recordRateLimit(retryAfterSec: number, basePaceMs: number): void {
+  const now = Date.now();
+
+  // If previous 429 was recent (< 30s), escalate; otherwise start new streak
+  if (now - lastRateLimitTime < 30_000) {
+    consecutive429Count++;
+  } else {
+    consecutive429Count = 1;
+  }
+  lastRateLimitTime = now;
+
+  // Escalate cooldown duration proportionally to retryAfterSec
+  const escalationMultiplier = Math.pow(1.5, Math.min(consecutive429Count - 1, 3));
+  const effectiveCooldownMs = Math.max(Math.round(retryAfterSec * 1000 * escalationMultiplier), 20);
+  rateLimitCooldownUntil = Math.max(rateLimitCooldownUntil, now + effectiveCooldownMs);
+
+  // Multiplicative increase in pacing: double base pace on first 429, escalate if repeated
+  const effectiveBase = basePaceMs || 250;
+  const paceMultiplier = Math.min(MAX_PACE_MULTIPLIER, Math.pow(2, consecutive429Count));
+  currentPaceMs = Math.min(2500, effectiveBase * paceMultiplier);
+
+  // Drop concurrency to 1 during recovery to prevent parallel re-triggers
+  concurrencyOverride = 1;
+  successesSinceLastThrottle = 0;
+}
+
+function recordSuccess(basePaceMs: number): void {
+  successesSinceLastThrottle++;
+  const effectiveBase = basePaceMs || 250;
+
+  // Additive decrease: gradually ease pacing back toward basePaceMs
+  if (currentPaceMs > effectiveBase) {
+    currentPaceMs = Math.max(effectiveBase, Math.round(currentPaceMs * 0.8));
+  } else {
+    currentPaceMs = 0;
+  }
+
+  // Restore concurrency and clear streak after sustained healthy recovery window
+  if (successesSinceLastThrottle >= RECOVERY_WINDOW) {
+    concurrencyOverride = 0;
+    currentPaceMs = 0;
+    consecutive429Count = 0;
+  }
+}
+
+function getEffectivePace(basePaceMs: number): number {
+  return currentPaceMs > 0 ? currentPaceMs : basePaceMs;
+}
+
+function getEffectiveConcurrency(requestedConcurrency: number): number {
+  return concurrencyOverride > 0 ? Math.min(concurrencyOverride, requestedConcurrency) : requestedConcurrency;
+}
+
+export function isInRecovery(): boolean {
+  return currentPaceMs > 0 || concurrencyOverride > 0;
+}
 
 /** Check if currently under rate limit cooldown and sleep until expired */
 async function waitForCooldown(
@@ -53,7 +142,7 @@ async function waitForCooldown(
     if (remainingSec > 0 && currentFile && onRetry) {
       onRetry(currentFile, 1, remainingSec);
     }
-    const sleepChunk = Math.min(1000, Math.max(100, rateLimitCooldownUntil - Date.now()));
+    const sleepChunk = Math.min(1000, Math.max(50, rateLimitCooldownUntil - Date.now()));
     await sleep(sleepChunk);
   }
 }
@@ -83,7 +172,8 @@ export async function flushUploads<T>(
       total: totalFiles,
       speedMBs,
       inCooldown,
-      cooldownSecondsRemaining: cooldownSec > 0 ? cooldownSec : undefined
+      cooldownSecondsRemaining: cooldownSec > 0 ? cooldownSec : undefined,
+      inRecovery: isInRecovery()
     });
   };
 
@@ -91,9 +181,10 @@ export async function flushUploads<T>(
     while (pending.length && !paused()) {
       await waitForCooldown(onRetry, pending[0]);
 
-      // Apply standard base pacing between sequential requests (e.g. 250ms)
-      if (completedCount > 0 && basePaceMs > 0) {
-        await sleep(basePaceMs);
+      // Apply adaptive pacing between sequential requests
+      const pace = getEffectivePace(basePaceMs);
+      if (completedCount > 0 && pace > 0) {
+        await sleep(pace);
       }
 
       if (paused()) return;
@@ -107,6 +198,7 @@ export async function flushUploads<T>(
           completedCount++;
           pending.shift();
           accepted(result, file);
+          recordSuccess(basePaceMs);
           emitProgress();
           break;
         } catch (err) {
@@ -116,7 +208,7 @@ export async function flushUploads<T>(
           }
 
           if (err instanceof UploadRateLimitError) {
-            rateLimitCooldownUntil = Math.max(rateLimitCooldownUntil, Date.now() + err.retryAfter * 1000);
+            recordRateLimit(err.retryAfter, basePaceMs);
             onRetry?.(file, attempt, err.retryAfter);
             emitProgress(true, err.retryAfter);
             await waitForCooldown(onRetry, file);
@@ -139,62 +231,76 @@ export async function flushUploads<T>(
   const initialFiles = [...pending];
   const completedResults = new Map<number, { result: T; file: File }>();
   let abortError: any = null;
+  let inFlight = 0;
 
   async function worker() {
     while (nextQueueIdx < initialFiles.length && !paused() && !abortError) {
       await waitForCooldown(onRetry, initialFiles[nextQueueIdx]);
       if (paused() || abortError) return;
 
+      // Dynamic concurrency gate: if under rate-limit recovery, drop active concurrent workers to 1
+      while (inFlight >= getEffectiveConcurrency(concurrency) && !paused() && !abortError) {
+        await sleep(20);
+      }
+      if (paused() || abortError || nextQueueIdx >= initialFiles.length) return;
+
+      inFlight++;
       const myIdx = nextQueueIdx++;
       const file = initialFiles[myIdx];
       let attempt = 0;
 
-      while (true) {
-        try {
-          if (basePaceMs > 0 && myIdx > 0) {
-            await sleep(basePaceMs);
-          }
-          if (paused() || abortError) return;
-
-          const result = await send(file);
-          totalBytesUploaded += file.size;
-          completedCount++;
-          completedResults.set(myIdx, { result, file });
-
-          // Flush in-order delivered items
-          while (completedResults.has(nextDeliverIdx)) {
-            const item = completedResults.get(nextDeliverIdx)!;
-            completedResults.delete(nextDeliverIdx);
-            nextDeliverIdx++;
-            const frontIndex = pending.indexOf(item.file);
-            if (frontIndex !== -1) {
-              pending.splice(frontIndex, 1);
+      try {
+        while (true) {
+          try {
+            const pace = getEffectivePace(basePaceMs);
+            if (pace > 0 && myIdx > 0) {
+              await sleep(pace);
             }
-            accepted(item.result, item.file);
-            emitProgress();
-          }
+            if (paused() || abortError) return;
 
-          break;
-        } catch (err) {
-          attempt++;
-          if (attempt > maxRetries) {
-            abortError = err;
-            throw err;
-          }
+            const result = await send(file);
+            totalBytesUploaded += file.size;
+            completedCount++;
+            completedResults.set(myIdx, { result, file });
+            recordSuccess(basePaceMs);
 
-          if (err instanceof UploadRateLimitError) {
-            rateLimitCooldownUntil = Math.max(rateLimitCooldownUntil, Date.now() + err.retryAfter * 1000);
-            onRetry?.(file, attempt, err.retryAfter);
-            emitProgress(true, err.retryAfter);
-            await waitForCooldown(onRetry, file);
-          } else {
-            const backoffMs = Math.min(30_000, 1000 * Math.pow(2, attempt - 1));
-            onRetry?.(file, attempt, Math.ceil(backoffMs / 1000));
-            await sleep(backoffMs);
-          }
+            // Flush in-order delivered items
+            while (completedResults.has(nextDeliverIdx)) {
+              const item = completedResults.get(nextDeliverIdx)!;
+              completedResults.delete(nextDeliverIdx);
+              nextDeliverIdx++;
+              const frontIndex = pending.indexOf(item.file);
+              if (frontIndex !== -1) {
+                pending.splice(frontIndex, 1);
+              }
+              accepted(item.result, item.file);
+              emitProgress();
+            }
 
-          if (paused() || abortError) return;
+            break;
+          } catch (err) {
+            attempt++;
+            if (attempt > maxRetries) {
+              abortError = err;
+              throw err;
+            }
+
+            if (err instanceof UploadRateLimitError) {
+              recordRateLimit(err.retryAfter, basePaceMs);
+              onRetry?.(file, attempt, err.retryAfter);
+              emitProgress(true, err.retryAfter);
+              await waitForCooldown(onRetry, file);
+            } else {
+              const backoffMs = Math.min(30_000, 1000 * Math.pow(2, attempt - 1));
+              onRetry?.(file, attempt, Math.ceil(backoffMs / 1000));
+              await sleep(backoffMs);
+            }
+
+            if (paused() || abortError) return;
+          }
         }
+      } finally {
+        inFlight--;
       }
     }
   }
