@@ -103,7 +103,6 @@
   function detectProvider(val: string): string | null {
     const lower = val.toLowerCase();
     if (lower.includes('kuro')) return 'kuro';
-    if (lower.includes('nexustoons') || lower.includes('nx-toons')) return 'nexus_toons';
     if (lower.includes('nexus')) return 'nexus';
     if (lower.includes('mangaflix')) return 'mangaflix';
     if (lower.includes('manhastro')) return 'manhastro';
@@ -5247,8 +5246,6 @@
 
   .candidate-provider-badge.provider-kuro { background: rgba(124, 58, 237, 0.95); }
   .candidate-provider-badge.provider-nexus { background: rgba(37, 99, 235, 0.95); }
-  .candidate-provider-badge.provider-nexus_toons,
-  .candidate-provider-badge.provider-nexustoons { background: rgba(14, 165, 233, 0.95); }
   .candidate-provider-badge.provider-mangaflix { background: rgba(217, 119, 6, 0.95); }
   .candidate-provider-badge.provider-manhastro { background: rgba(5, 150, 105, 0.95); }
   .candidate-provider-badge.provider-mangotoons { background: rgba(225, 29, 72, 0.95); }

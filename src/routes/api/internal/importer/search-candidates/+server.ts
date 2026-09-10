@@ -127,7 +127,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   // C. If staff searched for something not in the catalog, also suggest importing as a new work across sources
   if (results.length < 3) {
     const searchSlug = slugify(q);
-    const supportedProviders = ['nexus', 'nexus_toons', 'kuro', 'mangaflix', 'manhastro', 'mangotoons'];
+    const supportedProviders = ['nexus', 'kuro', 'mangaflix', 'manhastro', 'mangotoons'];
     for (const prov of supportedProviders) {
       const key = `new:${prov}:${searchSlug}`;
       if (!seenKeys.has(key)) {
@@ -160,7 +160,6 @@ function detectProviderFromUrl(rawUrl: string): { provider: string; slug: string
 
     let provider = '';
     if (host.includes('kuro')) provider = 'kuro';
-    else if (host.includes('nexustoons') || host.includes('nx-toons')) provider = 'nexus_toons';
     else if (host.includes('nexus')) provider = 'nexus';
     else if (host.includes('mangaflix')) provider = 'mangaflix';
     else if (host.includes('manhastro')) provider = 'manhastro';
