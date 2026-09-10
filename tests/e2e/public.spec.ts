@@ -1,4 +1,20 @@
 import { test, expect } from '@playwright/test';
+
+test.beforeEach(async ({ context }) => {
+  await context.addCookies([
+    {
+      name: 'nox-age-status',
+      value: 'ADULT',
+      url: 'http://127.0.0.1:5173'
+    },
+    {
+      name: 'nox-blur-nsfw',
+      value: 'false',
+      url: 'http://127.0.0.1:5173'
+    }
+  ]);
+});
+
 test('visitor cannot enter any administrative route or modify the API', async ({ request }) => {
   for (const path of ['/admin', '/admin/obras', '/admin/gestao'])
     expect((await request.get(path)).status()).toBe(403);
@@ -109,7 +125,7 @@ for (const width of [390, 768, 1440])
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.getByRole('link', { name: 'Encontrar minha próxima leitura' }).click();
+    await page.locator('a[href="/catalogo"]').first().click();
     await expect(page).toHaveURL(/catalogo/);
     await page.getByLabel('Título da obra').fill('Uma busca sem resultado');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();

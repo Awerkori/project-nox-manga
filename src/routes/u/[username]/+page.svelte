@@ -1,34 +1,68 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { invalidateAll } from '$app/navigation';
   import { date, memberRank } from '$lib/types';
   import { getLevelProgress } from '$lib/levels';
   import {
     Sparkles,
     BookOpen,
-    Bookmark,
+    BookMarked,
     Trophy,
     UserPlus,
     UserCheck,
     Settings,
     Crown,
     Calendar,
-    Award
+    Award,
+    Lock,
+    Users,
+    Star,
+    Palette,
+    CheckCircle2,
+    Flame,
+    ExternalLink
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import { invalidateAll } from '$app/navigation';
+  import AchievementIcon from '$lib/components/AchievementIcon.svelte';
 
   let { data } = $props();
 
-  let rank = $derived(memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id));
+  let rank = $derived(
+    memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id)
+  );
   let progress = $derived(getLevelProgress(data.member.xp));
 
   let isFollowing = $state(false);
   let followersCount = $state(0);
   let followBusy = $state(false);
 
+  // Active public profile tab
+  let activeTab = $state<'achievements' | 'cosmetics'>('achievements');
+  let cosmeticFilter = $state<string>('ALL');
+
   $effect(() => {
     isFollowing = data.isFollowing;
     followersCount = data.followersCount;
   });
+
+  onMount(() => {
+    // Check URL query param or hash to preset tab
+    const tabParam = page.url.searchParams.get('tab');
+    if (tabParam === 'cosmeticos' || tabParam === 'cosmetics' || window.location.hash === '#cosmeticos') {
+      activeTab = 'cosmetics';
+    } else if (tabParam === 'conquistas' || tabParam === 'achievements' || window.location.hash === '#conquistas') {
+      activeTab = 'achievements';
+    }
+  });
+
+  function switchTab(tab: 'achievements' | 'cosmetics') {
+    activeTab = tab;
+    const anchor = document.getElementById('profile-content-anchor');
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
 
   async function toggleFollow() {
     if (!data.viewerAuthenticated) {
@@ -61,6 +95,72 @@
       followersCount += willFollow ? -1 : 1;
     } finally {
       followBusy = false;
+    }
+  }
+
+  // Cosmetics helpers
+  function getCosmeticKindLabel(kind: string): string {
+    switch (kind) {
+      case 'AVATAR_FRAME':
+        return 'Moldura';
+      case 'TITLE':
+        return 'Título';
+      case 'PROFILE_BANNER':
+        return 'Banner';
+      case 'NAME_COLOR':
+        return 'Cor de Nome';
+      default:
+        return 'Cosmético';
+    }
+  }
+
+  function isItemEquipped(item: any): boolean {
+    if (!item) return false;
+    if (item.kind === 'AVATAR_FRAME' && data.member.avatar_frame_id === item.id) return true;
+    if (
+      item.kind === 'TITLE' &&
+      (data.member.equipped_title_id === item.id || data.member.equipped_title_id === item.name)
+    )
+      return true;
+    if (item.kind === 'PROFILE_BANNER' && data.member.equipped_banner_id === item.id) return true;
+    if (item.kind === 'NAME_COLOR') {
+      const colorVal = item.style_data?.color || item.style_data?.backgroundImage || item.id;
+      return data.member.name_color === colorVal;
+    }
+    return false;
+  }
+
+  let filteredCosmetics = $derived.by(() => {
+    const list = data.cosmetics || [];
+    if (cosmeticFilter === 'ALL') return list;
+    return list.filter((c: any) => c.kind === cosmeticFilter);
+  });
+
+  const cosmeticCounts = $derived.by(() => {
+    const list = data.cosmetics || [];
+    return {
+      all: list.length,
+      frames: list.filter((c: any) => c.kind === 'AVATAR_FRAME').length,
+      titles: list.filter((c: any) => c.kind === 'TITLE').length,
+      banners: list.filter((c: any) => c.kind === 'PROFILE_BANNER').length,
+      colors: list.filter((c: any) => c.kind === 'NAME_COLOR').length
+    };
+  });
+
+  function getRarityBadgeInfo(rarity: string = 'COMUM') {
+    switch (rarity.toUpperCase()) {
+      case 'MITICA':
+        return { label: 'Mítica', border: '#f43f5e', text: '#fda4af', bg: 'rgba(244, 63, 94, 0.15)', glow: '0 0 16px rgba(244, 63, 94, 0.4)' };
+      case 'LENDARIA':
+        return { label: 'Lendária', border: '#f59e0b', text: '#fde68a', bg: 'rgba(245, 158, 11, 0.15)', glow: '0 0 16px rgba(245, 158, 11, 0.4)' };
+      case 'EPICA':
+        return { label: 'Épica', border: '#a855f7', text: '#e9d5ff', bg: 'rgba(168, 85, 247, 0.15)', glow: '0 0 12px rgba(168, 85, 247, 0.3)' };
+      case 'RARA':
+        return { label: 'Rara', border: '#38bdf8', text: '#bae6fd', bg: 'rgba(56, 189, 248, 0.15)', glow: '0 0 10px rgba(56, 189, 248, 0.25)' };
+      case 'INCOMUM':
+        return { label: 'Incomum', border: '#34d399', text: '#a7f3d0', bg: 'rgba(52, 211, 153, 0.15)', glow: 'none' };
+      default:
+        return { label: 'Comum', border: '#64748b', text: '#cbd5e1', bg: 'rgba(148, 163, 184, 0.1)', glow: 'none' };
     }
   }
 </script>
@@ -181,75 +281,456 @@
           {/if}
         </div>
 
-        <!-- Stats Strip -->
-        <div class="stats-strip">
-          <div class="stat-cell">
-            <span class="stat-num">{rank.level}</span>
-            <span class="stat-txt">Nível</span>
+        <!-- Level & XP Progression Strip -->
+        <div class="xp-strip">
+          <div class="xp-header-row">
+            <div class="xp-rank-badge">
+              <span class="xp-rank-level">Nível {rank.level}</span>
+              <span class="xp-rank-dot">·</span>
+              <span class="xp-rank-xp">{data.member.xp.toLocaleString('pt-BR')} XP Total</span>
+            </div>
+            <div class="xp-status-text">
+              {#if progress.isMaxLevel}
+                <strong>✦ Maestria Máxima</strong>
+              {:else}
+                Faltam <strong>{progress.xpNeededForNext.toLocaleString('pt-BR')} XP</strong> para o Nível {progress.nextLevel}
+              {/if}
+            </div>
           </div>
-          <div class="stat-cell gold">
-            <span class="stat-num">{data.member.xp}</span>
-            <span class="stat-txt">XP Total</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-num">{data.stats.chapters_read}</span>
-            <span class="stat-txt">Capítulos</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-num">{data.stats.completed_works}</span>
-            <span class="stat-txt">Concluídas</span>
-          </div>
-          <div class="stat-cell">
-            <span class="stat-num">{data.stats.favorites}</span>
-            <span class="stat-txt">Favoritos</span>
-          </div>
-        </div>
-
-        <!-- Level Progress -->
-        <div class="xp-progress-section">
           <div class="xp-bar-track">
             <div class="xp-bar-fill" style="width: {progress.progressPercent}%"></div>
           </div>
-          <p class="xp-status-text">
-            {#if progress.isMaxLevel}
-              <strong>✦ Nível Máximo de Maestria Alcançado (100)</strong>
-            {:else}
-              Faltam <strong>{progress.xpNeededForNext} XP</strong> para o Nível {progress.nextLevel}
-            {/if}
-          </p>
         </div>
 
-        <!-- Achievements Shelf -->
-        <section class="achievements-section">
-          <div class="achievements-header">
-            <div class="sec-title-wrap">
-              <Trophy size={18} class="sec-icon" />
-              <h2>Conquistas Desbloqueadas</h2>
+        <!-- High-Impact Profile Stats Grid -->
+        <div class="stats-grid" id="stats-summary">
+          <!-- 1. Capítulos Lidos -->
+          <div class="stat-card" title="Total de capítulos lidos por este usuário">
+            <div class="stat-card-icon">
+              <BookOpen size={20} />
             </div>
-            <span class="achievements-count">{data.achievements.length}</span>
+            <div class="stat-card-data">
+              <span class="stat-card-num">{data.stats.chapters_read.toLocaleString('pt-BR')}</span>
+              <span class="stat-card-label">Capítulos Lidos</span>
+            </div>
           </div>
 
-          {#if data.achievements.length > 0}
-            <div class="achievements-grid">
-              {#each data.achievements as ach (ach.id)}
-                <div class="achievement-card" style="border-left-color: {ach.badge_color || '#8b5cf6'}">
-                  <div class="ach-icon-circle" style="background: {ach.badge_color ? `${ach.badge_color}22` : 'rgba(139, 92, 246, 0.15)'}; color: {ach.badge_color || '#c4b5fd'}">
-                    <Award size={18} />
-                  </div>
-                  <div class="ach-details">
-                    <h3 class="ach-title">{ach.title}</h3>
-                    <p class="ach-desc">{ach.description}</p>
-                  </div>
+          <!-- 2. Obras na Coleção -->
+          <div class="stat-card" title="Total de obras acompanhadas na biblioteca">
+            <div class="stat-card-icon">
+              <BookMarked size={20} />
+            </div>
+            <div class="stat-card-data">
+              <span class="stat-card-num">{data.stats.total_works.toLocaleString('pt-BR')}</span>
+              <span class="stat-card-label">Obras na Coleção</span>
+            </div>
+          </div>
+
+          <!-- 3. Conquistas (Desbloqueadas / Total) -->
+          <button
+            type="button"
+            class="stat-card stat-card-interactive"
+            class:active-card={activeTab === 'achievements'}
+            onclick={() => switchTab('achievements')}
+            title="Clique para ver a estante pública de conquistas"
+          >
+            <div class="stat-card-icon trophy-icon">
+              <Trophy size={20} />
+            </div>
+            <div class="stat-card-data">
+              {#if !data.canViewAchievements}
+                <div class="stat-private-row">
+                  <Lock size={14} />
+                  <span class="stat-private-txt">Privado</span>
                 </div>
-              {/each}
+              {:else}
+                <div class="stat-card-num stat-num-achievement">
+                  <span class="stat-unlocked">{data.stats.achievements_unlocked}</span>
+                  <span class="stat-sep">/</span>
+                  <span class="stat-total">{data.stats.achievements_total}</span>
+                </div>
+              {/if}
+              <div class="stat-label-wrap">
+                <span class="stat-card-label">Conquistas</span>
+                <span class="stat-click-hint">Ver</span>
+              </div>
             </div>
-          {:else}
-            <div class="achievements-empty">
-              <Sparkles size={28} />
-              <p>Este leitor ainda está desbravando o catálogo e forjando suas conquistas.</p>
+          </button>
+
+          <!-- 4. Cosméticos -->
+          <button
+            type="button"
+            class="stat-card stat-card-interactive"
+            class:active-card={activeTab === 'cosmetics'}
+            onclick={() => switchTab('cosmetics')}
+            title="Clique para ver a coleção de cosméticos e molduras"
+          >
+            <div class="stat-card-icon sparkles-icon">
+              <Sparkles size={20} />
             </div>
-          {/if}
-        </section>
+            <div class="stat-card-data">
+              {#if !data.canViewCosmetics}
+                <div class="stat-private-row">
+                  <Lock size={14} />
+                  <span class="stat-private-txt">Privado</span>
+                </div>
+              {:else}
+                <span class="stat-card-num">{data.stats.cosmetics_count}</span>
+              {/if}
+              <div class="stat-label-wrap">
+                <span class="stat-card-label">Cosméticos</span>
+                <span class="stat-click-hint">Ver</span>
+              </div>
+            </div>
+          </button>
+
+          <!-- 5. Seguidores -->
+          <div class="stat-card" title="Leitores que acompanham o perfil">
+            <div class="stat-card-icon">
+              <Users size={20} />
+            </div>
+            <div class="stat-card-data">
+              <span class="stat-card-num">{followersCount.toLocaleString('pt-BR')}</span>
+              <span class="stat-card-label">{followersCount === 1 ? 'Seguidor' : 'Seguidores'}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Featured Achievement Card (Conquista em Destaque) -->
+        {#if data.featuredAchievement && data.canViewAchievements}
+          {@const rInfo = getRarityBadgeInfo(data.featuredAchievement.rarity)}
+          <section class="featured-achievement-card" style="border-color: {rInfo.border}; box-shadow: {rInfo.glow};">
+            <div class="featured-top-banner" style="background: {rInfo.bg};">
+              <div class="featured-badge-pill">
+                <Star size={13} fill="currentColor" />
+                <span>CONQUISTA EM DESTAQUE</span>
+              </div>
+              <span class="featured-rarity-pill" style="color: {rInfo.text}; border-color: {rInfo.border}; background: rgba(0, 0, 0, 0.3);">
+                {rInfo.label}
+              </span>
+            </div>
+
+            <div class="featured-content-body">
+              <div class="featured-icon-circle" style="background: {rInfo.bg}; border: 2px solid {rInfo.border}; color: {rInfo.text};">
+                <AchievementIcon icon={data.featuredAchievement.icon} size={32} />
+              </div>
+              <div class="featured-text-block">
+                <div class="featured-title-row">
+                  <h3 class="featured-title">{data.featuredAchievement.title}</h3>
+                  {#if data.featuredAchievement.xp_reward}
+                    <span class="featured-xp-tag">+{data.featuredAchievement.xp_reward} XP</span>
+                  {/if}
+                </div>
+                <p class="featured-description">{data.featuredAchievement.description}</p>
+                <div class="featured-meta-row">
+                  <span class="featured-unlock-date">
+                    <CheckCircle2 size={13} />
+                    <span>Desbloqueada em {date(data.featuredAchievement.unlocked_at)}</span>
+                  </span>
+                  {#if data.isSelf}
+                    <a href="/me?tab=achievements" class="featured-edit-link">
+                      <span>Alterar destaque</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          </section>
+        {/if}
+
+        <div id="profile-content-anchor"></div>
+
+        <!-- Section Navigation Tabs -->
+        <div class="profile-tabs-header">
+          <button
+            type="button"
+            class="profile-tab-btn"
+            class:active={activeTab === 'achievements'}
+            onclick={() => (activeTab = 'achievements')}
+          >
+            <Trophy size={17} />
+            <span>Conquistas</span>
+            <span class="tab-count-pill">
+              {#if !data.canViewAchievements}
+                <Lock size={11} />
+              {:else}
+                {data.stats.achievements_unlocked} / {data.stats.achievements_total}
+              {/if}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="profile-tab-btn"
+            class:active={activeTab === 'cosmetics'}
+            onclick={() => (activeTab = 'cosmetics')}
+          >
+            <Sparkles size={17} />
+            <span>Coleção Cosmética</span>
+            <span class="tab-count-pill">
+              {#if !data.canViewCosmetics}
+                <Lock size={11} />
+              {:else}
+                {data.stats.cosmetics_count}
+              {/if}
+            </span>
+          </button>
+        </div>
+
+        <!-- TAB 1: CONQUISTAS -->
+        {#if activeTab === 'achievements'}
+          <section class="tab-pane achievements-pane">
+            {#if !data.canViewAchievements}
+              <div class="privacy-notice-card">
+                <div class="privacy-icon-wrap">
+                  <Lock size={32} />
+                </div>
+                <h3>Conquistas Privadas</h3>
+                <p>Este leitor optou por manter suas conquistas privadas no seu perfil público.</p>
+              </div>
+            {:else}
+              <!-- Rarity Breakdown Bar (Micro-resumo de Raridades) -->
+              <div class="rarity-breakdown-bar">
+                <div class="rarity-summary-label">
+                  <span>Raridades Desbloqueadas:</span>
+                </div>
+                <div class="rarity-chips-wrap">
+                  {#if data.rarityCounts.MITICA > 0}
+                    <span class="rarity-chip mitica">
+                      <strong>{data.rarityCounts.MITICA}</strong> Mítica{data.rarityCounts.MITICA > 1 ? 's' : ''}
+                    </span>
+                  {/if}
+                  {#if data.rarityCounts.LENDARIA > 0}
+                    <span class="rarity-chip lendaria">
+                      <strong>{data.rarityCounts.LENDARIA}</strong> Lendária{data.rarityCounts.LENDARIA > 1 ? 's' : ''}
+                    </span>
+                  {/if}
+                  {#if data.rarityCounts.EPICA > 0}
+                    <span class="rarity-chip epica">
+                      <strong>{data.rarityCounts.EPICA}</strong> Épica{data.rarityCounts.EPICA > 1 ? 's' : ''}
+                    </span>
+                  {/if}
+                  {#if data.rarityCounts.RARA > 0}
+                    <span class="rarity-chip rara">
+                      <strong>{data.rarityCounts.RARA}</strong> Rara{data.rarityCounts.RARA > 1 ? 's' : ''}
+                    </span>
+                  {/if}
+                  {#if data.rarityCounts.INCOMUM > 0}
+                    <span class="rarity-chip incomum">
+                      <strong>{data.rarityCounts.INCOMUM}</strong> Incomum{data.rarityCounts.INCOMUM > 1 ? 'ns' : ''}
+                    </span>
+                  {/if}
+                  {#if data.rarityCounts.COMUM > 0}
+                    <span class="rarity-chip comum">
+                      <strong>{data.rarityCounts.COMUM}</strong> Comum{data.rarityCounts.COMUM > 1 ? 'ns' : ''}
+                    </span>
+                  {/if}
+                  {#if data.achievements.length === 0}
+                    <span class="rarity-chip zero">Nenhuma conquista desbloqueada</span>
+                  {/if}
+                </div>
+              </div>
+
+              {#if data.achievements.length > 0}
+                <div class="achievements-catalog-grid">
+                  {#each data.achievements as ach (ach.id)}
+                    {@const rInfo = getRarityBadgeInfo(ach.rarity)}
+                    <div
+                      class="achievement-card"
+                      style="border-left-color: {rInfo.border};"
+                    >
+                      <div
+                        class="ach-icon-circle"
+                        style="background: {ach.badge_color ? `${ach.badge_color}22` : rInfo.bg}; color: {ach.badge_color || rInfo.text}"
+                      >
+                        <AchievementIcon icon={ach.icon} size={20} />
+                      </div>
+
+                      <div class="ach-details">
+                        <div class="ach-header-row">
+                          <span
+                            class="ach-rarity-tag"
+                            style="color: {rInfo.text}; border-color: {rInfo.border}; background: {rInfo.bg};"
+                          >
+                            {rInfo.label}
+                          </span>
+                          {#if ach.xp_reward}
+                            <span class="ach-xp-tag">+{ach.xp_reward} XP</span>
+                          {/if}
+                        </div>
+
+                        <h4 class="ach-title">{ach.title}</h4>
+                        <p class="ach-desc">{ach.description}</p>
+
+                        <div class="ach-footer-meta">
+                          <span class="ach-date">
+                            <CheckCircle2 size={12} />
+                            <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <div class="achievements-empty">
+                  <div class="empty-icon-wrap">
+                    <Trophy size={36} />
+                  </div>
+                  <h3>Jornada Inicial</h3>
+                  <p>Este leitor ainda está desbravando os caminhos da biblioteca e forjando suas conquistas.</p>
+                </div>
+              {/if}
+            {/if}
+          </section>
+
+        <!-- TAB 2: COLEÇÃO COSMÉTICA -->
+        {:else if activeTab === 'cosmetics'}
+          <section class="tab-pane cosmetics-pane">
+            {#if !data.canViewCosmetics}
+              <div class="privacy-notice-card">
+                <div class="privacy-icon-wrap">
+                  <Lock size={32} />
+                </div>
+                <h3>Coleção Privada</h3>
+                <p>Este leitor optou por manter sua coleção de cosméticos privada no perfil público.</p>
+              </div>
+            {:else}
+              <!-- Cosmetic Filter Pills -->
+              <div class="cosmetics-toolbar">
+                <div class="filter-pills-row">
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    class:active={cosmeticFilter === 'ALL'}
+                    onclick={() => (cosmeticFilter = 'ALL')}
+                  >
+                    <span>Todos</span>
+                    <span class="filter-count">{cosmeticCounts.all}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    class:active={cosmeticFilter === 'AVATAR_FRAME'}
+                    onclick={() => (cosmeticFilter = 'AVATAR_FRAME')}
+                  >
+                    <span>Molduras</span>
+                    <span class="filter-count">{cosmeticCounts.frames}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    class:active={cosmeticFilter === 'TITLE'}
+                    onclick={() => (cosmeticFilter = 'TITLE')}
+                  >
+                    <span>Títulos</span>
+                    <span class="filter-count">{cosmeticCounts.titles}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    class:active={cosmeticFilter === 'PROFILE_BANNER'}
+                    onclick={() => (cosmeticFilter = 'PROFILE_BANNER')}
+                  >
+                    <span>Banners</span>
+                    <span class="filter-count">{cosmeticCounts.banners}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="filter-pill"
+                    class:active={cosmeticFilter === 'NAME_COLOR'}
+                    onclick={() => (cosmeticFilter = 'NAME_COLOR')}
+                  >
+                    <span>Cores</span>
+                    <span class="filter-count">{cosmeticCounts.colors}</span>
+                  </button>
+                </div>
+              </div>
+
+              {#if filteredCosmetics.length > 0}
+                <div class="cosmetics-catalog-grid">
+                  {#each filteredCosmetics as item (item.id)}
+                    {@const rInfo = getRarityBadgeInfo(item.rarity)}
+                    {@const equipped = isItemEquipped(item)}
+                    <div
+                      class="cosmetic-card"
+                      class:equipped={equipped}
+                      style="border-color: {equipped ? '#dfc28d' : 'rgba(255, 255, 255, 0.08)'};"
+                    >
+                      <!-- Live Cosmetic Preview Box -->
+                      <div class="cosmetic-preview-box">
+                        {#if item.kind === 'AVATAR_FRAME'}
+                          <div class="preview-avatar-wrap">
+                            <div class="preview-frame" style={item.style_data ? Object.entries(item.style_data).map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`).join(';') : ''}>
+                              <div class="preview-avatar-placeholder">
+                                {data.member.display_name?.slice(0, 1) || 'N'}
+                              </div>
+                            </div>
+                          </div>
+                        {:else if item.kind === 'TITLE'}
+                          <div class="preview-title-tag">
+                            <Crown size={14} />
+                            <span>{item.name}</span>
+                          </div>
+                        {:else if item.kind === 'PROFILE_BANNER'}
+                          <div
+                            class="preview-banner-strip"
+                            style="background: {item.style_data?.background || 'linear-gradient(135deg, #1e1b4b, #0d101a)'};"
+                          ></div>
+                        {:else if item.kind === 'NAME_COLOR'}
+                          <div
+                            class="preview-color-name"
+                            style="color: {item.style_data?.color || item.id};"
+                          >
+                            <span>{data.member.display_name}</span>
+                          </div>
+                        {:else}
+                          <div class="preview-generic-icon">
+                            <Sparkles size={24} />
+                          </div>
+                        {/if}
+
+                        {#if equipped}
+                          <div class="equipped-ribbon">
+                            <CheckCircle2 size={11} />
+                            <span>Em Uso</span>
+                          </div>
+                        {/if}
+                      </div>
+
+                      <!-- Card Details -->
+                      <div class="cosmetic-card-body">
+                        <div class="cosmetic-tags-row">
+                          <span
+                            class="cosmetic-rarity-pill"
+                            style="color: {rInfo.text}; border-color: {rInfo.border}; background: {rInfo.bg};"
+                          >
+                            {rInfo.label}
+                          </span>
+                          <span class="cosmetic-kind-pill">{getCosmeticKindLabel(item.kind)}</span>
+                        </div>
+
+                        <h4 class="cosmetic-title">{item.name}</h4>
+                        {#if item.description}
+                          <p class="cosmetic-desc">{item.description}</p>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <div class="achievements-empty">
+                  <div class="empty-icon-wrap">
+                    <Palette size={36} />
+                  </div>
+                  <h3>Nenhum Cosmético</h3>
+                  <p>Nenhum cosmético encontrado para esta categoria no acervo do leitor.</p>
+                </div>
+              {/if}
+            {/if}
+          </section>
+        {/if}
       </div>
     </article>
   </div>
@@ -260,10 +741,13 @@
     min-height: 100vh;
     padding: 2rem 1.5rem 5rem;
     color: #e2e8f0;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   .profile-container {
-    max-width: 860px;
+    max-width: 900px;
     margin: 0 auto;
   }
 
@@ -272,11 +756,12 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.7);
   }
 
+  /* Profile Banner */
   .profile-banner-wrap {
-    height: 220px;
+    height: 230px;
     width: 100%;
     position: relative;
     background: #141724;
@@ -299,16 +784,18 @@
     padding: 0 2rem 2.5rem;
   }
 
+  /* Identity Header */
   .identity-row {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    margin-top: -48px;
+    margin-top: -50px;
     margin-bottom: 1.25rem;
   }
 
   .avatar-holder {
     position: relative;
+    z-index: 2;
   }
 
   .action-buttons {
@@ -364,9 +851,9 @@
     color: #fca5a5;
   }
 
-  /* Info */
+  /* Info Block */
   .info-block {
-    margin-bottom: 2rem;
+    margin-bottom: 1.75rem;
   }
 
   .name-line {
@@ -379,7 +866,7 @@
 
   .display-name {
     font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1.8rem;
+    font-size: 1.85rem;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
@@ -432,7 +919,7 @@
     display: flex;
     align-items: center;
     gap: 1.25rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
   }
 
   .social-count-item {
@@ -455,54 +942,63 @@
     max-width: 680px;
   }
 
-  /* Stats Strip */
-  .stats-strip {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.75rem;
-    padding: 1.25rem;
-    background: rgba(255, 255, 255, 0.03);
+  /* XP Strip */
+  .xp-strip {
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    margin-bottom: 1.75rem;
-    text-align: center;
+    border-radius: 12px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1.5rem;
   }
 
-  .stat-cell {
+  .xp-header-row {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
-  .stat-num {
-    font-size: 1.4rem;
+  .xp-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+  }
+
+  .xp-rank-level {
     font-weight: 800;
-    color: #ffffff;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid rgba(223, 194, 141, 0.25);
   }
 
-  .stat-txt {
-    font-size: 0.75rem;
+  .xp-rank-dot {
+    color: #64748b;
+  }
+
+  .xp-rank-xp {
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  .xp-status-text {
+    font-size: 0.78rem;
     color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 600;
   }
 
-  .stat-cell.gold .stat-num {
+  .xp-status-text strong {
     color: #dfc28d;
   }
 
-  /* Level Progress */
-  .xp-progress-section {
-    margin-bottom: 2.5rem;
-  }
-
   .xp-bar-track {
-    height: 8px;
+    height: 7px;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 9999px;
     overflow: hidden;
-    margin-bottom: 0.6rem;
   }
 
   .xp-bar-fill {
@@ -513,77 +1009,443 @@
     transition: width 0.4s ease;
   }
 
-  .xp-status-text {
-    font-size: 0.82rem;
+  /* High-Impact Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    text-align: center;
+    gap: 0.45rem;
+    transition: all 0.2s ease;
+  }
+
+  .stat-card-interactive {
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .stat-card-interactive:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(223, 194, 141, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .stat-card-interactive.active-card {
+    background: rgba(223, 194, 141, 0.08);
+    border-color: #dfc28d;
+    box-shadow: 0 4px 16px rgba(223, 194, 141, 0.15);
+  }
+
+  .stat-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
     color: #94a3b8;
-    margin: 0;
-    text-align: right;
   }
 
-  .xp-status-text strong {
+  .trophy-icon {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+  }
+
+  .sparkles-icon {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+  }
+
+  .stat-card-data {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    width: 100%;
+  }
+
+  .stat-card-num {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-num-achievement {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+
+  .stat-unlocked {
     color: #dfc28d;
+    font-size: 1.3rem;
+    font-weight: 800;
   }
 
-  /* Achievements */
-  .achievements-section {
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  .stat-sep {
+    color: #64748b;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0.05rem;
   }
 
-  .achievements-header {
+  .stat-total {
+    color: #94a3b8;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .stat-card-label {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+  }
+
+  .stat-label-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .stat-click-hint {
+    font-size: 0.65rem;
+    color: #dfc28d;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: rgba(223, 194, 141, 0.15);
+    padding: 0.05rem 0.3rem;
+    border-radius: 4px;
+  }
+
+  .stat-private-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .stat-private-txt {
+    font-size: 0.85rem;
+  }
+
+  /* Featured Achievement Card */
+  .featured-achievement-card {
+    background: linear-gradient(135deg, rgba(20, 24, 40, 0.9), rgba(14, 17, 29, 0.95));
+    border: 1.5px solid rgba(223, 194, 141, 0.3);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+    transition: all 0.3s ease;
+  }
+
+  .featured-top-banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1.25rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .sec-title-wrap {
-    display: flex;
+  .featured-badge-pill {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-  }
-
-  :global(.sec-icon) {
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
     color: #dfc28d;
   }
 
-  .achievements-header h2 {
-    font-size: 1.2rem;
-    font-weight: 700;
+  .featured-rarity-pill {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid;
+  }
+
+  .featured-content-body {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem;
+  }
+
+  .featured-icon-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .featured-text-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex-grow: 1;
+  }
+
+  .featured-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .featured-title {
+    font-size: 1.15rem;
+    font-weight: 800;
     color: #ffffff;
     margin: 0;
   }
 
-  .achievements-count {
-    padding: 0.2rem 0.6rem;
+  .featured-xp-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.3);
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+  }
+
+  .featured-description {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .featured-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    flex-wrap: wrap;
+  }
+
+  .featured-unlock-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #34d399;
+    font-weight: 600;
+  }
+
+  .featured-edit-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #94a3b8;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+  }
+
+  .featured-edit-link:hover {
+    color: #dfc28d;
+  }
+
+  /* Tabs Header */
+  .profile-tabs-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .profile-tabs-header::-webkit-scrollbar {
+    display: none;
+  }
+
+  .profile-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.85rem 1.25rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .profile-tab-btn:hover {
+    color: #e2e8f0;
+  }
+
+  .profile-tab-btn.active {
+    color: #dfc28d;
+    border-bottom-color: #dfc28d;
+  }
+
+  .tab-count-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.55rem;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 9999px;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #cbd5e1;
   }
 
-  .achievements-grid {
+  .profile-tab-btn.active .tab-count-pill {
+    background: rgba(223, 194, 141, 0.2);
+    color: #dfc28d;
+  }
+
+  /* Rarity Breakdown Bar */
+  .rarity-breakdown-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .rarity-summary-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .rarity-chips-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .rarity-chip {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid transparent;
+  }
+
+  .rarity-chip strong {
+    font-weight: 800;
+  }
+
+  .rarity-chip.mitica {
+    color: #fda4af;
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.3);
+  }
+
+  .rarity-chip.lendaria {
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+
+  .rarity-chip.epica {
+    color: #e9d5ff;
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.3);
+  }
+
+  .rarity-chip.rara {
+    color: #bae6fd;
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+
+  .rarity-chip.incomum {
+    color: #a7f3d0;
+    background: rgba(52, 211, 153, 0.15);
+    border-color: rgba(52, 211, 153, 0.3);
+  }
+
+  .rarity-chip.comum {
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.2);
+  }
+
+  .rarity-chip.zero {
+    color: #64748b;
+  }
+
+  /* Achievements Grid */
+  .achievements-catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 0.85rem;
   }
 
   .achievement-card {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.85rem;
-    padding: 0.85rem 1rem;
+    padding: 0.95rem 1.1rem;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-left: 3px solid #8b5cf6;
-    border-radius: 10px;
+    border-left: 3.5px solid #8b5cf6;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+  }
+
+  .achievement-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-1px);
   }
 
   .ach-icon-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -593,51 +1455,416 @@
   .ach-details {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.25rem;
+    width: 100%;
+  }
+
+  .ach-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .ach-rarity-tag {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .ach-xp-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #dfc28d;
   }
 
   .ach-title {
-    font-size: 0.88rem;
+    font-size: 0.92rem;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
   }
 
   .ach-desc {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    line-height: 1.3;
+    line-height: 1.35;
     margin: 0;
   }
 
+  .ach-footer-meta {
+    margin-top: 0.25rem;
+  }
+
+  .ach-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    color: #64748b;
+  }
+
+  /* Privacy Notice Card */
+  .privacy-notice-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    text-align: center;
+    color: #94a3b8;
+    gap: 0.75rem;
+  }
+
+  .privacy-icon-wrap {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+
+  .privacy-notice-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .privacy-notice-card p {
+    font-size: 0.88rem;
+    margin: 0;
+    max-width: 420px;
+    line-height: 1.5;
+  }
+
+  /* Empty State */
   .achievements-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 3rem 1.5rem;
+    padding: 3.5rem 1.5rem;
     text-align: center;
     color: #64748b;
     background: rgba(255, 255, 255, 0.02);
-    border-radius: 12px;
-    gap: 0.75rem;
+    border-radius: 14px;
+    gap: 0.6rem;
   }
 
-  .achievements-empty p {
-    font-size: 0.9rem;
+  .empty-icon-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+
+  .achievements-empty h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #ffffff;
     margin: 0;
   }
 
+  .achievements-empty p {
+    font-size: 0.85rem;
+    margin: 0;
+    max-width: 440px;
+    line-height: 1.4;
+  }
+
+  /* Cosmetics Tab Toolbar */
+  .cosmetics-toolbar {
+    margin-bottom: 1.25rem;
+  }
+
+  .filter-pills-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .filter-pill.active {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+  }
+
+  .filter-count {
+    font-size: 0.72rem;
+    opacity: 0.8;
+  }
+
+  /* Cosmetics Catalog Grid */
+  .cosmetics-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .cosmetic-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.2s ease;
+  }
+
+  .cosmetic-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+  }
+
+  .cosmetic-card.equipped {
+    border-color: rgba(223, 194, 141, 0.5);
+    background: linear-gradient(180deg, rgba(223, 194, 141, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  }
+
+  .cosmetic-preview-box {
+    height: 110px;
+    width: 100%;
+    background: #090c15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.75rem;
+  }
+
+  .preview-avatar-wrap {
+    position: relative;
+  }
+
+  .preview-frame {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .preview-avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #1e2436;
+    color: #cbd5e1;
+    font-weight: 800;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .preview-title-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.85rem;
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.4);
+    border-radius: 9999px;
+    color: #dfc28d;
+    font-size: 0.85rem;
+    font-weight: 800;
+  }
+
+  .preview-banner-strip {
+    width: 100%;
+    height: 70px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .preview-color-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  .preview-generic-icon {
+    color: #dfc28d;
+  }
+
+  .equipped-ribbon {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    background: rgba(223, 194, 141, 0.2);
+    border: 1px solid #dfc28d;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #dfc28d;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .cosmetic-card-body {
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .cosmetic-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .cosmetic-rarity-pill {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .cosmetic-kind-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .cosmetic-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .cosmetic-desc {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.35;
+    margin: 0;
+  }
+
+  /* Responsive Media Queries */
+  @media (max-width: 860px) {
+    .stats-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
   @media (max-width: 640px) {
-    .stats-strip {
-      grid-template-columns: repeat(3, 1fr);
+    .profile-page {
+      padding: 1rem 0.75rem 4rem;
+    }
+
+    .profile-body {
+      padding: 0 1rem 2rem;
     }
 
     .profile-banner-wrap {
-      height: 150px;
+      height: 160px;
     }
 
     .identity-row {
-      margin-top: -36px;
+      margin-top: -40px;
+      margin-bottom: 1rem;
+    }
+
+    .display-name {
+      font-size: 1.45rem;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+
+    /* Make the interactive Conquistas card span 2 cols on mobile for ample breathing room */
+    .stats-grid > button:nth-child(3) {
+      grid-column: span 2;
+    }
+
+    .stat-card {
+      padding: 0.85rem 0.5rem;
+    }
+
+    .stat-card-num {
+      font-size: 1.15rem;
+    }
+
+    .stat-unlocked {
+      font-size: 1.15rem;
+    }
+
+    .stat-sep,
+    .stat-total {
+      font-size: 0.85rem;
+    }
+
+    .featured-content-body {
+      flex-direction: column;
+      text-align: center;
+      gap: 0.85rem;
+    }
+
+    .featured-title-row {
+      justify-content: center;
+    }
+
+    .featured-meta-row {
+      justify-content: center;
+    }
+
+    .cosmetics-catalog-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .achievements-catalog-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

@@ -759,10 +759,30 @@
 
                     <div class="ach-footer">
                       {#if ach.unlocked}
-                        <span class="unlocked-tag">
-                          <CheckCircle2 size={12} />
-                          <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
-                        </span>
+                        <div class="ach-footer-actions">
+                          <span class="unlocked-tag">
+                            <CheckCircle2 size={12} />
+                            <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
+                          </span>
+                          <form method="POST" action="?/setFeaturedAchievement" use:enhance>
+                            <input
+                              type="hidden"
+                              name="achievement_id"
+                              value={data.member.featured_achievement_id === ach.id ? '' : ach.id}
+                            />
+                            <button
+                              type="submit"
+                              class="btn-pin-featured"
+                              class:is-featured={data.member.featured_achievement_id === ach.id}
+                              title={data.member.featured_achievement_id === ach.id
+                                ? 'Remover destaque do perfil público'
+                                : 'Destacar esta conquista no seu perfil público'}
+                            >
+                              <Star size={12} />
+                              <span>{data.member.featured_achievement_id === ach.id ? 'Em Destaque' : 'Destacar'}</span>
+                            </button>
+                          </form>
+                        </div>
                       {:else if isSecretLocked}
                         <span class="secret-tag">
                           <Lock size={12} />
@@ -1010,6 +1030,32 @@
                   type="checkbox"
                   name="blur_nsfw"
                   checked={data.member.blur_nsfw}
+                  class="toggle-input"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <h4>Exibir conquistas no Perfil Público</h4>
+                  <p>Permite que outros leitores vejam suas conquistas desbloqueadas no seu perfil público.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  name="privacy_show_achievements"
+                  checked={data.member.privacy_show_achievements ?? true}
+                  class="toggle-input"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <h4>Exibir cosméticos no Perfil Público</h4>
+                  <p>Permite que outros leitores vejam sua vitrine de cosméticos no seu perfil público.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  name="privacy_show_cosmetics"
+                  checked={data.member.privacy_show_cosmetics ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1625,6 +1671,41 @@
     font-size: 0.7rem;
     color: #34d399;
     font-weight: 700;
+  }
+
+  .ach-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .btn-pin-featured {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-pin-featured:hover {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+  }
+
+  .btn-pin-featured.is-featured {
+    background: rgba(223, 194, 141, 0.2);
+    border-color: #dfc28d;
+    color: #dfc28d;
   }
 
   .secret-tag {

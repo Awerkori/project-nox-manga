@@ -34,7 +34,10 @@
       is_onboarded: true,
       manual_badge: false,
       manual_title: false,
-      name_color: null as string | null
+      name_color: null as string | null,
+      featured_achievement_id: null as string | null,
+      privacy_show_achievements: true,
+      privacy_show_cosmetics: true
     },
     role: role,
     unread: 0,

@@ -1397,12 +1397,15 @@ export type Database = {
           equipped_comment_banner_id: string | null
           equipped_medal_id: string | null
           equipped_title_id: string | null
+          featured_achievement_id: string | null
           id: string
           is_onboarded: boolean
           is_test: boolean
           manual_badge: boolean
           manual_title: boolean
           name_color: string | null
+          privacy_show_achievements: boolean
+          privacy_show_cosmetics: boolean
           username: string
           xp: number
         }
@@ -1421,12 +1424,15 @@ export type Database = {
           equipped_comment_banner_id?: string | null
           equipped_medal_id?: string | null
           equipped_title_id?: string | null
+          featured_achievement_id?: string | null
           id: string
           is_onboarded?: boolean
           is_test?: boolean
           manual_badge?: boolean
           manual_title?: boolean
           name_color?: string | null
+          privacy_show_achievements?: boolean
+          privacy_show_cosmetics?: boolean
           username: string
           xp?: number
         }
@@ -1445,12 +1451,15 @@ export type Database = {
           equipped_comment_banner_id?: string | null
           equipped_medal_id?: string | null
           equipped_title_id?: string | null
+          featured_achievement_id?: string | null
           id?: string
           is_onboarded?: boolean
           is_test?: boolean
           manual_badge?: boolean
           manual_title?: boolean
           name_color?: string | null
+          privacy_show_achievements?: boolean
+          privacy_show_cosmetics?: boolean
           username?: string
           xp?: number
         }
@@ -1467,6 +1476,13 @@ export type Database = {
             columns: ["banner_id"]
             isOneToOne: false
             referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_featured_achievement_id_fkey"
+            columns: ["featured_achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
             referencedColumns: ["id"]
           },
         ]
@@ -2356,6 +2372,18 @@ export type Database = {
       is_member: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       member_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
+      member_public_profile_stats: {
+        Args: { p_user: string }
+        Returns: {
+          achievements_total: number
+          achievements_unlocked: number
+          chapters_read: number
+          completed_works: number
+          cosmetics_count: number
+          favorites: number
+          total_works: number
+        }[]
+      }
       member_public_stats: {
         Args: { p_user: string }
         Returns: {
@@ -2398,6 +2426,10 @@ export type Database = {
         Returns: undefined
       }
       revoke_editor_invite: { Args: { p_email: string }; Returns: undefined }
+      set_featured_achievement: {
+        Args: { p_achievement_id: string }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       toggle_chapter_reaction: {

@@ -34,6 +34,9 @@ export const load: PageServerLoad = async ({ locals }) => {
         xp,
         age_status,
         blur_nsfw,
+        featured_achievement_id,
+        privacy_show_achievements,
+        privacy_show_cosmetics,
         created_at
       `)
       .eq('id', locals.user.id)
@@ -152,14 +155,33 @@ export const actions: Actions = {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const blurNsfw = formData.get('blur_nsfw') === 'on';
+    const privacyShowAchievements = formData.get('privacy_show_achievements') === 'on';
+    const privacyShowCosmetics = formData.get('privacy_show_cosmetics') === 'on';
 
     const { error } = await locals.db
       .from('members')
-      .update({ blur_nsfw: blurNsfw })
+      .update({
+        blur_nsfw: blurNsfw,
+        privacy_show_achievements: privacyShowAchievements,
+        privacy_show_cosmetics: privacyShowCosmetics
+      })
       .eq('id', locals.user.id);
 
     if (error) return fail(400, { message: error.message });
     return { success: true, action: 'settings' };
+  },
+
+  setFeaturedAchievement: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const achievementId = (formData.get('achievement_id') as string)?.trim() || null;
+
+    const { error } = await locals.db.rpc('set_featured_achievement', {
+      p_achievement_id: achievementId || ''
+    });
+
+    if (error) return fail(400, { message: error.message });
+    return { success: true, action: 'featured_achievement' };
   },
 
   markAllNotificationsRead: async ({ locals }) => {
