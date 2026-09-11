@@ -284,8 +284,10 @@
                 <tr>
                   <th>Shard Físico</th>
                   <th>Pool Canônico</th>
-                  <th>Bot Reference</th>
+                  <th>Bot</th>
                   <th>Canal Telegram</th>
+                  <th>Uploads</th>
+                  <th>Share %</th>
                   <th>Escrita</th>
                   <th>Leitura</th>
                   <th>Conexões</th>
@@ -306,8 +308,14 @@
                     <td>
                       <span class="pool-tag">{data.storagePools.find(p => p.id === shard.pool_id)?.display_name || 'Pool'}</span>
                     </td>
-                    <td><code class="code-ref">{shard.bot_reference}</code></td>
+                    <td>
+                      <div class="bot-info-cell">
+                        <span class="bot-name-tag">{shard.bot_label || shard.bot_reference}</span>
+                      </div>
+                    </td>
                     <td><code class="code-ref">{shard.channel_id}</code></td>
+                    <td><span class="uploads-count">{shard.recent_uploads || 0} pág</span></td>
+                    <td><span class="share-cell">{shard.recent_share_percent || '0.0%'}</span></td>
                     <td>
                       <span class="status-chip {shard.write_status.toLowerCase()}">
                         {shard.write_status}
@@ -730,6 +738,30 @@
   .connections-count {
     font-size: 11px;
     color: #94a3b8;
+  }
+
+  .bot-info-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .bot-name-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: #e0e7ff;
+  }
+
+  .uploads-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: #38bdf8;
+  }
+
+  .share-cell {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a78bfa;
   }
 
   .weight-cell {

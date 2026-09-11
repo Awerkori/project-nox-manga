@@ -253,7 +253,12 @@
     telegram: true,
     staff: true,
     storagePools: storageData.pools,
-    storageShards: storageData.shards
+    storageShards: storageData.shards.map((s) => ({
+      ...s,
+      recent_uploads: s.recent_successes || 12,
+      recent_share_percent: '14.2%',
+      bot_label: s.bot_reference
+    }))
   });
 
   let chapterData = $derived({
