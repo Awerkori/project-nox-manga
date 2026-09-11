@@ -54,6 +54,9 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (event.url.protocol === 'https:') response.headers.set('Strict-Transport-Security', 'max-age=31536000');
   if (user || event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/auth'))
     response.headers.set('Cache-Control', 'private, no-store');
+  if (response.status >= 400) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  }
   if (
     /^\/(?:admin|auth|api|entrar|cadastrar|recuperar|redefinir|perfil|biblioteca|favoritos|historico|notificacoes|ler)(?:\/|$)/.test(
       event.url.pathname
