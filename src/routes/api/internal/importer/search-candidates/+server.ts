@@ -1,7 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
-  if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     return json({ error: 'Não autorizado' }, { status: 403 });
   }
 

@@ -55,7 +55,7 @@ export const load = async ({ locals }) => {
     locals.db
       .from('access_roles')
       .select('user_id', { count: 'exact', head: true })
-      .in('role', ['ADMIN', 'EDITOR'])
+      .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
       .eq('suspended', false),
     locals.db
       .from('importer_queue')

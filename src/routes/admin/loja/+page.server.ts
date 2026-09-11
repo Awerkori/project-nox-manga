@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 
 export const load = async ({ locals }) => {
-  const isEditor = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   if (!isEditor) error(403, 'Acesso restrito à equipe editorial');
 
   const db = locals.db || privileged();

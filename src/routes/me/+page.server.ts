@@ -39,6 +39,8 @@ export const load: PageServerLoad = async ({ locals }) => {
         privacy_show_cosmetics,
         privacy_show_favorites,
         privacy_show_reading_history,
+        avatar_crop,
+        banner_crop,
         created_at
       `)
       .eq('id', locals.user.id)
@@ -200,5 +202,47 @@ export const actions: Actions = {
 
     if (error) return fail(400, { message: error.message });
     return { success: true, action: 'notifications' };
+  },
+
+  updateAvatarCrop: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const x = parseFloat(formData.get('x') as string) || 50;
+    const y = parseFloat(formData.get('y') as string) || 50;
+    const zoom = parseFloat(formData.get('zoom') as string) || 1;
+    const crop = {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+      zoom: Math.max(1, Math.min(3, zoom))
+    };
+
+    const { error } = await locals.db
+      .from('members')
+      .update({ avatar_crop: crop })
+      .eq('id', locals.user.id);
+
+    if (error) return fail(400, { message: error.message });
+    return { success: true, action: 'avatar_crop', crop };
+  },
+
+  updateBannerCrop: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const x = parseFloat(formData.get('x') as string) || 50;
+    const y = parseFloat(formData.get('y') as string) || 50;
+    const zoom = parseFloat(formData.get('zoom') as string) || 1;
+    const crop = {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+      zoom: Math.max(1, Math.min(3, zoom))
+    };
+
+    const { error } = await locals.db
+      .from('members')
+      .update({ banner_crop: crop })
+      .eq('id', locals.user.id);
+
+    if (error) return fail(400, { message: error.message });
+    return { success: true, action: 'banner_crop', crop };
   }
 };

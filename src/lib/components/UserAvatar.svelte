@@ -6,6 +6,7 @@
     size?: number;
     frameId?: string | null;
     frameUrl?: string | null;
+    crop?: { x?: number; y?: number; zoom?: number } | any | null;
     class?: string;
   };
 
@@ -16,11 +17,17 @@
     size = 40,
     frameId = null,
     frameUrl = null,
+    crop = null,
     class: className = ''
   }: Props = $props();
 
   let resolvedSrc = $derived(avatarUrl || (avatarId ? `/media/${avatarId}` : null));
   let initial = $derived((displayName?.[0] || 'N').toUpperCase());
+  let cropStyle = $derived(
+    crop
+      ? `object-position: ${crop.x ?? 50}% ${crop.y ?? 50}%; transform: scale(${crop.zoom ?? 1});`
+      : 'object-position: 50% 50%;'
+  );
 </script>
 
 <div
@@ -41,6 +48,7 @@
         width={size}
         height={size}
         class="avatar-image"
+        style={cropStyle}
         loading="lazy"
       />
     {:else}

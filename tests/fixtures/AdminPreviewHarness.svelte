@@ -8,6 +8,7 @@
   import ChapterEditor from '../../src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte';
   import Importer from '../../src/routes/admin/importer/+page.svelte';
   import Staff from '../../src/routes/admin/staff/+page.svelte';
+  import storageData from './storage-preview-data.json';
 
   let { page = 'dashboard', role = 'ADMIN' } = $props<{ page?: string; role?: 'ADMIN' | 'EDITOR' }>();
 
@@ -39,7 +40,9 @@
       privacy_show_achievements: true,
       privacy_show_cosmetics: true,
       privacy_show_favorites: true,
-      privacy_show_reading_history: true
+      privacy_show_reading_history: true,
+      avatar_crop: null,
+      banner_crop: null
     },
     role: role,
     unread: 0,
@@ -248,7 +251,9 @@
       { key: 'contact_email', value: 'staff@project-nox.com' }
     ],
     telegram: true,
-    staff: true
+    staff: true,
+    storagePools: storageData.pools,
+    storageShards: storageData.shards
   });
 
   let chapterData = $derived({

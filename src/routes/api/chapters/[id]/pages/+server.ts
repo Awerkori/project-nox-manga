@@ -5,7 +5,7 @@ export const GET = async ({ params, locals, cookies }) => {
   const { id } = params;
   const db = locals.db || privileged();
 
-  const isStaff = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   let query = db
     .from('chapters')
     .select('id, number, title, published_at, work_id, works(id, title, slug, content_rating, published)')

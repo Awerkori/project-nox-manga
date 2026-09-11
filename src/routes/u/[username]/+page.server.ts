@@ -22,6 +22,8 @@ export const load = async ({ locals, params }) => {
       privacy_show_cosmetics,
       privacy_show_favorites,
       privacy_show_reading_history,
+      avatar_crop,
+      banner_crop,
       created_at
     `)
     .eq('username', params.username)

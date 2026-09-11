@@ -3,7 +3,7 @@ import { privileged } from '$lib/server/db';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const isEditor = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   if (!isEditor) error(403, 'Acesso restrito à equipe editorial');
 
   const db = locals.db || privileged();
@@ -72,7 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   reviewPartner: async ({ request, locals }) => {
-    const isEditor = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+    const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
     if (!isEditor) return fail(403, { message: 'Acesso negado' });
 
     const formData = await request.formData();
@@ -95,7 +95,7 @@ export const actions: Actions = {
   },
 
   reviewProject: async ({ request, locals }) => {
-    const isEditor = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+    const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
     if (!isEditor) return fail(403, { message: 'Acesso negado' });
 
     const formData = await request.formData();

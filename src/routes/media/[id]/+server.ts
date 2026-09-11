@@ -1,7 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
-import { env } from '$env/dynamic/private';
-import { telegramStorage } from '$lib/server/telegram';
+import { resolveBotDownloadClient } from '$lib/server/storage-router';
 
 export const GET = async ({ locals, params, request, platform }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
@@ -26,27 +25,43 @@ export const GET = async ({ locals, params, request, platform }: any) => {
 
   const db = privileged();
   const { data: media } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
-  if (!media || media.storage_ready === false) error(404);
+  if (!media || media.storage_ready === false || media.status === 'DELETED') error(404);
 
-  const isStaff = ['EDITOR', 'ADMIN'].includes(locals.role || '');
+  const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(locals.role || '');
   let isPublic = false;
 
+  // Verify access authorization across public media consumers
+  const checkPublicConsumers = async (database: any) => {
+    const [cover, pages, avatar, banner, scan, shop] = await Promise.all([
+      database.from('works').select('id').eq('published', true).eq('cover_id', params.id).limit(1),
+      database.from('pages').select('chapter_id').eq('media_id', params.id).limit(1),
+      database.from('members').select('id').eq('avatar_id', params.id).limit(1),
+      database.from('members').select('id').eq('banner_id', params.id).limit(1),
+      database.from('scans').select('id').or(`logo_id.eq.${params.id},banner_id.eq.${params.id}`).limit(1),
+      database.from('shop_items').select('id').eq('media_id', params.id).limit(1)
+    ]);
+    return Boolean(
+      cover.data?.length ||
+      pages.data?.length ||
+      avatar.data?.length ||
+      banner.data?.length ||
+      scan.data?.length ||
+      shop.data?.length
+    );
+  };
+
   if (!isStaff) {
-    const [cover, pages, avatar] = await Promise.all([
-      locals.db.from('works').select('id').eq('published', true).eq('cover_id', params.id).limit(1),
-      locals.db.from('pages').select('chapter_id').eq('media_id', params.id).limit(1),
-      locals.db.from('members').select('id').eq('avatar_id', params.id).limit(1)
-    ]);
-    isPublic = !!(cover.data?.length || pages.data?.length || avatar.data?.length);
-    if (!isPublic) error(404);
+    isPublic = await checkPublicConsumers(locals.db);
+    if (!isPublic) {
+      // Allow uploader to view their own uploaded asset
+      const isOwner = Boolean(locals.user?.id && media.created_by === locals.user.id);
+      if (!isOwner) {
+        error(404);
+      }
+    }
   } else {
-    // If staff, verify if the asset is also publicly accessible
-    const [cover, pages, avatar] = await Promise.all([
-      db.from('works').select('id').eq('published', true).eq('cover_id', params.id).limit(1),
-      db.from('pages').select('chapter_id').eq('media_id', params.id).limit(1),
-      db.from('members').select('id').eq('avatar_id', params.id).limit(1)
-    ]);
-    isPublic = !!(cover.data?.length || pages.data?.length || avatar.data?.length);
+    // If staff, also check if public for CDN caching optimization
+    isPublic = await checkPublicConsumers(db);
   }
 
   const headers: Record<string, string> = {
@@ -69,9 +84,10 @@ export const GET = async ({ locals, params, request, platform }: any) => {
     if (problem || !data) error(502, 'Página temporariamente indisponível');
     body = data;
   } else {
-    if (!env.TELEGRAM_BOT_TOKEN) error(503, 'Armazenamento temporariamente indisponível');
     try {
-      const stream = await telegramStorage(env.TELEGRAM_BOT_TOKEN, '').download(media.provider_key);
+      const botRef = media.bot_reference || 'primary';
+      const client = resolveBotDownloadClient(botRef);
+      const stream = await client.download(media.provider_key);
       body = await new Response(stream).arrayBuffer();
     } catch {
       error(502, 'Página temporariamente indisponível');

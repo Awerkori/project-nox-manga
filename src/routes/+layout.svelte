@@ -252,7 +252,7 @@
                       <span>Painel de Scan</span>
                     </a>
                   {/if}
-                  {#if data.role === 'ADMIN' || data.role === 'EDITOR'}
+                  {#if data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'}
                     <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
                       <Shield size={16} />
                       <span>Painel de Controle</span>

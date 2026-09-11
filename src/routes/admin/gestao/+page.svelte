@@ -37,7 +37,7 @@
     (data.members || []).filter((m) => m.access_roles?.role === 'ADMIN').length
   );
   let editorCount = $derived(
-    (data.members || []).filter((m) => m.access_roles?.role === 'EDITOR').length
+    (data.members || []).filter((m) => m.access_roles?.role === 'STAFF_SITE' || m.access_roles?.role === 'EDITOR').length
   );
   let suspendedCount = $derived(
     (data.members || []).filter((m) => Boolean(m.access_roles?.suspended)).length
@@ -230,14 +230,14 @@
                 <select
                   class="role-select"
                   class:role-admin={m.access_roles?.role === 'ADMIN'}
-                  class:role-editor={m.access_roles?.role === 'EDITOR'}
+                  class:role-editor={m.access_roles?.role === 'STAFF_SITE' || m.access_roles?.role === 'EDITOR'}
                   value={m.access_roles?.role || 'USER'}
                   aria-label="Cargo de {m.display_name}"
                   disabled={busy}
                   onchange={(e) => update('role', { id: m.id, role: e.currentTarget.value })}
                 >
                   <option value="USER">Leitor</option>
-                  <option value="EDITOR">Editor</option>
+                  <option value="STAFF_SITE">Staff (STAFF_SITE)</option>
                   <option value="ADMIN">Administrador</option>
                 </select>
               </td>
@@ -300,14 +300,14 @@
               <select
                 class="role-select"
                 class:role-admin={m.access_roles?.role === 'ADMIN'}
-                class:role-editor={m.access_roles?.role === 'EDITOR'}
+                class:role-editor={m.access_roles?.role === 'STAFF_SITE' || m.access_roles?.role === 'EDITOR'}
                 value={m.access_roles?.role || 'USER'}
                 aria-label="Cargo de {m.display_name}"
                 disabled={busy}
                 onchange={(e) => update('role', { id: m.id, role: e.currentTarget.value })}
               >
                 <option value="USER">Leitor</option>
-                <option value="EDITOR">Editor</option>
+                <option value="STAFF_SITE">Staff (STAFF_SITE)</option>
                 <option value="ADMIN">Administrador</option>
               </select>
             </label>

@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 
 export const load = async ({ locals }) => {
-  if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin');
   }
 

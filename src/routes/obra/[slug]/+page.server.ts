@@ -22,7 +22,7 @@ export const load = async ({ locals, params, url, cookies }) => {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
-  const isStaff = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   let chaptersQuery = locals.db
     .from('chapters')
     .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')

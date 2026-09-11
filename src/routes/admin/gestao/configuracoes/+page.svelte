@@ -260,6 +260,73 @@
           </div>
         </div>
       </section>
+
+      <!-- Storage Supremo Infrastructure Section -->
+      {#if data.storageShards && data.storageShards.length > 0}
+        <section class="panel storage-panel">
+          <div class="panel-header storage-header">
+            <div class="header-left">
+              <HardDrive size={18} class="panel-icon" />
+              <h2>Storage Supremo — Infraestrutura Multi-Bot e Multi-Shard</h2>
+            </div>
+            <span class="status-pill connected">
+              <span class="dot-connected"></span>
+              {data.storageShards.filter(s => s.enabled && s.write_status === 'HEALTHY').length}/{data.storageShards.length} Shards Saudáveis
+            </span>
+          </div>
+          <p class="section-desc">
+            Topologia distribuída com isolamento estrito por pool, bot affinity, failover automático e circuit breakers de escrita independentes da leitura.
+          </p>
+
+          <div class="shards-table-container">
+            <table class="shards-table">
+              <thead>
+                <tr>
+                  <th>Shard Físico</th>
+                  <th>Pool Canônico</th>
+                  <th>Bot Reference</th>
+                  <th>Canal Telegram</th>
+                  <th>Escrita</th>
+                  <th>Leitura</th>
+                  <th>Conexões</th>
+                  <th>Peso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.storageShards as shard}
+                  <tr>
+                    <td>
+                      <div class="shard-name-cell">
+                        <strong class="shard-name">{shard.display_name}</strong>
+                        {#if shard.reserved}
+                          <span class="badge-reserved">Reservado</span>
+                        {/if}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="pool-tag">{data.storagePools.find(p => p.id === shard.pool_id)?.display_name || 'Pool'}</span>
+                    </td>
+                    <td><code class="code-ref">{shard.bot_reference}</code></td>
+                    <td><code class="code-ref">{shard.channel_id}</code></td>
+                    <td>
+                      <span class="status-chip {shard.write_status.toLowerCase()}">
+                        {shard.write_status}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="status-chip {shard.read_status.toLowerCase()}">
+                        {shard.read_status}
+                      </span>
+                    </td>
+                    <td><span class="connections-count">{shard.active_uploads} ativos</span></td>
+                    <td><span class="weight-cell">{shard.weight}</span></td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {/if}
     </div>
   </div>
 </div>
@@ -517,5 +584,157 @@
     height: 6px;
     border-radius: 50%;
     background: #f59e0b;
+  }
+
+  /* Storage Supremo Panel */
+  .storage-panel {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .storage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .shards-table-container {
+    overflow-x: auto;
+    border: 1px solid #1e152d;
+    border-radius: 10px;
+    background: #090610;
+  }
+
+  .shards-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    text-align: left;
+  }
+
+  .shards-table th {
+    background: #110d1a;
+    padding: 10px 14px;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #1e152d;
+    white-space: nowrap;
+  }
+
+  .shards-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #181124;
+    color: #e2e8f0;
+    white-space: nowrap;
+  }
+
+  .shards-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .shards-table tbody tr:hover {
+    background: rgba(168, 85, 247, 0.04);
+  }
+
+  .shard-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .shard-name {
+    color: #f1f5f9;
+    font-weight: 600;
+  }
+
+  .badge-reserved {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .pool-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .code-ref {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: #a5b4fc;
+    background: #140e24;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #231b38;
+  }
+
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-chip.healthy {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .status-chip.cooldown {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .status-chip.offline,
+  .status-chip.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .connections-count {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .weight-cell {
+    font-size: 11px;
+    font-weight: 600;
+    color: #cbd5e1;
   }
 </style>

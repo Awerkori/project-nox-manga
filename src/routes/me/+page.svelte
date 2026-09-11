@@ -39,7 +39,12 @@
     Gift,
     Search,
     Users,
-    Library
+    Library,
+    Move,
+    ZoomIn,
+    RotateCcw,
+    Sliders,
+    X
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
@@ -196,50 +201,115 @@
   let bannerUploading = $state(false);
   let uploadNotice = $state('');
 
-  async function handleAvatarUpload(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files?.length) return;
-    const file = input.files[0];
+  // Crop & Reposition States
+  let showCropModal = $state(false);
+  let cropType = $state<'avatar' | 'banner'>('avatar');
+  let pendingFile = $state<File | null>(null);
+  let cropPreviewUrl = $state<string>('');
+  let cropX = $state(50);
+  let cropY = $state(50);
+  let cropZoom = $state(1);
+  let cropSaving = $state(false);
+  let modalNotice = $state('');
 
-    avatarUploading = true;
+  function openCropForNewFile(type: 'avatar' | 'banner', file: File) {
+    modalNotice = '';
+    cropType = type;
+    pendingFile = file;
+    if (cropPreviewUrl && cropPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(cropPreviewUrl);
+    }
+    cropPreviewUrl = URL.createObjectURL(file);
+    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    cropX = existing?.x ?? 50;
+    cropY = existing?.y ?? 50;
+    cropZoom = existing?.zoom ?? 1;
+    showCropModal = true;
+  }
+
+  function openReposition(type: 'avatar' | 'banner') {
+    modalNotice = '';
+    cropType = type;
+    pendingFile = null;
+    const mediaId = type === 'avatar' ? data.member.avatar_id : data.member.banner_id;
+    if (!mediaId) return;
+    cropPreviewUrl = `/media/${mediaId}`;
+    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    cropX = existing?.x ?? 50;
+    cropY = existing?.y ?? 50;
+    cropZoom = existing?.zoom ?? 1;
+    showCropModal = true;
+  }
+
+  function closeCropModal() {
+    modalNotice = '';
+    showCropModal = false;
+    if (pendingFile && cropPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(cropPreviewUrl);
+    }
+    pendingFile = null;
+  }
+
+  async function saveCrop() {
+    cropSaving = true;
+    modalNotice = '';
     uploadNotice = '';
-    const fd = new FormData();
-    fd.append('file', file);
-
     try {
-      const res = await fetch('/api/avatar', { method: 'POST', body: fd });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Falha ao enviar avatar.');
-      uploadNotice = 'Avatar atualizado com sucesso (suporta GIFs animados)!';
+      if (pendingFile) {
+        // Upload new file with crop coordinates
+        const fd = new FormData();
+        fd.append('file', pendingFile);
+        fd.append('crop_x', String(cropX));
+        fd.append('crop_y', String(cropY));
+        fd.append('crop_zoom', String(cropZoom));
+        const endpoint = cropType === 'avatar' ? '/api/avatar' : '/api/banner';
+        
+        let res = await fetch(endpoint, { method: 'POST', body: fd });
+        let result = await res.json();
+
+        if (res.status === 429) {
+          const wait = result.retryAfter || 5;
+          modalNotice = `Canal em espera (${wait}s). Reenviando automaticamente...`;
+          await new Promise((r) => setTimeout(r, (wait + 1) * 1000));
+          res = await fetch(endpoint, { method: 'POST', body: fd });
+          result = await res.json();
+        }
+
+        if (!res.ok) throw new Error(result.message || 'Falha ao salvar mídia.');
+        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} atualizado com sucesso!`;
+      } else {
+        // Repositioning existing media
+        const action = cropType === 'avatar' ? '?/updateAvatarCrop' : '?/updateBannerCrop';
+        const fd = new FormData();
+        fd.append('x', String(cropX));
+        fd.append('y', String(cropY));
+        fd.append('zoom', String(cropZoom));
+        const res = await fetch(action, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('Falha ao reposicionar.');
+        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} reposicionado com sucesso!`;
+      }
       await invalidateAll();
+      closeCropModal();
     } catch (err: any) {
-      uploadNotice = err.message || 'Erro no envio do avatar.';
+      modalNotice = err.message || 'Erro ao salvar posicionamento.';
+      uploadNotice = modalNotice;
     } finally {
-      avatarUploading = false;
+      cropSaving = false;
     }
   }
 
-  async function handleBannerUpload(event: Event) {
+  function handleAvatarUpload(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
-    const file = input.files[0];
+    openCropForNewFile('avatar', input.files[0]);
+    input.value = '';
+  }
 
-    bannerUploading = true;
-    uploadNotice = '';
-    const fd = new FormData();
-    fd.append('file', file);
-
-    try {
-      const res = await fetch('/api/banner', { method: 'POST', body: fd });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Falha ao enviar banner.');
-      uploadNotice = 'Banner atualizado com sucesso (suporta GIFs animados)!';
-      await invalidateAll();
-    } catch (err: any) {
-      uploadNotice = err.message || 'Erro no envio do banner.';
-    } finally {
-      bannerUploading = false;
-    }
+  function handleBannerUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    openCropForNewFile('banner', input.files[0]);
+    input.value = '';
   }
 </script>
 
@@ -255,6 +325,7 @@
         <UserAvatar
           avatarId={data.member.avatar_id}
           frameId={data.member.frame_id}
+          crop={data.member.avatar_crop}
           displayName={data.member.display_name || data.member.username}
           size={72}
         />
@@ -924,21 +995,34 @@
                   <UserAvatar
                     avatarId={data.member.avatar_id}
                     frameId={data.member.frame_id}
+                    crop={data.member.avatar_crop}
                     displayName={data.member.display_name || data.member.username}
                     size={80}
                   />
                 </div>
-                <label class="btn-file-upload">
-                  <Upload size={14} />
-                  <span>{avatarUploading ? 'Enviando GIF...' : 'Escolher Avatar (GIF/PNG)'}</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    onchange={handleAvatarUpload}
-                    disabled={avatarUploading}
-                    hidden
-                  />
-                </label>
+                <div class="uploader-actions-row">
+                  <label class="btn-file-upload">
+                    <Upload size={14} />
+                    <span>Escolher Avatar</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onchange={handleAvatarUpload}
+                      disabled={avatarUploading}
+                      hidden
+                    />
+                  </label>
+                  {#if data.member.avatar_id}
+                    <button
+                      type="button"
+                      class="btn-reposition"
+                      onclick={() => openReposition('avatar')}
+                    >
+                      <Move size={14} />
+                      <span>Reposicionar</span>
+                    </button>
+                  {/if}
+                </div>
               </div>
 
               <!-- Banner Upload -->
@@ -946,22 +1030,39 @@
                 <span class="upload-label">Banner de Perfil (Suporta GIFs)</span>
                 <div class="banner-preview-box">
                   {#if data.member.banner_id}
-                    <img src="/media/{data.member.banner_id}" alt="Banner atual" class="banner-preview-img" />
+                    <img
+                      src="/media/{data.member.banner_id}"
+                      alt="Banner atual"
+                      class="banner-preview-img"
+                      style={(data.member.banner_crop as any) ? `object-position: ${(data.member.banner_crop as any).x ?? 50}% ${(data.member.banner_crop as any).y ?? 50}%; transform: scale(${(data.member.banner_crop as any).zoom ?? 1});` : ''}
+                    />
                   {:else}
                     <div class="banner-preview-placeholder">Nenhum banner</div>
                   {/if}
                 </div>
-                <label class="btn-file-upload">
-                  <Upload size={14} />
-                  <span>{bannerUploading ? 'Enviando GIF...' : 'Escolher Banner (GIF/PNG)'}</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    onchange={handleBannerUpload}
-                    disabled={bannerUploading}
-                    hidden
-                  />
-                </label>
+                <div class="uploader-actions-row">
+                  <label class="btn-file-upload">
+                    <Upload size={14} />
+                    <span>Escolher Banner</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onchange={handleBannerUpload}
+                      disabled={bannerUploading}
+                      hidden
+                    />
+                  </label>
+                  {#if data.member.banner_id}
+                    <button
+                      type="button"
+                      class="btn-reposition"
+                      onclick={() => openReposition('banner')}
+                    >
+                      <Move size={14} />
+                      <span>Reposicionar</span>
+                    </button>
+                  {/if}
+                </div>
               </div>
             </div>
 
@@ -1095,7 +1196,297 @@
   </div>
 </div>
 
+{#if showCropModal}
+  <div class="crop-modal-backdrop" role="dialog" aria-modal="true">
+    <div class="crop-modal-content">
+      <div class="crop-modal-header">
+        <div class="header-titles">
+          <h3>{cropType === 'avatar' ? 'Ajustar Foto de Perfil' : 'Ajustar Banner de Perfil'}</h3>
+          <p>Ajuste o zoom e posição. GIFs animados permanecem com todos os frames.</p>
+        </div>
+        <button type="button" class="btn-close-modal" onclick={closeCropModal} aria-label="Fechar">
+          <X size={18} />
+        </button>
+      </div>
+
+      {#if modalNotice}
+        <div class="crop-modal-notice">
+          {modalNotice}
+        </div>
+      {/if}
+
+      <div class="crop-viewport-wrap">
+        <div class="crop-viewport {cropType === 'avatar' ? 'viewport-circle' : 'viewport-banner'}">
+          <img
+            src={cropPreviewUrl}
+            alt="Preview de enquadramento"
+            class="crop-img-preview"
+            style="object-position: {cropX}% {cropY}%; transform: scale({cropZoom});"
+          />
+        </div>
+      </div>
+
+      <div class="crop-controls">
+        <div class="control-row">
+          <label for="crop-zoom"><ZoomIn size={14} /> Zoom ({cropZoom.toFixed(2)}x)</label>
+          <input
+            id="crop-zoom"
+            type="range"
+            min="1"
+            max="3"
+            step="0.05"
+            bind:value={cropZoom}
+            class="range-slider"
+          />
+        </div>
+
+        <div class="control-row">
+          <label for="crop-x"><Move size={14} /> Posição Horizontal ({cropX}%)</label>
+          <input
+            id="crop-x"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            bind:value={cropX}
+            class="range-slider"
+          />
+        </div>
+
+        <div class="control-row">
+          <label for="crop-y"><Move size={14} /> Posição Vertical ({cropY}%)</label>
+          <input
+            id="crop-y"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            bind:value={cropY}
+            class="range-slider"
+          />
+        </div>
+      </div>
+
+      <div class="crop-modal-footer">
+        <button type="button" class="btn-cancel" onclick={closeCropModal}>
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn-save-crop"
+          onclick={saveCrop}
+          disabled={cropSaving}
+        >
+          {#if cropSaving}
+            <span>Salvando...</span>
+          {:else}
+            <Check size={16} />
+            <span>Salvar Enquadramento</span>
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .crop-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 18, 0.88);
+    backdrop-filter: blur(10px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: fadeIn 0.15s ease-out;
+  }
+  .crop-modal-content {
+    background: #0d111d;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 540px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .crop-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .crop-modal-header h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #f3f4f6;
+  }
+  .crop-modal-header p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #9ca3af;
+  }
+  .crop-modal-notice {
+    margin: 1rem 1.5rem 0;
+    padding: 0.65rem 1rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #c4b5fd;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-close-modal {
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-close-modal:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .crop-viewport-wrap {
+    padding: 1.5rem;
+    background: #080b14;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .crop-viewport {
+    background: #111422;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.2);
+  }
+  .viewport-circle {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: 3px solid #8b5cf6;
+  }
+  .viewport-banner {
+    width: 100%;
+    aspect-ratio: 16 / 6;
+    border-radius: 12px;
+    border: 2px solid #8b5cf6;
+  }
+  .crop-img-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    pointer-events: none;
+    transition: transform 0.05s ease-out, object-position 0.05s ease-out;
+  }
+  .crop-controls {
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background: #0d111d;
+  }
+  .control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .control-row label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #d1d5db;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .range-slider {
+    width: 100%;
+    accent-color: #8b5cf6;
+    cursor: pointer;
+  }
+  .crop-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0b0e18;
+  }
+  .btn-cancel {
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #d1d5db;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  .btn-save-crop {
+    padding: 0.5rem 1.25rem;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+  }
+  .btn-save-crop:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  }
+  .btn-save-crop:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .uploader-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+  .btn-reposition {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.5rem 0.85rem;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-reposition:hover {
+    background: rgba(139, 92, 246, 0.22);
+    color: #fff;
+    border-color: rgba(139, 92, 246, 0.5);
+  }
   .me-page {
     min-height: 100vh;
     padding: 2rem 1.5rem 5rem;

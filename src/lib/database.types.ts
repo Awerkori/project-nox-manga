@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       access_roles: {
@@ -439,6 +414,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      control_plane_backups: {
+        Row: {
+          backup_id: string
+          checksum: string
+          created_at: string
+          data_payload: Json | null
+          id: string
+          record_counts: Json
+          schema_version: string
+        }
+        Insert: {
+          backup_id: string
+          checksum: string
+          created_at?: string
+          data_payload?: Json | null
+          id?: string
+          record_counts: Json
+          schema_version: string
+        }
+        Update: {
+          backup_id?: string
+          checksum?: string
+          created_at?: string
+          data_payload?: Json | null
+          id?: string
+          record_counts?: Json
+          schema_version?: string
+        }
+        Relationships: []
       }
       editor_invites: {
         Row: {
@@ -1264,53 +1269,260 @@ export type Database = {
       }
       media: {
         Row: {
+          access_class: string | null
+          bot_reference: string | null
           bytes: number
+          chapter_id: string | null
           created_at: string
           created_by: string
           height: number
           id: string
           mime: string
+          pending_delete_at: string | null
           provider: string
           provider_key: string
           purpose: string
+          scan_id: string | null
           sha256: string
+          status: string | null
+          storage_pool_id: string | null
           storage_ready: boolean
+          storage_shard_id: string | null
           width: number
         }
         Insert: {
+          access_class?: string | null
+          bot_reference?: string | null
           bytes: number
+          chapter_id?: string | null
           created_at?: string
           created_by: string
           height: number
           id?: string
           mime: string
+          pending_delete_at?: string | null
           provider: string
           provider_key: string
           purpose?: string
+          scan_id?: string | null
           sha256: string
+          status?: string | null
+          storage_pool_id?: string | null
           storage_ready?: boolean
+          storage_shard_id?: string | null
           width: number
         }
         Update: {
+          access_class?: string | null
+          bot_reference?: string | null
           bytes?: number
+          chapter_id?: string | null
           created_at?: string
           created_by?: string
           height?: number
           id?: string
           mime?: string
+          pending_delete_at?: string | null
           provider?: string
           provider_key?: string
           purpose?: string
+          scan_id?: string | null
           sha256?: string
+          status?: string | null
+          storage_pool_id?: string | null
           storage_ready?: boolean
+          storage_shard_id?: string | null
           width?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "media_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "media_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_storage_pool_id_fkey"
+            columns: ["storage_pool_id"]
+            isOneToOne: false
+            referencedRelation: "storage_pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_storage_shard_id_fkey"
+            columns: ["storage_shard_id"]
+            isOneToOne: false
+            referencedRelation: "storage_shards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_locations: {
+        Row: {
+          bot_reference: string
+          channel_id: string | null
+          created_at: string
+          file_id: string
+          id: string
+          media_id: string
+          message_id: string | null
+          role: string
+          status: string
+          storage_shard_id: string
+        }
+        Insert: {
+          bot_reference?: string
+          channel_id?: string | null
+          created_at?: string
+          file_id: string
+          id?: string
+          media_id: string
+          message_id?: string | null
+          role?: string
+          status?: string
+          storage_shard_id: string
+        }
+        Update: {
+          bot_reference?: string
+          channel_id?: string | null
+          created_at?: string
+          file_id?: string
+          id?: string
+          media_id?: string
+          message_id?: string | null
+          role?: string
+          status?: string
+          storage_shard_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_locations_storage_shard_id_fkey"
+            columns: ["storage_shard_id"]
+            isOneToOne: false
+            referencedRelation: "storage_shards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_records: {
+        Row: {
+          access_class: string
+          backend: string
+          bot_reference: string
+          channel_id: string | null
+          chapter_id: string | null
+          checksum: string | null
+          created_at: string
+          file_id: string | null
+          id: string
+          message_id: string | null
+          mime_type: string
+          pending_delete_at: string | null
+          purpose: string
+          scan_id: string | null
+          size: number
+          status: string
+          storage_pool_id: string | null
+          storage_shard_id: string | null
+          unique_file_id: string | null
+          uploaded_by: string | null
+          work_id: string | null
+        }
+        Insert: {
+          access_class?: string
+          backend?: string
+          bot_reference?: string
+          channel_id?: string | null
+          chapter_id?: string | null
+          checksum?: string | null
+          created_at?: string
+          file_id?: string | null
+          id: string
+          message_id?: string | null
+          mime_type: string
+          pending_delete_at?: string | null
+          purpose: string
+          scan_id?: string | null
+          size?: number
+          status?: string
+          storage_pool_id?: string | null
+          storage_shard_id?: string | null
+          unique_file_id?: string | null
+          uploaded_by?: string | null
+          work_id?: string | null
+        }
+        Update: {
+          access_class?: string
+          backend?: string
+          bot_reference?: string
+          channel_id?: string | null
+          chapter_id?: string | null
+          checksum?: string | null
+          created_at?: string
+          file_id?: string | null
+          id?: string
+          message_id?: string | null
+          mime_type?: string
+          pending_delete_at?: string | null
+          purpose?: string
+          scan_id?: string | null
+          size?: number
+          status?: string
+          storage_pool_id?: string | null
+          storage_shard_id?: string | null
+          unique_file_id?: string | null
+          uploaded_by?: string | null
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_records_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_records_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_records_storage_pool_id_fkey"
+            columns: ["storage_pool_id"]
+            isOneToOne: false
+            referencedRelation: "storage_pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_records_storage_shard_id_fkey"
+            columns: ["storage_shard_id"]
+            isOneToOne: false
+            referencedRelation: "storage_shards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_records_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
             referencedColumns: ["id"]
           },
         ]
@@ -1387,8 +1599,10 @@ export type Database = {
       members: {
         Row: {
           age_status: string
+          avatar_crop: Json | null
           avatar_frame_id: string | null
           avatar_id: string | null
+          banner_crop: Json | null
           banner_id: string | null
           banner_position: string
           bio: string
@@ -1416,8 +1630,10 @@ export type Database = {
         }
         Insert: {
           age_status?: string
+          avatar_crop?: Json | null
           avatar_frame_id?: string | null
           avatar_id?: string | null
+          banner_crop?: Json | null
           banner_id?: string | null
           banner_position?: string
           bio?: string
@@ -1445,8 +1661,10 @@ export type Database = {
         }
         Update: {
           age_status?: string
+          avatar_crop?: Json | null
           avatar_frame_id?: string | null
           avatar_id?: string | null
+          banner_crop?: Json | null
           banner_id?: string | null
           banner_position?: string
           bio?: string
@@ -2026,6 +2244,47 @@ export type Database = {
           },
         ]
       }
+      scan_storage_usage: {
+        Row: {
+          active_uploads: number
+          bytes: number
+          failures: number
+          pages: number
+          scan_id: string
+          throughput: number
+          updated_at: string
+          uploads: number
+        }
+        Insert: {
+          active_uploads?: number
+          bytes?: number
+          failures?: number
+          pages?: number
+          scan_id: string
+          throughput?: number
+          updated_at?: string
+          uploads?: number
+        }
+        Update: {
+          active_uploads?: number
+          bytes?: number
+          failures?: number
+          pages?: number
+          scan_id?: string
+          throughput?: number
+          updated_at?: string
+          uploads?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_storage_usage_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scan_transfer_requests: {
         Row: {
           created_at: string
@@ -2033,7 +2292,7 @@ export type Database = {
           id: string
           responded_at: string | null
           scan_id: string
-          status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          status: string
           to_user_id: string
         }
         Insert: {
@@ -2042,7 +2301,7 @@ export type Database = {
           id?: string
           responded_at?: string | null
           scan_id: string
-          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          status?: string
           to_user_id: string
         }
         Update: {
@@ -2051,7 +2310,7 @@ export type Database = {
           id?: string
           responded_at?: string | null
           scan_id?: string
-          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+          status?: string
           to_user_id?: string
         }
         Relationships: [
@@ -2063,17 +2322,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "scan_transfer_requests_to_user_id_fkey"
-            columns: ["to_user_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "scan_transfer_requests_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
             referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_transfer_requests_to_user_id_fkey"
+            columns: ["to_user_id"]
+            isOneToOne: false
+            referencedRelation: "members"
             referencedColumns: ["id"]
           },
         ]
@@ -2210,6 +2469,206 @@ export type Database = {
         }
         Relationships: []
       }
+      storage_pools: {
+        Row: {
+          created_at: string
+          display_name: string
+          enabled: boolean
+          id: string
+          key: string
+          overflow_allowed: boolean
+          purpose: string
+          reserved: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          enabled?: boolean
+          id?: string
+          key: string
+          overflow_allowed?: boolean
+          purpose: string
+          reserved?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          enabled?: boolean
+          id?: string
+          key?: string
+          overflow_allowed?: boolean
+          purpose?: string
+          reserved?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      storage_shard_group_members: {
+        Row: {
+          group_id: string
+          priority: number
+          shard_id: string
+          weight: number
+        }
+        Insert: {
+          group_id: string
+          priority?: number
+          shard_id: string
+          weight?: number
+        }
+        Update: {
+          group_id?: string
+          priority?: number
+          shard_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_shard_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "storage_shard_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "storage_shard_group_members_shard_id_fkey"
+            columns: ["shard_id"]
+            isOneToOne: false
+            referencedRelation: "storage_shards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_shard_groups: {
+        Row: {
+          created_at: string
+          id: string
+          pool_id: string
+          scope_id: string
+          scope_type: string
+          strategy: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pool_id: string
+          scope_id: string
+          scope_type?: string
+          strategy?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pool_id?: string
+          scope_id?: string
+          scope_type?: string
+          strategy?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_shard_groups_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "storage_pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_shards: {
+        Row: {
+          active_uploads: number
+          backend: string
+          bot_reference: string
+          channel_id: string
+          cooldown_until: string | null
+          created_at: string
+          display_name: string
+          enabled: boolean
+          error_rate: number
+          id: string
+          latency_ms: number
+          owner_scan_id: string | null
+          pool_id: string
+          queue_depth: number
+          read_status: string
+          recent_failures: number
+          recent_successes: number
+          reserved: boolean
+          throughput: number
+          updated_at: string
+          weight: number
+          write_status: string
+        }
+        Insert: {
+          active_uploads?: number
+          backend?: string
+          bot_reference: string
+          channel_id: string
+          cooldown_until?: string | null
+          created_at?: string
+          display_name: string
+          enabled?: boolean
+          error_rate?: number
+          id?: string
+          latency_ms?: number
+          owner_scan_id?: string | null
+          pool_id: string
+          queue_depth?: number
+          read_status?: string
+          recent_failures?: number
+          recent_successes?: number
+          reserved?: boolean
+          throughput?: number
+          updated_at?: string
+          weight?: number
+          write_status?: string
+        }
+        Update: {
+          active_uploads?: number
+          backend?: string
+          bot_reference?: string
+          channel_id?: string
+          cooldown_until?: string | null
+          created_at?: string
+          display_name?: string
+          enabled?: boolean
+          error_rate?: number
+          id?: string
+          latency_ms?: number
+          owner_scan_id?: string | null
+          pool_id?: string
+          queue_depth?: number
+          read_status?: string
+          recent_failures?: number
+          recent_successes?: number
+          reserved?: boolean
+          throughput?: number
+          updated_at?: string
+          weight?: number
+          write_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_shards_owner_scan_id_fkey"
+            columns: ["owner_scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "storage_shards_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "storage_pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           id: string
@@ -2302,21 +2761,21 @@ export type Database = {
           created_at: string
           is_primary: boolean
           scan_id: string
-          status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
+          status: string
           work_id: string
         }
         Insert: {
           created_at?: string
           is_primary?: boolean
           scan_id: string
-          status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
+          status?: string
           work_id: string
         }
         Update: {
           created_at?: string
           is_primary?: boolean
           scan_id?: string
-          status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
+          status?: string
           work_id?: string
         }
         Relationships: [
@@ -2518,38 +2977,7 @@ export type Database = {
         Args: { p_scan_id: string; p_user_id?: string }
         Returns: boolean
       }
-      claim_chapter_xp: {
-        Args: { p_chapter_id: string; p_source?: string }
-        Returns: Json
-      }
-      claim_editor_invite: { Args: never; Returns: boolean }
-      claim_scan_invite: { Args: { p_code: string }; Returns: Json }
-      create_scan_invite: {
-        Args: { p_scan_id: string; p_role?: string; p_hours?: number }
-        Returns: Json
-      }
-      current_role: { Args: never; Returns: string }
-      review_scan_partner_request: {
-        Args: { p_request_id: string; p_action: string; p_reason?: string }
-        Returns: Json
-      }
-      review_scan_project_request: {
-        Args: { p_request_id: string; p_action: string; p_reason?: string }
-        Returns: Json
-      }
-      transfer_scan_ownership: {
-        Args: { p_scan_id: string; p_new_owner_id: string }
-        Returns: Json
-      }
-      request_scan_ownership_transfer: {
-        Args: { p_scan_id: string; p_target_user_id: string }
-        Returns: Json
-      }
-      respond_scan_ownership_transfer: {
-        Args: { p_request_id: string; p_accept: boolean }
-        Returns: Json
-      }
-      cancel_scan_transfer_request: {
+      cancel_scan_partner_request: {
         Args: { p_request_id: string }
         Returns: Json
       }
@@ -2557,19 +2985,37 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: Json
       }
-      cancel_scan_partner_request: {
+      cancel_scan_transfer_request: {
         Args: { p_request_id: string }
         Returns: Json
       }
-      update_work_scan_status: {
-        Args: { p_scan_id: string; p_work_id: string; p_status: string }
+      claim_chapter_xp: {
+        Args: { p_chapter_id: string; p_source?: string }
         Returns: Json
       }
+      claim_editor_invite: { Args: never; Returns: boolean }
+      claim_scan_invite: { Args: { p_code: string }; Returns: Json }
+      commit_media_record: {
+        Args: {
+          p_id: string
+          p_message_id?: string
+          p_provider_key: string
+          p_shard_id: string
+          p_unique_file_id?: string
+        }
+        Returns: undefined
+      }
+      create_scan_invite: {
+        Args: { p_hours?: number; p_role?: string; p_scan_id: string }
+        Returns: Json
+      }
+      current_role: { Args: never; Returns: string }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
       equip_cosmetic_item: {
         Args: { p_item_id: string; p_kind: string }
         Returns: Json
       }
+      execute_control_plane_backup: { Args: never; Returns: string }
       get_chapter_reactions: {
         Args: { p_chapter_id: string; p_visitor_id?: string }
         Returns: Json
@@ -2719,6 +3165,10 @@ export type Database = {
         }[]
       }
       purchase_shop_item: { Args: { p_item_id: string }; Returns: Json }
+      quarantine_media_record: {
+        Args: { p_grace_days?: number; p_id: string }
+        Returns: undefined
+      }
       record_chapter_view: {
         Args: {
           p_anon_hash?: string
@@ -2726,6 +3176,25 @@ export type Database = {
           p_origin?: string
           p_user_id?: string
         }
+        Returns: Json
+      }
+      record_shard_upload_result: {
+        Args: {
+          p_bytes?: number
+          p_error_code?: number
+          p_latency_ms?: number
+          p_retry_after?: number
+          p_shard_id: string
+          p_success: boolean
+        }
+        Returns: undefined
+      }
+      record_shard_upload_start: {
+        Args: { p_shard_id: string }
+        Returns: undefined
+      }
+      request_scan_ownership_transfer: {
+        Args: { p_scan_id: string; p_target_user_id: string }
         Returns: Json
       }
       reserve_media: {
@@ -2742,7 +3211,32 @@ export type Database = {
         }
         Returns: undefined
       }
+      respond_scan_ownership_transfer: {
+        Args: { p_accept: boolean; p_request_id: string }
+        Returns: Json
+      }
+      review_scan_partner_request: {
+        Args: { p_action: string; p_reason?: string; p_request_id: string }
+        Returns: Json
+      }
+      review_scan_project_request: {
+        Args: { p_action: string; p_reason?: string; p_request_id: string }
+        Returns: Json
+      }
       revoke_editor_invite: { Args: { p_email: string }; Returns: undefined }
+      select_optimal_storage_shard: {
+        Args: { p_chapter_id?: string; p_pool_key: string; p_scan_id?: string }
+        Returns: {
+          backend: string
+          bot_reference: string
+          channel_id: string
+          display_name: string
+          is_overflow: boolean
+          pool_id: string
+          shard_id: string
+          write_status: string
+        }[]
+      }
       set_featured_achievement: {
         Args: { p_achievement_id: string }
         Returns: Json
@@ -2754,6 +3248,14 @@ export type Database = {
         Returns: Json
       }
       toggle_follow_user: { Args: { p_target_user_id: string }; Returns: Json }
+      transfer_scan_ownership: {
+        Args: { p_new_owner_id: string; p_scan_id: string }
+        Returns: Json
+      }
+      update_work_scan_status: {
+        Args: { p_scan_id: string; p_status: string; p_work_id: string }
+        Returns: Json
+      }
       work_metrics: {
         Args: { p_work: string }
         Returns: {
@@ -2890,9 +3392,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
+import { TelegramStorageError } from '$lib/server/telegram';
+import { resolveBotClient } from '$lib/server/storage-router';
 import { inspectImage } from '$lib/media-validation';
 import type { RequestHandler } from './$types';
 
@@ -61,7 +62,15 @@ function authenticate(request: Request, getClientAddress: () => string, url: URL
 export const GET: RequestHandler = async ({ request, getClientAddress, url }) => {
   authenticate(request, getClientAddress, url);
 
-  const configured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+  const targetShard = url.searchParams.get('bot') || url.searchParams.get('shard') || 'MANGA_STORAGE_01';
+  let configured = false;
+  try {
+    const client = resolveBotClient(targetShard);
+    configured = Boolean(client.token && client.chat);
+  } catch {
+    configured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+  }
+
   return json({
     ok: configured,
     provider: 'telegram'
@@ -71,8 +80,21 @@ export const GET: RequestHandler = async ({ request, getClientAddress, url }) =>
 export const POST: RequestHandler = async ({ request, getClientAddress, url }) => {
   authenticate(request, getClientAddress, url);
 
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
-    error(503, 'Armazenamento temporariamente indisponível');
+  const targetShard = url.searchParams.get('bot') || url.searchParams.get('shard') || 'MANGA_STORAGE_01';
+  let botClient;
+  try {
+    botClient = resolveBotClient(targetShard);
+  } catch (err1) {
+    try {
+      botClient = resolveBotClient('primary');
+    } catch (err2) {
+      console.warn('storage_resolve_failed', {
+        targetShard,
+        err1: (err1 as Error).message,
+        err2: (err2 as Error).message
+      });
+      error(503, 'Armazenamento temporariamente indisponível');
+    }
   }
 
   const id = url.searchParams.get('id') || crypto.randomUUID();
@@ -101,7 +123,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
   }
 
   try {
-    const fileId = await telegramStorage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID).upload(
+    const fileId = await botClient.client.upload(
       bytes,
       info.mime,
       id
@@ -109,6 +131,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 
     return json({
       providerKey: fileId,
+      botReference: botClient.botRef,
       mime: info.mime,
       width: info.width,
       height: info.height,

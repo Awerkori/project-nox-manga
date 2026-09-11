@@ -167,6 +167,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
     const body = await res.json();
     expect(body).toEqual({
       providerKey: 'tg-file-id-abc-123',
+      botReference: 'MANGA_STORAGE_01',
       mime: 'image/png',
       width: 1,
       height: 1,

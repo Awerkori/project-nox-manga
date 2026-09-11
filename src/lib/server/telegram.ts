@@ -23,19 +23,24 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       });
       if (!response.ok) {
         let retryAfter: number | undefined;
-        if (response.status === 429) {
+        let errorDetails = '';
+        try {
+          const body = await response.json().catch(() => null);
+          if (body?.parameters?.retry_after && typeof body.parameters.retry_after === 'number') {
+            retryAfter = body.parameters.retry_after;
+          }
+          if (body?.description) {
+            errorDetails = body.description;
+          }
+        } catch {}
+        if (response.status === 429 && !retryAfter) {
           const header = response.headers?.get?.('retry-after');
           if (header) {
             const parsed = parseInt(header, 10);
             if (!isNaN(parsed) && parsed > 0) retryAfter = parsed;
           }
-          try {
-            const body = await response.json().catch(() => null);
-            if (body?.parameters?.retry_after && typeof body.parameters.retry_after === 'number') {
-              retryAfter = body.parameters.retry_after;
-            }
-          } catch {}
         }
+        console.error('TELEGRAM_HTTP_ERROR:', { status: response.status, description: errorDetails });
         throw new TelegramStorageError('http', response.status, retryAfter);
       }
       const payload = await response.json().catch(() => {
@@ -44,8 +49,13 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       if (!payload?.ok || !payload.result) throw new TelegramStorageError('payload');
       return payload.result;
     } catch (failure) {
+      if (failure instanceof TelegramStorageError) {
+        console.error('TELEGRAM_STORAGE_ERROR:', failure.stage, failure.status, failure.retryAfter);
+        throw failure;
+      }
+      console.error('TELEGRAM_FETCH_EXCEPTION:', (failure as Error)?.name, (failure as Error)?.message);
       // Network errors may contain the credential-bearing URL. Never forward them.
-      throw failure instanceof TelegramStorageError ? failure : new TelegramStorageError('network');
+      throw new TelegramStorageError('network');
     }
   }
 

@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin/staff');
   }
 
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ locals }) => {
           created_at
         )
       `)
-      .in('role', ['ADMIN', 'EDITOR'])
+      .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
       .order('role', { ascending: true });
 
     if (!joinErr && staffRoles && staffRoles.length > 0) {
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         const m = Array.isArray(sr.members) ? sr.members[0] : (sr.members || sr.member);
         return {
           userId: sr.user_id,
-          role: sr.role as 'ADMIN' | 'EDITOR',
+          role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
           suspended: Boolean(sr.suspended),
           updatedAt: m?.created_at || null,
           username: m?.username || 'desconhecido',
@@ -48,7 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       const { data: rawRoles } = await locals.db
         .from('access_roles')
         .select('user_id, role, suspended')
-        .in('role', ['ADMIN', 'EDITOR']);
+        .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR']);
 
       if (rawRoles && rawRoles.length > 0) {
         const userIds = rawRoles.map((r: any) => r.user_id);
@@ -63,7 +63,7 @@ export const load: PageServerLoad = async ({ locals }) => {
           const m = memberMap.get(sr.user_id);
           return {
             userId: sr.user_id,
-            role: sr.role as 'ADMIN' | 'EDITOR',
+            role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
             suspended: Boolean(sr.suspended),
             updatedAt: m?.created_at || null,
             username: m?.username || 'desconhecido',
@@ -82,7 +82,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const counts = {
     total: staffList.length,
     admins: staffList.filter((s) => s.role === 'ADMIN').length,
-    editors: staffList.filter((s) => s.role === 'EDITOR').length,
+    editors: staffList.filter((s) => s.role === 'STAFF_SITE' || s.role === 'EDITOR').length,
     suspended: staffList.filter((s) => s.suspended).length
   };
 
@@ -104,7 +104,7 @@ export const actions: Actions = {
     const userId = (formData.get('userId') as string || '').trim();
     const role = (formData.get('role') as string || '').trim();
 
-    if (!userId || !['ADMIN', 'EDITOR', 'USER'].includes(role)) {
+    if (!userId || !['ADMIN', 'STAFF_SITE', 'EDITOR', 'USER'].includes(role)) {
       return fail(400, { error: 'Parâmetros inválidos para alteração de cargo.' });
     }
 
@@ -134,8 +134,8 @@ export const actions: Actions = {
     const userId = (formData.get('userId') as string || '').trim();
     const role = (formData.get('role') as string || '').trim();
 
-    if (!userId || !['ADMIN', 'EDITOR'].includes(role)) {
-      return fail(400, { error: 'Selecione um usuário e um cargo válido (Editor ou Administrador).' });
+    if (!userId || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(role)) {
+      return fail(400, { error: 'Selecione um usuário e um cargo válido (Staff ou Administrador).' });
     }
 
     const { error } = await locals.db.rpc('owner_action', {

@@ -209,6 +209,7 @@
             src="/media/{data.member.banner_id}"
             alt="Banner de {data.member.display_name}"
             class="profile-banner-img"
+            style={(data.member.banner_crop as any) ? `object-position: ${(data.member.banner_crop as any).x ?? 50}% ${(data.member.banner_crop as any).y ?? 50}%; transform: scale(${(data.member.banner_crop as any).zoom ?? 1});` : ''}
           />
         {:else if data.cosmetic_banner?.background}
           <div
@@ -228,6 +229,7 @@
             <UserAvatar
               avatarId={data.member.avatar_id}
               frameId={data.member.frame_id}
+              crop={data.member.avatar_crop as any}
               displayName={data.member.display_name}
               size={96}
             />
@@ -284,10 +286,10 @@
                 <ShieldCheck size={13} />
                 <span>Administrador</span>
               </span>
-            {:else if data.staffRole === 'EDITOR'}
+            {:else if data.staffRole === 'STAFF_SITE' || data.staffRole === 'EDITOR'}
               <span class="staff-role-badge editor">
                 <ShieldCheck size={13} />
-                <span>Editor Nox</span>
+                <span>Staff Nox</span>
               </span>
             {/if}
           </div>

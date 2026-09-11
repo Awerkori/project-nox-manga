@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { check } from '$lib/server/db';
 export const load = async ({ locals, params, url, cookies }) => {
-  const preview = url.searchParams.get('preview') === '1' && ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const preview = url.searchParams.get('preview') === '1' && ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   let query = locals.db
     .from('chapters')
     .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')

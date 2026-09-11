@@ -19,7 +19,7 @@
 
   let { data, form } = $props();
 
-  let filterRole = $state<'ALL' | 'ADMIN' | 'EDITOR'>('ALL');
+  let filterRole = $state<'ALL' | 'ADMIN' | 'STAFF_SITE'>('ALL');
   let searchQuery = $state('');
 
   // Modals state
@@ -33,12 +33,13 @@
   let userSearchLoading = $state(false);
   let userSearchError = $state('');
   let selectedUser = $state<any | null>(null);
-  let selectedNewRole = $state<'EDITOR' | 'ADMIN'>('EDITOR');
+  let selectedNewRole = $state<'STAFF_SITE' | 'ADMIN'>('STAFF_SITE');
   let searchDebounceTimeout: any = null;
 
   let filteredStaff = $derived(
     (data.staff || []).filter((member: any) => {
-      if (filterRole !== 'ALL' && member.role !== filterRole) return false;
+      if (filterRole === 'ADMIN' && member.role !== 'ADMIN') return false;
+      if (filterRole === 'STAFF_SITE' && member.role !== 'STAFF_SITE' && member.role !== 'EDITOR') return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -78,7 +79,7 @@
 
   function openAddStaffModal() {
     selectedUser = null;
-    selectedNewRole = 'EDITOR';
+    selectedNewRole = 'STAFF_SITE';
     userSearchInput = '';
     userSearchResults = [];
     userSearchError = '';
@@ -194,10 +195,10 @@
       <button
         type="button"
         class="filter-tab"
-        class:active={filterRole === 'EDITOR'}
-        onclick={() => (filterRole = 'EDITOR')}
+        class:active={filterRole === 'STAFF_SITE'}
+        onclick={() => (filterRole = 'STAFF_SITE')}
       >
-        <span>Editores</span>
+        <span>Staff Site</span>
         <span class="tab-badge">{data.counts.editors}</span>
       </button>
     </div>
@@ -245,13 +246,13 @@
               <span class="member-handle">@{member.username}</span>
             </div>
 
-            <div class="role-badge" class:gold={member.role === 'ADMIN'} class:purple={member.role === 'EDITOR'}>
+            <div class="role-badge" class:gold={member.role === 'ADMIN'} class:purple={member.role === 'STAFF_SITE' || member.role === 'EDITOR'}>
               {#if member.role === 'ADMIN'}
                 <Crown size={12} />
                 <span>Administrador</span>
               {:else}
                 <FileEdit size={12} />
-                <span>Editor</span>
+                <span>Staff Site</span>
               {/if}
             </div>
           </div>
@@ -425,19 +426,19 @@
               <span class="field-label">2. Escolha o cargo a ser concedido:</span>
 
               <div class="role-cards-choice">
-                <label class="role-choice-card" class:active={selectedNewRole === 'EDITOR'}>
+                <label class="role-choice-card" class:active={selectedNewRole === 'STAFF_SITE'}>
                   <input
                     type="radio"
                     name="roleOption"
-                    value="EDITOR"
-                    checked={selectedNewRole === 'EDITOR'}
-                    onchange={() => (selectedNewRole = 'EDITOR')}
+                    value="STAFF_SITE"
+                    checked={selectedNewRole === 'STAFF_SITE'}
+                    onchange={() => (selectedNewRole = 'STAFF_SITE')}
                     class="role-radio-native"
                   />
                   <div class="role-choice-content">
                     <div class="role-choice-header">
                       <span class="role-choice-icon purple"><FileEdit size={16} /></span>
-                      <strong>Editor Nox</strong>
+                      <strong>Staff Site (STAFF_SITE)</strong>
                       <span class="role-choice-tag">Recomendado</span>
                     </div>
                     <p class="role-choice-desc">
@@ -510,10 +511,10 @@
           </p>
 
           <div class="role-switch-options">
-            <label class="switch-option-label" class:selected={showRoleModal.role === 'EDITOR'}>
-              <input type="radio" name="role" value="EDITOR" checked={showRoleModal.role === 'EDITOR'} />
+            <label class="switch-option-label" class:selected={showRoleModal.role === 'STAFF_SITE' || showRoleModal.role === 'EDITOR'}>
+              <input type="radio" name="role" value="STAFF_SITE" checked={showRoleModal.role === 'STAFF_SITE' || showRoleModal.role === 'EDITOR'} />
               <div>
-                <strong>Editor Nox</strong>
+                <strong>Staff Site</strong>
                 <span>Criação, edição e publicação de capítulos</span>
               </div>
             </label>

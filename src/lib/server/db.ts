@@ -19,5 +19,6 @@ export function member(locals: App.Locals) {
 }
 export function editor(locals: App.Locals) {
   member(locals);
-  if (!['EDITOR', 'ADMIN'].includes(locals.role || '')) error(403, 'Acesso editorial negado');
+  if (!['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(locals.role || '')) error(403, 'Acesso editorial negado');
 }
+

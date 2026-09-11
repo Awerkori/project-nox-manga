@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       avatar_id: m.avatar_id,
       xp: m.xp || 0,
       role,
-      isStaff: role === 'ADMIN' || role === 'EDITOR',
+      isStaff: role === 'ADMIN' || role === 'STAFF_SITE' || role === 'EDITOR',
       suspended: Boolean(m.access_roles?.suspended)
     };
   });

@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 export const load = async ({ locals, url }) => {
-  if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin/reports');
   }
 
@@ -141,7 +141,7 @@ export const load = async ({ locals, url }) => {
 
 export const actions = {
   updateStatus: async ({ request, locals }) => {
-    if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+    if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
       return fail(403, { error: 'Não autorizado.' });
     }
 
@@ -200,7 +200,7 @@ export const actions = {
   },
 
   resolveBatch: async ({ request, locals }) => {
-    if (!locals.user || !['ADMIN', 'EDITOR'].includes(locals.role || '')) {
+    if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
       return fail(403, { error: 'Não autorizado.' });
     }
 

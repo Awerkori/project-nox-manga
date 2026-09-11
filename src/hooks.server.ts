@@ -40,7 +40,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   } = await event.locals.db.auth.getUser();
   event.locals.user = user;
   event.locals.role = user ? (await event.locals.db.rpc('current_role')).data : null;
-  if (event.url.pathname.startsWith('/admin') && !['EDITOR', 'ADMIN'].includes(event.locals.role || ''))
+  if (event.url.pathname.startsWith('/admin') && !['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(event.locals.role || ''))
     error(403, 'Esta área é exclusiva da equipe editorial.');
   if (event.url.pathname.startsWith('/admin/gestao') && event.locals.role !== 'ADMIN')
     error(403, 'Esta área é exclusiva dos administradores.');
