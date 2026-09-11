@@ -104,14 +104,64 @@ export async function acquireScanSlot(scanId: string): Promise<() => void> {
   };
 }
 
-function getEnvToken(upper: string): string | undefined {
+export function normalizeBotReference(rawRef: string | null | undefined): string {
+  if (!rawRef) return 'MANGA_STORAGE_01';
+  const clean = rawRef.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  if (['MANGA_STORAGE_02', 'MANGA_STORAGE_2', 'MANGA_02', 'MANGA_2', 'STORAGE_02', 'STORAGE_2', 'BOT_02', 'BOT_2'].includes(clean)) {
+    return 'MANGA_STORAGE_2';
+  }
+  if (['MANGA_STORAGE_01', 'MANGA_STORAGE_1', 'MANGA_01', 'MANGA_1', 'STORAGE_01', 'STORAGE_1', 'BOT_01', 'BOT_1', 'PRIMARY', 'LEGACY'].includes(clean)) {
+    return 'MANGA_STORAGE_01';
+  }
+  if (['STAFF_STORAGE', 'STAFF'].includes(clean)) return 'STAFF_STORAGE';
+  if (['PARTNER_SCAN_STORAGE', 'PARTNER_STORAGE', 'PARTNER'].includes(clean)) return 'PARTNER_STORAGE';
+  if (['PROFILE_MEDIA', 'PROFILE'].includes(clean)) return 'PROFILE_MEDIA';
+  if (['SCAN_MEDIA', 'SCAN'].includes(clean)) return 'SCAN_MEDIA';
+  if (['OVERFLOW_STORAGE', 'OVERFLOW'].includes(clean)) return 'OVERFLOW_STORAGE';
+  return clean;
+}
+
+export const KNOWN_MANGA_SHARDS: Record<string, { name: string; botRef: string; shardId: string; channelId: string }> = {
+  '0383b872': { name: 'Site Mangá (Storage 000)', botRef: 'MANGA_STORAGE_01', shardId: '935e146d-de3f-4a8e-b393-692944c716fa', channelId: '-1004353931378' },
+  'd22770c9': { name: 'Nox Manga Storage 001',    botRef: 'MANGA_STORAGE_01', shardId: '3a4be1a3-f5d2-40c9-9eab-697c2357b183', channelId: '-1003525800137' },
+  'dbc29f11': { name: 'Nox Manga Storage 002',    botRef: 'MANGA_STORAGE_01', shardId: 'a3b6a10e-f53a-4873-9f19-d4cc8576de3a', channelId: '-1003686965009' },
+  '064ee013': { name: 'Nox Manga Storage 003',    botRef: 'MANGA_STORAGE_01', shardId: '424e8be1-dc8a-4d97-a904-119c7ef1c9b5', channelId: '-1004400799763' },
+  '053996b5': { name: 'Nox Manga Storage 004',    botRef: 'MANGA_STORAGE_01', shardId: 'b8fd37d7-3923-4e04-be37-610a1079aa43', channelId: '-1004382627509' },
+  'e7d202e3': { name: 'Nox Manga Storage 005',    botRef: 'MANGA_STORAGE_2',  shardId: '80ead41f-7b58-492d-a028-ae0b2669cd93', channelId: '-1003889300195' },
+  '03acc769': { name: 'Nox Manga Storage 006',    botRef: 'MANGA_STORAGE_2',  shardId: '98701fd5-d376-4310-b664-6aa13bf0cbb1', channelId: '-1004356622185' },
+  '070a0e6a': { name: 'Nox Manga Storage 007',    botRef: 'MANGA_STORAGE_2',  shardId: '3535da22-cb50-4b7b-b12f-96c25460d0b6', channelId: '-1004413066858' },
+  '0289a08a': { name: 'Nox Manga Storage 008',    botRef: 'MANGA_STORAGE_2',  shardId: '23518242-ad31-44e9-9997-add190b0a930', channelId: '-1004337541258' }
+};
+
+export function deduceMangaShardFromFileId(fileId: string) {
+  try {
+    const buf = Buffer.from(fileId.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const hex = buf.toString('hex');
+    for (const [chanHex, info] of Object.entries(KNOWN_MANGA_SHARDS)) {
+      if (hex.includes(chanHex)) return info;
+    }
+  } catch {}
+  return null;
+}
+
+function getEnvToken(rawUpper: string): string | undefined {
+  const norm = normalizeBotReference(rawUpper);
+  if (norm === 'MANGA_STORAGE_2') {
+    const t = (env as any).TELEGRAM_BOT_MANGA_STORAGE_2 || (env as any).TELEGRAM_BOT_MANGA_02;
+    if (t) return t;
+  }
+  if (norm === 'MANGA_STORAGE_01') {
+    const t = (env as any).TELEGRAM_BOT_MANGA_STORAGE_01 || (env as any).TELEGRAM_BOT_MANGA_01;
+    if (t) return t;
+  }
   const variations = [
-    `TELEGRAM_BOT_${upper}`,
-    `TELEGRAM_BOT_${upper.replace(/_STORAGE$/, '')}`,
-    `TELEGRAM_BOT_${upper.replace(/_MEDIA$/, '')}`,
-    `TELEGRAM_BOT_${upper.replace(/^STORAGE_/, '')}`,
-    `TELEGRAM_BOT_${upper}_STORAGE`,
-    `TELEGRAM_BOT_${upper}_MEDIA`
+    `TELEGRAM_BOT_${norm}`,
+    `TELEGRAM_BOT_${rawUpper}`,
+    `TELEGRAM_BOT_${norm.replace(/_STORAGE$/, '')}`,
+    `TELEGRAM_BOT_${norm.replace(/_MEDIA$/, '')}`,
+    `TELEGRAM_BOT_${norm.replace(/^STORAGE_/, '')}`,
+    `TELEGRAM_BOT_${norm}_STORAGE`,
+    `TELEGRAM_BOT_${norm}_MEDIA`
   ];
   for (const v of variations) {
     if ((env as any)[v]) return (env as any)[v];
@@ -119,12 +169,22 @@ function getEnvToken(upper: string): string | undefined {
   return undefined;
 }
 
-function getEnvChat(upper: string): string | undefined {
+function getEnvChat(rawUpper: string): string | undefined {
+  const norm = normalizeBotReference(rawUpper);
+  if (norm === 'MANGA_STORAGE_2') {
+    const c = (env as any).TELEGRAM_CHAT_MANGA_STORAGE_2 || (env as any).TELEGRAM_CHAT_MANGA_02;
+    if (c) return c;
+  }
+  if (norm === 'MANGA_STORAGE_01') {
+    const c = (env as any).TELEGRAM_CHAT_MANGA_STORAGE_01 || (env as any).TELEGRAM_CHAT_MANGA_01;
+    if (c) return c;
+  }
   const variations = [
-    `TELEGRAM_CHAT_${upper}`,
-    `TELEGRAM_CHAT_${upper.replace(/_STORAGE$/, '')}`,
-    `TELEGRAM_CHAT_${upper.replace(/_MEDIA$/, '')}`,
-    `TELEGRAM_CHANNEL_${upper}`
+    `TELEGRAM_CHAT_${norm}`,
+    `TELEGRAM_CHAT_${rawUpper}`,
+    `TELEGRAM_CHAT_${norm.replace(/_STORAGE$/, '')}`,
+    `TELEGRAM_CHAT_${norm.replace(/_MEDIA$/, '')}`,
+    `TELEGRAM_CHANNEL_${norm}`
   ];
   for (const v of variations) {
     if ((env as any)[v]) return (env as any)[v];
@@ -137,9 +197,9 @@ function getEnvChat(upper: string): string | undefined {
  * Supports dedicated bot tokens per shard pool or gracefully falls back to primary credentials.
  */
 export function resolveBotClient(botRef: string, targetChannel?: string) {
-  const upper = (botRef || 'PRIMARY').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-  const token = getEnvToken(upper) || env.TELEGRAM_BOT_TOKEN;
-  const specificChat = getEnvChat(upper);
+  const norm = normalizeBotReference(botRef);
+  const token = getEnvToken(norm) || env.TELEGRAM_BOT_TOKEN;
+  const specificChat = getEnvChat(norm);
   const chat = targetChannel || specificChat || env.TELEGRAM_CHAT_ID;
 
   if (!token || !chat) {
@@ -150,7 +210,7 @@ export function resolveBotClient(botRef: string, targetChannel?: string) {
     client: telegramStorage(token, chat),
     token,
     chat,
-    botRef: upper
+    botRef: norm
   };
 }
 
@@ -158,14 +218,18 @@ export function resolveBotClient(botRef: string, targetChannel?: string) {
  * Resolves download client with strict Bot Affinity.
  */
 export function resolveBotDownloadClient(botRef: string) {
-  const upper = (botRef || 'PRIMARY').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-  const token = getEnvToken(upper) || env.TELEGRAM_BOT_TOKEN;
+  const norm = normalizeBotReference(botRef);
+  const token = getEnvToken(norm) || (norm === 'MANGA_STORAGE_2' ? undefined : env.TELEGRAM_BOT_TOKEN);
 
   if (!token) {
     throw new Error(`Credenciais de leitura Telegram não encontradas para [${botRef}].`);
   }
 
-  return telegramStorage(token, '');
+  const client = telegramStorage(token, '');
+  return {
+    ...client,
+    botRef: norm
+  };
 }
 
 /**

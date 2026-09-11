@@ -49,13 +49,14 @@
   style="aspect-ratio:{page.width}/{page.height}"
 >
   {#if near && !broken}<img
-      src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry : ''}`}
+      src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
       alt="Página {page.position}"
       width={page.width}
       height={page.height}
       decoding="async"
       onload={() => {
         loaded = true;
+        broken = false;
         onSeen(page.position, visibleNow);
       }}
       onerror={() => {
@@ -69,6 +70,7 @@
       <button
         class="button secondary"
         onclick={() => {
+          loaded = false;
           retry++;
           broken = false;
         }}>Tentar novamente</button
