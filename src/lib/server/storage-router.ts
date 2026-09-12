@@ -122,7 +122,7 @@ export function normalizeBotReference(rawRef: string | null | undefined): string
 }
 
 export const KNOWN_MANGA_SHARDS: Record<string, { name: string; botRef: string; shardId: string; channelId: string }> = {
-  '0383b872': { name: 'Site Mangá (Storage 000)', botRef: 'MANGA_STORAGE_01', shardId: '935e146d-de3f-4a8e-b393-692944c716fa', channelId: '-1004353931378' },
+  '0383b872': { name: 'Nox Mangá',                botRef: 'MANGA_STORAGE_01', shardId: '935e146d-de3f-4a8e-b393-692944c716fa', channelId: '-1004353931378' },
   'd22770c9': { name: 'Nox Manga Storage 001',    botRef: 'MANGA_STORAGE_01', shardId: '3a4be1a3-f5d2-40c9-9eab-697c2357b183', channelId: '-1003525800137' },
   'dbc29f11': { name: 'Nox Manga Storage 002',    botRef: 'MANGA_STORAGE_01', shardId: 'a3b6a10e-f53a-4873-9f19-d4cc8576de3a', channelId: '-1003686965009' },
   '064ee013': { name: 'Nox Manga Storage 003',    botRef: 'MANGA_STORAGE_01', shardId: '424e8be1-dc8a-4d97-a904-119c7ef1c9b5', channelId: '-1004400799763' },

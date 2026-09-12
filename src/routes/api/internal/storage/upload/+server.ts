@@ -154,11 +154,18 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
         chapterId,
         error: shardErr?.message
       });
-      // Fallback to primary client if router query fails
-      try {
-        botClient = resolveBotClient('MANGA_STORAGE_01');
-      } catch {
-        botClient = resolveBotClient('primary');
+      // Fallback: pick a known healthy manga shard from control plane definition
+      const fallbackShard = KNOWN_MANGA_SHARDS['0383b872'] || Object.values(KNOWN_MANGA_SHARDS)[0];
+      if (fallbackShard) {
+        shardId = fallbackShard.shardId;
+        selectedShardDisplayName = fallbackShard.name;
+        botClient = resolveBotClient(fallbackShard.botRef, fallbackShard.channelId);
+      } else {
+        try {
+          botClient = resolveBotClient('MANGA_STORAGE_01');
+        } catch {
+          botClient = resolveBotClient('primary');
+        }
       }
     } else {
       const selectedShard = shardRows[0];
