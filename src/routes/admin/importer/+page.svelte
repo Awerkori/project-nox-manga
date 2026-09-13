@@ -1129,7 +1129,7 @@
           <div>
             <div class="title-with-badge">
               <h2 class="panel-title">Importando Agora</h2>
-              <span class="badge-accent">{(data.importingJobs || []).length} ativos</span>
+              <span class="badge-accent">{data.counts?.importing ?? (data.importingJobs || []).length} ativos</span>
             </div>
             <p class="panel-sub">Capítulos em execução concorrente no worker (download, validação e storage)</p>
           </div>
@@ -1810,8 +1810,18 @@
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">Saúde das Fontes</h2>
-            <p class="panel-sub">Estado operacional e conectividade dos provedores ({data.activeSourcesCount ?? 5}/{data.totalSourcesCount ?? 6} ativas)</p>
+            <h2 class="panel-title">Saúde das Fontes Operacionais</h2>
+            <p class="panel-sub">
+              Provedores: <span style="color: #22c55e; font-weight: 600;">{data.activeSourcesCount ?? 0} operacionais ativos</span>
+              {#if (data.upstreamBlockedSourcesCount ?? 0) > 0}
+                <span style="color: #64748b; margin: 0 4px;">•</span>
+                <span style="color: #f59e0b;">{data.upstreamBlockedSourcesCount} pausadas por upstream (Cloudflare)</span>
+              {/if}
+              {#if (data.excludedByPolicySourcesCount ?? 0) > 0}
+                <span style="color: #64748b; margin: 0 4px;">•</span>
+                <span style="color: #ef4444;">{data.excludedByPolicySourcesCount} excluídas por diretriz</span>
+              {/if}
+            </p>
           </div>
         </div>
 
@@ -1825,10 +1835,10 @@
                     <strong class="blocker-name">{blocker.sourceName}</strong>
                     <span class="blocker-badge">UPSTREAM BLOCKED</span>
                   </div>
-                  <span class="blocker-jobs-tag">{blocker.affectedJobsCount} jobs retidos</span>
+                  <span class="blocker-jobs-tag">{blocker.affectedJobsCount === 0 ? '0 jobs retidos (seguro)' : `${blocker.affectedJobsCount} jobs retidos`}</span>
                 </div>
                 <p class="blocker-lead-text">
-                  Cloudflare bloqueia o ambiente atual do Importer.
+                  Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276).
                 </p>
                 <div class="blocker-env-grid">
                   <span class="env-pill env-local">Local/Mihon: HTTP {blocker.localStatus} (funcional)</span>
@@ -1840,20 +1850,21 @@
         {/if}
 
         <div class="sources-list">
-          {#each data.sources as src (src.id)}
-            <div class="source-card {src.status === 'UPSTREAM_BLOCKED' ? 'source-card-blocked' : ''}">
+          {#each (data.operationalSources || data.sources) as src (src.id)}
+            <div class="source-card {src.status === 'DEGRADED' ? 'source-card-degraded' : ''}">
               <div class="source-top">
-                <strong class="source-name">{src.name}</strong>
+                <div class="source-ident-col" style="display: flex; flex-direction: column; gap: 2px;">
+                  <strong class="source-name">{src.name}</strong>
+                  {#if src.base_url}
+                    <span class="source-domain-tag" style="font-size: 0.68rem; color: #a1a1aa; font-family: monospace;">
+                      {src.base_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                    </span>
+                  {/if}
+                </div>
                 <span class="source-status-tag status-{src.status.toLowerCase()}">
                   {src.status.replace('_', ' ')}
                 </span>
               </div>
-              {#if src.status === 'UPSTREAM_BLOCKED'}
-                <div class="source-blocked-micro">
-                  <span class="micro-title">Cloudflare bloqueia o ambiente atual do Importer.</span>
-                  <span class="micro-desc">Local/Mihon: funcional · DIScloud: HTTP 403</span>
-                </div>
-              {/if}
               <div class="source-details">
                 <span class="source-rate">Taxa: {src.rate_limit_per_second} req/s</span>
                 <span class="source-sync">Ciclo: {src.sync_interval_minutes}m</span>
@@ -1867,6 +1878,52 @@
             </div>
           {/each}
         </div>
+
+        {#if (data.upstreamBlockedSources && data.upstreamBlockedSources.length > 0) || (data.excludedByPolicySources && data.excludedByPolicySources.length > 0)}
+          <div class="policy-sources-wrapper" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              {#if data.upstreamBlockedSources && data.upstreamBlockedSources.length > 0}
+                <div class="policy-group" style="flex: 1; min-width: 280px;">
+                  <h4 style="font-size: 0.8rem; color: #f59e0b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+                    <AlertTriangle size={13} />
+                    Fontes Bloqueadas Upstream ({data.upstreamBlockedSources.length})
+                  </h4>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    {#each data.upstreamBlockedSources as s}
+                      <div style="background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                          <strong style="color: #f3f4f6;">{s.name}</strong>
+                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.base_url?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+                        </div>
+                        <span style="color: #f59e0b; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;">BLOCKED</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              {#if data.excludedByPolicySources && data.excludedByPolicySources.length > 0}
+                <div class="policy-group" style="flex: 1; min-width: 280px;">
+                  <h4 style="font-size: 0.8rem; color: #ef4444; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+                    <Shield size={13} />
+                    Fontes Excluídas por Diretriz do Projeto ({data.excludedByPolicySources.length})
+                  </h4>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    {#each data.excludedByPolicySources as s}
+                      <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                          <strong style="color: #f3f4f6;">{s.name}</strong>
+                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.base_url?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+                        </div>
+                        <span style="color: #ef4444; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;">EXCLUDED</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
       </section>
 
       <!-- 3. Diagnóstico Avançado & Falhas Recentes -->

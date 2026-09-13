@@ -37,7 +37,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       .select('*')
       .eq('status', 'IMPORTING')
       .order('updated_at', { ascending: false })
-      .limit(16),
+      .limit(64),
 
     // 3b. Jobs awaiting retry (DEDICATED RETRIES AREA)
     locals.db
@@ -130,7 +130,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     failed1hRes,
     failed24hRes,
     recentFailuresRes,
-    blockedUpstreamCount
+    blockedUpstreamRes
   ] = await Promise.all([
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
@@ -142,7 +142,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
     locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
     locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'BLOCKED_BY_UPSTREAM')
+    locals.db.from('importer_queue').select('source').eq('status', 'BLOCKED_BY_UPSTREAM')
   ]);
 
   const importingJobs = importingJobsRes.data || [];
@@ -253,14 +253,28 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
   }
 
+  const blockedUpstreamJobs = blockedUpstreamRes.data || [];
+  const blockedUpstreamTotal = blockedUpstreamJobs.length;
+  const blockedCountBySource: Record<string, number> = {};
+  for (const j of blockedUpstreamJobs) {
+    if (j.source) {
+      blockedCountBySource[j.source] = (blockedCountBySource[j.source] || 0) + 1;
+    }
+  }
+
   const sourcesList = sourcesRes.data || [];
-  const blockedSources = sourcesList.filter((s: any) => s.status === 'UPSTREAM_BLOCKED');
-  const providerBlockers = blockedSources.map((s: any) => ({
+  const operationalSources = sourcesList.filter(
+    (s: any) => s.enabled === true && (s.status === 'ACTIVE' || s.status === 'DEGRADED')
+  );
+  const upstreamBlockedSources = sourcesList.filter((s: any) => s.status === 'UPSTREAM_BLOCKED');
+  const excludedByPolicySources = sourcesList.filter((s: any) => s.status === 'EXCLUDED_BY_POLICY');
+
+  const providerBlockers = upstreamBlockedSources.map((s: any) => ({
     sourceId: s.id,
     sourceName: s.name,
     reason: s.blocked_reason || 'CLOUDFLARE_DATACENTER_BLOCK',
     message: (s.blocked_details as any)?.message || 'Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276). Local/Mihon: funcional; DIScloud: HTTP 403.',
-    affectedJobsCount: blockedUpstreamCount.count || 0,
+    affectedJobsCount: blockedCountBySource[s.id] || 0,
     localStatus: (s.blocked_details as any)?.local_status ?? 200,
     remoteStatus: (s.blocked_details as any)?.discloud_status ?? 403
   }));
@@ -274,7 +288,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       retry: retryCount.count || 0,
       paused: pausedCount.count || 0,
       cancelled: cancelledCount.count || 0,
-      blockedByUpstream: blockedUpstreamCount.count || 0,
+      blockedByUpstream: blockedUpstreamTotal,
       staged: stagedCountRes.count || 0,
       completed: completedCount.count || 0,
       failed: failedCount.count || 0,
@@ -282,7 +296,14 @@ export const load: PageServerLoad = async ({ locals }) => {
       failed24h: failed24hRes.count || 0
     },
     providerBlockers,
-    activeSourcesCount: sourcesList.filter((s: any) => s.status === 'ACTIVE').length,
+    sources: operationalSources,
+    operationalSources,
+    upstreamBlockedSources,
+    excludedByPolicySources,
+    activeSourcesCount: operationalSources.filter((s: any) => s.status === 'ACTIVE').length,
+    operationalSourcesCount: operationalSources.length,
+    upstreamBlockedSourcesCount: upstreamBlockedSources.length,
+    excludedByPolicySourcesCount: excludedByPolicySources.length,
     totalSourcesCount: sourcesList.length,
     recentFailures: recentFailuresRes.data || [],
     recentAudit: staffAuditRes.data || [],
@@ -308,7 +329,6 @@ export const load: PageServerLoad = async ({ locals }) => {
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
     stagedChapters: stagedRes.data || [],
-    sources: sourcesRes.data || [],
     catalogWorks: worksListRes.data || [],
     workHealth: (workHealthRes.data || []).map((h: any) => ({
       ...h,
@@ -347,6 +367,10 @@ export const actions: Actions = {
     const sourceUrl = form.get('source_url')?.toString() || null;
     const reason = form.get('reason')?.toString() || null;
     const forceReplace = form.get('force_replace')?.toString() === 'true';
+
+    if (source === 'toonlivre' || source === 'nexus_toons') {
+      return fail(400, { error: 'Esta fonte está permanentemente excluída por diretriz do projeto.' });
+    }
 
     // If workId is not provided but candidate details were passed, resolve or create
     if (!workId && candidateTitle && sourceWorkId) {
