@@ -78,9 +78,9 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         'Content-Type': 'application/json'
       });
       const path = result.file_path;
-      if (typeof path !== 'string' || !/^documents\/[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(path))
+      if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
         throw unavailable();
-      if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 19_000_000)
+      if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
         throw unavailable();
       try {
         const response = await transport(`https://api.telegram.org/file/bot${token}/${path}`, {

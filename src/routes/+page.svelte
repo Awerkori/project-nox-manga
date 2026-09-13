@@ -136,7 +136,7 @@
     {/if}
 
     <!-- 5. Lançamentos (Single Wide Column High-Density Feed) -->
-    <RecentReleases releases={data.recentReleases} />
+    <RecentReleases releases={data.recentReleases} loadError={data.loadError} isStale={data.isStale} />
   </div>
 </div>
 

@@ -24,8 +24,10 @@
     ExternalLink,
     Heart,
     Clock,
-    ShieldCheck
+    ShieldCheck,
+    AlertTriangle
   } from '@lucide/svelte';
+  import { enhance } from '$app/forms';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import AchievementIcon from '$lib/components/AchievementIcon.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
@@ -42,7 +44,7 @@
   let followBusy = $state(false);
 
   // Active public profile tab
-  let activeTab = $state<'favorites' | 'reading' | 'achievements' | 'cosmetics'>('favorites');
+  let activeTab = $state<'favorites' | 'reading' | 'achievements' | 'cosmetics' | 'teams'>('favorites');
   let cosmeticFilter = $state<string>('ALL');
 
   $effect(() => {
@@ -61,10 +63,12 @@
       activeTab = 'cosmetics';
     } else if (tabParam === 'conquistas' || tabParam === 'achievements' || window.location.hash === '#conquistas') {
       activeTab = 'achievements';
+    } else if (tabParam === 'equipes' || tabParam === 'teams' || window.location.hash === '#equipes') {
+      activeTab = 'teams';
     }
   });
 
-  function switchTab(tab: 'favorites' | 'reading' | 'achievements' | 'cosmetics') {
+  function switchTab(tab: 'favorites' | 'reading' | 'achievements' | 'cosmetics' | 'teams') {
     activeTab = tab;
     const anchor = document.getElementById('profile-content-anchor');
     if (anchor) {
@@ -312,15 +316,17 @@
                   class:owner={sr.role === 'OWNER'}
                   class:admin={sr.role === 'ADMIN'}
                   class:uploader={sr.role === 'UPLOADER'}
-                  title="Membro da equipe {sr.scan.name}"
+                  title={sr.fullTitle || `Membro da equipe ${sr.scan.name}`}
                 >
                   {#if sr.scan.logo_id}
                     <img src="/media/{sr.scan.logo_id}" alt="" class="scan-badge-logo" />
+                  {:else if sr.role === 'OWNER'}
+                    <Crown size={13} class="text-amber" />
                   {:else}
                     <ShieldCheck size={13} />
                   {/if}
                   <span class="scan-badge-role">
-                    {sr.role === 'OWNER' ? 'Líder' : sr.role === 'ADMIN' ? 'Admin Scan' : sr.role === 'UPLOADER' ? 'Uploader' : 'Staff'}
+                    {sr.role === 'OWNER' ? '👑 Dono' : (sr.primaryPosition?.name || (sr.role === 'ADMIN' ? 'Admin' : sr.role === 'UPLOADER' ? 'Uploader' : 'Staff'))}
                   </span>
                   <span class="scan-badge-dot">·</span>
                   <span class="scan-badge-name">{sr.scan.name}</span>
@@ -607,6 +613,19 @@
               {/if}
             </span>
           </button>
+
+          {#if data.scanRoles && data.scanRoles.length > 0}
+            <button
+              type="button"
+              class="profile-tab-btn"
+              class:active={activeTab === 'teams'}
+              onclick={() => switchTab('teams')}
+            >
+              <ShieldCheck size={17} />
+              <span>Equipes</span>
+              <span class="tab-count-pill">{data.scanRoles.length}</span>
+            </button>
+          {/if}
         </div>
 
         <!-- TAB: FAVORITOS -->
@@ -971,6 +990,142 @@
                   <p>Nenhum cosmético encontrado para esta categoria no acervo do leitor.</p>
                 </div>
               {/if}
+            {/if}
+          </section>
+        {:else if activeTab === 'teams'}
+          <section class="tab-pane teams-pane">
+            {#if data.isSelf}
+              <div class="user-privacy-control-box">
+                <div class="privacy-control-left">
+                  <ShieldCheck size={18} class="text-gold" />
+                  <div>
+                    <strong class="privacy-box-title">Privacidade das Equipes no Perfil</strong>
+                    <p class="privacy-box-sub">Defina como suas scans e cargos aparecem para os outros leitores no seu perfil público.</p>
+                  </div>
+                </div>
+
+                <form method="POST" action="?/toggleScanPrivacy" use:enhance class="privacy-actions-form">
+                  <label class="privacy-checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="show_scans"
+                      checked={data.member.privacy_show_scans ?? true}
+                      onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                    />
+                    <span>Exibir emblemas de equipes</span>
+                  </label>
+
+                  <select
+                    name="mode"
+                    value={data.member.privacy_scan_mode ?? 'PRIMARY'}
+                    class="privacy-select-field"
+                    onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                  >
+                    <option value="PRIMARY">Apenas Equipe Principal</option>
+                    <option value="ALL">Todas as Equipes</option>
+                    <option value="NONE">Ocultar Todas</option>
+                  </select>
+                </form>
+              </div>
+            {/if}
+
+            {#if data.isViewerGlobalAdmin && !data.isSelf}
+              <div class="admin-mod-control-box" class:is-hidden={data.member.admin_hide_scan_badges}>
+                <div class="admin-mod-left">
+                  <AlertTriangle size={18} class={data.member.admin_hide_scan_badges ? 'text-red' : 'text-amber'} />
+                  <div>
+                    <strong class="admin-mod-title">Moderação Global de Equipes (Admin)</strong>
+                    <p class="admin-mod-sub">
+                      {data.member.admin_hide_scan_badges ? 'Emblemas de equipe deste leitor estão OCULTOS globalmente por um administrador.' : 'Emblemas de equipe deste leitor estão visíveis normalmente conforme a privacidade do usuário.'}
+                    </p>
+                  </div>
+                </div>
+
+                <form method="POST" action="?/moderateUserScans" use:enhance>
+                  <input type="hidden" name="target_user_id" value={data.member.id} />
+                  <input
+                    type="hidden"
+                    name="hide_badges"
+                    value={data.member.admin_hide_scan_badges ? 'false' : 'true'}
+                  />
+                  <button
+                    type="submit"
+                    class="btn-admin-mod"
+                    class:restore={data.member.admin_hide_scan_badges}
+                  >
+                    {data.member.admin_hide_scan_badges ? 'Restaurar Emblemas do Usuário' : 'Ocultar Emblemas Globalmente'}
+                  </button>
+                </form>
+              </div>
+            {/if}
+
+            {#if data.scanRoles && data.scanRoles.length > 0}
+              <div class="teams-grid">
+                {#each data.scanRoles as sr}
+                  <div class="user-team-card">
+                    <div class="user-team-header">
+                      <div class="team-logo-wrap">
+                        {#if sr.scan.logo_id}
+                          <img src="/media/{sr.scan.logo_id}" alt={sr.scan.name} class="team-logo-img" />
+                        {:else}
+                          <div class="team-logo-fallback">NOX</div>
+                        {/if}
+                      </div>
+                      <div class="team-title-wrap">
+                        <div class="team-name-row">
+                          <h3 class="team-name">{sr.scan.name}</h3>
+                          {#if sr.scan.is_official}
+                            <span class="official-verified-badge" title="Scan Oficial Project Nox">
+                              <Sparkles size={12} /> Oficial
+                            </span>
+                          {/if}
+                        </div>
+                        <span class="team-main-role" class:owner={sr.role === 'OWNER'}>
+                          {sr.fullTitle}
+                        </span>
+                      </div>
+                    </div>
+
+                    {#if sr.positions && sr.positions.length > 0}
+                      <div class="team-positions-row">
+                        <span class="team-positions-label">Cargos Editoriais:</span>
+                        <div class="team-positions-tags">
+                          {#each sr.positions as pos}
+                            <span class="user-pos-tag" class:primary={pos.is_primary}>
+                              {#if pos.is_primary}★ {/if}{pos.name}
+                            </span>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+
+                    {#if sr.scan.description}
+                      <p class="user-team-desc">{sr.scan.description}</p>
+                    {/if}
+
+                    <div class="user-team-footer">
+                      {#if sr.created_at}
+                        <span class="team-member-since">
+                          <Calendar size={13} />
+                          <span>Membro desde {date(sr.created_at)}</span>
+                        </span>
+                      {/if}
+                      <a href="/scans/{sr.scan.slug}" class="btn-team-link">
+                        <span>Ver Scan</span>
+                        <ExternalLink size={13} />
+                      </a>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="achievements-empty">
+                <div class="empty-icon-wrap">
+                  <ShieldCheck size={36} />
+                </div>
+                <h3>Nenhuma Equipe</h3>
+                <p>Este leitor ainda não faz parte de nenhuma equipe parceira cadastrada.</p>
+              </div>
             {/if}
           </section>
         {/if}
@@ -2378,5 +2533,320 @@
   .empty-tab-state p {
     font-size: 0.85rem;
     margin: 0;
+  }
+
+  /* Teams Pane */
+  .teams-pane {
+    width: 100%;
+  }
+
+  .teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .user-team-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.2s ease;
+  }
+
+  .user-team-card:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .user-team-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .team-logo-wrap {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #141724;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+
+  .team-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .team-logo-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #dfc28d;
+    background: linear-gradient(135deg, rgba(223, 194, 141, 0.15), rgba(139, 92, 246, 0.15));
+  }
+
+  .team-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .team-name-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .team-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+  }
+
+  .team-main-role {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #c4b5fd;
+  }
+
+  .team-main-role.owner {
+    color: #fbbf24;
+  }
+
+  .team-positions-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .team-positions-label {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  .team-positions-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .user-pos-tag {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .user-pos-tag.primary {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+    border-color: rgba(139, 92, 246, 0.35);
+  }
+
+  .user-team-desc {
+    font-size: 0.86rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .user-team-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: auto;
+  }
+
+  .team-member-since {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .btn-team-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #dfc28d;
+    text-decoration: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(223, 194, 141, 0.1);
+    border: 1px solid rgba(223, 194, 141, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .btn-team-link:hover {
+    background: rgba(223, 194, 141, 0.2);
+    color: #ffffff;
+  }
+
+  .text-amber {
+    color: #fbbf24;
+  }
+
+  .text-red {
+    color: #f87171;
+  }
+
+  .text-gold {
+    color: #dfc28d;
+  }
+
+  /* Teams Privacy & Moderation Controls */
+  .user-privacy-control-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(18, 22, 34, 0.75);
+    border: 1px solid rgba(223, 194, 141, 0.25);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .privacy-control-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .privacy-box-title {
+    display: block;
+    font-size: 0.92rem;
+    color: #f1f5f9;
+    margin-bottom: 0.15rem;
+  }
+
+  .privacy-box-sub {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+
+  .privacy-actions-form {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .privacy-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .privacy-select-field {
+    background: rgba(10, 13, 22, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #f1f5f9;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .admin-mod-control-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .admin-mod-control-box.is-hidden {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  .admin-mod-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .admin-mod-title {
+    display: block;
+    font-size: 0.92rem;
+    color: #f1f5f9;
+    margin-bottom: 0.15rem;
+  }
+
+  .admin-mod-sub {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+
+  .btn-admin-mod {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #f87171;
+    padding: 0.45rem 0.95rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-admin-mod:hover {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  .btn-admin-mod.restore {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #34d399;
+  }
+
+  .btn-admin-mod.restore:hover {
+    background: #10b981;
+    color: #fff;
   }
 </style>

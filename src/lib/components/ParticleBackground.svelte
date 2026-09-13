@@ -184,6 +184,7 @@
     pointer-events: none;
     z-index: 0;
     overflow: hidden;
+    contain: strict;
   }
 
   .particle-canvas {
@@ -238,5 +239,19 @@
       rgba(6, 7, 12, 0.6) 100%
     );
     pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    .ambient-glow {
+      filter: none;
+      opacity: 0.35;
+    }
+    .glow-top {
+      width: 100%;
+      height: 250px;
+    }
+    .glow-side {
+      display: none;
+    }
   }
 </style>

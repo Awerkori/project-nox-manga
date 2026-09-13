@@ -97,6 +97,11 @@ export async function storeImage(input: Request | FormData, userId: string, defa
     }
   }
 
+  // Ensure staff manual uploads are strictly preserved and never degraded to editorial
+  if (defaultPurpose === 'staff_manual' && (!purpose || purpose === 'editorial')) {
+    purpose = 'staff_manual';
+  }
+
   let info;
   try {
     info = inspectImage(bytes);

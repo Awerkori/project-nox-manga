@@ -1,5 +1,6 @@
-import { error } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import { NOX_TITLES } from '$lib/levels';
+import { formatScanRoleTitle, formatScanBadgeText, getScanPreposition } from '$lib/scans';
 
 export const load = async ({ locals, params }) => {
   const { data: member } = await locals.db
@@ -22,6 +23,9 @@ export const load = async ({ locals, params }) => {
       privacy_show_cosmetics,
       privacy_show_favorites,
       privacy_show_reading_history,
+      privacy_show_scans,
+      privacy_scan_mode,
+      admin_hide_scan_badges,
       avatar_crop,
       banner_crop,
       created_at
@@ -50,7 +54,8 @@ export const load = async ({ locals, params }) => {
     favoritesRes,
     readingRes,
     scanRolesRes,
-    staffRoleRes
+    staffRoleRes,
+    scanMemberPositionsRes
   ] = await Promise.all([
     locals.db.rpc('member_public_profile_stats', { p_user: member.id }),
     locals.db.from('user_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', member.id),
@@ -168,13 +173,18 @@ export const load = async ({ locals, params }) => {
       .from('scan_members')
       .select(`
         role,
+        is_public,
+        hidden_by_admin,
+        created_at,
         scans!inner(
           id,
           name,
           slug,
           logo_id,
           is_official,
-          status
+          status,
+          description,
+          display_preposition
         )
       `)
       .eq('user_id', member.id)
@@ -184,7 +194,22 @@ export const load = async ({ locals, params }) => {
       .select('role')
       .eq('user_id', member.id)
       .eq('suspended', false)
-      .maybeSingle()
+      .maybeSingle(),
+    locals.db
+      .from('scan_member_positions')
+      .select(`
+        scan_id,
+        is_primary,
+        is_public,
+        hidden_by_admin,
+        created_at,
+        scan_positions!inner(
+          id,
+          name,
+          icon
+        )
+      `)
+      .eq('user_id', member.id)
   ]);
 
   // Format unlocked achievements
@@ -386,10 +411,59 @@ export const load = async ({ locals, params }) => {
   }
   const recentReadings = Array.from(readingMap.values());
 
-  const scanRoles = (scanRolesRes.data || []).map((r: any) => ({
-    role: r.role,
-    scan: r.scans
+  const scanPositions = (scanMemberPositionsRes.data || []).map((p: any) => ({
+    scan_id: p.scan_id,
+    is_primary: p.is_primary,
+    created_at: p.created_at,
+    id: p.scan_positions?.id,
+    name: p.scan_positions?.name,
+    icon: p.scan_positions?.icon
   }));
+
+  const isViewerGlobalAdmin = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+  const canViewScanBadges = (
+    !member.admin_hide_scan_badges || isViewerGlobalAdmin
+  ) && (
+    (member.privacy_show_scans ?? true) || isSelf || isViewerGlobalAdmin
+  ) && (
+    (member.privacy_scan_mode ?? 'PRIMARY') !== 'NONE' || isSelf || isViewerGlobalAdmin
+  );
+
+  let scanRoles: any[] = [];
+
+  if (canViewScanBadges) {
+    const rawScanRoles = (scanRolesRes.data || []).filter((r: any) => {
+      if (r.hidden_by_admin && !isViewerGlobalAdmin) return false;
+      if (!r.is_public && !isSelf && !isViewerGlobalAdmin) return false;
+      return true;
+    });
+
+    const mapped = rawScanRoles.map((r: any) => {
+      const userPositions = scanPositions.filter((p: any) => p.scan_id === r.scans.id && (isViewerGlobalAdmin || (!p.hidden_by_admin && (p.is_public || isSelf))));
+      const primaryPos = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
+      const prep = r.scans.display_preposition || getScanPreposition(r.scans);
+      const badgeText = formatScanBadgeText(r.role, primaryPos?.name, r.scans.name);
+      const fullTitle = formatScanRoleTitle(r.role, primaryPos?.name, r.scans.name, prep);
+
+      return {
+        role: r.role,
+        is_public: r.is_public,
+        hidden_by_admin: r.hidden_by_admin,
+        created_at: r.created_at,
+        scan: r.scans,
+        positions: userPositions,
+        primaryPosition: primaryPos,
+        badgeText,
+        fullTitle
+      };
+    });
+
+    if (member.privacy_scan_mode === 'PRIMARY' && !isSelf && !isViewerGlobalAdmin) {
+      scanRoles = mapped.slice(0, 1);
+    } else {
+      scanRoles = mapped;
+    }
+  }
 
   const isFollowing = !!isFollowingRes.data;
 
@@ -410,6 +484,7 @@ export const load = async ({ locals, params }) => {
     recentReadings,
     scanRoles,
     isSelf,
+    isViewerGlobalAdmin,
     isFollowing,
     canViewAchievements,
     canViewCosmetics,
@@ -418,4 +493,32 @@ export const load = async ({ locals, params }) => {
     viewerAuthenticated: !!locals.user,
     staffRole: staffRoleRes.data?.role || null
   };
+};
+
+export const actions = {
+  toggleScanPrivacy: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const showScans = formData.get('show_scans') === 'on';
+    const mode = (formData.get('mode') as string) || 'PRIMARY';
+    const { error: rpcErr } = await locals.db.rpc('toggle_user_scan_privacy', {
+      p_show_scans: showScans,
+      p_mode: mode
+    });
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, action: 'toggleScanPrivacy' };
+  },
+
+  moderateUserScans: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const targetUserId = (formData.get('target_user_id') as string)?.trim();
+    const hideBadges = formData.get('hide_badges') === 'true';
+    const { error: rpcErr } = await locals.db.rpc('admin_moderate_user_scans', {
+      p_target_user_id: targetUserId,
+      p_hide_badges: hideBadges
+    });
+    if (rpcErr) return fail(400, { message: rpcErr.message });
+    return { success: true, action: 'moderateUserScans' };
+  }
 };

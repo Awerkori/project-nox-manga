@@ -15,6 +15,14 @@ export interface ProgressStats {
   speedMBs: number;
   inCooldown: boolean;
   cooldownSecondsRemaining?: number;
+  /** True strictly when a real HTTP 429 rate limit is in cooldown */
+  isRateLimited: boolean;
+  rateLimitSecondsRemaining?: number;
+  /** True when retrying after a transient network/502/503 error */
+  isRetryingTransient: boolean;
+  transientRetrySecondsRemaining?: number;
+  transientAttempt?: number;
+  transientMaxRetries?: number;
   /** True when operating at reduced speed after a rate limit recovery */
   inRecovery?: boolean;
 }
@@ -26,8 +34,8 @@ export interface FlushOptions {
   concurrency?: number;
   /** Base pace between uploads in ms (default: 250). */
   basePaceMs?: number;
-  /** Called when a retry is about to happen, with the wait time in seconds. */
-  onRetry?: (file: File, attempt: number, waitSeconds: number) => void;
+  /** Called when a retry is about to happen, with the wait time in seconds and whether it is a 429 rate limit. */
+  onRetry?: (file: File, attempt: number, waitSeconds: number, isRateLimit?: boolean) => void;
   /** Real-time progress update callback */
   onProgress?: (stats: ProgressStats) => void;
 }
@@ -132,18 +140,87 @@ export function isInRecovery(): boolean {
   return currentPaceMs > 0 || concurrencyOverride > 0;
 }
 
-/** Check if currently under rate limit cooldown and sleep until expired */
+/** Check if currently under rate limit cooldown and countdown until expired */
 async function waitForCooldown(
-  onRetry?: (file: File, attempt: number, waitSeconds: number) => void,
-  currentFile?: File
+  onRetry?: (file: File, attempt: number, waitSeconds: number, isRateLimit?: boolean) => void,
+  currentFile?: File,
+  emitTicker?: (stats: Partial<ProgressStats>) => void,
+  paused?: () => boolean
 ): Promise<void> {
-  while (Date.now() < rateLimitCooldownUntil) {
+  let prevSec = -1;
+  while (Date.now() < rateLimitCooldownUntil && (!paused || !paused())) {
     const remainingSec = Math.ceil((rateLimitCooldownUntil - Date.now()) / 1000);
-    if (remainingSec > 0 && currentFile && onRetry) {
-      onRetry(currentFile, 1, remainingSec);
+    if (remainingSec !== prevSec) {
+      prevSec = remainingSec;
+      if (currentFile && onRetry) {
+        onRetry(currentFile, 1, remainingSec, true);
+      }
+      if (emitTicker) {
+        emitTicker({
+          inCooldown: true,
+          cooldownSecondsRemaining: remainingSec,
+          isRateLimited: true,
+          rateLimitSecondsRemaining: remainingSec,
+          isRetryingTransient: false,
+          transientRetrySecondsRemaining: 0
+        });
+      }
     }
-    const sleepChunk = Math.min(1000, Math.max(50, rateLimitCooldownUntil - Date.now()));
+    const sleepChunk = Math.min(1000, Math.max(20, rateLimitCooldownUntil - Date.now()));
     await sleep(sleepChunk);
+  }
+  if (!paused || !paused()) {
+    if (currentFile && onRetry && prevSec !== -1) {
+      onRetry(currentFile, 1, 0, true);
+    }
+    if (emitTicker && prevSec !== -1) {
+      emitTicker({
+        inCooldown: false,
+        cooldownSecondsRemaining: 0,
+        isRateLimited: false,
+        rateLimitSecondsRemaining: 0
+      });
+    }
+  }
+}
+
+/** Sleep with second-by-second countdown for transient non-429 error retries */
+async function waitTransientBackoff(
+  backoffMs: number,
+  file: File,
+  attempt: number,
+  maxRetries: number,
+  onRetry?: (file: File, attempt: number, waitSeconds: number, isRateLimit?: boolean) => void,
+  emitTicker?: (stats: Partial<ProgressStats>) => void,
+  paused?: () => boolean
+): Promise<void> {
+  const until = Date.now() + backoffMs;
+  let prevSec = -1;
+  while (Date.now() < until && (!paused || !paused())) {
+    const remainingSec = Math.ceil((until - Date.now()) / 1000);
+    if (remainingSec !== prevSec) {
+      prevSec = remainingSec;
+      onRetry?.(file, attempt, remainingSec, false);
+      emitTicker?.({
+        inCooldown: false,
+        cooldownSecondsRemaining: 0,
+        isRateLimited: false,
+        rateLimitSecondsRemaining: 0,
+        isRetryingTransient: true,
+        transientRetrySecondsRemaining: remainingSec,
+        transientAttempt: attempt,
+        transientMaxRetries: maxRetries
+      });
+    }
+    const sleepChunk = Math.min(1000, Math.max(20, until - Date.now()));
+    await sleep(sleepChunk);
+  }
+  if (!paused || !paused()) {
+    onRetry?.(file, attempt, 0, false);
+    emitTicker?.({
+      isRetryingTransient: false,
+      transientRetrySecondsRemaining: 0
+    });
   }
 }
 
@@ -162,7 +239,7 @@ export async function flushUploads<T>(
   const totalFiles = pending.length;
   let completedCount = 0;
 
-  const emitProgress = (inCooldown = false, cooldownSec = 0) => {
+  const emitProgress = (extra: Partial<ProgressStats> = {}) => {
     if (!onProgress) return;
     const elapsedSec = (Date.now() - startTime) / 1000;
     const speedMBs =
@@ -171,15 +248,22 @@ export async function flushUploads<T>(
       completed: completedCount,
       total: totalFiles,
       speedMBs,
-      inCooldown,
-      cooldownSecondsRemaining: cooldownSec > 0 ? cooldownSec : undefined,
-      inRecovery: isInRecovery()
+      inCooldown: extra.isRateLimited ?? false,
+      cooldownSecondsRemaining: extra.rateLimitSecondsRemaining,
+      isRateLimited: extra.isRateLimited ?? false,
+      rateLimitSecondsRemaining: extra.rateLimitSecondsRemaining,
+      isRetryingTransient: extra.isRetryingTransient ?? false,
+      transientRetrySecondsRemaining: extra.transientRetrySecondsRemaining,
+      transientAttempt: extra.transientAttempt,
+      transientMaxRetries: extra.transientMaxRetries ?? maxRetries,
+      inRecovery: isInRecovery(),
+      ...extra
     });
   };
 
   if (concurrency <= 1) {
     while (pending.length && !paused()) {
-      await waitForCooldown(onRetry, pending[0]);
+      await waitForCooldown(onRetry, pending[0], (e) => emitProgress(e), paused);
 
       // Apply adaptive pacing between sequential requests
       const pace = getEffectivePace(basePaceMs);
@@ -209,13 +293,10 @@ export async function flushUploads<T>(
 
           if (err instanceof UploadRateLimitError) {
             recordRateLimit(err.retryAfter, basePaceMs);
-            onRetry?.(file, attempt, err.retryAfter);
-            emitProgress(true, err.retryAfter);
-            await waitForCooldown(onRetry, file);
+            await waitForCooldown(onRetry, file, (e) => emitProgress(e), paused);
           } else {
             const backoffMs = Math.min(30_000, 1000 * Math.pow(2, attempt - 1));
-            onRetry?.(file, attempt, Math.ceil(backoffMs / 1000));
-            await sleep(backoffMs);
+            await waitTransientBackoff(backoffMs, file, attempt, maxRetries, onRetry, (e) => emitProgress(e), paused);
           }
 
           if (paused()) return;
@@ -235,7 +316,7 @@ export async function flushUploads<T>(
 
   async function worker() {
     while (nextQueueIdx < initialFiles.length && !paused() && !abortError) {
-      await waitForCooldown(onRetry, initialFiles[nextQueueIdx]);
+      await waitForCooldown(onRetry, initialFiles[nextQueueIdx], (e) => emitProgress(e), paused);
       if (paused() || abortError) return;
 
       // Dynamic concurrency gate: if under rate-limit recovery, drop active concurrent workers to 1
@@ -287,13 +368,10 @@ export async function flushUploads<T>(
 
             if (err instanceof UploadRateLimitError) {
               recordRateLimit(err.retryAfter, basePaceMs);
-              onRetry?.(file, attempt, err.retryAfter);
-              emitProgress(true, err.retryAfter);
-              await waitForCooldown(onRetry, file);
+              await waitForCooldown(onRetry, file, (e) => emitProgress(e), paused);
             } else {
               const backoffMs = Math.min(30_000, 1000 * Math.pow(2, attempt - 1));
-              onRetry?.(file, attempt, Math.ceil(backoffMs / 1000));
-              await sleep(backoffMs);
+              await waitTransientBackoff(backoffMs, file, attempt, maxRetries, onRetry, (e) => emitProgress(e), paused);
             }
 
             if (paused() || abortError) return;

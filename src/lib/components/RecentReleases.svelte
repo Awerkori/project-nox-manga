@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { ArrowRight, BookOpen, Clock, ChevronDown } from '@lucide/svelte';
+  import { ArrowRight, BookOpen, Clock, ChevronDown, AlertTriangle, RefreshCw } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
+  import { resolveCoverUrl } from '$lib/covers';
+  import { decodeHtmlEntities } from '$lib/html-entities';
 
   type ReleaseItem = {
     workId: string;
@@ -21,9 +23,11 @@
 
   type Props = {
     releases: ReleaseItem[];
+    loadError?: boolean;
+    isStale?: boolean;
   };
 
-  let { releases = [] }: Props = $props();
+  let { releases = [], loadError = false, isStale = false }: Props = $props();
 
   let visibleCount = $state(12);
   let displayedReleases = $derived(releases.slice(0, visibleCount));
@@ -55,24 +59,21 @@
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
+        {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId)}
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             <div class="thumb-wrap">
-              {#if rel.coverId}
-                <img
-                  src="/media/{rel.coverId}"
-                  alt={rel.workTitle}
-                  class="thumb-img"
-                  class:blurred-cover={effectiveBlur}
-                  width="64"
-                  height="90"
-                  loading="lazy"
-                  decoding="async"
-                />
-              {:else}
-                <div class="thumb-placeholder">NOX</div>
-              {/if}
+              <img
+                src={thumbCover}
+                alt={rel.workTitle}
+                class="thumb-img"
+                class:blurred-cover={effectiveBlur}
+                width="64"
+                height="90"
+                loading="lazy"
+                decoding="async"
+              />
               {#if isAdult}
                 <span class="adult-badge-mini">+18</span>
               {/if}
@@ -83,8 +84,8 @@
           <div class="release-main">
             <div class="release-top-row">
               <div class="work-title-group">
-                <a href="/obra/{rel.workSlug}" class="work-link" title={rel.workTitle}>
-                  {rel.workTitle}
+                <a href="/obra/{rel.workSlug}" class="work-link" title={decodeHtmlEntities(rel.workTitle)}>
+                  {decodeHtmlEntities(rel.workTitle)}
                 </a>
                 <span class="kind-tag">{rel.kind}</span>
               </div>
@@ -105,7 +106,7 @@
                   href="/ler/{ch.id}"
                   class="chapter-pill"
                   class:latest-pill={i === 0}
-                  title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${ch.title}` : ''}`}
+                  title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
                 >
                   <span class="ch-text">Cap. {ch.number}</span>
                 </a>
@@ -124,6 +125,16 @@
         </button>
       </div>
     {/if}
+  {:else if loadError}
+    <div class="degraded-releases-alert" role="alert">
+      <AlertTriangle size={36} class="alert-icon" />
+      <h3>Não foi possível carregar os lançamentos agora</h3>
+      <p>O catálogo e os capítulos continuam preservados no banco de dados, mas ocorreu uma lentidão temporária na conexão. Tente recarregar.</p>
+      <button type="button" class="btn-retry" onclick={() => window.location.reload()}>
+        <RefreshCw size={16} />
+        <span>Recarregar lançamentos</span>
+      </button>
+    </div>
   {:else}
     <div class="empty-releases">
       <BookOpen size={36} />
@@ -409,6 +420,71 @@
   .chapter-pill.latest-pill:hover {
     background: rgba(139, 92, 246, 0.22);
     border-color: #8b5cf6;
+    color: #ffffff;
+  }
+
+  .stale-notice {
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.85rem;
+    background: rgba(234, 179, 8, 0.08);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: #fde047;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .degraded-releases-alert {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3.5rem 1.5rem;
+    text-align: center;
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 12px;
+  }
+
+  .degraded-releases-alert :global(.alert-icon) {
+    color: #f87171;
+  }
+
+  .degraded-releases-alert h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #f87171;
+  }
+
+  .degraded-releases-alert p {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #94a3b8;
+    max-width: 480px;
+  }
+
+  .btn-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-retry:hover {
+    background: rgba(239, 68, 68, 0.25);
     color: #ffffff;
   }
 

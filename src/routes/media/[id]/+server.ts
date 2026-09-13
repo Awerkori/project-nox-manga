@@ -10,6 +10,7 @@ import { TelegramStorageError } from '$lib/server/telegram';
 export const GET = async ({ locals, params, request, platform }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
+
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const canonicalUrl = `${url.origin}/media/${params.id}`;
@@ -43,46 +44,29 @@ export const GET = async ({ locals, params, request, platform }: any) => {
   }
 
   const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(locals.role || '');
-  let isPublic = false;
+  
+  // Public media includes all editorial assets, covers, avatars, banners, and any media marked PUBLIC
+  const isPublic =
+    media.access_class === 'PUBLIC' ||
+    media.purpose === 'editorial' ||
+    media.purpose === 'avatar' ||
+    media.purpose === 'banner' ||
+    media.purpose === 'scan_logo' ||
+    media.purpose === 'scan_banner' ||
+    !media.access_class;
 
-  // Verify access authorization across public media consumers
-  const checkPublicConsumers = async (database: any) => {
-    const [cover, pages, avatar, banner, scan, shop] = await Promise.all([
-      database.from('works').select('id').eq('published', true).eq('cover_id', params.id).limit(1),
-      database.from('pages').select('chapter_id').eq('media_id', params.id).limit(1),
-      database.from('members').select('id').eq('avatar_id', params.id).limit(1),
-      database.from('members').select('id').eq('banner_id', params.id).limit(1),
-      database.from('scans').select('id').or(`logo_id.eq.${params.id},banner_id.eq.${params.id}`).limit(1),
-      database.from('shop_items').select('id').eq('media_id', params.id).limit(1)
-    ]);
-    return Boolean(
-      cover.data?.length ||
-      pages.data?.length ||
-      avatar.data?.length ||
-      banner.data?.length ||
-      scan.data?.length ||
-      shop.data?.length
-    );
-  };
-
-  if (!isStaff) {
-    isPublic = await checkPublicConsumers(locals.db);
-    if (!isPublic) {
-      // Allow uploader to view their own uploaded asset
-      const isOwner = Boolean(locals.user?.id && media.created_by === locals.user.id);
-      if (!isOwner) {
-        return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
-          status: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-          }
-        });
-      }
+  if (!isPublic && !isStaff) {
+    const isOwner = Boolean(locals.user?.id && media.created_by === locals.user.id);
+    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(locals.user?.id);
+    if (!isOwner && !isAuthenticatedAllowed) {
+      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
     }
-  } else {
-    // If staff, also check if public for CDN caching optimization
-    isPublic = await checkPublicConsumers(db);
   }
 
   const headers: Record<string, string> = {

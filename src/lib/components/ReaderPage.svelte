@@ -46,13 +46,13 @@
   bind:this={root}
   id="pagina-{page.position}"
   class="reader-page"
-  style="aspect-ratio:{page.width}/{page.height}"
+  style="aspect-ratio:{page.width && page.height ? `${page.width}/${page.height}` : '2/3'}; min-height: 350px;"
 >
   {#if near && !broken}<img
       src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
       alt="Página {page.position}"
-      width={page.width}
-      height={page.height}
+      width={page.width || 800}
+      height={page.height || 1200}
       decoding="async"
       onload={() => {
         loaded = true;
@@ -60,9 +60,15 @@
         onSeen(page.position, visibleNow);
       }}
       onerror={() => {
-        loaded = false;
-        broken = true;
-        onSeen(page.position, false);
+        if (retry < 2) {
+          setTimeout(() => {
+            retry++;
+          }, 500 * (retry + 1));
+        } else {
+          loaded = false;
+          broken = true;
+          onSeen(page.position, false);
+        }
       }}
     />{/if}
   {#if broken}<div class="page-retry">

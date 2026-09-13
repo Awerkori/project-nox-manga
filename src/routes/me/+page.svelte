@@ -44,10 +44,12 @@
     ZoomIn,
     RotateCcw,
     Sliders,
-    X
+    X,
+    ExternalLink
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
+  import { getSupabaseBrowserClient } from '$lib/supabase';
   import { relativeTime, date } from '$lib/types';
   import {
     getOfflineChapters,
@@ -191,6 +193,60 @@
   onMount(() => {
     loadOfflineList();
   });
+
+  // Notifications State & Realtime
+  let notifsList = $state<any[]>(data.notifications || []);
+  let notifFilter = $state<'ALL' | 'UNREAD'>('ALL');
+
+  $effect(() => {
+    notifsList = data.notifications || [];
+  });
+
+  $effect(() => {
+    if (!data.member?.id) return;
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+
+    const channel = client
+      .channel(`me_notifs_${data.member.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${data.member.id}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            notifsList = [payload.new, ...notifsList];
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const updated = payload.new as any;
+            notifsList = notifsList.map((n) => (n.id === updated.id ? { ...n, ...updated } : n));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  });
+
+  let displayedNotifs = $derived(
+    notifFilter === 'UNREAD'
+      ? notifsList.filter((n: any) => !n.read_at)
+      : notifsList
+  );
+
+  let unreadNotifsCount = $derived(notifsList.filter((n: any) => !n.read_at).length);
+
+  async function markSingleRead(notifId: string) {
+    notifsList = notifsList.map((n) => (n.id === notifId ? { ...n, read_at: new Date().toISOString() } : n));
+    const fd = new FormData();
+    fd.append('id', notifId);
+    await fetch('?/markNotificationRead', { method: 'POST', body: fd }).catch(() => {});
+  }
 
   // Level computation
   let currentXp = $derived(data.member.xp || 0);
@@ -450,7 +506,9 @@
         >
           <Bell size={17} />
           <span>Notificações</span>
-          <span class="count-badge">{data.notifications.filter((n: any) => !n.read_at).length}</span>
+          {#if unreadNotifsCount > 0}
+            <span class="count-badge">{unreadNotifsCount}</span>
+          {/if}
         </button>
 
         <div class="nav-separator"></div>
@@ -947,29 +1005,87 @@
           <!-- 8. Notifications -->
           <div class="pane-section">
             <div class="sub-header">
-              <h2 class="pane-title">Notificações</h2>
-              {#if data.notifications.some((n: any) => !n.read_at)}
-                <form method="POST" action="?/markAllNotificationsRead" use:enhance>
+              <div>
+                <h2 class="pane-title">Notificações</h2>
+                <div class="notif-chips-row">
+                  <button
+                    type="button"
+                    class="notif-filter-btn"
+                    class:active={notifFilter === 'ALL'}
+                    onclick={() => notifFilter = 'ALL'}
+                  >
+                    Todas ({notifsList.length})
+                  </button>
+                  <button
+                    type="button"
+                    class="notif-filter-btn"
+                    class:active={notifFilter === 'UNREAD'}
+                    onclick={() => notifFilter = 'UNREAD'}
+                  >
+                    Não lidas ({unreadNotifsCount})
+                  </button>
+                </div>
+              </div>
+
+              {#if unreadNotifsCount > 0}
+                <form method="POST" action="?/markAllNotificationsRead" use:enhance={() => {
+                  notifsList = notifsList.map(n => ({ ...n, read_at: new Date().toISOString() }));
+                  return async ({ update }) => { await update(); };
+                }}>
                   <button type="submit" class="btn-text">Marcar todas como lidas</button>
                 </form>
               {/if}
             </div>
 
-            {#if data.notifications.length > 0}
+            {#if displayedNotifs.length > 0}
               <div class="notifs-list">
-                {#each data.notifications as n (n.id)}
-                  <div class="notif-item" class:unread={!n.read_at}>
-                    <div class="notif-content">
-                      <p class="notif-body">{n.body || 'Notificação'}</p>
+                {#each displayedNotifs as n (n.id)}
+                  <a
+                    href={n.href || '/me'}
+                    class="notif-card"
+                    class:unread={!n.read_at}
+                    onclick={() => { if (!n.read_at) markSingleRead(n.id); }}
+                  >
+                    <div class="notif-card-header">
+                      <div class="notif-tag-wrap">
+                        <span class="notif-type-pill notif-type-{n.type ? n.type.toLowerCase() : (n.kind || 'system')}">
+                          {n.type === 'LEVEL_UP' ? 'LEVEL UP' : n.type === 'ACHIEVEMENT' ? 'CONQUISTA' : n.type === 'NEW_CHAPTER' ? 'CAPÍTULO' : n.type === 'ROLE_MENTION' ? 'CARGO' : n.type === 'MENTION' ? 'MENÇÃO' : n.type === 'REPLY_CHAT' || n.type === 'REPLY_COMMENT' ? 'RESPOSTA' : n.type === 'QC_ISSUE' ? 'QC' : n.type === 'APPLICATION' ? 'RECRUTAMENTO' : (n.type || 'SISTEMA')}
+                        </span>
+                        {#if n.context}
+                          <span class="notif-context-pill">{n.context}</span>
+                        {/if}
+                      </div>
                       <span class="notif-time">{relativeTime(n.created_at)}</span>
                     </div>
-                  </div>
+
+                    <h3 class="notif-title">{n.title || n.body || 'Notificação'}</h3>
+                    <p class="notif-body">{n.body}</p>
+
+                    <div class="notif-card-footer">
+                      <span class="notif-cta-link">
+                        <span>Acessar</span>
+                        <ExternalLink size={13} />
+                      </span>
+
+                      {#if !n.read_at}
+                        <button
+                          type="button"
+                          class="btn-mark-single-read"
+                          title="Marcar como lida"
+                          onclick={(e) => { e.preventDefault(); e.stopPropagation(); markSingleRead(n.id); }}
+                        >
+                          <Check size={14} />
+                          <span>Lida</span>
+                        </button>
+                      {/if}
+                    </div>
+                  </a>
                 {/each}
               </div>
             {:else}
               <div class="empty-state">
                 <Bell size={36} />
-                <p>Nenhuma notificação recebida.</p>
+                <p>{notifFilter === 'UNREAD' ? 'Nenhuma notificação não lida.' : 'Nenhuma notificação recebida.'}</p>
               </div>
             {/if}
           </div>
@@ -1185,6 +1301,31 @@
                   checked={data.member.privacy_show_reading_history ?? true}
                   class="toggle-input"
                 />
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <h4>Exibir Vínculos e Títulos de Scans no Perfil</h4>
+                  <p>Permite exibir seus cargos editoriais e equipes parceiras na sua página pública de leitor.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  name="privacy_show_scans"
+                  checked={data.member.privacy_show_scans ?? true}
+                  class="toggle-input"
+                />
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <h4>Modo de Exibição das Scans</h4>
+                  <p>Escolha se deseja destacar apenas o cargo principal ou todas as equipes em que você atua.</p>
+                </div>
+                <select name="privacy_scan_mode" class="form-input" style="width: auto; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15);">
+                  <option value="PRIMARY" selected={(data.member.privacy_scan_mode ?? 'PRIMARY') === 'PRIMARY'}>Somente Cargo Principal</option>
+                  <option value="ALL" selected={data.member.privacy_scan_mode === 'ALL'}>Todas as Equipes</option>
+                  <option value="NONE" selected={data.member.privacy_scan_mode === 'NONE'}>Nenhuma (Ocultar)</option>
+                </select>
               </div>
 
               <button type="submit" class="btn-primary">Salvar Configurações</button>
@@ -2420,5 +2561,187 @@
     .media-uploaders-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Notifications Center Styles */
+  .notif-chips-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .notif-filter-btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #a1a1aa;
+    background: #1f1f23;
+    border: 1px solid #27272a;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .notif-filter-btn:hover {
+    color: #ffffff;
+    border-color: #3f3f46;
+  }
+
+  .notif-filter-btn.active {
+    color: #ffffff;
+    background: #4f46e5;
+    border-color: #6366f1;
+  }
+
+  .notifs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .notif-card {
+    display: flex;
+    flex-direction: column;
+    background: #141417;
+    border: 1px solid #27272a;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .notif-card:hover {
+    background: #18181c;
+    border-color: #3f3f46;
+    transform: translateY(-1px);
+  }
+
+  .notif-card.unread {
+    border-left: 3px solid #6366f1;
+    background: #16161b;
+  }
+
+  .notif-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .notif-tag-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .notif-type-pill {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background: #27272a;
+    color: #a1a1aa;
+  }
+
+  .notif-type-pill.notif-type-level_up {
+    background: rgba(234, 179, 8, 0.15);
+    color: #facc15;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+  }
+
+  .notif-type-pill.notif-type-achievement {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .notif-type-pill.notif-type-new_chapter,
+  .notif-type-pill.notif-type-chapter_published {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .notif-type-pill.notif-type-mention,
+  .notif-type-pill.notif-type-role_mention {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+  }
+
+  .notif-type-pill.notif-type-reply_chat,
+  .notif-type-pill.notif-type-reply_comment {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  .notif-context-pill {
+    font-size: 0.75rem;
+    color: #71717a;
+    background: #18181b;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+  }
+
+  .notif-time {
+    font-size: 0.75rem;
+    color: #71717a;
+  }
+
+  .notif-title {
+    margin: 0 0 0.35rem 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.35;
+  }
+
+  .notif-body {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.8125rem;
+    color: #a1a1aa;
+    line-height: 1.5;
+  }
+
+  .notif-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.5rem;
+    border-top: 1px solid #1f1f23;
+  }
+
+  .notif-cta-link {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #818cf8;
+  }
+
+  .btn-mark-single-read {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: transparent;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    color: #a1a1aa;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-mark-single-read:hover {
+    color: #ffffff;
+    border-color: #3f3f46;
+    background: #27272a;
   }
 </style>

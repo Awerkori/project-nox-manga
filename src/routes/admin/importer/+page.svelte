@@ -1815,7 +1815,7 @@
               Provedores: <span style="color: #22c55e; font-weight: 600;">{data.activeSourcesCount ?? 0} operacionais ativos</span>
               {#if (data.upstreamBlockedSourcesCount ?? 0) > 0}
                 <span style="color: #64748b; margin: 0 4px;">•</span>
-                <span style="color: #f59e0b;">{data.upstreamBlockedSourcesCount} pausadas por upstream (Cloudflare)</span>
+                <span style="color: #f59e0b;">{data.upstreamBlockedSourcesCount} pausadas por upstream ({data.counts?.blockedByUpstream ?? 0} jobs retidos no total)</span>
               {/if}
               {#if (data.excludedByPolicySourcesCount ?? 0) > 0}
                 <span style="color: #64748b; margin: 0 4px;">•</span>
@@ -1835,7 +1835,9 @@
                     <strong class="blocker-name">{blocker.sourceName}</strong>
                     <span class="blocker-badge">UPSTREAM BLOCKED</span>
                   </div>
-                  <span class="blocker-jobs-tag">{blocker.affectedJobsCount === 0 ? '0 jobs retidos (seguro)' : `${blocker.affectedJobsCount} jobs retidos`}</span>
+                  <span class="blocker-jobs-tag {blocker.affectedJobsCount === 0 ? 'tag-zero' : ''}">
+                    {blocker.affectedJobsCount === 0 ? '0 jobs retidos' : `${blocker.affectedJobsCount} ${blocker.affectedJobsCount === 1 ? 'job retido' : 'jobs retidos'}`}
+                  </span>
                 </div>
                 <p class="blocker-lead-text">
                   Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276).
@@ -1895,7 +1897,12 @@
                           <strong style="color: #f3f4f6;">{s.name}</strong>
                           <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.base_url?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
                         </div>
-                        <span style="color: #f59e0b; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;">BLOCKED</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span style="font-size: 0.7rem; color: #94a3b8; font-family: monospace;">
+                            {(s.blockedJobsCount ?? 0) === 0 ? '0 jobs retidos' : `${s.blockedJobsCount} ${(s.blockedJobsCount === 1) ? 'job retido' : 'jobs retidos'}`}
+                          </span>
+                          <span style="color: #f59e0b; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;">BLOCKED</span>
+                        </div>
                       </div>
                     {/each}
                   </div>
@@ -4629,8 +4636,20 @@
 
   .provider-blocker-card .blocker-jobs-tag {
     font-size: 10.5px;
-    color: #94a3b8;
     font-family: var(--font-mono, monospace);
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    font-weight: 500;
+  }
+
+  .provider-blocker-card .blocker-jobs-tag.tag-zero {
+    background: rgba(148, 163, 184, 0.08);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    font-weight: 400;
   }
 
   .provider-blocker-card .blocker-lead-text {

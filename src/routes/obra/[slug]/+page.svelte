@@ -22,6 +22,8 @@
   import { page } from '$app/state';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, date } from '$lib/types';
+  import { resolveCoverUrl } from '$lib/covers';
+  import { decodeHtmlEntities } from '$lib/html-entities';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import {
@@ -32,6 +34,9 @@
   } from '$lib/offline-storage';
 
   let { data } = $props();
+  let decodedTitle = $derived(decodeHtmlEntities(data.work.title));
+  let decodedSynopsis = $derived(decodeHtmlEntities(data.work.synopsis || data.work.description));
+  let obraCover = $derived(resolveCoverUrl(data.work.cover_id, data.work.slug, data.work.id));
   let notice = $state(''),
     busy = $state(false),
     ascending = $state(false),
@@ -216,16 +221,16 @@
 </script>
 
 <svelte:head>
-  <title>{data.work.title} — Ler na Project Nox</title>
-  <meta name="description" content={data.work.synopsis.slice(0, 160)} />
-  <meta property="og:title" content={data.work.title} />
-  <meta property="og:description" content={data.work.synopsis.slice(0, 200)} />
+  <title>{decodedTitle} — Ler na Project Nox</title>
+  <meta name="description" content={decodedSynopsis.slice(0, 160)} />
+  <meta property="og:title" content={decodedTitle} />
+  <meta property="og:description" content={decodedSynopsis.slice(0, 200)} />
   <meta property="og:image" content={data.metaImage} />
-  <meta property="og:image:alt" content="Capa de {data.work.title}" />
+  <meta property="og:image:alt" content="Capa de {decodedTitle}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content={data.metaImage} />
-  <meta name="twitter:title" content="{data.work.title} — Ler na Project Nox" />
-  <meta name="twitter:description" content={data.work.synopsis.slice(0, 200)} />
+  <meta name="twitter:title" content="{decodedTitle} — Ler na Project Nox" />
+  <meta name="twitter:description" content={decodedSynopsis.slice(0, 200)} />
   <link rel="canonical" href={data.canonical} />
   <meta property="og:url" content={data.canonical} />
   <meta property="og:type" content="book" />
@@ -237,19 +242,17 @@
 </svelte:head>
 
 <!-- Cinematic Backdrop Banner -->
-{#if data.work.cover_id}
-  <div class="work-backdrop" aria-hidden="true">
-    <img src="/media/{data.work.cover_id}" alt="" class="backdrop-img" />
-    <div class="backdrop-mask"></div>
-  </div>
-{/if}
+<div class="work-backdrop" aria-hidden="true">
+  <img src={obraCover} alt="" class="backdrop-img" />
+  <div class="backdrop-mask"></div>
+</div>
 
 <div class="container work-page-container spacer-bottom">
   <div class="page-top">
     <nav class="breadcrumb" aria-label="Navegação estrutural">
       <a href="/catalogo">Catálogo</a>
       <span>/</span>
-      <span class="active-crumb">{data.work.title}</span>
+      <span class="active-crumb">{decodedTitle}</span>
     </nav>
   </div>
 
@@ -257,28 +260,24 @@
     <!-- LEFT SIDEBAR: Cover + INFORMAÇÕES (Under Cover on Desktop) -->
     <aside class="kuro-sidebar">
       <div class="work-cover-wrap">
-        {#if data.work.cover_id}
-          <img
-            src="/media/{data.work.cover_id}"
-            alt="Capa de {data.work.title}"
-            width="320"
-            height="440"
-            class="work-cover"
-            class:blurred-cover={effectiveBlur}
-          />
-        {:else}
-          <div class="work-cover-fallback">
-            <span>PROJECT NOX</span>
-            <strong>{data.work.title}</strong>
-          </div>
-        {/if}
+        <img
+          src={obraCover}
+          alt="Capa de {decodedTitle}"
+          width="320"
+          height="440"
+          class="work-cover"
+          class:blurred-cover={effectiveBlur}
+        />
         {#if isAdult}
           <span class="adult-badge-work">+18</span>
         {/if}
         {#if data.scans && data.scans.length > 0}
           <div class="cover-scan-seal">
             <Users size={12} />
-            <span>{data.scans.map((s) => s.name).join(' × ')}</span>
+            {#each data.scans as scan, i}
+              {#if i > 0}<span class="seal-sep">×</span>{/if}
+              <a href="/scans/{scan.slug}" class="seal-link" title="Ver perfil de {scan.name}">{scan.name}</a>
+            {/each}
           </div>
         {/if}
       </div>
@@ -332,6 +331,22 @@
               <span class="meta-value">{data.work.artist}</span>
             </div>
           {/if}
+          {#if data.scans && data.scans.length > 0}
+            <div class="meta-item full-width row-style">
+              <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
+              <div class="meta-scans-val">
+                {#each data.scans as scan, i}
+                  {#if i > 0}<span class="scan-comma">·</span>{/if}
+                  <a href="/scans/{scan.slug}" class="meta-scan-link">
+                    {#if scan.logo_id}
+                      <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
+                    {/if}
+                    <span>{scan.name}</span>
+                  </a>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </aside>
@@ -348,9 +363,21 @@
           {#if isAdult}
             <span class="badge-adult">+18 Adulto</span>
           {/if}
+          {#if data.scans && data.scans.length > 0}
+            {#each data.scans as scan}
+              <a
+                href="/scans/{scan.slug}"
+                class="badge-scan-partner"
+                title="Scan {scan.is_official ? 'Oficial' : 'Parceira'}: {scan.name}"
+              >
+                <Users size={11} />
+                <span>{scan.name}</span>
+              </a>
+            {/each}
+          {/if}
         </div>
 
-        <h1 class="work-title">{data.work.title}</h1>
+        <h1 class="work-title">{decodedTitle}</h1>
 
         {#if data.work.aliases.length}
           <p class="aliases">{data.work.aliases.join(' · ')}</p>
@@ -380,8 +407,8 @@
         </div>
 
         <!-- Sinopse (collapsible Ver mais / Ver menos) -->
-        {#if data.work.synopsis || data.work.description}
-          {@const fullText = data.work.synopsis || data.work.description || ''}
+        {#if decodedSynopsis}
+          {@const fullText = decodedSynopsis}
           {@const isLong = fullText.length > 280}
           <div class="synopsis-box">
             <h3 class="synopsis-heading">Sinopse</h3>
@@ -453,6 +480,22 @@
               <div class="meta-item full-width row-style">
                 <span class="meta-label">Arte</span>
                 <span class="meta-value">{data.work.artist}</span>
+              </div>
+            {/if}
+            {#if data.scans && data.scans.length > 0}
+              <div class="meta-item full-width row-style">
+                <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
+                <div class="meta-scans-val">
+                  {#each data.scans as scan, i}
+                    {#if i > 0}<span class="scan-comma">·</span>{/if}
+                    <a href="/scans/{scan.slug}" class="meta-scan-link">
+                      {#if scan.logo_id}
+                        <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
+                      {/if}
+                      <span>{scan.name}</span>
+                    </a>
+                  {/each}
+                </div>
               </div>
             {/if}
           </div>
@@ -603,8 +646,24 @@
                 <div class="chapter-meta-row">
                   <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.views_total || 0)}</span>
                   {#if scanLabel}
+                    {@const chScanSlug = (chapter.chapter_scans?.[0]?.scans?.slug) || (data.scans?.[0]?.slug) || null}
                     <span class="chapter-meta-dot">·</span>
-                    <span class="chapter-meta-scan">{scanLabel}</span>
+                    {#if chScanSlug}
+                      <button
+                        type="button"
+                        class="chapter-meta-scan-btn"
+                        title="Ver perfil da scan {scanLabel}"
+                        onclick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.location.href = `/scans/${chScanSlug}`;
+                        }}
+                      >
+                        {scanLabel}
+                      </button>
+                    {:else}
+                      <span class="chapter-meta-scan">{scanLabel}</span>
+                    {/if}
                   {/if}
                   {#if chapter.published_at}
                     <span class="chapter-meta-dot">·</span>
@@ -816,20 +875,34 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     color: #dfc28d;
-    background: rgba(8, 10, 18, 0.88);
-    backdrop-filter: blur(8px);
-    padding: 3px 12px;
+    background: rgba(8, 10, 18, 0.92);
+    backdrop-filter: blur(10px);
+    padding: 4px 14px;
     border-radius: 999px;
     white-space: nowrap;
-    border: 1px solid rgba(223, 194, 141, 0.35);
+    border: 1px solid rgba(223, 194, 141, 0.4);
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
     z-index: 3;
   }
 
+  .cover-scan-seal .seal-link {
+    color: #dfc28d;
+    text-decoration: none;
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+  }
 
+  .cover-scan-seal .seal-link:hover {
+    color: #f7e0b5;
+    text-shadow: 0 0 8px rgba(223, 194, 141, 0.6);
+  }
+
+  .cover-scan-seal .seal-sep {
+    opacity: 0.6;
+    margin: 0 1px;
+  }
 
   .work-type-badges {
     display: flex;
@@ -837,6 +910,30 @@
     gap: 8px;
     margin-bottom: 12px;
     flex-wrap: wrap;
+  }
+
+  .badge-scan-partner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    padding: 3px 9px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .badge-scan-partner:hover {
+    background: rgba(223, 194, 141, 0.22);
+    border-color: rgba(223, 194, 141, 0.65);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 10px rgba(223, 194, 141, 0.2);
   }
 
   .badge-kind {
@@ -1185,6 +1282,42 @@
     color: #dfc28d;
   }
 
+  .meta-scans-val {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .meta-scan-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #dfc28d;
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 700;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+  }
+
+  .meta-scan-link:hover {
+    color: #f7e0b5;
+    text-decoration: underline;
+  }
+
+  .scan-meta-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid rgba(223, 194, 141, 0.4);
+  }
+
+  .scan-comma {
+    color: #7b788a;
+    font-size: 12px;
+  }
+
 
 
   /* Chapters List */
@@ -1441,6 +1574,26 @@
   .chapter-meta-scan {
     color: #dfc28d;
     font-weight: 600;
+  }
+
+  .chapter-meta-scan-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 600;
+    color: #dfc28d;
+    cursor: pointer;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .chapter-meta-scan-btn:hover {
+    color: #f7e0b5;
+    text-decoration: underline;
   }
 
   .chapter-meta-date {

@@ -2,14 +2,14 @@ import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { privileged } from '$lib/server/db';
 import { TelegramStorageError } from '$lib/server/telegram';
-import { resolveBotClient, resolveStoragePoolForPurpose } from '$lib/server/storage-router';
+import { resolveBotClient, resolveStoragePoolForPurpose, KNOWN_MANGA_SHARDS } from '$lib/server/storage-router';
 import { inspectImage } from '$lib/media-validation';
 import type { RequestHandler } from './$types';
 
-// In-memory sliding-window rate limiter (120 requests / 60 seconds per IP)
+// In-memory sliding-window rate limiter (300 requests / 60 seconds per IP across 9 shards)
 const rateLimitMap = new Map<string, number[]>();
 
-function checkRateLimit(ip: string, limit = 120, windowMs = 60_000): boolean {
+function checkRateLimit(ip: string, limit = 300, windowMs = 60_000): boolean {
   const now = Date.now();
   const timestamps = (rateLimitMap.get(ip) || []).filter((t) => now - t < windowMs);
   if (timestamps.length >= limit) {

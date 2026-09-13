@@ -263,18 +263,23 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   const sourcesList = sourcesRes.data || [];
-  const operationalSources = sourcesList.filter(
+  const sourcesWithBlockedCounts = sourcesList.map((s: any) => ({
+    ...s,
+    blockedJobsCount: blockedCountBySource[s.id] || 0
+  }));
+
+  const operationalSources = sourcesWithBlockedCounts.filter(
     (s: any) => s.enabled === true && (s.status === 'ACTIVE' || s.status === 'DEGRADED')
   );
-  const upstreamBlockedSources = sourcesList.filter((s: any) => s.status === 'UPSTREAM_BLOCKED');
-  const excludedByPolicySources = sourcesList.filter((s: any) => s.status === 'EXCLUDED_BY_POLICY');
+  const upstreamBlockedSources = sourcesWithBlockedCounts.filter((s: any) => s.status === 'UPSTREAM_BLOCKED');
+  const excludedByPolicySources = sourcesWithBlockedCounts.filter((s: any) => s.status === 'EXCLUDED_BY_POLICY');
 
   const providerBlockers = upstreamBlockedSources.map((s: any) => ({
     sourceId: s.id,
     sourceName: s.name,
     reason: s.blocked_reason || 'CLOUDFLARE_DATACENTER_BLOCK',
     message: (s.blocked_details as any)?.message || 'Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276). Local/Mihon: funcional; DIScloud: HTTP 403.',
-    affectedJobsCount: blockedCountBySource[s.id] || 0,
+    affectedJobsCount: s.blockedJobsCount,
     localStatus: (s.blocked_details as any)?.local_status ?? 200,
     remoteStatus: (s.blocked_details as any)?.discloud_status ?? 403
   }));
@@ -296,6 +301,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       failed24h: failed24hRes.count || 0
     },
     providerBlockers,
+    blockedCountBySource,
     sources: operationalSources,
     operationalSources,
     upstreamBlockedSources,

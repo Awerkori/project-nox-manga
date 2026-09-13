@@ -19,7 +19,8 @@
     FileText,
     Clock,
     Shield,
-    Users
+    Users,
+    RefreshCw
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -40,7 +41,13 @@
     uploading = $state(false);
   let uploadSpeedMBs = $state(0),
     inCooldown = $state(false),
-    cooldownSeconds = $state(0);
+    cooldownSeconds = $state(0),
+    isRateLimited = $state(false),
+    rateLimitSeconds = $state(0),
+    isRetryingTransient = $state(false),
+    transientRetrySeconds = $state(0),
+    transientAttempt = $state(0),
+    lastProgressTime = $state(Date.now());
   let batchTotal = $state(0),
     savedNavigation = false;
   let savedVersion = $state(
@@ -115,20 +122,43 @@
       busy = false;
     }
   }
+  $effect(() => {
+    if (!uploading || pauseRequested || !pendingUploads.length) return;
+    const interval = setInterval(() => {
+      // If stalled for > 20s while not in active rate limit or transient retry wait
+      if (
+        uploading &&
+        !pauseRequested &&
+        pendingUploads.length > 0 &&
+        !isRateLimited &&
+        !isRetryingTransient &&
+        Date.now() - lastProgressTime > 20000
+      ) {
+        lastProgressTime = Date.now();
+        resumeUploads();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  });
+
   async function resumeUploads() {
     if (uploading || !pendingUploads.length) return;
     busy = uploading = true;
     pauseRequested = false;
     confirmed = false;
+    lastProgressTime = Date.now();
     try {
       await flushUploads(
         pendingUploads,
         async (file) => {
-          notice = `Enviando página ${batchTotal - pendingUploads.length + 1} de ${batchTotal}: ${file.name}`;
+          notice = `Enviando página ${pages.length + 1} de ${batchTotal}: ${file.name}`;
           const image = await normalizePage(file);
-          const response = await fetch('/api/upload', {
+          const response = await fetch('/api/upload?purpose=staff_manual', {
             method: 'POST',
-            headers: { 'Content-Type': image.type },
+            headers: {
+              'Content-Type': image.type,
+              'x-media-purpose': 'staff_manual'
+            },
             body: image
           });
           if (response.status === 429) {
@@ -142,24 +172,55 @@
         },
         (result, file) => {
           pages.push({ id: result.id, name: file.name });
-          progress = Math.round(((batchTotal - pendingUploads.length) / batchTotal) * 100);
+          progress = Math.round((pages.length / batchTotal) * 100);
+          lastProgressTime = Date.now();
+          isRateLimited = false;
+          rateLimitSeconds = 0;
+          isRetryingTransient = false;
+          transientRetrySeconds = 0;
+          inCooldown = false;
+          cooldownSeconds = 0;
         },
         () => pauseRequested,
         {
           maxRetries: 6,
           concurrency: 2,
           basePaceMs: 250,
-          onRetry: (_file, attempt, waitSeconds) => {
-            inCooldown = true;
-            cooldownSeconds = waitSeconds;
-            notice = `Aguardando ${waitSeconds}s antes de tentar novamente (tentativa ${attempt})…`;
+          onRetry: (_file, attempt, waitSeconds, isRateLimit) => {
+            lastProgressTime = Date.now();
+            if (isRateLimit) {
+              isRateLimited = waitSeconds > 0;
+              rateLimitSeconds = waitSeconds;
+              inCooldown = waitSeconds > 0;
+              cooldownSeconds = waitSeconds;
+              isRetryingTransient = false;
+              transientRetrySeconds = 0;
+              notice = waitSeconds > 0
+                ? `Rate limit temporário do servidor. Aguardando ${waitSeconds}s…`
+                : 'Retomando envio…';
+            } else {
+              isRateLimited = false;
+              rateLimitSeconds = 0;
+              inCooldown = false;
+              cooldownSeconds = 0;
+              isRetryingTransient = waitSeconds > 0;
+              transientRetrySeconds = waitSeconds;
+              transientAttempt = attempt;
+              notice = waitSeconds > 0
+                ? `Instabilidade de rede. Tentativa (${attempt}/6) em ${waitSeconds}s…`
+                : `Tentando novamente (${attempt}/6)…`;
+            }
           },
           onProgress: (stats) => {
+            lastProgressTime = Date.now();
             uploadSpeedMBs = stats.speedMBs;
-            inCooldown = stats.inCooldown;
-            if (stats.cooldownSecondsRemaining !== undefined) {
-              cooldownSeconds = stats.cooldownSecondsRemaining;
-            }
+            isRateLimited = stats.isRateLimited;
+            rateLimitSeconds = stats.rateLimitSecondsRemaining ?? 0;
+            isRetryingTransient = stats.isRetryingTransient;
+            transientRetrySeconds = stats.transientRetrySecondsRemaining ?? 0;
+            transientAttempt = stats.transientAttempt ?? 0;
+            inCooldown = stats.isRateLimited;
+            cooldownSeconds = stats.rateLimitSecondsRemaining ?? 0;
           }
         }
       );
@@ -167,6 +228,9 @@
         ? 'Envio pausado. As páginas já enviadas foram preservadas.'
         : 'Páginas enviadas. Confira a ordem e salve o rascunho.';
     } catch (e) {
+      isRateLimited = false;
+      isRetryingTransient = false;
+      inCooldown = false;
       notice = `${(e as Error).message} As páginas já enviadas foram preservadas. Tente novamente para continuar.`;
     } finally {
       busy = uploading = false;
@@ -404,16 +468,27 @@
 
       {#if !data.chapter?.published_at}
         <div class="upload-section">
-          <label class="upload-zone">
+          <label
+            class="upload-zone"
+            ondragover={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            ondrop={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (busy || pendingUploads.length) return;
+              const dt = e.dataTransfer;
+              if (!dt || !dt.files || !dt.files.length) return;
+              await uploadFiles(Array.from(dt.files));
+            }}
+          >
             <span aria-hidden="true">+</span>
-            <strong>Selecione imagens ou um arquivo ZIP</strong>
-            <small>Ordenação automática por nome. Você pode ajustar antes de publicar.</small>
+            <strong>Selecione imagens ou um arquivo ZIP / CBZ</strong>
+            <small>Formatos aceitos: ZIP, CBZ, PNG, JPEG, WebP, AVIF. Ordenação automática por nome.</small>
             <span class="file-choice">Escolher arquivos</span>
             <input
               type="file"
-              aria-label="Selecionar imagens ou ZIP"
+              aria-label="Selecionar imagens ou arquivo ZIP/CBZ"
               multiple
-              accept=".zip,image/png,image/jpeg,image/webp"
+              accept=".zip,.cbz,image/png,image/jpeg,image/webp,image/avif,application/zip,application/x-zip-compressed,application/vnd.comicbook+zip,application/x-cbz"
               onchange={upload}
               disabled={busy || !!pendingUploads.length}
             />
@@ -425,7 +500,7 @@
         <div class="upload-live-metrics-card">
           <div class="metrics-header-row">
             <span class="metrics-title">
-              Enviando página <strong>{pages.length + 1}</strong> de <strong>{batchTotal}</strong>
+              Enviando página <strong>{Math.min(batchTotal, pages.length + 1)}</strong> de <strong>{batchTotal}</strong>
             </span>
             <div class="metrics-chips">
               {#if uploadSpeedMBs > 0}
@@ -439,10 +514,15 @@
             <span style="width:{progress}%"></span>
           </div>
 
-          {#if inCooldown && cooldownSeconds > 0}
+          {#if isRateLimited && rateLimitSeconds > 0}
             <div class="cooldown-alert">
               <Clock size={13} class="spin" />
-              <span>Rate limit temporário. Cooldown: <strong>{cooldownSeconds}s</strong> · Retomada gradual automática.</span>
+              <span>Rate limit temporário do servidor. Cooldown: <strong>{rateLimitSeconds}s</strong> · Retomada automática imediata.</span>
+            </div>
+          {:else if isRetryingTransient && transientRetrySeconds > 0}
+            <div class="cooldown-alert transient-alert">
+              <RefreshCw size={13} class="spin" />
+              <span>Instabilidade temporária de rede. Nova tentativa ({transientAttempt}/6) em <strong>{transientRetrySeconds}s</strong>…</span>
             </div>
           {/if}
         </div>
@@ -1208,5 +1288,11 @@
     border-radius: 6px;
     font-size: 11.5px;
     margin-top: 4px;
+  }
+
+  .cooldown-alert.transient-alert {
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
   }
 </style>

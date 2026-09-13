@@ -30,10 +30,21 @@
   let { data, form } = $props();
 
   // Navigation sections: Scans, Partner Requests, Project Requests
-  let activeSection = $state<'scans' | 'partner_requests' | 'project_requests'>('scans');
+  let activeSection = $state<'scans' | 'partner_requests' | 'project_requests' | 'audit_log'>('scans');
+  let statusModalScan = $state<any>(null);
+  let statusModalValue = $state('ACTIVE');
+  let statusModalReason = $state('');
+  let recoverOwnerModalScan = $state<any>(null);
+  let recoverOwnerUserId = $state('');
+  let recoverOwnerReason = $state('');
+  let hardDeleteModalScan = $state<any>(null);
+  let hardDeleteReason = $state('');
+  let hardDeleteConfirmation = $state('');
+  let auditSearch = $state('');
+  let auditActionFilter = $state('ALL');
 
   let search = $state('');
-  let statusFilter = $state<'ALL' | 'ACTIVE' | 'INACTIVE' | 'ENDED'>('ALL');
+  let statusFilter = $state<'ALL' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'CLOSED'>('ALL');
   let partnerFilter = $state<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   let projectFilter = $state<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
 
@@ -66,6 +77,23 @@
         (r.members?.display_name || '').toLowerCase().includes(q);
       const matchesStatus = partnerFilter === 'ALL' || r.status === partnerFilter;
       return matchesSearch && matchesStatus;
+    })
+  );
+
+  
+  let filteredAuditLogs = $derived(
+    (data.auditLogs || []).filter((log: any) => {
+      if (auditActionFilter !== 'ALL' && log.action !== auditActionFilter) return false;
+      if (auditSearch.trim()) {
+        const q = auditSearch.toLowerCase();
+        return (
+          (log.scan_name || '').toLowerCase().includes(q) ||
+          (log.action || '').toLowerCase().includes(q) ||
+          (log.reason || '').toLowerCase().includes(q) ||
+          (log.admin?.username || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
     })
   );
 
@@ -202,16 +230,16 @@
 </script>
 
 <svelte:head>
-  <title>Gestão de Scans & Parceiros — Project Nox Admin</title>
+  <title>Gestão Global de Scans — Project Nox Admin</title>
 </svelte:head>
 
 <div class="admin-page">
   <header class="page-header">
     <div class="header-left">
-      <span class="badge-mini">EDITORIAL & PARCERIAS</span>
-      <h1 class="page-title">Gestão de Scans & Parceiros</h1>
+      <span class="badge-mini">ADMINISTRAÇÃO GLOBAL</span>
+      <h1 class="page-title">Gestão Global de Scans</h1>
       <p class="page-desc">
-        Cadastre, edite e gerencie grupos de tradução parceiros e a scan oficial Project Nox.
+        Administre, audite e controle as Scans cadastradas no Project Nox.
       </p>
     </div>
     <div class="header-right">
@@ -266,6 +294,19 @@
         <span class="count-badge-glow">{pendingProjectsCount}</span>
       {/if}
     </button>
+
+    <button
+      type="button"
+      class="admin-tab-btn"
+      class:active={activeSection === 'audit_log'}
+      onclick={() => (activeSection = 'audit_log')}
+    >
+      <Clock size={16} />
+      <span>Auditoria Global</span>
+      {#if (data.auditLogs || []).length > 0}
+        <span class="count-badge-glow">{(data.auditLogs || []).length}</span>
+      {/if}
+    </button>
   </div>
 
   {#if activeSection === 'scans'}
@@ -298,17 +339,24 @@
         </button>
         <button
           class="filter-chip"
-          class:active={statusFilter === 'INACTIVE'}
-          onclick={() => (statusFilter = 'INACTIVE')}
+          class:active={statusFilter === 'SUSPENDED'}
+          onclick={() => (statusFilter = 'SUSPENDED')}
         >
-          Inativas ({data.scans.filter((s: any) => s.status === 'INACTIVE').length})
+          Suspensas ({data.scans.filter((s: any) => s.status === 'SUSPENDED').length})
         </button>
         <button
           class="filter-chip"
-          class:active={statusFilter === 'ENDED'}
-          onclick={() => (statusFilter = 'ENDED')}
+          class:active={statusFilter === 'ARCHIVED'}
+          onclick={() => (statusFilter = 'ARCHIVED')}
         >
-          Encerradas ({data.scans.filter((s: any) => s.status === 'ENDED').length})
+          Arquivadas ({data.scans.filter((s: any) => s.status === 'ARCHIVED').length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={statusFilter === 'CLOSED'}
+          onclick={() => (statusFilter = 'CLOSED')}
+        >
+          Encerradas ({data.scans.filter((s: any) => s.status === 'CLOSED').length})
         </button>
       </div>
     </div>
@@ -361,6 +409,22 @@
             </div>
           </div>
 
+          <!-- Owner Info Row -->
+          <div class="scan-owner-info">
+            {#if scan.owner}
+              <div class="owner-pill">
+                <span class="owner-lbl">Líder:</span>
+                <UserAvatar user={scan.owner} size={18} />
+                <span class="owner-name">{scan.owner.display_name || scan.owner.username}</span>
+              </div>
+            {:else}
+              <div class="owner-pill empty">
+                <AlertTriangle size={13} />
+                <span>Sem líder atribuído</span>
+              </div>
+            {/if}
+          </div>
+
           <!-- Links & Actions -->
           <div class="scan-card-footer">
             <div class="footer-links">
@@ -380,18 +444,44 @@
             </div>
 
             <div class="footer-actions">
+              <button
+                class="btn-icon status"
+                onclick={() => {
+                  statusModalScan = scan;
+                  statusModalValue = scan.status;
+                  statusModalReason = '';
+                }}
+                title="Alterar Status do Ciclo de Vida"
+              >
+                <Shield size={14} />
+                <span>Status</span>
+              </button>
+              <button
+                class="btn-icon recover"
+                onclick={() => {
+                  recoverOwnerModalScan = scan;
+                  recoverOwnerUserId = scan.owner?.id || (data.users?.[0]?.id || '');
+                  recoverOwnerReason = '';
+                }}
+                title="Recuperar / Transferir Liderança"
+              >
+                <Users size={14} />
+                <span>Liderança</span>
+              </button>
               <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
-                <Edit3 size={15} />
-                <span>Editar</span>
+                <Edit3 size={14} />
               </button>
               {#if !scan.is_official}
                 <button
                   class="btn-icon delete"
-                  onclick={() => handleDeleteScan(scan)}
-                  title="Excluir scan"
-                  disabled={busy}
+                  onclick={() => {
+                    hardDeleteModalScan = scan;
+                    hardDeleteReason = '';
+                    hardDeleteConfirmation = '';
+                  }}
+                  title="Exclusão Definitiva (Admin Supremo)"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={14} />
                 </button>
               {/if}
             </div>
@@ -682,6 +772,87 @@
         </div>
       {/if}
     </div>
+
+  {:else if activeSection === 'audit_log'}
+    <div class="toolbar-card">
+      <div class="search-box">
+        <Search size={16} class="search-icon" />
+        <input
+          type="text"
+          placeholder="Buscar no log de auditoria por scan, ação ou admin…"
+          bind:value={auditSearch}
+          class="search-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <button
+          class="filter-chip"
+          class:active={auditActionFilter === 'ALL'}
+          onclick={() => (auditActionFilter = 'ALL')}
+        >
+          Todas Ações ({data.auditLogs.length})
+        </button>
+        <button
+          class="filter-chip"
+          class:active={auditActionFilter === 'SCAN_STATUS_CHANGED'}
+          onclick={() => (auditActionFilter = 'SCAN_STATUS_CHANGED')}
+        >
+          Mudança de Status
+        </button>
+        <button
+          class="filter-chip"
+          class:active={auditActionFilter === 'OWNER_RECOVERED'}
+          onclick={() => (auditActionFilter = 'OWNER_RECOVERED')}
+        >
+          Liderança Recuperada
+        </button>
+        <button
+          class="filter-chip"
+          class:active={auditActionFilter === 'SCAN_HARD_DELETED'}
+          onclick={() => (auditActionFilter = 'SCAN_HARD_DELETED')}
+        >
+          Exclusões
+        </button>
+      </div>
+    </div>
+
+    {#if filteredAuditLogs.length === 0}
+      <div class="empty-state">
+        <Clock size={40} class="empty-icon" />
+        <p class="empty-text">Nenhum registro de auditoria encontrado.</p>
+      </div>
+    {:else}
+      <div class="audit-log-list">
+        {#each filteredAuditLogs as log}
+          <div class="audit-card">
+            <div class="audit-top">
+              <span class="audit-badge action-{log.action.toLowerCase()}">{log.action}</span>
+              <span class="audit-scan">{log.scan_name || 'Scan Removida'}</span>
+              <span class="audit-date">{new Date(log.created_at).toLocaleString('pt-BR')}</span>
+            </div>
+            <div class="audit-main">
+              <div class="audit-admin">
+                {#if log.admin}
+                  <UserAvatar user={log.admin} size={18} />
+                  <span>{log.admin.display_name || log.admin.username}</span>
+                {:else}
+                  <span class="muted">Sistema</span>
+                {/if}
+              </div>
+              {#if log.reason}
+                <div class="audit-reason">
+                  <strong>Motivo:</strong> {log.reason}
+                </div>
+              {/if}
+            </div>
+            {#if log.metadata && Object.keys(log.metadata).length > 0}
+              <pre class="audit-meta">{JSON.stringify(log.metadata, null, 2)}</pre>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
   {/if}
 
   <!-- Rejection Modal -->
@@ -730,6 +901,176 @@
             <button type="submit" class="btn-danger-confirm" disabled={reviewLoading}>
               <Ban size={15} />
               <span>Confirmar Recusa</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+
+  <!-- Status Modal -->
+  {#if statusModalScan}
+    <div class="modal-backdrop" onclick={() => (statusModalScan = null)}>
+      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Alterar Status: {statusModalScan.name}</h2>
+          <button class="btn-close-modal" onclick={() => (statusModalScan = null)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/setStatus"
+          use:enhance={() => {
+            return async ({ update }) => {
+              statusModalScan = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={statusModalScan.id} />
+          <div class="form-group">
+            <label for="st-val" class="form-label">Novo Status da Scan:</label>
+            <select id="st-val" name="status" bind:value={statusModalValue} class="form-select">
+              <option value="ACTIVE">ACTIVE (Ativa na plataforma)</option>
+              <option value="SUSPENDED">SUSPENDED (Suspensa temporariamente)</option>
+              <option value="ARCHIVED">ARCHIVED (Arquivada)</option>
+              <option value="CLOSED">CLOSED (Encerrada definitivamente)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="st-reason" class="form-label">Motivo Administrativo Obrigatório:</label>
+            <textarea
+              id="st-reason"
+              name="reason"
+              rows={3}
+              class="form-textarea"
+              bind:value={statusModalReason}
+              placeholder="Descreva a razão desta alteração para o log de auditoria..."
+              required
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (statusModalScan = null)}>Cancelar</button>
+            <button type="submit" class="btn-primary" disabled={!statusModalReason.trim()}>Confirmar Status</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Recover Owner Modal -->
+  {#if recoverOwnerModalScan}
+    <div class="modal-backdrop" onclick={() => (recoverOwnerModalScan = null)}>
+      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title">Liderança da Scan: {recoverOwnerModalScan.name}</h2>
+          <button class="btn-close-modal" onclick={() => (recoverOwnerModalScan = null)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/recoverOwner"
+          use:enhance={() => {
+            return async ({ update }) => {
+              recoverOwnerModalScan = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={recoverOwnerModalScan.id} />
+          <div class="form-group">
+            <label for="rec-owner" class="form-label">Selecionar Novo Dono / Líder:</label>
+            <select id="rec-owner" name="new_owner_id" bind:value={recoverOwnerUserId} class="form-select" required>
+              {#each (data.users || []) as u}
+                <option value={u.id}>{u.display_name || u.username} (@{u.username})</option>
+              {/each}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="rec-reason" class="form-label">Motivo da Atribuição / Recuperação:</label>
+            <textarea
+              id="rec-reason"
+              name="reason"
+              rows={3}
+              class="form-textarea"
+              bind:value={recoverOwnerReason}
+              placeholder="Ex: Titular anterior inativo ou solicitação formal de transferência..."
+              required
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (recoverOwnerModalScan = null)}>Cancelar</button>
+            <button type="submit" class="btn-primary" disabled={!recoverOwnerReason.trim()}>Atribuir Liderança</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Hard Delete Modal (Supreme Delete) -->
+  {#if hardDeleteModalScan}
+    <div class="modal-backdrop" onclick={() => (hardDeleteModalScan = null)}>
+      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h2 class="modal-title text-danger">Exclusão Definitiva (Admin Supremo)</h2>
+          <button class="btn-close-modal" onclick={() => (hardDeleteModalScan = null)}><X size={18} /></button>
+        </div>
+        <form
+          method="POST"
+          action="?/hardDelete"
+          use:enhance={() => {
+            return async ({ update }) => {
+              hardDeleteModalScan = null;
+              await update();
+            };
+          }}
+          class="modal-form"
+        >
+          <input type="hidden" name="scan_id" value={hardDeleteModalScan.id} />
+          <div class="warning-alert-box">
+            <AlertTriangle size={20} class="flex-shrink-0" />
+            <div>
+              <strong>Atenção Máxima: Ação Irreversível</strong>
+              <p>Esta ação apagará permanentemente a scan <strong>{hardDeleteModalScan.name}</strong> e todo o seu workspace privado (tarefas, canais, mensagens, tutoriais, mural e membros).</p>
+              <p class="safe-note">✓ Obras e capítulos do catálogo público continuarão 100% intactos com suas páginas e leitor funcionando normalmente.</p>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="hd-confirm" class="form-label">
+              Para confirmar, digite exatamente o nome da scan: <strong class="confirm-target-name">{hardDeleteModalScan.name}</strong>
+            </label>
+            <input
+              id="hd-confirm"
+              type="text"
+              name="confirmation"
+              class="form-input"
+              bind:value={hardDeleteConfirmation}
+              placeholder={hardDeleteModalScan.name}
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="form-group">
+            <label for="hd-reason" class="form-label">Motivo da Exclusão Definitiva:</label>
+            <textarea
+              id="hd-reason"
+              name="reason"
+              rows={3}
+              class="form-textarea"
+              bind:value={hardDeleteReason}
+              placeholder="Ex: Encerramento de parceria ou limpeza administrativa autorizada..."
+              required
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick={() => (hardDeleteModalScan = null)}>Cancelar</button>
+            <button
+              type="submit"
+              class="btn-danger-confirm"
+              disabled={!hardDeleteReason.trim() || hardDeleteConfirmation.trim() !== hardDeleteModalScan.name.trim()}
+            >
+              Excluir Definitivamente
             </button>
           </div>
         </form>
@@ -1048,7 +1389,7 @@
   /* Scans Grid */
   .scans-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
     gap: 18px;
   }
 
@@ -1061,6 +1402,8 @@
     padding: 20px;
     backdrop-filter: blur(10px);
     transition: all 0.2s ease;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .scan-card:hover {
@@ -1473,7 +1816,7 @@
   /* Requests Grid */
   .requests-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
     gap: 18px;
   }
 
@@ -1486,6 +1829,8 @@
     padding: 20px;
     backdrop-filter: blur(12px);
     transition: all 0.2s ease;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .request-card.status-pending {
@@ -1791,11 +2136,190 @@
 
   @media (max-width: 600px) {
     .admin-page {
-      padding: 16px;
+      padding: 8px 0;
     }
     .scans-grid,
     .requests-grid {
       grid-template-columns: 1fr;
     }
+    .scan-card {
+      padding: 14px;
+    }
+    .scan-metrics-row {
+      gap: 10px;
+      padding: 8px 10px;
+      flex-wrap: wrap;
+    }
+    .scan-card-footer {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .footer-links {
+      justify-content: flex-start;
+    }
+    .footer-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
   }
+
+  .scan-owner-info {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .owner-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .owner-pill.empty {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+  }
+
+  .owner-lbl {
+    color: #8c899e;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .owner-name {
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .btn-icon.status {
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #818cf8;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .btn-icon.recover {
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    color: #c084fc;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .audit-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .audit-card {
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .audit-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .audit-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+  }
+
+  .audit-scan {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .audit-date {
+    margin-left: auto;
+    font-size: 12px;
+    color: #8c899e;
+  }
+
+  .audit-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+
+  .audit-admin {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #cbd5e1;
+  }
+
+  .audit-reason {
+    color: #e2e8f0;
+  }
+
+  .audit-meta {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 0;
+    overflow-x: auto;
+  }
+
+  .warning-alert-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    padding: 12px;
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .text-danger {
+    color: #ef4444;
+  }
+
+  .confirm-target-name {
+    color: #f87171;
+    font-weight: 700;
+    user-select: all;
+  }
+
+  .safe-note {
+    color: #4ade80;
+    font-size: 12px;
+    margin-top: 6px;
+    font-weight: 500;
+  }
+
 </style>

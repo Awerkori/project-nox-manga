@@ -3,6 +3,7 @@
   import { BookOpen, ChevronLeft, ChevronRight, Info, Sparkles, AlertTriangle } from '@lucide/svelte';
   import type { Work } from '$lib/types';
   import { page } from '$app/state';
+  import { resolveCoverUrl } from '$lib/covers';
 
   type Props = {
     works: Work[];
@@ -24,6 +25,7 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
+  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id, currentWork.slug, currentWork.id) : '');
   let isAdult = $derived(currentWork?.content_rating === 'ADULT_18');
   let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 
@@ -123,16 +125,14 @@
   >
     <!-- Full-Bleed Atmospheric Backdrop -->
     <div class="backdrop-wrapper" aria-hidden="true">
-      {#if currentWork.cover_id}
-        <img
-          src="/media/{currentWork.cover_id}"
-          alt=""
-          class="backdrop-img"
-          class:blurred-cover={effectiveBlur}
-          loading="eager"
-          decoding="async"
-        />
-      {/if}
+      <img
+        src={heroCover}
+        alt=""
+        class="backdrop-img"
+        class:blurred-cover={effectiveBlur}
+        loading="eager"
+        decoding="async"
+      />
       <div class="backdrop-gradient-v"></div>
       <div class="backdrop-gradient-h"></div>
       <div class="backdrop-noise"></div>
@@ -144,22 +144,16 @@
         <div class="hero-cover-col">
           <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
             <div class="cover-3d-card">
-              {#if currentWork.cover_id}
-                <img
-                  src="/media/{currentWork.cover_id}"
-                  alt={currentWork.title}
-                  class="cover-img"
-                  class:blurred-cover={effectiveBlur}
-                  width="330"
-                  height="470"
-                  loading="eager"
-                  decoding="async"
-                />
-              {:else}
-                <div class="cover-placeholder">
-                  <span>NOX</span>
-                </div>
-              {/if}
+              <img
+                src={heroCover}
+                alt={currentWork.title}
+                class="cover-img"
+                class:blurred-cover={effectiveBlur}
+                width="330"
+                height="470"
+                loading="eager"
+                decoding="async"
+              />
               {#if isAdult}
                 <span class="adult-badge-hero">+18</span>
               {/if}

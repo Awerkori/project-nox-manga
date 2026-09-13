@@ -7,6 +7,7 @@ import { RateLimitError } from '$lib/server/media';
 export type StoragePoolKey =
   | 'MANGA_STORAGE'
   | 'STAFF_STORAGE'
+  | 'PRODUCTION_STORAGE'
   | 'PARTNER_SCAN_STORAGE'
   | 'PROFILE_MEDIA'
   | 'SCAN_MEDIA'
@@ -55,7 +56,13 @@ export interface StoredMediaRecord {
 export function resolveStoragePoolForPurpose(purpose: string): StoragePoolKey {
   switch (purpose) {
     case 'staff_manual':
+    case 'staff_chapter':
+    case 'staff':
       return 'STAFF_STORAGE';
+    case 'pipeline':
+    case 'scan_pipeline':
+    case 'production':
+      return 'PRODUCTION_STORAGE';
     case 'scan_chapter':
       return 'PARTNER_SCAN_STORAGE';
     case 'avatar':
@@ -113,6 +120,7 @@ export function normalizeBotReference(rawRef: string | null | undefined): string
   if (['MANGA_STORAGE_01', 'MANGA_STORAGE_1', 'MANGA_01', 'MANGA_1', 'STORAGE_01', 'STORAGE_1', 'BOT_01', 'BOT_1', 'PRIMARY', 'LEGACY'].includes(clean)) {
     return 'MANGA_STORAGE_01';
   }
+  if (['PRODUCTION_STORAGE', 'PRODUCTION', 'PIPELINE'].includes(clean)) return 'PRODUCTION_STORAGE';
   if (['STAFF_STORAGE', 'STAFF'].includes(clean)) return 'STAFF_STORAGE';
   if (['PARTNER_SCAN_STORAGE', 'PARTNER_STORAGE', 'PARTNER'].includes(clean)) return 'PARTNER_STORAGE';
   if (['PROFILE_MEDIA', 'PROFILE'].includes(clean)) return 'PROFILE_MEDIA';
@@ -153,6 +161,10 @@ function getEnvToken(rawUpper: string): string | undefined {
   if (norm === 'MANGA_STORAGE_01') {
     const t = (env as any).TELEGRAM_BOT_MANGA_STORAGE_01 || (env as any).TELEGRAM_BOT_MANGA_01;
     if (t) return t;
+  }
+  if (norm === 'PRODUCTION_STORAGE') {
+    const t = (env as any).TELEGRAM_BOT_PRODUCTION_STORAGE || (env as any).TELEGRAM_BOT_PRODUCTION;
+    return t; // Strictly NO fallback to STAFF_STORAGE or default TELEGRAM_BOT_TOKEN (Fail-Closed)
   }
   const variations = [
     `TELEGRAM_BOT_${norm}`,
@@ -198,6 +210,25 @@ function getEnvChat(rawUpper: string): string | undefined {
  */
 export function resolveBotClient(botRef: string, targetChannel?: string) {
   const norm = normalizeBotReference(botRef);
+
+  if (norm === 'PRODUCTION_STORAGE') {
+    const token = getEnvToken(norm);
+    if (!token) {
+      throw new Error('FAIL_CLOSED: TELEGRAM_BOT_PRODUCTION_STORAGE is required for Telegram PRODUCTION_STORAGE pool. Fallback to STAFF_STORAGE is strictly forbidden.');
+    }
+    const specificChat = getEnvChat(norm);
+    const chat = targetChannel || specificChat;
+    if (!chat) {
+      throw new Error('FAIL_CLOSED: Target channel for PRODUCTION_STORAGE is not configured.');
+    }
+    return {
+      client: telegramStorage(token, chat),
+      token,
+      chat,
+      botRef: 'PRODUCTION_STORAGE'
+    };
+  }
+
   const token = getEnvToken(norm) || env.TELEGRAM_BOT_TOKEN;
   const specificChat = getEnvChat(norm);
   const chat = targetChannel || specificChat || env.TELEGRAM_CHAT_ID;
@@ -219,6 +250,19 @@ export function resolveBotClient(botRef: string, targetChannel?: string) {
  */
 export function resolveBotDownloadClient(botRef: string) {
   const norm = normalizeBotReference(botRef);
+
+  if (norm === 'PRODUCTION_STORAGE') {
+    const token = getEnvToken(norm);
+    if (!token) {
+      throw new Error('FAIL_CLOSED: TELEGRAM_BOT_PRODUCTION_STORAGE is required for downloading from PRODUCTION_STORAGE. Fallback to STAFF_STORAGE is strictly forbidden.');
+    }
+    const client = telegramStorage(token, '');
+    return {
+      ...client,
+      botRef: 'PRODUCTION_STORAGE'
+    };
+  }
+
   const token = getEnvToken(norm) || (norm === 'MANGA_STORAGE_2' ? undefined : env.TELEGRAM_BOT_TOKEN);
 
   if (!token) {
@@ -407,3 +451,117 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     }
   }
 }
+
+export interface PipelineFileUploadOptions {
+  bytes: Uint8Array;
+  fileName: string;
+  mime?: string;
+  userId: string;
+  scanId: string;
+  productionChapterId: string;
+  stageId: string;
+}
+
+export interface PipelineFileStoredRecord {
+  telegramFileId: string;
+  shardId: string;
+  poolId: string;
+  botReference: string;
+  sha256: string;
+  byteSize: number;
+}
+
+/**
+ * Dedicated secure uploader for Scan Production Editorial Pipeline working files.
+ * Enforces Telegram Bot API 20 MB download limit, scan concurrency fair sharing,
+ * routes strictly to PRODUCTION_STORAGE pool, and tracks shard metrics.
+ */
+export async function uploadPipelineFileToStorage(options: PipelineFileUploadOptions): Promise<PipelineFileStoredRecord> {
+  const { bytes, fileName, mime, userId, scanId, productionChapterId, stageId } = options;
+
+  const MAX_PIPELINE_SIZE = 20_971_520; // 20 MB (Telegram Bot API getFile ceiling)
+  if (bytes.byteLength > MAX_PIPELINE_SIZE) {
+    throw new Error(
+      `Arquivo excede o limite máximo de 20 MB permitido pela API de bots do Telegram (${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB enviado).`
+    );
+  }
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
+  const sha256 = Array.from(new Uint8Array(hashBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
+
+  const releaseScanSlot = await acquireScanSlot(scanId);
+  const db = privileged();
+
+  try {
+    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
+      p_pool_key: 'PRODUCTION_STORAGE',
+      p_chapter_id: productionChapterId,
+      p_scan_id: scanId
+    });
+
+    if (shardErr || !shardRows?.length) {
+      throw new Error(`Falha ao selecionar shard de produção editorial: ${shardErr?.message || 'Nenhum shard disponível'}`);
+    }
+
+    const shard = shardRows[0];
+    const shardId = shard.shard_id;
+    const botRef = shard.bot_reference || 'PRODUCTION_STORAGE';
+    const channelId = shard.channel_id;
+
+    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    const botClient = resolveBotClient(botRef, channelId);
+
+    const fileId = crypto.randomUUID();
+    const startTime = Date.now();
+    let telegramFileId: string;
+
+    try {
+      telegramFileId = await botClient.client.upload(
+        bytes as unknown as Uint8Array<ArrayBuffer>,
+        mime || 'application/octet-stream',
+        fileId
+      );
+    } catch (uploadErr) {
+      const elapsedMs = Date.now() - startTime;
+      const isTg = uploadErr instanceof TelegramStorageError;
+      const statusCode = isTg ? uploadErr.status : undefined;
+      const retryAfter = isTg ? uploadErr.retryAfter : undefined;
+
+      await db.rpc('record_shard_upload_result', {
+        p_shard_id: shardId,
+        p_success: false,
+        p_latency_ms: elapsedMs,
+        p_bytes: 0,
+        p_error_code: statusCode || null,
+        p_retry_after: retryAfter || null
+      });
+
+      if (isTg && statusCode === 429) {
+        throw new RateLimitError(retryAfter && retryAfter > 0 ? retryAfter : 15);
+      }
+      throw uploadErr;
+    }
+
+    const elapsedMs = Date.now() - startTime;
+    await db.rpc('record_shard_upload_result', {
+      p_shard_id: shardId,
+      p_success: true,
+      p_latency_ms: elapsedMs,
+      p_bytes: bytes.byteLength,
+      p_error_code: null,
+      p_retry_after: null
+    });
+
+    return {
+      telegramFileId,
+      shardId,
+      poolId: shard.pool_id,
+      botReference: botClient.botRef,
+      sha256,
+      byteSize: bytes.byteLength
+    };
+  } finally {
+    releaseScanSlot();
+  }
+}
+

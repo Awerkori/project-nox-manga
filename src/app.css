@@ -1264,3 +1264,28 @@ td {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   MOBILE PERFORMANCE HARDENING (GPU & JANK PREVENTION)
+   Removes heavy backdrop-filter passes on repeating cards to eliminate scroll stutter
+   while preserving the deep void aesthetic with rich semi-opaque surfaces.
+   ========================================================================== */
+@media (max-width: 768px) {
+  .shelf-card,
+  .editorial-card,
+  .release-row-card,
+  .shop-card,
+  .rank-row,
+  .chapter-item {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(14, 17, 28, 0.95) !important;
+    transform: translateZ(0);
+  }
+
+  /* Optimize Reader page images on mobile */
+  .reader-page-img {
+    content-visibility: auto;
+  }
+}
+

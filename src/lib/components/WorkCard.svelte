@@ -3,6 +3,8 @@
   import { kindLabels, statusLabels } from '$lib/types';
   import { BookOpen, Sparkles, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
+  import { resolveCoverUrl } from '$lib/covers';
+  import { decodeHtmlEntities } from '$lib/html-entities';
 
   let {
     work,
@@ -44,26 +46,27 @@
     if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + 'k';
     return String(n);
   }
+
+  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id));
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
   <div class="card-media">
-    {#if work.cover_id}
-      <img
-        src="/media/{work.cover_id}"
-        alt="Capa de {work.title}"
-        loading="lazy"
-        width="300"
-        height="400"
-        class="card-img"
-        class:blurred-cover={effectiveBlur}
-      />
-    {:else}
-      <div class="card-fallback">
-        <span class="fallback-logo">NOX</span>
-        <strong class="fallback-title">{work.title}</strong>
-      </div>
-    {/if}
+    <img
+      src={coverSrc}
+      alt="Capa de {decodeHtmlEntities(work.title)}"
+      loading="lazy"
+      width="300"
+      height="400"
+      class="card-img"
+      class:blurred-cover={effectiveBlur}
+      onerror={(e) => {
+        const target = e.currentTarget as HTMLImageElement;
+        if (target && !target.src.endsWith('/brand/nox-symbol.webp')) {
+          target.src = '/brand/nox-symbol.webp';
+        }
+      }}
+    />
 
     <!-- 1. Views: Superior Esquerdo (Top-Left) -->
     <div class="card-views-top-left" title="{work.views_total || 0} visualizações">
@@ -109,7 +112,7 @@
   </div>
 
   <div class="card-meta">
-    <h3 class="card-title" title={work.title}>{work.title}</h3>
+    <h3 class="card-title" title={decodeHtmlEntities(work.title)}>{decodeHtmlEntities(work.title)}</h3>
     <div class="card-sub">
       <span class="card-status">{statusLabels[work.status] || work.status}</span>
       {#if work.year}

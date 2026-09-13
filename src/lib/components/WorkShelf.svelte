@@ -3,6 +3,7 @@
   import type { Work } from '$lib/types';
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
+  import { resolveCoverUrl } from '$lib/covers';
 
   type Props = {
     title: string;
@@ -184,23 +185,20 @@
         {#each currentWorks as work (work.id)}
           {@const isAdult = work.content_rating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
+          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id)}
           {@const scanInfo = getScanInfo(work)}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
-              {#if work.cover_id}
-                <img
-                  src="/media/{work.cover_id}"
-                  alt={work.title}
-                  class="card-img"
-                  class:blurred-cover={effectiveBlur}
-                  width="200"
-                  height="285"
-                  loading="lazy"
-                  decoding="async"
-                />
-              {:else}
-                <div class="card-placeholder">NOX</div>
-              {/if}
+              <img
+                src={shelfCover}
+                alt={work.title}
+                class="card-img"
+                class:blurred-cover={effectiveBlur}
+                width="200"
+                height="285"
+                loading="lazy"
+                decoding="async"
+              />
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->

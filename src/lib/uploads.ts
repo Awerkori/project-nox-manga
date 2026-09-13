@@ -49,20 +49,54 @@ export async function normalizeCover(file: File): Promise<Blob> {
   return normalizePage(file);
 }
 
+export const SUPPORTED_IMAGE_REGEX = /\.(png|jpe?g|webp|avif)$/i;
+export const DANGEROUS_EXT_REGEX = /\.(exe|svg|sh|bat|cmd|com|vbs|js|html|htm|php|py|bin|dll|so|app)$/i;
+
+export async function isZipOrCbzFile(file: File): Promise<boolean> {
+  if (/\.(zip|cbz)$/i.test(file.name)) return true;
+  if (
+    [
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/vnd.comicbook+zip',
+      'application/x-cbz'
+    ].includes(file.type)
+  ) {
+    return true;
+  }
+  try {
+    const slice = await file.slice(0, 4).arrayBuffer();
+    const bytes = new Uint8Array(slice);
+    return (
+      bytes[0] === 0x50 &&
+      bytes[1] === 0x4b &&
+      ((bytes[2] === 0x03 && bytes[3] === 0x04) ||
+        (bytes[2] === 0x05 && bytes[3] === 0x06) ||
+        (bytes[2] === 0x07 && bytes[3] === 0x08))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function expandFiles(input: File[]): Promise<File[]> {
   const result: File[] = [];
   let total = 0;
   for (const file of input) {
-    if (!/\.zip$/i.test(file.name)) {
-      if (!/\.(png|jpe?g|webp)$/i.test(file.name) || file.size > 19_000_000)
-        throw new Error('Selecione páginas PNG, JPEG ou WebP de até 19 MB.');
+    const isArchive = await isZipOrCbzFile(file);
+    if (!isArchive) {
+      if (!SUPPORTED_IMAGE_REGEX.test(file.name) || file.size > 19_000_000)
+        throw new Error('Selecione páginas PNG, JPEG, WebP ou AVIF de até 19 MB.');
       result.push(file);
       total += file.size;
       if (result.length > 500 || total > 400_000_000)
         throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
       continue;
     }
-    if (file.size > 300_000_000) throw new Error('O ZIP deve ter no máximo 300 MB.');
+
+    if (file.size > 400_000_000) throw new Error('O arquivo compactado deve ter no máximo 400 MB.');
+    const extractedBefore = result.length;
+
     await new Promise<void>((resolve, reject) => {
       let pending = 0,
         streamDone = false,
@@ -80,20 +114,37 @@ export async function expandFiles(input: File[]): Promise<File[]> {
       };
       const unzip = new Unzip((entry) => {
         if (failed) return;
-        if (entry.name.endsWith('/') || entry.name.startsWith('__MACOSX/')) return;
+
+        // Skip directories and common OS junk files
+        if (entry.name.endsWith('/')) return;
         if (
-          !/\.(png|jpe?g|webp)$/i.test(entry.name) ||
+          entry.name.includes('__MACOSX') ||
+          entry.name.split('/').some((p) => p.startsWith('.') || p === 'Thumbs.db' || p === 'desktop.ini')
+        ) {
+          return;
+        }
+
+        // Guard against directory traversal attacks and dangerous payloads
+        if (
           entry.name.split('/').includes('..') ||
           entry.name.includes('\\') ||
-          entry.name.startsWith('/')
+          entry.name.startsWith('/') ||
+          DANGEROUS_EXT_REGEX.test(entry.name)
         ) {
-          abort('O ZIP deve conter somente imagens PNG, JPEG ou WebP.');
+          abort('O arquivo compactado contém entradas inválidas ou não permitidas.');
           return;
         }
+
+        // If harmless non-image file (e.g. metadata or text), skip silently
+        if (!SUPPORTED_IMAGE_REGEX.test(entry.name)) {
+          return;
+        }
+
         if (entry.originalSize !== undefined && entry.originalSize > 19_000_000) {
-          abort('Uma página do ZIP excede 19 MB.');
+          abort('Uma página do arquivo compactado excede 19 MB.');
           return;
         }
+
         pending++;
         active.add(entry);
         let size = 0;
@@ -101,7 +152,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
         entry.ondata = (problem, chunk, final) => {
           if (failed) return;
           if (problem) {
-            abort('ZIP corrompido.');
+            abort('Arquivo compactado corrompido.');
             return;
           }
           size += chunk.length;
@@ -113,7 +164,8 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           chunks.push(chunk);
           if (final) {
             active.delete(entry);
-            result.push(new File(chunks as BlobPart[], entry.name.split('/').at(-1)!));
+            const cleanName = entry.name.split('/').filter(Boolean).pop() || entry.name;
+            result.push(new File(chunks as BlobPart[], cleanName));
             pending--;
             complete();
           }
@@ -136,14 +188,19 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           }
           if (failed) await reader.cancel();
         } catch {
-          abort('Não foi possível abrir o ZIP.');
+          abort('Não foi possível abrir o arquivo compactado.');
         }
       })();
     });
+
+    if (result.length === extractedBefore) {
+      throw new Error(`Nenhuma página ou imagem válida (.png, .jpg, .webp, .avif) encontrada no arquivo ${file.name}.`);
+    }
   }
   if (result.length > 500 || total > 400_000_000)
     throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
-  if (!result.length) throw new Error('Nenhuma página encontrada. Selecione imagens ou um ZIP com páginas.');
+  if (!result.length)
+    throw new Error('Nenhuma página encontrada. Selecione imagens ou um arquivo ZIP/CBZ com páginas.');
   return result.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' }));
 }
 
@@ -165,11 +222,12 @@ export function parseChapterNumber(name: string, fallbackIndex = 1): number {
 }
 
 export async function extractChaptersFromZip(file: File): Promise<DetectedChapter[]> {
-  if (!/\.zip$/i.test(file.name)) {
-    throw new Error('Selecione um arquivo .zip');
+  const isArchive = await isZipOrCbzFile(file);
+  if (!isArchive) {
+    throw new Error('Selecione um arquivo .zip ou .cbz');
   }
   if (file.size > 800_000_000) {
-    throw new Error('O arquivo ZIP excede o limite de 800 MB.');
+    throw new Error('O arquivo compactado excede o limite de 800 MB.');
   }
 
   const rawEntries: { path: string; chunks: Uint8Array[] }[] = [];
@@ -194,13 +252,22 @@ export async function extractChaptersFromZip(file: File): Promise<DetectedChapte
 
     const unzip = new Unzip((entry) => {
       if (failed) return;
-      if (entry.name.endsWith('/') || entry.name.startsWith('__MACOSX/')) return;
+      if (entry.name.endsWith('/')) return;
       if (
-        !/\.(png|jpe?g|webp)$/i.test(entry.name) ||
+        entry.name.includes('__MACOSX') ||
+        entry.name.split('/').some((p) => p.startsWith('.') || p === 'Thumbs.db' || p === 'desktop.ini')
+      ) {
+        return;
+      }
+      if (
         entry.name.split('/').includes('..') ||
         entry.name.includes('\\') ||
-        entry.name.startsWith('/')
+        entry.name.startsWith('/') ||
+        DANGEROUS_EXT_REGEX.test(entry.name)
       ) {
+        return;
+      }
+      if (!SUPPORTED_IMAGE_REGEX.test(entry.name)) {
         return;
       }
       pending++;
@@ -209,7 +276,7 @@ export async function extractChaptersFromZip(file: File): Promise<DetectedChapte
       entry.ondata = (problem, chunk, final) => {
         if (failed) return;
         if (problem) {
-          abort('Arquivo ZIP corrompido.');
+          abort('Arquivo compactado corrompido.');
           return;
         }
         chunks.push(chunk);
@@ -240,13 +307,13 @@ export async function extractChaptersFromZip(file: File): Promise<DetectedChapte
         }
         if (failed) await reader.cancel();
       } catch {
-        abort('Não foi possível ler o arquivo ZIP.');
+        abort('Não foi possível ler o arquivo compactado.');
       }
     })();
   });
 
   if (!rawEntries.length) {
-    throw new Error('Nenhuma imagem válida (PNG, JPG, WebP) encontrada no arquivo ZIP.');
+    throw new Error('Nenhuma imagem válida (PNG, JPG, WebP, AVIF) encontrada no arquivo compactado.');
   }
 
   const pathParts = rawEntries.map((e) => e.path.split('/'));

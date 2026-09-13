@@ -17,13 +17,15 @@ let homePublicCache: HomeCachePayload | null = null;
 const HOME_CACHE_TTL_MS = 60_000;
 
 export const load = async ({ locals, setHeaders }) => {
-  // If public content cache is fresh, authenticated users only need their personal reading data
+  // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
+  setHeaders({
+    'cache-control': 'private, no-cache, no-store, must-revalidate'
+  });
+
   const hasFreshPublicCache = Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
 
+  // If public content cache is fresh and user is anonymous, return directly without hitting DB
   if (!locals.user && hasFreshPublicCache && homePublicCache) {
-    setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
-    });
     return {
       works: homePublicCache.works,
       featuredList: homePublicCache.featuredList,
@@ -35,33 +37,108 @@ export const load = async ({ locals, setHeaders }) => {
     };
   }
 
-  // Execute reading query and (if cache is cold) public queries concurrently
+  // If public content cache is fresh and user is authenticated, use cached public content and only fetch personal reading data
+  if (hasFreshPublicCache && homePublicCache && locals.user) {
+    const readingRes = await safeDbQuery(
+      locals.db
+        .from('reading')
+        .select(
+          'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
+        )
+        .not('chapters.published_at', 'is', null)
+        .eq('chapters.works.published', true)
+        .order('updated_at', { ascending: false })
+        .limit(20),
+      3000,
+      'home_reading'
+    );
+
+    let continueReading: any[] = [];
+    if (readingRes.data && readingRes.data.length > 0) {
+      const grouped = new Map<string, typeof readingRes.data>();
+      for (const row of readingRes.data) {
+        const wid = (row as any).chapters?.work_id;
+        if (!wid) continue;
+        if (!grouped.has(wid)) grouped.set(wid, []);
+        grouped.get(wid)!.push(row);
+      }
+      for (const [wid, rows] of grouped.entries()) {
+        const sorted = rows.sort((a: any, b: any) => (b.chapters?.number ?? 0) - (a.chapters?.number ?? 0));
+        const mostRecent = rows.sort((a: any, b: any) => b.updated_at.localeCompare(a.updated_at))[0];
+        const highestRead = sorted[0];
+        const currentCh = highestRead.chapters as any;
+        const work = currentCh.works as any;
+        if (!work) continue;
+        const nextNumber = (currentCh.number ?? 0) + 1;
+        const nextCh = sorted.find((r: any) => (r.chapters as any)?.number === nextNumber)?.chapters as any;
+        if (nextCh) {
+          continueReading.push({
+            workId: wid,
+            workTitle: work.title,
+            workSlug: work.slug,
+            coverId: work.cover_id,
+            contentRating: work.content_rating,
+            chapterId: nextCh.id,
+            chapterNumber: nextCh.number,
+            destinationUrl: `/ler/${nextCh.id}`,
+            progressText: `Próximo: Capítulo ${nextCh.number}`,
+            actionLabel: 'Ler próximo ↗',
+            updatedAt: mostRecent.updated_at
+          });
+        } else {
+          continueReading.push({
+            workId: wid,
+            workTitle: work.title,
+            workSlug: work.slug,
+            coverId: work.cover_id,
+            contentRating: work.content_rating,
+            chapterId: currentCh.id,
+            chapterNumber: currentCh.number,
+            destinationUrl: `/obra/${work.slug}`,
+            progressText: `Em dia · Cap. ${currentCh.number}`,
+            actionLabel: 'Ver obra ↗',
+            updatedAt: mostRecent.updated_at
+          });
+        }
+      }
+      continueReading.sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt));
+      continueReading = continueReading.slice(0, 10);
+    }
+
+    return {
+      works: homePublicCache.works,
+      featuredList: homePublicCache.featuredList,
+      recentReleases: homePublicCache.recentReleases,
+      mostReadWorks: homePublicCache.mostReadWorks,
+      recent: continueReading,
+      loadError: false,
+      isStale: false
+    };
+  }
+
+  // Cold cache: execute reading query and public queries concurrently
   const [worksRes, chaptersRes, readingRes, mostReadRes] = await Promise.all([
-    hasFreshPublicCache
-      ? Promise.resolve({ data: homePublicCache!.works, error: null, status: 'SUCCESS' as const, isDegraded: false })
-      : safeDbQuery(
-          locals.db
-            .from('works')
-            .select(HOME_WORK_FIELDS)
-            .eq('published', true)
-            .order('updated_at', { ascending: false })
-            .limit(16),
-          3000,
-          'home_works'
-        ),
-    hasFreshPublicCache
-      ? Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false })
-      : safeDbQuery(
-          locals.db
-            .from('chapters')
-            .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published,content_rating)')
-            .not('published_at', 'is', null)
-            .eq('works.published', true)
-            .order('published_at', { ascending: false })
-            .limit(48),
-          4500,
-          'home_chapters'
-        ),
+    safeDbQuery(
+      locals.db
+        .from('works')
+        .select(HOME_WORK_FIELDS)
+        .eq('published', true)
+        .order('updated_at', { ascending: false })
+        .limit(16),
+      3000,
+      'home_works'
+    ),
+    safeDbQuery(
+      locals.db
+        .from('chapters')
+        .select('id,number,title,published_at,work_id,works!inner(id,slug,title,cover_id,kind,published,content_rating)')
+        .not('published_at', 'is', null)
+        .eq('works.published', true)
+        .order('published_at', { ascending: false })
+        .limit(48),
+      4500,
+      'home_chapters'
+    ),
     locals.user
       ? safeDbQuery(
           locals.db
@@ -345,22 +422,9 @@ export const load = async ({ locals, setHeaders }) => {
   const loadError = isDegraded && recentReleases.length === 0;
 
 
-  if (!locals.user) {
-    if (isDegraded) {
-      setHeaders({
-        'x-degraded': 'true',
-        'cache-control': 'public, max-age=10, stale-while-revalidate=30'
-      });
-    } else {
-      setHeaders({
-        'cache-control': 'public, max-age=60, stale-while-revalidate=300'
-      });
-    }
-  } else {
-    setHeaders({
-      'cache-control': 'private, no-cache, no-store, must-revalidate'
-    });
-  }
+  setHeaders({
+    'cache-control': 'private, no-cache, no-store, must-revalidate'
+  });
 
   return {
     works,

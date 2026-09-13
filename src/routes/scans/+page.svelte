@@ -1,40 +1,54 @@
 <script lang="ts">
-  import { Search, Globe, ShieldCheck, BookOpen, Layers, ArrowRight, Sparkles, MessageSquare } from '@lucide/svelte';
+  import { Search, Globe, ShieldCheck, BookOpen, Layers, ArrowRight, Sparkles, MessageSquare, Star, UserPlus } from "@lucide/svelte";
+  import DiscordIcon from "$lib/components/icons/DiscordIcon.svelte";
+  import FluxerIcon from "$lib/components/icons/FluxerIcon.svelte";
 
   let { data } = $props();
 
-  let searchQuery = $state('');
+  let searchQuery = $state("");
+  let filterTab = $state<"all" | "official" | "partner" | "recruiting">("all");
 
   let filteredScans = $derived(
     (data.scans || []).filter((s: any) => {
+      // Filter tab
+      if (filterTab === "official" && !s.is_official) return false;
+      if (filterTab === "partner" && s.is_official) return false;
+      if (filterTab === "recruiting" && !s.isRecruiting) return false;
+
+      // Search query
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      return s.name.toLowerCase().includes(q) || (s.description && s.description.toLowerCase().includes(q));
+      const matchName = s.name.toLowerCase().includes(q);
+      const matchDesc = s.description && s.description.toLowerCase().includes(q);
+      const matchPositions = (s.recruitingPositions || []).some((p: string) => p.toLowerCase().includes(q));
+      return matchName || matchDesc || matchPositions;
     })
   );
+
+  let totalScans = $derived((data.scans || []).length);
+  let recruitingCount = $derived((data.scans || []).filter((s: any) => s.isRecruiting).length);
 </script>
 
 <svelte:head>
   <title>Scans & Grupos de Tradução | Project Nox</title>
   <meta
     name="description"
-    content="Conheça os grupos parceiros e a equipe editorial oficial responsável pelas traduções no Project Nox."
+    content="Conheça os grupos parceiros e a equipe editorial oficial responsável pelas traduções e lançamentos no Project Nox."
   />
 </svelte:head>
 
 <div class="scans-page">
   <div class="scans-container">
-    <!-- Header Banner -->
+    <!-- Header Hero Section -->
     <header class="scans-hero">
-      <div class="hero-content">
+      <div class="hero-left">
         <div class="badge-tag">
           <Sparkles size={14} />
-          <span>Comunidade & Tradução</span>
+          <span>Comunidade & Equipes</span>
         </div>
         <h1 class="hero-title">Scans & Grupos Parceiros</h1>
         <p class="hero-subtitle">
-          Conheça as equipes e os tradutores independentes que tornam as obras disponíveis no Project Nox com
-          qualidade e dedicação.
+          Descubra as equipes editoriais e os grupos independentes que trazem as melhores traduções para a comunidade do Project Nox.
         </p>
 
         <!-- Search Bar -->
@@ -43,24 +57,62 @@
           <input
             type="text"
             bind:value={searchQuery}
-            placeholder="Buscar por nome do grupo ou descrição..."
+            placeholder="Buscar por nome, descrição ou vaga aberta..."
             class="search-input"
           />
           {#if searchQuery}
-            <button class="btn-clear" onclick={() => (searchQuery = '')} type="button">Limpar</button>
+            <button class="btn-clear" onclick={() => (searchQuery = "")} type="button">Limpar</button>
           {/if}
+        </div>
+
+        <!-- Filter Chips -->
+        <div class="filter-chips">
+          <button
+            type="button"
+            class="filter-chip"
+            class:active={filterTab === "all"}
+            onclick={() => (filterTab = "all")}
+          >
+            Todas ({totalScans})
+          </button>
+          <button
+            type="button"
+            class="filter-chip"
+            class:active={filterTab === "official"}
+            onclick={() => (filterTab = "official")}
+          >
+            <Star size={13} />
+            <span>Oficiais</span>
+          </button>
+          <button
+            type="button"
+            class="filter-chip"
+            class:active={filterTab === "partner"}
+            onclick={() => (filterTab = "partner")}
+          >
+            <span>Parceiras</span>
+          </button>
+          <button
+            type="button"
+            class="filter-chip"
+            class:active={filterTab === "recruiting"}
+            onclick={() => (filterTab = "recruiting")}
+          >
+            <span class="pulse-dot"></span>
+            <span>Recrutando ({recruitingCount})</span>
+          </button>
         </div>
       </div>
 
-      <!-- Partner CTA -->
+      <!-- Partner CTA Card -->
       <aside class="partner-cta-card">
         <div class="cta-inner">
           <div class="cta-icon-wrap">
-            <ShieldCheck size={24} />
+            <ShieldCheck size={26} />
           </div>
           <h2 class="cta-title">Tem um grupo de scan?</h2>
           <p class="cta-text">
-            Publique suas obras com atribuição real de direitos, página dedicada e métricas de audiência em tempo real.
+            Publique suas obras com atribuição real de direitos, página dedicada, métricas e sistema próprio de recrutamento.
           </p>
           <a href="/scan" class="cta-button">
             <span>Acessar Painel de Scan</span>
@@ -76,24 +128,25 @@
         <div class="scans-grid">
           {#each filteredScans as scan (scan.id)}
             <article class="scan-card" class:official={scan.is_official}>
-              <!-- Card Header / Banner -->
+              <!-- Card Banner Header -->
               <div class="card-banner">
                 {#if scan.banner_id}
                   <img src="/media/{scan.banner_id}" alt="Banner de {scan.name}" class="banner-img" loading="lazy" />
+                  <div class="banner-gradient"></div>
                 {:else}
-                  <div class="banner-placeholder"></div>
+                  <div class="banner-placeholder" class:official-bg={scan.is_official}></div>
                 {/if}
               </div>
 
-              <!-- Card Body -->
+              <!-- Card Body (z-index: 2 ensures logo never gets clipped by banner) -->
               <div class="card-body">
-                <!-- Avatar & Badges -->
+                <!-- Avatar Row -->
                 <div class="avatar-row">
-                  <div class="logo-wrap">
+                  <div class="logo-wrap" class:official-border={scan.is_official}>
                     {#if scan.logo_id}
                       <img src="/media/{scan.logo_id}" alt="Logo de {scan.name}" class="logo-img" />
                     {:else}
-                      <div class="logo-placeholder">
+                      <div class="logo-placeholder" class:official-logo={scan.is_official}>
                         {scan.name.charAt(0).toUpperCase()}
                       </div>
                     {/if}
@@ -102,69 +155,116 @@
                   <div class="badges-cluster">
                     {#if scan.is_official}
                       <span class="badge-official">
-                        <ShieldCheck size={13} />
-                        <span>Oficial</span>
+                        <Star size={12} fill="#dfc28d" />
+                        <span>OFICIAL</span>
                       </span>
                     {:else}
                       <span class="badge-partner">
-                        <Sparkles size={13} />
-                        <span>Parceira</span>
+                        <span>PARCEIRA</span>
+                      </span>
+                    {/if}
+
+                    {#if scan.isRecruiting}
+                      <span class="badge-recruiting" title="Equipe com vagas abertas para novos membros">
+                        <span class="pulse-dot"></span>
+                        <span>RECRUTANDO</span>
                       </span>
                     {/if}
                   </div>
                 </div>
 
-                <!-- Info -->
+                <!-- Identity Info -->
                 <div class="info-cluster">
                   <h3 class="scan-name">
                     <a href="/scans/{scan.slug}">{scan.name}</a>
                   </h3>
                   <p class="scan-desc">
-                    {scan.description || 'Grupo de tradução ativo no catálogo do Project Nox.'}
+                    {scan.description || (scan.is_official ? "Scan oficial e núcleo editorial do Project Nox." : "Grupo parceiro de tradução e edição no Project Nox.")}
                   </p>
                 </div>
 
+                <!-- Open Vacancies Tags if recruiting -->
+                {#if scan.isRecruiting && scan.recruitingPositions.length > 0}
+                  <div class="recruiting-positions-wrap">
+                    <div class="recruiting-label">
+                      <UserPlus size={13} />
+                      <span>Vagas abertas:</span>
+                    </div>
+                    <div class="recruiting-tags">
+                      {#each scan.recruitingPositions.slice(0, 3) as pos}
+                        <span class="pos-tag">{pos}</span>
+                      {/each}
+                      {#if scan.recruitingPositions.length > 3}
+                        <span class="pos-tag more">+{scan.recruitingPositions.length - 3}</span>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+
                 <!-- Stats Bar -->
                 <div class="stats-row">
-                  <div class="stat-item" title="Total de obras traduzidas">
+                  <div class="stat-item" title="Total de obras com participação desta scan">
                     <BookOpen size={14} />
-                    <span><strong>{scan.worksCount}</strong> {scan.worksCount === 1 ? 'obra' : 'obras'}</span>
+                    <span><strong>{scan.worksCount}</strong> {scan.worksCount === 1 ? "obra" : "obras"}</span>
                   </div>
+                  <div class="stat-dot">·</div>
                   <div class="stat-item" title="Total de capítulos lançados">
                     <Layers size={14} />
-                    <span><strong>{scan.chaptersCount}</strong> {scan.chaptersCount === 1 ? 'cap.' : 'caps.'}</span>
+                    <span><strong>{scan.chaptersCount}</strong> {scan.chaptersCount === 1 ? "capítulo" : "capítulos"}</span>
                   </div>
                 </div>
 
-                <!-- Footer & Action -->
+                <!-- Card Actions Footer -->
                 <div class="card-footer">
                   <div class="social-links">
                     {#if scan.discord}
-                      <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="social-btn" title="Discord">
-                        <MessageSquare size={15} />
+                      <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="social-btn discord" title="Discord oficial">
+                        <DiscordIcon size={14} />
+                      </a>
+                    {/if}
+                    {#if scan.fluxer}
+                      <a href={scan.fluxer} target="_blank" rel="noopener noreferrer" class="social-btn fluxer" title="Fluxer oficial">
+                        <FluxerIcon size={14} />
                       </a>
                     {/if}
                     {#if scan.website}
-                      <a href={scan.website} target="_blank" rel="noopener noreferrer" class="social-btn" title="Website">
-                        <Globe size={15} />
+                      <a href={scan.website} target="_blank" rel="noopener noreferrer" class="social-btn website" title="Website oficial">
+                        <Globe size={14} />
                       </a>
                     {/if}
                   </div>
 
-                  <a href="/scans/{scan.slug}" class="btn-view-works">
-                    <span>Ver Traduções</span>
-                    <ArrowRight size={14} />
-                  </a>
+                  <div class="action-buttons">
+                    {#if scan.isRecruiting}
+                      <a href="/scans/{scan.slug}#recrutamento" class="btn-apply" title="Ver vagas disponíveis">
+                        <UserPlus size={13} />
+                        <span>Candidatar-se</span>
+                      </a>
+                    {/if}
+                    <a href="/scans/{scan.slug}" class="btn-view-works">
+                      <span>Ver Scan</span>
+                      <ArrowRight size={13} />
+                    </a>
+                  </div>
                 </div>
               </div>
             </article>
           {/each}
         </div>
+      {:else if data.loadError}
+        <div class="empty-state degraded-state" role="alert">
+          <BookOpen size={42} />
+          <h3>Não foi possível carregar as scans agora</h3>
+          <p>As equipes e grupos parceiros continuam registrados na plataforma, mas ocorreu uma lentidão temporária na conexão. Tente recarregar.</p>
+          <button type="button" class="btn-retry" onclick={() => window.location.reload()} style="margin-top: 1rem; padding: 0.5rem 1rem; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+            Recarregar scans
+          </button>
+        </div>
       {:else}
         <div class="empty-state">
-          <BookOpen size={40} />
+          <BookOpen size={42} />
           <h3>Nenhuma scan encontrada</h3>
-          <p>Tente ajustar os termos da sua pesquisa.</p>
+          <p>Tente ajustar os filtros ou termos da sua busca.</p>
         </div>
       {/if}
     </main>
@@ -174,7 +274,7 @@
 <style>
   .scans-page {
     min-height: 100vh;
-    padding: 2.5rem 1.5rem 5rem;
+    padding: 2rem 1.5rem 5rem;
     color: #e2e8f0;
   }
 
@@ -183,18 +283,24 @@
     margin: 0 auto;
   }
 
+  /* Hero Section */
   .scans-hero {
     display: grid;
     grid-template-columns: 1fr 340px;
     gap: 2rem;
-    align-items: center;
-    background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.12), transparent 70%),
-      rgba(14, 17, 29, 0.7);
+    align-items: stretch;
+    background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.1), transparent 65%),
+      linear-gradient(180deg, rgba(17, 21, 37, 0.85) 0%, rgba(10, 13, 23, 0.95) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
     padding: 2.5rem;
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
     backdrop-filter: blur(16px);
+  }
+
+  .hero-left {
+    display: flex;
+    flex-direction: column;
   }
 
   .badge-tag {
@@ -208,31 +314,34 @@
     font-size: 0.8rem;
     font-weight: 700;
     color: #c4b5fd;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
+    align-self: flex-start;
   }
 
   .hero-title {
-    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 2.2rem;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 2.25rem;
     font-weight: 800;
     color: #ffffff;
-    margin: 0 0 0.75rem;
-    letter-spacing: -0.02em;
+    margin: 0 0 0.6rem;
+    letter-spacing: -0.025em;
   }
 
   .hero-subtitle {
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: #94a3b8;
     line-height: 1.6;
-    margin: 0 0 1.75rem;
+    margin: 0 0 1.5rem;
     max-width: 680px;
   }
 
+  /* Search Box */
   .search-box {
     position: relative;
     display: flex;
     align-items: center;
-    max-width: 580px;
+    max-width: 620px;
+    margin-bottom: 1.25rem;
   }
 
   :global(.search-icon) {
@@ -271,24 +380,81 @@
     cursor: pointer;
   }
 
+  /* Filter Chips */
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-chip:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .filter-chip.active {
+    color: #ffffff;
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.2);
+  }
+
+  /* Pulse Dot */
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #a855f7;
+    box-shadow: 0 0 8px #a855f7;
+    animation: pulse 1.6s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  /* Partner CTA Card */
   .partner-cta-card {
-    background: linear-gradient(135deg, rgba(30, 27, 75, 0.4), rgba(20, 24, 42, 0.8));
-    border: 1px solid rgba(139, 92, 246, 0.25);
+    background: linear-gradient(145deg, rgba(30, 27, 75, 0.45) 0%, rgba(17, 21, 37, 0.9) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: 16px;
-    padding: 1.5rem;
+    padding: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
 
   .cta-inner {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    height: 100%;
+    justify-content: space-between;
   }
 
   .cta-icon-wrap {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
     background: rgba(139, 92, 246, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -305,7 +471,7 @@
   .cta-text {
     font-size: 0.85rem;
     color: #94a3b8;
-    line-height: 1.5;
+    line-height: 1.55;
     margin: 0;
   }
 
@@ -331,43 +497,46 @@
     transform: translateY(-1px);
   }
 
-  /* Scans Grid */
+  /* Grid & Cards */
   .scans-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1.75rem;
   }
 
   .scan-card {
-    background: #0e111d;
+    background: #0d101a;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 18px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
   }
 
   .scan-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-4px);
     border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7), 0 0 20px -2px rgba(139, 92, 246, 0.15);
+    box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.8), 0 0 24px -4px rgba(139, 92, 246, 0.2);
   }
 
   .scan-card.official {
-    border-color: rgba(223, 194, 141, 0.3);
+    border-color: rgba(223, 194, 141, 0.35);
+    background: radial-gradient(circle at top right, rgba(223, 194, 141, 0.06), transparent 70%), #0d101a;
   }
 
   .scan-card.official:hover {
-    border-color: rgba(223, 194, 141, 0.6);
-    box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7), 0 0 20px -2px rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.65);
+    box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.8), 0 0 24px -4px rgba(223, 194, 141, 0.2);
   }
 
+  /* Banner */
   .card-banner {
-    height: 100px;
+    height: 110px;
     width: 100%;
     position: relative;
-    background: #141724;
+    background: #141829;
     overflow: hidden;
   }
 
@@ -377,36 +546,59 @@
     object-fit: cover;
   }
 
+  .banner-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(13, 16, 26, 0.95) 100%);
+  }
+
   .banner-placeholder {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #181d30 0%, #0d101a 100%);
+    background: linear-gradient(135deg, #171b2d 0%, #0d101b 100%);
   }
 
+  .banner-placeholder.official-bg {
+    background: linear-gradient(135deg, rgba(60, 48, 25, 0.4) 0%, #0d101b 100%);
+  }
+
+  /* Card Body - CRITICAL FIX: relative with z-index: 2 prevents banner clipping the avatar */
   .card-body {
-    padding: 0 1.25rem 1.25rem;
+    position: relative;
+    z-index: 2;
+    padding: 0 1.35rem 1.35rem;
     display: flex;
     flex-direction: column;
     flex: 1;
   }
 
+  /* Avatar Row */
   .avatar-row {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    margin-top: -36px;
-    margin-bottom: 0.75rem;
+    margin-top: -34px;
+    margin-bottom: 0.85rem;
+    gap: 0.75rem;
   }
 
   .logo-wrap {
     width: 64px;
     height: 64px;
-    border-radius: 14px;
-    background: #111422;
-    border: 3px solid #0e111d;
+    border-radius: 16px;
+    background: #131728;
+    border: 3px solid #0d101a;
     overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-wrap.official-border {
+    border-color: #0d101a;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(223, 194, 141, 0.4);
   }
 
   .logo-img {
@@ -422,14 +614,22 @@
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #2e1065, #1e1b4b);
-    color: #e2e8f0;
+    color: #f1f5f9;
     font-size: 1.5rem;
     font-weight: 800;
+    line-height: 1;
+  }
+
+  .logo-placeholder.official-logo {
+    background: linear-gradient(135deg, #422006, #1c1917);
+    color: #dfc28d;
   }
 
   .badges-cluster {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.4rem;
   }
 
@@ -437,37 +637,55 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.25rem 0.6rem;
+    padding: 0.25rem 0.65rem;
     background: rgba(223, 194, 141, 0.15);
     border: 1px solid rgba(223, 194, 141, 0.35);
-    border-radius: 6px;
+    border-radius: 8px;
     color: #dfc28d;
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
   }
 
   .badge-partner {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.25rem 0.6rem;
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 6px;
+    padding: 0.25rem 0.65rem;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 8px;
     color: #c4b5fd;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
   }
 
+  .badge-recruiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(168, 85, 247, 0.16);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 8px;
+    color: #e9d5ff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+
+  /* Identity */
   .info-cluster {
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
     flex: 1;
   }
 
   .scan-name {
-    margin: 0 0 0.4rem;
-    font-size: 1.2rem;
-    font-weight: 700;
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   .scan-name a {
@@ -477,11 +695,15 @@
   }
 
   .scan-name a:hover {
+    color: #c4b5fd;
+  }
+
+  .scan-card.official .scan-name a:hover {
     color: #dfc28d;
   }
 
   .scan-desc {
-    font-size: 0.85rem;
+    font-size: 0.86rem;
     color: #94a3b8;
     line-height: 1.5;
     margin: 0;
@@ -492,13 +714,59 @@
     overflow: hidden;
   }
 
+  /* Recruiting Tags */
+  .recruiting-positions-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.65rem 0.85rem;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 10px;
+    margin-bottom: 0.85rem;
+  }
+
+  .recruiting-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #d8b4fe;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .recruiting-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .pos-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f3e8ff;
+    background: rgba(147, 51, 234, 0.25);
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+  }
+
+  .pos-tag.more {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #cbd5e1;
+  }
+
+  /* Stats Bar */
   .stats-row {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
-    padding: 0.65rem 0.85rem;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
+    border-radius: 10px;
     margin-bottom: 1rem;
   }
 
@@ -507,26 +775,32 @@
     align-items: center;
     gap: 0.4rem;
     font-size: 0.82rem;
-    color: #cbd5e1;
+    color: #94a3b8;
   }
 
   .stat-item strong {
-    color: #ffffff;
+    color: #f1f5f9;
   }
 
+  .stat-dot {
+    color: #475569;
+    font-size: 0.85rem;
+  }
+
+  /* Card Footer */
   .card-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding-top: 0.5rem;
+    padding-top: 0.75rem;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .social-links {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
 
   .social-btn {
@@ -536,7 +810,7 @@
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.05);
     color: #94a3b8;
     text-decoration: none;
     transition: all 0.2s ease;
@@ -547,52 +821,115 @@
     background: rgba(139, 92, 246, 0.25);
   }
 
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-apply {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.8rem;
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 8px;
+    color: #e9d5ff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-apply:hover {
+    background: rgba(168, 85, 247, 0.35);
+    color: #ffffff;
+  }
+
   .btn-view-works {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.9rem;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    color: #e2e8f0;
-    font-size: 0.82rem;
+    color: #f1f5f9;
+    font-size: 0.8rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.2s ease;
   }
 
   .btn-view-works:hover {
-    background: rgba(223, 194, 141, 0.15);
-    border-color: rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #ffffff;
     transform: translateX(2px);
   }
 
+  .scan-card.official .btn-view-works:hover {
+    background: rgba(223, 194, 141, 0.2);
+    border-color: rgba(223, 194, 141, 0.5);
+    color: #dfc28d;
+  }
+
+  /* Empty State */
   .empty-state {
-    padding: 4rem 2rem;
+    padding: 4.5rem 2rem;
     text-align: center;
     color: #64748b;
     background: rgba(255, 255, 255, 0.02);
     border: 1px dashed rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 18px;
   }
 
   .empty-state h3 {
     color: #f1f5f9;
     margin: 1rem 0 0.5rem;
+    font-size: 1.15rem;
   }
 
-  @media (max-width: 960px) {
+  /* Responsiveness */
+  @media (max-width: 992px) {
     .scans-hero {
       grid-template-columns: 1fr;
       padding: 2rem 1.5rem;
+      gap: 1.75rem;
     }
   }
 
   @media (max-width: 640px) {
+    .scans-page {
+      padding: 1.25rem 1rem 4rem;
+    }
+
+    .hero-title {
+      font-size: 1.75rem;
+    }
+
+    .hero-subtitle {
+      font-size: 0.88rem;
+    }
+
     .scans-grid {
       grid-template-columns: 1fr;
+    }
+
+    .avatar-row {
+      margin-top: -30px;
+    }
+
+    .logo-wrap {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+    }
+
+    .action-buttons {
+      width: 100%;
+      justify-content: flex-end;
     }
   }
 </style>

@@ -140,19 +140,32 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
     }
   }
-  const [pages, siblings, progress, comments, chapterScansRes, workScansRes] = await withTimeout(
+  // 1. Fetch core chapter pages with dedicated timeout and resilience
+  const pagesPromise = safeDbQuery(
+    locals.db
+      .from('pages')
+      .select('position,media_id,width,height')
+      .eq('chapter_id', chapter.id)
+      .order('position'),
+    6000,
+    'reader_pages'
+  );
+
+  // 2. Fetch sibling chapters for navigation
+  const siblingsPromise = safeDbQuery(
+    locals.db
+      .from('chapters')
+      .select('id,number')
+      .eq('work_id', chapter.work_id)
+      .not('published_at', 'is', null)
+      .order('number'),
+    5000,
+    'reader_siblings'
+  );
+
+  // 3. Auxiliary metadata (comments, scans, reading progress) with resilient fallback
+  const auxPromise = withTimeout(
     Promise.all([
-      locals.db
-        .from('pages')
-        .select('position,media_id,width,height')
-        .eq('chapter_id', chapter.id)
-        .order('position'),
-      locals.db
-        .from('chapters')
-        .select('id,number')
-        .eq('work_id', chapter.work_id)
-        .not('published_at', 'is', null)
-        .order('number'),
       locals.user
         ? locals.db
             .from('reading')
@@ -179,10 +192,31 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         .select('scans(id,name,slug)')
         .eq('work_id', chapter.work_id)
     ]),
-    3500,
-    [{ data: [] }, { data: [] }, { data: null }, { data: [] }, { data: [] }, { data: [] }] as any,
-    'reader_batch_data'
+    3000,
+    [{ data: null }, { data: [] }, { data: [] }, { data: [] }] as any,
+    'reader_aux_metadata'
   );
+
+  const [pagesRes, siblingsRes, [progress, comments, chapterScansRes, workScansRes]] = await Promise.all([
+    pagesPromise,
+    siblingsPromise,
+    auxPromise
+  ]);
+
+  if (pagesRes.status === 'TIMEOUT') {
+    error(503, 'A conexão com as páginas está temporariamente lenta. Tente recarregar em instantes.');
+  }
+
+  if (pagesRes.status === 'ERROR') {
+    error(500, 'Instabilidade ao carregar as páginas do capítulo.');
+  }
+
+  const pagesData = (pagesRes.data || []) as any[];
+
+  // If chapter is published but has 0 pages returned, throw 503 so it re-attempts rather than showing an empty black box
+  if (!preview && pagesData.length === 0) {
+    error(503, 'Capítulo em processamento ou temporariamente indisponível. Tente novamente em instantes.');
+  }
 
   let scans = (((chapterScansRes && chapterScansRes.data) || []) as any[])
     .map((cs) => cs.scans)
@@ -196,11 +230,10 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     scans = [{ id: '04872e99-37ad-4d45-aed4-35759d0eae33', name: 'Project Nox', slug: 'project-nox' }];
   }
 
-  let all = (siblings.data || []) as any[];
-
+  let all = (siblingsRes.data || []) as any[];
   const index = all.findIndex((c) => c.id === chapter.id);
 
-  if (!preview && chapter && pages.data && pages.data.length > 0) {
+  if (!preview && chapter && pagesData.length > 0) {
     if (readerCache.size >= 100) {
       const oldestKey = readerCache.keys().next().value;
       if (oldestKey) readerCache.delete(oldestKey);
@@ -208,7 +241,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     readerCache.set(chapter.id, {
       timestamp: Date.now(),
       chapter,
-      pages: pages.data,
+      pages: pagesData,
       siblings: all,
       scans
     });
@@ -222,12 +255,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
 
   return {
     chapter,
-    pages: pages.data || [],
+    pages: pagesData,
     previous: all[index - 1] || null,
     next: all[index + 1] || null,
     siblings: all,
-    progress: progress.data,
-    comments: comments.data || [],
+    progress: progress?.data || null,
+    comments: comments?.data || [],
     scans,
     preview
   };

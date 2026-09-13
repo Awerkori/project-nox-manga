@@ -129,9 +129,12 @@
           async (file) => {
             currentProgressText = `Capítulo ${ch.number}: enviando ${file.name} (${uploadedMediaIds.length + 1}/${ch.files.length})…`;
             const blob = await normalizePage(file);
-            const res = await fetch('/api/upload', {
+            const res = await fetch('/api/upload?purpose=staff_manual', {
               method: 'POST',
-              headers: { 'Content-Type': blob.type },
+              headers: {
+                'Content-Type': blob.type,
+                'x-media-purpose': 'staff_manual'
+              },
               body: blob
             });
             if (res.status === 429) {
@@ -235,11 +238,11 @@
 
           <label class="dropzone">
             <UploadCloud size={40} />
-            <span class="dropzone-label">Clique para selecionar o arquivo ZIP</span>
-            <span class="dropzone-hint">Formatos aceitos: .zip (máx. 800 MB)</span>
+            <span class="dropzone-label">Clique para selecionar o arquivo ZIP ou CBZ</span>
+            <span class="dropzone-hint">Formatos aceitos: .zip, .cbz (máx. 800 MB)</span>
             <input
               type="file"
-              accept=".zip,application/zip"
+              accept=".zip,.cbz,application/zip,application/x-zip-compressed,application/vnd.comicbook+zip,application/x-cbz"
               onchange={handleFileSelect}
               style="display:none"
             />

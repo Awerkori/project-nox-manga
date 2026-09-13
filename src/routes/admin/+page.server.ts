@@ -1,4 +1,13 @@
+import { withTimeout } from '$lib/server/resilience';
+
+let adminDashboardCache: { timestamp: number; payload: any } | null = null;
+const ADMIN_CACHE_TTL_MS = 30_000;
+
 export const load = async ({ locals }) => {
+  if (adminDashboardCache && Date.now() - adminDashboardCache.timestamp < ADMIN_CACHE_TTL_MS) {
+    return adminDashboardCache.payload;
+  }
+
   const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
 
   const [
@@ -14,12 +23,13 @@ export const load = async ({ locals }) => {
     staffCountRes,
     failedJobsRes,
     failedMappingsRes
-  ] = await Promise.all([
-    locals.db.from('works').select('id', { count: 'exact', head: true }),
-    locals.db
-      .from('chapters')
-      .select('id', { count: 'exact', head: true })
-      .not('published_at', 'is', null),
+  ] = await withTimeout(
+    Promise.all([
+      locals.db.from('works').select('id', { count: 'exact', head: true }),
+      locals.db
+        .from('chapters')
+        .select('id', { count: 'exact', head: true })
+        .not('published_at', 'is', null),
     locals.db
       .from('chapters')
       .select('id', { count: 'exact', head: true })
@@ -66,13 +76,30 @@ export const load = async ({ locals }) => {
       .from('importer_chapter_mappings')
       .select('id', { count: 'exact', head: true })
       .in('status', ['FAILED', 'VERIFICATION_FAILED'])
-  ]);
+    ]),
+    3500,
+    [
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { data: [] },
+      { data: [] },
+      { data: [] },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 }
+    ] as any,
+    'admin_dashboard_metrics'
+  );
 
   const totalFailedJobs24h = failedJobsRes.count || 0;
   const unrecoveredFailures = failedMappingsRes.count || 0;
   const recoveredFailures = Math.max(0, totalFailedJobs24h - unrecoveredFailures);
 
-  return {
+  const payload = {
     works: works.count || 0,
     chapters: publishedChapters.count || 0,
     draftsCount: draftsCount.count || 0,
@@ -87,4 +114,7 @@ export const load = async ({ locals }) => {
     unrecoveredFailures,
     recoveredFailures
   };
+
+  adminDashboardCache = { timestamp: Date.now(), payload };
+  return payload;
 };

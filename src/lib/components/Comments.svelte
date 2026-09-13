@@ -2,11 +2,12 @@
   import { invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { date } from '$lib/types';
-  import { tick } from 'svelte';
+  import { tick, onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { threadComments, parseCommentBody } from '$lib/comments';
   import { MessageSquare, Flag, X } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
+  import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   type Comment = {
     id: string;
     user_id: string;
@@ -33,6 +34,7 @@
     notice = $state(''),
     busy = $state(false),
     reportingComment = $state<Comment | null>(null);
+  let mentionAutocompleteRef = $state<any>();
   const revealedSpoilers = new SvelteSet<string>();
 
   function toggleSpoiler(key: string) {
@@ -45,6 +47,29 @@
   let composer = $state<HTMLTextAreaElement>();
   let threaded = $derived(threadComments(comments));
   let replyComment = $derived(reply ? comments.find((c) => c.id === reply) : null);
+
+  onMount(() => {
+    function checkHashAndScroll() {
+      if (typeof window === 'undefined') return;
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#comment-')) {
+        const id = hash.slice(1);
+        const el = document.getElementById(id);
+        if (el) {
+          setTimeout(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('highlight-pulse');
+            setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
+          }, 300);
+        }
+      }
+    }
+
+    checkHashAndScroll();
+    window.addEventListener('hashchange', checkHashAndScroll);
+    return () => window.removeEventListener('hashchange', checkHashAndScroll);
+  });
+
   async function compose(comment: Comment, editing = false) {
     edit = editing ? comment.id : null;
     reply = editing ? null : comment.id;
@@ -57,14 +82,18 @@
     busy = true;
     notice = '';
     try {
+      const mentionsData = mentionAutocompleteRef?.getTrackedMentions() || null;
       await action(
         'member',
         edit ? 'comment_edit' : 'comment',
-        edit ? { id: edit, body } : { work_id: workId, chapter_id: chapterId, parent_id: reply, body }
+        edit
+          ? { id: edit, body, mentionsData }
+          : { work_id: workId, chapter_id: chapterId, parent_id: reply, body, mentionsData }
       );
       body = '';
       reply = null;
       edit = null;
+      mentionAutocompleteRef?.clearTrackedMentions();
       await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;
@@ -121,22 +150,33 @@
         </div>
       {/if}
 
-      <label class="field"
-        >{edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}<textarea
+      <div class="composer-field-wrapper">
+        <label class="field"
+          >{edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}<textarea
+            bind:value={body}
+            bind:this={composer}
+            rows="3"
+            required
+            maxlength="2000"
+            oninput={(e) => mentionAutocompleteRef?.handleInput((e.target as HTMLTextAreaElement).value)}
+            onkeydown={(e) => {
+              if (mentionAutocompleteRef?.handleKeyDown(e)) return;
+            }}
+            placeholder={edit
+              ? 'Edite seu comentário…'
+              : reply
+                ? `Respondendo a @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
+                : chapterId
+                  ? 'O que achou deste capítulo? Compartilhe suas impressões… Evite spoilers sem aviso.'
+                  : 'O que achou desta obra? Compartilhe suas impressões sobre a história, personagens e arte…'
+            }></textarea></label
+        >
+        <MentionAutocomplete
+          bind:this={mentionAutocompleteRef}
           bind:value={body}
-          bind:this={composer}
-          rows="3"
-          required
-          maxlength="2000"
-          placeholder={edit
-            ? 'Edite seu comentário…'
-            : reply
-              ? `Respondendo a @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
-              : chapterId
-                ? 'O que achou deste capítulo? Compartilhe suas impressões… Evite spoilers sem aviso.'
-                : 'O que achou desta obra? Compartilhe suas impressões sobre a história, personagens e arte…'
-          }></textarea></label
-      >
+          textareaEl={composer}
+        />
+      </div>
       <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
         <button class="button compact" disabled={busy || !body.trim()}>
           {busy ? 'Enviando…' : edit ? 'Salvar alteração' : reply ? 'Responder' : 'Comentar'}
@@ -182,7 +222,7 @@
     </div>
   {:else}
     <div class="comment-list">
-      {#each threaded as comment (comment.id)}<article class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
+      {#each threaded as comment (comment.id)}<article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
         <div class="comment-author">
           <span class="avatar"
             >{#if comment.members?.avatar_id}<img
@@ -217,6 +257,8 @@
                   <span class="spoiler-badge">SPOILER</span>
                 {/if}
               </button>
+            {:else if chunk.type === 'mention'}
+              <a href={`/u/${chunk.username || chunk.content}`} class="mention-tag">@{chunk.content}</a>
             {:else}
               {chunk.content}
             {/if}
@@ -493,5 +535,41 @@
     border: 1px solid rgba(139, 92, 246, 0.45);
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
     transition: all 0.25s ease;
+  }
+
+  .comment-list article.highlight-pulse {
+    background: rgba(99, 102, 241, 0.22);
+    border-radius: 12px;
+    padding: 18px 16px;
+    border: 1px solid rgba(99, 102, 241, 0.7);
+    box-shadow: 0 0 25px rgba(99, 102, 241, 0.4);
+    animation: highlightPulseFade 3s ease-out forwards;
+  }
+
+  @keyframes highlightPulseFade {
+    0% { background: rgba(99, 102, 241, 0.35); border-color: #818cf8; }
+    70% { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); }
+    100% { background: transparent; border-color: var(--line); }
+  }
+
+  .composer-field-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  :global(.mention-tag) {
+    display: inline-block;
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  :global(.mention-tag:hover) {
+    background: rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
   }
 </style>
