@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite dev --host 127.0.0.1",
     "build": "vite build",
+    "postbuild": "node scripts/inject-worker-auth-bypass.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
