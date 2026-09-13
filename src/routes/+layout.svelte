@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../app.css';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     Search,
     Library,
@@ -23,13 +23,79 @@
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
   import AgeGateModal from '$lib/components/AgeGateModal.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getSupabaseBrowserClient } from '$lib/supabase';
+  import { page } from '$app/state';
 
   let { data, children } = $props();
+  let currentPath = $derived(page.url.pathname);
   let menu = $state(false);
   let userMenuOpen = $state(false);
   let scrolled = $state(false);
-  let reader = $derived(data.pathname.startsWith('/ler/'));
+  let reader = $derived(currentPath.startsWith('/ler/'));
   let rank = $derived(data.profile ? memberRank(data.profile.xp) : null);
+  let localUnread = $state(data.unread || 0);
+
+  $effect(() => {
+    localUnread = data.unread || 0;
+  });
+
+  let subscribedProfileId: string | null = null;
+  let activeRealtimeChannel: any = null;
+
+  $effect(() => {
+    const profileId = data.profile?.id || null;
+    if (profileId === subscribedProfileId) {
+      // Profile ID has not changed; do NOT re-create the websocket channel on page navigation!
+      return;
+    }
+
+    if (activeRealtimeChannel) {
+      const client = getSupabaseBrowserClient();
+      if (client) {
+        client.removeChannel(activeRealtimeChannel);
+      }
+      activeRealtimeChannel = null;
+    }
+
+    subscribedProfileId = profileId;
+    if (!profileId) return;
+
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+
+    activeRealtimeChannel = client
+      .channel(`rt_notifs_${profileId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profileId}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            localUnread = (localUnread || 0) + 1;
+          } else if (payload.eventType === 'UPDATE') {
+            if ((payload.new as any)?.read_at && !(payload.old as any)?.read_at) {
+              localUnread = Math.max(0, (localUnread || 0) - 1);
+            }
+          }
+        }
+      )
+      .subscribe();
+  });
+
+  onDestroy(() => {
+    if (activeRealtimeChannel) {
+      const client = getSupabaseBrowserClient();
+      if (client) {
+        client.removeChannel(activeRealtimeChannel);
+      }
+      activeRealtimeChannel = null;
+      subscribedProfileId = null;
+    }
+  });
 
   onMount(() => {
     function handleScroll() {
@@ -68,7 +134,7 @@
   />
   <meta property="og:site_name" content="Project Nox" />
   <meta property="og:type" content="website" />
-  {#if !data.pathname?.startsWith('/obra/')}
+  {#if !currentPath?.startsWith('/obra/')}
     <meta
       property="og:image"
       content="{(data.siteUrl || 'https://manga.project-nox-awerkori.workers.dev')}/brand/nox-symbol-256.webp"
@@ -110,20 +176,20 @@
         </span>
       </a>
 
-      <nav class="desktop-nav" aria-label="Navegação principal">
-        <a class:active={data.pathname === '/'} href="/">
+      <nav class="desktop-nav" aria-label="Navegação principal" data-sveltekit-preload-data="hover">
+        <a class:active={currentPath === '/'} href="/">
           <span>Início</span>
         </a>
-        <a class:active={data.pathname.startsWith('/catalogo')} href="/catalogo">
+        <a class:active={currentPath.startsWith('/catalogo')} href="/catalogo">
           <span>Catálogo</span>
         </a>
-        <a class:active={data.pathname === '/ranking'} href="/ranking">
+        <a class:active={currentPath === '/ranking'} href="/ranking">
           <span>Ranking</span>
         </a>
-        <a class:active={data.pathname.startsWith('/scans')} href="/scans">
+        <a class:active={currentPath.startsWith('/scans')} href="/scans">
           <span>Scans</span>
         </a>
-        <a class:active={data.pathname.startsWith('/loja')} href="/loja">
+        <a class:active={currentPath.startsWith('/loja')} href="/loja">
           <span>Loja</span>
         </a>
       </nav>
@@ -171,7 +237,7 @@
             aria-label="Notificações"
           >
             <Bell size={18} />
-            {#if data.unread}<i></i>{/if}
+            {#if localUnread > 0}<i></i>{/if}
           </a>
 
           <div class="user-menu-container">
@@ -238,24 +304,40 @@
                   <a href="/me?tab=notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Bell size={16} />
                     <span>Notificações</span>
-                    {#if data.unread}
-                      <span class="dropdown-badge">{data.unread}</span>
+                    {#if localUnread > 0}
+                      <span class="dropdown-badge">{localUnread}</span>
                     {/if}
                   </a>
                   <a href="/loja" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <ShoppingBag size={16} />
                     <span>Loja de Cosméticos</span>
                   </a>
-                  {#if data.role === 'SCAN_PARTNER' || data.role === 'ADMIN'}
-                    <a href="/scan" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                      <Users size={16} />
-                      <span>Painel de Scan</span>
-                    </a>
+                  {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
+                    {#if data.userScans && data.userScans.length === 1}
+                      <a href="/scan?id={data.userScans[0].id}" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                        <Users size={16} />
+                        <span>Painel: {data.userScans[0].name}</span>
+                      </a>
+                    {:else if data.userScans && data.userScans.length > 1}
+                      <div class="dropdown-scans-title">MINHAS SCANS</div>
+                      {#each data.userScans as uscan}
+                        <a href="/scan?id={uscan.id}" class="dropdown-partner-link is-sub" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                          <Users size={14} />
+                          <span class="truncate">{uscan.name}</span>
+                          <span class="scan-badge-role">{uscan.role}</span>
+                        </a>
+                      {/each}
+                    {:else if data.role === 'ADMIN'}
+                      <a href="/scan" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                        <Users size={16} />
+                        <span>Painéis de Scan</span>
+                      </a>
+                    {/if}
                   {/if}
                   {#if data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'}
                     <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
                       <Shield size={16} />
-                      <span>Painel de Controle</span>
+                      <span>{data.role === 'ADMIN' ? 'Painel de Controle Global' : 'Painel da Staff'}</span>
                     </a>
                   {/if}
                 </div>
@@ -306,6 +388,8 @@
               </div>
             {/if}
           </div>
+        {:else if data.authState === 'AUTH_PENDING' || data.authState === 'AUTH_ERROR'}
+          <div class="user-avatar-skeleton" title="Sincronizando sessão..." aria-label="Carregando conta"></div>
         {:else}
           <a class="btn-login-nav" href="/entrar">
             <span>Entrar</span>
@@ -326,36 +410,76 @@
     <!-- Mobile Drawer Dropdown -->
     {#if menu}
       <div class="mobile-drawer" role="dialog" aria-modal="true">
-        <nav class="mobile-drawer-nav" aria-label="Menu móvel">
-          <a class:active={data.pathname === '/'} href="/" onclick={() => (menu = false)}>
+        <nav class="mobile-drawer-nav" aria-label="Menu móvel" data-sveltekit-preload-data="tap">
+          <a class:active={currentPath === '/'} href="/" onclick={() => (menu = false)}>
             <BookOpen size={18} />
             <span>Início</span>
           </a>
-          <a class:active={data.pathname.startsWith('/catalogo')} href="/catalogo" onclick={() => (menu = false)}>
+          <a class:active={currentPath.startsWith('/catalogo')} href="/catalogo" onclick={() => (menu = false)}>
             <Search size={18} />
             <span>Catálogo</span>
           </a>
-          <a class:active={data.pathname === '/ranking'} href="/ranking" onclick={() => (menu = false)}>
+          <a class:active={currentPath === '/ranking'} href="/ranking" onclick={() => (menu = false)}>
             <Trophy size={18} />
             <span>Ranking</span>
           </a>
-          <a class:active={data.pathname.startsWith('/scans')} href="/scans" onclick={() => (menu = false)}>
+          <a class:active={currentPath.startsWith('/scans')} href="/scans" onclick={() => (menu = false)}>
             <Users size={18} />
             <span>Scans Parceiras</span>
           </a>
-          <a class:active={data.pathname.startsWith('/loja')} href="/loja" onclick={() => (menu = false)}>
+          <a class:active={currentPath.startsWith('/loja')} href="/loja" onclick={() => (menu = false)}>
             <ShoppingBag size={18} />
             <span>Loja de Cosméticos</span>
           </a>
-          {#if data.profile}
-            <a class:active={data.pathname.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
+          {#if data.profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
+            <a class:active={currentPath.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
               <UserRound size={18} />
               <span>Meu Espaço</span>
             </a>
-            <a href="/u/{data.profile.username}" onclick={() => (menu = false)}>
-              <UserRound size={18} />
-              <span>Meu Perfil Público</span>
+            {#if data.profile?.username}
+              <a href="/u/{data.profile.username}" onclick={() => (menu = false)}>
+                <BookOpen size={18} />
+                <span>Perfil Público</span>
+              </a>
+            {/if}
+            <a href="/me?tab=biblioteca" onclick={() => (menu = false)}>
+              <Library size={18} />
+              <span>Minha Biblioteca</span>
             </a>
+            <a href="/me?tab=favoritos" onclick={() => (menu = false)}>
+              <Bookmark size={18} />
+              <span>Favoritos</span>
+            </a>
+            <a href="/me?tab=historico" onclick={() => (menu = false)}>
+              <History size={18} />
+              <span>Histórico</span>
+            </a>
+            {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
+              {#if data.userScans && data.userScans.length === 1}
+                <a href="/scan?id={data.userScans[0].id}" class="mobile-partner-link" onclick={() => (menu = false)}>
+                  <Users size={18} />
+                  <span>Painel: {data.userScans[0].name}</span>
+                </a>
+              {:else if data.userScans && data.userScans.length > 1}
+                {#each data.userScans as uscan}
+                  <a href="/scan?id={uscan.id}" class="mobile-partner-link" onclick={() => (menu = false)}>
+                    <Users size={18} />
+                    <span>Painel: {uscan.name} ({uscan.role})</span>
+                  </a>
+                {/each}
+              {:else if data.role === 'ADMIN'}
+                <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
+                  <Users size={18} />
+                  <span>Painéis de Scan</span>
+                </a>
+              {/if}
+            {/if}
+            {#if data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'}
+              <a href="/admin" class="mobile-admin-link" onclick={() => (menu = false)}>
+                <Shield size={18} />
+                <span>{data.role === 'ADMIN' ? 'Painel de Controle Global' : 'Painel da Staff'}</span>
+              </a>
+            {/if}
           {:else}
             <a href="/entrar" onclick={() => (menu = false)}>
               <UserRound size={18} />
@@ -369,7 +493,7 @@
 {/if}
 
 <main id="conteudo" class:reader-main={reader}>
-  {#key data.pathname}{@render children()}{/key}
+  {@render children()}
 </main>
 
 {#if !reader}
@@ -408,12 +532,12 @@
     </div>
   </footer>
 
-  <nav class="mobile-bottom" aria-label="Atalhos">
-    <a href="/" class:active={data.pathname === '/'}><BookOpen size={20} /><span>Início</span></a>
-    <a href="/catalogo" class:active={data.pathname.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
-    <a href="/scans" class:active={data.pathname.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
-    <a href="/loja" class:active={data.pathname.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
-    <a href={data.profile ? '/me' : '/entrar'} class:active={data.pathname.startsWith('/me') || data.pathname.startsWith('/u/')}><UserRound size={20} /><span>{data.profile ? 'Espaço' : 'Entrar'}</span></a>
+  <nav class="mobile-bottom" aria-label="Atalhos" data-sveltekit-preload-data="tap">
+    <a href="/" class:active={currentPath === '/'}><BookOpen size={20} /><span>Início</span></a>
+    <a href="/catalogo" class:active={currentPath.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
+    <a href="/scans" class:active={currentPath.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
+    <a href="/loja" class:active={currentPath.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
+    <a href={data.profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{data.profile || data.authState !== 'ANONYMOUS' ? 'Espaço' : 'Entrar'}</span></a>
   </nav>
 {/if}
 
@@ -665,7 +789,7 @@
 
   @media (max-width: 768px) {
     .header-community-group {
-      display: inline-flex !important;
+      display: inline-flex;
       gap: 5px;
     }
     .header-community-btn {
@@ -684,6 +808,12 @@
     .header-actions .icon-button {
       width: 38px;
       height: 38px;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .header-community-group {
+      display: none !important;
     }
   }
 
@@ -733,6 +863,20 @@
     border-color: rgba(181, 154, 245, 0.65);
     box-shadow: 0 6px 24px rgba(181, 154, 245, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3);
     transform: translateY(-1px);
+  }
+
+  .user-avatar-skeleton {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    animation: userAvatarPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes userAvatarPulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.96); }
+    50% { opacity: 0.8; transform: scale(1); }
   }
 
   .user-menu-container {
@@ -925,6 +1069,31 @@
 
   .dropdown-admin-link {
     color: #dfc28d !important;
+  }
+
+  .dropdown-scans-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #a78bfa;
+    letter-spacing: 0.08em;
+    padding: 6px 10px 2px;
+    text-transform: uppercase;
+  }
+
+  .dropdown-partner-link.is-sub {
+    padding-left: 14px;
+    font-size: 12px;
+  }
+
+  .scan-badge-role {
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+    text-transform: uppercase;
   }
 
   .dropdown-badge {

@@ -116,6 +116,7 @@
   let xpAwardConfirmed = $state(false);
   let xpClaimInFlight = false;
   let previousChapterId = $state('');
+  let readerSessionGen = 0;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   const preloadedMedia = new Set<string>();
   const inFlightPreloads = new Set<string>();
@@ -125,6 +126,7 @@
     if (preloadMode !== 'full' || typeof window === 'undefined' || !data.pages?.length) return;
     if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) return;
 
+    const currentGen = readerSessionGen;
     const startIdx = Math.max(0, current - 1);
     const ordered = [
       ...data.pages.slice(startIdx),
@@ -139,6 +141,9 @@
       inFlightPreloads.add(id);
       const img = new Image();
       const onDone = () => {
+        img.onload = null;
+        img.onerror = null;
+        if (currentGen !== readerSessionGen) return;
         inFlightPreloads.delete(id);
         preloadedMedia.add(id);
         pumpPreload();
@@ -171,6 +176,7 @@
   $effect(() => {
     if (data.chapter?.id && data.chapter.id !== previousChapterId) {
       previousChapterId = data.chapter.id;
+      readerSessionGen++;
       visible.clear();
       preloadedMedia.clear();
       inFlightPreloads.clear();
@@ -379,6 +385,7 @@
 
     window.addEventListener('pagehide', saveOnExit);
     return () => {
+      readerSessionGen++;
       if (hideTimer) clearTimeout(hideTimer);
       clearInterval(timer);
       endObserver?.disconnect();
@@ -458,7 +465,7 @@
     class:ui-hidden={!uiVisible && !settings}
   >
     <a
-      href={data.preview ? `/admin/obras/${data.chapter.work_id}` : `/obra/${data.chapter.works?.slug}`}
+      href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
       aria-label="Voltar para obra"
     >
       <ArrowLeft size={20} />
