@@ -15,7 +15,7 @@ const READER_CACHE_TTL_MS = 60_000;
 export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
-  const canAccessUnpublished = isStaff;
+  const canAccessUnpublished = isStaff && isPreviewRequested;
 
   // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
   if (!isPreviewRequested && readerCache.has(params.id)) {

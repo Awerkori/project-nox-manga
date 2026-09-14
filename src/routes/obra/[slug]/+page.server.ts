@@ -30,7 +30,7 @@ export const load = async ({ locals, params, url, cookies }) => {
 
 
   // If not found by exact slug, attempt case-insensitive or ID lookup fallback in DB
-  if (!work && !isTargetUuid) {
+  if (!work && result.status === 'SUCCESS_EMPTY' && !isTargetUuid) {
     const fallbackRes = await safeDbQuery(
       locals.db.from('works').select(WORK_FIELDS).ilike('slug', params.slug).eq('published', true).maybeSingle(),
       2000,
@@ -78,7 +78,8 @@ export const load = async ({ locals, params, url, cookies }) => {
     .eq('work_id', work.id)
     .order('number', { ascending: false });
 
-  if (!isStaff) {
+  const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
+  if (!preview) {
     chaptersQuery = chaptersQuery.not('published_at', 'is', null);
   }
 
