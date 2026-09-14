@@ -11,14 +11,15 @@
   "scripts": {
     "dev": "vite dev --host 127.0.0.1",
     "build": "vite build",
-    "postbuild": "node scripts/inject-worker-auth-bypass.mjs",
+    "postbuild": "node scripts/retain-client-assets.mjs restore && node scripts/inject-worker-auth-bypass.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:browser": "playwright test --config playwright.components.config.ts",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "prebuild": "node scripts/retain-client-assets.mjs save"
   },
   "dependencies": {
     "@lucide/svelte": "latest",
