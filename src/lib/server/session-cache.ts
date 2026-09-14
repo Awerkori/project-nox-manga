@@ -92,18 +92,6 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
 }
 
 /**
- * Fast hashing for cache keying
- */
-function fastHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return String(hash);
-}
-
-/**
  * Single-flight session resolver with memory cache and resilient fallback
  */
 export async function resolveSessionData(
@@ -111,7 +99,8 @@ export async function resolveSessionData(
   decoded: DecodedJwt,
   accessToken: string
 ): Promise<CachedSession> {
-  const cacheKey = decoded.sub + ':' + (decoded.exp || fastHash(accessToken));
+  // Only the exact verified token may reuse a cached identity.
+  const cacheKey = accessToken;
   const now = Date.now();
 
   const cached = sessionCache.get(cacheKey);
@@ -125,7 +114,18 @@ export async function resolveSessionData(
   }
 
   const flightPromise = (async () => {
+    let identityVerified = false;
     try {
+      const verified = await withTimeout(
+        db.auth.getUser(accessToken),
+        2000,
+        null,
+        'session_verify_user'
+      );
+      if (!verified?.data?.user || verified.error || verified.data.user.id !== decoded.sub) {
+        throw new Error('SESSION_NOT_VERIFIED');
+      }
+      identityVerified = true;
       const userId = decoded.sub;
 
       // Run profile, role, scans and unread queries concurrently
@@ -250,7 +250,8 @@ export async function resolveSessionData(
       }
 
       return result;
-    } catch {
+    } catch (error) {
+      if (!identityVerified) throw error;
       // Degraded fallback without breaking auth
       const userId = decoded.sub;
       return {
@@ -284,8 +285,8 @@ export async function resolveSessionData(
  * Clear session cache for a specific user (on logout, role update, etc.)
  */
 export function invalidateUserSession(userId: string) {
-  for (const [k] of sessionCache.entries()) {
-    if (k.startsWith(userId + ':')) {
+  for (const [k, session] of sessionCache.entries()) {
+    if (session.user.id === userId) {
       sessionCache.delete(k);
     }
   }

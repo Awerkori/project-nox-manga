@@ -6,8 +6,9 @@ import {
   deduceMangaShardFromFileId
 } from '$lib/server/storage-router';
 import { TelegramStorageError } from '$lib/server/telegram';
+import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
-export const GET = async ({ locals, params, request, platform }: any) => {
+export const GET = async ({ locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
 
@@ -24,7 +25,7 @@ export const GET = async ({ locals, params, request, platform }: any) => {
         if (etag && request.headers.get('if-none-match') === etag) {
           return new Response(null, { status: 304, headers: cached.headers });
         }
-        return cached;
+        return new Response(cached.body, cached);
       }
     } catch {
       // Fall through to standard retrieval on cache check failure
@@ -43,7 +44,6 @@ export const GET = async ({ locals, params, request, platform }: any) => {
     });
   }
 
-  const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(locals.role || '');
   
   // Public media includes all editorial assets, covers, avatars, banners, and any media marked PUBLIC
   const isPublic =
@@ -55,10 +55,19 @@ export const GET = async ({ locals, params, request, platform }: any) => {
     media.purpose === 'scan_banner' ||
     !media.access_class;
 
-  if (!isPublic && !isStaff) {
-    const isOwner = Boolean(locals.user?.id && media.created_by === locals.user.id);
-    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(locals.user?.id);
-    if (!isOwner && !isAuthenticatedAllowed) {
+  if (!isPublic) {
+    let verifiedSession = null;
+    const raw = extractFullAuthCookie(cookies.getAll());
+    if (raw) {
+      const { jwt, accessToken } = decodeSessionJwt(raw);
+      if (jwt) {
+        try { verifiedSession = await resolveSessionData(locals.db, jwt, accessToken); } catch {}
+      }
+    }
+    const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
+    const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
+    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+    if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
       return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
@@ -127,7 +136,7 @@ export const GET = async ({ locals, params, request, platform }: any) => {
     try {
       const client = resolveBotDownloadClient(botRef);
       const stream = await client.download(media.provider_key);
-      body = await new Response(stream).arrayBuffer();
+      body = stream;
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
       if (isTg400) {
@@ -136,7 +145,7 @@ export const GET = async ({ locals, params, request, platform }: any) => {
         try {
           const altClient = resolveBotDownloadClient(altBotRef);
           const stream = await altClient.download(media.provider_key);
-          body = await new Response(stream).arrayBuffer();
+          body = stream;
           botRef = altBotRef;
           // Self-heal DB mapping in background
           const healingUpdate = { bot_reference: altBotRef };

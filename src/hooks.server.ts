@@ -55,7 +55,17 @@ export const handle: Handle = async ({ event, resolve }) => {
   let sessionData: any = null;
   const authStart = performance.now();
 
-  if (!hasAuthCookie || !rawAuthCookie) {
+  const isMedia = event.url.pathname.startsWith('/media/');
+  const isStaticAsset =
+    event.url.pathname.startsWith('/_app/') ||
+    event.url.pathname.startsWith('/brand/') ||
+    event.url.pathname === '/favicon.ico' ||
+    event.url.pathname === '/robots.txt' ||
+    event.url.pathname === '/sitemap.xml';
+
+  if (isMedia || isStaticAsset) {
+    // Public assets need no session. Private media verifies identity after its access class is known.
+  } else if (!hasAuthCookie || !rawAuthCookie) {
     authState = 'ANONYMOUS';
     user = null;
     role = null;
@@ -72,8 +82,8 @@ export const handle: Handle = async ({ event, resolve }) => {
         authState = 'AUTHENTICATED';
         event.locals.sessionCache = sessionData;
       } catch {
-        // Fallback using decoded JWT without breaking authenticated UI
-        user = { id: jwt.sub, email: jwt.email, user_metadata: jwt.user_metadata };
+        // Decoding a JWT is not signature verification; never authorize this identity.
+        user = null;
         authState = 'AUTH_PENDING';
         role = null;
       }
@@ -89,7 +99,8 @@ export const handle: Handle = async ({ event, resolve }) => {
         if (authResult?.data?.user) {
           user = authResult.data.user;
           authState = 'AUTHENTICATED';
-          sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, accessToken || '');
+          const refreshed = await event.locals.db.auth.getSession();
+          sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, refreshed.data.session?.access_token || accessToken || '');
           role = sessionData.role;
           event.locals.sessionCache = sessionData;
         } else {
@@ -128,9 +139,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  const response = await resolve(event, {
+  const resolved = await resolve(event, {
     filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
   });
+
+  // Media and static assets handle their own caching and security headers; return immediately
+  if (isMedia || isStaticAsset) {
+    return resolved;
+  }
+
+  const response = new Response(resolved.body, resolved);
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('X-Frame-Options', 'DENY');
@@ -142,12 +160,15 @@ export const handle: Handle = async ({ event, resolve }) => {
   response.headers.set('Server-Timing', `auth;dur=${authDuration}, render;dur=${renderDuration}, total;dur=${totalDuration}`);
 
   // Never cache HTML responses at the edge to guarantee 100% accurate SSR auth state on every request
-  const isHtml = response.headers.get('content-type')?.includes('text/html') || event.request.headers.get('accept')?.includes('text/html');
-  if (isHtml || user || hasAuthCookie || event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/auth') || event.url.pathname.startsWith('/me') || event.url.pathname.startsWith('/scan')) {
-    response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    response.headers.set('Vary', 'Cookie, Accept');
-  } else if (response.status >= 400) {
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  // Static assets and media endpoints handle their own caching headers and must not be overwritten
+  if (!isMedia && !isStaticAsset) {
+    const isHtml = response.headers.get('content-type')?.includes('text/html') || event.request.headers.get('accept')?.includes('text/html');
+    if (isHtml || user || hasAuthCookie || event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/auth') || event.url.pathname.startsWith('/me') || event.url.pathname.startsWith('/scan')) {
+      response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('Vary', 'Cookie, Accept');
+    } else if (response.status >= 400) {
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
   }
   if (
     /^\/(?:admin|auth|api|entrar|cadastrar|recuperar|redefinir|perfil|biblioteca|favoritos|historico|notificacoes|ler)(?:\/|$)/.test(
