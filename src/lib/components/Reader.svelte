@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { SvelteSet } from 'svelte/reactivity';
   import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download, CheckCircle2 } from '@lucide/svelte';
@@ -128,10 +128,8 @@
 
     const currentGen = readerSessionGen;
     const startIdx = Math.max(0, current - 1);
-    const ordered = [
-      ...data.pages.slice(startIdx),
-      ...data.pages.slice(0, startIdx)
-    ];
+    // Bound downloads to a lookahead near the current page.
+    const ordered = data.pages.slice(startIdx, startIdx + 5);
 
     for (const page of ordered) {
       if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) break;
@@ -321,7 +319,6 @@
       );
 
     const endEl = document.querySelector('.reader-end');
-    let endObserver: IntersectionObserver | null = null;
     if (endEl && typeof IntersectionObserver !== 'undefined') {
       endObserver = new IntersectionObserver(
         (entries) => {
@@ -336,7 +333,7 @@
       endObserver.observe(endEl);
     }
 
-    const timer = setInterval(async () => {
+    timer = setInterval(async () => {
       if (document.visibilityState !== 'visible' || sending) return;
       const pageToSave = current;
       const locallySaved = savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
@@ -361,39 +358,45 @@
       }
     }, 3500);
 
-    const saveOnExit = () => {
-      const pageToSave = current;
-      savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
-      savePreference('nox-reader', JSON.stringify({ width, gap, preload: preloadMode }));
-      if (data.profile && !data.preview)
-        void fetch('/api/action', {
-          method: 'POST',
-          keepalive: true,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            scope: 'member',
-            action: 'read_page',
-            data: {
-              work_id: data.chapter.work_id,
-              chapter_id: data.chapter.id,
-              page: pageToSave,
-              completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
-            }
-          })
-        }).catch(() => {});
-    };
-
     window.addEventListener('pagehide', saveOnExit);
-    return () => {
-      readerSessionGen++;
-      if (hideTimer) clearTimeout(hideTimer);
-      clearInterval(timer);
-      endObserver?.disconnect();
-      preloadedMedia.clear();
-      inFlightPreloads.clear();
+  });
+
+  let endObserver: IntersectionObserver | null = null;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  function saveOnExit() {
+    const pageToSave = current;
+    savePreference(`nox-page:${data.chapter.id}`, String(pageToSave));
+    savePreference('nox-reader', JSON.stringify({ width, gap, preload: preloadMode }));
+    if (data.profile && !data.preview)
+      void fetch('/api/action', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: 'member',
+          action: 'read_page',
+          data: {
+            work_id: data.chapter.work_id,
+            chapter_id: data.chapter.id,
+            page: pageToSave,
+            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
+          }
+        })
+      }).catch(() => {});
+  }
+
+  onDestroy(() => {
+    readerSessionGen++;
+    if (hideTimer) clearTimeout(hideTimer);
+    if (timer) clearInterval(timer);
+    endObserver?.disconnect();
+    preloadedMedia.clear();
+    inFlightPreloads.clear();
+    if (typeof window !== 'undefined') {
       window.removeEventListener('pagehide', saveOnExit);
-      saveOnExit();
-    };
+    }
+    saveOnExit();
   });
 </script>
 
@@ -580,8 +583,8 @@
   {/if}
 
   <div class="page-stack" style="max-width:{width}px;gap:{gap ? '20px' : '0'}">
-    {#each data.pages as page (page.position)}
-      <ReaderPage {page} onSeen={seen} />
+    {#each data.pages as page, index (page.media_id + ':' + page.position)}
+      <ReaderPage {page} eager={index < 2} onSeen={seen} />
     {/each}
   </div>
 

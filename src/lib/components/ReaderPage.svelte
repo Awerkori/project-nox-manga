@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   let {
     page,
-    onSeen
+    onSeen,
+    eager = false
   }: {
     page: { position: number; media_id: string; width: number; height: number; blobUrl?: string };
     onSeen: (page: number, visible: boolean) => void;
+    eager?: boolean;
   } = $props();
   let root: HTMLDivElement;
   let loaded = false,
@@ -13,19 +15,24 @@
   let near = $state(false),
     broken = $state(false),
     retry = $state(0);
+
+  let preloadObserver: IntersectionObserver | null = null;
+  let visibleObserver: IntersectionObserver | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
   onMount(() => {
-    const preload = new IntersectionObserver(
+    preloadObserver = new IntersectionObserver(
       (entries) => {
         for (const e of entries)
           if (e.isIntersecting) {
             near = true;
-            preload.disconnect();
+            preloadObserver?.disconnect();
           }
       },
       { rootMargin: '900px' }
     );
-    preload.observe(root);
-    const visible = new IntersectionObserver(
+    preloadObserver.observe(root);
+    visibleObserver = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           visibleNow = e.isIntersecting;
@@ -34,12 +41,45 @@
       },
       { rootMargin: '-30% 0px -30% 0px' }
     );
-    visible.observe(root);
-    return () => {
-      preload.disconnect();
-      visible.disconnect();
-    };
+    visibleObserver.observe(root);
   });
+
+  onDestroy(() => {
+    if (retryTimer) clearTimeout(retryTimer);
+    preloadObserver?.disconnect();
+    visibleObserver?.disconnect();
+  });
+
+  function setupPageImg(node: HTMLImageElement) {
+    const handleLoad = () => {
+      loaded = true;
+      broken = false;
+      onSeen(page.position, visibleNow);
+    };
+    const handleError = () => {
+      if (retry < 2) {
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(() => {
+          retry++;
+        }, 500 * (retry + 1));
+      } else {
+        loaded = false;
+        broken = true;
+        onSeen(page.position, false);
+      }
+    };
+
+    node.addEventListener('load', handleLoad);
+    node.addEventListener('error', handleError);
+    if (node.complete && node.naturalWidth > 0) handleLoad();
+
+    return {
+      destroy() {
+        node.removeEventListener('load', handleLoad);
+        node.removeEventListener('error', handleError);
+      }
+    };
+  }
 </script>
 
 <div
@@ -48,28 +88,14 @@
   class="reader-page"
   style="aspect-ratio:{page.width && page.height ? `${page.width}/${page.height}` : '2/3'}; min-height: 350px;"
 >
-  {#if near && !broken}<img
+  {#if (eager || near) && !broken}<img
+      use:setupPageImg
       src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
       alt="Página {page.position}"
       width={page.width || 800}
       height={page.height || 1200}
       decoding="async"
-      onload={() => {
-        loaded = true;
-        broken = false;
-        onSeen(page.position, visibleNow);
-      }}
-      onerror={() => {
-        if (retry < 2) {
-          setTimeout(() => {
-            retry++;
-          }, 500 * (retry + 1));
-        } else {
-          loaded = false;
-          broken = true;
-          onSeen(page.position, false);
-        }
-      }}
+      fetchpriority={eager ? 'high' : 'auto'}
     />{/if}
   {#if broken}<div class="page-retry">
       <p>Não foi possível carregar a página {page.position}.</p>
@@ -81,7 +107,7 @@
           broken = false;
         }}>Tentar novamente</button
       >
-    </div>{:else if !near}<span class="page-placeholder">{page.position}</span>{/if}
+    </div>{:else if !near && !eager}<span class="page-placeholder">{page.position}</span>{/if}
 </div>
 
 <style>
