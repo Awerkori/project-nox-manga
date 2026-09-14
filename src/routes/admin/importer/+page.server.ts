@@ -116,12 +116,14 @@ async function loadSnapshot({ locals }: any) {
   ].map(query => query.abortSignal(AbortSignal.timeout(4000))));
 
   const failedSections = [telemetryRes, stagedCountRes, importingJobsRes, retryJobsRes, pausedJobsRes, staffRequestsRes, nextQueuedRes, stagedRes, sourcesRes, worksListRes, workHealthRes, recentManifestRes, staffAuditRes].filter(r => r.error);
-  if (failedSections.length) error(503, 'Não foi possível atualizar todos os dados do painel.');
+  if (failedSections.length) {
+    console.warn('[ADMIN_SNAPSHOT_FAILED]', failedSections.map(r => ({ code: r.error?.code, message: r.error?.message })));
+    error(503, 'Não foi possível atualizar todos os dados do painel.');
+  }
 
-  const [countRes, recentFailuresRes, blockedUpstreamRes] = await Promise.all([
+  const [countRes, recentFailuresRes] = await Promise.all([
     (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(3500)),
-    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(3500)),
-    locals.db.from('importer_queue').select('source').eq('status', 'BLOCKED_BY_UPSTREAM').abortSignal(AbortSignal.timeout(3500))
+    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(3500))
   ]);
   if (countRes.error || !countRes.data) error(503, 'Métricas do Importer temporariamente indisponíveis.');
   const queueCounts = countRes.data;
@@ -238,14 +240,8 @@ async function loadSnapshot({ locals }: any) {
     }
   }
 
-  const blockedUpstreamJobs = blockedUpstreamRes.data || [];
-  const blockedUpstreamTotal = blockedUpstreamJobs.length;
-  const blockedCountBySource: Record<string, number> = {};
-  for (const j of blockedUpstreamJobs) {
-    if (j.source) {
-      blockedCountBySource[j.source] = (blockedCountBySource[j.source] || 0) + 1;
-    }
-  }
+  const blockedUpstreamTotal = queueCounts.blocked;
+  const blockedCountBySource: Record<string, number> = queueCounts.blockedBySource;
 
   const sourcesList = sourcesRes.data || [];
   const sourcesWithBlockedCounts = sourcesList.map((s: any) => ({
@@ -263,10 +259,10 @@ async function loadSnapshot({ locals }: any) {
     sourceId: s.id,
     sourceName: s.name,
     reason: s.blocked_reason || 'CLOUDFLARE_DATACENTER_BLOCK',
-    message: (s.blocked_details as any)?.message || 'Cloudflare bloqueia o ambiente atual do Importer (DIScloud / OVH ASN 16276). Local/Mihon: funcional; DIScloud: HTTP 403.',
+    message: (s.blocked_details as any)?.message || 'Fonte bloqueada; diagnóstico detalhado indisponível.',
     affectedJobsCount: s.blockedJobsCount,
-    localStatus: (s.blocked_details as any)?.local_status ?? 200,
-    remoteStatus: (s.blocked_details as any)?.discloud_status ?? 403
+    localStatus: (s.blocked_details as any)?.local_status ?? null,
+    remoteStatus: (s.blocked_details as any)?.discloud_status ?? null
   }));
 
   return {
@@ -323,7 +319,11 @@ async function loadSnapshot({ locals }: any) {
     catalogWorks: worksListRes.data || [],
     workHealth: (workHealthRes.data || []).map((h: any) => ({
       ...h,
-      work: h.works
+      work: h.works,
+      gapCount: Array.isArray(h.gaps) ? h.gaps.length : 0,
+      unresolvedGapCount: Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.length : 0,
+      gaps: Array.isArray(h.gaps) ? h.gaps.slice(0, 8) : [],
+      unresolved_gaps: Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.slice(0, 3) : []
     })),
     chapterManifest: recentManifestRes.data || [],
     healthMetrics: {

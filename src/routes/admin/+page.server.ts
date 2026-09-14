@@ -1,13 +1,10 @@
-import { withTimeout } from '$lib/server/resilience';
+import { error } from '@sveltejs/kit';
 
-let adminDashboardCache: { timestamp: number; payload: any } | null = null;
+const snapshots = new Map<string, { timestamp: number; payload: any }>();
+const inFlight = new Map<string, Promise<any>>();
 const ADMIN_CACHE_TTL_MS = 30_000;
 
-export const load = async ({ locals }) => {
-  if (adminDashboardCache && Date.now() - adminDashboardCache.timestamp < ADMIN_CACHE_TTL_MS) {
-    return adminDashboardCache.payload;
-  }
-
+const loadSnapshot = async (locals: App.Locals) => {
   const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
 
   const [
@@ -23,8 +20,7 @@ export const load = async ({ locals }) => {
     staffCountRes,
     failedJobsRes,
     failedMappingsRes
-  ] = await withTimeout(
-    Promise.all([
+  ] = await Promise.all([
       locals.db.from('works').select('id', { count: 'exact', head: true }),
       locals.db
         .from('chapters')
@@ -76,45 +72,56 @@ export const load = async ({ locals }) => {
       .from('importer_chapter_mappings')
       .select('id', { count: 'exact', head: true })
       .in('status', ['FAILED', 'VERIFICATION_FAILED'])
-    ]),
-    3500,
-    [
-      { count: 0 },
-      { count: 0 },
-      { count: 0 },
-      { count: 0 },
-      { data: [] },
-      { data: [] },
-      { data: [] },
-      { count: 0 },
-      { count: 0 },
-      { count: 0 },
-      { count: 0 },
-      { count: 0 }
-    ] as any,
-    'admin_dashboard_metrics'
-  );
+    ].map(async (query) => {
+      try { return await query.abortSignal(AbortSignal.timeout(3500)); }
+      catch { return { error: true, count: null, data: null }; }
+    }));
 
-  const totalFailedJobs24h = failedJobsRes.count || 0;
-  const unrecoveredFailures = failedMappingsRes.count || 0;
-  const recoveredFailures = Math.max(0, totalFailedJobs24h - unrecoveredFailures);
+  const metricsUnavailable = [works, publishedChapters, draftsCount, tags, drafts,
+    recentPublished, recentWorks, importerQueue, pendingReports, staffCountRes,
+    failedJobsRes, failedMappingsRes].some(result => result.error);
+
+  const totalFailedJobs24h = failedJobsRes.count ?? null;
+  const unrecoveredFailures = failedMappingsRes.count ?? null;
+  const recoveredFailures = totalFailedJobs24h === null || unrecoveredFailures === null
+    ? null : Math.max(0, totalFailedJobs24h - unrecoveredFailures);
 
   const payload = {
-    works: works.count || 0,
-    chapters: publishedChapters.count || 0,
-    draftsCount: draftsCount.count || 0,
-    tagsCount: tags.count || 0,
+    metricsUnavailable,
+    works: works.count ?? null,
+    chapters: publishedChapters.count ?? null,
+    draftsCount: draftsCount.count ?? null,
+    tagsCount: tags.count ?? null,
     drafts: (drafts.data as any[]) || [],
     recentPublished: (recentPublished.data as any[]) || [],
     recentWorks: (recentWorks.data as any[]) || [],
-    importerActiveCount: importerQueue.count || 0,
-    pendingReportsCount: pendingReports.count || 0,
-    staffCount: staffCountRes.count || 0,
+    importerActiveCount: importerQueue.count ?? null,
+    pendingReportsCount: pendingReports.count ?? null,
+    staffCount: staffCountRes.count ?? null,
     failedJobs24h: totalFailedJobs24h,
     unrecoveredFailures,
     recoveredFailures
   };
 
-  adminDashboardCache = { timestamp: Date.now(), payload };
   return payload;
+};
+
+export const load = async ({ locals }: { locals: App.Locals }) => {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+    throw error(403, 'Acesso restrito à equipe');
+  }
+  const key = `${locals.user.id}:${locals.role}`;
+  const cached = snapshots.get(key);
+  if (cached && Date.now() - cached.timestamp < ADMIN_CACHE_TTL_MS) return cached.payload;
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const pending = loadSnapshot(locals).then(payload => {
+    if (!payload.metricsUnavailable) {
+      if (snapshots.size >= 50) snapshots.delete(snapshots.keys().next().value!);
+      snapshots.set(key, { timestamp: Date.now(), payload });
+    }
+    return payload;
+  }).finally(() => inFlight.delete(key));
+  inFlight.set(key, pending);
+  return pending;
 };

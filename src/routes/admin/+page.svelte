@@ -34,7 +34,7 @@
   const capitalizedToday = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
 
   let hasAttentionItems = $derived(
-    data.pendingReportsCount > 0 || data.draftsCount > 0
+    data.metricsUnavailable || data.pendingReportsCount > 0 || data.draftsCount > 0
   );
 </script>
 
@@ -93,6 +93,9 @@
       {/if}
     </div>
 
+    {#if data.metricsUnavailable}
+      <p role="status">Algumas informações estão indisponíveis. Atualize para tentar novamente; “—” indica uma contagem não confirmada.</p>
+    {/if}
     {#if hasAttentionItems}
       <div class="triage-grid">
         {#if data.pendingReportsCount > 0}
@@ -311,7 +314,7 @@
               </span>
               <span class="stat-trend">Catálogo</span>
             </div>
-            <strong class="stat-value">{data.works}</strong>
+            <strong class="stat-value">{data.works ?? '—'}</strong>
             <span class="stat-label">Obras Registradas</span>
           </a>
 
@@ -322,7 +325,7 @@
               </span>
               <span class="stat-trend">Público</span>
             </div>
-            <strong class="stat-value">{data.chapters}</strong>
+            <strong class="stat-value">{data.chapters ?? '—'}</strong>
             <span class="stat-label">Capítulos Publicados</span>
           </div>
 
@@ -333,7 +336,7 @@
               </span>
               <span class="stat-trend">Equipe</span>
             </div>
-            <strong class="stat-value">{data.staffCount}</strong>
+            <strong class="stat-value">{data.staffCount ?? '—'}</strong>
             <span class="stat-label">Membros Staff</span>
           </a>
 
@@ -343,10 +346,10 @@
                 <Activity size={16} />
               </span>
               <span class="stat-trend" class:active-pulse={data.importerActiveCount > 0}>
-                {data.importerActiveCount > 0 ? 'Ativo' : 'Ocioso'}
+                {data.importerActiveCount == null ? 'Sem dados' : data.importerActiveCount > 0 ? 'Com pendências' : 'Fila vazia'}
               </span>
             </div>
-            <strong class="stat-value">{data.importerActiveCount}</strong>
+            <strong class="stat-value">{data.importerActiveCount ?? '—'}</strong>
             <span class="stat-label">Em Fila Importer</span>
           </a>
         </div>

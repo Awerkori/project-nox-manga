@@ -331,6 +331,8 @@
     const poll = async () => {
       try {
         if (document.visibilityState === 'visible') await invalidateAll();
+      } catch (error) {
+        console.warn('Não foi possível atualizar o painel do Importer', error);
       } finally {
         if (!disposed) pollInterval = setTimeout(poll, 4000);
       }
@@ -1049,7 +1051,7 @@
                 <td class="td-gaps">
                   <div class="gaps-list">
                     {#if Array.isArray(item.gaps) && item.gaps.length > 0}
-                      {#each item.gaps as gap}
+                      {#each item.gaps.slice(0, 8) as gap}
                         <span class="gap-pill" class:gap-start={gap.type === 'MISSING_START'}>
                           {#if gap.type === 'MISSING_START'}
                             Falta 1..{gap.to}
@@ -1058,10 +1060,13 @@
                           {/if}
                         </span>
                       {/each}
+                      {#if item.gapCount > 8}
+                        <span class="gap-pill">+{item.gapCount - 8} lacunas</span>
+                      {/if}
                     {/if}
                     {#if Array.isArray(item.unresolved_gaps) && item.unresolved_gaps.length > 0}
                       <span class="gap-pill gap-unresolved" title="Nenhum provedor disponível possui estes capítulos">
-                        Irresolvível: {item.unresolved_gaps.slice(0, 3).join(', ')}{item.unresolved_gaps.length > 3 ? '…' : ''}
+                        Irresolvível: {item.unresolved_gaps.slice(0, 3).join(', ')}{item.unresolvedGapCount > 3 ? ` (+${item.unresolvedGapCount - 3})` : ''}
                       </span>
                     {/if}
                     {#if (!item.gaps || item.gaps.length === 0) && (!item.unresolved_gaps || item.unresolved_gaps.length === 0) && !item.missing_start}
