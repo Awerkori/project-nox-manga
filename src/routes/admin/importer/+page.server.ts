@@ -113,7 +113,7 @@ async function loadSnapshot({ locals }: any) {
       .select('*, actor:members!importer_staff_audit_actor_id_fkey(id, username, display_name)')
       .order('created_at', { ascending: false })
       .limit(10)
-  ].map(query => query.abortSignal(AbortSignal.timeout(4000))));
+  ].map(query => query.abortSignal(AbortSignal.timeout(10000))));
 
   const failedSections = [telemetryRes, stagedCountRes, importingJobsRes, retryJobsRes, pausedJobsRes, staffRequestsRes, nextQueuedRes, stagedRes, sourcesRes, worksListRes, workHealthRes, recentManifestRes, staffAuditRes].filter(r => r.error);
   if (failedSections.length) {
@@ -122,8 +122,8 @@ async function loadSnapshot({ locals }: any) {
   }
 
   const [countRes, recentFailuresRes] = await Promise.all([
-    (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(3500)),
-    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(3500))
+    (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(10000)),
+    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(10000))
   ]);
   if (countRes.error || !countRes.data) error(503, 'Métricas do Importer temporariamente indisponíveis.');
   const queueCounts = countRes.data;

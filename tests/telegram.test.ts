@@ -73,7 +73,7 @@ describe('private Telegram provider', () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
-  it.each([0, -1, 19_000_001, null])('rejects invalid file size %s', async (file_size) => {
+  it.each([0, -1, 20_971_521, null])('rejects invalid file size %s', async (file_size) => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(metadata({ file_size }));
     await expect(telegramStorage(token, '', transport).download('id')).rejects.toThrow('indisponível');
     expect(transport).toHaveBeenCalledTimes(1);

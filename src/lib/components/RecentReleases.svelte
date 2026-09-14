@@ -71,7 +71,6 @@
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
-                loading="lazy"
                 decoding="async"
               />
               {#if isAdult}

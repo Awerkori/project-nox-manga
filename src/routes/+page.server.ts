@@ -421,11 +421,6 @@ export const load = async ({ locals, setHeaders }) => {
   // Load error is only true if we truly have NO releases to display at all
   const loadError = isDegraded && recentReleases.length === 0;
 
-
-  setHeaders({
-    'cache-control': 'private, no-cache, no-store, must-revalidate'
-  });
-
   return {
     works,
     featuredList,

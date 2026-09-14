@@ -112,16 +112,28 @@
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
   });
+
+  function bindCarouselEvents(node: HTMLElement) {
+    node.addEventListener('mouseenter', handleMouseEnter);
+    node.addEventListener('mouseleave', handleMouseLeave);
+    node.addEventListener('touchstart', handleTouchStart, { passive: true });
+    node.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return {
+      destroy() {
+        node.removeEventListener('mouseenter', handleMouseEnter);
+        node.removeEventListener('mouseleave', handleMouseLeave);
+        node.removeEventListener('touchstart', handleTouchStart);
+        node.removeEventListener('touchend', handleTouchEnd);
+      }
+    };
+  }
 </script>
 
 {#if currentWork}
   <section
     class="hero-carousel"
     aria-label="Destaques da Plataforma"
-    onmouseenter={handleMouseEnter}
-    onmouseleave={handleMouseLeave}
-    ontouchstart={handleTouchStart}
-    ontouchend={handleTouchEnd}
+    use:bindCarouselEvents
   >
     <!-- Full-Bleed Atmospheric Backdrop -->
     <div class="backdrop-wrapper" aria-hidden="true">

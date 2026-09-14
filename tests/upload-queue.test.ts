@@ -148,3 +148,43 @@ it('reports inRecovery in progress stats after a 429 and clears it after recover
   // After 4 consecutive successes, inRecovery should become false
   expect(isInRecovery()).toBe(false);
 });
+
+it('strictly distinguishes real 429 from transient 502/network errors without masquerading', async () => {
+  const pending = [1, 2].map((n) => new File(['page'], `${n}.png`));
+  const accepted = vi.fn();
+  const retryEvents: { attempt: number; waitSec: number; isRateLimit?: boolean }[] = [];
+  const progressSnapshots: any[] = [];
+  let errorTriggered = false;
+
+  const send = vi.fn(async (file: File) => {
+    if (file.name === '1.png' && !errorTriggered) {
+      errorTriggered = true;
+      throw new Error('HTTP 502 Bad Gateway: function safe_decode_hex does not exist');
+    }
+    return file.name;
+  });
+
+  await flushUploads(pending, send, accepted, () => false, {
+    maxRetries: 2,
+    basePaceMs: 10,
+    onRetry: (_file, attempt, waitSec, isRateLimit) => {
+      retryEvents.push({ attempt, waitSec, isRateLimit });
+    },
+    onProgress: (stats) => {
+      progressSnapshots.push({ ...stats });
+    }
+  });
+
+  expect(accepted).toHaveBeenCalledTimes(2);
+  expect(pending).toEqual([]);
+  // Verify that isRateLimit was strictly false for the 502 error
+  expect(retryEvents.length).toBeGreaterThan(0);
+  expect(retryEvents[0].isRateLimit).toBe(false);
+  // Verify that inCooldown/isRateLimited was NEVER true for 502
+  const rateLimitReports = progressSnapshots.filter((s) => s.isRateLimited || s.inCooldown);
+  expect(rateLimitReports.length).toBe(0);
+  // Verify that transient retry was reported
+  const transientReports = progressSnapshots.filter((s) => s.isRetryingTransient);
+  expect(transientReports.length).toBeGreaterThan(0);
+});
+

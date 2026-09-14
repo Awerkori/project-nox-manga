@@ -67,6 +67,15 @@
       scrollContainer.scrollLeft < scrollContainer.scrollWidth - scrollContainer.clientWidth - 10;
   }
 
+  function bindScroll(node: HTMLElement) {
+    node.addEventListener('scroll', updateScrollState, { passive: true });
+    return {
+      destroy() {
+        node.removeEventListener('scroll', updateScrollState);
+      }
+    };
+  }
+
   function scroll(direction: 'left' | 'right') {
     if (!scrollContainer) return;
     const amount = scrollContainer.clientWidth * 0.75;
@@ -179,7 +188,7 @@
       class="shelf-scroll-container"
       class:is-expanded={isExpanded}
       bind:this={scrollContainer}
-      onscroll={updateScrollState}
+      use:bindScroll
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
         {#each currentWorks as work (work.id)}
@@ -196,7 +205,6 @@
                 class:blurred-cover={effectiveBlur}
                 width="200"
                 height="285"
-                loading="lazy"
                 decoding="async"
               />
               <div class="card-glow"></div>

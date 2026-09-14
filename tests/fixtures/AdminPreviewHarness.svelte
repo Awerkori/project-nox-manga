@@ -51,7 +51,8 @@
     pathname: page === 'dashboard' ? '/admin' : `/admin/${page}`,
     ageStatus: 'ADULT' as const,
     blurNsfw: false,
-    siteUrl: 'http://127.0.0.1:5173'
+    siteUrl: 'http://127.0.0.1:5173',
+    userScans: []
   });
 
   let dashboardData = $derived({

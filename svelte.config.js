@@ -10,7 +10,7 @@ export default {
         'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
         'font-src': ['self', 'https://fonts.gstatic.com'],
         'img-src': ['self', 'blob:', 'data:'],
-        'connect-src': ['self', 'https://*.supabase.co'],
+        'connect-src': ['self', 'https://*.supabase.co', 'wss://*.supabase.co'],
         'frame-ancestors': ['none'],
         'object-src': ['none'],
         'base-uri': ['self'],

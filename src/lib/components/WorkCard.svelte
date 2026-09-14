@@ -48,11 +48,26 @@
   }
 
   let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id));
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
+  }
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
   <div class="card-media">
     <img
+      use:fallbackCover
       src={coverSrc}
       alt="Capa de {decodeHtmlEntities(work.title)}"
       loading="lazy"
@@ -60,12 +75,6 @@
       height="400"
       class="card-img"
       class:blurred-cover={effectiveBlur}
-      onerror={(e) => {
-        const target = e.currentTarget as HTMLImageElement;
-        if (target && !target.src.endsWith('/brand/nox-symbol.webp')) {
-          target.src = '/brand/nox-symbol.webp';
-        }
-      }}
     />
 
     <!-- 1. Views: Superior Esquerdo (Top-Left) -->

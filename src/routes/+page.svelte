@@ -18,6 +18,15 @@
       continueContainer.scrollWidth - continueContainer.clientWidth - 10;
   }
 
+  function bindContinueScroll(node: HTMLElement) {
+    node.addEventListener('scroll', updateContinueScroll, { passive: true });
+    return {
+      destroy() {
+        node.removeEventListener('scroll', updateContinueScroll);
+      }
+    };
+  }
+
   function scrollContinue(direction: 'left' | 'right') {
     if (!continueContainer) return;
     const amount = continueContainer.clientWidth * 0.75;
@@ -80,7 +89,7 @@
         <div
           class="continue-track"
           bind:this={continueContainer}
-          onscroll={updateContinueScroll}
+          use:bindContinueScroll
         >
           {#each data.recent as item (item.workId)}
             {@const isAdult = item.contentRating === 'ADULT_18'}
@@ -95,7 +104,7 @@
                     height="90"
                     class="thumb-img"
                     class:blurred-cover={effectiveBlur}
-                    loading="lazy"
+                    decoding="async"
                   />
                 {:else}
                   <div class="thumb-placeholder">NOX</div>

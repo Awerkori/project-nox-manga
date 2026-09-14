@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   interface Particle {
     x: number;
@@ -15,6 +15,7 @@
   }
 
   let canvas: HTMLCanvasElement | null = $state(null);
+  let cleanupListeners: (() => void) | null = null;
 
   onMount(() => {
     if (!canvas) return;
@@ -158,13 +159,25 @@
     window.addEventListener('scroll', onScroll, { passive: true });
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    return () => {
+    cleanupListeners = () => {
       if (animId !== null) cancelAnimationFrame(animId);
       if (scrollTimeout) clearTimeout(scrollTimeout);
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onScroll);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('scroll', onScroll);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
     };
+  });
+
+  onDestroy(() => {
+    if (cleanupListeners) {
+      cleanupListeners();
+      cleanupListeners = null;
+    }
   });
 </script>
 

@@ -2,7 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { date } from '$lib/types';
-  import { tick, onMount } from 'svelte';
+  import { tick, onMount, onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { threadComments, parseCommentBody } from '$lib/comments';
   import { MessageSquare, Flag, X } from '@lucide/svelte';
@@ -48,26 +48,31 @@
   let threaded = $derived(threadComments(comments));
   let replyComment = $derived(reply ? comments.find((c) => c.id === reply) : null);
 
-  onMount(() => {
-    function checkHashAndScroll() {
-      if (typeof window === 'undefined') return;
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#comment-')) {
-        const id = hash.slice(1);
-        const el = document.getElementById(id);
-        if (el) {
-          setTimeout(() => {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.classList.add('highlight-pulse');
-            setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
-          }, 300);
-        }
+  function checkHashAndScroll() {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#comment-')) {
+      const id = hash.slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('highlight-pulse');
+          setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
+        }, 300);
       }
     }
+  }
 
+  onMount(() => {
     checkHashAndScroll();
     window.addEventListener('hashchange', checkHashAndScroll);
-    return () => window.removeEventListener('hashchange', checkHashAndScroll);
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('hashchange', checkHashAndScroll);
+    }
   });
 
   async function compose(comment: Comment, editing = false) {
@@ -114,6 +119,19 @@
       busy = false;
     }
   }
+
+  function bindSubmit(node: HTMLFormElement) {
+    const handleSubmit = (e: Event) => {
+      e.preventDefault();
+      void send();
+    };
+    node.addEventListener('submit', handleSubmit);
+    return {
+      destroy() {
+        node.removeEventListener('submit', handleSubmit);
+      }
+    };
+  }
 </script>
 
 <section class="comments">
@@ -125,12 +143,7 @@
     <span class="small muted">{comments.length} comentário{comments.length === 1 ? '' : 's'}</span>
   </div>
   {#if notice}<div class="notice error" role="alert">{notice}</div>{/if}
-  {#if profile}<form
-      onsubmit={(e) => {
-        e.preventDefault();
-        send();
-      }}
-    >
+  {#if profile}<form use:bindSubmit>
       {#if replyComment}
         <div class="replying-banner">
           <div class="replying-info">
