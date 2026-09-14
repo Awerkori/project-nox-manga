@@ -1,7 +1,7 @@
-import { fail } from '@sveltejs/kit';
+import { fail, error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+async function loadSnapshot({ locals }: any) {
   const [
     telemetryRes,
     stagedCountRes,
@@ -113,37 +113,22 @@ export const load: PageServerLoad = async ({ locals }) => {
       .select('*, actor:members!importer_staff_audit_actor_id_fkey(id, username, display_name)')
       .order('created_at', { ascending: false })
       .limit(10)
-  ]);
+  ].map(query => query.abortSignal(AbortSignal.timeout(4000))));
 
-  const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
-  const twentyFourHoursAgo = new Date(Date.now() - 86400_000).toISOString();
+  const failedSections = [telemetryRes, stagedCountRes, importingJobsRes, retryJobsRes, pausedJobsRes, staffRequestsRes, nextQueuedRes, stagedRes, sourcesRes, worksListRes, workHealthRes, recentManifestRes, staffAuditRes].filter(r => r.error);
+  if (failedSections.length) error(503, 'Não foi possível atualizar todos os dados do painel.');
 
-  // Query status counts from importer_queue
-  const [
-    queuedCount,
-    importingCount,
-    retryCount,
-    pausedCount,
-    cancelledCount,
-    completedCount,
-    failedCount,
-    failed1hRes,
-    failed24hRes,
-    recentFailuresRes,
-    blockedUpstreamRes
-  ] = await Promise.all([
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'QUEUED'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'IMPORTING'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'RETRY'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'PAUSED_BY_STAFF'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'CANCELLED_BY_STAFF'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'COMPLETED'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED'),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', oneHourAgo),
-    locals.db.from('importer_queue').select('id', { count: 'exact', head: true }).eq('status', 'FAILED').gte('updated_at', twentyFourHoursAgo),
-    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6),
-    locals.db.from('importer_queue').select('source').eq('status', 'BLOCKED_BY_UPSTREAM')
+  const [countRes, recentFailuresRes, blockedUpstreamRes] = await Promise.all([
+    (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(3500)),
+    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(3500)),
+    locals.db.from('importer_queue').select('source').eq('status', 'BLOCKED_BY_UPSTREAM').abortSignal(AbortSignal.timeout(3500))
   ]);
+  if (countRes.error || !countRes.data) error(503, 'Métricas do Importer temporariamente indisponíveis.');
+  const queueCounts = countRes.data;
+  const queuedCount = { count: queueCounts.queued }, importingCount = { count: queueCounts.importing };
+  const retryCount = { count: queueCounts.retry }, pausedCount = { count: queueCounts.paused };
+  const cancelledCount = { count: queueCounts.cancelled }, completedCount = { count: queueCounts.completed };
+  const failedCount = { count: queueCounts.failed }, failed1hRes = { count: queueCounts.failed1h }, failed24hRes = { count: queueCounts.failed24h };
 
   const importingJobs = importingJobsRes.data || [];
   const retryJobs = retryJobsRes.data || [];
@@ -352,6 +337,24 @@ export const load: PageServerLoad = async ({ locals }) => {
       totalImportedChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.total_imported_chapters || 0), 0),
     }
   };
+};
+
+const snapshots = new Map<string, { at: number; data: any }>();
+const snapshotFlights = new Map<string, Promise<any>>();
+export const load: PageServerLoad = async (event) => {
+  const key = event.locals.user?.id;
+  if (!key || !['ADMIN','STAFF_SITE','EDITOR'].includes(event.locals.role || '')) error(403);
+  const cached = snapshots.get(key);
+  if (cached && Date.now() - cached.at < 4000) return cached.data;
+  const existing = snapshotFlights.get(key);
+  if (existing) return existing;
+  const flight = loadSnapshot(event).then(data => {
+    if (snapshots.size >= 50) snapshots.delete(snapshots.keys().next().value!);
+    snapshots.set(key, { at: Date.now(), data });
+    return data;
+  }).finally(() => snapshotFlights.delete(key));
+  snapshotFlights.set(key, flight);
+  return flight;
 };
 
 function slugify(value: string): string {

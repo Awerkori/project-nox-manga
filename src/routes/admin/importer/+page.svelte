@@ -318,7 +318,7 @@
     })
   );
 
-  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  let pollInterval: ReturnType<typeof setTimeout> | null = null;
 
   // Real-time live polling every 4s while tab is visible
   onMount(() => {
@@ -327,15 +327,20 @@
     };
     window.addEventListener('click', handleGlobalClick);
 
-    pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        invalidateAll();
+    let disposed = false;
+    const poll = async () => {
+      try {
+        if (document.visibilityState === 'visible') await invalidateAll();
+      } finally {
+        if (!disposed) pollInterval = setTimeout(poll, 4000);
       }
-    }, 4000);
+    };
+    pollInterval = setTimeout(poll, 4000);
 
     return () => {
       window.removeEventListener('click', handleGlobalClick);
-      if (pollInterval) clearInterval(pollInterval);
+      disposed = true;
+      if (pollInterval) clearTimeout(pollInterval);
     };
   });
 
