@@ -61,10 +61,10 @@ BEGIN
     END IF;
   END IF;
 
+  
   SELECT q.id INTO v_job_id
-  FROM public.importer_queue q
-  WHERE q.id = (
-    SELECT cand_batch.id
+  FROM (
+    SELECT cand_batch.id, cand_batch.payload, cand_batch.task_type, cand_batch.chapter_sort_key, cand_batch.priority, cand_batch.created_at
     FROM (
       SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
       FROM public.importer_queue q_cand
@@ -121,9 +121,10 @@ BEGIN
       ) DESC,
       CASE WHEN cand_batch.chapter_sort_key IS NOT NULL THEN cand_batch.chapter_sort_key ELSE 999999 END ASC,
       cand_batch.created_at ASC
-    LIMIT 1
-  )
-  FOR UPDATE OF q SKIP LOCKED;
+  ) sorted_cands
+  JOIN public.importer_queue q ON q.id = sorted_cands.id
+  FOR UPDATE OF q SKIP LOCKED
+  LIMIT 1;
 
   IF v_job_id IS NULL THEN
     SELECT q.id INTO v_job_id
