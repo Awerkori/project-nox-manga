@@ -1,0 +1,878 @@
+npm notice run project-nox-manga@1.0.0 npx
+npm notice run 'wrangler' tail
+{
+    "wallTime": 373,
+    "cpuTime": 63,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412722880,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "HEAD",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cache-control": "no-cache",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::1d6c",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9adcfaec802",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::1d6c"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 24,
+                "clientQuicRtt": 0,
+                "colo": "GIG",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "v8D+pgAY87ddv8EFC26QRlh+giDTzEeig4bkjyF336w=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "4c76698b54af4a556b5a163bb04ec64bc8e2c30b15db189a6f067ce6735059b3656e895d3ba18f8cec92d10ec920c37d",
+                    "serverHandshake": "55c12706ba50262f0c3160fc0354fb7316834a173bf004d3f319c358627f48b66b4140aa95e9fdc5ed169091c50b328c",
+                    "clientFinished": "8bdfce62b08e05d1070d8accea5bf179c61af07b55df54c55b1fb80c5c16b809ded61a35c3c098ede7af0d052290ba8b",
+                    "serverFinished": "9e4c828ece7274735e2f73b0da6698b797343eb785b3dc78ba89f28be38a8d06058c30af3b45a060f2e72e49e1e2a33f"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 181932
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 27,
+    "cpuTime": 25,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412724318,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "HEAD",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cache-control": "no-cache",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::1d6c",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9b6b9d36396",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::1d6c"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 17,
+                "clientQuicRtt": 0,
+                "colo": "GIG",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "35DVZEJCj9Q3O01ubaiL+BGlLwen4Mj36Atwf5KMm8Y=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "c87a222e9f72ee9699ac0a8befbf0fd3babcae621a07830202e11116ef08272664bbfad65ace8cd364a2aafe3f572aa4",
+                    "serverHandshake": "73d738ffb41b138762e87857a7a1c52079c5188edb05ff16fa35bede6dc6da999248abdea5e5a5438379f61bebf17706",
+                    "clientFinished": "15149bf12ead3dc2b099385360e1c6bd38b14866292231479a146fb66f0258d2e29db48948d145c1aaa07d42dc606675",
+                    "serverFinished": "568229d1b5286f5ccf4387169d3feb8c05e9990a9decb67c0066ae1cf4363b343fa415b2aa07a9243b62967a2199daf5"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 140061
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 23,
+    "cpuTime": 20,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412725484,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "HEAD",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cache-control": "no-cache",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::1d6c",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9be1bf7b67a",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::1d6c"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 25,
+                "clientQuicRtt": 0,
+                "colo": "GIG",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "X5wKrhhFOG4RDJdyeY+UjqtCHbi4uqu7oAgj5uNx7Qw=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "ea234fca830c336ee5778ec436b1b99f8e368aa869ca4971d545ae644b0af925517015eea0eea8992eb6eb25f7351568",
+                    "serverHandshake": "4106c029caa54d2ca46679da7d4e2f6848307d603dda044910a50844c85ad0bf5975faba9abcb67b4eee84a3c0dd1a86",
+                    "clientFinished": "4f9b59a767da6d041ac8dbb6773035963589e8e8eb385d681b514e29f514543fe6b1395ed7362c2c8ce1684a38770745",
+                    "serverFinished": "f525ccb37dcb1b6f1eac3022a7eeca640d92ff94f381f8343b2023d32816b1edf8f162e1d5fb62e2d58e8ebe264b6be4"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 157452
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 2295,
+    "cpuTime": 20,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412723577,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/media/REDACTED",
+            "method": "GET",
+            "headers": {
+                "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "accept-encoding": "gzip, br",
+                "accept-language": "pt-BR,pt;q=0.9,en-us;q=0.8,en;q=0.7",
+                "cf-connecting-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9b21ec36c5a",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "cookie": "REDACTED",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "priority": "i",
+                "referer": "https://manga.project-nox-awerkori.workers.dev/ler/39c3987c-c5b7-4054-85a0-6c542f324086",
+                "sec-ch-ua": "\"OperaMobile\";v=\"101\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"151\", \"Opera\";v=\"136\"",
+                "sec-ch-ua-mobile": "?1",
+                "sec-ch-ua-platform": "\"Android\"",
+                "sec-fetch-dest": "image",
+                "sec-fetch-mode": "no-cors",
+                "sec-fetch-site": "same-origin",
+                "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36 OPR/101.0.0.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/3",
+                "clientAcceptEncoding": "gzip, deflate, br",
+                "requestPriority": "",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 0,
+                "clientQuicRtt": 26,
+                "colo": "GIG",
+                "asn": 262691,
+                "asOrganization": "CONECTA LTDA.",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Barbacena",
+                "continent": "SA",
+                "region": "Minas Gerais",
+                "regionCode": "MG",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.77361",
+                "latitude": "-21.22583",
+                "postalCode": "36200-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES128-GCM-SHA256",
+                "tlsClientRandom": "P4GfY1TfIC+D+rnCDTQWHrCxYkrsR45daGt2MjaZzR4=",
+                "tlsClientCiphersSha1": "3HTt3+R/6BL3zeALJDSq0pR1yOQ=",
+                "tlsClientExtensionsSha1": "JwmcoBEK9JFCI4meqEmA3/jXheo=",
+                "tlsClientExtensionsSha1Le": "pu+dC5MV3Ar+YEeXEUH1mMKlOlE=",
+                "tlsClientHelloLength": "1743",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 13241053
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 45501,
+    "cpuTime": 25,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "5091d847-3a50-49f9-8251-40d2e2b54dee"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412680884,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/media/REDACTED",
+            "method": "GET",
+            "headers": {
+                "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "accept-encoding": "gzip, br",
+                "accept-language": "pt-BR,pt;q=0.9,en-us;q=0.8,en;q=0.7",
+                "cf-connecting-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a8a758d86c5a",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "cookie": "REDACTED",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "priority": "i",
+                "referer": "https://manga.project-nox-awerkori.workers.dev/ler/39c3987c-c5b7-4054-85a0-6c542f324086",
+                "sec-ch-ua": "\"OperaMobile\";v=\"101\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"151\", \"Opera\";v=\"136\"",
+                "sec-ch-ua-mobile": "?1",
+                "sec-ch-ua-platform": "\"Android\"",
+                "sec-fetch-dest": "image",
+                "sec-fetch-mode": "no-cors",
+                "sec-fetch-site": "same-origin",
+                "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36 OPR/101.0.0.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/3",
+                "clientAcceptEncoding": "gzip, deflate, br",
+                "requestPriority": "",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 0,
+                "clientQuicRtt": 21,
+                "colo": "GIG",
+                "asn": 262691,
+                "asOrganization": "CONECTA LTDA.",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Barbacena",
+                "continent": "SA",
+                "region": "Minas Gerais",
+                "regionCode": "MG",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.77361",
+                "latitude": "-21.22583",
+                "postalCode": "36200-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES128-GCM-SHA256",
+                "tlsClientRandom": "P4GfY1TfIC+D+rnCDTQWHrCxYkrsR45daGt2MjaZzR4=",
+                "tlsClientCiphersSha1": "3HTt3+R/6BL3zeALJDSq0pR1yOQ=",
+                "tlsClientExtensionsSha1": "JwmcoBEK9JFCI4meqEmA3/jXheo=",
+                "tlsClientExtensionsSha1Le": "pu+dC5MV3Ar+YEeXEUH1mMKlOlE=",
+                "tlsClientHelloLength": "1743",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 13241053
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 10,
+    "cpuTime": 8,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412726634,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "HEAD",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cache-control": "no-cache",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::1d6c",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9c53a6bcafe",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::1d6c"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 20,
+                "clientQuicRtt": 0,
+                "colo": "GIG",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "ng0O1DvdMHTyzdnyJ3SsOvJtbOUcpYIX92A8+l520+s=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "1d4a484aa15470f8524427da48f4b46f04d7a439ae47115be4ed0cbd2d5918dd9f90062f56950652c3472aeb5a4f300b",
+                    "serverHandshake": "228732052c67fa473726dfb87f31554f86f96753d34ee0a85de5ae2ae7b79473e45ca09971d8733ce5b71d45a435f5ca",
+                    "clientFinished": "c9c5106384ca7d5c02b663199bed03d0dd0bc79ec1d9a5b86cb77d14b4db8ca0fa992d9b8ff191b3373583cb2df85369",
+                    "serverFinished": "be7053b9806c4b242589fb085e21c6632c79ae99f08c1159ff2c426650e459cd691eece6a8c1b95b755fd21ea4e3b2af"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 177687
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 2068,
+    "cpuTime": 17,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412725703,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/media/REDACTED",
+            "method": "GET",
+            "headers": {
+                "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "accept-encoding": "gzip, br",
+                "accept-language": "pt-BR,pt;q=0.9,en-us;q=0.8,en;q=0.7",
+                "cf-connecting-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9bf7a596c5a",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "cookie": "REDACTED",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "priority": "i",
+                "referer": "https://manga.project-nox-awerkori.workers.dev/ler/39c3987c-c5b7-4054-85a0-6c542f324086",
+                "sec-ch-ua": "\"OperaMobile\";v=\"101\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"151\", \"Opera\";v=\"136\"",
+                "sec-ch-ua-mobile": "?1",
+                "sec-ch-ua-platform": "\"Android\"",
+                "sec-fetch-dest": "image",
+                "sec-fetch-mode": "no-cors",
+                "sec-fetch-site": "same-origin",
+                "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36 OPR/101.0.0.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:1cd8:e212:2380:dd8a:deb7:3616:566d"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/3",
+                "clientAcceptEncoding": "gzip, deflate, br",
+                "requestPriority": "",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 0,
+                "clientQuicRtt": 21,
+                "colo": "GIG",
+                "asn": 262691,
+                "asOrganization": "CONECTA LTDA.",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Barbacena",
+                "continent": "SA",
+                "region": "Minas Gerais",
+                "regionCode": "MG",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.77361",
+                "latitude": "-21.22583",
+                "postalCode": "36200-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES128-GCM-SHA256",
+                "tlsClientRandom": "P4GfY1TfIC+D+rnCDTQWHrCxYkrsR45daGt2MjaZzR4=",
+                "tlsClientCiphersSha1": "3HTt3+R/6BL3zeALJDSq0pR1yOQ=",
+                "tlsClientExtensionsSha1": "JwmcoBEK9JFCI4meqEmA3/jXheo=",
+                "tlsClientExtensionsSha1Le": "pu+dC5MV3Ar+YEeXEUH1mMKlOlE=",
+                "tlsClientHelloLength": "1743",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 13241053
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 10,
+    "cpuTime": 9,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e1ee812a-a19b-44da-a984-4500d130f884"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789412727771,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "HEAD",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cache-control": "no-cache",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::1d6c",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3b1a9cc5d59e2ce",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::1d6c"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 25,
+                "clientQuicRtt": 0,
+                "colo": "GIG",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "H+Py7+JBkuS6CCr8YyHjWOBh7KvF0ThvmJ8erdDvjSs=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "d80c2a153cccfbf9170dea94a4cf2abd05fd63dcc52cb115f756fe841d1942c75c1bf6f77d54c512273a5b648776de64",
+                    "serverHandshake": "bb83d852d662e10994f50c54585f051fb4a2c43704a25259d965d04c8cd76c3f96461e11c7b3bb921a462e4d60be411c",
+                    "clientFinished": "d8798f8472d58e547eafcee5920bff2270c52b76862880e89926db03fb318122a7c9a69fccfbfb3e2e3e395d0cdfee2c",
+                    "serverFinished": "9574d24b80e3779f1a1959c0a846f39eccebda8e7afafe1037b4fbec68cc1d14c0a603be93d541e0b63ae21e7d0a8219"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 186936
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}

@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { databaseConfig } from '$lib/server/config';
 import { withTimeout } from '$lib/server/resilience';
 
@@ -59,11 +58,11 @@ export const load = async ({ locals, url, cookies }) => {
   if (!cachedSettings || Date.now() - cachedSettings.timestamp > SETTINGS_CACHE_TTL_MS) {
     try {
       const { url: databaseUrl, key } = databaseConfig();
-      const publicClient = createClient(databaseUrl, key, {
-        auth: { persistSession: false, autoRefreshToken: false }
-      });
+       
+         
+       
       const settingsRes = await withTimeout(
-        publicClient.rpc('public_settings'),
+        locals.db.rpc('public_settings'),
         1200,
         { data: null } as any,
         'public_settings'

@@ -330,7 +330,15 @@
     let disposed = false;
     const poll = async () => {
       try {
-        if (document.visibilityState === 'visible') await invalidateAll();
+        if (document.visibilityState === 'visible') {
+          const res = await fetch('/api/internal/importer/snapshot');
+          if (res.ok) {
+            const body = await res.json();
+            if (body.success && body.data) {
+              data = body.data;
+            }
+          }
+        }
       } catch (error) {
         console.warn('Não foi possível atualizar o painel do Importer', error);
       } finally {
