@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, BookOpen, Clock, ChevronDown, AlertTriangle, RefreshCw } from '@lucide/svelte';
+  import { ArrowRight, ArrowUp, BookOpen, Clock, ChevronDown, AlertTriangle, RefreshCw } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
@@ -68,6 +68,15 @@
       loadingMore = false;
     }
   }
+
+  function handleShowLess() {
+    currentReleases = [...releases];
+    hasMore = releases.length >= 16;
+    const section = document.getElementById('lancamentos');
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
 </script>
 
 <section id="lancamentos" class="releases-section">
@@ -78,10 +87,25 @@
     </div>
 
     <div class="header-right-tools">
-      <a href="/catalogo" class="view-all-link">
-        <span>Ver catálogo completo</span>
-        <ArrowRight size={14} />
-      </a>
+      {#if currentReleases.length > releases.length}
+        <button type="button" class="view-all-link" onclick={handleShowLess}>
+          <span>Mostrar menos</span>
+          <ArrowUp size={14} />
+        </button>
+      {/if}
+      {#if hasMore}
+        <button type="button" class="view-all-link" onclick={handleLoadMore} disabled={loadingMore}>
+          {#if loadingMore}
+            <RefreshCw size={14} class="spin" />
+            <span>Carregando...</span>
+          {:else}
+            <span>Ver mais lançamentos</span>
+            <ArrowRight size={14} />
+          {/if}
+        </button>
+      {:else if currentReleases.length >= 16}
+        <span class="view-all-link" style="opacity: 0.5; cursor: default;">Não há mais lançamentos</span>
+      {/if}
     </div>
   </div>
 
@@ -147,20 +171,6 @@
         </article>
       {/each}
     </div>
-
-    {#if hasMore}
-      <div class="load-more-wrap">
-        <button type="button" class="btn-load-more" onclick={handleLoadMore} disabled={loadingMore}>
-          {#if loadingMore}
-            <RefreshCw size={16} class="spin" />
-            <span>Carregando...</span>
-          {:else}
-            <span>Carregar mais lançamentos</span>
-            <ChevronDown size={16} />
-          {/if}
-        </button>
-      </div>
-    {/if}
   {:else if loadError}
     <div class="degraded-releases-alert" role="alert">
       <AlertTriangle size={36} class="alert-icon" />
@@ -233,10 +243,20 @@
     color: #8e95a5;
     text-decoration: none;
     transition: color 0.2s ease;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
   }
 
-  .view-all-link:hover {
+  .view-all-link:hover:not(:disabled) {
     color: #dfc28d;
+  }
+  
+  .view-all-link:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   /* Grid Feed */
@@ -259,40 +279,6 @@
     min-height: 102px;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  .load-more-wrap {
-    display: flex;
-    justify-content: center;
-    margin-top: 2rem;
-  }
-
-  .btn-load-more {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.75rem;
-    background: rgba(22, 27, 44, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 9999px;
-    color: #e2e8f0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-load-more:hover:not(:disabled) {
-    background: rgba(30, 36, 60, 0.95);
-    border-color: rgba(223, 194, 141, 0.4);
-    color: #ffffff;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  }
-
-  .btn-load-more:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
   }
 
   .spin {
