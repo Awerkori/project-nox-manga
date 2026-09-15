@@ -330,7 +330,7 @@ export const load = async ({ locals, setHeaders }) => {
         .in('work_id', workIds)
         .not('published_at', 'is', null)
         .order('published_at', { ascending: false })
-        .limit(48),
+        .limit(100), // Increased limit to avoid a single work monopolizing the fallback
       1500,
       { data: [] } as any,
       'home_chapters_fallback'
