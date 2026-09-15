@@ -98,11 +98,6 @@ var worker_default = {
     let location = pathname.at(-1) === "/" ? stripped_pathname : pathname + "/";
     if (is_static_asset || prerendered.has(pathname) || pathname === version_file || pathname.startsWith(immutable)) {
       res = await env2.ASSETS.fetch(req);
-      if (res.status >= 400) {
-        // ASSET_ERROR_NO_STORE
-        res = new Response(res.body, res);
-        res.headers.set("cache-control", "no-store");
-      }
     } else if (location && prerendered.has(location)) {
       if (search) location += search;
       res = new Response("", {

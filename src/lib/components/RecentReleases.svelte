@@ -29,12 +29,44 @@
 
   let { releases = [], loadError = false, isStale = false }: Props = $props();
 
-  let visibleCount = $state(12);
-  let displayedReleases = $derived(releases.slice(0, visibleCount));
-  let hasMore = $derived(releases.length > visibleCount);
+  let currentReleases = $state<ReleaseItem[]>(releases);
+  let loadingMore = $state(false);
+  let hasMore = $state(releases.length >= 16);
 
-  function loadMore() {
-    visibleCount += 12;
+  $effect(() => {
+    // Keep it in sync if props change externally
+    if (releases !== currentReleases) {
+      currentReleases = [...releases];
+    }
+  });
+
+  async function handleLoadMore() {
+    if (loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const lastItem = currentReleases[currentReleases.length - 1];
+      const cursorTime = lastItem ? lastItem.latestPublishedAt : '';
+      const cursorId = lastItem ? lastItem.workId : '';
+      const res = await fetch(`/api/releases?cursorTime=${encodeURIComponent(cursorTime)}&cursorId=${encodeURIComponent(cursorId)}&limit=16`);
+      if (!res.ok) throw new Error('Falha ao carregar');
+      const data = await res.json();
+      const newItems: ReleaseItem[] = data.releases || [];
+      
+      if (newItems.length === 0) {
+        hasMore = false;
+      } else {
+        const existingIds = new Set(currentReleases.map(r => r.workId));
+        const uniqueItems = newItems.filter(r => !existingIds.has(r.workId));
+        currentReleases = [...currentReleases, ...uniqueItems];
+        if (uniqueItems.length === 0 || !data.hasMore || currentReleases.length >= 64) {
+          hasMore = false;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      loadingMore = false;
+    }
   }
 </script>
 
@@ -55,7 +87,7 @@
 
   {#if releases.length > 0}
     <div class="releases-grid">
-      {#each displayedReleases as rel (rel.workId)}
+      {#each currentReleases as rel (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
@@ -118,9 +150,14 @@
 
     {#if hasMore}
       <div class="load-more-wrap">
-        <button type="button" class="btn-load-more" onclick={loadMore}>
-          <span>Carregar mais lançamentos</span>
-          <ChevronDown size={16} />
+        <button type="button" class="btn-load-more" onclick={handleLoadMore} disabled={loadingMore}>
+          {#if loadingMore}
+            <RefreshCw size={16} class="spin" />
+            <span>Carregando...</span>
+          {:else}
+            <span>Carregar mais lançamentos</span>
+            <ChevronDown size={16} />
+          {/if}
         </button>
       </div>
     {/if}
@@ -245,12 +282,30 @@
     transition: all 0.2s ease;
   }
 
-  .btn-load-more:hover {
+  .btn-load-more:hover:not(:disabled) {
     background: rgba(30, 36, 60, 0.95);
     border-color: rgba(223, 194, 141, 0.4);
     color: #ffffff;
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-load-more:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .release-row-card:hover {

@@ -130,7 +130,7 @@ export const load = async ({ locals, setHeaders }) => {
     ),
     safeDbQuery(
       locals.db
-        .rpc('get_recent_releases', { p_limit: 12, p_chapters_per_work: 3 }),
+        .rpc('get_recent_releases', { p_limit: 16, p_chapters_per_work: 3 }),
       4500,
       'home_chapters'
     ),
@@ -320,25 +320,38 @@ export const load = async ({ locals, setHeaders }) => {
 
   let recentReleases = Array.from(releasesMap.values());
 
-  // Resilient secondary fallback: if RPC timed out but works succeeded, fetch recent chapters by work_id
-  if (recentReleases.length === 0 && works.length > 0) {
-    const workIds = works.map((w: any) => w.id).filter(Boolean);
-    const fallbackChaptersRes = await withTimeout(
+  // Resilient secondary fallback: if RPC timed out, do it manually with two queries
+  if (recentReleases.length === 0) {
+    const fallbackWorksRes = await withTimeout(
       locals.db
-        .from('chapters')
-        .select('id,number,title,published_at,work_id')
-        .in('work_id', workIds)
-        .not('published_at', 'is', null)
-        .order('published_at', { ascending: false })
-        .limit(100), // Increased limit to avoid a single work monopolizing the fallback
+        .from('works')
+        .select('id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at')
+        .eq('published', true)
+        .not('latest_chapter_published_at', 'is', null)
+        .order('latest_chapter_published_at', { ascending: false })
+        .limit(16),
       1500,
       { data: [] } as any,
-      'home_chapters_fallback'
+      'home_chapters_fallback_works'
     );
 
-    const fallbackChapters = fallbackChaptersRes?.data || [];
-    if (fallbackChapters.length > 0) {
-      const worksById = new Map(works.map((w: any) => [w.id, w]));
+    const fallbackWorks = fallbackWorksRes?.data || [];
+    if (fallbackWorks.length > 0) {
+      const workIds = fallbackWorks.map((w: any) => w.id);
+      const fallbackChaptersRes = await withTimeout(
+        locals.db
+          .from('chapters')
+          .select('id,number,title,published_at,work_id')
+          .in('work_id', workIds)
+          .not('published_at', 'is', null)
+          .order('published_at', { ascending: false }),
+        1500,
+        { data: [] } as any,
+        'home_chapters_fallback_chapters'
+      );
+
+      const fallbackChapters = fallbackChaptersRes?.data || [];
+      const worksById = new Map(fallbackWorks.map((w: any) => [w.id, w]));
       for (const row of fallbackChapters) {
         const w = worksById.get(row.work_id);
         if (!w) continue;
@@ -350,7 +363,7 @@ export const load = async ({ locals, setHeaders }) => {
             coverId: w.cover_id,
             kind: w.kind,
             contentRating: w.content_rating,
-            latestPublishedAt: row.published_at || '',
+            latestPublishedAt: w.latest_chapter_published_at || '',
             chapters: []
           });
         }
@@ -365,6 +378,8 @@ export const load = async ({ locals, setHeaders }) => {
         }
       }
       recentReleases = Array.from(releasesMap.values());
+      // Sort to guarantee correct order
+      recentReleases.sort((a, b) => new Date(b.latestPublishedAt).getTime() - new Date(a.latestPublishedAt).getTime());
     }
   }
 
