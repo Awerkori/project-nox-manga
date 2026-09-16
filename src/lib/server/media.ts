@@ -1,5 +1,4 @@
 import { error } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { inspectImage } from '$lib/media-validation';
 import { TelegramStorageError } from '$lib/server/telegram';
@@ -97,7 +96,6 @@ export async function storeImage(input: Request | FormData, userId: string, defa
     }
   }
 
-  // Ensure staff manual uploads are strictly preserved and never degraded to editorial
   if (defaultPurpose === 'staff_manual' && (!purpose || purpose === 'editorial')) {
     purpose = 'staff_manual';
   }
@@ -109,66 +107,23 @@ export async function storeImage(input: Request | FormData, userId: string, defa
     error(400, (e as Error).message);
   }
 
-  // Route through Storage Supremo if Telegram storage is configured
-  if (env.TELEGRAM_BOT_TOKEN || (env as any).TELEGRAM_BOT_MANGA_STORAGE_01) {
-    try {
-      const stored = await uploadToStorageSupremo({
-        bytes,
-        mime: info.mime,
-        purpose,
-        userId,
-        scanId,
-        chapterId,
-        workId,
-        accessClass
-      });
-      return { id: stored.id, ...info, bytes: size };
-    } catch (failure) {
-      if (failure instanceof RateLimitError) throw failure;
-      if (failure instanceof TelegramStorageError && failure.status === 429) {
-        throw new RateLimitError(failure.retryAfter && failure.retryAfter > 0 ? failure.retryAfter : 15);
-      }
-      error(502, (failure as Error).message || 'Não foi possível armazenar a imagem. Tente novamente.');
-    }
-  }
-
-  // Fallback to Supabase Storage if Telegram is completely absent
-  const db = privileged();
-  const id = crypto.randomUUID();
-  const hash = Array.from(
-    new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)),
-    (b) => b.toString(16).padStart(2, '0')
-  ).join('');
-
-  const { error: reservation } = await db.rpc('reserve_media', {
-    p_id: id,
-    p_user: userId,
-    p_provider: 'supabase',
-    p_mime: info.mime,
-    p_width: info.width,
-    p_height: info.height,
-    p_bytes: size,
-    p_sha256: hash,
-    p_purpose: purpose
-  });
-  if (reservation) error(400, reservation.message);
-
   try {
-    const { error: problem } = await db.storage
-      .from('nox-media')
-      .upload(id, bytes as unknown as ArrayBuffer, { contentType: info.mime, upsert: false });
-    if (problem) throw new Error('Não foi possível armazenar a imagem.');
-
-    const { error: updateErr } = await db
-      .from('media')
-      .update({ provider_key: id, storage_ready: true })
-      .eq('id', id);
-    if (updateErr) throw new Error('Não foi possível registrar a imagem.');
-
-    return { id, ...info, bytes: size };
+    const stored = await uploadToStorageSupremo({
+      bytes,
+      mime: info.mime,
+      purpose,
+      userId,
+      scanId,
+      chapterId,
+      workId,
+      accessClass
+    });
+    return { id: stored.id, ...info, bytes: size };
   } catch (failure) {
-    await db.storage.from('nox-media').remove([id]);
-    await db.from('media').delete().eq('id', id);
-    error(502, 'Não foi possível armazenar a imagem. Tente novamente.');
+    if (failure instanceof RateLimitError) throw failure;
+    if (failure instanceof TelegramStorageError && failure.status === 429) {
+      throw new RateLimitError(failure.retryAfter && failure.retryAfter > 0 ? failure.retryAfter : 15);
+    }
+    error(502, (failure as Error).message || 'Não foi possível armazenar a imagem. Tente novamente.');
   }
 }

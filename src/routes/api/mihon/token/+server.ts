@@ -1,17 +1,22 @@
 import { json } from '@sveltejs/kit';
-import { member, privileged } from '$lib/server/db';
+import { db, schema, member, safeQuery } from '$lib/server/db';
+import { eq, and, desc } from 'drizzle-orm';
 import { generateMihonToken } from '$lib/server/mihon';
 
 export const GET = async ({ locals }) => {
   const userId = member(locals);
-  const db = privileged();
 
-  const { data, error } = await db
-    .from('mihon_tokens')
-    .select('id, device_name, created_at, expires_at')
-    .eq('user_id', userId)
-    .eq('revoked', false)
-    .order('created_at', { ascending: false });
+  const { data, error } = await safeQuery(
+    db.select({
+      id: schema.mihonTokens.id,
+      device_name: schema.mihonTokens.deviceName,
+      created_at: schema.mihonTokens.createdAt,
+      expires_at: schema.mihonTokens.expiresAt
+    })
+    .from(schema.mihonTokens)
+    .where(and(eq(schema.mihonTokens.userId, userId), eq(schema.mihonTokens.revoked, 0)))
+    .orderBy(desc(schema.mihonTokens.createdAt))
+  );
 
   if (error) {
     return json({ error: 'Erro ao carregar tokens' }, { status: 500 });
@@ -56,12 +61,11 @@ export const DELETE = async ({ request, locals }) => {
     return json({ error: 'ID do token é obrigatório' }, { status: 400 });
   }
 
-  const db = privileged();
-  const { error } = await db
-    .from('mihon_tokens')
-    .update({ revoked: true })
-    .eq('id', tokenId)
-    .eq('user_id', userId);
+  const { error } = await safeQuery(
+    db.update(schema.mihonTokens)
+      .set({ revoked: 1 })
+      .where(and(eq(schema.mihonTokens.id, tokenId), eq(schema.mihonTokens.userId, userId)))
+  );
 
   if (error) {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });

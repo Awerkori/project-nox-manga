@@ -1,4 +1,8 @@
 import { withTimeout } from '$lib/server/resilience';
+import { db } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
+import { eq, and, asc } from 'drizzle-orm';
+import { safeQuery, safeQuerySingle } from '$lib/server/db/safe';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
 const SHOP_CACHE_TTL_MS = 120_000;
@@ -9,11 +13,12 @@ export const load = async ({ locals, setHeaders }) => {
     items = cachedShopItems.data;
   } else {
     const res = await withTimeout(
-      locals.db
-        .from('shop_items')
-        .select('*')
-        .eq('is_active', true)
-        .order('order_index', { ascending: true }),
+      safeQuery(
+        db.select()
+          .from(schema.shopItems)
+          .where(eq(schema.shopItems.isActive, 1))
+          .orderBy(asc(schema.shopItems.orderIndex))
+      ),
       2500,
       { data: cachedShopItems?.data || [] } as any,
       'shop_items'
@@ -33,20 +38,32 @@ export const load = async ({ locals, setHeaders }) => {
   let userProfile: any = null;
 
   if (locals.user) {
-    const profile = locals.sessionCache?.profile;
+    const profile = locals.profile;
     const [invRes, profileRes] = await withTimeout(
       Promise.all([
-        locals.db
-          .from('member_inventory')
-          .select('item_id')
-          .eq('user_id', locals.user.id),
+        safeQuery(
+          db.select({ item_id: schema.memberInventory.itemId })
+            .from(schema.memberInventory)
+            .where(eq(schema.memberInventory.userId, locals.user.id))
+        ),
         profile
           ? Promise.resolve({ data: profile })
-          : locals.db
-              .from('members')
-              .select('id, username, display_name, avatar_id, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
-              .eq('id', locals.user.id)
-              .maybeSingle()
+          : safeQuerySingle(
+              db.select({
+                id: schema.members.id,
+                username: schema.members.username,
+                display_name: schema.members.displayName,
+                avatar_id: schema.members.avatarId,
+                banner_id: schema.members.bannerId,
+                equipped_banner_id: schema.members.equippedBannerId,
+                xp: schema.members.xp,
+                avatar_frame_id: schema.members.avatarFrameId,
+                name_color: schema.members.nameColor,
+                equipped_title_id: schema.members.equippedTitleId
+              })
+              .from(schema.members)
+              .where(eq(schema.members.id, locals.user.id))
+            )
       ]),
       1200,
       [{ data: [] }, { data: profile || null }] as any,

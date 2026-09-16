@@ -53,7 +53,7 @@ BEGIN
     SELECT (c.published_at is not null) INTO v_has_completed_work FROM public.chapters c WHERE c.work_id = v_focus_work_id ORDER BY c.created_at desc LIMIT 1;
 
     IF not v_has_pending_jobs and not v_has_pending_mappings and coalesce(v_has_completed_work, false) THEN
-      UPDATE public.importer_staff_requests SET status = 'COMPLETED', updated_at = now() WHERE id = v_focus_request_id;
+      UPDATE public.importer_staff_requests SET status = 'COMPLETED', updated_at = now() WHERE public.importer_staff_requests.id = v_focus_request_id;
       v_focus_request_id := null;
       v_focus_work_id := null;
     ELSIF v_focus_status = 'QUEUED' THEN
@@ -66,7 +66,7 @@ BEGIN
   FROM (
     SELECT cand_batch.id, cand_batch.payload, cand_batch.task_type, cand_batch.chapter_sort_key, cand_batch.priority, cand_batch.created_at
     FROM (
-      SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
+      ( SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
       FROM public.importer_queue q_cand
       WHERE q_cand.status in ('QUEUED', 'RETRY') AND q_cand.priority >= 100 AND q_cand.next_run_at <= now()
         AND (v_focus_work_id is null or (q_cand.payload->>'workId')::text = v_focus_work_id::text)
@@ -74,9 +74,9 @@ BEGIN
         AND (p_task_type is null or (p_task_type = 'DISCOVERY' and q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK')) or q_cand.task_type = p_task_type)
         AND (coalesce(v_barrier_state, 'OPEN') != 'CLOSED' OR q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK'))
         AND not exists (SELECT 1 FROM public.importer_sources s WHERE s.id = q_cand.source AND (s.enabled = false or s.status in ('PAUSED', 'DISABLED', 'UPSTREAM_BLOCKED') or (s.cooldown_until is not null and s.cooldown_until > now())))
-      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 25
+      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 25 )
       UNION ALL
-      SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
+      ( SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
       FROM public.importer_queue q_cand
       WHERE q_cand.status in ('QUEUED', 'RETRY') AND q_cand.priority >= 80 AND q_cand.priority < 100 AND q_cand.next_run_at <= now()
         AND (v_focus_work_id is null or (q_cand.payload->>'workId')::text = v_focus_work_id::text)
@@ -84,9 +84,9 @@ BEGIN
         AND (p_task_type is null or (p_task_type = 'DISCOVERY' and q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK')) or q_cand.task_type = p_task_type)
         AND (coalesce(v_barrier_state, 'OPEN') != 'CLOSED' OR q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK'))
         AND not exists (SELECT 1 FROM public.importer_sources s WHERE s.id = q_cand.source AND (s.enabled = false or s.status in ('PAUSED', 'DISABLED', 'UPSTREAM_BLOCKED') or (s.cooldown_until is not null and s.cooldown_until > now())))
-      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 15
+      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 15 )
       UNION ALL
-      SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
+      ( SELECT q_cand.id, q_cand.task_type, q_cand.priority, q_cand.payload, q_cand.chapter_sort_key, q_cand.created_at
       FROM public.importer_queue q_cand
       WHERE q_cand.status in ('QUEUED', 'RETRY') AND q_cand.priority < 80 AND q_cand.next_run_at <= now()
         AND (v_focus_work_id is null or (q_cand.payload->>'workId')::text = v_focus_work_id::text)
@@ -94,7 +94,7 @@ BEGIN
         AND (p_task_type is null or (p_task_type = 'DISCOVERY' and q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK')) or q_cand.task_type = p_task_type)
         AND (coalesce(v_barrier_state, 'OPEN') != 'CLOSED' OR q_cand.task_type in ('DISCOVER_WORKS', 'SYNC_WORK'))
         AND not exists (SELECT 1 FROM public.importer_sources s WHERE s.id = q_cand.source AND (s.enabled = false or s.status in ('PAUSED', 'DISABLED', 'UPSTREAM_BLOCKED') or (s.cooldown_until is not null and s.cooldown_until > now())))
-      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 10
+      ORDER BY q_cand.priority DESC, q_cand.next_run_at ASC LIMIT 10 )
     ) cand_batch
     ORDER BY
       CASE WHEN v_focus_work_id is not null and (cand_batch.payload->>'workId')::text = v_focus_work_id::text THEN 100000 ELSE 0 END DESC,
@@ -144,6 +144,6 @@ BEGIN
   RETURN QUERY
   UPDATE public.importer_queue SET status = 'IMPORTING', locked_by = p_worker_id, locked_at = now(), lease_expires_at = now() + p_lease_duration, attempts = public.importer_queue.attempts + 1, updated_at = now()
   WHERE public.importer_queue.id = v_job_id
-  RETURNING id, task_type, source, priority, payload, dedupe_key, status, attempts, max_attempts, locked_by, locked_at, lease_expires_at, next_run_at, last_error, chapter_sort_key;
+  RETURNING public.importer_queue.id, public.importer_queue.task_type, public.importer_queue.source, public.importer_queue.priority, public.importer_queue.payload, public.importer_queue.dedupe_key, public.importer_queue.status, public.importer_queue.attempts, public.importer_queue.max_attempts, public.importer_queue.locked_by, public.importer_queue.locked_at, public.importer_queue.lease_expires_at, public.importer_queue.next_run_at, public.importer_queue.last_error, public.importer_queue.chapter_sort_key;
 END;
 $fn$;

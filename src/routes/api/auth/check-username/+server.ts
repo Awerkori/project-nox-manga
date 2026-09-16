@@ -1,5 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
+import { eq, sql } from 'drizzle-orm';
+import { safeQuerySingle } from '$lib/server/db/safe';
 
 const RESERVED_USERNAMES = new Set([
   'admin',
@@ -66,24 +69,23 @@ export const GET = async ({ url, locals }) => {
     return json({ available: false, reason: 'Este nome de usuário é reservado.' });
   }
 
-  // If current user already owns this username, it's available to them
   if (locals.user) {
-    const { data: currentMember } = await privileged()
-      .from('members')
-      .select('username')
-      .eq('id', locals.user.id)
-      .maybeSingle();
+    const { data: currentMember } = await safeQuerySingle(
+      db.select({ username: schema.members.username })
+        .from(schema.members)
+        .where(eq(schema.members.id, locals.user.id))
+    );
 
     if (currentMember?.username?.toLowerCase() === raw) {
       return json({ available: true, username: raw, current: true });
     }
   }
 
-  const { data: collision } = await privileged()
-    .from('members')
-    .select('id')
-    .ilike('username', raw)
-    .maybeSingle();
+  const { data: collision } = await safeQuerySingle(
+    db.select({ id: schema.members.id })
+      .from(schema.members)
+      .where(sql`lower(${schema.members.username}) = ${raw}`)
+  );
 
   if (collision) {
     return json({ available: false, reason: 'Este nome de usuário já está em uso.' });

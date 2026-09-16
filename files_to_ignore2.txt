@@ -1,0 +1,9 @@
+src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte
+src/routes/api/scan/attachments/[id]/+server.ts
+src/routes/convite/[code]/+page.svelte
+src/routes/ler/[id]/+page.server.ts
+src/routes/media/[id]/+server.ts
+src/routes/obra/[slug]/+page.server.ts
+src/routes/obra/[slug]/+page.svelte
+src/routes/scans/[slug]/+page.svelte
+src/routes/u/[username]/+page.svelte

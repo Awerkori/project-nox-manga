@@ -1,0 +1,70 @@
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte
+   9:5  error  'ArrowLeft' is defined but never used                 @typescript-eslint/no-unused-vars
+  10:5  error  'Save' is defined but never used                      @typescript-eslint/no-unused-vars
+  11:5  error  'Send' is defined but never used                      @typescript-eslint/no-unused-vars
+  12:5  error  'Eye' is defined but never used                       @typescript-eslint/no-unused-vars
+  13:5  error  'UploadCloud' is defined but never used               @typescript-eslint/no-unused-vars
+  17:5  error  'Trash2' is defined but never used                    @typescript-eslint/no-unused-vars
+  22:5  error  'Users' is defined but never used                     @typescript-eslint/no-unused-vars
+  43:5  error  'inCooldown' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  44:5  error  'cooldownSeconds' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/api/scan/attachments/[id]/+server.ts
+  1:10  error  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/convite/[code]/+page.svelte
+  2:12  error  'Shield' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/ler/[id]/+page.server.ts
+  233:7  error  'all' is never reassigned. Use 'const' instead  prefer-const
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/media/[id]/+server.ts
+  64:96  error  Empty block statement  no-empty
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/obra/[slug]/+page.server.ts
+   29:7  error  'work' is never reassigned. Use 'const' instead          prefer-const
+  150:7  error  'chaptersList' is never reassigned. Use 'const' instead  prefer-const
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/obra/[slug]/+page.svelte
+   13:5   error  'AlertTriangle' is defined but never used                                  @typescript-eslint/no-unused-vars
+   22:12  error  'page' is defined but never used                                           @typescript-eslint/no-unused-vars
+   73:22  error  Found a mutable instance of the built-in Set class. Use SvelteSet instead  svelte/prefer-svelte-reactivity
+   98:20  error  Found a mutable instance of the built-in Set class. Use SvelteSet instead  svelte/prefer-svelte-reactivity
+  142:26  error  Found a mutable instance of the built-in Set class. Use SvelteSet instead  svelte/prefer-svelte-reactivity
+  277:13  error  Each block should have a key                                               svelte/require-each-key
+  338:17  error  Each block should have a key                                               svelte/require-each-key
+  367:13  error  Each block should have a key                                               svelte/require-each-key
+  489:19  error  Each block should have a key                                               svelte/require-each-key
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/scans/[slug]/+page.svelte
+    17:5   error  'ExternalLink' is defined but never used                                   @typescript-eslint/no-unused-vars
+    34:12  error  'formatScanRoleTitle' is defined but never used                            @typescript-eslint/no-unused-vars
+    42:7   error  'successModal' is assigned a value but never used                          @typescript-eslint/no-unused-vars
+    60:7   error  'preposition' is assigned a value but never used                           @typescript-eslint/no-unused-vars
+    74:17  error  Found a mutable instance of the built-in Map class. Use SvelteMap instead  svelte/prefer-svelte-reactivity
+   338:17  error  Each block should have a key                                               svelte/require-each-key
+   352:17  error  Each block should have a key                                               svelte/require-each-key
+   373:15  error  Each block should have a key                                               svelte/require-each-key
+   420:19  error  Each block should have a key                                               svelte/require-each-key
+   442:29  error  Each block should have a key                                               svelte/require-each-key
+   464:19  error  Each block should have a key                                               svelte/require-each-key
+   483:29  error  Each block should have a key                                               svelte/require-each-key
+   505:19  error  Each block should have a key                                               svelte/require-each-key
+   526:29  error  Each block should have a key                                               svelte/require-each-key
+   562:15  error  Each block should have a key                                               svelte/require-each-key
+   648:15  error  Each block should have a key                                               svelte/require-each-key
+  1108:13  error  Each block should have a key                                               svelte/require-each-key
+  1132:21  error  Each block should have a key                                               svelte/require-each-key
+
+/home/awerkori/.Projects/project-nox-manga/src/routes/u/[username]/+page.svelte
+    10:5   error  'BookMarked' is defined but never used  @typescript-eslint/no-unused-vars
+    17:5   error  'Award' is defined but never used       @typescript-eslint/no-unused-vars
+    23:5   error  'Flame' is defined but never used       @typescript-eslint/no-unused-vars
+   312:15  error  Each block should have a key            svelte/require-each-key
+  1064:17  error  Each block should have a key            svelte/require-each-key
+  1093:27  error  Each block should have a key            svelte/require-each-key
+
+✖ 48 problems (48 errors, 0 warnings)
+  3 errors and 0 warnings potentially fixable with the `--fix` option.
+

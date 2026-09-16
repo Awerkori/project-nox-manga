@@ -1,8 +1,11 @@
 import { json, error } from '@sveltejs/kit';
-import { member } from '$lib/server/db';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, and, or } from 'drizzle-orm';
 
-export const POST = async ({ request, locals }) => {
-  const currentUserId = member(locals);
+export const POST = async ({ request, locals }: any) => {
+  const currentUserId = locals.user?.id;
+  if (!currentUserId) error(401, 'Não autorizado');
+
   const body = await request.json().catch(() => ({}));
   const targetUserId = String(body.targetUserId || '').trim();
   const unblock = body.action === 'unblock';
@@ -16,28 +19,49 @@ export const POST = async ({ request, locals }) => {
   }
 
   if (unblock) {
-    const { error: delErr } = await locals.db
-      .from('user_blocks')
-      .delete()
-      .eq('user_id', currentUserId)
-      .eq('blocked_id', targetUserId);
+    const { error: delErr } = await safeQuerySingle(
+      db.delete(schema.userBlocks)
+        .where(
+          and(
+            eq(schema.userBlocks.userId, currentUserId),
+            eq(schema.userBlocks.blockedId, targetUserId)
+          )
+        )
+        .returning()
+    );
 
     if (delErr) error(500, delErr.message);
     return json({ blocked: false });
   } else {
     // Unfollow in both directions when blocking
-    await locals.db
-      .from('user_follows')
-      .delete()
-      .or(`and(follower_id.eq.${currentUserId},following_id.eq.${targetUserId}),and(follower_id.eq.${targetUserId},following_id.eq.${currentUserId})`);
+    await safeQuery(
+      db.delete(schema.userFollows)
+        .where(
+          or(
+            and(
+              eq(schema.userFollows.followerId, currentUserId),
+              eq(schema.userFollows.followingId, targetUserId)
+            ),
+            and(
+              eq(schema.userFollows.followerId, targetUserId),
+              eq(schema.userFollows.followingId, currentUserId)
+            )
+          )
+        )
+        .returning()
+    );
 
-    const { error: insErr } = await locals.db
-      .from('user_blocks')
-      .insert({ user_id: currentUserId, blocked_id: targetUserId })
-      .select()
-      .single();
+    const { error: insErr } = await safeQuerySingle(
+      db.insert(schema.userBlocks)
+        .values({ 
+          userId: currentUserId, 
+          blockedId: targetUserId,
+          createdAt: new Date().toISOString()
+        })
+        .returning()
+    );
 
-    if (insErr && insErr.code !== '23505') {
+    if (insErr) {
       error(500, insErr.message);
     }
     return json({ blocked: true });

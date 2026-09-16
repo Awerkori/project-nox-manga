@@ -1,4 +1,7 @@
-import { privileged } from '$lib/server/db';
+import { db } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
+import { safeQuerySingle, safeQuery } from '$lib/server/db/safe';
+import { eq, and, gt } from 'drizzle-orm';
 
 export async function hashToken(token: string): Promise<string> {
   const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -33,24 +36,48 @@ export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult
   const rawToken = match[1];
   const hash = await hashToken(rawToken);
 
-  const admin = privileged();
-  const { data, error } = await admin
-    .from('mihon_tokens')
-    .select('id, user_id, expires_at, revoked, members(id, username, age_status, xp, is_test)')
-    .eq('token_hash', hash)
-    .eq('revoked', false)
-    .gt('expires_at', new Date().toISOString())
-    .maybeSingle();
+  const { data: row, error } = await safeQuerySingle(
+    db.select({
+      token: {
+        id: schema.mihonTokens.id,
+        userId: schema.mihonTokens.userId,
+        expiresAt: schema.mihonTokens.expiresAt,
+        revoked: schema.mihonTokens.revoked
+      },
+      member: {
+        id: schema.members.id,
+        username: schema.members.username,
+        ageStatus: schema.members.ageStatus,
+        xp: schema.members.xp,
+        isTest: schema.members.isTest
+      }
+    })
+    .from(schema.mihonTokens)
+    .leftJoin(schema.members, eq(schema.mihonTokens.userId, schema.members.id))
+    .where(
+      and(
+        eq(schema.mihonTokens.tokenHash, hash),
+        eq(schema.mihonTokens.revoked, 0),
+        gt(schema.mihonTokens.expiresAt, new Date().toISOString())
+      )
+    )
+    .limit(1)
+  );
 
-  if (error || !data || !data.members) {
+  if (error || !row || !row.member) {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token inválido ou expirado' };
   }
 
-  const member = Array.isArray(data.members) ? data.members[0] : data.members;
   return {
     authenticated: true,
-    user: member as unknown as MihonUser,
-    ageStatus: (member as { age_status?: 'UNKNOWN' | 'MINOR' | 'ADULT' }).age_status || 'UNKNOWN'
+    user: {
+      id: row.member.id,
+      username: row.member.username,
+      age_status: row.member.ageStatus as any,
+      xp: row.member.xp,
+      is_test: Boolean(row.member.isTest)
+    },
+    ageStatus: (row.member.ageStatus as any) || 'UNKNOWN'
   };
 }
 
@@ -65,14 +92,19 @@ export async function generateMihonToken(userId: string, deviceName = 'Mihon App
   expiresDate.setDate(expiresDate.getDate() + 180); // 180 days validity
   const expiresAt = expiresDate.toISOString();
 
-  const admin = privileged();
-  const { error } = await admin.from('mihon_tokens').insert({
-    user_id: userId,
-    token_hash: hash,
-    token_type: 'access',
-    device_name: deviceName,
-    expires_at: expiresAt
-  });
+  const { error } = await safeQuery(
+    db.insert(schema.mihonTokens).values({
+      id: crypto.randomUUID(),
+      userId,
+      tokenHash: hash,
+      tokenType: 'access',
+      deviceName,
+      expiresAt,
+      scopes: '[]',
+      revoked: 0,
+      createdAt: new Date().toISOString()
+    })
+  );
 
   if (error) throw new Error('Não foi possível registrar o token.');
   return { token, expiresAt };

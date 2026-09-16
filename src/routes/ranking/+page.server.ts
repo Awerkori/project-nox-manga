@@ -1,4 +1,8 @@
 import { safeDbQuery } from '$lib/server/resilience';
+import { db } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
+import { eq, and, gt, desc } from 'drizzle-orm';
+import { safeQuery } from '$lib/server/db/safe';
 
 type RankingCache = {
   timestamp: number;
@@ -24,13 +28,22 @@ export const load = async ({ locals, setHeaders }) => {
   }
 
   const res = await safeDbQuery(
-    locals.db
-      .from('members')
-      .select('id,username,display_name,xp,avatar_id,created_at,equipped_title_id,equipped_badge_id')
-      .eq('is_test', false)
-      .gt('xp', 0)
-      .order('xp', { ascending: false })
-      .limit(50),
+    safeQuery(
+      db.select({
+        id: schema.members.id,
+        username: schema.members.username,
+        display_name: schema.members.displayName,
+        xp: schema.members.xp,
+        avatar_id: schema.members.avatarId,
+        created_at: schema.members.createdAt,
+        equipped_title_id: schema.members.equippedTitleId,
+        equipped_badge_id: schema.members.equippedBadgeId
+      })
+      .from(schema.members)
+      .where(and(eq(schema.members.isTest, 0), gt(schema.members.xp, 0)))
+      .orderBy(desc(schema.members.xp))
+      .limit(50)
+    ),
     1200,
     'ranking_members'
   );
@@ -61,4 +74,3 @@ export const load = async ({ locals, setHeaders }) => {
     isStale: false
   };
 };
-

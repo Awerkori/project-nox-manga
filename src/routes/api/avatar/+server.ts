@@ -1,9 +1,14 @@
 import { json, error } from '@sveltejs/kit';
-import { member, privileged } from '$lib/server/db';
+import { db } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+import { safeQuery } from '$lib/server/db/safe';
 import { storeImage, RateLimitError } from '$lib/server/media';
 
 export const POST = async ({ request, locals }) => {
-  const userId = member(locals);
+  const userId = locals.user?.id;
+  if (!userId) error(401, 'Não autorizado');
+
   const formData = await request.formData();
   const file = formData.get('file');
   if (!file || !(file instanceof Blob)) error(400, 'Selecione uma imagem.');
@@ -31,10 +36,11 @@ export const POST = async ({ request, locals }) => {
     throw err;
   }
 
-  const { error: problem } = await privileged()
-    .from('members')
-    .update({ avatar_id: image.id, avatar_crop: crop })
-    .eq('id', userId);
+  const { error: problem } = await safeQuery(
+    db.update(schema.members)
+      .set({ avatar_id: image.id, avatar_crop: crop })
+      .where(eq(schema.members.id, userId))
+  );
 
   if (problem) {
     console.error('API_AVATAR_MEMBER_UPDATE_ERROR:', problem);

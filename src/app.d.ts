@@ -1,17 +1,19 @@
-import type { SupabaseClient, User } from '@supabase/supabase-js';
-import type { Database } from '$lib/database.types';
-export type AuthState = 'ANONYMOUS' | 'AUTH_PENDING' | 'AUTHENTICATED' | 'AUTH_ERROR';
+import type { Session, User } from "better-auth";
 
 declare global {
   namespace App {
     interface Locals {
-      db: SupabaseClient<Database>;
       user: User | null;
+      session: Session | null;
       role: string | null;
-      authState: AuthState;
-      authError?: string;
-      sessionCache?: any;
+      profile: any | null;
+      userScans: any[];
+      unread: number;
     }
+    // interface Error {}
+    // interface PageData {}
+    // interface Platform {}
   }
 }
+
 export {};
