@@ -22,9 +22,16 @@
     "prebuild": "node scripts/retain-client-assets.mjs save"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@libsql/client-wasm": "^0.18.0",
     "@lucide/svelte": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "better-auth": "^1.7.5",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "fflate": "latest",
     "zod": "latest"
   },
