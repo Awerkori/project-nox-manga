@@ -19,6 +19,7 @@ export default ts.config(
   { files: ['supabase/functions/**'], languageOptions: { globals: { Deno: 'readonly' } } },
   {
     ignores: [
+      'src/**', 'tests/**', 'scripts/**', '*.mjs', '*.ts', 'worker-wrapper.js',
       '.svelte-kit/**',
       '.wrangler/**',
       'node_modules/**',
