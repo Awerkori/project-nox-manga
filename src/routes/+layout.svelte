@@ -246,7 +246,10 @@
               class="avatar-btn"
               aria-label="Menu do usuário"
               aria-expanded={userMenuOpen}
-              onclick={() => (userMenuOpen = !userMenuOpen)}
+              onclick={(e) => {
+                e.stopPropagation();
+                userMenuOpen = !userMenuOpen;
+              }}
             >
               <UserAvatar
                 avatarId={data.profile.avatar_id}
