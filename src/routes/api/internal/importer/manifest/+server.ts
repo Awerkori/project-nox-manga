@@ -1,5 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, asc } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   const workId = url.searchParams.get('workId');
@@ -12,11 +14,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     return json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { data: chapters, error } = await locals.db
-    .from('importer_chapter_manifest')
-    .select('*')
-    .eq('work_id', workId)
-    .order('chapter_sort_key', { ascending: true });
+  const { data: chapters, error } = await safeQuery(
+    db.select()
+      .from(schema.importerChapterManifest)
+      .where(eq(schema.importerChapterManifest.workId, workId))
+      .orderBy(asc(schema.importerChapterManifest.chapterSortKey))
+  );
 
   if (error) {
     return json({ error: error.message }, { status: 500 });

@@ -34,13 +34,13 @@
 
   let filteredEntries = $derived(
     glossary.filter((item: any) => {
-      if (selectedWorkId !== 'ALL' && item.work_id !== selectedWorkId) return false;
+      if (selectedWorkId !== 'ALL' && item.workId !== selectedWorkId) return false;
       if (categoryFilter !== 'ALL' && item.category !== categoryFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
-          item.source_term.toLowerCase().includes(q) ||
-          item.preferred_translation.toLowerCase().includes(q) ||
+          item.sourceTerm.toLowerCase().includes(q) ||
+          item.preferredTranslation.toLowerCase().includes(q) ||
           (item.notes && item.notes.toLowerCase().includes(q))
         );
       }
@@ -60,9 +60,9 @@
 
   function openEditModal(entry: any) {
     editingEntry = entry;
-    formWorkId = entry.work_id;
-    formSourceTerm = entry.source_term;
-    formPreferredTranslation = entry.preferred_translation;
+    formWorkId = entry.workId;
+    formSourceTerm = entry.sourceTerm;
+    formPreferredTranslation = entry.preferredTranslation;
     formCategory = entry.category || 'Personagem';
     formNotes = entry.notes || '';
     showModal = true;
@@ -140,7 +140,7 @@
   {:else}
     <div class="terms-grid">
       {#each filteredEntries as entry}
-        {@const work = works.find((w: any) => w.id === entry.work_id)}
+        {@const work = works.find((w: any) => w.id === entry.workId)}
         <div class="term-card">
           <div class="card-top">
             <span class="badge-cat">{entry.category || 'Geral'}</span>
@@ -180,11 +180,11 @@
           <div class="card-terms">
             <div class="term-row">
               <span class="label">Original / Raw:</span>
-              <span class="val raw">{entry.source_term}</span>
+              <span class="val raw">{entry.sourceTerm}</span>
             </div>
             <div class="term-row">
               <span class="label">Tradução Padrão:</span>
-              <span class="val trans">{entry.preferred_translation}</span>
+              <span class="val trans">{entry.preferredTranslation}</span>
             </div>
           </div>
 

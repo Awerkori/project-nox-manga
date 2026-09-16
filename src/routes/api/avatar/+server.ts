@@ -38,7 +38,7 @@ export const POST = async ({ request, locals }) => {
 
   const { error: problem } = await safeQuery(
     db.update(schema.members)
-      .set({ avatar_id: image.id, avatar_crop: crop })
+      .set({avatarId: image.id, avatarCrop: crop})
       .where(eq(schema.members.id, userId))
   );
 
@@ -47,5 +47,5 @@ export const POST = async ({ request, locals }) => {
     error(500, 'Não foi possível atualizar seu avatar.');
   }
 
-  return json({ ...image, avatar_crop: crop });
+  return json({...image, avatarCrop: crop});
 };

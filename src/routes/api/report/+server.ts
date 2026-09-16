@@ -1,5 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, and, gte, inArray, count } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) {
@@ -25,35 +27,39 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   // Rate limit / cooldown: max 6 reports in 10 minutes per user
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const { count: recentCount } = await locals.db
-    .from('reports')
-    .select('id', { count: 'exact', head: true })
-    .eq('reporter_id', locals.user.id)
-    .gte('created_at', tenMinutesAgo);
+  
+  const { data: countData } = await safeQuery(
+    db.select({ value: count() })
+      .from(schema.reports)
+      .where(and(
+        eq(schema.reports.reporterId, locals.user.id),
+        gte(schema.reports.createdAt, tenMinutesAgo)
+      ))
+  );
 
-  if ((recentCount || 0) >= 6) {
+  if ((countData?.[0]?.value || 0) >= 6) {
     throw error(429, 'Limite de denúncias atingido. Aguarde alguns minutos antes de enviar outro reporte.');
   }
 
   // Anti-spam check: check if a pending report already exists from this user for this target
-  let existingCheck = locals.db
-    .from('reports')
-    .select('id')
-    .eq('reporter_id', locals.user.id)
-    .eq('target_type', targetType)
-    .in('status', ['NOVO', 'EM_ANALISE']);
+  const conditions = [
+    eq(schema.reports.reporterId, locals.user.id),
+    eq(schema.reports.targetType, targetType),
+    inArray(schema.reports.status, ['NOVO', 'EM_ANALISE'])
+  ];
 
-  if (targetType === 'WORK' && workId) {
-    existingCheck = existingCheck.eq('work_id', workId);
-  } else if (targetType === 'CHAPTER' && chapterId) {
-    existingCheck = existingCheck.eq('chapter_id', chapterId);
-  } else if (targetType === 'COMMENT' && commentId) {
-    existingCheck = existingCheck.eq('comment_id', commentId);
-  } else if (targetType === 'USER' && targetUserId) {
-    existingCheck = existingCheck.eq('target_user_id', targetUserId);
-  }
+  if (targetType === 'WORK' && workId) conditions.push(eq(schema.reports.workId, workId));
+  else if (targetType === 'CHAPTER' && chapterId) conditions.push(eq(schema.reports.chapterId, chapterId));
+  else if (targetType === 'COMMENT' && commentId) conditions.push(eq(schema.reports.commentId, commentId));
+  else if (targetType === 'USER' && targetUserId) conditions.push(eq(schema.reports.targetUserId, targetUserId));
 
-  const { data: existing } = await existingCheck.maybeSingle();
+  const { data: existing } = await safeQuerySingle(
+    db.select({ id: schema.reports.id })
+      .from(schema.reports)
+      .where(and(...conditions))
+      .limit(1)
+  );
+
   if (existing) {
     return json({
       ok: true,
@@ -62,21 +68,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     });
   }
 
-  const { data: inserted, error: insertError } = await locals.db
-    .from('reports')
-    .insert({
-      reporter_id: locals.user.id,
-      target_type: targetType,
-      work_id: workId || null,
-      chapter_id: chapterId || null,
-      comment_id: commentId || null,
-      target_user_id: targetUserId || null,
-      reason: cleanReason,
-      details: cleanDetails || null,
-      status: 'NOVO'
-    })
-    .select('id')
-    .single();
+  const newId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const { data: inserted, error: insertError } = await safeQuerySingle(
+    db.insert(schema.reports)
+      .values({
+        id: newId,
+        reporterId: locals.user.id,
+        targetType: targetType,
+        workId: workId || null,
+        chapterId: chapterId || null,
+        commentId: commentId || null,
+        targetUserId: targetUserId || null,
+        reason: cleanReason,
+        details: cleanDetails || null,
+        status: 'NOVO',
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning({ id: schema.reports.id })
+  );
 
   if (insertError) {
     throw error(500, 'Erro ao registrar denúncia: ' + insertError.message);

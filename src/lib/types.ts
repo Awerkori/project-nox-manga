@@ -1,5 +1,4 @@
-export type Work = {
-  id: string;
+export type Work = {id: string;
   slug: string;
   title: string;
   aliases: string[];
@@ -10,15 +9,14 @@ export type Work = {
   kind: string;
   status: string;
   year: number | null;
-  age_rating: number;
+  ageRating: number;
   published: boolean;
   featured: boolean;
-  cover_id: string | null;
-  updated_at: string;
-  created_at: string;
-  content_rating?: string;
-  views_total?: number;
-};
+  coverId: string | null;
+  updatedAt: string;
+  createdAt: string;
+  contentRating?: string;
+  viewsTotal?: number;};
 export const statusLabels: Record<string, string> = {
   ONGOING: 'Em andamento',
   COMPLETED: 'Concluído',

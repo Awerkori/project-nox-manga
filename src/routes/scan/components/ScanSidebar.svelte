@@ -95,7 +95,7 @@
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
-            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assignedTo) {
               counts[cSt.slug]++;
             }
           }
@@ -132,8 +132,8 @@
     const set = new Set<string>();
     if (Array.isArray(seenStages)) {
       for (const s of seenStages) {
-        if (s?.chapter_stage_id) {
-          set.add(`${s.chapter_stage_id}:${s.availability_version ?? 1}`);
+        if (s?.chapterStageId) {
+          set.add(`${s.chapterStageId}:${s.availabilityVersion ?? 1}`);
         }
       }
     }
@@ -149,12 +149,12 @@
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
-            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assignedTo) {
               if (userHoldsRoleForStage(cSt.slug)) {
-                if (matchesStageSlug(cSt.slug, 'revisor_qc') && cs.qc_assignee_id && cs.qc_assignee_id !== currentUserId) {
+                if (matchesStageSlug(cSt.slug, 'revisor_qc') && cs.qcAssigneeId && cs.qcAssigneeId !== currentUserId) {
                   continue;
                 }
-                const key = `${cs.id}:${cs.availability_version ?? 1}`;
+                const key = `${cs.id}:${cs.availabilityVersion ?? 1}`;
                 if (!seenStageMap.has(key)) {
                   counts[cSt.slug]++;
                 }
@@ -226,8 +226,8 @@
   <div class="sidebar-header">
     <div class="scan-brand-lockup">
       <div class="scan-avatar">
-        {#if currentScan?.logo_id}
-          <img src="/media/{currentScan.logo_id}" alt="" class="scan-logo-img" />
+        {#if currentScan?.logoId}
+          <img src="/media/{currentScan.logoId}" alt="" class="scan-logo-img" />
         {:else}
           <div class="scan-logo-fallback">
             {(currentScan?.name || 'S').slice(0, 2).toUpperCase()}

@@ -37,7 +37,7 @@ export async function safeDbQuery<T>(
         console.warn(`[ERROR] dependency=${dependency} operation=${operation} error=${res.error?.message || res.error}`);
         return {
           data: null,
-          error: res.error,
+          error: res.error as any,
           status: 'ERROR',
           isDegraded: true
         };

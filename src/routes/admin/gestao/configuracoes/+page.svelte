@@ -271,7 +271,7 @@
             </div>
             <span class="status-pill connected">
               <span class="dot-connected"></span>
-              {data.storageShards.filter(s => s.enabled && s.write_status === 'HEALTHY').length}/{data.storageShards.length} Shards Saudáveis
+              {data.storageShards.filter(s => s.enabled && s.writeStatus === 'HEALTHY').length}/{data.storageShards.length} Shards Saudáveis
             </span>
           </div>
           <p class="section-desc">
@@ -299,34 +299,34 @@
                   <tr>
                     <td>
                       <div class="shard-name-cell">
-                        <strong class="shard-name">{shard.display_name}</strong>
+                        <strong class="shard-name">{shard.displayName}</strong>
                         {#if shard.reserved}
                           <span class="badge-reserved">Reservado</span>
                         {/if}
                       </div>
                     </td>
                     <td>
-                      <span class="pool-tag">{data.storagePools.find(p => p.id === shard.pool_id)?.display_name || 'Pool'}</span>
+                      <span class="pool-tag">{data.storagePools.find(p => p.id === shard.poolId)?.displayName || 'Pool'}</span>
                     </td>
                     <td>
                       <div class="bot-info-cell">
-                        <span class="bot-name-tag">{shard.bot_label || shard.bot_reference}</span>
+                        <span class="bot-name-tag">{shard.bot_label || shard.botReference}</span>
                       </div>
                     </td>
-                    <td><code class="code-ref">{shard.channel_id}</code></td>
+                    <td><code class="code-ref">{shard.channelId}</code></td>
                     <td><span class="uploads-count">{shard.recent_uploads || 0} pág</span></td>
                     <td><span class="share-cell">{shard.recent_share_percent || '0.0%'}</span></td>
                     <td>
-                      <span class="status-chip {shard.write_status.toLowerCase()}">
-                        {shard.write_status}
+                      <span class="status-chip {shard.writeStatus.toLowerCase()}">
+                        {shard.writeStatus}
                       </span>
                     </td>
                     <td>
-                      <span class="status-chip {shard.read_status.toLowerCase()}">
-                        {shard.read_status}
+                      <span class="status-chip {shard.readStatus.toLowerCase()}">
+                        {shard.readStatus}
                       </span>
                     </td>
-                    <td><span class="connections-count">{shard.active_uploads} ativos</span></td>
+                    <td><span class="connections-count">{shard.activeUploads} ativos</span></td>
                     <td><span class="weight-cell">{shard.weight}</span></td>
                   </tr>
                 {/each}

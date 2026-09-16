@@ -33,29 +33,29 @@
   let memberWorkload = $derived.by(() => {
     return (team || []).map((m: any, idx: number) => {
       const u = m.members || m.member;
-      const uid = m.user_id || u?.id || m.id || `member-${idx}`;
-      const mTasks = tasks.filter((t: any) => t.assigned_to === uid || t.assigned_to === m.user_id);
+      const uid = m.userId || u?.id || m.id || `member-${idx}`;
+      const mTasks = tasks.filter((t: any) => t.assignedTo === uid || t.assignedTo === m.userId);
       const activeTasks = mTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'BLOCKED'].includes(t.status));
       const urgentTasks = activeTasks.filter((t: any) => t.priority === 'URGENT');
       const completedTasks = mTasks.filter((t: any) => t.status === 'DONE');
 
       // Member positions
       const mPositions = (memberPositions || [])
-        .filter((mp: any) => mp.user_id === uid || mp.user_id === m.user_id)
+        .filter((mp: any) => mp.userId === uid || mp.userId === m.userId)
         .map((mp: any) => mp.positions?.name)
         .filter(Boolean);
 
-      const avail = m.availability_status || 'ACTIVE';
+      const avail = m.availabilityStatus || 'ACTIVE';
 
       return {
         id: uid,
-        displayName: u?.display_name || u?.username || 'Membro',
+        displayName: u?.displayName || u?.username || 'Membro',
         username: u?.username || '',
-        avatarId: u?.avatar_id,
+        avatarId: u?.avatarId,
         role: m.role,
         positions: mPositions,
         availability: avail,
-        availabilityMsg: m.availability_message,
+        availabilityMsg: m.availabilityMessage,
         activeTasksCount: activeTasks.length,
         urgentTasksCount: urgentTasks.length,
         completedTasksCount: completedTasks.length,
@@ -64,8 +64,8 @@
     });
   });
 
-  let totalActive = $derived(team.filter((m: any) => (m.availability_status || 'ACTIVE') === 'ACTIVE').length);
-  let totalHiatus = $derived(team.filter((m: any) => m.availability_status === 'HIATUS').length);
+  let totalActive = $derived(team.filter((m: any) => (m.availabilityStatus || 'ACTIVE') === 'ACTIVE').length);
+  let totalHiatus = $derived(team.filter((m: any) => m.availabilityStatus === 'HIATUS').length);
   let totalTasksInProgress = $derived(tasks.filter((t: any) => ['TODO', 'IN_PROGRESS'].includes(t.status)).length);
 </script>
 

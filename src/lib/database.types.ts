@@ -12,572 +12,448 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  public: {
-    Tables: {
+  public: {Tables: {
       access_roles: {
         Row: {
           role: string
           suspended: boolean
-          user_id: string
-        }
-        Insert: {
-          role?: string
+          userId: string}
+        Insert: {role?: string
           suspended?: boolean
-          user_id: string
-        }
-        Update: {
-          role?: string
+          userId: string}
+        Update: {role?: string
           suspended?: boolean
-          user_id?: string
-        }
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "access_roles_user_id_fkey"
-            columns: ["user_id"]
+          {foreignKeyName: "access_roles_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: true
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      achievements: {
-        Row: {
-          badge_color: string
+      achievements: {Row: {
+          badgeColor: string
           category: string
-          condition_type: string
-          condition_value: number
-          created_at: string
+          conditionType: string
+          conditionValue: number
+          createdAt: string
           description: string
           icon: string
           id: string
-          is_secret: boolean
-          order_index: number
+          isSecret: boolean
+          orderIndex: number
           rarity: string
-          reward_item_id: string | null
+          rewardItemId: string | null
           title: string
-          xp_reward: number
-        }
-        Insert: {
-          badge_color?: string
+          xpReward: number}
+        Insert: {badgeColor?: string
           category: string
-          condition_type: string
-          condition_value?: number
-          created_at?: string
+          conditionType: string
+          conditionValue?: number
+          createdAt?: string
           description: string
           icon?: string
           id: string
-          is_secret?: boolean
-          order_index?: number
+          isSecret?: boolean
+          orderIndex?: number
           rarity?: string
-          reward_item_id?: string | null
+          rewardItemId?: string | null
           title: string
-          xp_reward?: number
-        }
-        Update: {
-          badge_color?: string
+          xpReward?: number}
+        Update: {badgeColor?: string
           category?: string
-          condition_type?: string
-          condition_value?: number
-          created_at?: string
+          conditionType?: string
+          conditionValue?: number
+          createdAt?: string
           description?: string
           icon?: string
           id?: string
-          is_secret?: boolean
-          order_index?: number
+          isSecret?: boolean
+          orderIndex?: number
           rarity?: string
-          reward_item_id?: string | null
+          rewardItemId?: string | null
           title?: string
-          xp_reward?: number
-        }
+          xpReward?: number}
         Relationships: []
       }
-      audit_log: {
-        Row: {
+      audit_log: {Row: {
           action: string
-          actor_id: string | null
-          created_at: string
+          actorId: string | null
+          createdAt: string
           id: number
           metadata: Json
-          target_id: string | null
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          created_at?: string
+          targetId: string | null}
+        Insert: {action: string
+          actorId?: string | null
+          createdAt?: string
           id?: never
           metadata?: Json
-          target_id?: string | null
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          created_at?: string
+          targetId?: string | null}
+        Update: {action?: string
+          actorId?: string | null
+          createdAt?: string
           id?: never
           metadata?: Json
-          target_id?: string | null
-        }
+          targetId?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "audit_log_actor_id_fkey"
-            columns: ["actor_id"]
+          {foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actorId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      chapter_reactions: {
-        Row: {
-          chapter_id: string
-          created_at: string
+      chapter_reactions: {Row: {
+          chapterId: string
+          createdAt: string
           emoji: string
           id: string
-          visitor_id: string
-        }
-        Insert: {
-          chapter_id: string
-          created_at?: string
+          visitorId: string}
+        Insert: {chapterId: string
+          createdAt?: string
           emoji: string
           id?: string
-          visitor_id: string
-        }
-        Update: {
-          chapter_id?: string
-          created_at?: string
+          visitorId: string}
+        Update: {chapterId?: string
+          createdAt?: string
           emoji?: string
           id?: string
-          visitor_id?: string
-        }
+          visitorId?: string}
         Relationships: [
-          {
-            foreignKeyName: "chapter_reactions_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "chapter_reactions_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      chapter_scans: {
-        Row: {
-          chapter_id: string
-          created_at: string
-          scan_id: string
-        }
-        Insert: {
-          chapter_id: string
-          created_at?: string
-          scan_id: string
-        }
-        Update: {
-          chapter_id?: string
-          created_at?: string
-          scan_id?: string
-        }
+      chapter_scans: {Row: {
+          chapterId: string
+          createdAt: string
+          scanId: string}
+        Insert: {chapterId: string
+          createdAt?: string
+          scanId: string}
+        Update: {chapterId?: string
+          createdAt?: string
+          scanId?: string}
         Relationships: [
-          {
-            foreignKeyName: "chapter_scans_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "chapter_scans_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chapter_scans_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "chapter_scans_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      chapter_views: {
-        Row: {
-          anonymous_hash: string | null
-          chapter_id: string
+      chapter_views: {Row: {
+          anonymousHash: string | null
+          chapterId: string
           id: string
           origin: string
-          user_id: string | null
-          viewed_at: string
-          work_id: string
-        }
-        Insert: {
-          anonymous_hash?: string | null
-          chapter_id: string
+          userId: string | null
+          viewedAt: string
+          workId: string}
+        Insert: {anonymousHash?: string | null
+          chapterId: string
           id?: string
           origin?: string
-          user_id?: string | null
-          viewed_at?: string
-          work_id: string
-        }
-        Update: {
-          anonymous_hash?: string | null
-          chapter_id?: string
+          userId?: string | null
+          viewedAt?: string
+          workId: string}
+        Update: {anonymousHash?: string | null
+          chapterId?: string
           id?: string
           origin?: string
-          user_id?: string | null
-          viewed_at?: string
-          work_id?: string
-        }
+          userId?: string | null
+          viewedAt?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "chapter_views_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "chapter_views_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chapter_views_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "chapter_views_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chapter_views_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "chapter_views_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      chapters: {
-        Row: {
-          created_at: string
+      chapters: {Row: {
+          createdAt: string
           id: string
           number: number
           origin: string
-          published_at: string | null
-          source_id: string | null
+          publishedAt: string | null
+          sourceId: string | null
           title: string
-          views_total: number
-          work_id: string
-        }
-        Insert: {
-          created_at?: string
+          viewsTotal: number
+          workId: string}
+        Insert: {createdAt?: string
           id?: string
           number: number
           origin?: string
-          published_at?: string | null
-          source_id?: string | null
+          publishedAt?: string | null
+          sourceId?: string | null
           title?: string
-          views_total?: number
-          work_id: string
-        }
-        Update: {
-          created_at?: string
+          viewsTotal?: number
+          workId: string}
+        Update: {createdAt?: string
           id?: string
           number?: number
           origin?: string
-          published_at?: string | null
-          source_id?: string | null
+          publishedAt?: string | null
+          sourceId?: string | null
           title?: string
-          views_total?: number
-          work_id?: string
-        }
+          viewsTotal?: number
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "chapters_work_id_fkey"
-            columns: ["work_id"]
+          {foreignKeyName: "chapters_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      comment_likes: {
-        Row: {
-          comment_id: string
-          user_id: string
-        }
-        Insert: {
-          comment_id: string
-          user_id: string
-        }
-        Update: {
-          comment_id?: string
-          user_id?: string
-        }
+      comment_likes: {Row: {
+          commentId: string
+          userId: string}
+        Insert: {commentId: string
+          userId: string}
+        Update: {commentId?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "comment_likes_comment_id_fkey"
-            columns: ["comment_id"]
+          {foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["commentId"]
             isOneToOne: false
             referencedRelation: "comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comment_likes_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "comment_likes_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      comment_mentions: {
-        Row: {
-          comment_id: string
-          created_at: string
-          mentioned_user_id: string
-        }
-        Insert: {
-          comment_id: string
-          created_at?: string
-          mentioned_user_id: string
-        }
-        Update: {
-          comment_id?: string
-          created_at?: string
-          mentioned_user_id?: string
-        }
+      comment_mentions: {Row: {
+          commentId: string
+          createdAt: string
+          mentionedUserId: string}
+        Insert: {commentId: string
+          createdAt?: string
+          mentionedUserId: string}
+        Update: {commentId?: string
+          createdAt?: string
+          mentionedUserId?: string}
         Relationships: [
-          {
-            foreignKeyName: "comment_mentions_comment_id_fkey"
-            columns: ["comment_id"]
+          {foreignKeyName: "comment_mentions_comment_id_fkey"
+            columns: ["commentId"]
             isOneToOne: false
             referencedRelation: "comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comment_mentions_mentioned_user_id_fkey"
-            columns: ["mentioned_user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "comment_mentions_mentioned_user_id_fkey"
+            columns: ["mentionedUserId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      comments: {
-        Row: {
+      comments: {Row: {
           body: string
-          chapter_id: string | null
-          created_at: string
+          chapterId: string | null
+          createdAt: string
           id: string
-          parent_id: string | null
+          parentId: string | null
           removed: boolean
-          updated_at: string
-          user_id: string
-          work_id: string
-        }
-        Insert: {
-          body: string
-          chapter_id?: string | null
-          created_at?: string
+          updatedAt: string
+          userId: string
+          workId: string}
+        Insert: {body: string
+          chapterId?: string | null
+          createdAt?: string
           id?: string
-          parent_id?: string | null
+          parentId?: string | null
           removed?: boolean
-          updated_at?: string
-          user_id: string
-          work_id: string
-        }
-        Update: {
-          body?: string
-          chapter_id?: string | null
-          created_at?: string
+          updatedAt?: string
+          userId: string
+          workId: string}
+        Update: {body?: string
+          chapterId?: string | null
+          createdAt?: string
           id?: string
-          parent_id?: string | null
+          parentId?: string | null
           removed?: boolean
-          updated_at?: string
-          user_id?: string
-          work_id?: string
-        }
+          updatedAt?: string
+          userId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "comments_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "comments_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comments_parent_id_fkey"
-            columns: ["parent_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parentId"]
             isOneToOne: false
             referencedRelation: "comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comments_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "comments_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comments_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "comments_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      control_plane_backups: {
-        Row: {
-          backup_id: string
+      control_plane_backups: {Row: {
+          backupId: string
           checksum: string
-          created_at: string
-          data_payload: Json | null
+          createdAt: string
+          dataPayload: Json | null
           id: string
-          record_counts: Json
-          schema_version: string
-        }
-        Insert: {
-          backup_id: string
+          recordCounts: Json
+          schemaVersion: string}
+        Insert: {backupId: string
           checksum: string
-          created_at?: string
-          data_payload?: Json | null
+          createdAt?: string
+          dataPayload?: Json | null
           id?: string
-          record_counts: Json
-          schema_version: string
-        }
-        Update: {
-          backup_id?: string
+          recordCounts: Json
+          schemaVersion: string}
+        Update: {backupId?: string
           checksum?: string
-          created_at?: string
-          data_payload?: Json | null
+          createdAt?: string
+          dataPayload?: Json | null
           id?: string
-          record_counts?: Json
-          schema_version?: string
-        }
+          recordCounts?: Json
+          schemaVersion?: string}
         Relationships: []
       }
-      editor_invites: {
-        Row: {
-          created_at: string
-          created_by: string
-          email: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          email: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          email?: string
-        }
+      editor_invites: {Row: {
+          createdAt: string
+          createdBy: string
+          email: string}
+        Insert: {createdAt?: string
+          createdBy: string
+          email: string}
+        Update: {createdAt?: string
+          createdBy?: string
+          email?: string}
         Relationships: [
-          {
-            foreignKeyName: "editor_invites_created_by_fkey"
-            columns: ["created_by"]
+          {foreignKeyName: "editor_invites_created_by_fkey"
+            columns: ["createdBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_chapter_manifest: {
-        Row: {
-          available_sources: Json
-          chapter_number: number
-          chapter_sort_key: number
-          chapter_title: string | null
+      importer_chapter_manifest: {Row: {
+          availableSources: Json
+          chapterNumber: number
+          chapterSortKey: number
+          chapterTitle: string | null
           id: string
-          last_checked_at: string
-          page_count: number | null
-          selected_source: string | null
+          lastCheckedAt: string
+          pageCount: number | null
+          selectedSource: string | null
           status: string
-          work_id: string
-        }
-        Insert: {
-          available_sources?: Json
-          chapter_number: number
-          chapter_sort_key: number
-          chapter_title?: string | null
+          workId: string}
+        Insert: {availableSources?: Json
+          chapterNumber: number
+          chapterSortKey: number
+          chapterTitle?: string | null
           id?: string
-          last_checked_at?: string
-          page_count?: number | null
-          selected_source?: string | null
+          lastCheckedAt?: string
+          pageCount?: number | null
+          selectedSource?: string | null
           status: string
-          work_id: string
-        }
-        Update: {
-          available_sources?: Json
-          chapter_number?: number
-          chapter_sort_key?: number
-          chapter_title?: string | null
+          workId: string}
+        Update: {availableSources?: Json
+          chapterNumber?: number
+          chapterSortKey?: number
+          chapterTitle?: string | null
           id?: string
-          last_checked_at?: string
-          page_count?: number | null
-          selected_source?: string | null
+          lastCheckedAt?: string
+          pageCount?: number | null
+          selectedSource?: string | null
           status?: string
-          work_id?: string
-        }
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_chapter_manifest_work_id_fkey"
-            columns: ["work_id"]
+          {foreignKeyName: "importer_chapter_manifest_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_chapter_mappings: {
-        Row: {
-          chapter_id: string | null
-          chapter_number: number
-          chapter_sort_key: number | null
-          created_at: string
+      importer_chapter_mappings: {Row: {
+          chapterId: string | null
+          chapterNumber: number
+          chapterSortKey: number | null
+          createdAt: string
           id: string
-          is_gap: boolean
-          is_page_provider: boolean
-          last_error: string | null
-          page_count: number
+          isGap: boolean
+          isPageProvider: boolean
+          lastError: string | null
+          pageCount: number
           source: string
-          source_chapter_id: string
+          sourceChapterId: string
           status: string
-          updated_at: string
-          work_id: string | null
-          work_mapping_id: string
-        }
-        Insert: {
-          chapter_id?: string | null
-          chapter_number: number
-          chapter_sort_key?: number | null
-          created_at?: string
+          updatedAt: string
+          workId: string | null
+          workMappingId: string}
+        Insert: {chapterId?: string | null
+          chapterNumber: number
+          chapterSortKey?: number | null
+          createdAt?: string
           id?: string
-          is_gap?: boolean
-          is_page_provider?: boolean
-          last_error?: string | null
-          page_count?: number
+          isGap?: boolean
+          isPageProvider?: boolean
+          lastError?: string | null
+          pageCount?: number
           source: string
-          source_chapter_id: string
+          sourceChapterId: string
           status?: string
-          updated_at?: string
-          work_id?: string | null
-          work_mapping_id: string
-        }
-        Update: {
-          chapter_id?: string | null
-          chapter_number?: number
-          chapter_sort_key?: number | null
-          created_at?: string
+          updatedAt?: string
+          workId?: string | null
+          workMappingId: string}
+        Update: {chapterId?: string | null
+          chapterNumber?: number
+          chapterSortKey?: number | null
+          createdAt?: string
           id?: string
-          is_gap?: boolean
-          is_page_provider?: boolean
-          last_error?: string | null
-          page_count?: number
+          isGap?: boolean
+          isPageProvider?: boolean
+          lastError?: string | null
+          pageCount?: number
           source?: string
-          source_chapter_id?: string
+          sourceChapterId?: string
           status?: string
-          updated_at?: string
-          work_id?: string | null
-          work_mapping_id?: string
-        }
+          updatedAt?: string
+          workId?: string | null
+          workMappingId?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_chapter_mappings_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "importer_chapter_mappings_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
           {
             foreignKeyName: "importer_chapter_mappings_source_fkey"
             columns: ["source"]
@@ -585,50 +461,40 @@ export type Database = {
             referencedRelation: "importer_sources"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "importer_chapter_mappings_work_id_fkey"
-            columns: ["work_id"]
+          {foreignKeyName: "importer_chapter_mappings_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "importer_chapter_mappings_work_mapping_id_fkey"
-            columns: ["work_mapping_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "importer_chapter_mappings_work_mapping_id_fkey"
+            columns: ["workMappingId"]
             isOneToOne: false
             referencedRelation: "importer_work_mappings"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_checkpoints: {
-        Row: {
-          created_at: string
-          cursor_value: string | null
+      importer_checkpoints: {Row: {
+          createdAt: string
+          cursorValue: string | null
           id: string
-          last_checked_at: string
+          lastCheckedAt: string
           metadata: Json
           source: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          cursor_value?: string | null
+          updatedAt: string}
+        Insert: {createdAt?: string
+          cursorValue?: string | null
           id?: string
-          last_checked_at?: string
+          lastCheckedAt?: string
           metadata?: Json
           source: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          cursor_value?: string | null
+          updatedAt?: string}
+        Update: {createdAt?: string
+          cursorValue?: string | null
           id?: string
-          last_checked_at?: string
+          lastCheckedAt?: string
           metadata?: Json
           source?: string
-          updated_at?: string
-        }
+          updatedAt?: string}
         Relationships: [
           {
             foreignKeyName: "importer_checkpoints_source_fkey"
@@ -639,190 +505,170 @@ export type Database = {
           },
         ]
       }
-      importer_job_metrics: {
-        Row: {
-          chapter_id: string | null
-          chapter_number: number
-          created_at: string
-          db_ms: number
-          download_ms: number
-          duration_ms: number
-          error_message: string | null
+      importer_job_metrics: {Row: {
+          chapterId: string | null
+          chapterNumber: number
+          createdAt: string
+          dbMs: number
+          downloadMs: number
+          durationMs: number
+          errorMessage: string | null
           id: string
-          page_count: number
+          pageCount: number
           source: string
           status: string
-          total_bytes: number
-          upload_ms: number
-          work_id: string | null
-          worker_id: string
-        }
-        Insert: {
-          chapter_id?: string | null
-          chapter_number: number
-          created_at?: string
-          db_ms?: number
-          download_ms?: number
-          duration_ms: number
-          error_message?: string | null
+          totalBytes: number
+          uploadMs: number
+          workId: string | null
+          workerId: string}
+        Insert: {chapterId?: string | null
+          chapterNumber: number
+          createdAt?: string
+          dbMs?: number
+          downloadMs?: number
+          durationMs: number
+          errorMessage?: string | null
           id?: string
-          page_count: number
+          pageCount: number
           source: string
           status: string
-          total_bytes?: number
-          upload_ms?: number
-          work_id?: string | null
-          worker_id: string
-        }
-        Update: {
-          chapter_id?: string | null
-          chapter_number?: number
-          created_at?: string
-          db_ms?: number
-          download_ms?: number
-          duration_ms?: number
-          error_message?: string | null
+          totalBytes?: number
+          uploadMs?: number
+          workId?: string | null
+          workerId: string}
+        Update: {chapterId?: string | null
+          chapterNumber?: number
+          createdAt?: string
+          dbMs?: number
+          downloadMs?: number
+          durationMs?: number
+          errorMessage?: string | null
           id?: string
-          page_count?: number
+          pageCount?: number
           source?: string
           status?: string
-          total_bytes?: number
-          upload_ms?: number
-          work_id?: string | null
-          worker_id?: string
-        }
+          totalBytes?: number
+          uploadMs?: number
+          workId?: string | null
+          workerId?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_job_metrics_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "importer_job_metrics_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "importer_job_metrics_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "importer_job_metrics_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_queue: {
-        Row: {
+      importer_queue: {Row: {
           attempts: number
-          cancel_reason: string | null
-          cancel_requested: boolean
-          cancelled_at: string | null
-          cancelled_by: string | null
-          chapter_sort_key: number | null
-          created_at: string
-          dedupe_key: string
+          cancelReason: string | null
+          cancelRequested: boolean
+          cancelledAt: string | null
+          cancelledBy: string | null
+          chapterSortKey: number | null
+          createdAt: string
+          dedupeKey: string
           id: string
-          last_error: string | null
-          last_error_at: string | null
-          last_recovered_error: string | null
-          lease_expires_at: string | null
-          locked_at: string | null
-          locked_by: string | null
-          max_attempts: number
-          next_run_at: string
-          pause_reason: string | null
-          paused_at: string | null
-          paused_by: string | null
+          lastError: string | null
+          lastErrorAt: string | null
+          lastRecoveredError: string | null
+          leaseExpiresAt: string | null
+          lockedAt: string | null
+          lockedBy: string | null
+          maxAttempts: number
+          nextRunAt: string
+          pauseReason: string | null
+          pausedAt: string | null
+          pausedBy: string | null
           payload: Json
           priority: number
-          progress_current: number | null
-          progress_stage: string | null
-          progress_total: number | null
-          recovered_at: string | null
-          retry_reason: string | null
+          progressCurrent: number | null
+          progressStage: string | null
+          progressTotal: number | null
+          recoveredAt: string | null
+          retryReason: string | null
           source: string
           status: string
-          task_type: string
-          updated_at: string
-        }
-        Insert: {
-          attempts?: number
-          cancel_reason?: string | null
-          cancel_requested?: boolean
-          cancelled_at?: string | null
-          cancelled_by?: string | null
-          chapter_sort_key?: number | null
-          created_at?: string
-          dedupe_key: string
+          taskType: string
+          updatedAt: string}
+        Insert: {attempts?: number
+          cancelReason?: string | null
+          cancelRequested?: boolean
+          cancelledAt?: string | null
+          cancelledBy?: string | null
+          chapterSortKey?: number | null
+          createdAt?: string
+          dedupeKey: string
           id?: string
-          last_error?: string | null
-          last_error_at?: string | null
-          last_recovered_error?: string | null
-          lease_expires_at?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          max_attempts?: number
-          next_run_at?: string
-          pause_reason?: string | null
-          paused_at?: string | null
-          paused_by?: string | null
+          lastError?: string | null
+          lastErrorAt?: string | null
+          lastRecoveredError?: string | null
+          leaseExpiresAt?: string | null
+          lockedAt?: string | null
+          lockedBy?: string | null
+          maxAttempts?: number
+          nextRunAt?: string
+          pauseReason?: string | null
+          pausedAt?: string | null
+          pausedBy?: string | null
           payload?: Json
           priority?: number
-          progress_current?: number | null
-          progress_stage?: string | null
-          progress_total?: number | null
-          recovered_at?: string | null
-          retry_reason?: string | null
+          progressCurrent?: number | null
+          progressStage?: string | null
+          progressTotal?: number | null
+          recoveredAt?: string | null
+          retryReason?: string | null
           source: string
           status?: string
-          task_type: string
-          updated_at?: string
-        }
-        Update: {
-          attempts?: number
-          cancel_reason?: string | null
-          cancel_requested?: boolean
-          cancelled_at?: string | null
-          cancelled_by?: string | null
-          chapter_sort_key?: number | null
-          created_at?: string
-          dedupe_key?: string
+          taskType: string
+          updatedAt?: string}
+        Update: {attempts?: number
+          cancelReason?: string | null
+          cancelRequested?: boolean
+          cancelledAt?: string | null
+          cancelledBy?: string | null
+          chapterSortKey?: number | null
+          createdAt?: string
+          dedupeKey?: string
           id?: string
-          last_error?: string | null
-          last_error_at?: string | null
-          last_recovered_error?: string | null
-          lease_expires_at?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          max_attempts?: number
-          next_run_at?: string
-          pause_reason?: string | null
-          paused_at?: string | null
-          paused_by?: string | null
+          lastError?: string | null
+          lastErrorAt?: string | null
+          lastRecoveredError?: string | null
+          leaseExpiresAt?: string | null
+          lockedAt?: string | null
+          lockedBy?: string | null
+          maxAttempts?: number
+          nextRunAt?: string
+          pauseReason?: string | null
+          pausedAt?: string | null
+          pausedBy?: string | null
           payload?: Json
           priority?: number
-          progress_current?: number | null
-          progress_stage?: string | null
-          progress_total?: number | null
-          recovered_at?: string | null
-          retry_reason?: string | null
+          progressCurrent?: number | null
+          progressStage?: string | null
+          progressTotal?: number | null
+          recoveredAt?: string | null
+          retryReason?: string | null
           source?: string
           status?: string
-          task_type?: string
-          updated_at?: string
-        }
+          taskType?: string
+          updatedAt?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_queue_cancelled_by_fkey"
-            columns: ["cancelled_by"]
+          {foreignKeyName: "importer_queue_cancelled_by_fkey"
+            columns: ["cancelledBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "importer_queue_paused_by_fkey"
-            columns: ["paused_by"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "importer_queue_paused_by_fkey"
+            columns: ["pausedBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
           {
             foreignKeyName: "importer_queue_source_fkey"
             columns: ["source"]
@@ -832,353 +678,305 @@ export type Database = {
           },
         ]
       }
-      importer_sources: {
-        Row: {
-          base_url: string
-          blocked_details: Json
-          blocked_reason: string | null
+      importer_sources: {Row: {
+          baseUrl: string
+          blockedDetails: Json
+          blockedReason: string | null
           config: Json
-          cooldown_until: string | null
-          created_at: string
+          cooldownUntil: string | null
+          createdAt: string
           enabled: boolean
           id: string
-          last_health_check_at: string | null
-          last_sync_at: string | null
+          lastHealthCheckAt: string | null
+          lastSyncAt: string | null
           name: string
-          rate_limit_per_second: number
+          rateLimitPerSecond: number
           status: string
-          sync_interval_minutes: number
-          updated_at: string
-        }
-        Insert: {
-          base_url: string
-          blocked_details?: Json
-          blocked_reason?: string | null
+          syncIntervalMinutes: number
+          updatedAt: string}
+        Insert: {baseUrl: string
+          blockedDetails?: Json
+          blockedReason?: string | null
           config?: Json
-          cooldown_until?: string | null
-          created_at?: string
+          cooldownUntil?: string | null
+          createdAt?: string
           enabled?: boolean
           id: string
-          last_health_check_at?: string | null
-          last_sync_at?: string | null
+          lastHealthCheckAt?: string | null
+          lastSyncAt?: string | null
           name: string
-          rate_limit_per_second?: number
+          rateLimitPerSecond?: number
           status?: string
-          sync_interval_minutes?: number
-          updated_at?: string
-        }
-        Update: {
-          base_url?: string
-          blocked_details?: Json
-          blocked_reason?: string | null
+          syncIntervalMinutes?: number
+          updatedAt?: string}
+        Update: {baseUrl?: string
+          blockedDetails?: Json
+          blockedReason?: string | null
           config?: Json
-          cooldown_until?: string | null
-          created_at?: string
+          cooldownUntil?: string | null
+          createdAt?: string
           enabled?: boolean
           id?: string
-          last_health_check_at?: string | null
-          last_sync_at?: string | null
+          lastHealthCheckAt?: string | null
+          lastSyncAt?: string | null
           name?: string
-          rate_limit_per_second?: number
+          rateLimitPerSecond?: number
           status?: string
-          sync_interval_minutes?: number
-          updated_at?: string
-        }
+          syncIntervalMinutes?: number
+          updatedAt?: string}
         Relationships: []
       }
-      importer_staff_audit: {
-        Row: {
+      importer_staff_audit: {Row: {
           action: string
-          actor_id: string | null
-          created_at: string
+          actorId: string | null
+          createdAt: string
           id: string
           metadata: Json
-          new_state: string | null
-          old_state: string | null
+          newState: string | null
+          oldState: string | null
           reason: string | null
-          target_id: string
-          target_type: string
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          created_at?: string
+          targetId: string
+          targetType: string}
+        Insert: {action: string
+          actorId?: string | null
+          createdAt?: string
           id?: string
           metadata?: Json
-          new_state?: string | null
-          old_state?: string | null
+          newState?: string | null
+          oldState?: string | null
           reason?: string | null
-          target_id: string
-          target_type: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          created_at?: string
+          targetId: string
+          targetType: string}
+        Update: {action?: string
+          actorId?: string | null
+          createdAt?: string
           id?: string
           metadata?: Json
-          new_state?: string | null
-          old_state?: string | null
+          newState?: string | null
+          oldState?: string | null
           reason?: string | null
-          target_id?: string
-          target_type?: string
-        }
+          targetId?: string
+          targetType?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_staff_audit_actor_id_fkey"
-            columns: ["actor_id"]
+          {foreignKeyName: "importer_staff_audit_actor_id_fkey"
+            columns: ["actorId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_staff_requests: {
-        Row: {
-          attempt_count: number
-          cancel_reason: string | null
-          cancelled_at: string | null
-          cancelled_by: string | null
-          created_at: string
+      importer_staff_requests: {Row: {
+          attemptCount: number
+          cancelReason: string | null
+          cancelledAt: string | null
+          cancelledBy: string | null
+          createdAt: string
           id: string
-          last_attempt_at: string | null
-          last_error: string | null
-          next_attempt_at: string | null
-          priority_boost: number
+          lastAttemptAt: string | null
+          lastError: string | null
+          nextAttemptAt: string | null
+          priorityBoost: number
           reason: string | null
-          requested_by: string
+          requestedBy: string
           status: string
-          updated_at: string
-          work_id: string
-        }
-        Insert: {
-          attempt_count?: number
-          cancel_reason?: string | null
-          cancelled_at?: string | null
-          cancelled_by?: string | null
-          created_at?: string
+          updatedAt: string
+          workId: string}
+        Insert: {attemptCount?: number
+          cancelReason?: string | null
+          cancelledAt?: string | null
+          cancelledBy?: string | null
+          createdAt?: string
           id?: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          next_attempt_at?: string | null
-          priority_boost?: number
+          lastAttemptAt?: string | null
+          lastError?: string | null
+          nextAttemptAt?: string | null
+          priorityBoost?: number
           reason?: string | null
-          requested_by: string
+          requestedBy: string
           status?: string
-          updated_at?: string
-          work_id: string
-        }
-        Update: {
-          attempt_count?: number
-          cancel_reason?: string | null
-          cancelled_at?: string | null
-          cancelled_by?: string | null
-          created_at?: string
+          updatedAt?: string
+          workId: string}
+        Update: {attemptCount?: number
+          cancelReason?: string | null
+          cancelledAt?: string | null
+          cancelledBy?: string | null
+          createdAt?: string
           id?: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          next_attempt_at?: string | null
-          priority_boost?: number
+          lastAttemptAt?: string | null
+          lastError?: string | null
+          nextAttemptAt?: string | null
+          priorityBoost?: number
           reason?: string | null
-          requested_by?: string
+          requestedBy?: string
           status?: string
-          updated_at?: string
-          work_id?: string
-        }
+          updatedAt?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_staff_requests_cancelled_by_fkey"
-            columns: ["cancelled_by"]
+          {foreignKeyName: "importer_staff_requests_cancelled_by_fkey"
+            columns: ["cancelledBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "importer_staff_requests_requested_by_fkey"
-            columns: ["requested_by"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "importer_staff_requests_requested_by_fkey"
+            columns: ["requestedBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "importer_staff_requests_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "importer_staff_requests_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_telemetry: {
-        Row: {
-          active_jobs: number
-          array_buffers_mb: number
+      importer_telemetry: {Row: {
+          activeJobs: number
+          arrayBuffersMb: number
           concurrency: number
-          created_at: string
-          cycle_action: string
-          cycle_reason: string | null
-          event_loop_lag_ms: number
-          external_mb: number
-          heap_total_mb: number
-          heap_used_mb: number
+          createdAt: string
+          cycleAction: string
+          cycleReason: string | null
+          eventLoopLagMs: number
+          externalMb: number
+          heapTotalMb: number
+          heapUsedMb: number
           id: string
-          rss_mb: number
-          worker_id: string
-        }
-        Insert: {
-          active_jobs: number
-          array_buffers_mb: number
+          rssMb: number
+          workerId: string}
+        Insert: {activeJobs: number
+          arrayBuffersMb: number
           concurrency: number
-          created_at?: string
-          cycle_action: string
-          cycle_reason?: string | null
-          event_loop_lag_ms: number
-          external_mb: number
-          heap_total_mb: number
-          heap_used_mb: number
+          createdAt?: string
+          cycleAction: string
+          cycleReason?: string | null
+          eventLoopLagMs: number
+          externalMb: number
+          heapTotalMb: number
+          heapUsedMb: number
           id?: string
-          rss_mb: number
-          worker_id: string
-        }
-        Update: {
-          active_jobs?: number
-          array_buffers_mb?: number
+          rssMb: number
+          workerId: string}
+        Update: {activeJobs?: number
+          arrayBuffersMb?: number
           concurrency?: number
-          created_at?: string
-          cycle_action?: string
-          cycle_reason?: string | null
-          event_loop_lag_ms?: number
-          external_mb?: number
-          heap_total_mb?: number
-          heap_used_mb?: number
+          createdAt?: string
+          cycleAction?: string
+          cycleReason?: string | null
+          eventLoopLagMs?: number
+          externalMb?: number
+          heapTotalMb?: number
+          heapUsedMb?: number
           id?: string
-          rss_mb?: number
-          worker_id?: string
-        }
+          rssMb?: number
+          workerId?: string}
         Relationships: []
       }
-      importer_work_health: {
-        Row: {
-          created_at: string
-          first_chapter_number: number | null
+      importer_work_health: {Row: {
+          createdAt: string
+          firstChapterNumber: number | null
           gaps: Json
-          health_status: string
-          last_reconciled_at: string
-          latest_chapter_number: number | null
-          missing_start: boolean
-          providers_summary: Json
-          total_imported_chapters: number
-          total_known_chapters: number
-          unresolved_gaps: Json
-          updated_at: string
-          work_id: string
-        }
-        Insert: {
-          created_at?: string
-          first_chapter_number?: number | null
+          healthStatus: string
+          lastReconciledAt: string
+          latestChapterNumber: number | null
+          missingStart: boolean
+          providersSummary: Json
+          totalImportedChapters: number
+          totalKnownChapters: number
+          unresolvedGaps: Json
+          updatedAt: string
+          workId: string}
+        Insert: {createdAt?: string
+          firstChapterNumber?: number | null
           gaps?: Json
-          health_status: string
-          last_reconciled_at?: string
-          latest_chapter_number?: number | null
-          missing_start?: boolean
-          providers_summary?: Json
-          total_imported_chapters?: number
-          total_known_chapters?: number
-          unresolved_gaps?: Json
-          updated_at?: string
-          work_id: string
-        }
-        Update: {
-          created_at?: string
-          first_chapter_number?: number | null
+          healthStatus: string
+          lastReconciledAt?: string
+          latestChapterNumber?: number | null
+          missingStart?: boolean
+          providersSummary?: Json
+          totalImportedChapters?: number
+          totalKnownChapters?: number
+          unresolvedGaps?: Json
+          updatedAt?: string
+          workId: string}
+        Update: {createdAt?: string
+          firstChapterNumber?: number | null
           gaps?: Json
-          health_status?: string
-          last_reconciled_at?: string
-          latest_chapter_number?: number | null
-          missing_start?: boolean
-          providers_summary?: Json
-          total_imported_chapters?: number
-          total_known_chapters?: number
-          unresolved_gaps?: Json
-          updated_at?: string
-          work_id?: string
-        }
+          healthStatus?: string
+          lastReconciledAt?: string
+          latestChapterNumber?: number | null
+          missingStart?: boolean
+          providersSummary?: Json
+          totalImportedChapters?: number
+          totalKnownChapters?: number
+          unresolvedGaps?: Json
+          updatedAt?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "importer_work_health_work_id_fkey"
-            columns: ["work_id"]
+          {foreignKeyName: "importer_work_health_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: true
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      importer_work_mappings: {
-        Row: {
-          confidence_score: number | null
-          created_at: string
-          freeze_reason: string | null
-          frozen_at: string | null
-          frozen_by: string | null
+      importer_work_mappings: {Row: {
+          confidenceScore: number | null
+          createdAt: string
+          freezeReason: string | null
+          frozenAt: string | null
+          frozenBy: string | null
           id: string
-          is_primary: boolean | null
-          last_synced_at: string | null
-          match_method: string | null
+          isPrimary: boolean | null
+          lastSyncedAt: string | null
+          matchMethod: string | null
           metadata: Json
           source: string
-          source_slug: string
-          source_title: string
-          source_work_id: string
-          sync_status: string
-          updated_at: string
-          work_id: string | null
-        }
-        Insert: {
-          confidence_score?: number | null
-          created_at?: string
-          freeze_reason?: string | null
-          frozen_at?: string | null
-          frozen_by?: string | null
+          sourceSlug: string
+          sourceTitle: string
+          sourceWorkId: string
+          syncStatus: string
+          updatedAt: string
+          workId: string | null}
+        Insert: {confidenceScore?: number | null
+          createdAt?: string
+          freezeReason?: string | null
+          frozenAt?: string | null
+          frozenBy?: string | null
           id?: string
-          is_primary?: boolean | null
-          last_synced_at?: string | null
-          match_method?: string | null
+          isPrimary?: boolean | null
+          lastSyncedAt?: string | null
+          matchMethod?: string | null
           metadata?: Json
           source: string
-          source_slug: string
-          source_title: string
-          source_work_id: string
-          sync_status?: string
-          updated_at?: string
-          work_id?: string | null
-        }
-        Update: {
-          confidence_score?: number | null
-          created_at?: string
-          freeze_reason?: string | null
-          frozen_at?: string | null
-          frozen_by?: string | null
+          sourceSlug: string
+          sourceTitle: string
+          sourceWorkId: string
+          syncStatus?: string
+          updatedAt?: string
+          workId?: string | null}
+        Update: {confidenceScore?: number | null
+          createdAt?: string
+          freezeReason?: string | null
+          frozenAt?: string | null
+          frozenBy?: string | null
           id?: string
-          is_primary?: boolean | null
-          last_synced_at?: string | null
-          match_method?: string | null
+          isPrimary?: boolean | null
+          lastSyncedAt?: string | null
+          matchMethod?: string | null
           metadata?: Json
           source?: string
-          source_slug?: string
-          source_title?: string
-          source_work_id?: string
-          sync_status?: string
-          updated_at?: string
-          work_id?: string | null
-        }
+          sourceSlug?: string
+          sourceTitle?: string
+          sourceWorkId?: string
+          syncStatus?: string
+          updatedAt?: string
+          workId?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "importer_work_mappings_frozen_by_fkey"
-            columns: ["frozen_by"]
+          {foreignKeyName: "importer_work_mappings_frozen_by_fkey"
+            columns: ["frozenBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
           {
             foreignKeyName: "importer_work_mappings_source_fkey"
             columns: ["source"]
@@ -1186,1218 +984,984 @@ export type Database = {
             referencedRelation: "importer_sources"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "importer_work_mappings_work_id_fkey"
-            columns: ["work_id"]
+          {foreignKeyName: "importer_work_mappings_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      library: {
-        Row: {
+      library: {Row: {
           favorite: boolean
           following: boolean
           status: string
-          updated_at: string
-          user_id: string
-          work_id: string
-        }
-        Insert: {
-          favorite?: boolean
+          updatedAt: string
+          userId: string
+          workId: string}
+        Insert: {favorite?: boolean
           following?: boolean
           status?: string
-          updated_at?: string
-          user_id: string
-          work_id: string
-        }
-        Update: {
-          favorite?: boolean
+          updatedAt?: string
+          userId: string
+          workId: string}
+        Update: {favorite?: boolean
           following?: boolean
           status?: string
-          updated_at?: string
-          user_id?: string
-          work_id?: string
-        }
+          updatedAt?: string
+          userId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "library_user_id_fkey"
-            columns: ["user_id"]
+          {foreignKeyName: "library_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "library_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "library_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      likes: {
-        Row: {
-          user_id: string
-          work_id: string
-        }
-        Insert: {
-          user_id: string
-          work_id: string
-        }
-        Update: {
-          user_id?: string
-          work_id?: string
-        }
+      likes: {Row: {
+          userId: string
+          workId: string}
+        Insert: {userId: string
+          workId: string}
+        Update: {userId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "likes_user_id_fkey"
-            columns: ["user_id"]
+          {foreignKeyName: "likes_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "likes_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "likes_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      media: {
-        Row: {
-          access_class: string | null
-          bot_reference: string | null
+      media: {Row: {
+          accessClass: string | null
+          botReference: string | null
           bytes: number
-          chapter_id: string | null
-          created_at: string
-          created_by: string
+          chapterId: string | null
+          createdAt: string
+          createdBy: string
           height: number
           id: string
           mime: string
-          pending_delete_at: string | null
+          pendingDeleteAt: string | null
           provider: string
-          provider_key: string
+          providerKey: string
           purpose: string
-          scan_id: string | null
+          scanId: string | null
           sha256: string
           status: string | null
-          storage_pool_id: string | null
-          storage_ready: boolean
-          storage_shard_id: string | null
-          width: number
-        }
-        Insert: {
-          access_class?: string | null
-          bot_reference?: string | null
+          storagePoolId: string | null
+          storageReady: boolean
+          storageShardId: string | null
+          width: number}
+        Insert: {accessClass?: string | null
+          botReference?: string | null
           bytes: number
-          chapter_id?: string | null
-          created_at?: string
-          created_by: string
+          chapterId?: string | null
+          createdAt?: string
+          createdBy: string
           height: number
           id?: string
           mime: string
-          pending_delete_at?: string | null
+          pendingDeleteAt?: string | null
           provider: string
-          provider_key: string
+          providerKey: string
           purpose?: string
-          scan_id?: string | null
+          scanId?: string | null
           sha256: string
           status?: string | null
-          storage_pool_id?: string | null
-          storage_ready?: boolean
-          storage_shard_id?: string | null
-          width: number
-        }
-        Update: {
-          access_class?: string | null
-          bot_reference?: string | null
+          storagePoolId?: string | null
+          storageReady?: boolean
+          storageShardId?: string | null
+          width: number}
+        Update: {accessClass?: string | null
+          botReference?: string | null
           bytes?: number
-          chapter_id?: string | null
-          created_at?: string
-          created_by?: string
+          chapterId?: string | null
+          createdAt?: string
+          createdBy?: string
           height?: number
           id?: string
           mime?: string
-          pending_delete_at?: string | null
+          pendingDeleteAt?: string | null
           provider?: string
-          provider_key?: string
+          providerKey?: string
           purpose?: string
-          scan_id?: string | null
+          scanId?: string | null
           sha256?: string
           status?: string | null
-          storage_pool_id?: string | null
-          storage_ready?: boolean
-          storage_shard_id?: string | null
-          width?: number
-        }
+          storagePoolId?: string | null
+          storageReady?: boolean
+          storageShardId?: string | null
+          width?: number}
         Relationships: [
-          {
-            foreignKeyName: "media_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "media_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_created_by_fkey"
-            columns: ["created_by"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_created_by_fkey"
+            columns: ["createdBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_storage_pool_id_fkey"
-            columns: ["storage_pool_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_storage_pool_id_fkey"
+            columns: ["storagePoolId"]
             isOneToOne: false
             referencedRelation: "storage_pools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_storage_shard_id_fkey"
-            columns: ["storage_shard_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_storage_shard_id_fkey"
+            columns: ["storageShardId"]
             isOneToOne: false
             referencedRelation: "storage_shards"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      media_locations: {
-        Row: {
-          bot_reference: string
-          channel_id: string | null
-          created_at: string
-          file_id: string
+      media_locations: {Row: {
+          botReference: string
+          channelId: string | null
+          createdAt: string
+          fileId: string
           id: string
-          media_id: string
-          message_id: string | null
+          mediaId: string
+          messageId: string | null
           role: string
           status: string
-          storage_shard_id: string
-        }
-        Insert: {
-          bot_reference?: string
-          channel_id?: string | null
-          created_at?: string
-          file_id: string
+          storageShardId: string}
+        Insert: {botReference?: string
+          channelId?: string | null
+          createdAt?: string
+          fileId: string
           id?: string
-          media_id: string
-          message_id?: string | null
+          mediaId: string
+          messageId?: string | null
           role?: string
           status?: string
-          storage_shard_id: string
-        }
-        Update: {
-          bot_reference?: string
-          channel_id?: string | null
-          created_at?: string
-          file_id?: string
+          storageShardId: string}
+        Update: {botReference?: string
+          channelId?: string | null
+          createdAt?: string
+          fileId?: string
           id?: string
-          media_id?: string
-          message_id?: string | null
+          mediaId?: string
+          messageId?: string | null
           role?: string
           status?: string
-          storage_shard_id?: string
-        }
+          storageShardId?: string}
         Relationships: [
-          {
-            foreignKeyName: "media_locations_storage_shard_id_fkey"
-            columns: ["storage_shard_id"]
+          {foreignKeyName: "media_locations_storage_shard_id_fkey"
+            columns: ["storageShardId"]
             isOneToOne: false
             referencedRelation: "storage_shards"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      media_records: {
-        Row: {
-          access_class: string
+      media_records: {Row: {
+          accessClass: string
           backend: string
-          bot_reference: string
-          channel_id: string | null
-          chapter_id: string | null
+          botReference: string
+          channelId: string | null
+          chapterId: string | null
           checksum: string | null
-          created_at: string
-          file_id: string | null
+          createdAt: string
+          fileId: string | null
           id: string
-          message_id: string | null
-          mime_type: string
-          pending_delete_at: string | null
+          messageId: string | null
+          mimeType: string
+          pendingDeleteAt: string | null
           purpose: string
-          scan_id: string | null
+          scanId: string | null
           size: number
           status: string
-          storage_pool_id: string | null
-          storage_shard_id: string | null
-          unique_file_id: string | null
-          uploaded_by: string | null
-          work_id: string | null
-        }
-        Insert: {
-          access_class?: string
+          storagePoolId: string | null
+          storageShardId: string | null
+          uniqueFileId: string | null
+          uploadedBy: string | null
+          workId: string | null}
+        Insert: {accessClass?: string
           backend?: string
-          bot_reference?: string
-          channel_id?: string | null
-          chapter_id?: string | null
+          botReference?: string
+          channelId?: string | null
+          chapterId?: string | null
           checksum?: string | null
-          created_at?: string
-          file_id?: string | null
+          createdAt?: string
+          fileId?: string | null
           id: string
-          message_id?: string | null
-          mime_type: string
-          pending_delete_at?: string | null
+          messageId?: string | null
+          mimeType: string
+          pendingDeleteAt?: string | null
           purpose: string
-          scan_id?: string | null
+          scanId?: string | null
           size?: number
           status?: string
-          storage_pool_id?: string | null
-          storage_shard_id?: string | null
-          unique_file_id?: string | null
-          uploaded_by?: string | null
-          work_id?: string | null
-        }
-        Update: {
-          access_class?: string
+          storagePoolId?: string | null
+          storageShardId?: string | null
+          uniqueFileId?: string | null
+          uploadedBy?: string | null
+          workId?: string | null}
+        Update: {accessClass?: string
           backend?: string
-          bot_reference?: string
-          channel_id?: string | null
-          chapter_id?: string | null
+          botReference?: string
+          channelId?: string | null
+          chapterId?: string | null
           checksum?: string | null
-          created_at?: string
-          file_id?: string | null
+          createdAt?: string
+          fileId?: string | null
           id?: string
-          message_id?: string | null
-          mime_type?: string
-          pending_delete_at?: string | null
+          messageId?: string | null
+          mimeType?: string
+          pendingDeleteAt?: string | null
           purpose?: string
-          scan_id?: string | null
+          scanId?: string | null
           size?: number
           status?: string
-          storage_pool_id?: string | null
-          storage_shard_id?: string | null
-          unique_file_id?: string | null
-          uploaded_by?: string | null
-          work_id?: string | null
-        }
+          storagePoolId?: string | null
+          storageShardId?: string | null
+          uniqueFileId?: string | null
+          uploadedBy?: string | null
+          workId?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "media_records_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "media_records_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_records_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_records_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_records_storage_pool_id_fkey"
-            columns: ["storage_pool_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_records_storage_pool_id_fkey"
+            columns: ["storagePoolId"]
             isOneToOne: false
             referencedRelation: "storage_pools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_records_storage_shard_id_fkey"
-            columns: ["storage_shard_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_records_storage_shard_id_fkey"
+            columns: ["storageShardId"]
             isOneToOne: false
             referencedRelation: "storage_shards"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "media_records_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "media_records_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      member_achievements: {
-        Row: {
-          achievement_id: string
-          unlocked_at: string
-          user_id: string
-        }
-        Insert: {
-          achievement_id: string
-          unlocked_at?: string
-          user_id: string
-        }
-        Update: {
-          achievement_id?: string
-          unlocked_at?: string
-          user_id?: string
-        }
+      member_achievements: {Row: {
+          achievementId: string
+          unlockedAt: string
+          userId: string}
+        Insert: {achievementId: string
+          unlockedAt?: string
+          userId: string}
+        Update: {achievementId?: string
+          unlockedAt?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "member_achievements_achievement_id_fkey"
-            columns: ["achievement_id"]
+          {foreignKeyName: "member_achievements_achievement_id_fkey"
+            columns: ["achievementId"]
             isOneToOne: false
             referencedRelation: "achievements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_achievements_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "member_achievements_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      member_inventory: {
-        Row: {
-          acquired_at: string
-          item_id: string
+      member_inventory: {Row: {
+          acquiredAt: string
+          itemId: string
           origin: string
-          user_id: string
-        }
-        Insert: {
-          acquired_at?: string
-          item_id: string
+          userId: string}
+        Insert: {acquiredAt?: string
+          itemId: string
           origin?: string
-          user_id: string
-        }
-        Update: {
-          acquired_at?: string
-          item_id?: string
+          userId: string}
+        Update: {acquiredAt?: string
+          itemId?: string
           origin?: string
-          user_id?: string
-        }
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "member_inventory_item_id_fkey"
-            columns: ["item_id"]
+          {foreignKeyName: "member_inventory_item_id_fkey"
+            columns: ["itemId"]
             isOneToOne: false
             referencedRelation: "shop_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_inventory_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "member_inventory_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      members: {
-        Row: {
-          age_status: string
-          avatar_crop: Json | null
-          avatar_frame_id: string | null
-          avatar_id: string | null
-          banner_crop: Json | null
-          banner_id: string | null
-          banner_position: string
+      members: {Row: {
+          ageStatus: string
+          avatarCrop: Json | null
+          avatarFrameId: string | null
+          avatarId: string | null
+          bannerCrop: Json | null
+          bannerId: string | null
+          bannerPosition: string
           bio: string
-          blur_nsfw: boolean
-          created_at: string
-          display_name: string
-          equipped_badge_id: string | null
-          equipped_banner_id: string | null
-          equipped_comment_banner_id: string | null
-          equipped_medal_id: string | null
-          equipped_title_id: string | null
-          featured_achievement_id: string | null
+          blurNsfw: boolean
+          createdAt: string
+          displayName: string
+          equippedBadgeId: string | null
+          equippedBannerId: string | null
+          equippedCommentBannerId: string | null
+          equippedMedalId: string | null
+          equippedTitleId: string | null
+          featuredAchievementId: string | null
           id: string
-          is_onboarded: boolean
-          is_test: boolean
-          manual_badge: boolean
-          manual_title: boolean
-          name_color: string | null
-          privacy_show_achievements: boolean
-          privacy_show_cosmetics: boolean
-          privacy_show_favorites: boolean
-          privacy_show_reading_history: boolean
+          isOnboarded: boolean
+          isTest: boolean
+          manualBadge: boolean
+          manualTitle: boolean
+          nameColor: string | null
+          privacyShowAchievements: boolean
+          privacyShowCosmetics: boolean
+          privacyShowFavorites: boolean
+          privacyShowReadingHistory: boolean
           username: string
-          xp: number
-        }
-        Insert: {
-          age_status?: string
-          avatar_crop?: Json | null
-          avatar_frame_id?: string | null
-          avatar_id?: string | null
-          banner_crop?: Json | null
-          banner_id?: string | null
-          banner_position?: string
+          xp: number}
+        Insert: {ageStatus?: string
+          avatarCrop?: Json | null
+          avatarFrameId?: string | null
+          avatarId?: string | null
+          bannerCrop?: Json | null
+          bannerId?: string | null
+          bannerPosition?: string
           bio?: string
-          blur_nsfw?: boolean
-          created_at?: string
-          display_name: string
-          equipped_badge_id?: string | null
-          equipped_banner_id?: string | null
-          equipped_comment_banner_id?: string | null
-          equipped_medal_id?: string | null
-          equipped_title_id?: string | null
-          featured_achievement_id?: string | null
+          blurNsfw?: boolean
+          createdAt?: string
+          displayName: string
+          equippedBadgeId?: string | null
+          equippedBannerId?: string | null
+          equippedCommentBannerId?: string | null
+          equippedMedalId?: string | null
+          equippedTitleId?: string | null
+          featuredAchievementId?: string | null
           id: string
-          is_onboarded?: boolean
-          is_test?: boolean
-          manual_badge?: boolean
-          manual_title?: boolean
-          name_color?: string | null
-          privacy_show_achievements?: boolean
-          privacy_show_cosmetics?: boolean
-          privacy_show_favorites?: boolean
-          privacy_show_reading_history?: boolean
+          isOnboarded?: boolean
+          isTest?: boolean
+          manualBadge?: boolean
+          manualTitle?: boolean
+          nameColor?: string | null
+          privacyShowAchievements?: boolean
+          privacyShowCosmetics?: boolean
+          privacyShowFavorites?: boolean
+          privacyShowReadingHistory?: boolean
           username: string
-          xp?: number
-        }
-        Update: {
-          age_status?: string
-          avatar_crop?: Json | null
-          avatar_frame_id?: string | null
-          avatar_id?: string | null
-          banner_crop?: Json | null
-          banner_id?: string | null
-          banner_position?: string
+          xp?: number}
+        Update: {ageStatus?: string
+          avatarCrop?: Json | null
+          avatarFrameId?: string | null
+          avatarId?: string | null
+          bannerCrop?: Json | null
+          bannerId?: string | null
+          bannerPosition?: string
           bio?: string
-          blur_nsfw?: boolean
-          created_at?: string
-          display_name?: string
-          equipped_badge_id?: string | null
-          equipped_banner_id?: string | null
-          equipped_comment_banner_id?: string | null
-          equipped_medal_id?: string | null
-          equipped_title_id?: string | null
-          featured_achievement_id?: string | null
+          blurNsfw?: boolean
+          createdAt?: string
+          displayName?: string
+          equippedBadgeId?: string | null
+          equippedBannerId?: string | null
+          equippedCommentBannerId?: string | null
+          equippedMedalId?: string | null
+          equippedTitleId?: string | null
+          featuredAchievementId?: string | null
           id?: string
-          is_onboarded?: boolean
-          is_test?: boolean
-          manual_badge?: boolean
-          manual_title?: boolean
-          name_color?: string | null
-          privacy_show_achievements?: boolean
-          privacy_show_cosmetics?: boolean
-          privacy_show_favorites?: boolean
-          privacy_show_reading_history?: boolean
+          isOnboarded?: boolean
+          isTest?: boolean
+          manualBadge?: boolean
+          manualTitle?: boolean
+          nameColor?: string | null
+          privacyShowAchievements?: boolean
+          privacyShowCosmetics?: boolean
+          privacyShowFavorites?: boolean
+          privacyShowReadingHistory?: boolean
           username?: string
-          xp?: number
-        }
+          xp?: number}
         Relationships: [
-          {
-            foreignKeyName: "members_avatar_id_fkey"
-            columns: ["avatar_id"]
+          {foreignKeyName: "members_avatar_id_fkey"
+            columns: ["avatarId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "members_banner_id_fkey"
-            columns: ["banner_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "members_banner_id_fkey"
+            columns: ["bannerId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "members_featured_achievement_id_fkey"
-            columns: ["featured_achievement_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "members_featured_achievement_id_fkey"
+            columns: ["featuredAchievementId"]
             isOneToOne: false
             referencedRelation: "achievements"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      mihon_tokens: {
-        Row: {
-          created_at: string
-          device_name: string | null
-          expires_at: string
+      mihon_tokens: {Row: {
+          createdAt: string
+          deviceName: string | null
+          expiresAt: string
           id: string
           revoked: boolean
           scopes: string[]
-          token_hash: string
-          token_type: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          device_name?: string | null
-          expires_at: string
+          tokenHash: string
+          tokenType: string
+          userId: string}
+        Insert: {createdAt?: string
+          deviceName?: string | null
+          expiresAt: string
           id?: string
           revoked?: boolean
           scopes?: string[]
-          token_hash: string
-          token_type?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          device_name?: string | null
-          expires_at?: string
+          tokenHash: string
+          tokenType?: string
+          userId: string}
+        Update: {createdAt?: string
+          deviceName?: string | null
+          expiresAt?: string
           id?: string
           revoked?: boolean
           scopes?: string[]
-          token_hash?: string
-          token_type?: string
-          user_id?: string
-        }
+          tokenHash?: string
+          tokenType?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "mihon_tokens_user_id_fkey"
-            columns: ["user_id"]
+          {foreignKeyName: "mihon_tokens_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      notifications: {
-        Row: {
+      notifications: {Row: {
           body: string
-          created_at: string
-          dedupe_key: string
+          createdAt: string
+          dedupeKey: string
           href: string
           id: string
           kind: string
-          read_at: string | null
-          user_id: string
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          dedupe_key: string
+          readAt: string | null
+          userId: string}
+        Insert: {body: string
+          createdAt?: string
+          dedupeKey: string
           href: string
           id?: string
           kind: string
-          read_at?: string | null
-          user_id: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          dedupe_key?: string
+          readAt?: string | null
+          userId: string}
+        Update: {body?: string
+          createdAt?: string
+          dedupeKey?: string
           href?: string
           id?: string
           kind?: string
-          read_at?: string | null
-          user_id?: string
-        }
+          readAt?: string | null
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
+          {foreignKeyName: "notifications_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      pages: {
-        Row: {
-          chapter_id: string
+      pages: {Row: {
+          chapterId: string
           height: number
-          media_id: string
+          mediaId: string
           position: number
-          width: number
-        }
-        Insert: {
-          chapter_id: string
+          width: number}
+        Insert: {chapterId: string
           height: number
-          media_id: string
+          mediaId: string
           position: number
-          width: number
-        }
-        Update: {
-          chapter_id?: string
+          width: number}
+        Update: {chapterId?: string
           height?: number
-          media_id?: string
+          mediaId?: string
           position?: number
-          width?: number
-        }
+          width?: number}
         Relationships: [
-          {
-            foreignKeyName: "pages_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "pages_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pages_media_id_fkey"
-            columns: ["media_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "pages_media_id_fkey"
+            columns: ["mediaId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      reading: {
-        Row: {
-          chapter_id: string
-          completed_at: string | null
-          max_page: number
+      reading: {Row: {
+          chapterId: string
+          completedAt: string | null
+          maxPage: number
           page: number
-          started_at: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          chapter_id: string
-          completed_at?: string | null
-          max_page?: number
+          startedAt: string
+          updatedAt: string
+          userId: string}
+        Insert: {chapterId: string
+          completedAt?: string | null
+          maxPage?: number
           page?: number
-          started_at?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          chapter_id?: string
-          completed_at?: string | null
-          max_page?: number
+          startedAt?: string
+          updatedAt?: string
+          userId: string}
+        Update: {chapterId?: string
+          completedAt?: string | null
+          maxPage?: number
           page?: number
-          started_at?: string
-          updated_at?: string
-          user_id?: string
-        }
+          startedAt?: string
+          updatedAt?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "reading_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "reading_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reading_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reading_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      reading_sessions: {
-        Row: {
-          accepted_at: string
-          chapter_id: string
-          next_page: number
-          user_id: string
-        }
-        Insert: {
-          accepted_at?: string
-          chapter_id: string
-          next_page?: number
-          user_id: string
-        }
-        Update: {
-          accepted_at?: string
-          chapter_id?: string
-          next_page?: number
-          user_id?: string
-        }
+      reading_sessions: {Row: {
+          acceptedAt: string
+          chapterId: string
+          nextPage: number
+          userId: string}
+        Insert: {acceptedAt?: string
+          chapterId: string
+          nextPage?: number
+          userId: string}
+        Update: {acceptedAt?: string
+          chapterId?: string
+          nextPage?: number
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "reading_sessions_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "reading_sessions_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reading_sessions_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reading_sessions_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      reports: {
-        Row: {
-          assigned_to: string | null
-          chapter_id: string | null
-          comment_id: string | null
-          created_at: string
+      reports: {Row: {
+          assignedTo: string | null
+          chapterId: string | null
+          commentId: string | null
+          createdAt: string
           details: string | null
           id: string
           reason: string
-          reporter_id: string
-          resolution_notes: string | null
+          reporterId: string
+          resolutionNotes: string | null
           status: string
-          target_type: string
-          target_user_id: string | null
-          updated_at: string
-          work_id: string | null
-        }
-        Insert: {
-          assigned_to?: string | null
-          chapter_id?: string | null
-          comment_id?: string | null
-          created_at?: string
+          targetType: string
+          targetUserId: string | null
+          updatedAt: string
+          workId: string | null}
+        Insert: {assignedTo?: string | null
+          chapterId?: string | null
+          commentId?: string | null
+          createdAt?: string
           details?: string | null
           id?: string
           reason: string
-          reporter_id: string
-          resolution_notes?: string | null
+          reporterId: string
+          resolutionNotes?: string | null
           status?: string
-          target_type: string
-          target_user_id?: string | null
-          updated_at?: string
-          work_id?: string | null
-        }
-        Update: {
-          assigned_to?: string | null
-          chapter_id?: string | null
-          comment_id?: string | null
-          created_at?: string
+          targetType: string
+          targetUserId?: string | null
+          updatedAt?: string
+          workId?: string | null}
+        Update: {assignedTo?: string | null
+          chapterId?: string | null
+          commentId?: string | null
+          createdAt?: string
           details?: string | null
           id?: string
           reason?: string
-          reporter_id?: string
-          resolution_notes?: string | null
+          reporterId?: string
+          resolutionNotes?: string | null
           status?: string
-          target_type?: string
-          target_user_id?: string | null
-          updated_at?: string
-          work_id?: string | null
-        }
+          targetType?: string
+          targetUserId?: string | null
+          updatedAt?: string
+          workId?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "reports_assigned_to_fkey"
-            columns: ["assigned_to"]
+          {foreignKeyName: "reports_assigned_to_fkey"
+            columns: ["assignedTo"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_chapter_id_fkey"
-            columns: ["chapter_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reports_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_comment_id_fkey"
-            columns: ["comment_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reports_comment_id_fkey"
+            columns: ["commentId"]
             isOneToOne: false
             referencedRelation: "comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_reporter_id_fkey"
-            columns: ["reporter_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporterId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_target_user_id_fkey"
-            columns: ["target_user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reports_target_user_id_fkey"
+            columns: ["targetUserId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "reports_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_invites: {
-        Row: {
+      scan_invites: {Row: {
           code: string
-          created_at: string
-          created_by: string
-          expires_at: string
+          createdAt: string
+          createdBy: string
+          expiresAt: string
           id: string
           revoked: boolean
           role: string
-          scan_id: string
-          used_at: string | null
-          used_by: string | null
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          created_by: string
-          expires_at: string
+          scanId: string
+          usedAt: string | null
+          usedBy: string | null}
+        Insert: {code: string
+          createdAt?: string
+          createdBy: string
+          expiresAt: string
           id?: string
           revoked?: boolean
           role: string
-          scan_id: string
-          used_at?: string | null
-          used_by?: string | null
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          created_by?: string
-          expires_at?: string
+          scanId: string
+          usedAt?: string | null
+          usedBy?: string | null}
+        Update: {code?: string
+          createdAt?: string
+          createdBy?: string
+          expiresAt?: string
           id?: string
           revoked?: boolean
           role?: string
-          scan_id?: string
-          used_at?: string | null
-          used_by?: string | null
-        }
+          scanId?: string
+          usedAt?: string | null
+          usedBy?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "scan_invites_created_by_fkey"
-            columns: ["created_by"]
+          {foreignKeyName: "scan_invites_created_by_fkey"
+            columns: ["createdBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_invites_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_invites_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_invites_used_by_fkey"
-            columns: ["used_by"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_invites_used_by_fkey"
+            columns: ["usedBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_members: {
-        Row: {
-          created_at: string
+      scan_members: {Row: {
+          createdAt: string
           role: string
-          scan_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
+          scanId: string
+          userId: string}
+        Insert: {createdAt?: string
           role?: string
-          scan_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
+          scanId: string
+          userId: string}
+        Update: {createdAt?: string
           role?: string
-          scan_id?: string
-          user_id?: string
-        }
+          scanId?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "scan_members_scan_id_fkey"
-            columns: ["scan_id"]
+          {foreignKeyName: "scan_members_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_members_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_members_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_partner_requests: {
-        Row: {
-          created_at: string
+      scan_partner_requests: {Row: {
+          createdAt: string
           description: string | null
           discord: string | null
           fluxer: string | null
           id: string
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          sample_links: string | null
-          scan_name: string
-          scan_slug: string
+          rejectionReason: string | null
+          reviewedAt: string | null
+          reviewedBy: string | null
+          sampleLinks: string | null
+          scanName: string
+          scanSlug: string
           status: string
-          user_id: string
-          website: string | null
-        }
-        Insert: {
-          created_at?: string
+          userId: string
+          website: string | null}
+        Insert: {createdAt?: string
           description?: string | null
           discord?: string | null
           fluxer?: string | null
           id?: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          sample_links?: string | null
-          scan_name: string
-          scan_slug: string
+          rejectionReason?: string | null
+          reviewedAt?: string | null
+          reviewedBy?: string | null
+          sampleLinks?: string | null
+          scanName: string
+          scanSlug: string
           status?: string
-          user_id: string
-          website?: string | null
-        }
-        Update: {
-          created_at?: string
+          userId: string
+          website?: string | null}
+        Update: {createdAt?: string
           description?: string | null
           discord?: string | null
           fluxer?: string | null
           id?: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          sample_links?: string | null
-          scan_name?: string
-          scan_slug?: string
+          rejectionReason?: string | null
+          reviewedAt?: string | null
+          reviewedBy?: string | null
+          sampleLinks?: string | null
+          scanName?: string
+          scanSlug?: string
           status?: string
-          user_id?: string
-          website?: string | null
-        }
+          userId?: string
+          website?: string | null}
         Relationships: [
-          {
-            foreignKeyName: "scan_partner_requests_reviewed_by_fkey"
-            columns: ["reviewed_by"]
+          {foreignKeyName: "scan_partner_requests_reviewed_by_fkey"
+            columns: ["reviewedBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_partner_requests_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_partner_requests_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_project_requests: {
-        Row: {
-          created_at: string
+      scan_project_requests: {Row: {
+          createdAt: string
           id: string
           message: string | null
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          scan_id: string
+          rejectionReason: string | null
+          reviewedAt: string | null
+          reviewedBy: string | null
+          scanId: string
           status: string
-          user_id: string
-          work_id: string
-        }
-        Insert: {
-          created_at?: string
+          userId: string
+          workId: string}
+        Insert: {createdAt?: string
           id?: string
           message?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          scan_id: string
+          rejectionReason?: string | null
+          reviewedAt?: string | null
+          reviewedBy?: string | null
+          scanId: string
           status?: string
-          user_id: string
-          work_id: string
-        }
-        Update: {
-          created_at?: string
+          userId: string
+          workId: string}
+        Update: {createdAt?: string
           id?: string
           message?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          scan_id?: string
+          rejectionReason?: string | null
+          reviewedAt?: string | null
+          reviewedBy?: string | null
+          scanId?: string
           status?: string
-          user_id?: string
-          work_id?: string
-        }
+          userId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "scan_project_requests_reviewed_by_fkey"
-            columns: ["reviewed_by"]
+          {foreignKeyName: "scan_project_requests_reviewed_by_fkey"
+            columns: ["reviewedBy"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_project_requests_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_project_requests_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_project_requests_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_project_requests_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_project_requests_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_project_requests_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_storage_usage: {
-        Row: {
-          active_uploads: number
+      scan_storage_usage: {Row: {
+          activeUploads: number
           bytes: number
           failures: number
           pages: number
-          scan_id: string
+          scanId: string
           throughput: number
-          updated_at: string
-          uploads: number
-        }
-        Insert: {
-          active_uploads?: number
+          updatedAt: string
+          uploads: number}
+        Insert: {activeUploads?: number
           bytes?: number
           failures?: number
           pages?: number
-          scan_id: string
+          scanId: string
           throughput?: number
-          updated_at?: string
-          uploads?: number
-        }
-        Update: {
-          active_uploads?: number
+          updatedAt?: string
+          uploads?: number}
+        Update: {activeUploads?: number
           bytes?: number
           failures?: number
           pages?: number
-          scan_id?: string
+          scanId?: string
           throughput?: number
-          updated_at?: string
-          uploads?: number
-        }
+          updatedAt?: string
+          uploads?: number}
         Relationships: [
-          {
-            foreignKeyName: "scan_storage_usage_scan_id_fkey"
-            columns: ["scan_id"]
+          {foreignKeyName: "scan_storage_usage_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: true
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scan_transfer_requests: {
-        Row: {
-          created_at: string
-          from_user_id: string
+      scan_transfer_requests: {Row: {
+          createdAt: string
+          fromUserId: string
           id: string
-          responded_at: string | null
-          scan_id: string
+          respondedAt: string | null
+          scanId: string
           status: string
-          to_user_id: string
-        }
-        Insert: {
-          created_at?: string
-          from_user_id: string
+          toUserId: string}
+        Insert: {createdAt?: string
+          fromUserId: string
           id?: string
-          responded_at?: string | null
-          scan_id: string
+          respondedAt?: string | null
+          scanId: string
           status?: string
-          to_user_id: string
-        }
-        Update: {
-          created_at?: string
-          from_user_id?: string
+          toUserId: string}
+        Update: {createdAt?: string
+          fromUserId?: string
           id?: string
-          responded_at?: string | null
-          scan_id?: string
+          respondedAt?: string | null
+          scanId?: string
           status?: string
-          to_user_id?: string
-        }
+          toUserId?: string}
         Relationships: [
-          {
-            foreignKeyName: "scan_transfer_requests_from_user_id_fkey"
-            columns: ["from_user_id"]
+          {foreignKeyName: "scan_transfer_requests_from_user_id_fkey"
+            columns: ["fromUserId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_transfer_requests_scan_id_fkey"
-            columns: ["scan_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_transfer_requests_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scan_transfer_requests_to_user_id_fkey"
-            columns: ["to_user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scan_transfer_requests_to_user_id_fkey"
+            columns: ["toUserId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      scans: {
-        Row: {
-          banner_id: string | null
-          created_at: string
+      scans: {Row: {
+          bannerId: string | null
+          createdAt: string
           description: string
           discord: string
           fluxer: string
           id: string
-          is_official: boolean
-          logo_id: string | null
+          isOfficial: boolean
+          logoId: string | null
           name: string
           slug: string
           status: string
-          updated_at: string
-          website: string
-        }
-        Insert: {
-          banner_id?: string | null
-          created_at?: string
+          updatedAt: string
+          website: string}
+        Insert: {bannerId?: string | null
+          createdAt?: string
           description?: string
           discord?: string
           fluxer?: string
           id?: string
-          is_official?: boolean
-          logo_id?: string | null
+          isOfficial?: boolean
+          logoId?: string | null
           name: string
           slug: string
           status?: string
-          updated_at?: string
-          website?: string
-        }
-        Update: {
-          banner_id?: string | null
-          created_at?: string
+          updatedAt?: string
+          website?: string}
+        Update: {bannerId?: string | null
+          createdAt?: string
           description?: string
           discord?: string
           fluxer?: string
           id?: string
-          is_official?: boolean
-          logo_id?: string | null
+          isOfficial?: boolean
+          logoId?: string | null
           name?: string
           slug?: string
           status?: string
-          updated_at?: string
-          website?: string
-        }
+          updatedAt?: string
+          website?: string}
         Relationships: [
-          {
-            foreignKeyName: "scans_banner_id_fkey"
-            columns: ["banner_id"]
+          {foreignKeyName: "scans_banner_id_fkey"
+            columns: ["bannerId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scans_logo_id_fkey"
-            columns: ["logo_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "scans_logo_id_fkey"
+            columns: ["logoId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
       settings: {
@@ -2415,258 +1979,218 @@ export type Database = {
         }
         Relationships: []
       }
-      shop_items: {
-        Row: {
-          asset_url: string
-          created_at: string
+      shop_items: {Row: {
+          assetUrl: string
+          createdAt: string
           description: string
           id: string
-          is_active: boolean
-          is_animated: boolean
+          isActive: boolean
+          isAnimated: boolean
           kind: string
-          min_level: number
+          minLevel: number
           name: string
-          order_index: number
-          price_xp: number
+          orderIndex: number
+          priceXp: number
           rarity: string
           status: string
-          style_data: Json
-          thumbnail_url: string | null
-        }
-        Insert: {
-          asset_url?: string
-          created_at?: string
+          styleData: Json
+          thumbnailUrl: string | null}
+        Insert: {assetUrl?: string
+          createdAt?: string
           description?: string
           id: string
-          is_active?: boolean
-          is_animated?: boolean
+          isActive?: boolean
+          isAnimated?: boolean
           kind: string
-          min_level?: number
+          minLevel?: number
           name: string
-          order_index?: number
-          price_xp: number
+          orderIndex?: number
+          priceXp: number
           rarity?: string
           status?: string
-          style_data?: Json
-          thumbnail_url?: string | null
-        }
-        Update: {
-          asset_url?: string
-          created_at?: string
+          styleData?: Json
+          thumbnailUrl?: string | null}
+        Update: {assetUrl?: string
+          createdAt?: string
           description?: string
           id?: string
-          is_active?: boolean
-          is_animated?: boolean
+          isActive?: boolean
+          isAnimated?: boolean
           kind?: string
-          min_level?: number
+          minLevel?: number
           name?: string
-          order_index?: number
-          price_xp?: number
+          orderIndex?: number
+          priceXp?: number
           rarity?: string
           status?: string
-          style_data?: Json
-          thumbnail_url?: string | null
-        }
+          styleData?: Json
+          thumbnailUrl?: string | null}
         Relationships: []
       }
-      storage_pools: {
-        Row: {
-          created_at: string
-          display_name: string
+      storage_pools: {Row: {
+          createdAt: string
+          displayName: string
           enabled: boolean
           id: string
           key: string
-          overflow_allowed: boolean
+          overflowAllowed: boolean
           purpose: string
           reserved: boolean
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          display_name: string
+          updatedAt: string}
+        Insert: {createdAt?: string
+          displayName: string
           enabled?: boolean
           id?: string
           key: string
-          overflow_allowed?: boolean
+          overflowAllowed?: boolean
           purpose: string
           reserved?: boolean
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          display_name?: string
+          updatedAt?: string}
+        Update: {createdAt?: string
+          displayName?: string
           enabled?: boolean
           id?: string
           key?: string
-          overflow_allowed?: boolean
+          overflowAllowed?: boolean
           purpose?: string
           reserved?: boolean
-          updated_at?: string
-        }
+          updatedAt?: string}
         Relationships: []
       }
-      storage_shard_group_members: {
-        Row: {
-          group_id: string
+      storage_shard_group_members: {Row: {
+          groupId: string
           priority: number
-          shard_id: string
-          weight: number
-        }
-        Insert: {
-          group_id: string
+          shardId: string
+          weight: number}
+        Insert: {groupId: string
           priority?: number
-          shard_id: string
-          weight?: number
-        }
-        Update: {
-          group_id?: string
+          shardId: string
+          weight?: number}
+        Update: {groupId?: string
           priority?: number
-          shard_id?: string
-          weight?: number
-        }
+          shardId?: string
+          weight?: number}
         Relationships: [
-          {
-            foreignKeyName: "storage_shard_group_members_group_id_fkey"
-            columns: ["group_id"]
+          {foreignKeyName: "storage_shard_group_members_group_id_fkey"
+            columns: ["groupId"]
             isOneToOne: false
             referencedRelation: "storage_shard_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "storage_shard_group_members_shard_id_fkey"
-            columns: ["shard_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "storage_shard_group_members_shard_id_fkey"
+            columns: ["shardId"]
             isOneToOne: false
             referencedRelation: "storage_shards"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      storage_shard_groups: {
-        Row: {
-          created_at: string
+      storage_shard_groups: {Row: {
+          createdAt: string
           id: string
-          pool_id: string
-          scope_id: string
-          scope_type: string
+          poolId: string
+          scopeId: string
+          scopeType: string
           strategy: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
+          updatedAt: string}
+        Insert: {createdAt?: string
           id?: string
-          pool_id: string
-          scope_id: string
-          scope_type?: string
+          poolId: string
+          scopeId: string
+          scopeType?: string
           strategy?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
+          updatedAt?: string}
+        Update: {createdAt?: string
           id?: string
-          pool_id?: string
-          scope_id?: string
-          scope_type?: string
+          poolId?: string
+          scopeId?: string
+          scopeType?: string
           strategy?: string
-          updated_at?: string
-        }
+          updatedAt?: string}
         Relationships: [
-          {
-            foreignKeyName: "storage_shard_groups_pool_id_fkey"
-            columns: ["pool_id"]
+          {foreignKeyName: "storage_shard_groups_pool_id_fkey"
+            columns: ["poolId"]
             isOneToOne: false
             referencedRelation: "storage_pools"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      storage_shards: {
-        Row: {
-          active_uploads: number
+      storage_shards: {Row: {
+          activeUploads: number
           backend: string
-          bot_reference: string
-          channel_id: string
-          cooldown_until: string | null
-          created_at: string
-          display_name: string
+          botReference: string
+          channelId: string
+          cooldownUntil: string | null
+          createdAt: string
+          displayName: string
           enabled: boolean
-          error_rate: number
+          errorRate: number
           id: string
-          latency_ms: number
-          owner_scan_id: string | null
-          pool_id: string
-          queue_depth: number
-          read_status: string
-          recent_failures: number
-          recent_successes: number
+          latencyMs: number
+          ownerScanId: string | null
+          poolId: string
+          queueDepth: number
+          readStatus: string
+          recentFailures: number
+          recentSuccesses: number
           reserved: boolean
           throughput: number
-          updated_at: string
+          updatedAt: string
           weight: number
-          write_status: string
-        }
-        Insert: {
-          active_uploads?: number
+          writeStatus: string}
+        Insert: {activeUploads?: number
           backend?: string
-          bot_reference: string
-          channel_id: string
-          cooldown_until?: string | null
-          created_at?: string
-          display_name: string
+          botReference: string
+          channelId: string
+          cooldownUntil?: string | null
+          createdAt?: string
+          displayName: string
           enabled?: boolean
-          error_rate?: number
+          errorRate?: number
           id?: string
-          latency_ms?: number
-          owner_scan_id?: string | null
-          pool_id: string
-          queue_depth?: number
-          read_status?: string
-          recent_failures?: number
-          recent_successes?: number
+          latencyMs?: number
+          ownerScanId?: string | null
+          poolId: string
+          queueDepth?: number
+          readStatus?: string
+          recentFailures?: number
+          recentSuccesses?: number
           reserved?: boolean
           throughput?: number
-          updated_at?: string
+          updatedAt?: string
           weight?: number
-          write_status?: string
-        }
-        Update: {
-          active_uploads?: number
+          writeStatus?: string}
+        Update: {activeUploads?: number
           backend?: string
-          bot_reference?: string
-          channel_id?: string
-          cooldown_until?: string | null
-          created_at?: string
-          display_name?: string
+          botReference?: string
+          channelId?: string
+          cooldownUntil?: string | null
+          createdAt?: string
+          displayName?: string
           enabled?: boolean
-          error_rate?: number
+          errorRate?: number
           id?: string
-          latency_ms?: number
-          owner_scan_id?: string | null
-          pool_id?: string
-          queue_depth?: number
-          read_status?: string
-          recent_failures?: number
-          recent_successes?: number
+          latencyMs?: number
+          ownerScanId?: string | null
+          poolId?: string
+          queueDepth?: number
+          readStatus?: string
+          recentFailures?: number
+          recentSuccesses?: number
           reserved?: boolean
           throughput?: number
-          updated_at?: string
+          updatedAt?: string
           weight?: number
-          write_status?: string
-        }
+          writeStatus?: string}
         Relationships: [
-          {
-            foreignKeyName: "storage_shards_owner_scan_id_fkey"
-            columns: ["owner_scan_id"]
+          {foreignKeyName: "storage_shards_owner_scan_id_fkey"
+            columns: ["ownerScanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "storage_shards_pool_id_fkey"
-            columns: ["pool_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "storage_shards_pool_id_fkey"
+            columns: ["poolId"]
             isOneToOne: false
             referencedRelation: "storage_pools"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
       tags: {
@@ -2690,277 +2214,217 @@ export type Database = {
         }
         Relationships: []
       }
-      user_blocks: {
-        Row: {
-          blocked_id: string
-          created_at: string
-          user_id: string
-        }
-        Insert: {
-          blocked_id: string
-          created_at?: string
-          user_id: string
-        }
-        Update: {
-          blocked_id?: string
-          created_at?: string
-          user_id?: string
-        }
+      user_blocks: {Row: {
+          blockedId: string
+          createdAt: string
+          userId: string}
+        Insert: {blockedId: string
+          createdAt?: string
+          userId: string}
+        Update: {blockedId?: string
+          createdAt?: string
+          userId?: string}
         Relationships: [
-          {
-            foreignKeyName: "user_blocks_blocked_id_fkey"
-            columns: ["blocked_id"]
+          {foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blockedId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_blocks_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "user_blocks_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      user_follows: {
-        Row: {
-          created_at: string
-          follower_id: string
-          following_id: string
-        }
-        Insert: {
-          created_at?: string
-          follower_id: string
-          following_id: string
-        }
-        Update: {
-          created_at?: string
-          follower_id?: string
-          following_id?: string
-        }
+      user_follows: {Row: {
+          createdAt: string
+          followerId: string
+          followingId: string}
+        Insert: {createdAt?: string
+          followerId: string
+          followingId: string}
+        Update: {createdAt?: string
+          followerId?: string
+          followingId?: string}
         Relationships: [
-          {
-            foreignKeyName: "user_follows_follower_id_fkey"
-            columns: ["follower_id"]
+          {foreignKeyName: "user_follows_follower_id_fkey"
+            columns: ["followerId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_follows_following_id_fkey"
-            columns: ["following_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "user_follows_following_id_fkey"
+            columns: ["followingId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      work_scans: {
-        Row: {
-          created_at: string
-          is_primary: boolean
-          scan_id: string
+      work_scans: {Row: {
+          createdAt: string
+          isPrimary: boolean
+          scanId: string
           status: string
-          work_id: string
-        }
-        Insert: {
-          created_at?: string
-          is_primary?: boolean
-          scan_id: string
+          workId: string}
+        Insert: {createdAt?: string
+          isPrimary?: boolean
+          scanId: string
           status?: string
-          work_id: string
-        }
-        Update: {
-          created_at?: string
-          is_primary?: boolean
-          scan_id?: string
+          workId: string}
+        Update: {createdAt?: string
+          isPrimary?: boolean
+          scanId?: string
           status?: string
-          work_id?: string
-        }
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "work_scans_scan_id_fkey"
-            columns: ["scan_id"]
+          {foreignKeyName: "work_scans_scan_id_fkey"
+            columns: ["scanId"]
             isOneToOne: false
             referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_scans_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "work_scans_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      work_tags: {
-        Row: {
-          system_generated: boolean
-          tag_id: string
-          work_id: string
-        }
-        Insert: {
-          system_generated?: boolean
-          tag_id: string
-          work_id: string
-        }
-        Update: {
-          system_generated?: boolean
-          tag_id?: string
-          work_id?: string
-        }
+      work_tags: {Row: {
+          systemGenerated: boolean
+          tagId: string
+          workId: string}
+        Insert: {systemGenerated?: boolean
+          tagId: string
+          workId: string}
+        Update: {systemGenerated?: boolean
+          tagId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "work_tags_tag_id_fkey"
-            columns: ["tag_id"]
+          {foreignKeyName: "work_tags_tag_id_fkey"
+            columns: ["tagId"]
             isOneToOne: false
             referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_tags_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "work_tags_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      works: {
-        Row: {
-          age_rating: number
+      works: {Row: {
+          ageRating: number
           aliases: string[]
           artist: string
           author: string
-          content_rating: string
-          cover_id: string | null
-          created_at: string
+          contentRating: string
+          coverId: string | null
+          createdAt: string
           description: string
           featured: boolean
           id: string
           kind: string
-          metadata_provenance: Json
+          metadataProvenance: Json
           published: boolean
-          search_text: string
+          searchText: string
           slug: string
-          source_id: string | null
+          sourceId: string | null
           status: string
           synopsis: string
           title: string
-          updated_at: string
-          views_total: number
-          year: number | null
-        }
-        Insert: {
-          age_rating?: number
+          updatedAt: string
+          viewsTotal: number
+          year: number | null}
+        Insert: {ageRating?: number
           aliases?: string[]
           artist?: string
           author?: string
-          content_rating?: string
-          cover_id?: string | null
-          created_at?: string
+          contentRating?: string
+          coverId?: string | null
+          createdAt?: string
           description?: string
           featured?: boolean
           id?: string
           kind?: string
-          metadata_provenance?: Json
+          metadataProvenance?: Json
           published?: boolean
-          search_text?: string
+          searchText?: string
           slug: string
-          source_id?: string | null
+          sourceId?: string | null
           status?: string
           synopsis?: string
           title: string
-          updated_at?: string
-          views_total?: number
-          year?: number | null
-        }
-        Update: {
-          age_rating?: number
+          updatedAt?: string
+          viewsTotal?: number
+          year?: number | null}
+        Update: {ageRating?: number
           aliases?: string[]
           artist?: string
           author?: string
-          content_rating?: string
-          cover_id?: string | null
-          created_at?: string
+          contentRating?: string
+          coverId?: string | null
+          createdAt?: string
           description?: string
           featured?: boolean
           id?: string
           kind?: string
-          metadata_provenance?: Json
+          metadataProvenance?: Json
           published?: boolean
-          search_text?: string
+          searchText?: string
           slug?: string
-          source_id?: string | null
+          sourceId?: string | null
           status?: string
           synopsis?: string
           title?: string
-          updated_at?: string
-          views_total?: number
-          year?: number | null
-        }
+          updatedAt?: string
+          viewsTotal?: number
+          year?: number | null}
         Relationships: [
-          {
-            foreignKeyName: "works_cover_id_fkey"
-            columns: ["cover_id"]
+          {foreignKeyName: "works_cover_id_fkey"
+            columns: ["coverId"]
             isOneToOne: false
             referencedRelation: "media"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
-      xp_awards: {
-        Row: {
+      xp_awards: {Row: {
           amount: number
-          chapter_id: string
-          created_at: string
+          chapterId: string
+          createdAt: string
           id: string
           source: string
-          user_id: string
-          work_id: string
-        }
-        Insert: {
-          amount?: number
-          chapter_id: string
-          created_at?: string
+          userId: string
+          workId: string}
+        Insert: {amount?: number
+          chapterId: string
+          createdAt?: string
           id?: string
           source?: string
-          user_id: string
-          work_id: string
-        }
-        Update: {
-          amount?: number
-          chapter_id?: string
-          created_at?: string
+          userId: string
+          workId: string}
+        Update: {amount?: number
+          chapterId?: string
+          createdAt?: string
           id?: string
           source?: string
-          user_id?: string
-          work_id?: string
-        }
+          userId?: string
+          workId?: string}
         Relationships: [
-          {
-            foreignKeyName: "xp_awards_chapter_id_fkey"
-            columns: ["chapter_id"]
+          {foreignKeyName: "xp_awards_chapter_id_fkey"
+            columns: ["chapterId"]
             isOneToOne: false
             referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "xp_awards_user_id_fkey"
-            columns: ["user_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "xp_awards_user_id_fkey"
+            columns: ["userId"]
             isOneToOne: false
             referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "xp_awards_work_id_fkey"
-            columns: ["work_id"]
+            referencedColumns: ["id"]},
+          {foreignKeyName: "xp_awards_work_id_fkey"
+            columns: ["workId"]
             isOneToOne: false
             referencedRelation: "works"
-            referencedColumns: ["id"]
-          },
+            referencedColumns: ["id"]},
         ]
       }
     }
@@ -3030,23 +2494,21 @@ export type Database = {
           p_source?: string
           p_worker_id: string
         }
-        Returns: {
-          attempts: number
-          chapter_sort_key: number
-          dedupe_key: string
+        Returns: {attempts: number
+          chapterSortKey: number
+          dedupeKey: string
           id: string
-          last_error: string
-          lease_expires_at: string
-          locked_at: string
-          locked_by: string
-          max_attempts: number
-          next_run_at: string
+          lastError: string
+          leaseExpiresAt: string
+          lockedAt: string
+          lockedBy: string
+          maxAttempts: number
+          nextRunAt: string
           payload: Json
           priority: number
           source: string
           status: string
-          task_type: string
-        }[]
+          taskType: string}[]
       }
       importer_cancel_staff_request: {
         Args: { p_request_id: string }
@@ -3226,16 +2688,14 @@ export type Database = {
       revoke_editor_invite: { Args: { p_email: string }; Returns: undefined }
       select_optimal_storage_shard: {
         Args: { p_chapter_id?: string; p_pool_key: string; p_scan_id?: string }
-        Returns: {
-          backend: string
-          bot_reference: string
-          channel_id: string
-          display_name: string
+        Returns: {backend: string
+          botReference: string
+          channelId: string
+          displayName: string
           is_overflow: boolean
-          pool_id: string
-          shard_id: string
-          write_status: string
-        }[]
+          poolId: string
+          shardId: string
+          writeStatus: string}[]
       }
       set_featured_achievement: {
         Args: { p_achievement_id: string }

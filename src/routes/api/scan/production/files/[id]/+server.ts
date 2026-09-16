@@ -30,8 +30,8 @@ export const GET = async ({ locals, params, url }) => {
     const { data: member } = await db
       .from('scan_members')
       .select('role')
-      .eq('scan_id', file.scan_id)
-      .eq('user_id', locals.user.id)
+      .eq('scan_id', file.scanId)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!member) {
@@ -45,15 +45,15 @@ export const GET = async ({ locals, params, url }) => {
   if (url.searchParams.get('meta') === '1') {
     return json({
       id: file.id,
-      filename: file.file_name,
-      size: file.byte_size,
-      mimeType: file.mime_type,
+      filename: file.fileName,
+      size: file.byteSize,
+      mimeType: file.mimeType,
       version: file.version,
-      isCurrent: file.is_current,
+      isCurrent: file.isCurrent,
       stage: file.scan_workflow_stages?.name,
-      stageSlug: file.stage_slug || file.scan_workflow_stages?.slug,
-      scanId: file.scan_id,
-      createdAt: file.created_at,
+      stageSlug: file.stageSlug || file.scan_workflow_stages?.slug,
+      scanId: file.scanId,
+      createdAt: file.createdAt,
       status: 'AUTHORIZED'
     });
   }
@@ -71,7 +71,7 @@ export const GET = async ({ locals, params, url }) => {
       );
       const { data: blob, error: dlErr } = await staffDb.storage
         .from('scan-artifacts')
-        .download(file.file_key);
+        .download(file.fileKey);
 
       if (dlErr || !blob) {
         return json({
@@ -82,9 +82,9 @@ export const GET = async ({ locals, params, url }) => {
       return new Response(blob.stream(), {
         status: 200,
         headers: {
-          'Content-Type': file.mime_type || 'application/octet-stream',
-          'Content-Disposition': `${disposition}; filename="${encodeURIComponent(file.file_name)}"`,
-          'Content-Length': String(file.byte_size),
+          'Content-Type': file.mimeType || 'application/octet-stream',
+          'Content-Disposition': `${disposition}; filename="${encodeURIComponent(file.fileName)}"`,
+          'Content-Length': String(file.byteSize),
           'Cache-Control': 'private, no-transform, max-age=3600',
           'X-Content-Type-Options': 'nosniff'
         }
@@ -97,12 +97,12 @@ export const GET = async ({ locals, params, url }) => {
   }
 
   // Otherwise Telegram Bot API streaming download
-  const telegramFileId = file.telegram_file_id || (file.provider === 'TELEGRAM' ? file.file_key : null);
+  const telegramFileId = file.telegramFileId || (file.provider === 'TELEGRAM' ? file.fileKey : null);
   if (!telegramFileId) {
     return json({ error: 'Arquivo não possui chave de armazenamento disponível para download.' }, { status: 404 });
   }
 
-  const botRef = file.bot_reference || 'PRODUCTION_STORAGE';
+  const botRef = file.botReference || 'PRODUCTION_STORAGE';
 
   try {
     const client = resolveBotDownloadClient(botRef);
@@ -111,9 +111,9 @@ export const GET = async ({ locals, params, url }) => {
     return new Response(stream, {
       status: 200,
       headers: {
-        'Content-Type': file.mime_type || 'application/octet-stream',
-        'Content-Disposition': `${disposition}; filename="${encodeURIComponent(file.file_name)}"`,
-        'Content-Length': String(file.byte_size),
+        'Content-Type': file.mimeType || 'application/octet-stream',
+        'Content-Disposition': `${disposition}; filename="${encodeURIComponent(file.fileName)}"`,
+        'Content-Length': String(file.byteSize),
         'Cache-Control': 'private, no-transform, max-age=3600',
         'X-Content-Type-Options': 'nosniff'
       }

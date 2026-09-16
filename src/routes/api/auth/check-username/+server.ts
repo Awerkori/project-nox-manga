@@ -73,7 +73,7 @@ export const GET = async ({ url, locals }) => {
     const { data: currentMember } = await safeQuerySingle(
       db.select({ username: schema.members.username })
         .from(schema.members)
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
     );
 
     if (currentMember?.username?.toLowerCase() === raw) {

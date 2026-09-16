@@ -19,14 +19,14 @@
   } = $props();
 
   let activeWorks = $derived(works.filter((w: any) => w.project_status === 'ACTIVE'));
-  let sortedByViews = $derived([...works].sort((a: any, b: any) => (b.views_total || 0) - (a.views_total || 0)));
+  let sortedByViews = $derived([...works].sort((a: any, b: any) => (b.viewsTotal || 0) - (a.viewsTotal || 0)));
 
   // Calculate views for last 30 days vs earlier (simple heuristic based on chapter published dates)
   let now = new Date();
   let thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   let recentChapters = $derived(
-    chapters.filter((c: any) => c.published_at && new Date(c.published_at) >= thirtyDaysAgo)
+    chapters.filter((c: any) => c.publishedAt && new Date(c.publishedAt) >= thirtyDaysAgo)
   );
 </script>
 
@@ -102,7 +102,7 @@
     {:else}
       <div class="works-ranking-list">
         {#each sortedByViews as work, i}
-          {@const pct = totalViews > 0 ? Math.round(((work.views_total || 0) / totalViews) * 100) : 0}
+          {@const pct = totalViews > 0 ? Math.round(((work.viewsTotal || 0) / totalViews) * 100) : 0}
           <div class="ranking-row">
             <div class="rank-num">#{i + 1}</div>
             <div class="work-info">
@@ -117,7 +117,7 @@
             </div>
             <div class="views-col">
               <Eye size={14} class="eye-icon" />
-              <span>{(work.views_total || 0).toLocaleString('pt-BR')}</span>
+              <span>{(work.viewsTotal || 0).toLocaleString('pt-BR')}</span>
             </div>
           </div>
         {/each}
@@ -153,7 +153,7 @@
       </div>
       <div class="dist-card">
         <span class="dist-label">Disponibilidade Ativa</span>
-        <span class="dist-val">{team.filter((m: any) => m.availability_status === 'ACTIVE' || !m.availability_status).length}</span>
+        <span class="dist-val">{team.filter((m: any) => m.availabilityStatus === 'ACTIVE' || !m.availabilityStatus).length}</span>
         <span class="dist-sub">Prontos para assumir capítulos</span>
       </div>
     </div>

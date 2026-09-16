@@ -28,7 +28,7 @@
 
   let filteredReferences = $derived(
     references.filter((ref: any) => {
-      if (selectedWorkId !== 'ALL' && ref.work_id !== selectedWorkId) return false;
+      if (selectedWorkId !== 'ALL' && ref.workId !== selectedWorkId) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -109,12 +109,12 @@
   {:else}
     <div class="refs-grid">
       {#each filteredReferences as ref}
-        {@const work = works.find((w: any) => w.id === ref.work_id)}
+        {@const work = works.find((w: any) => w.id === ref.workId)}
         <div class="ref-card">
           <div class="ref-header">
             <div class="badge-row">
-              <span class="type-badge {ref.ref_type.toLowerCase()}">
-                {ref.ref_type === 'LINK' ? 'Link Externo' : ref.ref_type === 'TEXT' ? 'Texto / Guia' : 'Nota de Edição'}
+              <span class="type-badge {ref.refType.toLowerCase()}">
+                {ref.refType === 'LINK' ? 'Link Externo' : ref.refType === 'TEXT' ? 'Texto / Guia' : 'Nota de Edição'}
               </span>
               {#if work}
                 <span class="work-badge">{work.title}</span>
@@ -145,7 +145,7 @@
           <h4 class="ref-title">{ref.title}</h4>
 
           <div class="ref-body">
-            {#if ref.ref_type === 'LINK'}
+            {#if ref.refType === 'LINK'}
               <a href={ref.content} target="_blank" rel="noopener noreferrer" class="link-target">
                 <ExternalLink size={14} />
                 <span class="link-url">{ref.content}</span>
@@ -158,7 +158,7 @@
           </div>
 
           <div class="ref-footer">
-            <span class="date">{new Date(ref.created_at).toLocaleDateString('pt-BR')}</span>
+            <span class="date">{new Date(ref.createdAt).toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
       {/each}

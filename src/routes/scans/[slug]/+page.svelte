@@ -37,7 +37,7 @@
 
   let activeTab = $state<"works" | "chapters" | "members" | "recruitment" | "activity" | "comments">("works");
   let applyingOpening = $state<any>(null);
-  let openingQuestions = $derived((data.recruitmentQuestions || []).filter((q: any) => q.opening_id === applyingOpening?.id));
+  let openingQuestions = $derived((data.recruitmentQuestions || []).filter((q: any) => q.openingId === applyingOpening?.id));
   let isSubmitting = $state(false);
   let successModal = $state(false);
 
@@ -68,14 +68,14 @@
 
   // Threading for comments
   let rootComments = $derived(
-    (data.comments || []).filter((c: any) => !c.parent_id)
+    (data.comments || []).filter((c: any) => !c.parentId)
   );
   let repliesMap = $derived.by(() => {
     const map = new Map<string, any[]>();
     for (const c of (data.comments || [])) {
-      if (c.parent_id) {
-        if (!map.has(c.parent_id)) map.set(c.parent_id, []);
-        map.get(c.parent_id)!.push(c);
+      if (c.parentId) {
+        if (!map.has(c.parentId)) map.set(c.parentId, []);
+        map.get(c.parentId)!.push(c);
       }
     }
     return map;
@@ -91,7 +91,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.scan.name} — Scan {data.scan.is_official ? "Oficial" : "Parceira"} | Project Nox</title>
+  <title>{data.scan.name} — Scan {data.scan.isOfficial ? "Oficial" : "Parceira"} | Project Nox</title>
   <meta
     name="description"
     content={data.scan.description || `Página oficial de traduções de ${data.scan.name} no Project Nox.`}
@@ -111,20 +111,20 @@
     <!-- Hero Card -->
     <header class="scan-hero">
       <div class="hero-banner">
-        {#if data.scan.banner_id}
-          <img src="/media/{data.scan.banner_id}" alt="Banner de {data.scan.name}" class="banner-img" />
+        {#if data.scan.bannerId}
+          <img src="/media/{data.scan.bannerId}" alt="Banner de {data.scan.name}" class="banner-img" />
           <div class="banner-gradient"></div>
         {:else}
-          <div class="banner-placeholder" class:official-bg={data.scan.is_official}></div>
+          <div class="banner-placeholder" class:official-bg={data.scan.isOfficial}></div>
         {/if}
       </div>
 
       <div class="hero-body">
         <div class="hero-identity-row">
           <!-- Logo Wrap: relative z-2 prevents any banner cut-off -->
-          <div class="scan-logo-wrap" class:official-logo={data.scan.is_official}>
-            {#if data.scan.logo_id}
-              <img src="/media/{data.scan.logo_id}" alt="Logo de {data.scan.name}" class="logo-img" />
+          <div class="scan-logo-wrap" class:official-logo={data.scan.isOfficial}>
+            {#if data.scan.logoId}
+              <img src="/media/{data.scan.logoId}" alt="Logo de {data.scan.name}" class="logo-img" />
             {:else}
               <div class="logo-placeholder">
                 {data.scan.name.charAt(0).toUpperCase()}
@@ -135,7 +135,7 @@
           <div class="identity-meta">
             <div class="name-line">
               <h1 class="scan-title">{data.scan.name}</h1>
-              {#if data.scan.is_official}
+              {#if data.scan.isOfficial}
                 <span class="badge-official">
                   <Star size={13} fill="#dfc28d" />
                   <span>Scan Oficial</span>
@@ -156,7 +156,7 @@
             </div>
 
             <p class="scan-bio">
-              {data.scan.description || (data.scan.is_official ? "Scan oficial e núcleo editorial de traduções do Project Nox." : "Grupo independente de tradução e edição parceiro do Project Nox.")}
+              {data.scan.description || (data.scan.isOfficial ? "Scan oficial e núcleo editorial de traduções do Project Nox." : "Grupo independente de tradução e edição parceiro do Project Nox.")}
             </p>
           </div>
 
@@ -387,7 +387,7 @@
                   <div class="chapter-right">
                     <span class="chapter-date">
                       <Clock size={13} />
-                      <span>{relativeTime(ch.published_at)}</span>
+                      <span>{relativeTime(ch.publishedAt)}</span>
                     </span>
                     <a href="/ler/{ch.id}" class="btn-read">
                       <span>Ler Capítulo</span>
@@ -420,15 +420,15 @@
                   {#each owners as member}
                     <div class="member-card is-owner">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        displayName={member.display_name || member.username}
+                        avatarId={member.avatarId}
+                        displayName={member.displayName || member.username}
                         size={56}
                         frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
                           <a href="/u/{member.username}" class="member-name">
-                            {member.display_name || member.username}
+                            {member.displayName || member.username}
                           </a>
                           <span class="owner-badge">
                             👑 Dono
@@ -464,15 +464,15 @@
                   {#each admins as member}
                     <div class="member-card is-admin">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        displayName={member.display_name || member.username}
+                        avatarId={member.avatarId}
+                        displayName={member.displayName || member.username}
                         size={52}
                         frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
                           <a href="/u/{member.username}" class="member-name">
-                            {member.display_name || member.username}
+                            {member.displayName || member.username}
                           </a>
                           <span class="admin-badge">Admin</span>
                         </div>
@@ -505,15 +505,15 @@
                   {#each otherMembers as member}
                     <div class="member-card">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        displayName={member.display_name || member.username}
+                        avatarId={member.avatarId}
+                        displayName={member.displayName || member.username}
                         size={48}
                         frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
                           <a href="/u/{member.username}" class="member-name">
-                            {member.display_name || member.username}
+                            {member.displayName || member.username}
                           </a>
                           {#if member.role === "UPLOADER"}
                             <span class="uploader-badge">Uploader</span>
@@ -583,10 +583,10 @@
                         <span class="meta-val">{opening.language}</span>
                       </div>
                     {/if}
-                    {#if opening.experience_level && opening.experience_level !== "QUALQUER"}
+                    {#if opening.experienceLevel && opening.experienceLevel !== "QUALQUER"}
                       <div class="meta-row">
                         <span class="meta-label">Experiência:</span>
-                        <span class="meta-val">{opening.experience_level}</span>
+                        <span class="meta-val">{opening.experienceLevel}</span>
                       </div>
                     {/if}
                     {#if opening.availability}
@@ -652,18 +652,18 @@
                     <div class="timeline-header">
                       <span class="timeline-action">
                         {#if act.action === "APPLICATION_RECEIVED"}
-                          Nova candidatura recebida para <strong>{act.details?.position_name || "vaga"}</strong>
+                          Nova candidatura recebida para <strong>{act.details?.positionName || "vaga"}</strong>
                         {:else if act.action === "MEMBER_ADDED"}
-                          <strong>{act.details?.user_name}</strong> entrou para a equipe como <strong>{act.details?.position_name || "Membro"}</strong>
+                          <strong>{act.details?.userName}</strong> entrou para a equipe como <strong>{act.details?.positionName || "Membro"}</strong>
                         {:else if act.action === "OPENING_CREATED"}
-                          Nova vaga aberta para <strong>{act.details?.position_name || "equipe"}</strong>
+                          Nova vaga aberta para <strong>{act.details?.positionName || "equipe"}</strong>
                         {:else if act.action === "APPLICATION_STATUS"}
                           Candidatura de <strong>{act.details?.applicant_name}</strong> atualizada para <strong>{act.details?.status}</strong>
                         {:else}
                           Atividade registrada na scan
                         {/if}
                       </span>
-                      <span class="timeline-time">{relativeTime(act.created_at)}</span>
+                      <span class="timeline-time">{relativeTime(act.createdAt)}</span>
                     </div>
                   </div>
                 </div>
@@ -756,9 +756,9 @@
                   <div class="comment-main">
                     <div class="comment-avatar">
                       <UserAvatar
-                        displayName={comment.author?.display_name || comment.author?.username || 'Usuário'}
-                        avatarId={comment.author?.avatar_id}
-                        frameId={comment.author?.avatar_frame_id}
+                        displayName={comment.author?.displayName || comment.author?.username || 'Usuário'}
+                        avatarId={comment.author?.avatarId}
+                        frameId={comment.author?.avatarFrameId}
                         size={38}
                       />
                     </div>
@@ -766,13 +766,13 @@
                       <div class="comment-meta-header">
                         <div class="comment-author-info">
                           <a href="/u/{comment.author?.username}" class="comment-author-name">
-                            {comment.author?.display_name || comment.author?.username || 'Usuário'}
+                            {comment.author?.displayName || comment.author?.username || 'Usuário'}
                           </a>
                           {#if comment.isStaff}
                             <span class="comment-staff-pill" title="Membro desta scan">Staff</span>
                           {/if}
                         </div>
-                        <time class="comment-timestamp">{relativeTime(comment.created_at)}</time>
+                        <time class="comment-timestamp">{relativeTime(comment.createdAt)}</time>
                       </div>
 
                       <p class="comment-text">{comment.body}</p>
@@ -850,7 +850,7 @@
                           </form>
                         {/if}
 
-                        {#if data.viewer && comment.user_id !== data.viewer.id}
+                        {#if data.viewer && comment.userId !== data.viewer.id}
                           <button
                             type="button"
                             class="btn-comment-action btn-report"
@@ -913,9 +913,9 @@
                               <CornerDownRight size={14} class="reply-turn-icon" />
                               <div class="reply-avatar">
                                 <UserAvatar
-                                  displayName={reply.author?.display_name || reply.author?.username || 'Usuário'}
-                                  avatarId={reply.author?.avatar_id}
-                                  frameId={reply.author?.avatar_frame_id}
+                                  displayName={reply.author?.displayName || reply.author?.username || 'Usuário'}
+                                  avatarId={reply.author?.avatarId}
+                                  frameId={reply.author?.avatarFrameId}
                                   size={28}
                                 />
                               </div>
@@ -923,13 +923,13 @@
                                 <div class="comment-meta-header">
                                   <div class="comment-author-info">
                                     <a href="/u/{reply.author?.username}" class="comment-author-name">
-                                      {reply.author?.display_name || reply.author?.username || 'Usuário'}
+                                      {reply.author?.displayName || reply.author?.username || 'Usuário'}
                                     </a>
                                     {#if reply.isStaff}
                                       <span class="comment-staff-pill">Staff</span>
                                     {/if}
                                   </div>
-                                  <time class="comment-timestamp">{relativeTime(reply.created_at)}</time>
+                                  <time class="comment-timestamp">{relativeTime(reply.createdAt)}</time>
                                 </div>
 
                                 <p class="comment-text">{reply.body}</p>
@@ -967,7 +967,7 @@
                                     </form>
                                   {/if}
 
-                                  {#if data.viewer && reply.user_id !== data.viewer.id}
+                                  {#if data.viewer && reply.userId !== data.viewer.id}
                                     <button
                                       type="button"
                                       class="btn-comment-action btn-report"
@@ -1110,7 +1110,7 @@
                 <label for="q-{q.id}" class="form-label">
                   {q.question} {q.required ? '*' : '(Opcional)'}
                 </label>
-                {#if q.question_type === 'TEXT_LONG'}
+                {#if q.questionType === 'TEXT_LONG'}
                   <textarea
                     id="q-{q.id}"
                     name="question_{q.id}"
@@ -1119,13 +1119,13 @@
                     class="form-textarea"
                     placeholder="Sua resposta..."
                   ></textarea>
-                {:else if q.question_type === 'YES_NO'}
+                {:else if q.questionType === 'YES_NO'}
                   <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
                     <option value="">Selecione...</option>
                     <option value="Sim">Sim</option>
                     <option value="Não">Não</option>
                   </select>
-                {:else if q.question_type === 'SINGLE_CHOICE'}
+                {:else if q.questionType === 'SINGLE_CHOICE'}
                   {@const opts = Array.isArray(q.options) ? q.options : []}
                   <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
                     <option value="">Selecione uma opção...</option>

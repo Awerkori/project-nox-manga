@@ -23,8 +23,7 @@ export const POST = async ({ locals, request }) => {
   const note = formData.get('note')?.toString() || '';
   const file = formData.get('file');
 
-  if (!scanId || !productionChapterId || !stageId) {
-    return json({ error: 'scan_id, production_chapter_id e stage_id são obrigatórios' }, { status: 400 });
+  if (!scanId || !productionChapterId || !stageId) {return json({ error: 'scanId, productionChapterId e stageId são obrigatórios'}, { status: 400 });
   }
 
   if (!file || !(file instanceof Blob)) {
@@ -40,7 +39,7 @@ export const POST = async ({ locals, request }) => {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!member) {
@@ -159,7 +158,7 @@ export const POST = async ({ locals, request }) => {
         bytes,
         fileName: safeFilename,
         mime: file.type || 'application/octet-stream',
-        userId: locals.user.id,
+        userId: locals.user!.id,
         scanId,
         productionChapterId,
         stageId
@@ -224,34 +223,32 @@ export const POST = async ({ locals, request }) => {
   // Mark previous versions as not current
   await db
     .from('scan_production_files')
-    .update({ is_current: false })
+    .update({isCurrent: false})
     .eq('production_chapter_id', productionChapterId)
     .eq('stage_id', stageId);
 
   // Insert new version
   const { data: newFile, error: insertErr } = await db
     .from('scan_production_files')
-    .insert({
-      scan_id: scanId,
-      work_id: chapter.work_id,
-      production_chapter_id: productionChapterId,
-      stage_id: stageId,
-      stage_slug: stage.slug,
-      file_name: rawFilename,
-      byte_size: storedRecord.byteSize,
-      mime_type: file.type || 'application/octet-stream',
-      file_key: storedRecord.fileKey,
-      storage_pool_id: storedRecord.poolId,
-      storage_shard_id: storedRecord.shardId,
-      bot_reference: storedRecord.botReference,
-      telegram_file_id: storedRecord.telegramFileId,
+    .insert({scanId: scanId,
+      workId: chapter.workId,
+      productionChapterId: productionChapterId,
+      stageId: stageId,
+      stageSlug: stage.slug,
+      fileName: rawFilename,
+      byteSize: storedRecord.byteSize,
+      mimeType: file.type || 'application/octet-stream',
+      fileKey: storedRecord.fileKey,
+      storagePoolId: storedRecord.poolId,
+      storageShardId: storedRecord.shardId,
+      botReference: storedRecord.botReference,
+      telegramFileId: storedRecord.telegramFileId,
       sha256: storedRecord.sha256,
       provider: storedRecord.provider,
       version: nextVersion,
-      uploaded_by: locals.user.id,
-      is_current: true,
-      note: note || null
-    })
+      uploadedBy: locals.user!.id,
+      isCurrent: true,
+      note: note || null})
     .select()
     .single();
 
@@ -262,7 +259,7 @@ export const POST = async ({ locals, request }) => {
   // Update stage activity
   await db
     .from('scan_chapter_stages')
-    .update({ last_activity_at: new Date().toISOString() })
+    .update({lastActivityAt: new Date().toISOString()})
     .eq('production_chapter_id', productionChapterId)
     .eq('stage_id', stageId);
 
@@ -270,27 +267,25 @@ export const POST = async ({ locals, request }) => {
   const { data: callerMember } = await db
     .from('members')
     .select('username, display_name')
-    .eq('id', locals.user.id)
+    .eq('id', locals.user!.id)
     .single();
 
-  const callerName = callerMember?.display_name || callerMember?.username || 'Membro';
+  const callerName = callerMember?.displayName || callerMember?.username || 'Membro';
 
   await db
     .from('scan_chapter_timeline')
-    .insert({
-      scan_id: scanId,
-      production_chapter_id: productionChapterId,
-      stage_id: stageId,
-      stage_slug: stage.slug,
-      event_type: 'FILE_UPLOADED',
-      user_id: locals.user.id,
-      user_name: callerName,
+    .insert({scanId: scanId,
+      productionChapterId: productionChapterId,
+      stageId: stageId,
+      stageSlug: stage.slug,
+      eventType: 'FILE_UPLOADED',
+      userId: locals.user!.id,
+      userName: callerName,
       details: {
-        file_name: rawFilename,
+        fileName: rawFilename,
         version: nextVersion,
-        byte_size: file.size,
-        note: note || null
-      }
+        byteSize: file.size,
+        note: note || null}
     });
 
   // Re-resolve DAG dependencies

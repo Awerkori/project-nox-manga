@@ -1,5 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { ilike, or, desc, eq } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user || locals.role !== 'ADMIN') {
@@ -12,29 +14,38 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     return json({ users: [] });
   }
 
-  const { data: members, error: dbError } = await locals.db
-    .from('members')
-    .select('id, username, display_name, avatar_id, created_at, xp, access_roles(role, suspended)')
-    .or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`)
-    .order('created_at', { ascending: false })
-    .limit(15);
+  const { data: members, error: dbError } = await safeQuery(
+    db.select({
+      id: schema.members.id,
+      username: schema.members.username,
+      displayName: schema.members.displayName,
+      avatarId: schema.members.avatarId,
+      createdAt: schema.members.createdAt,
+      xp: schema.members.xp,
+      role: schema.accessRoles.role,
+      suspended: schema.accessRoles.suspended
+    })
+    .from(schema.members)
+    .leftJoin(schema.accessRoles, eq(schema.members.id, schema.accessRoles.userId))
+    .where(or(ilike(schema.members.username, `%${cleanQ}%`), ilike(schema.members.displayName, `%${cleanQ}%`)))
+    .orderBy(desc(schema.members.createdAt))
+    .limit(15)
+  );
 
   if (dbError) {
     throw error(500, 'Erro ao buscar membros: ' + dbError.message);
   }
 
-  const users = (members || []).map((m: any) => {
-    const role = m.access_roles?.role || 'USER';
+  const users = (members || []).map((m: any) => {const role = m.role || 'USER';
     return {
       id: m.id,
       username: m.username,
-      display_name: m.display_name,
-      avatar_id: m.avatar_id,
+      displayName: m.displayName,
+      avatarId: m.avatarId,
       xp: m.xp || 0,
       role,
       isStaff: role === 'ADMIN' || role === 'STAFF_SITE' || role === 'EDITOR',
-      suspended: Boolean(m.access_roles?.suspended)
-    };
+      suspended: Boolean(m.suspended)};
   });
 
   return json({ users });

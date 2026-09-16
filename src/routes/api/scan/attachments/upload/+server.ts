@@ -18,8 +18,7 @@ export const POST = async ({ locals, request }) => {
   const contextId = formData.get('context_id')?.toString();
   const file = formData.get('file');
 
-  if (!scanId || !contextId) {
-    return json({ error: 'scan_id e context_id são obrigatórios' }, { status: 400 });
+  if (!scanId || !contextId) {return json({ error: 'scanId e contextId são obrigatórios'}, { status: 400 });
   }
 
   if (!file || !(file instanceof Blob)) {
@@ -35,7 +34,7 @@ export const POST = async ({ locals, request }) => {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!member) {
@@ -64,19 +63,17 @@ export const POST = async ({ locals, request }) => {
   // Insert attachment metadata
   const { data: attachment, error: dbErr } = await db
     .from('scan_attachments')
-    .insert({
-      scan_id: scanId,
-      context_type: contextType,
-      context_id: contextId,
-      uploaded_by: locals.user.id,
-      original_filename: rawFilename,
-      safe_filename: safeFilename,
-      mime_type: file.type || 'application/octet-stream',
+    .insert({scanId: scanId,
+      contextType: contextType,
+      contextId: contextId,
+      uploadedBy: locals.user!.id,
+      originalFilename: rawFilename,
+      safeFilename: safeFilename,
+      mimeType: file.type || 'application/octet-stream',
       size: file.size,
       checksum: checksum,
-      storage_reference: 'att_' + checksum.slice(0, 16) + '_' + Date.now(),
-      storage_provider: 'PRIVATE_STORAGE'
-    })
+      storageReference: 'att_' + checksum.slice(0, 16) + '_' + Date.now(),
+      storageProvider: 'PRIVATE_STORAGE'})
     .select()
     .single();
 

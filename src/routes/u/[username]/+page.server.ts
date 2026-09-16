@@ -38,10 +38,10 @@ export const load = async ({ locals, params }) => {
   }
 
   const isSelf = locals.user?.id === member.id;
-  const canViewAchievements = (member.privacy_show_achievements ?? true) || isSelf;
-  const canViewCosmetics = (member.privacy_show_cosmetics ?? true) || isSelf;
-  const canViewFavorites = (member.privacy_show_favorites ?? true) || isSelf;
-  const canViewReadingHistory = (member.privacy_show_reading_history ?? true) || isSelf;
+  const canViewAchievements = (member.privacyShowAchievements ?? true) || isSelf;
+  const canViewCosmetics = (member.privacyShowCosmetics ?? true) || isSelf;
+  const canViewFavorites = (member.privacyShowFavorites ?? true) || isSelf;
+  const canViewReadingHistory = (member.privacyShowReadingHistory ?? true) || isSelf;
 
   const [
     statsRes,
@@ -100,19 +100,19 @@ export const load = async ({ locals, params }) => {
           .eq('user_id', member.id)
           .order('acquired_at', { ascending: false })
       : Promise.resolve({ data: [] }),
-    locals.user && locals.user.id !== member.id
+    locals.user && locals.user!.id !== member.id
       ? locals.db
           .from('user_follows')
           .select('follower_id')
-          .eq('follower_id', locals.user.id)
+          .eq('follower_id', locals.user!.id)
           .eq('following_id', member.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    member.equipped_banner_id
+    member.equippedBannerId
       ? locals.db
           .from('shop_items')
           .select('id, style_data')
-          .eq('id', member.equipped_banner_id)
+          .eq('id', member.equippedBannerId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     canViewFavorites
@@ -213,10 +213,8 @@ export const load = async ({ locals, params }) => {
   ]);
 
   // Format unlocked achievements
-  const achievements = (achievementsRes.data || []).map((row: any) => ({
-    unlocked_at: row.unlocked_at,
-    ...row.achievements
-  }));
+  const achievements = (achievementsRes.data || []).map((row: any) => ({unlockedAt: row.unlockedAt,
+    ...row.achievements}));
 
   // Rarity Breakdown
   const rarityCounts: Record<string, number> = {
@@ -234,11 +232,11 @@ export const load = async ({ locals, params }) => {
 
   // Determine Featured Achievement (Deterministic: user choice -> equipped badge -> rarest unlocked)
   let featuredAchievement: any = null;
-  if (member.featured_achievement_id) {
-    featuredAchievement = achievements.find((a: any) => a.id === member.featured_achievement_id) || null;
+  if (member.featuredAchievementId) {
+    featuredAchievement = achievements.find((a: any) => a.id === member.featuredAchievementId) || null;
   }
-  if (!featuredAchievement && member.equipped_badge_id) {
-    featuredAchievement = achievements.find((a: any) => a.id === member.equipped_badge_id) || null;
+  if (!featuredAchievement && member.equippedBadgeId) {
+    featuredAchievement = achievements.find((a: any) => a.id === member.equippedBadgeId) || null;
   }
   if (!featuredAchievement && achievements.length > 0) {
     const RARITY_WEIGHT: Record<string, number> = { MITICA: 6, LENDARIA: 5, EPICA: 4, RARA: 3, INCOMUM: 2, COMUM: 1 };
@@ -246,15 +244,14 @@ export const load = async ({ locals, params }) => {
       const wa = RARITY_WEIGHT[a.rarity] || 1;
       const wb = RARITY_WEIGHT[b.rarity] || 1;
       if (wa !== wb) return wb - wa;
-      return new Date(b.unlocked_at).getTime() - new Date(a.unlocked_at).getTime();
+      return new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime();
     });
     featuredAchievement = sorted[0] || null;
   }
 
   // Format cosmetic items and deduplicate (canonical inventory + legacy items)
   const cosmeticsMap = new Map<string, any>();
-  for (const row of inventoryRes.data || []) {
-    const itemKey = row.item_id || row.shop_items?.id;
+  for (const row of inventoryRes.data || []) {const itemKey = row.itemId || row.shop_items?.id;
     if (!itemKey || cosmeticsMap.has(itemKey)) continue;
 
     if (row.shop_items?.id) {
@@ -264,13 +261,11 @@ export const load = async ({ locals, params }) => {
         description: row.shop_items.description,
         kind: row.shop_items.kind,
         rarity: row.shop_items.rarity || 'COMUM',
-        is_animated: row.shop_items.is_animated,
-        style_data: row.shop_items.style_data,
+        isAnimated: row.shop_items.isAnimated,
+        styleData: row.shop_items.styleData,
         origin: row.origin || 'SHOP',
-        acquired_at: row.acquired_at
-      });
-    } else {
-      const noxTitle = NOX_TITLES.find(
+        acquiredAt: row.acquiredAt});
+    } else {const noxTitle = NOX_TITLES.find(
         (t) =>
           t.id.toLowerCase() === itemKey.toLowerCase() ||
           t.name.toLowerCase() === itemKey.toLowerCase()
@@ -282,32 +277,29 @@ export const load = async ({ locals, params }) => {
           description: noxTitle.description,
           kind: 'TITLE',
           rarity: 'COMUM',
-          is_animated: false,
-          style_data: null,
+          isAnimated: false,
+          styleData: null,
           origin: row.origin || 'LEGACY',
-          acquired_at: row.acquired_at
-        });
-      } else {
-        cosmeticsMap.set(itemKey, {
+          acquiredAt: row.acquiredAt});
+      } else {cosmeticsMap.set(itemKey, {
           id: itemKey,
           name: itemKey,
           description: 'Item cosmético desbloqueado',
           kind: 'COSMETIC',
           rarity: 'COMUM',
-          is_animated: false,
-          style_data: null,
+          isAnimated: false,
+          styleData: null,
           origin: row.origin || 'LEGACY',
-          acquired_at: row.acquired_at
-        });
+          acquiredAt: row.acquiredAt});
       }
     }
   }
 
   // Check equipped legacy items not yet in map
   const equippedLegacyIds = [
-    member.avatar_frame_id,
-    member.equipped_banner_id,
-    member.equipped_title_id
+    member.avatarFrameId,
+    member.equippedBannerId,
+    member.equippedTitleId
   ].filter((id): id is string => Boolean(id && typeof id === 'string' && !cosmeticsMap.has(id)));
 
   if (equippedLegacyIds.length > 0) {
@@ -316,29 +308,26 @@ export const load = async ({ locals, params }) => {
       .select('id, name, description, kind, rarity, is_animated, style_data')
       .in('id', equippedLegacyIds);
 
-    for (const item of legacyShopItems || []) {
-      if (!cosmeticsMap.has(item.id)) {
+    for (const item of legacyShopItems || []) {if (!cosmeticsMap.has(item.id)) {
         cosmeticsMap.set(item.id, {
           id: item.id,
           name: item.name,
           description: item.description,
           kind: item.kind,
           rarity: item.rarity || 'COMUM',
-          is_animated: item.is_animated,
-          style_data: item.style_data,
+          isAnimated: item.isAnimated,
+          styleData: item.styleData,
           origin: 'LEGACY',
-          acquired_at: member.created_at
-        });
+          acquiredAt: member.createdAt});
       }
     }
   }
 
   // Check if equipped_title_id was from NOX_TITLES
-  if (member.equipped_title_id && !cosmeticsMap.has(member.equipped_title_id)) {
-    const noxTitle = NOX_TITLES.find(
+  if (member.equippedTitleId && !cosmeticsMap.has(member.equippedTitleId)) {const noxTitle = NOX_TITLES.find(
       (t) =>
-        t.id.toLowerCase() === member.equipped_title_id?.toLowerCase() ||
-        t.name.toLowerCase() === member.equipped_title_id?.toLowerCase()
+        t.id.toLowerCase() === member.equippedTitleId?.toLowerCase() ||
+        t.name.toLowerCase() === member.equippedTitleId?.toLowerCase()
     );
     if (noxTitle) {
       cosmeticsMap.set(noxTitle.id, {
@@ -347,26 +336,24 @@ export const load = async ({ locals, params }) => {
         description: noxTitle.description,
         kind: 'TITLE',
         rarity: 'COMUM',
-        is_animated: false,
-        style_data: null,
+        isAnimated: false,
+        styleData: null,
         origin: 'LEGACY',
-        acquired_at: member.created_at
-      });
+        acquiredAt: member.createdAt});
     }
   }
 
   // Check if name_color is set
-  if (member.name_color && !cosmeticsMap.has(member.name_color)) {
-    cosmeticsMap.set(member.name_color, {
-      id: member.name_color,
+  if (member.nameColor && !cosmeticsMap.has(member.nameColor)) {cosmeticsMap.set(member.nameColor, {
+      id: member.nameColor,
       name: 'Cor Personalizada',
       description: 'Cor exclusiva para o nome do leitor no perfil e comentários.',
       kind: 'NAME_COLOR',
       rarity: 'RARA',
-      is_animated: false,
-      style_data: { color: member.name_color },
+      isAnimated: false,
+      styleData: { color: member.nameColor},
       origin: 'LEGACY',
-      acquired_at: member.created_at
+      acquired_at: member.createdAt
     });
   }
 
@@ -389,76 +376,72 @@ export const load = async ({ locals, params }) => {
   for (const r of (readingRes.data || []) as any[]) {
     const ch = r.chapters;
     if (!ch || !ch.works) continue;
-    const wid = ch.work_id || ch.works.id;
+    const wid = ch.workId || ch.works.id;
     if (!readingMap.has(wid)) {
       readingMap.set(wid, {
         workId: wid,
         workTitle: ch.works.title,
         workSlug: ch.works.slug,
-        coverId: ch.works.cover_id,
-        contentRating: ch.works.content_rating,
+        coverId: ch.works.coverId,
+        contentRating: ch.works.contentRating,
         kind: ch.works.kind,
         chapterId: ch.id,
         chapterNumber: ch.number,
         chapterTitle: ch.title,
         page: r.page,
-        maxPage: r.max_page,
-        completedAt: r.completed_at,
-        updatedAt: r.updated_at
+        maxPage: r.maxPage,
+        completedAt: r.completedAt,
+        updatedAt: r.updatedAt
       });
     }
     if (readingMap.size >= 16) break;
   }
   const recentReadings = Array.from(readingMap.values());
 
-  const scanPositions = (scanMemberPositionsRes.data || []).map((p: any) => ({
-    scan_id: p.scan_id,
-    is_primary: p.is_primary,
-    created_at: p.created_at,
+  const scanPositions = (scanMemberPositionsRes.data || []).map((p: any) => ({scanId: p.scanId,
+    isPrimary: p.isPrimary,
+    createdAt: p.createdAt,
     id: p.scan_positions?.id,
     name: p.scan_positions?.name,
-    icon: p.scan_positions?.icon
-  }));
+    icon: p.scan_positions?.icon}));
 
   const isViewerGlobalAdmin = ['ADMIN', 'EDITOR'].includes(locals.role || '');
   const canViewScanBadges = (
-    !member.admin_hide_scan_badges || isViewerGlobalAdmin
+    !member.adminHideScanBadges || isViewerGlobalAdmin
   ) && (
-    (member.privacy_show_scans ?? true) || isSelf || isViewerGlobalAdmin
+    (member.privacyShowScans ?? true) || isSelf || isViewerGlobalAdmin
   ) && (
-    (member.privacy_scan_mode ?? 'PRIMARY') !== 'NONE' || isSelf || isViewerGlobalAdmin
+    (member.privacyScanMode ?? 'PRIMARY') !== 'NONE' || isSelf || isViewerGlobalAdmin
   );
 
   let scanRoles: any[] = [];
 
   if (canViewScanBadges) {
     const rawScanRoles = (scanRolesRes.data || []).filter((r: any) => {
-      if (r.hidden_by_admin && !isViewerGlobalAdmin) return false;
-      if (!r.is_public && !isSelf && !isViewerGlobalAdmin) return false;
+      if (r.hiddenByAdmin && !isViewerGlobalAdmin) return false;
+      if (!r.isPublic && !isSelf && !isViewerGlobalAdmin) return false;
       return true;
     });
 
-    const mapped = rawScanRoles.map((r: any) => {
-      const userPositions = scanPositions.filter((p: any) => p.scan_id === r.scans.id && (isViewerGlobalAdmin || (!p.hidden_by_admin && (p.is_public || isSelf))));
-      const primaryPos = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
-      const prep = r.scans.display_preposition || getScanPreposition(r.scans);
+    const mapped = rawScanRoles.map((r: any) => {const userPositions = scanPositions.filter((p: any) => p.scanId === r.scans.id && (isViewerGlobalAdmin || (!p.hiddenByAdmin && (p.isPublic || isSelf))));
+      const primaryPos = userPositions.find((p: any) => p.isPrimary) || userPositions[0] || null;
+      const prep = r.scans.displayPreposition || getScanPreposition(r.scans);
       const badgeText = formatScanBadgeText(r.role, primaryPos?.name, r.scans.name);
       const fullTitle = formatScanRoleTitle(r.role, primaryPos?.name, r.scans.name, prep);
 
       return {
         role: r.role,
-        is_public: r.is_public,
-        hidden_by_admin: r.hidden_by_admin,
-        created_at: r.created_at,
+        isPublic: r.isPublic,
+        hiddenByAdmin: r.hiddenByAdmin,
+        createdAt: r.createdAt,
         scan: r.scans,
         positions: userPositions,
         primaryPosition: primaryPos,
         badgeText,
-        fullTitle
-      };
+        fullTitle};
     });
 
-    if (member.privacy_scan_mode === 'PRIMARY' && !isSelf && !isViewerGlobalAdmin) {
+    if (member.privacyScanMode === 'PRIMARY' && !isSelf && !isViewerGlobalAdmin) {
       scanRoles = mapped.slice(0, 1);
     } else {
       scanRoles = mapped;
@@ -470,9 +453,9 @@ export const load = async ({ locals, params }) => {
   return {
     member: {
       ...member,
-      frame_id: member.avatar_frame_id
+      frame_id: member.avatarFrameId
     },
-    cosmetic_banner: (bannerRes.data?.style_data as any) || null,
+    cosmetic_banner: (bannerRes.data?.styleData as any) || null,
     stats: profileStats,
     followersCount: followersCountRes.count ?? 0,
     followingCount: followingCountRes.count ?? 0,

@@ -58,18 +58,18 @@
 
   // 1. Minhas Tarefas (legacy tasks assigned)
   let myTasks = $derived(
-    tasks.filter((t: any) => t.assigned_to === userProfile?.id && t.status !== 'DONE')
+    tasks.filter((t: any) => t.assignedTo === userProfile?.id && t.status !== 'DONE')
   );
 
   // 1b. Meus Capítulos Editoriais (chapter stages assigned to logged in user)
   let myEditorialStages = $derived.by(() => {
     if (!chapterStages || !userProfile?.id) return [];
     return chapterStages
-      .filter((cs: any) => cs.assigned_to === userProfile?.id && (cs.status === 'IN_PROGRESS' || cs.status === 'REWORK'))
+      .filter((cs: any) => cs.assignedTo === userProfile?.id && (cs.status === 'IN_PROGRESS' || cs.status === 'REWORK'))
       .map((cs: any) => {
-        const ch = chapters.find((c: any) => c.id === cs.production_chapter_id);
-        const work = ch?.work || works.find((w: any) => w.id === ch?.work_id);
-        const stage = stages.find((s: any) => s.id === cs.stage_id) || cs.stage;
+        const ch = chapters.find((c: any) => c.id === cs.productionChapterId);
+        const work = ch?.work || works.find((w: any) => w.id === ch?.workId);
+        const stage = stages.find((s: any) => s.id === cs.stageId) || cs.stage;
         return { cs, ch, work, stage };
       });
   });
@@ -78,13 +78,13 @@
 
   // 2. Precisa da sua atenção
   let unreadMentions = $derived(
-    notifications.filter((n: any) => !n.is_read && n.type === 'MENTION').length
+    notifications.filter((n: any) => !n.isRead && n.type === 'MENTION').length
   );
   let openQcCount = $derived(
     qcIssues.filter((q: any) => q.status === 'OPEN').length
   );
   let unassignedTasks = $derived(
-    tasks.filter((t: any) => !t.assigned_to && t.status === 'TODO').length
+    tasks.filter((t: any) => !t.assignedTo && t.status === 'TODO').length
   );
 
   // 3. Filas de Produção (7 canonical stages with real available counts)
@@ -99,7 +99,7 @@
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
-            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assignedTo) {
               map[cSt.slug]++;
             }
           }
@@ -140,8 +140,8 @@
   // 6. Próximos Prazos
   let upcomingDeadlines = $derived(
     tasks
-      .filter((t: any) => (t.due_date || t.due_at) && t.status !== 'DONE')
-      .sort((a: any, b: any) => new Date(a.due_date || a.due_at).getTime() - new Date(b.due_date || b.due_at).getTime())
+      .filter((t: any) => (t.due_date || t.dueAt) && t.status !== 'DONE')
+      .sort((a: any, b: any) => new Date(a.due_date || a.dueAt).getTime() - new Date(b.due_date || b.dueAt).getTime())
       .slice(0, 4)
   );
 </script>
@@ -152,7 +152,7 @@
     <div class="hero-text">
       <span class="scan-badge-label">{currentScan?.name || 'Project Nox'}</span>
       <h1 class="welcome-heading">
-        Olá, {userProfile?.display_name || 'Membro'}.
+        Olá, {userProfile?.displayName || 'Membro'}.
       </h1>
       <p class="welcome-sub">
         O que precisa da sua atenção hoje na Scan?
@@ -253,9 +253,9 @@
                   <div class="task-info">
                     <div class="task-work-title">
                       <strong class="text-slate-100">{ed.work?.title || 'Obra'}</strong>
-                      <span class="ch-num">#{ed.ch?.chapter_number}</span>
-                      {#if ed.ch?.chapter_label}
-                        <span class="ch-label-sub">· {ed.ch.chapter_label}</span>
+                      <span class="ch-num">#{ed.ch?.chapterNumber}</span>
+                      {#if ed.ch?.chapterLabel}
+                        <span class="ch-label-sub">· {ed.ch.chapterLabel}</span>
                       {/if}
                     </div>
                     <div class="task-sub-meta">
@@ -356,7 +356,7 @@
               <div class="chapter-quick-row">
                 <div class="chapter-work-meta">
                   <span class="work-name">{chData.work?.title || chData.works?.title || 'Obra'}</span>
-                  <span class="chapter-num">Capítulo #{chData.chapter_number || chData.number || '—'}</span>
+                  <span class="chapter-num">Capítulo #{chData.chapterNumber || chData.number || '—'}</span>
                 </div>
                 <div class="chapter-status-pill">
                   <span>Ativo</span>
@@ -399,24 +399,24 @@
         {#if recentMural.length > 0}
           <div class="mural-quick-feed">
             {#each recentMural as post}
-              <div class="mural-quick-card" class:is-pinned={post.is_pinned}>
+              <div class="mural-quick-card" class:is-pinned={post.isPinned}>
                 <div class="mural-card-top">
-                  {#if post.is_pinned}
+                  {#if post.isPinned}
                     <span class="pinned-tag">📌 FIXADO</span>
                   {/if}
-                  <span class="post-type-tag">{post.post_type || 'AVISO'}</span>
-                  <span class="post-time">{relativeTime(post.created_at)}</span>
+                  <span class="post-type-tag">{post.postType || 'AVISO'}</span>
+                  <span class="post-time">{relativeTime(post.createdAt)}</span>
                 </div>
                 <h3 class="mural-post-title">{post.title}</h3>
                 <p class="mural-post-snippet">{post.content.slice(0, 140)}...</p>
                 <div class="mural-card-footer">
                   <div class="author-meta">
                     <UserAvatar
-                      avatarId={post.author?.avatar_id}
-                      displayName={post.author?.display_name}
+                      avatarId={post.author?.avatarId}
+                      displayName={post.author?.displayName}
                       size={20}
                     />
-                    <span class="author-name">{post.author?.display_name || 'Staff'}</span>
+                    <span class="author-name">{post.author?.displayName || 'Staff'}</span>
                   </div>
                   {#if post.scan_attachments && post.scan_attachments.length > 0}
                     <span class="attachment-count-pill">
@@ -449,7 +449,7 @@
         {#if upcomingDeadlines.length > 0}
           <div class="deadlines-list">
             {#each upcomingDeadlines as d}
-              {@const dDate = d.due_date || d.due_at}
+              {@const dDate = d.due_date || d.dueAt}
               <div class="deadline-row">
                 <div class="deadline-date-box">
                   <span class="date-day">{new Date(dDate).getDate()}</span>

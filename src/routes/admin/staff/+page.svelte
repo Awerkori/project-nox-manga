@@ -366,14 +366,14 @@
                 }}
               >
                 <div class="user-result-avatar">
-                  {#if user.avatar_id}
-                    <img src="/media/{user.avatar_id}" alt="" class="avatar-img" />
+                  {#if user.avatarId}
+                    <img src="/media/{user.avatarId}" alt="" class="avatar-img" />
                   {:else}
-                    <span>{user.display_name.charAt(0).toUpperCase()}</span>
+                    <span>{user.displayName.charAt(0).toUpperCase()}</span>
                   {/if}
                 </div>
                 <div class="user-result-meta">
-                  <strong class="user-result-name">{user.display_name}</strong>
+                  <strong class="user-result-name">{user.displayName}</strong>
                   <span class="user-result-handle">@{user.username}</span>
                 </div>
                 {#if user.isStaff}
@@ -394,14 +394,14 @@
         {#if selectedUser}
           <div class="selected-user-card">
             <div class="selected-user-avatar">
-              {#if selectedUser.avatar_id}
-                <img src="/media/{selectedUser.avatar_id}" alt="" class="avatar-img" />
+              {#if selectedUser.avatarId}
+                <img src="/media/{selectedUser.avatarId}" alt="" class="avatar-img" />
               {:else}
-                <span>{selectedUser.display_name.charAt(0).toUpperCase()}</span>
+                <span>{selectedUser.displayName.charAt(0).toUpperCase()}</span>
               {/if}
             </div>
             <div class="selected-user-info">
-              <strong class="selected-name">{selectedUser.display_name}</strong>
+              <strong class="selected-name">{selectedUser.displayName}</strong>
               <span class="selected-handle">@{selectedUser.username}</span>
             </div>
             <button

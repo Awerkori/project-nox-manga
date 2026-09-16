@@ -72,8 +72,8 @@
     const set = new Set<string>();
     if (Array.isArray(seenStages)) {
       for (const s of seenStages) {
-        if (s?.chapter_stage_id) {
-          set.add(`${s.chapter_stage_id}:${s.availability_version ?? 1}`);
+        if (s?.chapterStageId) {
+          set.add(`${s.chapterStageId}:${s.availabilityVersion ?? 1}`);
         }
       }
     }
@@ -146,11 +146,11 @@
     if (!pipelinePersonalBadgesEnabled || !item?.cs) return false;
     const stageSlug = item.cs.stage?.slug || activeCanonical.slug;
     if (item.cs.status !== 'AVAILABLE' && item.cs.status !== 'REWORK') return false;
-    if (item.cs.assigned_to) return false;
+    if (item.cs.assignedTo) return false;
     if (!userHoldsRoleForStage(stageSlug)) return false;
 
     // If it's QC and reserved for another user, it's not available for me
-    if (matchesStageSlug(stageSlug, 'revisor_qc') && item.cs.qc_assignee_id && item.cs.qc_assignee_id !== currentUserId) {
+    if (matchesStageSlug(stageSlug, 'revisor_qc') && item.cs.qcAssigneeId && item.cs.qcAssigneeId !== currentUserId) {
       return false;
     }
 
@@ -160,7 +160,7 @@
   // Check if a stage item is newly available and unseen by current user
   function isStageNewForMe(item: any): boolean {
     if (!isStageAvailableForMe(item)) return false;
-    const key = `${item.cs.id}:${item.cs.availability_version ?? 1}`;
+    const key = `${item.cs.id}:${item.cs.availabilityVersion ?? 1}`;
     return !seenStageMap.has(key);
   }
 
@@ -177,12 +177,12 @@
       const slug = cs.stage?.slug || '';
       for (const cSt of CANONICAL_STAGES) {
         if (matchesStageSlug(slug, cSt.slug)) {
-          if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+          if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assignedTo) {
             if (userHoldsRoleForStage(cSt.slug)) {
-              if (matchesStageSlug(cSt.slug, 'revisor_qc') && cs.qc_assignee_id && cs.qc_assignee_id !== currentUserId) {
+              if (matchesStageSlug(cSt.slug, 'revisor_qc') && cs.qcAssigneeId && cs.qcAssigneeId !== currentUserId) {
                 continue;
               }
-              const key = `${cs.id}:${cs.availability_version ?? 1}`;
+              const key = `${cs.id}:${cs.availabilityVersion ?? 1}`;
               if (!seenStageMap.has(key)) {
                 counts[cSt.slug]++;
               }
@@ -198,7 +198,7 @@
   async function markStageSeen(chapterStageId: string) {
     if (!pipelinePersonalBadgesEnabled || !chapterStageId) return;
     const stageRecord = chapterStages.find((cs: any) => cs.id === chapterStageId);
-    const ver = stageRecord?.availability_version ?? 1;
+    const ver = stageRecord?.availabilityVersion ?? 1;
     const key = `${chapterStageId}:${ver}`;
     if (localSeenSet.has(key)) return;
 
@@ -364,8 +364,8 @@
     const targetWorkId = rawSelectedWorkId || (works[0]?.id ?? '');
     return activeStageItems.filter((item: any) =>
       (item.cs.status === 'AVAILABLE' || item.cs.status === 'REWORK') &&
-      !item.cs.assigned_to &&
-      (item.work?.id === targetWorkId || item.ch?.work_id === targetWorkId)
+      !item.cs.assignedTo &&
+      (item.work?.id === targetWorkId || item.ch?.workId === targetWorkId)
     );
   });
 
@@ -437,7 +437,7 @@
 
   function openEditModal(item: any) {
     editTargetItem = item;
-    editChapterLabel = item.ch.chapter_label || '';
+    editChapterLabel = item.ch.chapterLabel || '';
     editChapterPriority = item.ch.priority || 'NORMAL';
     editChapterNotes = item.cs.notes || '';
     showEditModal = true;
@@ -484,10 +484,10 @@
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
-            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assignedTo) {
               counts[cSt.slug].available++;
             }
-            if (cs.assigned_to === currentUserId && (cs.status === 'IN_PROGRESS' || cs.status === 'REWORK')) {
+            if (cs.assignedTo === currentUserId && (cs.status === 'IN_PROGRESS' || cs.status === 'REWORK')) {
               counts[cSt.slug].mine++;
             }
             counts[cSt.slug].total++;
@@ -528,7 +528,7 @@
         .map((c: any) => ({
           ch: c,
           cs: { id: c.id, status: 'DONE', stage: { slug: 'publicado', name: 'Publicado' } },
-          work: c.work || works.find((w: any) => w.id === c.work_id)
+          work: c.work || works.find((w: any) => w.id === c.workId)
         }));
     }
 
@@ -539,7 +539,7 @@
         .map((c: any) => ({
           ch: c,
           cs: { id: c.id, status: c.status === 'PUBLISHED' ? 'DONE' : 'AVAILABLE', stage: { slug: 'preview', name: 'Preview' } },
-          work: c.work || works.find((w: any) => w.id === c.work_id)
+          work: c.work || works.find((w: any) => w.id === c.workId)
         }));
     }
 
@@ -548,9 +548,9 @@
     for (const cs of chapterStages) {
       const stageSlug = cs.stage?.slug || '';
       if (matchesStageSlug(stageSlug, target)) {
-        const ch = chapters.find((c: any) => c.id === cs.production_chapter_id);
+        const ch = chapters.find((c: any) => c.id === cs.productionChapterId);
         if (ch) {
-          const work = ch.work || works.find((w: any) => w.id === ch.work_id);
+          const work = ch.work || works.find((w: any) => w.id === ch.workId);
           result.push({ ch, cs, work });
         }
       }
@@ -564,15 +564,15 @@
       .filter((item: any) => {
         if (activeCanonical.slug === 'publicado') return false; // Publicado is historic
         if (activeCanonical.slug === 'preview') return item.cs.status === 'AVAILABLE';
-        return (item.cs.status === 'AVAILABLE' || item.cs.status === 'REWORK') && !item.cs.assigned_to;
+        return (item.cs.status === 'AVAILABLE' || item.cs.status === 'REWORK') && !item.cs.assignedTo;
       })
       .filter((item: any) => {
         const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
         const query = searchQuery.trim().toLowerCase();
         if (!query) return matchesWork;
         const title = (item.work?.title || '').toLowerCase();
-        const num = String(item.ch.chapter_number || '');
-        const label = (item.ch.chapter_label || '').toLowerCase();
+        const num = String(item.ch.chapterNumber || '');
+        const label = (item.ch.chapterLabel || '').toLowerCase();
         return matchesWork && (title.includes(query) || num.includes(query) || label.includes(query));
       })
   );
@@ -583,15 +583,15 @@
       .filter((item: any) => {
         if (activeCanonical.slug === 'publicado') return true; // Show all published in main view
         if (activeCanonical.slug === 'preview') return false;
-        return item.cs.assigned_to === currentUserId && (item.cs.status === 'IN_PROGRESS' || item.cs.status === 'REWORK');
+        return item.cs.assignedTo === currentUserId && (item.cs.status === 'IN_PROGRESS' || item.cs.status === 'REWORK');
       })
       .filter((item: any) => {
         const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
         const query = searchQuery.trim().toLowerCase();
         if (!query) return matchesWork;
         const title = (item.work?.title || '').toLowerCase();
-        const num = String(item.ch.chapter_number || '');
-        const label = (item.ch.chapter_label || '').toLowerCase();
+        const num = String(item.ch.chapterNumber || '');
+        const label = (item.ch.chapterLabel || '').toLowerCase();
         return matchesWork && (title.includes(query) || num.includes(query) || label.includes(query));
       })
   );
@@ -599,12 +599,12 @@
   // Get upstream files for a chapter stage
   function getUpstreamFilesForStage(cs: any, chId: string) {
     const deps: string[] = cs.stage?.dependencies || [];
-    const files = productionFiles.filter((f: any) => f.production_chapter_id === chId && f.is_current);
+    const files = productionFiles.filter((f: any) => f.productionChapterId === chId && f.isCurrent);
 
     // If stage is Typeset, explicitly return Clean and Tradução separated
     if (matchesStageSlug(cs.stage?.slug, 'typeset')) {
-      const cleanFile = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'clean_redraw'));
-      const tradFile = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'traducao'));
+      const cleanFile = files.find((f: any) => matchesStageSlug(f.stageSlug || f.stage?.slug, 'clean_redraw'));
+      const tradFile = files.find((f: any) => matchesStageSlug(f.stageSlug || f.stage?.slug, 'traducao'));
       return {
         isTypeset: true,
         cleanFile,
@@ -615,12 +615,12 @@
 
     if (deps.length === 0) {
       // Return raw file if exists
-      const rawFile = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'raw'));
+      const rawFile = files.find((f: any) => matchesStageSlug(f.stageSlug || f.stage?.slug, 'raw'));
       return { isTypeset: false, all: rawFile ? [rawFile] : [] };
     }
 
     const matched = files.filter((f: any) => {
-      const slug = f.stage_slug || f.stage?.slug || '';
+      const slug = f.stageSlug || f.stage?.slug || '';
       return deps.some(d => matchesStageSlug(slug, d));
     });
 
@@ -630,9 +630,9 @@
   // Get current deliverable file for active stage
   function getCurrentDeliverableFile(cs: any, chId: string) {
     return productionFiles.find((f: any) =>
-      f.production_chapter_id === chId &&
-      (f.stage_id === cs.stage_id || matchesStageSlug(f.stage_slug || f.stage?.slug, cs.stage?.slug)) &&
-      f.is_current
+      f.productionChapterId === chId &&
+      (f.stageId === cs.stageId || matchesStageSlug(f.stageSlug || f.stage?.slug, cs.stage?.slug)) &&
+      f.isCurrent
     );
   }
 
@@ -650,7 +650,7 @@
       const formData = new FormData();
       formData.set('scan_id', scanId);
       formData.set('production_chapter_id', item.ch.id);
-      formData.set('stage_id', item.cs.stage_id);
+      formData.set('stage_id', item.cs.stageId);
       formData.set('file', file);
 
       uploadProgress = 45;
@@ -687,7 +687,7 @@
   // Open rework modal
   function openReworkModal(item: any) {
     reworkSourceStageId = item.cs.id;
-    reworkChapterTitle = `${item.work?.title} - Cap. #${item.ch.chapter_number}`;
+    reworkChapterTitle = `${item.work?.title} - Cap. #${item.ch.chapterNumber}`;
     reworkReason = '';
     reworkTargetSlug = activeCanonical.slug === 'qc' ? 'typeset' : 'clean_redraw';
     showReworkModal = true;
@@ -942,7 +942,7 @@
               <option value="">Selecione o capítulo...</option>
               {#each eligibleRawChaptersForWork as item}
                 <option value={item.cs.id}>
-                  Capítulo #{item.ch.chapter_number} {item.ch.chapter_label ? `(${item.ch.chapter_label})` : ''}
+                  Capítulo #{item.ch.chapterNumber} {item.ch.chapterLabel ? `(${item.ch.chapterLabel})` : ''}
                 </option>
               {/each}
             {/if}
@@ -1050,8 +1050,8 @@
                 >
                   <div class="accordion-header-left">
                     <div class="work-thumbnail sm">
-                      {#if item.work?.cover_id}
-                        <img src="/media/{item.work.cover_id}" alt={item.work.title} class="thumbnail-img" />
+                      {#if item.work?.coverId}
+                        <img src="/media/{item.work.coverId}" alt={item.work.title} class="thumbnail-img" />
                       {:else}
                         <div class="thumbnail-fallback">NOX</div>
                       {/if}
@@ -1061,9 +1061,9 @@
                       <span class="work-title-name" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
                       <div class="chapter-number-row">
                         <h4 class="chapter-number-title">
-                          Capítulo #{item.ch.chapter_number}
-                          {#if item.ch.chapter_label}
-                            <span class="chapter-sublabel">· {item.ch.chapter_label}</span>
+                          Capítulo #{item.ch.chapterNumber}
+                          {#if item.ch.chapterLabel}
+                            <span class="chapter-sublabel">· {item.ch.chapterLabel}</span>
                           {/if}
                         </h4>
                       </div>
@@ -1214,21 +1214,21 @@
                             {#if upstream.cleanFile}
                               <a
                                 href="/api/scan/production/files/{upstream.cleanFile.id}?download=1"
-                                download={upstream.cleanFile.file_name}
+                                download={upstream.cleanFile.fileName}
                                 class="btn-upstream-dl-pill clean"
                               >
                                 <FileText size={13} />
-                                <span>Clean: {upstream.cleanFile.file_name} ({formatBytes(upstream.cleanFile.byte_size)})</span>
+                                <span>Clean: {upstream.cleanFile.fileName} ({formatBytes(upstream.cleanFile.byteSize)})</span>
                               </a>
                             {/if}
                             {#if upstream.tradFile}
                               <a
                                 href="/api/scan/production/files/{upstream.tradFile.id}?download=1"
-                                download={upstream.tradFile.file_name}
+                                download={upstream.tradFile.fileName}
                                 class="btn-upstream-dl-pill traducao"
                               >
                                 <FileText size={13} />
-                                <span>Tradução: {upstream.tradFile.file_name} ({formatBytes(upstream.tradFile.byte_size)})</span>
+                                <span>Tradução: {upstream.tradFile.fileName} ({formatBytes(upstream.tradFile.byteSize)})</span>
                               </a>
                             {/if}
                           </div>
@@ -1237,11 +1237,11 @@
                             {#each upstream.all as file}
                               <a
                                 href="/api/scan/production/files/{file.id}?download=1"
-                                download={file.file_name}
+                                download={file.fileName}
                                 class="btn-upstream-dl-pill"
                               >
                                 <FileText size={13} />
-                                <span>{file.file_name} (v{file.version} · {formatBytes(file.byte_size)})</span>
+                                <span>{file.fileName} (v{file.version} · {formatBytes(file.byteSize)})</span>
                               </a>
                             {/each}
                           </div>
@@ -1255,7 +1255,7 @@
                       </div>
 
                       <!-- Box 3: Apontamentos / Retrabalho / Observações -->
-                      {#if item.cs.status === 'REWORK' || item.cs.rejection_reason || item.cs.notes}
+                      {#if item.cs.status === 'REWORK' || item.cs.rejectionReason || item.cs.notes}
                         <div class="detail-panel-box alert-box">
                           <div class="panel-box-head">
                             <AlertTriangle size={14} class="text-amber-400" />
@@ -1264,7 +1264,7 @@
                             </span>
                           </div>
                           <p class="box-head-text rework-alert-text">
-                            {item.cs.rejection_reason || item.cs.notes}
+                            {item.cs.rejectionReason || item.cs.notes}
                           </p>
                         </div>
                       {/if}
@@ -1423,8 +1423,8 @@
               >
                 <div class="accordion-header-left">
                   <div class="work-thumbnail sm">
-                    {#if item.work?.cover_id}
-                      <img src="/media/{item.work.cover_id}" alt={item.work.title} class="thumbnail-img" />
+                    {#if item.work?.coverId}
+                      <img src="/media/{item.work.coverId}" alt={item.work.title} class="thumbnail-img" />
                     {:else}
                       <div class="thumbnail-fallback">NOX</div>
                     {/if}
@@ -1433,9 +1433,9 @@
                   <div class="header-titles-cluster">
                     <span class="work-title-name" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
                     <h3 class="chapter-number-title">
-                      Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label}
-                        <span class="chapter-sublabel">· {item.ch.chapter_label}</span>
+                      Capítulo #{item.ch.chapterNumber}
+                      {#if item.ch.chapterLabel}
+                        <span class="chapter-sublabel">· {item.ch.chapterLabel}</span>
                       {/if}
                     </h3>
                   </div>
@@ -1463,7 +1463,7 @@
                 <div class="accordion-header-right">
                   {#if isPublicado}
                     <a
-                      href="/ler/{item.ch.target_chapter_id || item.ch.id}"
+                      href="/ler/{item.ch.targetChapterId || item.ch.id}"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="btn-view-chapter-outline"
@@ -1538,12 +1538,12 @@
                                 <div class="file-item-pill">
                                   <FileText size={16} class="text-pink-400" />
                                   <div class="file-pill-info">
-                                    <span class="pill-name">{upstream.cleanFile.file_name}</span>
-                                    <span class="pill-meta">v{upstream.cleanFile.version} · {formatBytes(upstream.cleanFile.byte_size)}</span>
+                                    <span class="pill-name">{upstream.cleanFile.fileName}</span>
+                                    <span class="pill-meta">v{upstream.cleanFile.version} · {formatBytes(upstream.cleanFile.byteSize)}</span>
                                   </div>
                                   <a
                                     href="/api/scan/production/files/{upstream.cleanFile.id}?download=1"
-                                    download={upstream.cleanFile.file_name}
+                                    download={upstream.cleanFile.fileName}
                                     class="btn-download-pill"
                                   >
                                     <Download size={14} />
@@ -1561,12 +1561,12 @@
                                 <div class="file-item-pill">
                                   <FileText size={16} class="text-blue-400" />
                                   <div class="file-pill-info">
-                                    <span class="pill-name">{upstream.tradFile.file_name}</span>
-                                    <span class="pill-meta">v{upstream.tradFile.version} · {formatBytes(upstream.tradFile.byte_size)}</span>
+                                    <span class="pill-name">{upstream.tradFile.fileName}</span>
+                                    <span class="pill-meta">v{upstream.tradFile.version} · {formatBytes(upstream.tradFile.byteSize)}</span>
                                   </div>
                                   <a
                                     href="/api/scan/production/files/{upstream.tradFile.id}?download=1"
-                                    download={upstream.tradFile.file_name}
+                                    download={upstream.tradFile.fileName}
                                     class="btn-download-pill"
                                   >
                                     <Download size={14} />
@@ -1584,14 +1584,14 @@
                               <div class="file-item-pill">
                                 <FileText size={16} class="text-purple-400" />
                                 <div class="file-pill-info">
-                                  <span class="pill-name">{file.file_name}</span>
+                                  <span class="pill-name">{file.fileName}</span>
                                   <span class="pill-meta">
-                                    {file.stage?.name || file.stage_slug || 'Etapa anterior'} · v{file.version} · {formatBytes(file.byte_size)}
+                                    {file.stage?.name || file.stageSlug || 'Etapa anterior'} · v{file.version} · {formatBytes(file.byteSize)}
                                   </span>
                                 </div>
                                 <a
                                   href="/api/scan/production/files/{file.id}?download=1"
-                                  download={file.file_name}
+                                  download={file.fileName}
                                   class="btn-download-pill"
                                 >
                                   <Download size={14} />
@@ -1684,8 +1684,8 @@
                             <div class="current-uploaded-file-banner">
                               <CheckCircle2 size={18} class="text-emerald-400" />
                               <div class="uploaded-meta">
-                                <strong>Arquivo pronto: {deliverable.file_name}</strong>
-                                <span>Versão v{deliverable.version} · {formatBytes(deliverable.byte_size)}</span>
+                                <strong>Arquivo pronto: {deliverable.fileName}</strong>
+                                <span>Versão v{deliverable.version} · {formatBytes(deliverable.byteSize)}</span>
                               </div>
                               <label class="btn-reupload-label">
                                 <input
@@ -1847,7 +1847,7 @@
       </div>
 
       <p class="modal-subtitle">
-        Obra: <strong>{editTargetItem.work?.title}</strong> · Capítulo #{editTargetItem.ch.chapter_number}
+        Obra: <strong>{editTargetItem.work?.title}</strong> · Capítulo #{editTargetItem.ch.chapterNumber}
       </p>
 
       <form
@@ -1937,9 +1937,9 @@
         <div>
           <strong>Atenção: Esta ação é irreversível!</strong>
           <p>
-            Você está prestes a excluir toda a linha de produção do <strong>Capítulo #{deleteTargetItem.ch.chapter_number}</strong>
-            {#if deleteTargetItem.ch.chapter_label}
-              ({deleteTargetItem.ch.chapter_label})
+            Você está prestes a excluir toda a linha de produção do <strong>Capítulo #{deleteTargetItem.ch.chapterNumber}</strong>
+            {#if deleteTargetItem.ch.chapterLabel}
+              ({deleteTargetItem.ch.chapterLabel})
             {/if}
             da obra <strong>{deleteTargetItem.work?.title}</strong>. Todos os arquivos de rascunho e etapas associadas serão removidos.
           </p>
@@ -1957,7 +1957,7 @@
         method="POST"
         action="?/deleteProductionChapter"
         use:enhance={({ cancel }) => {
-          const expected = String(deleteTargetItem.ch.chapter_number);
+          const expected = String(deleteTargetItem.ch.chapterNumber);
           if (deleteConfirmationText.trim() !== expected && deleteConfirmationText.trim() !== 'CONFIRMAR') {
             deleteError = `Para confirmar, digite o número do capítulo (${expected}) ou CONFIRMAR.`;
             cancel();
@@ -1981,7 +1981,7 @@
 
         <div class="form-field">
           <label for="delete_conf_field" class="field-label">
-            Digite <strong class="text-rose-400">{deleteTargetItem.ch.chapter_number}</strong> para confirmar:
+            Digite <strong class="text-rose-400">{deleteTargetItem.ch.chapterNumber}</strong> para confirmar:
           </label>
           <input
             id="delete_conf_field"
@@ -1989,7 +1989,7 @@
             name="confirmation"
             required
             autocomplete="off"
-            placeholder={String(deleteTargetItem.ch.chapter_number)}
+            placeholder={String(deleteTargetItem.ch.chapterNumber)}
             bind:value={deleteConfirmationText}
             class="field-input delete-input"
           />
@@ -2002,7 +2002,7 @@
           <button
             type="submit"
             class="btn-confirm-danger"
-            disabled={isDeletingChapter || (deleteConfirmationText.trim() !== String(deleteTargetItem.ch.chapter_number) && deleteConfirmationText.trim() !== 'CONFIRMAR')}
+            disabled={isDeletingChapter || (deleteConfirmationText.trim() !== String(deleteTargetItem.ch.chapterNumber) && deleteConfirmationText.trim() !== 'CONFIRMAR')}
           >
             {#if isDeletingChapter}
               <span class="spinner-sm"></span>

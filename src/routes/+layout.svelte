@@ -77,7 +77,7 @@
           if (payload.eventType === 'INSERT') {
             localUnread = (localUnread || 0) + 1;
           } else if (payload.eventType === 'UPDATE') {
-            if ((payload.new as any)?.read_at && !(payload.old as any)?.read_at) {
+            if ((payload.new as any)?.readAt && !(payload.old as any)?.readAt) {
               localUnread = Math.max(0, (localUnread || 0) - 1);
             }
           }
@@ -252,9 +252,9 @@
               }}
             >
               <UserAvatar
-                avatarId={data.profile.avatar_id}
-                displayName={data.profile.display_name}
-                frameId={data.profile.avatar_frame_id}
+                avatarId={data.profile.avatarId}
+                displayName={data.profile.displayName}
+                frameId={data.profile.avatarFrameId}
                 size={34}
               />
             </button>
@@ -263,13 +263,13 @@
               <div class="user-dropdown" role="menu">
                 <a href="/u/{data.profile.username}" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
                   <UserAvatar
-                    avatarId={data.profile.avatar_id}
-                    displayName={data.profile.display_name}
-                    frameId={data.profile.avatar_frame_id}
+                    avatarId={data.profile.avatarId}
+                    displayName={data.profile.displayName}
+                    frameId={data.profile.avatarFrameId}
                     size={42}
                   />
                   <div class="dropdown-user-meta">
-                    <span class="dropdown-user-name" style={data.profile.name_color ? `color: ${data.profile.name_color};` : ''}>{data.profile.display_name}</span>
+                    <span class="dropdown-user-name" style={data.profile.nameColor ? `color: ${data.profile.nameColor};` : ''}>{data.profile.displayName}</span>
                     <span class="dropdown-user-handle">@{data.profile.username || 'leitor'}</span>
                     {#if rank}
                       <span class="dropdown-rank-pill">{rank.title}</span>

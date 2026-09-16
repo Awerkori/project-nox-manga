@@ -55,28 +55,25 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         scan_id,
         scans!inner(*)
       `)
-      .eq('user_id', locals.user.id),
+      .eq('user_id', locals.user!.id),
     2000,
     { data: [] } as any,
     'scan_member_rows'
   );
 
   let memberRows = memberRowsRes?.data || [];
-  if (memberRows.length === 0 && locals.sessionCache?.userScans?.length) {
-    memberRows = locals.sessionCache.userScans.map((us: any) => ({
+  if (memberRows.length === 0 && locals.sessionCache?.userScans?.length) {memberRows = locals.sessionCache.userScans.map((us: any) => ({
       role: us.role,
-      scan_id: us.scan_id,
-      scans: us.scans
-    }));
+      scanId: us.scanId,
+      scans: us.scans}));
   }
 
-  if (!memberRows || memberRows.length === 0) {
-    const [partnerRequestsRes, incomingTransferRes] = await Promise.all([
+  if (!memberRows || memberRows.length === 0) {const [partnerRequestsRes, incomingTransferRes] = await Promise.all([
       locals.db
         .from('scan_partner_requests')
         .select('*')
-        .eq('user_id', locals.user.id)
-        .order('created_at', { ascending: false }),
+        .eq('userId', locals.user!.id)
+        .order('createdAt', { ascending: false}),
       locals.db
         .from('scan_transfer_requests')
         .select(`
@@ -84,7 +81,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           scans(id, name, slug),
           from_user:from_user_id(id, username, display_name)
         `)
-        .eq('to_user_id', locals.user.id)
+        .eq('to_user_id', locals.user!.id)
         .eq('status', 'PENDING')
         .maybeSingle()
     ]);
@@ -92,7 +89,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     return {
       authenticated: true,
       isMember: false,
-      userId: locals.user.id,
+      userId: locals.user!.id,
       myScans: [],
       partnerRequests: partnerRequestsRes.data || [],
       incomingTransfer: incomingTransferRes.data || null,
@@ -268,7 +265,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         scans(id, name, slug),
         from_user:from_user_id(id, username, display_name)
       `)
-      .eq('to_user_id', locals.user.id)
+      .eq('to_user_id', locals.user!.id)
       .eq('status', 'PENDING')
       .maybeSingle(),
     locals.db
@@ -419,14 +416,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .from('scan_notifications')
       .select('*')
       .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .order('created_at', { ascending: false })
       .limit(50),
     locals.db
       .from('scan_notification_preferences')
       .select('*')
       .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle(),
     locals.db
       .from('scan_academy_tutorials')
@@ -490,7 +487,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .from('scan_channel_read_states')
       .select('*')
       .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id),
+      .eq('user_id', locals.user!.id),
     locals.db
       .from('scan_application_answers')
       .select(`
@@ -501,7 +498,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .from('scan_pipeline_stage_seen')
       .select('chapter_stage_id, availability_version, seen_at')
       .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
     ]),
     5000,
     emptyScanBatchFallback as any,
@@ -509,36 +506,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   );
 
   const memberPosMap = new Map<string, any[]>();
-  for (const mp of (memberPositionsRes.data || [])) {
-    if (!memberPosMap.has(mp.user_id)) memberPosMap.set(mp.user_id, []);
-    memberPosMap.get(mp.user_id)!.push({
-      position_id: mp.position_id,
+  for (const mp of (memberPositionsRes.data || [])) {if (!memberPosMap.has(mp.userId)) memberPosMap.set(mp.userId, []);
+    memberPosMap.get(mp.userId)!.push({
+      positionId: mp.positionId,
       name: mp.scan_positions?.name,
       description: mp.scan_positions?.description,
       icon: mp.scan_positions?.icon,
-      is_primary: mp.is_primary,
-      is_public: mp.is_public ?? true,
-      hidden_by_admin: mp.hidden_by_admin ?? false
-    });
+      isPrimary: mp.isPrimary,
+      isPublic: mp.isPublic ?? true,
+      hiddenByAdmin: mp.hiddenByAdmin ?? false});
   }
 
-  const works = (worksRes.data || []).map((r: any) => ({
-    ...r.works,
+  const works = (worksRes.data || []).map((r: any) => ({...r.works,
     project_status: r.status || 'ACTIVE',
-    is_primary: r.is_primary
-  })).filter(Boolean);
+    isPrimary: r.isPrimary})).filter(Boolean);
   const chapters = (chaptersRes.data || []).map((r: any) => r.chapters).filter(Boolean);
-  const team = (teamRes.data || []).map((r: any) => ({
-    role: r.role,
-    is_public: r.is_public ?? true,
-    hidden_by_admin: r.hidden_by_admin ?? false,
-    availability_status: r.availability_status || 'ACTIVE',
-    availability_message: r.availability_message || '',
-    availability_updated_at: r.availability_updated_at || null,
-    created_at: r.created_at,
+  const team = (teamRes.data || []).map((r: any) => ({role: r.role,
+    isPublic: r.isPublic ?? true,
+    hiddenByAdmin: r.hiddenByAdmin ?? false,
+    availabilityStatus: r.availabilityStatus || 'ACTIVE',
+    availabilityMessage: r.availabilityMessage || '',
+    availabilityUpdatedAt: r.availabilityUpdatedAt || null,
+    createdAt: r.createdAt,
     ...r.members,
-    positions: memberPosMap.get(r.members.id) || []
-  }));
+    positions: memberPosMap.get(r.members.id) || []}));
   const invites = invitesRes.data || [];
   const projectRequests = projectRequestsRes.data || [];
   const catalogWorks = catalogWorksRes.data || [];
@@ -546,7 +537,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const incomingTransfer = incomingTransferRes.data || null;
   const positions = positionsRes.data || [];
   const openings = (openingsRes.data || []).map((op: any) => {
-    const apps = (applicationsRes.data || []).filter((a: any) => a.opening_id === op.id);
+    const apps = (applicationsRes.data || []).filter((a: any) => a.openingId === op.id);
     return {
       ...op,
       applications_count: apps.length,
@@ -559,40 +550,39 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const isScanLeader = ['OWNER', 'ADMIN'].includes(currentScan.role);
   const isGlobalEditor = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
 
-  const staffNotes = (staffNotesRes.data || []).map((n: any) => ({
-    id: n.id,
-    scan_id: n.scan_id,
-    user_id: n.user_id,
-    parent_id: n.parent_id,
+  const staffNotes = (staffNotesRes.data || []).map((n: any) => ({id: n.id,
+    scanId: n.scanId,
+    userId: n.userId,
+    parentId: n.parentId,
     body: n.body,
-    is_pinned: !!n.is_pinned,
-    created_at: n.created_at,
-    updated_at: n.updated_at,
-    author: n.members || { username: 'desconhecido', display_name: 'Membro' },
-    canDelete: n.user_id === locals.user.id || isScanLeader || isGlobalEditor
+    isPinned: !!n.isPinned,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+    author: n.members || { username: 'desconhecido', displayName: 'Membro'},
+    canDelete: n.userId === locals.user!.id || isScanLeader || isGlobalEditor
   }));
 
-  const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
+  const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.viewsTotal || 0), 0);
 
   const postCommentsMap = new Map<string, any[]>();
   for (const c of (muralCommentsRes.data || [])) {
-    if (!postCommentsMap.has(c.post_id)) postCommentsMap.set(c.post_id, []);
-    postCommentsMap.get(c.post_id)!.push(c);
+    if (!postCommentsMap.has(c.postId)) postCommentsMap.set(c.postId, []);
+    postCommentsMap.get(c.postId)!.push(c);
   }
 
   const postReactionsMap = new Map<string, any[]>();
   for (const r of (muralReactionsRes.data || [])) {
-    if (r.post_id) {
-      if (!postReactionsMap.has(r.post_id)) postReactionsMap.set(r.post_id, []);
-      postReactionsMap.get(r.post_id)!.push(r);
+    if (r.postId) {
+      if (!postReactionsMap.has(r.postId)) postReactionsMap.set(r.postId, []);
+      postReactionsMap.get(r.postId)!.push(r);
     }
   }
 
   const postAttachmentsMap = new Map<string, any[]>();
   for (const a of (attachmentsRes.data || [])) {
-    if (a.context_type === 'MURAL_POST') {
-      if (!postAttachmentsMap.has(a.context_id)) postAttachmentsMap.set(a.context_id, []);
-      postAttachmentsMap.get(a.context_id)!.push(a);
+    if (a.contextType === 'MURAL_POST') {
+      if (!postAttachmentsMap.has(a.contextId)) postAttachmentsMap.set(a.contextId, []);
+      postAttachmentsMap.get(a.contextId)!.push(a);
     }
   }
 
@@ -614,11 +604,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   return {
     authenticated: true,
     isMember: true,
-    userId: locals.user.id,
+    userId: locals.user!.id,
     myScans,
     currentScan,
     userRole: currentScan.role,
-    userPositions: memberPosMap.get(locals.user.id) || [],
+    userPositions: memberPosMap.get(locals.user!.id) || [],
     works,
     chapters,
     team,
@@ -678,7 +668,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
@@ -687,13 +677,11 @@ export const actions: Actions = {
 
     const { error } = await locals.db
       .from('scans')
-      .update({
-        description: description.slice(0, 2000),
+      .update({description: description.slice(0, 2000),
         discord: discord.slice(0, 255),
         website: website.slice(0, 255),
-        display_preposition: displayPreposition,
-        updated_at: new Date().toISOString()
-      })
+        displayPreposition: displayPreposition,
+        updatedAt: new Date().toISOString()})
       .eq('id', scanId);
 
     if (error) return fail(400, { message: error.message });
@@ -719,7 +707,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
@@ -728,19 +716,17 @@ export const actions: Actions = {
       }
     }
 
-    const updates: Record<string, any> = {
-      description: description.slice(0, 2000),
+    const updates: Record<string, any> = {description: description.slice(0, 2000),
       bio: bio.slice(0, 500),
       discord: discord.slice(0, 255),
       fluxer: fluxer.slice(0, 255),
       website: website.slice(0, 255),
-      display_preposition: displayPreposition,
-      updated_at: new Date().toISOString()
-    };
+      displayPreposition: displayPreposition,
+      updatedAt: new Date().toISOString()};
 
     if (name) updates.name = name.slice(0, 100);
-    if (logoId !== null && logoId !== undefined) updates.logo_id = logoId.trim() ? logoId.trim() : null;
-    if (bannerId !== null && bannerId !== undefined) updates.banner_id = bannerId.trim() ? bannerId.trim() : null;
+    if (logoId !== null && logoId !== undefined) updates.logoId = logoId.trim() ? logoId.trim() : null;
+    if (bannerId !== null && bannerId !== undefined) updates.bannerId = bannerId.trim() ? bannerId.trim() : null;
 
     const { error } = await locals.db
       .from('scans')
@@ -760,14 +746,14 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
       if (locals.role !== 'ADMIN') return fail(403, { message: 'Permissão negada.' });
     }
 
-    const { error } = await locals.db.from('scans').update({ logo_id: null, updated_at: new Date().toISOString() }).eq('id', scanId);
+    const { error } = await locals.db.from('scans').update({logoId: null, updatedAt: new Date().toISOString()}).eq('id', scanId);
     if (error) return fail(400, { message: error.message });
     return { success: true, logoRemoved: true };
   },
@@ -781,14 +767,14 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
       if (locals.role !== 'ADMIN') return fail(403, { message: 'Permissão negada.' });
     }
 
-    const { error } = await locals.db.from('scans').update({ banner_id: null, updated_at: new Date().toISOString() }).eq('id', scanId);
+    const { error } = await locals.db.from('scans').update({bannerId: null, updatedAt: new Date().toISOString()}).eq('id', scanId);
     if (error) return fail(400, { message: error.message });
     return { success: true, bannerRemoved: true };
   },
@@ -850,16 +836,14 @@ export const actions: Actions = {
 
     const { error: insErr } = await locals.db
       .from('scan_partner_requests')
-      .insert({
-        user_id: locals.user.id,
-        scan_name: scanName,
-        scan_slug: scanSlug,
+      .insert({userId: locals.user!.id,
+        scanName: scanName,
+        scanSlug: scanSlug,
         description,
         discord,
         fluxer,
         website,
-        sample_links: sampleLinks
-      });
+        sampleLinks: sampleLinks});
 
     if (insErr) return fail(400, { message: insErr.message });
     return { success: true, partnerRequested: true };
@@ -892,7 +876,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
@@ -1040,12 +1024,10 @@ export const actions: Actions = {
 
     const { error: insErr } = await locals.db
       .from('scan_project_requests')
-      .insert({
-        scan_id: scanId,
-        work_id: workId,
-        user_id: locals.user.id,
-        message
-      });
+      .insert({scanId: scanId,
+        workId: workId,
+        userId: locals.user!.id,
+        message});
 
     if (insErr) return fail(400, { message: insErr.message });
     return { success: true, projectRequested: true };
@@ -1183,7 +1165,7 @@ export const actions: Actions = {
         .eq('id', applicationId)
         .maybeSingle();
 
-      if (appRow && appRow.user_id && appRow.user_id !== locals.user.id) {
+      if (appRow && appRow.userId && appRow.userId !== locals.user!.id) {
         const scanName = (appRow.scans as any)?.name || 'Scan';
         const opTitle = (appRow.openings as any)?.title || 'Vaga';
         const actionTitle = action === 'APPROVE' ? 'Candidatura Aprovada!' : action === 'REJECT' ? 'Atualização sobre sua candidatura' : 'Candidatura em análise';
@@ -1194,13 +1176,13 @@ export const actions: Actions = {
           : `Sua candidatura para ${opTitle} na scan ${scanName} foi colocada sob análise pela liderança.`;
 
         await createNotification({
-          recipientUserId: appRow.user_id,
-          actorUserId: locals.user.id,
+          recipientUserId: appRow.userId,
+          actorUserId: locals.user!.id,
           type: 'APPLICATION_UPDATE',
           title: actionTitle,
           body: notes ? `${actionBody} Observações: ${notes}` : actionBody,
           deepLink: `/me`,
-          scanId: appRow.scan_id,
+          scanId: appRow.scanId,
           priority: 'NORMAL',
           dedupeKey: `app_review:${applicationId}:${action}:${Date.now()}`
         }).catch(err => console.error('Error notifying applicant:', err));
@@ -1334,17 +1316,15 @@ export const actions: Actions = {
 
     if (!scanId || !title) return fail(400, { message: 'Título da tarefa é obrigatório.' });
 
-    const { error } = await locals.db.from('scan_tasks').insert({
-      scan_id: scanId,
-      work_id: workId,
-      stage_id: stageId,
+    const { error } = await locals.db.from('scan_tasks').insert({scanId: scanId,
+      workId: workId,
+      stageId: stageId,
       title,
       description,
-      assigned_to: assignedTo,
-      created_by: locals.user.id,
+      assignedTo: assignedTo,
+      createdBy: locals.user!.id,
       priority,
-      due_at: dueAt ? new Date(dueAt).toISOString() : null
-    });
+      dueAt: dueAt ? new Date(dueAt).toISOString() : null});
 
     if (error) return fail(400, { message: error.message });
     return { success: true, taskCreated: true };
@@ -1358,14 +1338,12 @@ export const actions: Actions = {
 
     if (!taskId || !status) return fail(400, { message: 'Dados insuficientes.' });
 
-    const updates: any = {
-      status,
-      updated_at: new Date().toISOString()
-    };
+    const updates: any = {status,
+      updatedAt: new Date().toISOString()};
     if (status === 'DONE') {
-      updates.completed_at = new Date().toISOString();
+      updates.completedAt = new Date().toISOString();
     } else {
-      updates.completed_at = null;
+      updates.completedAt = null;
     }
 
     const { error } = await locals.db.from('scan_tasks').update(updates).eq('id', taskId);
@@ -1385,15 +1363,13 @@ export const actions: Actions = {
     const { data: task } = await locals.db.from('scan_tasks').select('assigned_to, scan_id').eq('id', taskId).single();
     if (!task) return fail(404, { message: 'Tarefa não encontrada.' });
 
-    await locals.db.from('scan_tasks').update({ assigned_to: targetUserId, updated_at: new Date().toISOString() }).eq('id', taskId);
+    await locals.db.from('scan_tasks').update({assignedTo: targetUserId, updatedAt: new Date().toISOString()}).eq('id', taskId);
 
-    await locals.db.from('scan_task_handoffs').insert({
-      task_id: taskId,
-      from_user_id: task.assigned_to,
-      to_user_id: targetUserId,
-      transferred_by: locals.user.id,
-      reason
-    });
+    await locals.db.from('scan_task_handoffs').insert({taskId: taskId,
+      fromUserId: task.assignedTo,
+      toUserId: targetUserId,
+      transferredBy: locals.user!.id,
+      reason});
 
     return { success: true, taskHandoff: true };
   },
@@ -1421,13 +1397,11 @@ export const actions: Actions = {
 
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const { error } = await locals.db.from('scan_workflow_stages').insert({
-      scan_id: scanId,
+    const { error } = await locals.db.from('scan_workflow_stages').insert({scanId: scanId,
       name,
       slug,
       color,
-      required
-    });
+      required});
     if (error) return fail(400, { message: error.message });
     return { success: true, stageCreated: true };
   },
@@ -1448,27 +1422,23 @@ export const actions: Actions = {
     }
 
     if (entryId) {
-      const { error } = await locals.db.from('work_glossary_entries').update({
-        work_id: workId,
-        source_term: sourceTerm,
-        preferred_translation: preferredTranslation,
+      const { error } = await locals.db.from('work_glossary_entries').update({workId: workId,
+        sourceTerm: sourceTerm,
+        preferredTranslation: preferredTranslation,
         category,
         notes,
-        updated_by: locals.user.id,
-        updated_at: new Date().toISOString()
-      }).eq('id', entryId);
+        updatedBy: locals.user!.id,
+        updatedAt: new Date().toISOString()}).eq('id', entryId);
       if (error) return fail(400, { message: error.message });
     } else {
-      const { error } = await locals.db.from('work_glossary_entries').insert({
-        scan_id: scanId,
-        work_id: workId,
-        source_term: sourceTerm,
-        preferred_translation: preferredTranslation,
+      const { error } = await locals.db.from('work_glossary_entries').insert({scanId: scanId,
+        workId: workId,
+        sourceTerm: sourceTerm,
+        preferredTranslation: preferredTranslation,
         category,
         notes,
-        created_by: locals.user.id,
-        updated_by: locals.user.id
-      });
+        createdBy: locals.user!.id,
+        updatedBy: locals.user!.id});
       if (error) return fail(400, { message: error.message });
     }
     return { success: true, glossarySaved: true };
@@ -1498,14 +1468,12 @@ export const actions: Actions = {
       return fail(400, { message: 'Preencha todos os campos obrigatórios.' });
     }
 
-    const { error } = await locals.db.from('work_references').insert({
-      scan_id: scanId,
-      work_id: workId,
+    const { error } = await locals.db.from('work_references').insert({scanId: scanId,
+      workId: workId,
       title,
-      ref_type: refType,
+      refType: refType,
       content,
-      created_by: locals.user.id
-    });
+      createdBy: locals.user!.id});
     if (error) return fail(400, { message: error.message });
     return { success: true, referenceSaved: true };
   },
@@ -1533,16 +1501,14 @@ export const actions: Actions = {
 
     if (!scanId || !title || !content) return fail(400, { message: 'Título e conteúdo obrigatórios.' });
 
-    const { error } = await locals.db.from('scan_wiki_pages').insert({
-      scan_id: scanId,
+    const { error } = await locals.db.from('scan_wiki_pages').insert({scanId: scanId,
       title,
       slug,
       category,
       content,
-      is_pinned: isPinned,
-      created_by: locals.user.id,
-      updated_by: locals.user.id
-    });
+      isPinned: isPinned,
+      createdBy: locals.user!.id,
+      updatedBy: locals.user!.id});
     if (error) return fail(400, { message: error.message });
     return { success: true, wikiCreated: true };
   },
@@ -1558,14 +1524,12 @@ export const actions: Actions = {
 
     if (!pageId || !title || !content) return fail(400, { message: 'Dados incompletos.' });
 
-    const { error } = await locals.db.from('scan_wiki_pages').update({
-      title,
+    const { error } = await locals.db.from('scan_wiki_pages').update({title,
       category,
       content,
-      is_pinned: isPinned,
-      updated_by: locals.user.id,
-      updated_at: new Date().toISOString()
-    }).eq('id', pageId);
+      isPinned: isPinned,
+      updatedBy: locals.user!.id,
+      updatedAt: new Date().toISOString()}).eq('id', pageId);
     if (error) return fail(400, { message: error.message });
     return { success: true, wikiUpdated: true };
   },
@@ -1590,13 +1554,11 @@ export const actions: Actions = {
     const emergencyMode = formData.get('emergency_mode') === 'on';
     const emergencyReason = (formData.get('emergency_reason') as string)?.trim() || null;
 
-    const { error } = await locals.db.from('scans').update({
-      pause_uploads: pauseUploads,
-      pause_recruitment: pauseRecruitment,
-      emergency_mode: emergencyMode,
-      emergency_reason: emergencyReason,
-      updated_at: new Date().toISOString()
-    }).eq('id', scanId);
+    const { error } = await locals.db.from('scans').update({pauseUploads: pauseUploads,
+      pauseRecruitment: pauseRecruitment,
+      emergencyMode: emergencyMode,
+      emergencyReason: emergencyReason,
+      updatedAt: new Date().toISOString()}).eq('id', scanId);
 
     if (error) return fail(400, { message: error.message });
     return { success: true, maintenanceUpdated: true };
@@ -1630,12 +1592,10 @@ export const actions: Actions = {
       return fail(400, { message: 'Campos obrigatórios ausentes.' });
     }
 
-    const { error } = await locals.db.from('scan_integrations').insert({
-      scan_id: scanId,
+    const { error } = await locals.db.from('scan_integrations').insert({scanId: scanId,
       platform,
       name,
-      webhook_url: webhookUrl
-    });
+      webhookUrl: webhookUrl});
     if (error) return fail(400, { message: error.message });
     return { success: true, integrationSaved: true };
   },
@@ -1673,11 +1633,9 @@ export const actions: Actions = {
 
     if (!scanId || !status) return fail(400, { message: 'Dados inválidos.' });
 
-    const { error } = await locals.db.from('scan_members').update({
-      availability_status: status,
-      availability_message: message,
-      availability_updated_at: new Date().toISOString()
-    }).eq('scan_id', scanId).eq('user_id', locals.user.id);
+    const { error } = await locals.db.from('scan_members').update({availabilityStatus: status,
+      availabilityMessage: message,
+      availabilityUpdatedAt: new Date().toISOString()}).eq('scan_id', scanId).eq('user_id', locals.user!.id);
 
     if (error) return fail(400, { message: error.message });
     return { success: true, availabilityUpdated: true };
@@ -1694,13 +1652,11 @@ export const actions: Actions = {
 
     if (!scanId || !openingId || !question) return fail(400, { message: 'Pergunta obrigatória.' });
 
-    const { error } = await locals.db.from('scan_recruitment_questions').insert({
-      scan_id: scanId,
-      opening_id: openingId,
+    const { error } = await locals.db.from('scan_recruitment_questions').insert({scanId: scanId,
+      openingId: openingId,
       question,
-      question_type: questionType,
-      required
-    });
+      questionType: questionType,
+      required});
     if (error) return fail(400, { message: error.message });
     return { success: true, questionSaved: true };
   },
@@ -1728,19 +1684,17 @@ export const actions: Actions = {
     if (!ch) return fail(404, { message: 'Canal não encontrado' });
 
     if (ch.type === 'ANNOUNCEMENT') {
-      const { data: mem } = await locals.db.from('scan_members').select('role').eq('scan_id', ch.scan_id).eq('user_id', locals.user.id).maybeSingle();
+      const { data: mem } = await locals.db.from('scan_members').select('role').eq('scan_id', ch.scanId).eq('user_id', locals.user!.id).maybeSingle();
       if (!mem || !['OWNER', 'ADMIN'].includes(mem.role)) {
         return fail(403, { message: 'Apenas Administradores e Donos da Scan podem postar em canais de avisos.' });
       }
     }
 
-    const { data: msg, error: msgErr } = await locals.db.from('scan_messages').insert({
-      scan_id: ch.scan_id,
-      channel_id: channelId,
-      user_id: locals.user.id,
-      reply_to_id: replyToId,
-      content
-    }).select().single();
+    const { data: msg, error: msgErr } = await locals.db.from('scan_messages').insert({scanId: ch.scanId,
+      channelId: channelId,
+      userId: locals.user!.id,
+      replyToId: replyToId,
+      content}).select().single();
 
     // Reply Notification Dispatch
     if (replyToId) {
@@ -1751,17 +1705,17 @@ export const actions: Actions = {
           .eq('id', replyToId)
           .maybeSingle();
 
-        if (origMsg && origMsg.user_id && origMsg.user_id !== locals.user.id) {
+        if (origMsg && origMsg.userId && origMsg.userId !== locals.user!.id) {
           const preview = origMsg.content ? `"${origMsg.content.slice(0, 50)}..."` : 'sua mensagem';
           await createNotification({
-            recipientUserId: origMsg.user_id,
-            actorUserId: locals.user.id,
+            recipientUserId: origMsg.userId,
+            actorUserId: locals.user!.id,
             type: 'REPLY_CHAT',
             title: `Respondeu ${preview} em #${ch.name || 'canal'}`,
             body: content,
-            deepLink: `/scan?id=${ch.scan_id}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
+            deepLink: `/scan?id=${ch.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
             context: `#${ch.name || 'chat'}`,
-            scanId: ch.scan_id,
+            scanId: ch.scanId,
             priority: 'NORMAL',
             dedupeKey: `reply:${replyToId}:${msg.id}`,
             platform
@@ -1787,11 +1741,11 @@ export const actions: Actions = {
       locals,
       text: content,
       messageId: msg.id,
-      scanId: ch.scan_id,
+      scanId: ch.scanId,
       channelId,
-      authorId: locals.user.id,
+      authorId: locals.user!.id,
       title: `Nova menção em #${ch.name || 'canal'}`,
-      deepLink: `/scan?id=${ch.scan_id}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
+      deepLink: `/scan?id=${ch.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
       contextType: 'CHAT',
       mentionsData,
       platform
@@ -1836,10 +1790,10 @@ export const actions: Actions = {
           locals,
           text: content,
           messageId,
-          scanId: currentMsg.scan_id,
-          channelId: currentMsg.channel_id,
-          authorId: locals.user.id,
-          deepLink: `/scan?id=${currentMsg.scan_id}&tab=chat&channelId=${currentMsg.channel_id}#msg-${messageId}`,
+          scanId: currentMsg.scanId,
+          channelId: currentMsg.channelId,
+          authorId: locals.user!.id,
+          deepLink: `/scan?id=${currentMsg.scanId}&tab=chat&channelId=${currentMsg.channelId}#msg-${messageId}`,
           contextType: 'CHAT',
           mentionsData: editMentionsData
         });
@@ -1878,28 +1832,26 @@ export const actions: Actions = {
       .single();
     if (!parent) return fail(404, { message: 'Mensagem original não encontrada' });
 
-    const { error } = await locals.db.from('scan_message_threads').insert({
-      scan_id: parent.scan_id,
-      parent_message_id: parentMessageId,
-      user_id: locals.user.id,
-      content
-    });
+    const { error } = await locals.db.from('scan_message_threads').insert({scanId: parent.scanId,
+      parentMessageId: parentMessageId,
+      userId: locals.user!.id,
+      content});
     if (error) return fail(400, { message: error.message });
 
     // Notify parent author
-    if (parent.user_id && parent.user_id !== locals.user.id) {
+    if (parent.userId && parent.userId !== locals.user!.id) {
       const preview = parent.content ? `"${parent.content.slice(0, 50)}..."` : 'sua mensagem';
       await createNotification({
-        recipientUserId: parent.user_id,
-        actorUserId: locals.user.id,
+        recipientUserId: parent.userId,
+        actorUserId: locals.user!.id,
         type: 'REPLY_CHAT',
         title: `Nova resposta na sua thread (${preview})`,
         body: content,
-        deepLink: `/scan?id=${parent.scan_id}&tab=chat&channelId=${parent.channel_id || ''}#msg-${parentMessageId}`,
+        deepLink: `/scan?id=${parent.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
         context: 'Thread',
-        scanId: parent.scan_id,
+        scanId: parent.scanId,
         priority: 'NORMAL',
-        dedupeKey: `thread_reply:${parentMessageId}:${locals.user.id}:${Date.now()}`
+        dedupeKey: `thread_reply:${parentMessageId}:${locals.user!.id}:${Date.now()}`
       }).catch(err => console.error('Error dispatching thread reply notification:', err));
     }
 
@@ -1907,11 +1859,11 @@ export const actions: Actions = {
     await dispatchMentions({
       locals,
       text: content,
-      scanId: parent.scan_id,
-      channelId: parent.channel_id,
-      authorId: locals.user.id,
+      scanId: parent.scanId,
+      channelId: parent.channelId,
+      authorId: locals.user!.id,
       title: 'Nova menção em resposta de thread',
-      deepLink: `/scan?id=${parent.scan_id}&tab=chat&channelId=${parent.channel_id || ''}#msg-${parentMessageId}`,
+      deepLink: `/scan?id=${parent.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
       contextType: 'CHAT'
     }).catch(err => console.error('Error dispatching thread mentions:', err));
 
@@ -1985,15 +1937,13 @@ export const actions: Actions = {
     if (!scanId || !name) return fail(400, { message: 'Nome obrigatório' });
 
     const slug = slugify(name);
-    const { error } = await locals.db.from('scan_channels').insert({
-      scan_id: scanId,
+    const { error } = await locals.db.from('scan_channels').insert({scanId: scanId,
       name,
       slug,
       category,
       type,
       description,
-      created_by: locals.user.id
-    });
+      createdBy: locals.user!.id});
     if (error) return fail(400, { message: error.message });
     return { success: true, channelCreated: true };
   },
@@ -2009,21 +1959,19 @@ export const actions: Actions = {
     const scanId = url.searchParams.get('id');
     if (!scanId || !chapterId || !description) return fail(400, { message: 'Dados incompletos' });
 
-    const { error } = await locals.db.from('scan_chapter_qc_issues').insert({
-      scan_id: scanId,
-      chapter_id: chapterId,
-      page_number: pageNumber,
-      issue_type: issueType,
+    const { error } = await locals.db.from('scan_chapter_qc_issues').insert({scanId: scanId,
+      chapterId: chapterId,
+      pageNumber: pageNumber,
+      issueType: issueType,
       description,
-      assigned_to: assignedTo,
-      created_by: locals.user.id
-    });
+      assignedTo: assignedTo,
+      createdBy: locals.user!.id});
     if (error) return fail(400, { message: error.message });
 
-    if (assignedTo && assignedTo !== locals.user.id) {
+    if (assignedTo && assignedTo !== locals.user!.id) {
       await createNotification({
         recipientUserId: assignedTo,
-        actorUserId: locals.user.id,
+        actorUserId: locals.user!.id,
         type: 'QC_ISSUE',
         title: `Novo problema de QC apontado (Pág. ${pageNumber})`,
         body: `Tipo: ${issueType}. Descrição: ${description}`,
@@ -2042,10 +1990,10 @@ export const actions: Actions = {
     const formData = await request.formData();
     const issueId = String(formData.get('issueId') || '');
     const status = String(formData.get('status') || 'OPEN');
-    const updateData: any = { status, updated_at: new Date().toISOString() };
+    const updateData: any = {status, updatedAt: new Date().toISOString()};
     if (status === 'RESOLVED') {
-      updateData.resolved_by = locals.user.id;
-      updateData.resolved_at = new Date().toISOString();
+      updateData.resolvedBy = locals.user!.id;
+      updateData.resolvedAt = new Date().toISOString();
     }
     const { error } = await locals.db.from('scan_chapter_qc_issues').update(updateData).eq('id', issueId);
     if (error) return fail(400, { message: error.message });
@@ -2067,29 +2015,25 @@ export const actions: Actions = {
 
     const slug = slugify(title) || 'tutorial';
     if (tutorialId) {
-      const { error } = await locals.db.from('scan_academy_tutorials').update({
-        title,
+      const { error } = await locals.db.from('scan_academy_tutorials').update({title,
         slug,
         category,
         content,
         status,
-        is_published: isPublished,
-        target_position_id: targetPositionId || null,
-        updated_at: new Date().toISOString()
-      }).eq('id', tutorialId);
+        isPublished: isPublished,
+        targetPositionId: targetPositionId || null,
+        updatedAt: new Date().toISOString()}).eq('id', tutorialId);
       if (error) return fail(400, { message: error.message });
     } else {
-      const { error } = await locals.db.from('scan_academy_tutorials').insert({
-        scan_id: scanId,
+      const { error } = await locals.db.from('scan_academy_tutorials').insert({scanId: scanId,
         title,
         slug,
         category,
         content,
         status,
-        is_published: isPublished,
-        target_position_id: targetPositionId || null,
-        created_by: locals.user.id
-      });
+        isPublished: isPublished,
+        targetPositionId: targetPositionId || null,
+        createdBy: locals.user!.id});
       if (error) return fail(400, { message: error.message });
     }
     return { success: true, tutorialSaved: true };
@@ -2106,7 +2050,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
@@ -2128,10 +2072,8 @@ export const actions: Actions = {
     const scanId = url.searchParams.get('id');
     if (!scanId || !chapterId || !stageSlug) return fail(400, { message: 'Dados incompletos' });
 
-    const { error } = await locals.db.from('scan_production_chapters').update({
-      current_stage_slug: stageSlug,
-      updated_at: new Date().toISOString()
-    }).eq('id', chapterId);
+    const { error } = await locals.db.from('scan_production_chapters').update({currentStageSlug: stageSlug,
+      updatedAt: new Date().toISOString()}).eq('id', chapterId);
     if (error) return fail(400, { message: error.message });
     return { success: true, stageAdvanced: true };
   },
@@ -2148,16 +2090,12 @@ export const actions: Actions = {
       return fail(400, { message: 'Publicação bloqueada: existem apontamentos de QC em aberto!' });
     }
 
-    const { error } = await locals.db.from('chapters').update({
-      published_at: new Date().toISOString()
-    }).eq('id', chapterId);
+    const { error } = await locals.db.from('chapters').update({publishedAt: new Date().toISOString()}).eq('id', chapterId);
     if (error) return fail(400, { message: error.message });
 
     // Update in-production chapter if exists
-    await locals.db.from('scan_production_chapters').update({
-      status: 'PUBLISHED',
-      updated_at: new Date().toISOString()
-    }).eq('target_chapter_id', chapterId);
+    await locals.db.from('scan_production_chapters').update({status: 'PUBLISHED',
+      updatedAt: new Date().toISOString()}).eq('target_chapter_id', chapterId);
 
     return { success: true, chapterPublished: true };
   },
@@ -2179,7 +2117,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!member && locals.role !== 'ADMIN') {
@@ -2188,16 +2126,14 @@ export const actions: Actions = {
 
     const { data: post, error } = await locals.db
       .from('scan_mural_posts')
-      .insert({
-        scan_id: scanId,
-        author_id: locals.user.id,
+      .insert({scanId: scanId,
+        authorId: locals.user!.id,
         title,
         content,
-        post_type: postType,
-        is_pinned: isPinned,
-        pinned_at: isPinned ? new Date().toISOString() : null,
-        pinned_by: isPinned ? locals.user.id : null
-      })
+        postType: postType,
+        isPinned: isPinned,
+        pinnedAt: isPinned ? new Date().toISOString() : null,
+        pinnedBy: isPinned ? locals.user!.id : null})
       .select()
       .single();
 
@@ -2206,8 +2142,7 @@ export const actions: Actions = {
     const files = formData.getAll('files') as File[];
     const BLOCKED_EXTENSIONS = ['.exe', '.apk', '.bat', '.cmd', '.sh', '.bin', '.dll', '.msi'];
 
-    for (const f of files) {
-      if (f && f instanceof Blob && f.size > 0) {
+    for (const f of files) {if (f && f instanceof Blob && f.size > 0) {
         const rawFilename = f.name || 'anexo';
         const ext = rawFilename.lastIndexOf('.') !== -1 ? rawFilename.slice(rawFilename.lastIndexOf('.')).toLowerCase() : '';
         if (BLOCKED_EXTENSIONS.includes(ext)) continue;
@@ -2219,17 +2154,16 @@ export const actions: Actions = {
           .toLowerCase();
 
         await locals.db.from('scan_attachments').insert({
-          scan_id: scanId,
-          context_type: 'MURAL_POST',
-          context_id: post.id,
-          uploaded_by: locals.user.id,
-          original_filename: rawFilename,
-          safe_filename: safeFilename,
-          mime_type: f.type || 'application/octet-stream',
+          scanId: scanId,
+          contextType: 'MURAL_POST',
+          contextId: post.id,
+          uploadedBy: locals.user!.id,
+          originalFilename: rawFilename,
+          safeFilename: safeFilename,
+          mimeType: f.type || 'application/octet-stream',
           size: f.size,
-          storage_reference: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-          storage_provider: 'PRIVATE_STORAGE'
-        });
+          storageReference: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+          storageProvider: 'PRIVATE_STORAGE'});
       }
     }
 
@@ -2237,7 +2171,7 @@ export const actions: Actions = {
       locals,
       text: content,
       scanId,
-      authorId: locals.user.id,
+      authorId: locals.user!.id,
       title: `Nova publicação no Mural: "${title}"`,
       deepLink: `/scan?id=${scanId}&tab=mural&postId=${post.id}`,
       contextType: 'MURAL'
@@ -2258,13 +2192,11 @@ export const actions: Actions = {
       return fail(400, { message: 'Comentário inválido' });
     }
 
-    const { error } = await locals.db.from('scan_mural_comments').insert({
-      scan_id: scanId,
-      post_id: postId,
-      author_id: locals.user.id,
+    const { error } = await locals.db.from('scan_mural_comments').insert({scanId: scanId,
+      postId: postId,
+      authorId: locals.user!.id,
       content,
-      parent_comment_id: parentCommentId
-    });
+      parentCommentId: parentCommentId});
 
     if (error) return fail(400, { message: error.message });
 
@@ -2272,7 +2204,7 @@ export const actions: Actions = {
       locals,
       text: content,
       scanId,
-      authorId: locals.user.id,
+      authorId: locals.user!.id,
       title: `Novo comentário no Mural`,
       deepLink: `/scan?id=${scanId}&tab=mural&postId=${postId}`,
       contextType: 'MURAL'
@@ -2297,7 +2229,7 @@ export const actions: Actions = {
       .from('scan_mural_reactions')
       .select('id')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .eq('emoji', emoji);
 
     if (postId) query = query.eq('post_id', postId);
@@ -2307,14 +2239,12 @@ export const actions: Actions = {
 
     if (existing) {
       await locals.db.from('scan_mural_reactions').delete().eq('id', existing.id);
-    } else {
-      await locals.db.from('scan_mural_reactions').insert({
-        scan_id: scanId,
-        post_id: postId,
-        comment_id: commentId,
-        user_id: locals.user.id,
-        emoji
-      });
+    } else {await locals.db.from('scan_mural_reactions').insert({
+        scanId: scanId,
+        postId: postId,
+        commentId: commentId,
+        userId: locals.user!.id,
+        emoji});
     }
 
     return { success: true, reacted: true };
@@ -2329,12 +2259,10 @@ export const actions: Actions = {
     const { data: post } = await locals.db.from('scan_mural_posts').select('is_pinned').eq('id', postId).single();
     if (!post) return fail(404, { message: 'Post não encontrado' });
 
-    const newPinned = !post.is_pinned;
-    const { error } = await locals.db.from('scan_mural_posts').update({
-      is_pinned: newPinned,
-      pinned_at: newPinned ? new Date().toISOString() : null,
-      pinned_by: newPinned ? locals.user.id : null
-    }).eq('id', postId);
+    const newPinned = !post.isPinned;
+    const { error } = await locals.db.from('scan_mural_posts').update({isPinned: newPinned,
+      pinnedAt: newPinned ? new Date().toISOString() : null,
+      pinnedBy: newPinned ? locals.user!.id : null}).eq('id', postId);
 
     if (error) return fail(400, { message: error.message });
     return { success: true, pinToggled: true };
@@ -2365,13 +2293,11 @@ export const actions: Actions = {
     const slug = slugify(name);
 
     if (stageId) {
-      const { error } = await locals.db.from('scan_workflow_stages').update({
-        name,
+      const { error } = await locals.db.from('scan_workflow_stages').update({name,
         color,
         description,
         required,
-        updated_at: new Date().toISOString()
-      }).eq('id', stageId);
+        updatedAt: new Date().toISOString()}).eq('id', stageId);
       if (error) return fail(400, { message: error.message });
     } else {
       const { data: maxRow } = await locals.db
@@ -2382,17 +2308,15 @@ export const actions: Actions = {
         .limit(1)
         .maybeSingle();
 
-      const nextOrder = (maxRow?.display_order || 0) + 1;
+      const nextOrder = (maxRow?.displayOrder || 0) + 1;
 
-      const { error } = await locals.db.from('scan_workflow_stages').insert({
-        scan_id: scanId,
+      const { error } = await locals.db.from('scan_workflow_stages').insert({scanId: scanId,
         name,
         slug,
         color,
         description,
         required,
-        display_order: nextOrder
-      });
+        displayOrder: nextOrder});
       if (error) return fail(400, { message: error.message });
     }
 
@@ -2430,7 +2354,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow) {
@@ -2443,7 +2367,7 @@ export const actions: Actions = {
         .from('scan_member_positions')
         .select('scan_positions(name)')
         .eq('scan_id', scanId)
-        .eq('user_id', locals.user.id);
+        .eq('user_id', locals.user!.id);
 
       const hasRawRole = (memberPositions || []).some((p: any) => {
         const name = (p.scan_positions?.name || '').toLowerCase();
@@ -2663,13 +2587,11 @@ export const actions: Actions = {
 
     const { error } = await locals.db
       .from('scan_work_workflow_overrides')
-      .upsert({
-        scan_id: scanId,
-        work_id: workId,
+      .upsert({scanId: scanId,
+        workId: workId,
         template,
-        custom_stages: customStages,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'scan_id,work_id' });
+        customStages: customStages,
+        updatedAt: new Date().toISOString()}, {onConflict: 'scanId,workId'});
 
     if (error) return fail(400, { message: error.message });
     return { success: true, overrideSaved: true };
@@ -2721,8 +2643,8 @@ export const actions: Actions = {
     const { data: memberRow } = await locals.db
       .from('scan_members')
       .select('role')
-      .eq('scan_id', prodCh.scan_id)
-      .eq('user_id', locals.user.id)
+      .eq('scan_id', prodCh.scanId)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     const isPrivileged = memberRow && ['OWNER', 'ADMIN'].includes(memberRow.role);
@@ -2730,10 +2652,8 @@ export const actions: Actions = {
       return fail(403, { message: 'Permissão negada. Apenas Administradores e Donos podem editar detalhes da produção.' });
     }
 
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString()
-    };
-    if (chapterLabel !== null) updatePayload.chapter_label = chapterLabel || null;
+    const updatePayload: Record<string, any> = {updatedAt: new Date().toISOString()};
+    if (chapterLabel !== null) updatePayload.chapterLabel = chapterLabel || null;
     if (priority && ['LOW', 'NORMAL', 'HIGH', 'URGENT'].includes(priority)) {
       updatePayload.priority = priority;
     }
@@ -2745,10 +2665,9 @@ export const actions: Actions = {
 
     if (updateErr) return fail(400, { message: updateErr.message });
 
-    if (notes !== null) {
-      await locals.db
+    if (notes !== null) {await locals.db
         .from('scan_chapter_stages')
-        .update({ notes: notes || null, updated_at: new Date().toISOString() })
+        .update({ notes: notes || null, updatedAt: new Date().toISOString()})
         .eq('production_chapter_id', productionChapterId)
         .in('status', ['AVAILABLE', 'IN_PROGRESS', 'REWORK']);
     }
@@ -2770,7 +2689,7 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
@@ -2801,20 +2720,19 @@ export const actions: Actions = {
       .from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!memberRow || !['OWNER', 'ADMIN'].includes(memberRow.role)) {
       return fail(403, { message: 'Apenas Administradores ou Donos podem reordenar os canais.' });
     }
 
-    try {
-      const orders: Array<{ id: string; display_order: number }> = JSON.parse(ordersRaw);
+    try {const orders: Array<{ id: string; displayOrder: number}> = JSON.parse(ordersRaw);
       await Promise.all(
         orders.map(item =>
           locals.db
             .from('scan_channels')
-            .update({ display_order: item.display_order })
+            .update({displayOrder: item.displayOrder})
             .eq('id', item.id)
             .eq('scan_id', scanId)
         )

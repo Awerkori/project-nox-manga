@@ -25,14 +25,14 @@
 
   let { data } = $props();
   const initial = untrack(() => data);
-  let pages = $state(initial.pages.map((p) => ({ id: p.media_id, name: `Página ${p.position}` }))),
+  let pages = $state(initial.pages.map((p) => ({ id: p.mediaId, name: `Página ${p.position}` }))),
     number = $state(initial.chapter?.number ?? 1),
     title = $state(initial.chapter?.title || ''),
     notice = $state(''),
     busy = $state(false),
     progress = $state(0),
     confirmed = $state(false);
-  let selectedScanIds = $state<string[]>((initial.chapterScans || []).map((cs: any) => cs.scan_id));
+  let selectedScanIds = $state<string[]>((initial.chapterScans || []).map((cs: any) => cs.scanId));
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
   let loadingFinals = $state(false), finalsChecked = $state(false);
@@ -54,7 +54,7 @@
     JSON.stringify({
       number: initial.chapter?.number ?? 1,
       title: initial.chapter?.title || '',
-      pages: initial.pages.map((p) => p.media_id)
+      pages: initial.pages.map((p) => p.mediaId)
     })
   );
   let dirty = $derived(JSON.stringify({ number, title, pages: pages.map((p) => p.id) }) !== savedVersion);
@@ -342,7 +342,7 @@
           <span class="action-pill saving"><Loader2 size={13} class="spin" /> Despublicando…</span>
         {:else if actionState === 'error'}
           <span class="action-pill error"><AlertCircle size={13} /> Erro na operação</span>
-        {:else if data.chapter?.published_at}
+        {:else if data.chapter?.publishedAt}
           <span class="action-pill live"><span class="dot-live"></span> Publicado</span>
         {:else if data.chapter}
           <span class="action-pill draft"><span class="dot-draft"></span> Rascunho</span>
@@ -366,7 +366,7 @@
         <h2>Dados do Capítulo</h2>
       </div>
 
-      {#if !data.chapter?.published_at && !finalsChecked}
+      {#if !data.chapter?.publishedAt && !finalsChecked}
         <details class="staff-import-accordion">
           <summary>Importação opcional da central</summary>
           <div class="staff-import-body">
@@ -385,7 +385,7 @@
         </details>
       {/if}
 
-      {#if finals.length && !data.chapter?.published_at}
+      {#if finals.length && !data.chapter?.publishedAt}
         <div class="finals-picker-card">
           <div class="finals-picker-info">
             <strong>Capítulos aprovados na central</strong>
@@ -418,7 +418,7 @@
             max="999999"
             step="0.01"
             bind:value={number}
-            disabled={!!data.chapter?.published_at}
+            disabled={!!data.chapter?.publishedAt}
             required
           />
         </label>
@@ -429,7 +429,7 @@
             type="text"
             bind:value={title}
             maxlength="200"
-            disabled={!!data.chapter?.published_at}
+            disabled={!!data.chapter?.publishedAt}
           />
         </label>
 
@@ -438,19 +438,19 @@
           <span class="field-label">Scans / Tradução deste Capítulo</span>
           <div class="chapter-scans-chips">
             {#each data.allScans as scan (scan.id)}
-              <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.is_official}>
+              <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.isOfficial}>
                 <input
                   type="checkbox"
                   bind:group={selectedScanIds}
                   value={scan.id}
                   class="scan-checkbox"
-                  disabled={!!data.chapter?.published_at}
+                  disabled={!!data.chapter?.publishedAt}
                 />
-                {#if scan.is_official}
+                {#if scan.isOfficial}
                   <Shield size={13} class="icon-gold" />
                 {/if}
                 <span>{scan.name}</span>
-                {#if scan.is_official}
+                {#if scan.isOfficial}
                   <span class="badge-official-mini">OFICIAL</span>
                 {/if}
               </label>
@@ -466,7 +466,7 @@
         </div>
       </div>
 
-      {#if !data.chapter?.published_at}
+      {#if !data.chapter?.publishedAt}
         <div class="upload-section">
           <label
             class="upload-zone"
@@ -599,7 +599,7 @@
                 <strong>{index + 1}</strong>
                 <span>{page.name}</span>
               </div>
-              {#if !data.chapter?.published_at}
+              {#if !data.chapter?.publishedAt}
                 <div class="page-controls">
                   <button
                     aria-label="Mover página {index + 1} para antes"
@@ -631,7 +631,7 @@
 
       <!-- Bottom Actions for Draft/Preview -->
       <div class="row" style="margin-top:30px">
-        {#if !data.chapter?.published_at}
+        {#if !data.chapter?.publishedAt}
           <button
             class="button"
             onclick={save}
@@ -662,9 +662,9 @@
     <!-- Publication Control Panel -->
     {#if data.chapter}
       <section class="panel publication-panel">
-        <h2 style="font-size:23px">{data.chapter.published_at ? 'Capítulo publicado' : 'Tudo conferido?'}</h2>
+        <h2 style="font-size:23px">{data.chapter.publishedAt ? 'Capítulo publicado' : 'Tudo conferido?'}</h2>
 
-        {#if data.chapter.published_at}
+        {#if data.chapter.publishedAt}
           <p class="small">
             Despublique antes de fazer correções. As páginas deixam de ser acessíveis publicamente.
           </p>

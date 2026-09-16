@@ -44,52 +44,48 @@ export interface ShardLookup {
  * STRICTLY NON-DESTRUCTIVE: returns anomaly status without making any changes.
  */
 export function auditMediaRecord(
-  media: {
-    id: string;
+  media: {id: string;
     provider: string;
-    provider_key: string | null;
+    providerKey: string | null;
     purpose?: string | null;
-    storage_pool_id?: string | null;
-    storage_shard_id?: string | null;
-    bot_reference?: string | null;
-    chapter_id?: string | null;
-    scan_id?: string | null;
-  },
+    storagePoolId?: string | null;
+    storageShardId?: string | null;
+    botReference?: string | null;
+    chapterId?: string | null;
+    scanId?: string | null;},
   shardsMap: Map<string, ShardLookup>,
   poolsMap: Map<string, { id: string; key: string }>,
   existingChapterIds?: Set<string>
-): ReconciliationAnomaly | null {
-  // 1. Check for BROKEN_REFERENCE
-  if (!media.provider_key || media.provider_key.trim().length === 0) {
+): ReconciliationAnomaly | null {// 1. Check for BROKEN_REFERENCE
+  if (!media.providerKey || media.providerKey.trim().length === 0) {
     return {
       mediaId: media.id,
       anomalyType: 'BROKEN_REFERENCE',
-      description: `Media record has missing or blank provider_key (provider: ${media.provider}).`,
-      shardId: media.storage_shard_id,
-      botReference: media.bot_reference,
-      providerKey: media.provider_key,
+      description: `Media record has missing or blank providerKey (provider: ${media.provider}).`,
+      shardId: media.storageShardId,
+      botReference: media.botReference,
+      providerKey: media.providerKey,
       remedyRecommendation: 'Re-upload or backfill file reference from upstream archive.',
     };
   }
 
   // 2. Check for MISSING_SHARD if shard ID is referenced
-  if (media.storage_shard_id) {
-    const shard = shardsMap.get(media.storage_shard_id);
+  if (media.storageShardId) {const shard = shardsMap.get(media.storageShardId);
     if (!shard) {
       return {
         mediaId: media.id,
         anomalyType: 'MISSING_SHARD',
-        description: `Referenced storage_shard_id ${media.storage_shard_id} does not exist in storage_shards.`,
-        shardId: media.storage_shard_id,
-        botReference: media.bot_reference,
-        providerKey: media.provider_key,
+        description: `Referenced storageShardId ${media.storageShardId} does not exist in storage_shards.`,
+        shardId: media.storageShardId,
+        botReference: media.botReference,
+        providerKey: media.providerKey,
         remedyRecommendation: 'Reassign media record to valid active shard in the appropriate storage pool.',
       };
     }
 
     // 3. Check for BOT_MISMATCH
-    if (media.bot_reference && shard.botReference) {
-      const normMediaBot = normalizeBotReference(media.bot_reference);
+    if (media.botReference && shard.botReference) {
+      const normMediaBot = normalizeBotReference(media.botReference);
       const normShardBot = normalizeBotReference(shard.botReference);
       if (normMediaBot !== normShardBot) {
         return {
@@ -97,9 +93,9 @@ export function auditMediaRecord(
           anomalyType: 'BOT_MISMATCH',
           description: `Bot reference mismatch: media has ${normMediaBot} but assigned shard ${shard.displayName} requires ${normShardBot}.`,
           poolKey: shard.poolKey,
-          shardId: media.storage_shard_id,
-          botReference: media.bot_reference,
-          providerKey: media.provider_key,
+          shardId: media.storageShardId,
+          botReference: media.botReference,
+          providerKey: media.providerKey,
           remedyRecommendation: `Update media bot_reference to ${normShardBot} to ensure affinity with assigned shard.`,
         };
       }
@@ -117,9 +113,9 @@ export function auditMediaRecord(
           anomalyType: 'POOL_MISMATCH',
           description: `Isolation breach: media with pipeline purpose is assigned to pool ${shard.poolKey} instead of PRODUCTION_STORAGE.`,
           poolKey: shard.poolKey,
-          shardId: media.storage_shard_id,
-          botReference: media.bot_reference,
-          providerKey: media.provider_key,
+          shardId: media.storageShardId,
+          botReference: media.botReference,
+          providerKey: media.providerKey,
           remedyRecommendation: 'Enforce strict fail-closed pool isolation; route pipeline files only to PRODUCTION_STORAGE.',
         };
       }
@@ -130,9 +126,9 @@ export function auditMediaRecord(
           anomalyType: 'POOL_MISMATCH',
           description: `Isolation breach: media with staff_manual purpose is assigned to pool ${shard.poolKey} instead of STAFF_STORAGE.`,
           poolKey: shard.poolKey,
-          shardId: media.storage_shard_id,
-          botReference: media.bot_reference,
-          providerKey: media.provider_key,
+          shardId: media.storageShardId,
+          botReference: media.botReference,
+          providerKey: media.providerKey,
           remedyRecommendation: 'Enforce staff isolation; route staff manual files to STAFF_STORAGE.',
         };
       }
@@ -143,9 +139,9 @@ export function auditMediaRecord(
           anomalyType: 'POOL_MISMATCH',
           description: `Isolation breach: public editorial manga media is assigned to pool ${shard.poolKey} instead of MANGA_STORAGE.`,
           poolKey: shard.poolKey,
-          shardId: media.storage_shard_id,
-          botReference: media.bot_reference,
-          providerKey: media.provider_key,
+          shardId: media.storageShardId,
+          botReference: media.botReference,
+          providerKey: media.providerKey,
           remedyRecommendation: 'Route public manga pages only to MANGA_STORAGE shards.',
         };
       }
@@ -153,14 +149,13 @@ export function auditMediaRecord(
   }
 
   // 5. Check for ORPHAN_ARTIFACT
-  if (media.chapter_id && existingChapterIds && !existingChapterIds.has(media.chapter_id)) {
-    return {
+  if (media.chapterId && existingChapterIds && !existingChapterIds.has(media.chapterId)) {return {
       mediaId: media.id,
       anomalyType: 'ORPHAN_ARTIFACT',
-      description: `Media references non-existent chapter_id ${media.chapter_id}.`,
-      shardId: media.storage_shard_id,
-      botReference: media.bot_reference,
-      providerKey: media.provider_key,
+      description: `Media references non-existent chapterId ${media.chapterId}.`,
+      shardId: media.storageShardId,
+      botReference: media.botReference,
+      providerKey: media.providerKey,
       remedyRecommendation: 'Review chapter lifecycle; verify if chapter was deleted without cascading media cleanup.',
     };
   }
@@ -186,13 +181,13 @@ export async function runStorageReconciliationAudit(sampleLimitPerPool: number =
   const { data: shards } = await db.from('storage_shards').select('id, pool_id, bot_reference, display_name');
   const shardsMap = new Map<string, ShardLookup>();
   for (const s of shards || []) {
-    const pool = poolsMap.get(s.pool_id);
+    const pool = poolsMap.get(s.poolId);
     shardsMap.set(s.id, {
       id: s.id,
-      poolId: s.pool_id,
+      poolId: s.poolId,
       poolKey: pool?.key || 'UNKNOWN',
-      botReference: s.bot_reference,
-      displayName: s.display_name,
+      botReference: s.botReference,
+      displayName: s.displayName,
     });
   }
 
@@ -205,7 +200,7 @@ export async function runStorageReconciliationAudit(sampleLimitPerPool: number =
 
   // 4. Gather chapter IDs from sample for existence check
   const chapterIdsToCheck = (sampleMedia || [])
-    .map((m) => m.chapter_id)
+    .map((m) => m.chapterId)
     .filter((id): id is string => Boolean(id));
 
   let existingChapterIds: Set<string> | undefined;

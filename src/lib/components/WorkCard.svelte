@@ -16,7 +16,7 @@
     blurNsfw?: boolean;
   } = $props();
 
-  let isAdult = $derived(work.content_rating === 'ADULT_18');
+  let isAdult = $derived(work.contentRating === 'ADULT_18');
   let effectiveBlur = $derived(
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
@@ -25,17 +25,17 @@
     const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
     if (list.length === 0) {
       if (work.primary_scan?.name) {
-        return { name: work.primary_scan.name, logo_id: work.primary_scan.logo_id, is_official: work.primary_scan.is_official, extraCount: 0 };
+        return { name: work.primary_scan.name, logo_id: work.primary_scan.logoId, is_official: work.primary_scan.isOfficial, extraCount: 0 };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logo_id: primary.logoId,
+      is_official: primary.isOfficial,
       extraCount
     };
   });
@@ -47,7 +47,7 @@
     return String(n);
   }
 
-  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id));
+  let coverSrc = $derived(resolveCoverUrl(work.coverId, work.slug, work.id));
 
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
@@ -78,9 +78,9 @@
     />
 
     <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-    <div class="card-views-top-left" title="{work.views_total || 0} visualizações">
+    <div class="card-views-top-left" title="{work.viewsTotal || 0} visualizações">
       <Eye size={11} />
-      <span>{formatViews(work.views_total)}</span>
+      <span>{formatViews(work.viewsTotal)}</span>
     </div>
 
     <!-- 2. Type: Superior Direito (Top-Right) -->
@@ -99,9 +99,9 @@
     <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox, múltiplos compactos) -->
     {#if scanInfo}
       <div class="card-scan-bottom-right" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
-        {#if scanInfo.logo_id}
-          <img src="/media/{scanInfo.logo_id}" alt="" class="scan-chip-logo" />
-        {:else if scanInfo.is_official}
+        {#if scanInfo.logoId}
+          <img src="/media/{scanInfo.logoId}" alt="" class="scan-chip-logo" />
+        {:else if scanInfo.isOfficial}
           <ShieldCheck size={11} class="scan-official-icon" />
         {/if}
         <span class="scan-chip-name">

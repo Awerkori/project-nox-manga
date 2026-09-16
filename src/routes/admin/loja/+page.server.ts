@@ -1,22 +1,21 @@
 import { error } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { asc } from 'drizzle-orm';
 
 export const load = async ({ locals }) => {
   const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   if (!isEditor) error(403, 'Acesso restrito à equipe editorial');
 
-  const db = locals.db || privileged();
-
   const [itemsRes, inventoryCountsRes] = await Promise.all([
-    db.from('shop_items').select('*').order('kind').order('order_index', { ascending: true }),
-    db.from('member_inventory').select('item_id')
+    safeQuery(db.select().from(schema.shopItems).orderBy(asc(schema.shopItems.kind), asc(schema.shopItems.orderIndex))),
+    safeQuery(db.select({ itemId: schema.memberInventory.itemId }).from(schema.memberInventory))
   ]);
 
   if (itemsRes.error) throw error(500, itemsRes.error.message);
 
   const ownershipMap: Record<string, number> = {};
-  for (const row of (inventoryCountsRes.data || []) as any[]) {
-    ownershipMap[row.item_id] = (ownershipMap[row.item_id] || 0) + 1;
+  for (const row of (inventoryCountsRes.data || [])) {
+    if (row.itemId) ownershipMap[row.itemId] = (ownershipMap[row.itemId] || 0) + 1;
   }
 
   const items = (itemsRes.data || []).map((it: any) => ({

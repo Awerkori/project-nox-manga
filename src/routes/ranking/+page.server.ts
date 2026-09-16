@@ -29,16 +29,14 @@ export const load = async ({ locals, setHeaders }) => {
 
   const res = await safeDbQuery(
     safeQuery(
-      db.select({
-        id: schema.members.id,
+      db.select({id: schema.members.id,
         username: schema.members.username,
-        display_name: schema.members.displayName,
+        displayName: schema.members.displayName,
         xp: schema.members.xp,
-        avatar_id: schema.members.avatarId,
-        created_at: schema.members.createdAt,
-        equipped_title_id: schema.members.equippedTitleId,
-        equipped_badge_id: schema.members.equippedBadgeId
-      })
+        avatarId: schema.members.avatarId,
+        createdAt: schema.members.createdAt,
+        equippedTitleId: schema.members.equippedTitleId,
+        equippedBadgeId: schema.members.equippedBadgeId})
       .from(schema.members)
       .where(and(eq(schema.members.isTest, 0), gt(schema.members.xp, 0)))
       .orderBy(desc(schema.members.xp))

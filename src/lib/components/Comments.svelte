@@ -148,7 +148,7 @@
         <div class="replying-banner">
           <div class="replying-info">
             <span class="replying-tag">Respondendo a</span>
-            <strong class="replying-author">@{replyComment.members?.display_name || replyComment.members?.username || 'leitor'}</strong>
+            <strong class="replying-author">@{replyComment.members?.displayName || replyComment.members?.username || 'leitor'}</strong>
             <span class="replying-preview">"{replyComment.body.slice(0, 50)}{replyComment.body.length > 50 ? '…' : ''}"</span>
           </div>
           <button
@@ -178,7 +178,7 @@
             placeholder={edit
               ? 'Edite seu comentário…'
               : reply
-                ? `Respondendo a @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
+                ? `Respondendo a @${replyComment?.members?.displayName || replyComment?.members?.username || 'leitor'}…`
                 : chapterId
                   ? 'O que achou deste capítulo? Compartilhe suas impressões… Evite spoilers sem aviso.'
                   : 'O que achou desta obra? Compartilhe suas impressões sobre a história, personagens e arte…'
@@ -235,21 +235,21 @@
     </div>
   {:else}
     <div class="comment-list">
-      {#each threaded as comment (comment.id)}<article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
+      {#each threaded as comment (comment.id)}<article id={'comment-' + comment.id} class:reply={comment.parentId !== null} class:is-reply-target={reply === comment.id}>
         <div class="comment-author">
           <span class="avatar"
-            >{#if comment.members?.avatar_id}<img
-                src="/media/{comment.members.avatar_id}"
+            >{#if comment.members?.avatarId}<img
+                src="/media/{comment.members.avatarId}"
                 alt=""
                 width="38"
                 height="38"
                 style="border-radius:50%"
                 loading="lazy"
-              />{:else}{(comment.members?.display_name[0] || 'N').toUpperCase()}{/if}</span
+              />{:else}{(comment.members?.displayName[0] || 'N').toUpperCase()}{/if}</span
           >
           <div>
-            <a href="/u/{comment.members?.username}">{comment.members?.display_name || 'Leitor'}</a><time
-              datetime={comment.created_at}>{date(comment.created_at)}</time
+            <a href="/u/{comment.members?.username}">{comment.members?.displayName || 'Leitor'}</a><time
+              datetime={comment.createdAt}>{date(comment.createdAt)}</time
             >
           </div>
         </div>
@@ -282,10 +282,10 @@
             class="comment-button"
             onclick={() => mutate('comment_like', comment.id)}
             disabled={!profile || busy}>♡ {comment.comment_likes.length}</button
-          >{#if profile}{#if !comment.parent_id}<button
+          >{#if profile}{#if !comment.parentId}<button
                 class="comment-button"
                 onclick={() => compose(comment)}>Responder</button
-              >{/if}{#if profile.id === comment.user_id}<button
+              >{/if}{#if profile.id === comment.userId}<button
                 class="comment-button"
                 onclick={() => compose(comment, true)}>Editar</button
               ><button

@@ -25,8 +25,8 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
-  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id, currentWork.slug, currentWork.id) : '');
-  let isAdult = $derived(currentWork?.content_rating === 'ADULT_18');
+  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.coverId, currentWork.slug, currentWork.id) : '');
+  let isAdult = $derived(currentWork?.contentRating === 'ADULT_18');
   let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 
   // Check if current featured work has reading progress

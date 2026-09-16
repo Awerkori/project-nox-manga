@@ -40,9 +40,9 @@
   let userLevel = $derived(Math.floor(Math.sqrt(1 + currentXp / 50)));
 
   let equippedFrame = $derived(data.profile?.frame_id ?? null);
-  let equippedColor = $derived(data.profile?.name_color ?? null);
+  let equippedColor = $derived(data.profile?.nameColor ?? null);
   let equippedTitle = $derived(data.profile?.title_id ?? null);
-  let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
+  let equippedBanner = $derived(data.profile?.equippedBannerId ?? null);
 
   let inventorySet = $derived(new Set(data.inventory || []));
 
@@ -63,10 +63,10 @@
         return true;
       })
       .sort((a: any, b: any) => {
-        if (sortBy === 'price_asc') return a.price_xp - b.price_xp;
-        if (sortBy === 'price_desc') return b.price_xp - a.price_xp;
-        if (sortBy === 'level') return (a.min_level || 1) - (b.min_level || 1);
-        return (a.order_index ?? 99) - (b.order_index ?? 99);
+        if (sortBy === 'price_asc') return a.priceXp - b.priceXp;
+        if (sortBy === 'price_desc') return b.priceXp - a.priceXp;
+        if (sortBy === 'level') return (a.minLevel || 1) - (b.minLevel || 1);
+        return (a.orderIndex ?? 99) - (b.orderIndex ?? 99);
       })
   );
 
@@ -82,8 +82,8 @@
   }
 
   function getStyle(item: any): Record<string, any> {
-    return typeof item.style_data === 'object' && item.style_data !== null
-      ? (item.style_data as Record<string, any>)
+    return typeof item.styleData === 'object' && item.styleData !== null
+      ? (item.styleData as Record<string, any>)
       : {};
   }
 
@@ -102,12 +102,12 @@
       window.location.href = '/entrar';
       return;
     }
-    if (currentXp < item.price_xp) {
+    if (currentXp < item.priceXp) {
       showToast('XP insuficiente para adquirir este cosmético.', 'error');
       return;
     }
-    if (userLevel < item.min_level) {
-      showToast(`Você precisa atingir o Nível ${item.min_level} para desbloquear este item.`, 'error');
+    if (userLevel < item.minLevel) {
+      showToast(`Você precisa atingir o Nível ${item.minLevel} para desbloquear este item.`, 'error');
       return;
     }
 
@@ -223,9 +223,9 @@
         <span class="preview-title">Sua Identidade Atual</span>
         <div class="preview-avatar-wrap">
           <UserAvatar
-            avatarId={data.profile?.avatar_id}
+            avatarId={data.profile?.avatarId}
             frameId={previewFrame || equippedFrame}
-            displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
+            displayName={data.profile?.displayName || data.profile?.username || 'Leitor'}
             size={88}
           />
         </div>
@@ -234,7 +234,7 @@
             class="preview-name"
             style={(previewColor || equippedColor) ? `color: ${previewColor || equippedColor}` : ''}
           >
-            {data.profile?.display_name || data.profile?.username || 'Visitante Nox'}
+            {data.profile?.displayName || data.profile?.username || 'Visitante Nox'}
           </span>
           {#if previewTitle || equippedTitle}
             <span class="preview-title-badge">{previewTitle || equippedTitle}</span>
@@ -353,8 +353,8 @@
           {@const style = getStyle(item)}
           {@const isOwned = inventorySet.has(item.id)}
           {@const isEquipped = checkEquipped(item)}
-          {@const canAfford = currentXp >= item.price_xp}
-          {@const meetsLevel = userLevel >= (item.min_level || 1)}
+          {@const canAfford = currentXp >= item.priceXp}
+          {@const meetsLevel = userLevel >= (item.minLevel || 1)}
           {@const isBusy = busyItemId === item.id}
           {@const rarityConf = RARITY_CONFIG[item.rarity || 'COMUM'] || RARITY_CONFIG.COMUM}
 
@@ -384,7 +384,7 @@
                 {#if item.kind === 'AVATAR_FRAME'}
                   <div class="frame-demo-wrap">
                     <UserAvatar
-                      avatarId={data.profile?.avatar_id}
+                      avatarId={data.profile?.avatarId}
                       frameId={item.id}
                       displayName={item.name}
                       size={72}
@@ -417,7 +417,7 @@
                   </div>
                 {/if}
 
-                {#if item.is_animated}
+                {#if item.isAnimated}
                   <span class="animated-chip">Animado</span>
                 {/if}
 
@@ -445,12 +445,12 @@
               <div class="item-meta">
                 <div class="xp-price" class:cant-afford={!isOwned && !canAfford}>
                   <Sparkles size={14} />
-                  <span>{isOwned ? 'No Inventário' : `${formatXp(item.price_xp)} XP`}</span>
+                  <span>{isOwned ? 'No Inventário' : `${formatXp(item.priceXp)} XP`}</span>
                 </div>
 
-                {#if item.min_level > 1}
-                  <span class="lvl-req" class:locked={userLevel < item.min_level}>
-                    {userLevel < item.min_level ? '🔒 ' : ''}Nv. {item.min_level}
+                {#if item.minLevel > 1}
+                  <span class="lvl-req" class:locked={userLevel < item.minLevel}>
+                    {userLevel < item.minLevel ? '🔒 ' : ''}Nv. {item.minLevel}
                   </span>
                 {/if}
               </div>
@@ -485,12 +485,12 @@
                   >
                     {#if !meetsLevel}
                       <Lock size={14} />
-                      <span>Nível {item.min_level} Necessário</span>
+                      <span>Nível {item.minLevel} Necessário</span>
                     {:else if !canAfford}
-                      <span>Faltam {formatXp(item.price_xp - currentXp)} XP</span>
+                      <span>Faltam {formatXp(item.priceXp - currentXp)} XP</span>
                     {:else}
                       <Sparkles size={14} />
-                      <span>{isBusy ? 'Comprando...' : `Adquirir por ${formatXp(item.price_xp)} XP`}</span>
+                      <span>{isBusy ? 'Comprando...' : `Adquirir por ${formatXp(item.priceXp)} XP`}</span>
                     {/if}
                   </button>
                 {/if}
@@ -507,10 +507,10 @@
       {@const style = getStyle(item)}
       {@const isOwned = inventorySet.has(item.id)}
       {@const isEquipped = checkEquipped(item)}
-      {@const canAfford = currentXp >= item.price_xp}
-      {@const meetsLevel = userLevel >= (item.min_level || 1)}
+      {@const canAfford = currentXp >= item.priceXp}
+      {@const meetsLevel = userLevel >= (item.minLevel || 1)}
       {@const rarityConf = RARITY_CONFIG[item.rarity || 'COMUM'] || RARITY_CONFIG.COMUM}
-      {@const remainingXp = currentXp - item.price_xp}
+      {@const remainingXp = currentXp - item.priceXp}
 
       <div class="modal-backdrop" onclick={closePreviewModal} role="presentation">
         <!-- Stop click propagation on modal card -->
@@ -533,9 +533,9 @@
                 <div class="avatar-stage-box">
                   <div class="stage-avatar-holder">
                     <UserAvatar
-                      avatarId={data.profile?.avatar_id}
+                      avatarId={data.profile?.avatarId}
                       frameId={item.id}
-                      displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
+                      displayName={data.profile?.displayName || data.profile?.username || 'Leitor'}
                       size={110}
                     />
                   </div>
@@ -544,7 +544,7 @@
                       class="stage-username"
                       style={equippedColor ? `color: ${equippedColor}` : ''}
                     >
-                      {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                      {data.profile?.displayName || data.profile?.username || 'Seu Nome'}
                     </span>
                     {#if equippedTitle}
                       <span class="stage-title-pill">{equippedTitle}</span>
@@ -564,15 +564,15 @@
                   <div class="stage-banner-profile-strip">
                     <div class="banner-stage-avatar">
                       <UserAvatar
-                        avatarId={data.profile?.avatar_id}
+                        avatarId={data.profile?.avatarId}
                         frameId={equippedFrame}
-                        displayName={data.profile?.display_name || 'Leitor'}
+                        displayName={data.profile?.displayName || 'Leitor'}
                         size={64}
                       />
                     </div>
                     <div class="banner-stage-meta">
                       <div class="banner-stage-name-row">
-                        <span class="banner-stage-name">{data.profile?.display_name || 'Seu Nome'}</span>
+                        <span class="banner-stage-name">{data.profile?.displayName || 'Seu Nome'}</span>
                         <span class="banner-stage-lvl">Nível {userLevel}</span>
                       </div>
                       <span class="banner-stage-handle">@{data.profile?.username || 'usuario'}</span>
@@ -591,9 +591,9 @@
                     </div>
                     <div class="mock-comment">
                       <UserAvatar
-                        avatarId={data.profile?.avatar_id}
+                        avatarId={data.profile?.avatarId}
                         frameId={equippedFrame}
-                        displayName={data.profile?.display_name || 'Leitor'}
+                        displayName={data.profile?.displayName || 'Leitor'}
                         size={38}
                       />
                       <div class="mock-comment-bubble">
@@ -604,7 +604,7 @@
                               ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
                               : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'};`}
                           >
-                            {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                            {data.profile?.displayName || data.profile?.username || 'Seu Nome'}
                           </span>
                           <span class="mock-comment-time">há 10 minutos</span>
                         </div>
@@ -664,8 +664,8 @@
               <!-- Item Requisite -->
               <div class="modal-requisite-row">
                 <span class="req-label">Requisito de Nível:</span>
-                <span class="req-val" class:locked={userLevel < (item.min_level || 1)}>
-                  {userLevel < (item.min_level || 1) ? '🔒 ' : '✓ '} Nível {item.min_level || 1}
+                <span class="req-val" class:locked={userLevel < (item.minLevel || 1)}>
+                  {userLevel < (item.minLevel || 1) ? '🔒 ' : '✓ '} Nível {item.minLevel || 1}
                 </span>
               </div>
 
@@ -681,7 +681,7 @@
                 <div class="calc-row">
                   <span class="calc-lbl">Custo do Item:</span>
                   <span class="calc-val price">
-                    {isOwned ? '0 XP (Já Adquirido)' : `- ${formatXp(item.price_xp)} XP`}
+                    {isOwned ? '0 XP (Já Adquirido)' : `- ${formatXp(item.priceXp)} XP`}
                   </span>
                 </div>
 
@@ -694,7 +694,7 @@
                   {:else if canAfford}
                     <span class="calc-val final">{formatXp(remainingXp)} XP</span>
                   {:else}
-                    <span class="calc-val deficient">Faltam {formatXp(item.price_xp - currentXp)} XP</span>
+                    <span class="calc-val deficient">Faltam {formatXp(item.priceXp - currentXp)} XP</span>
                   {/if}
                 </div>
               </div>
@@ -729,12 +729,12 @@
                   >
                     {#if !meetsLevel}
                       <Lock size={16} />
-                      <span>Nível {item.min_level} Necessário</span>
+                      <span>Nível {item.minLevel} Necessário</span>
                     {:else if !canAfford}
-                      <span>XP Insuficiente (Faltam {formatXp(item.price_xp - currentXp)} XP)</span>
+                      <span>XP Insuficiente (Faltam {formatXp(item.priceXp - currentXp)} XP)</span>
                     {:else}
                       <Sparkles size={16} />
-                      <span>{busyItemId === item.id ? 'Processando...' : `Adquirir por ${formatXp(item.price_xp)} XP`}</span>
+                      <span>{busyItemId === item.id ? 'Processando...' : `Adquirir por ${formatXp(item.priceXp)} XP`}</span>
                     {/if}
                   </button>
                 {/if}

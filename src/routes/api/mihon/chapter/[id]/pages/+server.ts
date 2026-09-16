@@ -14,7 +14,7 @@ export const GET = async ({ params, request, url }) => {
     .eq('id', id)
     .maybeSingle();
 
-  if (chErr || !chapter || !chapter.published_at) {
+  if (chErr || !chapter || !chapter.publishedAt) {
     return json({ error: 'Capítulo não encontrado' }, { status: 404 });
   }
 
@@ -23,7 +23,7 @@ export const GET = async ({ params, request, url }) => {
     return json({ error: 'Obra não publicada' }, { status: 404 });
   }
 
-  if (work.content_rating === 'ADULT_18' && !allowAdult) {
+  if (work.contentRating === 'ADULT_18' && !allowAdult) {
     return json(
       { error: 'Conteúdo Adulto (+18). Requer autenticação com token de usuário maior de idade.' },
       { status: 403 }
@@ -41,16 +41,15 @@ export const GET = async ({ params, request, url }) => {
   }
 
   const origin = url.origin;
-  return json({
-    chapter_id: chapter.id,
-    chapter_number: chapter.number,
-    chapter_title: chapter.title,
+  return json({chapterId: chapter.id,
+    chapterNumber: chapter.number,
+    chapterTitle: chapter.title,
     work_title: work.title,
     work_slug: work.slug,
-    total_pages: pages?.length ?? 0,
+    totalPages: pages?.length ?? 0,
     pages: (pages || []).map((p) => ({
       position: p.position,
-      url: `${origin}/media/${p.media_id}`,
+      url: `${origin}/media/${p.mediaId}`,
       width: p.width,
       height: p.height
     }))

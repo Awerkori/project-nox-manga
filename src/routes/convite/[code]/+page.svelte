@@ -31,15 +31,15 @@
     {#if data.status === 'VALID' && data.invite}
       {@const scan = data.invite.scan as any}
       <!-- Header Banner if exists -->
-      {#if scan.banner_id}
-        <div class="scan-banner" style="background-image: url(/media/{scan.banner_id});"></div>
+      {#if scan.bannerId}
+        <div class="scan-banner" style="background-image: url(/media/{scan.bannerId});"></div>
       {/if}
 
       <div class="card-content">
         <!-- Scan Logo -->
         <div class="logo-wrap">
-          {#if scan.logo_id}
-            <img src="/media/{scan.logo_id}" alt="Logo de {scan.name}" class="scan-logo-img" />
+          {#if scan.logoId}
+            <img src="/media/{scan.logoId}" alt="Logo de {scan.name}" class="scan-logo-img" />
           {:else}
             <div class="scan-logo-fallback">
               <Users size={32} />
@@ -50,7 +50,7 @@
         <span class="invite-badge">CONVITE PARA EQUIPE</span>
         <h1 class="scan-name">
           {scan.name}
-          {#if scan.is_official}
+          {#if scan.isOfficial}
             <ShieldCheck size={20} class="official-icon" title="Scan Oficial Verificada" />
           {/if}
         </h1>

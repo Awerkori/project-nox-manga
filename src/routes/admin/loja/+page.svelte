@@ -162,8 +162,8 @@
       const matchesKind = kindFilter === 'ALL' || it.kind === kindFilter;
       const matchesStatus =
         statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && it.is_active && it.status !== 'ARCHIVED') ||
-        (statusFilter === 'ARCHIVED' && (!it.is_active || it.status === 'ARCHIVED'));
+        (statusFilter === 'ACTIVE' && it.isActive && it.status !== 'ARCHIVED') ||
+        (statusFilter === 'ARCHIVED' && (!it.isActive || it.status === 'ARCHIVED'));
       return matchesSearch && matchesKind && matchesStatus;
     })
   );
@@ -208,13 +208,13 @@
     formDescription = it.description || '';
     formKind = it.kind;
     formRarity = it.rarity || 'COMUM';
-    formPriceXp = it.price_xp;
-    formMinLevel = it.min_level;
-    formIsAnimated = Boolean(it.is_animated);
-    formStatus = it.status || (it.is_active ? 'ACTIVE' : 'ARCHIVED');
-    formOrderIndex = it.order_index ?? 99;
-    formAssetUrl = it.asset_url || '';
-    formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
+    formPriceXp = it.priceXp;
+    formMinLevel = it.minLevel;
+    formIsAnimated = Boolean(it.isAnimated);
+    formStatus = it.status || (it.isActive ? 'ACTIVE' : 'ARCHIVED');
+    formOrderIndex = it.orderIndex ?? 99;
+    formAssetUrl = it.assetUrl || '';
+    formStyleJson = JSON.stringify(it.styleData || {}, null, 2);
     uploadError = '';
     showModal = true;
     notice = '';
@@ -228,13 +228,13 @@
     formDescription = it.description || '';
     formKind = it.kind;
     formRarity = it.rarity || 'COMUM';
-    formPriceXp = it.price_xp;
-    formMinLevel = it.min_level;
-    formIsAnimated = Boolean(it.is_animated);
+    formPriceXp = it.priceXp;
+    formMinLevel = it.minLevel;
+    formIsAnimated = Boolean(it.isAnimated);
     formStatus = 'ACTIVE';
     formOrderIndex = (data.items?.length || 0) + 1;
-    formAssetUrl = it.asset_url || '';
-    formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
+    formAssetUrl = it.assetUrl || '';
+    formStyleJson = JSON.stringify(it.styleData || {}, null, 2);
     uploadError = '';
     showModal = true;
     notice = 'Item duplicado no formulário. Ajuste os campos e clique em Salvar.';
@@ -291,7 +291,7 @@
   }
 
   async function toggleArchive(it: any) {
-    const isNowActive = it.status === 'ARCHIVED' || !it.is_active;
+    const isNowActive = it.status === 'ARCHIVED' || !it.isActive;
     busy = true;
     try {
       await action('editor', 'shop_item', {
@@ -425,16 +425,16 @@
   <!-- Items Grid -->
   <div class="items-grid">
     {#each filteredItems as item (item.id)}
-      {@const style = item.style_data || {}}
-      {@const isArchived = !item.is_active || item.status === 'ARCHIVED'}
+      {@const style = item.styleData || {}}
+      {@const isArchived = !item.isActive || item.status === 'ARCHIVED'}
       <div class="item-card" class:is-archived={isArchived}>
         <!-- Visual Preview Box -->
         <div class="item-preview-box">
           {#if item.kind === 'AVATAR_FRAME'}
             <UserAvatar
               avatarId={null}
-              frameId={item.asset_url ? null : item.id}
-              frameUrl={item.asset_url || null}
+              frameId={item.assetUrl ? null : item.id}
+              frameUrl={item.assetUrl || null}
               displayName={item.name}
               size={64}
             />
@@ -455,15 +455,15 @@
           {:else if item.kind === 'COMMENT_BANNER'}
             <div
               class="preview-comment-banner-box"
-              style={item.asset_url ? `background-image: url(${item.asset_url}); background-size: cover; background-position: center;` : style.background ? `background: ${style.background};` : 'background: #181928;'}
+              style={item.assetUrl ? `background-image: url(${item.assetUrl}); background-size: cover; background-position: center;` : style.background ? `background: ${style.background};` : 'background: #181928;'}
             >
               <MessageSquare size={13} />
               <span>{item.name}</span>
             </div>
           {:else if item.kind === 'BADGE'}
             <div class="preview-badge-chip">
-              {#if item.asset_url}
-                <img src={item.asset_url} alt="" class="badge-card-icon" />
+              {#if item.assetUrl}
+                <img src={item.assetUrl} alt="" class="badge-card-icon" />
               {:else}
                 <Award size={20} class="badge-icon" />
               {/if}
@@ -475,7 +475,7 @@
             <span class="rarity-tag rarity-{item.rarity?.toLowerCase() || 'comum'}">
               {item.rarity || 'COMUM'}
             </span>
-            {#if item.is_animated}
+            {#if item.isAnimated}
               <span class="anim-tag">Animado</span>
             {/if}
           </div>
@@ -493,10 +493,10 @@
           <div class="item-stats-row">
             <div class="stat-pill xp" title="Preço em XP">
               <Sparkles size={13} />
-              <span>{formatXp(item.price_xp)} XP</span>
+              <span>{formatXp(item.priceXp)} XP</span>
             </div>
             <div class="stat-pill lvl" title="Nível mínimo requerido">
-              <span>Nv. {item.min_level}</span>
+              <span>Nv. {item.minLevel}</span>
             </div>
             <div class="stat-pill owners" title="Usuários que possuem no inventário">
               <Users size={12} />
@@ -564,7 +564,7 @@
             {#if formKind === 'AVATAR_FRAME'}
               <div class="avatar-preview-box">
                 <UserAvatar
-                  avatarId={data.profile?.avatar_id}
+                  avatarId={data.profile?.avatarId}
                   frameId={formAssetUrl ? null : formId}
                   frameUrl={formAssetUrl || null}
                   displayName={formName || 'ProjetoNox'}
@@ -585,7 +585,7 @@
               >
                 <div class="comment-preview-glass">
                   <UserAvatar
-                    avatarId={data.profile?.avatar_id}
+                    avatarId={data.profile?.avatarId}
                     displayName="LeitorNox"
                     size={36}
                   />

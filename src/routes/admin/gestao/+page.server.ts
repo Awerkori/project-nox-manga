@@ -1,22 +1,51 @@
-import { check } from '$lib/server/db';
-export const load = async ({ locals }) => {
+import { db, schema, safeQuery, check } from '$lib/server/db';
+import { eq, desc } from 'drizzle-orm';
+
+export const load = async () => {
   const [members, comments, invites] = await Promise.all([
-    locals.db
-      .from('members')
-      .select('id,username,display_name,access_roles(role,suspended)')
-      .order('created_at', { ascending: false })
-      .limit(200),
-    locals.db
-      .from('comments')
-      .select('id,body,removed,created_at,members!comments_user_id_fkey(display_name),works(title)')
-      .order('created_at', { ascending: false })
-      .limit(100),
-    locals.db
-      .from('editor_invites')
-      .select('email,created_at')
-      .order('created_at', { ascending: false })
-      .limit(200)
+    safeQuery(db.select({
+      id: schema.members.id,
+      username: schema.members.username,
+      displayName: schema.members.displayName,
+      access_roles: {
+        role: schema.accessRoles.role,
+        suspended: schema.accessRoles.suspended
+      }
+    }).from(schema.members)
+      .leftJoin(schema.accessRoles, eq(schema.members.id, schema.accessRoles.userId))
+      .orderBy(desc(schema.members.createdAt))
+      .limit(200)),
+      
+    safeQuery(db.select({
+      id: schema.comments.id,
+      body: schema.comments.body,
+      removed: schema.comments.removed,
+      createdAt: schema.comments.createdAt,
+      members: {
+        displayName: schema.members.displayName
+      },
+      works: {
+        title: schema.works.title
+      }
+    }).from(schema.comments)
+      .leftJoin(schema.members, eq(schema.comments.userId, schema.members.id))
+      .leftJoin(schema.works, eq(schema.comments.workId, schema.works.id))
+      .orderBy(desc(schema.comments.createdAt))
+      .limit(100)),
+      
+    safeQuery(db.select({
+      email: schema.editorInvites.email,
+      createdAt: schema.editorInvites.createdAt
+    }).from(schema.editorInvites)
+      .orderBy(desc(schema.editorInvites.createdAt))
+      .limit(200))
   ]);
+
   check(comments);
-  return { members: members.data || [], comments: comments.data || [], invites: invites.data || [] };
+
+  return { 
+    members: members.data || [], 
+    comments: comments.data || [], 
+    invites: invites.data || [] 
+  };
 };

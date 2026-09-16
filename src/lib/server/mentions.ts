@@ -9,13 +9,11 @@ export interface MentionTarget {
   roleId?: string | null;
 }
 
-export interface StructuredMentionInput {
-  type: 'user' | 'position' | 'all' | 'USER' | 'ROLE' | 'ALL';
+export interface StructuredMentionInput {type: 'user' | 'position' | 'all' | 'USER' | 'ROLE' | 'ALL';
   id?: string;
-  target_user_id?: string;
-  target_role_id?: string;
-  label: string;
-}
+  targetUserId?: string;
+  targetRoleId?: string;
+  label: string;}
 
 export interface DispatchMentionsParams {
   locals: App.Locals;
@@ -76,23 +74,21 @@ export async function dispatchMentions({
   chapterId = null,
   mentionsData = null,
   platform
-}: DispatchMentionsParams): Promise<{ count: number; notifiedUserIds: string[] }> {
-  const db = privileged();
+}: DispatchMentionsParams): Promise<{ count: number; notifiedUserIds: string[] }> {const db = privileged();
   const targetUserMap = new Map<string, MentionTarget>();
   const structuredMentionsToPersist: Array<{
-    message_id: string;
-    mention_type: 'USER' | 'ROLE' | 'ALL';
-    target_user_id: string | null;
-    target_role_id: string | null;
-    mention_text: string;
-  }> = [];
+    messageId: string;
+    mentionType: 'USER' | 'ROLE' | 'ALL';
+    targetUserId: string | null;
+    targetRoleId: string | null;
+    mentionText: string;}> = [];
 
   // Obter nome do autor para mensagens personalizadas
   let authorName = 'Alguém';
   try {
     const { data: authorMem } = await db.from('members').select('display_name, username').eq('id', authorId).maybeSingle();
     if (authorMem) {
-      authorName = authorMem.display_name || authorMem.username || 'Alguém';
+      authorName = authorMem.displayName || authorMem.username || 'Alguém';
     }
   } catch (err) {
     console.warn('[MENTIONS] Erro ao buscar nome do autor:', err);
@@ -103,7 +99,7 @@ export async function dispatchMentions({
     for (const item of mentionsData) {
       const normalizedType = item.type.toUpperCase();
       if (normalizedType === 'USER') {
-        const uid = item.target_user_id || item.id;
+        const uid = item.targetUserId || item.id;
         if (uid) {
           targetUserMap.set(uid, {
             userId: uid,
@@ -111,18 +107,16 @@ export async function dispatchMentions({
             email: null,
             mentionType: 'USER'
           });
-          if (messageId) {
-            structuredMentionsToPersist.push({
-              message_id: messageId,
-              mention_type: 'USER',
-              target_user_id: uid,
-              target_role_id: null,
-              mention_text: item.label
-            });
+          if (messageId) {structuredMentionsToPersist.push({
+              messageId: messageId,
+              mentionType: 'USER',
+              targetUserId: uid,
+              targetRoleId: null,
+              mentionText: item.label});
           }
         }
       } else if (normalizedType === 'POSITION' || normalizedType === 'ROLE') {
-        const roleId = item.target_role_id || item.id;
+        const roleId = item.targetRoleId || item.id;
         if (roleId && scanId) {
           // Buscar todos os membros que possuem essa posição na Scan
           const { data: roleMembers } = await db
@@ -133,10 +127,10 @@ export async function dispatchMentions({
           if (roleMembers && roleMembers.length > 0) {
             for (const rm of roleMembers) {
               // Se já foi adicionado como USER, manter USER (prioridade)
-              const existing = targetUserMap.get(rm.user_id);
+              const existing = targetUserMap.get(rm.userId);
               if (!existing || existing.mentionType !== 'USER') {
-                targetUserMap.set(rm.user_id, {
-                  userId: rm.user_id,
+                targetUserMap.set(rm.userId, {
+                  userId: rm.userId,
                   username: item.label.replace(/^@/, ''),
                   email: null,
                   mentionType: 'ROLE',
@@ -146,14 +140,12 @@ export async function dispatchMentions({
             }
           }
 
-          if (messageId) {
-            structuredMentionsToPersist.push({
-              message_id: messageId,
-              mention_type: 'ROLE',
-              target_user_id: null,
-              target_role_id: roleId,
-              mention_text: item.label
-            });
+          if (messageId) {structuredMentionsToPersist.push({
+              messageId: messageId,
+              mentionType: 'ROLE',
+              targetUserId: null,
+              targetRoleId: roleId,
+              mentionText: item.label});
           }
         }
       } else if (normalizedType === 'ALL') {
@@ -165,9 +157,9 @@ export async function dispatchMentions({
 
           if (allMembers && allMembers.length > 0) {
             for (const am of allMembers) {
-              if (!targetUserMap.has(am.user_id)) {
-                targetUserMap.set(am.user_id, {
-                  userId: am.user_id,
+              if (!targetUserMap.has(am.userId)) {
+                targetUserMap.set(am.userId, {
+                  userId: am.userId,
                   username: 'todos',
                   email: null,
                   mentionType: 'ALL'
@@ -176,14 +168,12 @@ export async function dispatchMentions({
             }
           }
 
-          if (messageId) {
-            structuredMentionsToPersist.push({
-              message_id: messageId,
-              mention_type: 'ALL',
-              target_user_id: null,
-              target_role_id: null,
-              mention_text: '@todos'
-            });
+          if (messageId) {structuredMentionsToPersist.push({
+              messageId: messageId,
+              mentionType: 'ALL',
+              targetUserId: null,
+              targetRoleId: null,
+              mentionText: '@todos'});
           }
         }
       }
@@ -202,7 +192,7 @@ export async function dispatchMentions({
         .eq('id', channelId)
         .maybeSingle();
       if (ch) {
-        if (ch.is_private) isPrivateChannel = true;
+        if (ch.isPrivate) isPrivateChannel = true;
         if (ch.name) channelName = ch.name;
       }
     }
@@ -214,9 +204,9 @@ export async function dispatchMentions({
 
     if (resolved && resolved.length > 0) {
       for (const r of resolved) {
-        const uid = r.target_user_id;
+        const uid = r.targetUserId;
         if (uid) {
-          const resolvedType = r.mention_type === 'POSITION' ? 'ROLE' : (r.mention_type as any) || 'USER';
+          const resolvedType = r.mentionType === 'POSITION' ? 'ROLE' : (r.mentionType as any) || 'USER';
           const existing = targetUserMap.get(uid);
 
           // Se não existe ou se o novo é USER e o anterior era ROLE/ALL, atualizar para USER
@@ -229,14 +219,12 @@ export async function dispatchMentions({
             });
           }
 
-          if (messageId && !structuredMentionsToPersist.some(s => s.target_user_id === uid && s.mention_type === resolvedType)) {
-            structuredMentionsToPersist.push({
-              message_id: messageId,
-              mention_type: resolvedType,
-              target_user_id: resolvedType === 'USER' ? uid : null,
-              target_role_id: null,
-              mention_text: '@' + (r.mention_label || 'membro')
-            });
+          if (messageId && !structuredMentionsToPersist.some(s => s.targetUserId === uid && s.mentionType === resolvedType)) {structuredMentionsToPersist.push({
+              messageId: messageId,
+              mentionType: resolvedType,
+              targetUserId: resolvedType === 'USER' ? uid : null,
+              targetRoleId: null,
+              mentionText: '@' + (r.mention_label || 'membro')});
           }
         }
       }
@@ -249,7 +237,7 @@ export async function dispatchMentions({
         .select('user_id')
         .eq('scan_id', scanId)
         .in('user_id', uids);
-      const allowedSet = new Set((members || []).map((m: any) => m.user_id));
+      const allowedSet = new Set((members || []).map((m: any) => m.userId));
       for (const uid of uids) {
         if (!allowedSet.has(uid)) {
           targetUserMap.delete(uid);
@@ -279,15 +267,13 @@ export async function dispatchMentions({
   }
 
   // 3. Persistir menções estruturadas no banco
-  if (messageId && structuredMentionsToPersist.length > 0) {
-    try {
+  if (messageId && structuredMentionsToPersist.length > 0) {try {
       await db.from('scan_message_mentions').insert(structuredMentionsToPersist);
       const mentionsJson = Array.from(targetUserMap.values()).map(t => ({
         type: t.mentionType,
-        user_id: t.userId,
+        userId: t.userId,
         role_id: t.roleId || null,
-        label: '@' + t.username
-      }));
+        label: '@' + t.username}));
       await db.from('scan_messages').update({ mentions: mentionsJson }).eq('id', messageId);
     } catch (err) {
       console.warn('[MENTIONS] Erro ao persistir scan_message_mentions:', err);

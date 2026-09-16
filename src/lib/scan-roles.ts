@@ -35,69 +35,56 @@ export const SCAN_ADMIN_FUNCTIONS: Record<ScanAdminRole, ScanAdminFunctionConfig
   }
 };
 
-export interface ScanEditorialRoleConfig {
-  slug: string;
+export interface ScanEditorialRoleConfig {slug: string;
   name: string;
   icon: string;
   description: string;
-  display_order: number;
-  stage_slug: string;
-  stage_name: string;
-}
+  displayOrder: number;
+  stageSlug: string;
+  stageName: string;}
 
 export const CANONICAL_EDITORIAL_ROLES: ScanEditorialRoleConfig[] = [
-  {
-    slug: 'raw_provider',
+  {slug: 'raw_provider',
     name: 'Raw Provider',
     icon: '📦',
     description: 'Obtenção e tratamento dos arquivos brutos em alta resolução.',
-    display_order: 1,
-    stage_slug: 'raw',
-    stage_name: 'Raw Provider'
-  },
-  {
-    slug: 'tradutor',
+    displayOrder: 1,
+    stageSlug: 'raw',
+    stageName: 'Raw Provider'},
+  {slug: 'tradutor',
     name: 'Tradutor',
     icon: '🌐',
     description: 'Tradução e localização fiel dos diálogos e narrativas.',
-    display_order: 2,
-    stage_slug: 'traducao',
-    stage_name: 'Tradução'
-  },
-  {
-    slug: 'clean_redraw',
+    displayOrder: 2,
+    stageSlug: 'traducao',
+    stageName: 'Tradução'},
+  {slug: 'clean_redraw',
     name: 'Clean/Redraw',
     icon: '🎨',
     description: 'Limpeza dos balões e reconstrução artística de fundos.',
-    display_order: 3,
-    stage_slug: 'clean_redraw',
-    stage_name: 'Clean/Redraw'
-  },
-  {
-    slug: 'typer',
+    displayOrder: 3,
+    stageSlug: 'clean_redraw',
+    stageName: 'Clean/Redraw'},
+  {slug: 'typer',
     name: 'Typer',
     icon: '✒️',
     description: 'Diagramação tipográfica e formatação de falas e efeitos sonoros.',
-    display_order: 4,
-    stage_slug: 'typeset',
-    stage_name: 'Typeset'
-  },
-  {
-    slug: 'revisor_qc',
+    displayOrder: 4,
+    stageSlug: 'typeset',
+    stageName: 'Typeset'},
+  {slug: 'revisor_qc',
     name: 'Revisor (QC)',
     icon: '🔎',
     description: 'Revisão gramatical, coesão editorial e controle de qualidade.',
-    display_order: 5,
-    stage_slug: 'revisor_qc',
-    stage_name: 'Revisor (QC)'
-  }
+    displayOrder: 5,
+    stageSlug: 'revisor_qc',
+    stageName: 'Revisor (QC)'}
 ];
 
-export interface PipelineStageConfig {
-  slug: string;
+export interface PipelineStageConfig {slug: string;
   name: string;
   icon: string;
-  display_order: number;
+  displayOrder: number;
   requiredRoleName: string | null;
   requiredRoleSlug: string | null;
   dependencies: string[];
@@ -105,96 +92,81 @@ export interface PipelineStageConfig {
   color: string;
   description: string;
   adminOnly?: boolean;
-  isFinal?: boolean;
-}
+  isFinal?: boolean;}
 
 export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
-  {
-    slug: 'raw',
+  {slug: 'raw',
     name: 'Raw Provider',
     icon: '📦',
-    display_order: 1,
+    displayOrder: 1,
     requiredRoleName: 'Raw Provider',
     requiredRoleSlug: 'raw_provider',
     dependencies: [],
     requiresOutput: true,
     color: '#64748b',
-    description: 'Upload dos arquivos brutos e preparação das páginas para o pipeline.'
-  },
-  {
-    slug: 'traducao',
+    description: 'Upload dos arquivos brutos e preparação das páginas para o pipeline.'},
+  {slug: 'traducao',
     name: 'Tradução',
     icon: '🌐',
-    display_order: 2,
+    displayOrder: 2,
     requiredRoleName: 'Tradutor',
     requiredRoleSlug: 'tradutor',
     dependencies: ['raw'],
     requiresOutput: true,
     color: '#3b82f6',
-    description: 'Tradução do texto original preservando termos do glossário.'
-  },
-  {
-    slug: 'clean_redraw',
+    description: 'Tradução do texto original preservando termos do glossário.'},
+  {slug: 'clean_redraw',
     name: 'Clean/Redraw',
     icon: '🎨',
-    display_order: 3,
+    displayOrder: 3,
     requiredRoleName: 'Clean/Redraw',
     requiredRoleSlug: 'clean_redraw',
     dependencies: ['raw'],
     requiresOutput: true,
     color: '#ec4899',
-    description: 'Limpeza dos balões e reconstrução artística dos fundos.'
-  },
-  {
-    slug: 'typeset',
+    description: 'Limpeza dos balões e reconstrução artística dos fundos.'},
+  {slug: 'typeset',
     name: 'Typeset',
     icon: '✒️',
-    display_order: 4,
+    displayOrder: 4,
     requiredRoleName: 'Typer',
     requiredRoleSlug: 'typer',
     dependencies: ['traducao', 'clean_redraw'],
     requiresOutput: true,
     color: '#eab308',
-    description: 'Inserção tipográfica da tradução sobre as páginas limpas.'
-  },
-  {
-    slug: 'revisor_qc',
+    description: 'Inserção tipográfica da tradução sobre as páginas limpas.'},
+  {slug: 'revisor_qc',
     name: 'Revisor (QC)',
     icon: '🔎',
-    display_order: 5,
+    displayOrder: 5,
     requiredRoleName: 'Revisor (QC)',
     requiredRoleSlug: 'revisor_qc',
     dependencies: ['typeset'],
     requiresOutput: false,
     color: '#a855f7',
-    description: 'Inspeção de qualidade e revisão minuciosa antes da aprovação.'
-  },
-  {
-    slug: 'pre_aprovado',
+    description: 'Inspeção de qualidade e revisão minuciosa antes da aprovação.'},
+  {slug: 'pre_aprovado',
     name: 'Pré Aprovado',
     icon: '✅',
-    display_order: 6,
+    displayOrder: 6,
     requiredRoleName: null,
     requiredRoleSlug: null,
     dependencies: ['revisor_qc'],
     requiresOutput: false,
     color: '#10b981',
     description: 'Capítulo revisado aguardando autorização da liderança para publicação.',
-    adminOnly: true
-  },
-  {
-    slug: 'publicado',
+    adminOnly: true},
+  {slug: 'publicado',
     name: 'Publicado',
     icon: '📚',
-    display_order: 7,
+    displayOrder: 7,
     requiredRoleName: null,
     requiredRoleSlug: null,
     dependencies: ['pre_aprovado'],
     requiresOutput: false,
     color: '#06b6d4',
     description: 'Capítulo publicado e disponível para os leitores na plataforma.',
-    isFinal: true
-  }
+    isFinal: true}
 ];
 
 // Helper to normalize position names for comparisons

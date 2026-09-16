@@ -35,10 +35,10 @@
     isOwnerOrAdmin = false
   } = $props();
 
-  let pauseUploads = $state(!!currentScan?.pause_uploads);
-  let pauseRecruitment = $state(!!currentScan?.pause_recruitment);
-  let emergencyMode = $state(!!currentScan?.emergency_mode);
-  let emergencyReason = $state(currentScan?.emergency_reason || '');
+  let pauseUploads = $state(!!currentScan?.pauseUploads);
+  let pauseRecruitment = $state(!!currentScan?.pauseRecruitment);
+  let emergencyMode = $state(!!currentScan?.emergencyMode);
+  let emergencyReason = $state(currentScan?.emergencyReason || '');
 
   // Branding & Profile state
   let scanName = $state(currentScan?.name || '');
@@ -47,9 +47,9 @@
   let scanWebsite = $state(currentScan?.website || '');
   let scanDiscord = $state(currentScan?.discord || '');
   let scanFluxer = $state(currentScan?.fluxer || '');
-  let scanDisplayPrep = $state(currentScan?.display_preposition || 'de');
-  let logoId = $state(currentScan?.logo_id || '');
-  let bannerId = $state(currentScan?.banner_id || '');
+  let scanDisplayPrep = $state(currentScan?.displayPreposition || 'de');
+  let logoId = $state(currentScan?.logoId || '');
+  let bannerId = $state(currentScan?.bannerId || '');
   let isUploadingLogo = $state(false);
   let isUploadingBanner = $state(false);
   let logoError = $state('');
@@ -234,26 +234,26 @@
           description: currentScan.description,
           discord: currentScan.discord,
           website: currentScan.website,
-          created_at: currentScan.created_at
+          created_at: currentScan.createdAt
         },
         team: team.map((m: any) => ({
           username: m.username,
-          display_name: m.display_name,
+          display_name: m.displayName,
           role: m.role,
-          created_at: m.created_at
+          created_at: m.createdAt
         })),
         works: works.map((w: any) => ({
           title: w.title,
           slug: w.slug,
           status: w.project_status,
-          views_total: w.views_total
+          views_total: w.viewsTotal
         })),
         chapters: chapters.map((c: any) => ({
           work_title: c.works?.title,
           number: c.number,
           title: c.title,
-          published_at: c.published_at,
-          views: c.views_total
+          published_at: c.publishedAt,
+          views: c.viewsTotal
         }))
       };
 
@@ -268,10 +268,10 @@
       // CSV
       const rows = [
         ['Tipo', 'Identificador', 'Nome/Título', 'Info Extra', 'Data'],
-        ['SCAN', currentScan.slug, currentScan.name, currentScan.website || '', currentScan.created_at],
-        ...team.map((m: any) => ['MEMBRO', m.username, m.display_name || '', m.role, m.created_at]),
+        ['SCAN', currentScan.slug, currentScan.name, currentScan.website || '', currentScan.createdAt],
+        ...team.map((m: any) => ['MEMBRO', m.username, m.displayName || '', m.role, m.createdAt]),
         ...works.map((w: any) => ['OBRA', w.slug, w.title, w.project_status, '']),
-        ...chapters.map((c: any) => ['CAPITULO', `${c.works?.title} #${c.number}`, c.title || '', `${c.views_total} views`, c.published_at || ''])
+        ...chapters.map((c: any) => ['CAPITULO', `${c.works?.title} #${c.number}`, c.title || '', `${c.viewsTotal} views`, c.publishedAt || ''])
       ];
 
       const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -684,7 +684,7 @@
               <div class="wh-meta">
                 <span class="wh-platform {webhook.platform.toLowerCase()}">{webhook.platform}</span>
                 <span class="wh-name">{webhook.name}</span>
-                <span class="wh-url">{webhook.webhook_url.substring(0, 32)}...</span>
+                <span class="wh-url">{webhook.webhookUrl.substring(0, 32)}...</span>
               </div>
               <form method="POST" action="?/deleteIntegration" use:enhance>
                 <input type="hidden" name="integration_id" value={webhook.id} />

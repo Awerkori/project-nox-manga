@@ -1,30 +1,35 @@
-import { createClient } from '@supabase/supabase-js';
-import { databaseConfig } from './config';
+import { db, schema, eq } from '$lib/server/db';
 import { error } from '@sveltejs/kit';
+
 export async function inviteEditor(locals: App.Locals, email: string) {
   if (locals.role !== 'ADMIN') error(403, 'Somente administradores');
-  const {
-    data: { session }
-  } = await locals.db.auth.getSession();
-  if (!session) error(401, 'Entre novamente para autorizar a staff.');
-  const { url, key } = databaseConfig();
-  const caller = createClient(url, key, {
-    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-  const { error: problem } = await caller.rpc('invite_editor', { p_email: email });
-  if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+  if (!locals.user) error(401, 'Entre novamente para autorizar a staff.');
+  
+  try {
+    await db.insert(schema.editorInvites).values({
+      email,
+      createdBy: locals.user.id,
+      createdAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    error(400, err.message);
+  }
 }
+
 export async function claimInvite(locals: App.Locals) {
-  const {
-    data: { session }
-  } = await locals.db.auth.getSession();
-  if (!session) return;
-  const { url, key } = databaseConfig();
-  const caller = createClient(url, key, {
-    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-  const { error } = await caller.rpc('claim_editor_invite');
-  if (error) console.error('Editor invite could not be checked:', error.code);
+  if (!locals.user) return;
+  
+  try {
+    const invite = await db.select().from(schema.editorInvites).where(eq(schema.editorInvites.email, locals.user.email)).limit(1);
+    if (invite.length > 0) {
+      await db.insert(schema.accessRoles).values({
+        userId: locals.user.id,
+        role: 'EDITOR',
+        suspended: 0
+      }).onConflictDoNothing();
+      await db.delete(schema.editorInvites).where(eq(schema.editorInvites.email, locals.user.email));
+    }
+  } catch (err: any) {
+    console.error('Editor invite could not be checked:', err.message);
+  }
 }

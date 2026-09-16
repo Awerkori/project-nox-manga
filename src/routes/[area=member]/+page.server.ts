@@ -1,79 +1,180 @@
 import { redirect } from '@sveltejs/kit';
-import { check, WORK_FIELDS } from '$lib/server/db';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, and, desc, asc, isNull, isNotNull, count } from 'drizzle-orm';
 import { MEMBER_PAGE_SIZE, pageNumber, pageLink } from '$lib/pagination';
+
 export const load = async ({ locals, params, url }) => {
   if (!locals.user) redirect(303, '/entrar');
+
   const area = params.area;
   const rawTab = url.searchParams.get('status') || '';
   const tab = area === 'biblioteca' && ['READING', 'PLANNED', 'COMPLETED'].includes(rawTab) ? rawTab : '';
   const filter = area === 'notificacoes' && url.searchParams.get('filtro') === 'nao-lidas' ? 'nao-lidas' : '';
+
   const page = area === 'perfil' ? 1 : pageNumber(url.searchParams.get('pagina'));
   const start = (page - 1) * MEMBER_PAGE_SIZE;
   const empty = { data: [], error: null, count: 0 };
-  let query = locals.db
-    .from('library')
-    .select(`*,works!inner(${WORK_FIELDS})`, { count: 'exact' })
-    .eq('user_id', locals.user.id)
-    .eq('works.published', true)
-    .order('updated_at', { ascending: false })
-    .order('work_id')
-    .range(start, start + MEMBER_PAGE_SIZE - 1);
-  if (params.area === 'favoritos') query = query.eq('favorite', true);
-  if (tab) query = query.eq('status', tab);
-  let notificationsQuery = locals.db
-    .from('notifications')
-    .select('*', { count: 'exact' })
-    .eq('user_id', locals.user.id)
-    .order('created_at', { ascending: false })
-    .order('id')
-    .range(start, start + MEMBER_PAGE_SIZE - 1);
-  if (filter) notificationsQuery = notificationsQuery.is('read_at', null);
+
+  // Library query
+  let libWheres = [
+    eq(schema.library.userId, locals.user.id),
+    eq(schema.works.published, 1)
+  ];
+  if (params.area === 'favoritos') libWheres.push(eq(schema.library.favorite, 1));
+  if (tab) libWheres.push(eq(schema.library.status, tab));
+
+  const libraryQuery = db
+    .select({
+      ...schema.library,
+      works: schema.works
+    })
+    .from(schema.library)
+    .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
+    .where(and(...libWheres))
+    .orderBy(desc(schema.library.updatedAt), asc(schema.library.workId))
+    .limit(MEMBER_PAGE_SIZE)
+    .offset(start);
+
+  const libraryCountQuery = db
+    .select({ count: count() })
+    .from(schema.library)
+    .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
+    .where(and(...libWheres));
+
+  // Notifications query
+  let notificationsWheres = [eq(schema.notifications.userId, locals.user.id)];
+  if (filter) notificationsWheres.push(isNull(schema.notifications.readAt));
+
+  const notificationsQuery = db
+    .select()
+    .from(schema.notifications)
+    .where(and(...notificationsWheres))
+    .orderBy(desc(schema.notifications.createdAt), asc(schema.notifications.id))
+    .limit(MEMBER_PAGE_SIZE)
+    .offset(start);
+
+  const notificationsCountQuery = db
+    .select({ count: count() })
+    .from(schema.notifications)
+    .where(and(...notificationsWheres));
+
+  // History query
+  const historyWheres = [
+    eq(schema.reading.userId, locals.user.id),
+    isNotNull(schema.chapters.publishedAt),
+    eq(schema.works.published, 1)
+  ];
+
+  const historyQuery = db
+    .select({
+      ...schema.reading,
+      chapters: {
+        id: schema.chapters.id,
+        number: schema.chapters.number,
+        works: {
+          slug: schema.works.slug,
+          title: schema.works.title,
+          coverId: schema.works.coverId
+        }
+      }
+    })
+    .from(schema.reading)
+    .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
+    .innerJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+    .where(and(...historyWheres))
+    .orderBy(desc(schema.reading.updatedAt), asc(schema.reading.chapterId))
+    .limit(MEMBER_PAGE_SIZE)
+    .offset(start);
+
+  const historyCountQuery = db
+    .select({ count: count() })
+    .from(schema.reading)
+    .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
+    .innerJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+    .where(and(...historyWheres));
+
+  async function getLibrary() {
+    if (!['biblioteca', 'favoritos'].includes(params.area)) return empty;
+    const [d, c] = await Promise.all([safeQuery(libraryQuery), safeQuery(libraryCountQuery)]);
+    return { data: d.data || [], error: d.error, count: c.data?.[0]?.count || 0 };
+  }
+
+  async function getHistory() {
+    if (params.area !== 'historico') return empty;
+    const [d, c] = await Promise.all([safeQuery(historyQuery), safeQuery(historyCountQuery)]);
+    return { data: d.data || [], error: d.error, count: c.data?.[0]?.count || 0 };
+  }
+
+  async function getNotifications() {
+    if (params.area !== 'notificacoes') return empty;
+    const [d, c] = await Promise.all([safeQuery(notificationsQuery), safeQuery(notificationsCountQuery)]);
+    return { data: d.data || [], error: d.error, count: c.data?.[0]?.count || 0 };
+  }
+
   const [library, history, notifications] = await Promise.all([
-    ['biblioteca', 'favoritos'].includes(params.area) ? query : Promise.resolve(empty),
-    params.area === 'historico'
-      ? locals.db
-          .from('reading')
-          .select('*,chapters!inner(id,number,works!inner(slug,title,cover_id))', { count: 'exact' })
-          .eq('user_id', locals.user.id)
-          .not('chapters.published_at', 'is', null)
-          .eq('chapters.works.published', true)
-          .order('updated_at', { ascending: false })
-          .order('chapter_id')
-          .range(start, start + MEMBER_PAGE_SIZE - 1)
-      : Promise.resolve(empty),
-    params.area === 'notificacoes' ? notificationsQuery : Promise.resolve(empty)
+    getLibrary(),
+    getHistory(),
+    getNotifications()
   ]);
-  // PostgREST may report an unsatisfiable range after records are removed or filters change.
-  if ([library, history, notifications].some((result) => result.error?.code === 'PGRST103'))
-    redirect(303, pageLink(`/${area}`, 1, { status: tab, filtro: filter }));
-  [library, history, notifications].forEach(check);
+
+  if (library.error) console.error(library.error);
+  if (history.error) console.error(history.error);
+  if (notifications.error) console.error(notifications.error);
+
   const total =
-    (area === 'historico' ? history.count : area === 'notificacoes' ? notifications.count : library.count) ||
-    0;
+    (area === 'historico' ? history.count : area === 'notificacoes' ? notifications.count : library.count) || 0;
+
   const lastPage = Math.max(1, Math.ceil(total / MEMBER_PAGE_SIZE));
   if (page > lastPage) redirect(303, pageLink(`/${area}`, lastPage, { status: tab, filtro: filter }));
-  const [completed, libraryTotal, completedWorks] =
-    area === 'perfil'
-      ? await Promise.all([
-          locals.db
-            .from('reading')
-            .select('chapter_id', { count: 'exact', head: true })
-            .eq('user_id', locals.user.id)
-            .not('completed_at', 'is', null),
-          locals.db
-            .from('library')
-            .select('work_id,works!inner(id)', { count: 'exact', head: true })
-            .eq('user_id', locals.user.id)
-            .eq('works.published', true),
-          locals.db
-            .from('library')
-            .select('work_id,works!inner(id)', { count: 'exact', head: true })
-            .eq('user_id', locals.user.id)
-            .eq('works.published', true)
-            .eq('status', 'COMPLETED')
-        ])
-      : [empty, empty, empty];
-  [completed, libraryTotal, completedWorks].forEach(check);
+
+  // Profile completed / libraryTotal / completedWorks
+  const completedQuery = db
+    .select({ count: count() })
+    .from(schema.reading)
+    .where(and(
+      eq(schema.reading.userId, locals.user.id),
+      isNotNull(schema.reading.completedAt)
+    ));
+
+  const libraryTotalQuery = db
+    .select({ count: count() })
+    .from(schema.library)
+    .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
+    .where(and(
+      eq(schema.library.userId, locals.user.id),
+      eq(schema.works.published, 1)
+    ));
+
+  const completedWorksQuery = db
+    .select({ count: count() })
+    .from(schema.library)
+    .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
+    .where(and(
+      eq(schema.library.userId, locals.user.id),
+      eq(schema.works.published, 1),
+      eq(schema.library.status, 'COMPLETED')
+    ));
+
+  async function getProfileStats() {
+    if (area !== 'perfil') return [empty, empty, empty];
+    const [c, l, cw] = await Promise.all([
+      safeQuery(completedQuery),
+      safeQuery(libraryTotalQuery),
+      safeQuery(completedWorksQuery)
+    ]);
+    return [
+      { data: null, error: c.error, count: c.data?.[0]?.count || 0 },
+      { data: null, error: l.error, count: l.data?.[0]?.count || 0 },
+      { data: null, error: cw.error, count: cw.data?.[0]?.count || 0 }
+    ];
+  }
+
+  const [completed, libraryTotal, completedWorks] = await getProfileStats();
+
+  if (completed.error) console.error(completed.error);
+  if (libraryTotal.error) console.error(libraryTotal.error);
+  if (completedWorks.error) console.error(completedWorks.error);
+
   return {
     area: params.area,
     library: library.data || [],

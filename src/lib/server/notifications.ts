@@ -69,7 +69,7 @@ async function resolveUserContact(userId: string): Promise<{ email: string | nul
       .eq('id', userId)
       .maybeSingle();
     if (m) {
-      name = m.display_name || m.username || 'Membro';
+      name = m.displayName || m.username || 'Membro';
     }
   } catch (err) {
     console.warn('[NOTIF] Erro ao buscar dados do membro:', err);
@@ -136,21 +136,19 @@ export async function createNotification(
   const cleanDedupeKey = dedupeKey || `${type}:${recipientUserId}:${entityId || deepLink || Date.now()}`;
 
   // 3. Persistir em public.notifications
-  const notifInsertPayload = {
-    user_id: recipientUserId,
-    actor_user_id: actorUserId,
+  const notifInsertPayload = {userId: recipientUserId,
+    actorUserId: actorUserId,
     kind: type.toLowerCase(),
     type: type,
     title: title,
     body: body,
     href: deepLink,
-    dedupe_key: cleanDedupeKey,
+    dedupeKey: cleanDedupeKey,
     priority: priority,
-    scan_id: scanId,
+    scanId: scanId,
     context: context,
-    entity_type: entityType,
-    entity_id: entityId
-  };
+    entityType: entityType,
+    entityId: entityId};
 
   let notificationId: string | null = null;
   const { data: insertedNotif, error: notifErr } = await db
@@ -159,10 +157,9 @@ export async function createNotification(
     .select('id')
     .maybeSingle();
 
-  if (notifErr) {
-    if (notifErr.code === '23505') {
-      // Violação de unique(user_id, dedupe_key) - já foi notificado!
-      return { notificationId: null, emailQueued: false, deduped: true };
+  if (notifErr) {if (notifErr.code === '23505') {
+      // Violação de unique(userId, dedupeKey) - já foi notificado!
+      return { notificationId: null, emailQueued: false, deduped: true};
     }
     console.error('[NOTIF] Erro ao inserir public.notifications:', notifErr);
   } else if (insertedNotif) {
@@ -183,20 +180,18 @@ export async function createNotification(
   }
 
   // 4. Sincronizar com scan_notifications se houver scan_id
-  if (scanId && notificationId) {
-    const scanType = ['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED', 'STAGE_READY', 'QC_ISSUE', 'APPLICATION', 'SYSTEM'].includes(type)
+  if (scanId && notificationId) {const scanType = ['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED', 'STAGE_READY', 'QC_ISSUE', 'APPLICATION', 'SYSTEM'].includes(type)
       ? type
       : 'SYSTEM';
 
     try {
       await db.from('scan_notifications').insert({
-        scan_id: scanId,
-        user_id: recipientUserId,
+        scanId: scanId,
+        userId: recipientUserId,
         type: scanType,
         title: title,
         body: body,
-        deep_link: deepLink
-      });
+        deepLink: deepLink});
     } catch (e: any) {
       console.warn('[NOTIF] Aviso ao sincronizar scan_notifications:', e?.message);
     }
@@ -235,19 +230,17 @@ export async function createNotification(
 
       const { data: outboxItem, error: outboxErr } = await db
         .from('scan_email_outbox')
-        .insert({
-          scan_id: scanId,
-          recipient_user_id: recipientUserId,
-          recipient_email: recipientEmail,
+        .insert({scanId: scanId,
+          recipientUserId: recipientUserId,
+          recipientEmail: recipientEmail,
           subject,
-          html_body: html,
+          htmlBody: html,
           status: 'PENDING',
-          delivery_status: 'QUEUED',
+          deliveryStatus: 'QUEUED',
           priority: outboxPriority,
-          idempotency_key: emailIdempotencyKey,
-          notification_id: notificationId,
-          attempts: 0
-        })
+          idempotencyKey: emailIdempotencyKey,
+          notificationId: notificationId,
+          attempts: 0})
         .select('id')
         .maybeSingle();
 
@@ -339,17 +332,15 @@ export async function processPendingEmailOutbox(
       // send_started_at != null e move o item para DELIVERY_UNCERTAIN (bloqueando reenvio cego).
       await db
         .from('scan_email_outbox')
-        .update({
-          send_started_at: sendStartedAt,
-          provider_request_key: providerRequestKey,
-          delivery_status: 'SENDING'
-        })
+        .update({sendStartedAt: sendStartedAt,
+          providerRequestKey: providerRequestKey,
+          deliveryStatus: 'SENDING'})
         .eq('id', item.id);
 
       const result = await sendBrevoEmail({
-        toEmail: item.recipient_email,
+        toEmail: item.recipientEmail,
         subject: item.subject,
-        htmlContent: item.html_body,
+        htmlContent: item.htmlBody,
         customHeaders: {
           'X-Nox-Outbox-Id': item.id,
           'X-Nox-Request-Key': providerRequestKey
@@ -357,29 +348,26 @@ export async function processPendingEmailOutbox(
         tags: ['nox', item.priority ? item.priority.toLowerCase() : 'normal']
       });
 
-      if (result.success && result.messageId) {
-        // SUCESSO: accepted pelo Brevo
+      if (result.success && result.messageId) {// SUCESSO: accepted pelo Brevo
         await db
           .from('scan_email_outbox')
           .update({
             status: 'SENT',
-            delivery_status: 'ACCEPTED',
-            provider_message_id: result.messageId,
-            sent_at: new Date().toISOString(),
-            last_error: null,
-            lease_expires_at: null
-          })
+            deliveryStatus: 'ACCEPTED',
+            providerMessageId: result.messageId,
+            sentAt: new Date().toISOString(),
+            lastError: null,
+            leaseExpiresAt: null})
           .eq('id', item.id);
 
         sent++;
         details.push({
           id: item.id,
-          recipient: item.recipient_email,
+          recipient: item.recipientEmail,
           status: 'SENT',
           providerMessageId: result.messageId
         });
-      } else if (result.isRateLimit) {
-        // TRATAMENTO BREVO 429: Respeitar Retry-After sem descartar o e-mail
+      } else if (result.isRateLimit) {// TRATAMENTO BREVO 429: Respeitar Retry-After sem descartar o e-mail
         const retryAfterSec = result.retryAfterSeconds || 60;
         const nextSchedule = new Date(Date.now() + retryAfterSec * 1000).toISOString();
 
@@ -387,8 +375,8 @@ export async function processPendingEmailOutbox(
           .from('scan_email_outbox')
           .update({
             status: 'PENDING',
-            delivery_status: 'RATE_LIMITED',
-            last_error: `Brevo Rate Limit 429 - retrying after ${retryAfterSec}s: ${result.error}`,
+            deliveryStatus: 'RATE_LIMITED',
+            lastError: `Brevo Rate Limit 429 - retrying after ${retryAfterSec}s: ${result.error}`,
             scheduled_at: nextSchedule,
             send_started_at: null,
             lease_expires_at: null
@@ -398,19 +386,18 @@ export async function processPendingEmailOutbox(
         failed++;
         details.push({
           id: item.id,
-          recipient: item.recipient_email,
+          recipient: item.recipientEmail,
           status: 'RATE_LIMITED',
           error: result.error,
           retryAfterSeconds: retryAfterSec
         });
-      } else if (result.isPermanentFailure) {
-        // ERRO PERMANENTE: (ex: email inválido, unverified domain) -> não fazer retry infinito
+      } else if (result.isPermanentFailure) {// ERRO PERMANENTE: (ex: email inválido, unverified domain) -> não fazer retry infinito
         await db
           .from('scan_email_outbox')
           .update({
             status: 'FAILED',
-            delivery_status: 'FAILED',
-            last_error: `Permanent error from Brevo: ${result.error}`,
+            deliveryStatus: 'FAILED',
+            lastError: `Permanent error from Brevo: ${result.error}`,
             send_started_at: null,
             lease_expires_at: null
           })
@@ -419,13 +406,12 @@ export async function processPendingEmailOutbox(
         failed++;
         details.push({
           id: item.id,
-          recipient: item.recipient_email,
+          recipient: item.recipientEmail,
           status: 'FAILED',
           error: result.error,
           permanent: true
         });
-      } else {
-        // FALHA TEMPORÁRIA: backoff exponencial controlado (2min, 4min, 8min, 16min)
+      } else {// FALHA TEMPORÁRIA: backoff exponencial controlado (2min, 4min, 8min, 16min)
         const nextAttempts = item.attempts || 1;
         const isPermanentFail = nextAttempts >= 5;
         const backoffMinutes = Math.min(30, Math.pow(2, Math.min(nextAttempts, 4)));
@@ -435,18 +421,17 @@ export async function processPendingEmailOutbox(
           .from('scan_email_outbox')
           .update({
             status: isPermanentFail ? 'FAILED' : 'PENDING',
-            delivery_status: isPermanentFail ? 'FAILED' : 'RETRYING',
-            last_error: result.error || 'Erro desconhecido ao chamar Brevo',
-            scheduled_at: nextSchedule,
-            send_started_at: null,
-            lease_expires_at: null
-          })
+            deliveryStatus: isPermanentFail ? 'FAILED' : 'RETRYING',
+            lastError: result.error || 'Erro desconhecido ao chamar Brevo',
+            scheduledAt: nextSchedule,
+            sendStartedAt: null,
+            leaseExpiresAt: null})
           .eq('id', item.id);
 
         failed++;
         details.push({
           id: item.id,
-          recipient: item.recipient_email,
+          recipient: item.recipientEmail,
           status: isPermanentFail ? 'FAILED' : 'RETRYING',
           error: result.error
         });
@@ -504,11 +489,10 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
   let retried = 0;
   let waiting = 0;
 
-  for (const item of items) {
-    const sendStartedTime = item.send_started_at ? new Date(item.send_started_at).getTime() : 0;
+  for (const item of items) {const sendStartedTime = item.sendStartedAt ? new Date(item.sendStartedAt).getTime() : 0;
     const ageSeconds = sendStartedTime ? (Date.now() - sendStartedTime) / 1000 : 9999;
 
-    // Janela de busca: 10 minutos antes até 15 minutos depois do send_started_at
+    // Janela de busca: 10 minutos antes até 15 minutos depois do sendStartedAt
     const startDate = sendStartedTime 
       ? new Date(Math.max(0, sendStartedTime - 10 * 60 * 1000)).toISOString()
       : undefined;
@@ -517,32 +501,30 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
       : undefined;
 
     const events = await queryBrevoEvents({
-      email: item.recipient_email,
+      email: item.recipientEmail,
       startDate,
       endDate,
-      limit: 50
-    });
+      limit: 50});
 
     // Procura por evento correspondente ao mesmo destinatário e assunto
     const matchingEvent = events.find(e => {
-      if (e.email.toLowerCase() !== item.recipient_email.toLowerCase()) return false;
+      if (e.email.toLowerCase() !== item.recipientEmail.toLowerCase()) return false;
       const subjA = (e.subject || '').trim().toLowerCase();
       const subjB = (item.subject || '').trim().toLowerCase();
       return subjA === subjB || subjA.includes(subjB) || subjB.includes(subjA);
     });
 
-    if (matchingEvent && matchingEvent.messageId) {
-      // PROVADO: Brevo recebeu e aceitou o e-mail!
-      // NÃO reenviar. Marcar como SENT com delivery_status = 'RECONCILED_SENT'
+    if (matchingEvent && matchingEvent.messageId) {// PROVADO: Brevo recebeu e aceitou o e-mail!
+      // NÃO reenviar. Marcar como SENT com deliveryStatus = 'RECONCILED_SENT'
       await db
         .from('scan_email_outbox')
         .update({
           status: 'SENT',
           delivery_status: 'RECONCILED_SENT',
-          provider_message_id: matchingEvent.messageId,
-          sent_at: matchingEvent.date || new Date().toISOString(),
-          reconciled_at: new Date().toISOString(),
-          reconciliation_notes: `Reconciliado via evento Brevo "${matchingEvent.event}" em ${matchingEvent.date}`,
+          providerMessageId: matchingEvent.messageId,
+          sentAt: matchingEvent.date || new Date().toISOString(),
+          reconciledAt: new Date().toISOString(),
+          reconciliationNotes: `Reconciliado via evento Brevo "${matchingEvent.event}" em ${matchingEvent.date}`,
           lease_expires_at: null
         })
         .eq('id', item.id);
@@ -553,24 +535,22 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
       const evSample = events.slice(0, 3).map(e => `[${e.subject}]`).join(', ');
       await db
         .from('scan_email_outbox')
-        .update({
-          delivery_status: 'RECONCILIATION_WAITING',
-          reconciliation_notes: `Aguardando Brevo (idade: ${Math.round(ageSeconds)}s, evs=${events.length}): ${evSample || 'nenhum'} vs buscado: [${item.subject}]`,
+        .update({deliveryStatus: 'RECONCILIATION_WAITING',
+          reconciliationNotes: `Aguardando Brevo (idade: ${Math.round(ageSeconds)}s, evs=${events.length}): ${evSample || 'nenhum'} vs buscado: [${item.subject}]`,
           lease_expires_at: null
         })
         .eq('id', item.id);
       waiting++;
-    } else {
-      // Passaram mais de 5 minutos e nenhum evento foi registrado no Brevo:
+    } else {// Passaram mais de 5 minutos e nenhum evento foi registrado no Brevo:
       // Comprovado que o Brevo NÃO recebeu a mensagem (falha na conexão antes de chegar ao Brevo)
       // Liberado para retry seguro!
       await db
         .from('scan_email_outbox')
         .update({
           status: 'PENDING',
-          delivery_status: 'RECONCILED_RETRY',
-          send_started_at: null,
-          last_error: `Reconciliação confirmou ausência de recebimento no Brevo após ${Math.round(ageSeconds)}s. Liberado para re-tentativa segura.`,
+          deliveryStatus: 'RECONCILED_RETRY',
+          sendStartedAt: null,
+          lastError: `Reconciliação confirmou ausência de recebimento no Brevo após ${Math.round(ageSeconds)}s. Liberado para re-tentativa segura.`,
           reconciled_at: new Date().toISOString(),
           scheduled_at: new Date().toISOString(),
           lease_expires_at: null

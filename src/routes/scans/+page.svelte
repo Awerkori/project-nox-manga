@@ -11,8 +11,8 @@
   let filteredScans = $derived(
     (data.scans || []).filter((s: any) => {
       // Filter tab
-      if (filterTab === "official" && !s.is_official) return false;
-      if (filterTab === "partner" && s.is_official) return false;
+      if (filterTab === "official" && !s.isOfficial) return false;
+      if (filterTab === "partner" && s.isOfficial) return false;
       if (filterTab === "recruiting" && !s.isRecruiting) return false;
 
       // Search query
@@ -127,14 +127,14 @@
       {#if filteredScans.length > 0}
         <div class="scans-grid">
           {#each filteredScans as scan (scan.id)}
-            <article class="scan-card" class:official={scan.is_official}>
+            <article class="scan-card" class:official={scan.isOfficial}>
               <!-- Card Banner Header -->
               <div class="card-banner">
-                {#if scan.banner_id}
-                  <img src="/media/{scan.banner_id}" alt="Banner de {scan.name}" class="banner-img" loading="lazy" />
+                {#if scan.bannerId}
+                  <img src="/media/{scan.bannerId}" alt="Banner de {scan.name}" class="banner-img" loading="lazy" />
                   <div class="banner-gradient"></div>
                 {:else}
-                  <div class="banner-placeholder" class:official-bg={scan.is_official}></div>
+                  <div class="banner-placeholder" class:official-bg={scan.isOfficial}></div>
                 {/if}
               </div>
 
@@ -142,18 +142,18 @@
               <div class="card-body">
                 <!-- Avatar Row -->
                 <div class="avatar-row">
-                  <div class="logo-wrap" class:official-border={scan.is_official}>
-                    {#if scan.logo_id}
-                      <img src="/media/{scan.logo_id}" alt="Logo de {scan.name}" class="logo-img" />
+                  <div class="logo-wrap" class:official-border={scan.isOfficial}>
+                    {#if scan.logoId}
+                      <img src="/media/{scan.logoId}" alt="Logo de {scan.name}" class="logo-img" />
                     {:else}
-                      <div class="logo-placeholder" class:official-logo={scan.is_official}>
+                      <div class="logo-placeholder" class:official-logo={scan.isOfficial}>
                         {scan.name.charAt(0).toUpperCase()}
                       </div>
                     {/if}
                   </div>
 
                   <div class="badges-cluster">
-                    {#if scan.is_official}
+                    {#if scan.isOfficial}
                       <span class="badge-official">
                         <Star size={12} fill="#dfc28d" />
                         <span>OFICIAL</span>
@@ -179,7 +179,7 @@
                     <a href="/scans/{scan.slug}">{scan.name}</a>
                   </h3>
                   <p class="scan-desc">
-                    {scan.description || (scan.is_official ? "Scan oficial e núcleo editorial do Project Nox." : "Grupo parceiro de tradução e edição no Project Nox.")}
+                    {scan.description || (scan.isOfficial ? "Scan oficial e núcleo editorial do Project Nox." : "Grupo parceiro de tradução e edição no Project Nox.")}
                   </p>
                 </div>
 

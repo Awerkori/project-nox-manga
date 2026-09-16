@@ -45,9 +45,9 @@
           id: `app-${app.id}`,
           type: 'APPLICATION',
           priority: 'HIGH',
-          title: `Nova Candidatura: ${app.applicant?.display_name || app.applicant?.username || 'Candidato'}`,
+          title: `Nova Candidatura: ${app.applicant?.displayName || app.applicant?.username || 'Candidato'}`,
           desc: `Candidatou-se para a vaga de ${app.opening?.title || 'Staff'}.`,
-          date: app.created_at,
+          date: app.createdAt,
           actionLabel: 'Ver Candidatura',
           actionTab: 'applications',
           badge: 'Recrutamento'
@@ -56,14 +56,14 @@
     }
 
     // Unassigned tasks
-    for (const task of tasks.filter((t: any) => !t.assigned_to && t.status !== 'DONE')) {
+    for (const task of tasks.filter((t: any) => !t.assignedTo && t.status !== 'DONE')) {
       list.push({
         id: `task-unassigned-${task.id}`,
         type: 'TASK_UNASSIGNED',
         priority: task.priority === 'URGENT' ? 'URGENT' : 'NORMAL',
         title: `Tarefa sem Responsável: ${task.title}`,
         desc: task.description || 'Nenhum membro assumiu esta tarefa ainda.',
-        date: task.created_at,
+        date: task.createdAt,
         actionLabel: 'Assumir Tarefa',
         actionTab: 'tasks',
         taskId: task.id,
@@ -77,9 +77,9 @@
         id: `qc-${qc.id}`,
         type: 'QC_OPEN',
         priority: 'HIGH',
-        title: `QC Pendente — Pág. ${qc.page_number} (${qc.issue_type})`,
+        title: `QC Pendente — Pág. ${qc.pageNumber} (${qc.issueType})`,
         desc: qc.description,
-        date: qc.created_at,
+        date: qc.createdAt,
         actionLabel: 'Inspecionar QC',
         actionTab: 'qc',
         badge: 'Qualidade'
@@ -87,16 +87,16 @@
     }
 
     // Direct & Role Mentions in Notifications
-    for (const notif of notifications.filter((n: any) => !n.is_read && ['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED'].includes(n.type))) {
+    for (const notif of notifications.filter((n: any) => !n.isRead && ['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED'].includes(n.type))) {
       list.push({
         id: `notif-${notif.id}`,
         type: notif.type,
         priority: 'NORMAL',
         title: notif.title,
         desc: notif.body,
-        date: notif.created_at,
+        date: notif.createdAt,
         actionLabel: 'Abrir',
-        deepLink: notif.deep_link,
+        deepLink: notif.deepLink,
         badge: notif.type === 'ROLE_MENTION' ? 'Cargo' : 'Menção'
       });
     }
@@ -107,12 +107,12 @@
   // Other updates: completed tasks, read notices
   let updateItems = $derived(() => {
     const list: any[] = [];
-    for (const notif of notifications.filter((n: any) => n.is_read || !['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED'].includes(n.type))) {
+    for (const notif of notifications.filter((n: any) => n.isRead || !['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED'].includes(n.type))) {
       list.push({
         id: `notif-update-${notif.id}`,
         title: notif.title,
         desc: notif.body,
-        date: notif.created_at,
+        date: notif.createdAt,
         badge: 'Informativo'
       });
     }
@@ -121,8 +121,8 @@
       list.push({
         id: `task-done-${task.id}`,
         title: `Tarefa Concluída: ${task.title}`,
-        desc: `Finalizada por ${task.assignee?.display_name || 'Membro'}.`,
-        date: task.completed_at || task.updated_at,
+        desc: `Finalizada por ${task.assignee?.displayName || 'Membro'}.`,
+        date: task.completedAt || task.updatedAt,
         badge: 'Produção'
       });
     }

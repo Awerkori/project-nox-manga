@@ -1,5 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, and, desc, asc, isNull, isNotNull, count, inArray, notIlike, ilike } from 'drizzle-orm';
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -24,12 +26,19 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       let userProgress = null;
       if (locals.user) {
         const pRes = await withTimeout(
-          locals.db
-            .from('reading')
-            .select('page,completed_at')
-            .eq('user_id', locals.user.id)
-            .eq('chapter_id', params.id)
-            .maybeSingle(),
+          safeQuerySingle(
+            db.select({
+              page: schema.reading.page,
+              completedAt: schema.reading.completedAt
+            })
+            .from(schema.reading)
+            .where(
+              and(
+                eq(schema.reading.userId, locals.user.id),
+                eq(schema.reading.chapterId, params.id)
+              )
+            )
+          ),
           800,
           { data: null } as any,
           'reader_cached_progress'
@@ -42,7 +51,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       }
 
       const all = cached.siblings;
-      const index = all.findIndex((c) => c.id === params.id);
+      const index = all.findIndex((c: any) => c.id === params.id);
       return {
         chapter: cached.chapter,
         pages: cached.pages,
@@ -57,61 +66,121 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     }
   }
 
-  let query = locals.db
-    .from('chapters')
-    .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-    .eq('id', params.id);
-  if (!canAccessUnpublished) query = query.not('published_at', 'is', null);
+  let chapterConditions = [eq(schema.chapters.id, params.id)];
+  if (!canAccessUnpublished) {
+    chapterConditions.push(isNotNull(schema.chapters.publishedAt));
+  }
 
-  const chapterRes = await safeDbQuery(query.maybeSingle(), 4500, 'reader_chapter');
+  const query = db
+    .select({
+      id: schema.chapters.id,
+      number: schema.chapters.number,
+      title: schema.chapters.title,
+      workId: schema.chapters.workId,
+      publishedAt: schema.chapters.publishedAt,
+      works: {
+        id: schema.works.id,
+        title: schema.works.title,
+        slug: schema.works.slug,
+        kind: schema.works.kind,
+        published: schema.works.published,
+        contentRating: schema.works.contentRating
+      }
+    })
+    .from(schema.chapters)
+    .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+    .where(and(...chapterConditions));
+
+  const chapterRes = await safeDbQuery(safeQuerySingle(query), 4500, 'reader_chapter');
   let chapter: any = chapterRes.data || null;
 
   // If not found directly in chapters and staff is accessing, check scan_production_chapters
   if (!chapter && canAccessUnpublished) {
-    const { data: prodChapter } = await (locals.db as any)
-      .from('scan_production_chapters')
-      .select('id, work_id, chapter_number, chapter_label, chapter_title, target_chapter_id')
-      .eq('id', params.id)
-      .maybeSingle();
+    const { data: prodChapter } = await safeQuerySingle(
+      db.select({
+        id: schema.scanProductionChapters.id,
+        workId: schema.scanProductionChapters.workId,
+        chapterNumber: schema.scanProductionChapters.chapterNumber,
+        chapterLabel: schema.scanProductionChapters.chapterLabel,
+        chapterTitle: schema.scanProductionChapters.chapterTitle,
+        targetChapterId: schema.scanProductionChapters.targetChapterId
+      })
+      .from(schema.scanProductionChapters)
+      .where(eq(schema.scanProductionChapters.id, params.id))
+    );
 
     if (prodChapter) {
-      if (prodChapter.target_chapter_id) {
-        const { data: targetChap } = await locals.db
-          .from('chapters')
-          .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-          .eq('id', prodChapter.target_chapter_id)
-          .maybeSingle();
+      if (prodChapter.targetChapterId) {
+        const { data: targetChap } = await safeQuerySingle(
+          db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number,
+            title: schema.chapters.title,
+            workId: schema.chapters.workId,
+            publishedAt: schema.chapters.publishedAt,
+            works: {
+              id: schema.works.id,
+              title: schema.works.title,
+              slug: schema.works.slug,
+              kind: schema.works.kind,
+              published: schema.works.published,
+              contentRating: schema.works.contentRating
+            }
+          })
+          .from(schema.chapters)
+          .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+          .where(eq(schema.chapters.id, prodChapter.targetChapterId))
+        );
         chapter = targetChap;
       } else {
-        const { data: targetChap } = await locals.db
-          .from('chapters')
-          .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-          .eq('work_id', prodChapter.work_id)
-          .eq('number', prodChapter.chapter_number)
-          .maybeSingle();
+        const { data: targetChap } = await safeQuerySingle(
+          db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number,
+            title: schema.chapters.title,
+            workId: schema.chapters.workId,
+            publishedAt: schema.chapters.publishedAt,
+            works: {
+              id: schema.works.id,
+              title: schema.works.title,
+              slug: schema.works.slug,
+              kind: schema.works.kind,
+              published: schema.works.published,
+              contentRating: schema.works.contentRating
+            }
+          })
+          .from(schema.chapters)
+          .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+          .where(and(eq(schema.chapters.workId, prodChapter.workId), eq(schema.chapters.number, prodChapter.chapterNumber)))
+        );
         chapter = targetChap;
       }
 
       if (!chapter) {
-        const { data: workData } = await locals.db
-          .from('works')
-          .select('id,title,slug,kind,published,content_rating')
-          .eq('id', prodChapter.work_id)
-          .maybeSingle();
+        const { data: workData } = await safeQuerySingle(
+          db.select({
+            id: schema.works.id,
+            title: schema.works.title,
+            slug: schema.works.slug,
+            kind: schema.works.kind,
+            published: schema.works.published,
+            contentRating: schema.works.contentRating
+          })
+          .from(schema.works)
+          .where(eq(schema.works.id, prodChapter.workId))
+        );
 
         chapter = {
           id: prodChapter.id,
-          number: prodChapter.chapter_number,
-          title: prodChapter.chapter_label || prodChapter.chapter_title || `Capítulo ${prodChapter.chapter_number}`,
-          work_id: prodChapter.work_id,
-          published_at: null,
+          number: prodChapter.chapterNumber,
+          title: prodChapter.chapterLabel || prodChapter.chapterTitle || `Capítulo ${prodChapter.chapterNumber}`,
+          workId: prodChapter.workId,
+          publishedAt: null,
           works: workData
         };
       }
     }
   }
-
-
 
   if (!chapter && chapterRes.status === 'TIMEOUT') {
     error(503, 'A conexão com o leitor está temporariamente lenta. Tente recarregar em instantes.');
@@ -125,40 +194,54 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   if (!canAccessUnpublished && !chapter.works?.published) error(404, 'Obra ainda não publicada');
 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
-  const preview = !chapter.published_at || (isPreviewRequested && isStaff);
+  const preview = !chapter.publishedAt || (isPreviewRequested && isStaff);
 
-  if ((chapter.works as any)?.content_rating === 'ADULT_18') {
+  if ((chapter.works as any)?.contentRating === 'ADULT_18') {
     const rawAgeCookie = cookies.get('nox-age-status');
     let ageStatus = rawAgeCookie;
-    if (locals.sessionCache?.profile?.age_status) {
-      ageStatus = locals.sessionCache.profile.age_status;
+    if (locals.sessionCache?.profile?.ageStatus) {
+      ageStatus = locals.sessionCache.profile.ageStatus;
     } else if (locals.user) {
-      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-      if (p.data?.age_status) ageStatus = p.data.age_status;
+      const p = await safeQuerySingle(
+        db.select({ ageStatus: schema.members.ageStatus })
+        .from(schema.members)
+        .where(eq(schema.members.id, locals.user.id))
+      );
+      if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
     }
   }
+
   // 1. Fetch core chapter pages with dedicated timeout and resilience
   const pagesPromise = safeDbQuery(
-    locals.db
-      .from('pages')
-      .select('position,media_id,width,height')
-      .eq('chapter_id', chapter.id)
-      .order('position'),
+    safeQuery(
+      db.select({
+        position: schema.pages.position,
+        mediaId: schema.pages.mediaId,
+        width: schema.pages.width,
+        height: schema.pages.height
+      })
+      .from(schema.pages)
+      .where(eq(schema.pages.chapterId, chapter.id))
+      .orderBy(asc(schema.pages.position))
+    ),
     6000,
     'reader_pages'
   );
 
   // 2. Fetch sibling chapters for navigation
   const siblingsPromise = safeDbQuery(
-    locals.db
-      .from('chapters')
-      .select('id,number')
-      .eq('work_id', chapter.work_id)
-      .not('published_at', 'is', null)
-      .order('number'),
+    safeQuery(
+      db.select({
+        id: schema.chapters.id,
+        number: schema.chapters.number
+      })
+      .from(schema.chapters)
+      .where(and(eq(schema.chapters.workId, chapter.workId), isNotNull(schema.chapters.publishedAt)))
+      .orderBy(asc(schema.chapters.number))
+    ),
     5000,
     'reader_siblings'
   );
@@ -167,30 +250,92 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const auxPromise = withTimeout(
     Promise.all([
       locals.user
-        ? locals.db
-            .from('reading')
-            .select('page,completed_at')
-            .eq('user_id', locals.user.id)
-            .eq('chapter_id', chapter.id)
-            .maybeSingle()
+        ? safeQuerySingle(
+            db.select({
+              page: schema.reading.page,
+              completedAt: schema.reading.completedAt
+            })
+            .from(schema.reading)
+            .where(and(eq(schema.reading.userId, locals.user.id), eq(schema.reading.chapterId, chapter.id)))
+          )
         : Promise.resolve({ data: null }),
-      locals.db
-        .from('comments')
-        .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
-        )
-        .eq('chapter_id', chapter.id)
-        .eq('removed', false)
-        .order('created_at', { ascending: false })
-        .limit(100),
-      locals.db
-        .from('chapter_scans')
-        .select('scans(id,name,slug)')
-        .eq('chapter_id', chapter.id),
-      locals.db
-        .from('work_scans')
-        .select('scans(id,name,slug)')
-        .eq('work_id', chapter.work_id)
+      
+      safeQuery(
+        db.select({
+          id: schema.comments.id,
+          userId: schema.comments.userId,
+          body: schema.comments.body,
+          createdAt: schema.comments.createdAt,
+          parentId: schema.comments.parentId,
+          members: {
+            username: schema.members.username,
+            displayName: schema.members.displayName,
+            avatarId: schema.members.avatarId,
+            nameColor: schema.members.nameColor,
+            avatarFrameId: schema.members.avatarFrameId,
+            equippedCommentBannerId: schema.members.equippedCommentBannerId,
+            equippedTitleId: schema.members.equippedTitleId
+          }
+        })
+        .from(schema.comments)
+        .leftJoin(schema.members, eq(schema.comments.userId, schema.members.id))
+        .where(and(eq(schema.comments.chapterId, chapter.id), eq(schema.comments.removed, false)))
+        .orderBy(desc(schema.comments.createdAt))
+        .limit(100)
+      ).then(async (res) => {
+        if (!res.data || res.data.length === 0) return { data: [] };
+        
+        const commentIds = res.data.map((c: any) => c.id);
+        const likesRes = await safeQuery(
+          db.select({
+            commentId: schema.commentLikes.commentId,
+            userId: schema.commentLikes.userId
+          })
+          .from(schema.commentLikes)
+          .where(inArray(schema.commentLikes.commentId, commentIds))
+        );
+        
+        const likesMap = new Map<string, { userId: string }[]>();
+        if (likesRes.data) {
+          for (const like of likesRes.data) {
+            if (!likesMap.has(like.commentId)) likesMap.set(like.commentId, []);
+            likesMap.get(like.commentId)!.push({ userId: like.userId });
+          }
+        }
+        
+        return {
+          data: res.data.map((c: any) => ({
+            ...c,
+            commentLikes: likesMap.get(c.id) || []
+          }))
+        };
+      }),
+
+      safeQuery(
+        db.select({
+          scans: {
+            id: schema.scans.id,
+            name: schema.scans.name,
+            slug: schema.scans.slug
+          }
+        })
+        .from(schema.chapterScans)
+        .innerJoin(schema.scans, eq(schema.chapterScans.scanId, schema.scans.id))
+        .where(eq(schema.chapterScans.chapterId, chapter.id))
+      ),
+
+      safeQuery(
+        db.select({
+          scans: {
+            id: schema.scans.id,
+            name: schema.scans.name,
+            slug: schema.scans.slug
+          }
+        })
+        .from(schema.workScans)
+        .innerJoin(schema.scans, eq(schema.workScans.scanId, schema.scans.id))
+        .where(eq(schema.workScans.workId, chapter.workId))
+      )
     ]),
     3000,
     [{ data: null }, { data: [] }, { data: [] }, { data: [] }] as any,
@@ -231,7 +376,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   }
 
   let all = (siblingsRes.data || []) as any[];
-  const index = all.findIndex((c) => c.id === chapter.id);
+  const index = all.findIndex((c: any) => c.id === chapter.id);
 
   if (!preview && chapter && pagesData.length > 0) {
     if (readerCache.size >= 100) {

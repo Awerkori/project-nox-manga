@@ -43,8 +43,8 @@
   let filteredIssues = $derived(
     qcIssues.filter((issue: any) => {
       if (selectedStatus !== 'ALL' && issue.status !== selectedStatus) return false;
-      if (selectedType !== 'ALL' && issue.issue_type !== selectedType) return false;
-      if (selectedChapterId !== 'ALL' && issue.chapter_id !== selectedChapterId) return false;
+      if (selectedType !== 'ALL' && issue.issueType !== selectedType) return false;
+      if (selectedChapterId !== 'ALL' && issue.chapterId !== selectedChapterId) return false;
       return true;
     })
   );
@@ -131,11 +131,11 @@
     {:else}
       <div class="qc-cards-grid">
         {#each filteredIssues as issue (issue.id)}
-          {@const meta = getIssueTypeMeta(issue.issue_type)}
+          {@const meta = getIssueTypeMeta(issue.issueType)}
           <div class="qc-issue-card" class:resolved={issue.status === 'RESOLVED'}>
             <div class="issue-header-row">
               <div class="page-badge-wrap">
-                <span class="page-num-pill">Pág. {issue.page_number}</span>
+                <span class="page-num-pill">Pág. {issue.pageNumber}</span>
                 <span class="type-pill" style="--tag-color: {meta.color}">
                   {meta.label}
                 </span>
@@ -165,18 +165,18 @@
               <div class="issue-assignee-cluster">
                 {#if issue.assignee}
                   <UserAvatar
-                    displayName={issue.assignee.display_name || issue.assignee.username}
-                    avatarId={issue.assignee.avatar_id}
+                    displayName={issue.assignee.displayName || issue.assignee.username}
+                    avatarId={issue.assignee.avatarId}
                     size={20}
                   />
-                  <span class="assignee-txt">{issue.assignee.display_name || issue.assignee.username}</span>
+                  <span class="assignee-txt">{issue.assignee.displayName || issue.assignee.username}</span>
                 {:else}
                   <span class="unassigned-txt">Sem responsável</span>
                 {/if}
               </div>
 
               <div class="issue-meta-info">
-                <span class="created-time">{new Date(issue.created_at).toLocaleDateString('pt-BR')}</span>
+                <span class="created-time">{new Date(issue.createdAt).toLocaleDateString('pt-BR')}</span>
               </div>
             </div>
           </div>
@@ -248,7 +248,7 @@
             <select id="qc-modal-assignee" name="assignedTo" class="form-select" bind:value={newIssueAssignee}>
               <option value="">Ninguém (Fila Geral)</option>
               {#each team as m}
-                <option value={m.user_id}>{m.member?.display_name || m.member?.username || m.user_id}</option>
+                <option value={m.userId}>{m.member?.displayName || m.member?.username || m.userId}</option>
               {/each}
             </select>
           </div>

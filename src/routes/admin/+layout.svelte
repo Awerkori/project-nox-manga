@@ -79,9 +79,9 @@
       <!-- Operator Identity Card -->
       <div class="operator-card">
         <div class="operator-avatar">
-          {#if data.profile?.avatar_id}
+          {#if data.profile?.avatarId}
             <img
-              src="/media/{data.profile.avatar_id}"
+              src="/media/{data.profile.avatarId}"
               alt=""
               width="36"
               height="36"
@@ -89,15 +89,15 @@
             />
           {:else}
             <span class="avatar-fallback">
-              {data.profile?.display_name ? data.profile.display_name.slice(0, 1).toUpperCase() : (data.role === 'ADMIN' ? 'A' : 'E')}
+              {data.profile?.displayName ? data.profile.displayName.slice(0, 1).toUpperCase() : (data.role === 'ADMIN' ? 'A' : 'E')}
             </span>
           {/if}
           <span class="operator-status-dot"></span>
         </div>
 
         <div class="operator-meta">
-          <span class="operator-name" title={data.profile?.display_name || 'Operador Nox'}>
-            {data.profile?.display_name || (data.role === 'ADMIN' ? 'Administrador' : 'Editor Nox')}
+          <span class="operator-name" title={data.profile?.displayName || 'Operador Nox'}>
+            {data.profile?.displayName || (data.role === 'ADMIN' ? 'Administrador' : 'Editor Nox')}
           </span>
           <span class="operator-badge" class:role-admin={data.role === 'ADMIN'}>
             {#if data.role === 'ADMIN'}

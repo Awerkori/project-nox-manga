@@ -22,7 +22,7 @@
   let { data } = $props();
 
   let operatorName = $derived(
-    data.profile?.display_name || (data.role === 'ADMIN' ? 'Administrador' : 'Editor Nox')
+    data.profile?.displayName || (data.role === 'ADMIN' ? 'Administrador' : 'Editor Nox')
   );
   let firstName = $derived(operatorName.split(' ')[0]);
 
@@ -194,9 +194,9 @@
                   class="draft-cover-thumb"
                   tabindex="-1"
                 >
-                  {#if draft.works?.cover_id}
+                  {#if draft.works?.coverId}
                     <img
-                      src="/media/{draft.works.cover_id}"
+                      src="/media/{draft.works.coverId}"
                       alt=""
                       width="42"
                       height="58"
@@ -221,10 +221,10 @@
                       <span class="draft-ch-subtitle">— {draft.title}</span>
                     {/if}
                   </div>
-                  {#if draft.created_at}
+                  {#if draft.createdAt}
                     <div class="draft-timestamp">
                       <Clock size={11} />
-                      <span>Criado {relativeTime(draft.created_at)}</span>
+                      <span>Criado {relativeTime(draft.createdAt)}</span>
                     </div>
                   {/if}
                 </div>
@@ -274,8 +274,8 @@
                 <div class="pub-main-info">
                   <span class="pub-work">{pub.works?.title}</span>
                   <span class="pub-ch">Capítulo {pub.number}</span>
-                  {#if pub.published_at}
-                    <span class="pub-time">{relativeTime(pub.published_at)}</span>
+                  {#if pub.publishedAt}
+                    <span class="pub-time">{relativeTime(pub.publishedAt)}</span>
                   {/if}
                 </div>
 
@@ -373,8 +373,8 @@
             {#each data.recentWorks as work (work.id)}
               <a href="/admin/obras/{work.id}" class="radar-work-row">
                 <div class="radar-thumb">
-                  {#if work.cover_id}
-                    <img src="/media/{work.cover_id}" alt="" width="32" height="44" class="radar-img" />
+                  {#if work.coverId}
+                    <img src="/media/{work.coverId}" alt="" width="32" height="44" class="radar-img" />
                   {:else}
                     <div class="radar-placeholder">NOX</div>
                   {/if}

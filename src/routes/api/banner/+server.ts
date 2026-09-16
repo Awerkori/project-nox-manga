@@ -33,7 +33,7 @@ export const POST = async ({ request, locals }) => {
 
   const { error: problem } = await privileged()
     .from('members')
-    .update({ banner_id: image.id, banner_crop: crop })
+    .update({bannerId: image.id, bannerCrop: crop})
     .eq('id', userId);
 
   if (problem) {
@@ -41,5 +41,5 @@ export const POST = async ({ request, locals }) => {
     error(500, 'Não foi possível atualizar seu banner.');
   }
 
-  return json({ ...image, banner_crop: crop });
+  return json({...image, bannerCrop: crop});
 };

@@ -67,10 +67,10 @@
         <div class="member-progress-card">
           <div class="member-info">
             <div class="member-main">
-              <span class="member-name">{member.display_name || member.username}</span>
+              <span class="member-name">{member.displayName || member.username}</span>
               <span class="member-role {member.role.toLowerCase()}">{member.role}</span>
             </div>
-            <span class="member-date">Entrou em {new Date(member.created_at).toLocaleDateString('pt-BR')}</span>
+            <span class="member-date">Entrou em {new Date(member.createdAt).toLocaleDateString('pt-BR')}</span>
           </div>
 
           <!-- Simulated progress based on role/seniority -->

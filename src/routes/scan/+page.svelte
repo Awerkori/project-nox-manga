@@ -238,7 +238,7 @@
     if (!ch) return;
     if (typeof ch === 'string') {
       const all = [...(data.productionChapters || []), ...(chapters || [])];
-      const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.target_chapter_id === ch);
+      const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.targetChapterId === ch);
       activeWorkspaceChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo' };
     } else {
       activeWorkspaceChapter = ch.chapters || ch;
@@ -341,11 +341,11 @@
 
   function openEditOpeningModal(op: any) {
     editingOpening = op;
-    openingPosId = op.position_id;
+    openingPosId = op.positionId;
     openingTitle = op.title || '';
     openingDesc = op.description || '';
     openingReqs = op.requirements || '';
-    openingExpLevel = op.experience_level || 'QUALQUER';
+    openingExpLevel = op.experienceLevel || 'QUALQUER';
     openingAvail = op.availability || '';
     openingSlots = op.slots || null;
     openingNotes = op.notes || '';
@@ -375,8 +375,8 @@
     editingPosition = pos;
     posName = pos.name;
     posDesc = pos.description || '';
-    posDisplayOrder = pos.display_order || 0;
-    posIsActive = pos.is_active !== false;
+    posDisplayOrder = pos.displayOrder || 0;
+    posIsActive = pos.isActive !== false;
     showPositionModal = true;
   }
 
@@ -391,7 +391,7 @@
   function openReviewModal(app: any) {
     reviewingApp = app;
     reviewAction = app.status === 'PENDING' ? 'APPROVE' : (app.status as any);
-    reviewNotes = app.internal_notes || '';
+    reviewNotes = app.internalNotes || '';
     reviewAddToTeam = true;
     reviewInitialRole = 'MEMBER';
   }
@@ -417,7 +417,7 @@
   function openManageMemberModal(member: any) {
     editingMember = member;
     editingRole = member.role === 'ADMIN' ? 'ADMIN' : (member.role === 'OWNER' ? 'OWNER' : 'MEMBER');
-    editingPositionIds = (member.positions || []).map((p: any) => p.position_id).filter(Boolean);
+    editingPositionIds = (member.positions || []).map((p: any) => p.positionId).filter(Boolean);
     manageMemberError = null;
     manageMemberWarning = null;
   }
@@ -431,10 +431,10 @@
   }
 
   // Settings preposition state
-  let settingsPreposition = $state(data.currentScan?.display_preposition || 'de');
+  let settingsPreposition = $state(data.currentScan?.displayPreposition || 'de');
   $effect(() => {
-    if (data.currentScan?.display_preposition) {
-      settingsPreposition = data.currentScan.display_preposition;
+    if (data.currentScan?.displayPreposition) {
+      settingsPreposition = data.currentScan.displayPreposition;
     }
   });
 
@@ -485,7 +485,7 @@
             <div class="transfer-alert-text">
               <h3>Proposta de Liderança Recebida</h3>
               <p>
-                <strong>{data.incomingTransfer.from_user?.display_name || data.incomingTransfer.from_user?.username || 'O líder atual'}</strong>
+                <strong>{data.incomingTransfer.from_user?.displayName || data.incomingTransfer.from_user?.username || 'O líder atual'}</strong>
                 propôs transferir a liderança da scan <strong>{data.incomingTransfer.scans?.name}</strong> para você.
               </p>
             </div>
@@ -552,8 +552,8 @@
                 <div class="track-item status-{req.status.toLowerCase()}">
                   <div class="track-header">
                     <div class="track-scan-info">
-                      <strong class="track-scan-name">{req.scan_name}</strong>
-                      <span class="track-scan-slug font-mono">/{req.scan_slug}</span>
+                      <strong class="track-scan-name">{req.scanName}</strong>
+                      <span class="track-scan-slug font-mono">/{req.scanSlug}</span>
                     </div>
                     <div class="track-status-cell">
                       <span class="status-pill status-{req.status.toLowerCase()}">
@@ -572,10 +572,10 @@
                     <p class="track-desc">{req.description}</p>
                   {/if}
 
-                  {#if req.status === 'REJECTED' && req.rejection_reason}
+                  {#if req.status === 'REJECTED' && req.rejectionReason}
                     <div class="track-rejection-msg">
                       <AlertTriangle size={14} />
-                      <span>Motivo da recusa: {req.rejection_reason}</span>
+                      <span>Motivo da recusa: {req.rejectionReason}</span>
                     </div>
                   {:else if req.status === 'APPROVED'}
                     <div class="track-approved-msg">
@@ -593,7 +593,7 @@
                       <span>Sua solicitação está sendo revisada por nossa equipe editorial.</span>
                     </div>
                   {/if}
-                  <span class="track-date">Enviado em {new Date(req.created_at).toLocaleDateString('pt-BR')}</span>
+                  <span class="track-date">Enviado em {new Date(req.createdAt).toLocaleDateString('pt-BR')}</span>
                 </div>
               {/each}
             </div>
@@ -796,10 +796,10 @@
           seenStages={data.seenStages || []}
           currentUserId={data.userId}
           onSelectTab={handleSelectTab}
-          unreadNotifications={(data.notifications || []).filter((n: any) => !n.is_read).length}
+          unreadNotifications={(data.notifications || []).filter((n: any) => !n.isRead).length}
           unreadMessages={0}
           pendingAppsCount={pendingAppsCount}
-          openTasksCount={(data.tasks || []).filter((t: any) => t.status !== 'DONE' && (t.assigned_to === data.userId || t.assignee_id === data.userId)).length}
+          openTasksCount={(data.tasks || []).filter((t: any) => t.status !== 'DONE' && (t.assignedTo === data.userId || t.assignee_id === data.userId)).length}
           mobileOpen={sidebarMobileOpen}
           onCloseMobile={() => (sidebarMobileOpen = false)}
           onOpenCommandPalette={() => (showCommandPalette = true)}
@@ -829,15 +829,15 @@
             </button>
           </header>
 
-          {#if data.currentScan?.emergency_mode}
+          {#if data.currentScan?.emergencyMode}
             <div class="emergency-banner-alert">
               <AlertTriangle size={20} class="text-rose-500" />
               <div class="banner-text">
                 <strong>MODO DE EMERGÊNCIA ATIVO NA SCAN</strong>
-                <p>{data.currentScan?.emergency_reason || 'Operações e envios congelados temporariamente pela administração.'}</p>
+                <p>{data.currentScan?.emergencyReason || 'Operações e envios congelados temporariamente pela administração.'}</p>
               </div>
             </div>
-          {:else if data.currentScan?.pause_uploads}
+          {:else if data.currentScan?.pauseUploads}
             <div class="pause-banner-alert">
               <PauseCircle size={18} class="text-amber-500" />
               <span>Uploads de capítulos estão temporariamente pausados pela administração da scan.</span>
@@ -846,7 +846,7 @@
 
           <div class="workspace-view-content">
             {#if activeWorkspaceChapter}
-              {@const activeChId = activeWorkspaceChapter.id || activeWorkspaceChapter.target_chapter_id || activeWorkspaceChapter.chapters?.id}
+              {@const activeChId = activeWorkspaceChapter.id || activeWorkspaceChapter.targetChapterId || activeWorkspaceChapter.chapters?.id}
               <ChapterWorkspaceView
                 chapterId={activeChId}
                 chapters={[activeWorkspaceChapter, ...(data.productionChapters || []), ...(chapters || [])]}
@@ -854,13 +854,13 @@
                 chapterStages={data.chapterStages || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
-                tasks={(data.tasks || []).filter((t: any) => t.chapter_id === activeChId || t.chapter_id === activeWorkspaceChapter.id || t.chapter_id === activeWorkspaceChapter.target_chapter_id || t.chapter_number === (activeWorkspaceChapter.number || activeWorkspaceChapter.chapter_number))}
+                tasks={(data.tasks || []).filter((t: any) => t.chapterId === activeChId || t.chapterId === activeWorkspaceChapter.id || t.chapterId === activeWorkspaceChapter.targetChapterId || t.chapterNumber === (activeWorkspaceChapter.number || activeWorkspaceChapter.chapterNumber))}
                 team={team}
                 userProfile={{ id: data.userId }}
                 currentUserId={data.userId}
                 userRole={data.userRole}
                 scanId={data.currentScan.id}
-                qcIssues={(data.qcIssues || []).filter((q: any) => q.chapter_id === activeChId || q.chapter_id === activeWorkspaceChapter.id || q.chapter_id === activeWorkspaceChapter.target_chapter_id)}
+                qcIssues={(data.qcIssues || []).filter((q: any) => q.chapterId === activeChId || q.chapterId === activeWorkspaceChapter.id || q.chapterId === activeWorkspaceChapter.targetChapterId)}
                 onBackToPipeline={() => (activeWorkspaceChapter = null)}
               />
             {:else if currentWorkspaceTab === 'home'}
@@ -956,8 +956,8 @@
                   {#each works as work (work.id)}
                     <div class="dash-work-row">
                       <a href="/obra/{work.slug}" class="dash-work-item">
-                        {#if work.cover_id}
-                          <img src="/media/{work.cover_id}" alt={work.title} class="work-mini-cover" />
+                        {#if work.coverId}
+                          <img src="/media/{work.coverId}" alt={work.title} class="work-mini-cover" />
                         {:else}
                           <div class="work-mini-placeholder">NOX</div>
                         {/if}
@@ -965,7 +965,7 @@
                           <span class="work-mini-title">{work.title}</span>
                           <span class="work-mini-views">
                             <Eye size={12} />
-                            <span>{formatNumber(work.views_total || 0)} leituras</span>
+                            <span>{formatNumber(work.viewsTotal || 0)} leituras</span>
                           </span>
                         </div>
                       </a>
@@ -1011,8 +1011,8 @@
                   <div class="proj-requests-list">
                     {#each data.projectRequests as req (req.id)}
                       <div class="proj-req-item status-{req.status.toLowerCase()}">
-                        {#if req.works?.cover_id}
-                          <img src="/media/{req.works.cover_id}" alt="" class="proj-cover-mini" />
+                        {#if req.works?.coverId}
+                          <img src="/media/{req.works.coverId}" alt="" class="proj-cover-mini" />
                         {:else}
                           <div class="proj-cover-fallback">NOX</div>
                         {/if}
@@ -1021,10 +1021,10 @@
                           {#if req.message}
                             <span class="proj-msg">"{req.message}"</span>
                           {/if}
-                          {#if req.status === 'REJECTED' && req.rejection_reason}
+                          {#if req.status === 'REJECTED' && req.rejectionReason}
                             <span class="proj-rejection-note">
                               <AlertTriangle size={12} />
-                              <span>Motivo: {req.rejection_reason}</span>
+                              <span>Motivo: {req.rejectionReason}</span>
                             </span>
                           {/if}
                         </div>
@@ -1065,9 +1065,9 @@
                       <div class="ch-right">
                         <span class="ch-views-count">
                           <Eye size={12} />
-                          <span>{formatNumber(ch.views_total || 0)}</span>
+                          <span>{formatNumber(ch.viewsTotal || 0)}</span>
                         </span>
-                        <time datetime={ch.published_at}>{relativeTime(ch.published_at)}</time>
+                        <time datetime={ch.publishedAt}>{relativeTime(ch.publishedAt)}</time>
                       </div>
                     </a>
                   {/each}
@@ -1122,7 +1122,7 @@
                   {/if}
                 </button>
               </div>
-              <span class="invite-hint-txt">Link de uso único válido até {createdInvite.expires_at ? new Date(createdInvite.expires_at).toLocaleString('pt-BR') : 'expirar'}.</span>
+              <span class="invite-hint-txt">Link de uso único válido até {createdInvite.expiresAt ? new Date(createdInvite.expiresAt).toLocaleString('pt-BR') : 'expirar'}.</span>
             </div>
           {/if}
 
@@ -1136,7 +1136,7 @@
                       <span class="invite-role-tag">{ROLE_LABELS[inv.role] || inv.role}</span>
                       <span class="invite-exp-tag">
                         <Clock size={11} />
-                        <span>Expira {relativeTime(inv.expires_at)}</span>
+                        <span>Expira {relativeTime(inv.expiresAt)}</span>
                       </span>
                     </div>
                     <div class="invite-actions-right">
@@ -1172,7 +1172,7 @@
               {#each data.transferRequests.filter((t: any) => t.status === 'PENDING') as tr (tr.id)}
                 <div class="pending-transfer-item">
                   <div class="transfer-to-info">
-                    <span class="transfer-to-name">Proposta para <strong>{tr.to_user?.display_name || tr.to_user?.username}</strong></span>
+                    <span class="transfer-to-name">Proposta para <strong>{tr.to_user?.displayName || tr.to_user?.username}</strong></span>
                     <span class="transfer-to-sub">Aguardando aceite do membro</span>
                   </div>
                   {#if data.userRole === 'OWNER'}
@@ -1191,13 +1191,13 @@
               <div class="member-card">
                 <div class="member-card-header">
                   <UserAvatar
-                    avatarId={member.avatar_id}
-                    displayName={member.display_name || member.username}
+                    avatarId={member.avatarId}
+                    displayName={member.displayName || member.username}
                     size={46}
                   />
                   <div class="member-card-info">
                     <div class="member-name-row">
-                      <strong class="member-display">{member.display_name || member.username}</strong>
+                      <strong class="member-display">{member.displayName || member.username}</strong>
                       {#if member.role === 'OWNER'}
                         <span class="role-pill is-owner" title="Dono e Líder da Scan">
                           <Crown size={12} class="mr-1 inline text-amber" />
@@ -1227,9 +1227,9 @@
                   <div class="member-positions-tags">
                     {#if member.positions && member.positions.length > 0}
                       {#each member.positions as pos}
-                        <span class="pos-badge" class:primary={pos.is_primary}>
+                        <span class="pos-badge" class:primary={pos.isPrimary}>
                           <span class="pos-emoji">{getPositionIcon(pos.name)}</span>
-                          {#if pos.is_primary}★ {/if}{pos.name}
+                          {#if pos.isPrimary}★ {/if}{pos.name}
                         </span>
                       {/each}
                     {:else}
@@ -1242,11 +1242,11 @@
                 <div class="member-card-visibility">
                   <div class="vis-status-row">
                     <span class="vis-label">Visibilidade no Perfil:</span>
-                    {#if member.hidden_by_admin}
+                    {#if member.hiddenByAdmin}
                       <span class="badge-vis-status hidden-admin" title="Ocultado pela administração global">
                         Oculto por Admin Global
                       </span>
-                    {:else if !member.is_public}
+                    {:else if !member.isPublic}
                       <span class="badge-vis-status private" title="Oculto pela equipe">
                         Oculto na Equipe
                       </span>
@@ -1261,13 +1261,13 @@
                     <form method="POST" action="?/updateMemberVisibility" use:enhance class="vis-toggle-form">
                       <input type="hidden" name="scan_id" value={data.currentScan?.id} />
                       <input type="hidden" name="user_id" value={member.id} />
-                      <input type="hidden" name="is_public" value={member.is_public ? 'false' : 'true'} />
+                      <input type="hidden" name="is_public" value={member.isPublic ? 'false' : 'true'} />
                       <button
                         type="submit"
                         class="btn-vis-toggle"
-                        title={member.is_public ? 'Tornar oculto' : 'Tornar público'}
+                        title={member.isPublic ? 'Tornar oculto' : 'Tornar público'}
                       >
-                        {member.is_public ? 'Ocultar da Equipe' : 'Exibir na Equipe'}
+                        {member.isPublic ? 'Ocultar da Equipe' : 'Exibir na Equipe'}
                       </button>
                     </form>
                   {/if}
@@ -1363,7 +1363,7 @@
                     {#if op.language}
                       <span class="op-spec-item">🌐 {op.language}</span>
                     {/if}
-                    <span class="op-spec-item">🎯 Nível: {op.experience_level}</span>
+                    <span class="op-spec-item">🎯 Nível: {op.experienceLevel}</span>
                     {#if op.slots}
                       <span class="op-spec-item">👥 {op.slots} vaga{op.slots === 1 ? '' : 's'}</span>
                     {:else}
@@ -1417,12 +1417,12 @@
                       >
                         <input type="hidden" name="scan_id" value={data.currentScan?.id} />
                         <input type="hidden" name="opening_id" value={op.id} />
-                        <input type="hidden" name="position_id" value={op.position_id} />
+                        <input type="hidden" name="position_id" value={op.positionId} />
                         <input type="hidden" name="title" value={op.title} />
                         <input type="hidden" name="description" value={op.description || ''} />
                         <input type="hidden" name="requirements" value={op.requirements || ''} />
                         <input type="hidden" name="language" value={op.language || 'pt-BR'} />
-                        <input type="hidden" name="experience_level" value={op.experience_level || 'QUALQUER'} />
+                        <input type="hidden" name="experience_level" value={op.experienceLevel || 'QUALQUER'} />
                         <input type="hidden" name="availability" value={op.availability || ''} />
                         <input type="hidden" name="slots" value={op.slots || ''} />
                         <input type="hidden" name="notes" value={op.notes || ''} />
@@ -1536,21 +1536,21 @@
           {#if filteredApplications.length > 0}
             <div class="applications-grid">
               {#each filteredApplications as app (app.id)}
-                {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.application_id === app.id)}
+                {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.applicationId === app.id)}
                 <div class="app-card status-{app.status.toLowerCase()}">
                   <div class="app-card-header">
                     <div class="applicant-profile-row">
                       <UserAvatar
-                        avatarId={app.members?.avatar_id}
-                        displayName={app.members?.display_name || app.members?.username}
+                        avatarId={app.members?.avatarId}
+                        displayName={app.members?.displayName || app.members?.username}
                         size={42}
                       />
                       <div class="applicant-names">
                         <a href="/u/{app.members?.username}" target="_blank" class="applicant-link">
-                          <strong>{app.members?.display_name || app.members?.username}</strong>
+                          <strong>{app.members?.displayName || app.members?.username}</strong>
                           <span class="applicant-user">@{app.members?.username}</span>
                         </a>
-                        <span class="app-timestamp">{relativeTime(app.created_at)}</span>
+                        <span class="app-timestamp">{relativeTime(app.createdAt)}</span>
                       </div>
                     </div>
 
@@ -1588,17 +1588,17 @@
                       </div>
                     {/if}
 
-                    {#if app.contact_info}
+                    {#if app.contactInfo}
                       <div class="app-field-item">
                         <span class="app-field-label">Contato / Discord:</span>
-                        <p class="app-field-val font-mono">{app.contact_info}</p>
+                        <p class="app-field-val font-mono">{app.contactInfo}</p>
                       </div>
                     {/if}
 
-                    {#if app.portfolio_url}
+                    {#if app.portfolioUrl}
                       <div class="app-field-item">
                         <a
-                          href={app.portfolio_url}
+                          href={app.portfolioUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           class="portfolio-link-btn"
@@ -1623,10 +1623,10 @@
                       </div>
                     {/if}
 
-                    {#if app.internal_notes}
+                    {#if app.internalNotes}
                       <div class="app-internal-notes-box">
                         <strong>Anotação da Avaliação:</strong>
-                        <p>{app.internal_notes}</p>
+                        <p>{app.internalNotes}</p>
                       </div>
                     {/if}
                   </div>
@@ -1683,7 +1683,7 @@
 
           <div class="positions-grid">
             {#each positions as pos (pos.id)}
-              {@const membersInPos = team.filter((m: any) => m.positions?.some((p: any) => p.position_id === pos.id || p.name === pos.name)).length}
+              {@const membersInPos = team.filter((m: any) => m.positions?.some((p: any) => p.positionId === pos.id || p.name === pos.name)).length}
               <div class="pos-management-card">
                 <div class="pos-card-header">
                   <div class="pos-card-title-group">
@@ -1794,8 +1794,8 @@
           {#if staffNotes.length > 0}
             <div class="staff-notes-list">
               {#each staffNotes as note (note.id)}
-                <div class="staff-note-card" class:is-pinned={note.is_pinned}>
-                  {#if note.is_pinned}
+                <div class="staff-note-card" class:is-pinned={note.isPinned}>
+                  {#if note.isPinned}
                     <div class="staff-pinned-badge">
                       <Pin size={12} />
                       <span>Comunicado Fixado</span>
@@ -1805,17 +1805,17 @@
                   <div class="staff-note-header">
                     <div class="note-author-group">
                       <UserAvatar
-                        avatarId={note.author?.avatar_id}
-                        displayName={note.author?.display_name || note.author?.username || 'Membro'}
-                        frameId={note.author?.avatar_frame_id}
+                        avatarId={note.author?.avatarId}
+                        displayName={note.author?.displayName || note.author?.username || 'Membro'}
+                        frameId={note.author?.avatarFrameId}
                         size={36}
                       />
                       <div class="note-author-info">
                         <strong class="note-author-name">
-                          {note.author?.display_name || note.author?.username || 'Membro da Staff'}
+                          {note.author?.displayName || note.author?.username || 'Membro da Staff'}
                         </strong>
                         <span class="note-meta-line">
-                          @{note.author?.username || 'membro'} · {relativeTime(note.created_at)}
+                          @{note.author?.username || 'membro'} · {relativeTime(note.createdAt)}
                         </span>
                       </div>
                     </div>
@@ -1883,25 +1883,25 @@
                     <div class="timeline-msg-row">
                       {#if act.action === 'OPENING_CREATED'}
                         <p class="timeline-text">
-                          Nova vaga aberta: <strong>{act.details?.title || act.details?.position_name}</strong>
+                          Nova vaga aberta: <strong>{act.details?.title || act.details?.positionName}</strong>
                         </p>
                       {:else if act.action === 'APPLICATION_RECEIVED'}
                         <p class="timeline-text">
-                          Nova candidatura recebida de <strong>{act.details?.applicant_name}</strong> para <strong>{act.details?.position_name}</strong>
+                          Nova candidatura recebida de <strong>{act.details?.applicant_name}</strong> para <strong>{act.details?.positionName}</strong>
                         </p>
                       {:else if act.action === 'APPLICATION_STATUS'}
                         <p class="timeline-text">
-                          Candidatura de <strong>{act.details?.applicant_name}</strong> foi marcada como <span class="status-inline status-{(act.details?.status || '').toLowerCase()}">{act.details?.status}</span> por <strong>{act.details?.reviewed_by}</strong>
+                          Candidatura de <strong>{act.details?.applicant_name}</strong> foi marcada como <span class="status-inline status-{(act.details?.status || '').toLowerCase()}">{act.details?.status}</span> por <strong>{act.details?.reviewedBy}</strong>
                         </p>
                       {:else if act.action === 'MEMBER_ADDED'}
                         <p class="timeline-text">
-                          <strong>{act.details?.user_name}</strong> ingressou na equipe como <strong>{act.details?.position_name}</strong> (Aprovado por {act.details?.approved_by})
+                          <strong>{act.details?.userName}</strong> ingressou na equipe como <strong>{act.details?.positionName}</strong> (Aprovado por {act.details?.approved_by})
                         </p>
                       {:else}
                         <p class="timeline-text">{act.action}</p>
                       {/if}
                     </div>
-                    <span class="timeline-time">{relativeTime(act.created_at)}</span>
+                    <span class="timeline-time">{relativeTime(act.createdAt)}</span>
                   </div>
                 </div>
               {/each}
@@ -2196,7 +2196,7 @@
             else if (id === 'tab-home') handleSelectTab('home');
             showCommandPalette = false;
           } else if (type === 'chapter') {
-            const ch = (data.productionChapters || []).find((c: any) => c.id === id || c.target_chapter_id === id) || chapters.find((c: any) => c.id === id);
+            const ch = (data.productionChapters || []).find((c: any) => c.id === id || c.targetChapterId === id) || chapters.find((c: any) => c.id === id);
             if (ch) activeWorkspaceChapter = ch;
             showCommandPalette = false;
           }
@@ -2340,7 +2340,7 @@
               <strong>Atenção: Confirmação em duas etapas</strong>
               <p>
                 Você está prestes a propor a transferência de liderança da scan <strong>{data.currentScan?.name}</strong> para
-                <strong>{transferTarget.display_name || transferTarget.username}</strong> (@{transferTarget.username}).
+                <strong>{transferTarget.displayName || transferTarget.username}</strong> (@{transferTarget.username}).
                 O membro receberá um alerta e precisará aceitar a transferência para se tornar o novo Dono.
               </p>
             </div>
@@ -2383,9 +2383,9 @@
           <div class="warning-alert-box danger">
             <UserMinus size={24} class="warning-alert-icon text-red" />
             <div>
-              <strong>Remover {removeTarget.display_name || removeTarget.username}?</strong>
+              <strong>Remover {removeTarget.displayName || removeTarget.username}?</strong>
               <p>
-                Tem certeza que deseja remover <strong>{removeTarget.display_name || removeTarget.username}</strong> (@{removeTarget.username}) desta Scan?
+                Tem certeza que deseja remover <strong>{removeTarget.displayName || removeTarget.username}</strong> (@{removeTarget.username}) desta Scan?
               </p>
               <p class="mt-2 text-xs text-slate-400">
                 • A conta global do usuário, histórico e créditos permanecem 100% preservados.<br/>
@@ -2533,7 +2533,7 @@
   {/if}
 
   {#if reviewingApp}
-    {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.application_id === reviewingApp.id)}
+    {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.applicationId === reviewingApp.id)}
     <div class="modal-backdrop" onclick={() => (reviewingApp = null)}>
       <div class="modal-card" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
@@ -2544,12 +2544,12 @@
         <div class="review-candidate-summary">
           <div class="review-candidate-profile">
             <UserAvatar
-              avatarId={reviewingApp.members?.avatar_id}
-              displayName={reviewingApp.members?.display_name || reviewingApp.members?.username}
+              avatarId={reviewingApp.members?.avatarId}
+              displayName={reviewingApp.members?.displayName || reviewingApp.members?.username}
               size={44}
             />
             <div>
-              <strong>{reviewingApp.members?.display_name || reviewingApp.members?.username}</strong>
+              <strong>{reviewingApp.members?.displayName || reviewingApp.members?.username}</strong>
               <span class="user-handle">@{reviewingApp.members?.username}</span>
             </div>
           </div>
@@ -2581,17 +2581,17 @@
             </div>
           {/if}
 
-          {#if reviewingApp.contact_info}
+          {#if reviewingApp.contactInfo}
             <div class="review-info-item">
               <span class="item-label">Contato / Discord:</span>
-              <p class="font-mono">{reviewingApp.contact_info}</p>
+              <p class="font-mono">{reviewingApp.contactInfo}</p>
             </div>
           {/if}
 
-          {#if reviewingApp.portfolio_url}
+          {#if reviewingApp.portfolioUrl}
             <div class="review-info-item">
               <a
-                href={reviewingApp.portfolio_url}
+                href={reviewingApp.portfolioUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="portfolio-link-btn"
@@ -2773,13 +2773,13 @@
         <div class="modal-header">
           <div class="modal-header-profile">
             <UserAvatar
-              avatarId={editingMember.avatar_id}
-              displayName={editingMember.display_name || editingMember.username}
+              avatarId={editingMember.avatarId}
+              displayName={editingMember.displayName || editingMember.username}
               size={42}
             />
             <div class="modal-header-titles">
               <h2 class="modal-title">Gerenciar Membro</h2>
-              <span class="modal-subtitle">{editingMember.display_name || editingMember.username} (@{editingMember.username})</span>
+              <span class="modal-subtitle">{editingMember.displayName || editingMember.username} (@{editingMember.username})</span>
             </div>
           </div>
           <button class="btn-close-modal" onclick={() => (editingMember = null)}><X size={18} /></button>

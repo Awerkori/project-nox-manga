@@ -18,7 +18,7 @@ export const GET = async ({ params, request, url }) => {
     return json({ error: 'Obra não encontrada' }, { status: 404 });
   }
 
-  if (work.content_rating === 'ADULT_18' && !allowAdult) {
+  if (work.contentRating === 'ADULT_18' && !allowAdult) {
     return json(
       { error: 'Conteúdo Adulto (+18). Requer autenticação com token de usuário maior de idade.' },
       { status: 403 }
@@ -43,24 +43,21 @@ export const GET = async ({ params, request, url }) => {
     .map((wt) => (Array.isArray(wt.tags) ? wt.tags[0]?.name : (wt.tags as { name?: string } | null)?.name))
     .filter(Boolean);
 
-  return json({
-    id: work.id,
+  return json({id: work.id,
     title: work.title,
     slug: work.slug,
     kind: work.kind,
     status: work.status,
-    content_rating: work.content_rating || 'GENERAL',
+    contentRating: work.contentRating || 'GENERAL',
     synopsis: work.synopsis,
     author: work.author,
     artist: work.artist,
-    cover_url: work.cover_id ? `${origin}/media/${work.cover_id}` : null,
-    updated_at: work.updated_at,
+    cover_url: work.coverId ? `${origin}/media/${work.coverId}` : null,
+    updated_at: work.updatedAt,
     genres,
-    chapters: (chaptersRes.data || []).map((ch) => ({
-      id: ch.id,
+    chapters: (chaptersRes.data || []).map((ch) => ({id: ch.id,
       number: ch.number,
       title: ch.title,
-      published_at: ch.published_at
-    }))
+      publishedAt: ch.publishedAt}))
   });
 };

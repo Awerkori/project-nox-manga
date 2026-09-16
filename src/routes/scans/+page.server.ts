@@ -1,4 +1,6 @@
-import { safeDbQuery } from '$lib/server/resilience';
+import { safeQuery } from '$lib/server/db';
+import { db, schema } from '$lib/server/db';
+import { eq, desc, asc, sql } from 'drizzle-orm';
 
 type ScansCache = {
   timestamp: number;
@@ -17,48 +19,60 @@ export const load = async ({ locals }) => {
     };
   }
 
-  const res = await safeDbQuery(
-    locals.db
-      .from('scans')
-      .select(`
-        id,
-        name,
-        slug,
-        description,
-        display_preposition,
-        logo_id,
-        banner_id,
-        website,
-        discord,
-        fluxer,
-        is_official,
-        status,
-        created_at,
-        work_scans(count),
-        chapter_scans(count),
-        scan_recruitment_openings(
-          id,
-          title,
-          status,
-          position:scan_positions(id, name)
-        )
-      `)
-      .eq('status', 'ACTIVE')
-      .order('is_official', { ascending: false })
-      .order('name', { ascending: true }),
-    4000,
-    'scans_list'
+  const scansResult = await safeQuery(
+    db.select({
+      id: schema.scans.id,
+      name: schema.scans.name,
+      slug: schema.scans.slug,
+      description: schema.scans.description,
+      displayPreposition: schema.scans.displayPreposition,
+      logoId: schema.scans.logoId,
+      bannerId: schema.scans.bannerId,
+      website: schema.scans.website,
+      discord: schema.scans.discord,
+      fluxer: schema.scans.fluxer,
+      isOfficial: schema.scans.isOfficial,
+      status: schema.scans.status,
+      createdAt: schema.scans.createdAt,
+      worksCount: sql<number>`(SELECT count(*) FROM ${schema.workScans} WHERE ${schema.workScans.scanId} = ${schema.scans.id})::int`,
+      chaptersCount: sql<number>`(SELECT count(*) FROM ${schema.chapterScans} WHERE ${schema.chapterScans.scanId} = ${schema.scans.id})::int`
+    })
+    .from(schema.scans)
+    .where(eq(schema.scans.status, 'ACTIVE'))
+    .orderBy(desc(schema.scans.isOfficial), asc(schema.scans.name))
   );
 
-  const scans = res.data;
+  const openingsResult = await safeQuery(
+    db.select({
+      id: schema.scanRecruitmentOpenings.id,
+      title: schema.scanRecruitmentOpenings.title,
+      status: schema.scanRecruitmentOpenings.status,
+      scanId: schema.scanRecruitmentOpenings.scanId,
+      position: {
+        id: schema.scanPositions.id,
+        name: schema.scanPositions.name
+      }
+    })
+    .from(schema.scanRecruitmentOpenings)
+    .leftJoin(schema.scanPositions, eq(schema.scanRecruitmentOpenings.positionId, schema.scanPositions.id))
+    .where(eq(schema.scanRecruitmentOpenings.status, 'OPEN'))
+  );
+
+  const openingsByScanId = new Map<string, any[]>();
+  if (openingsResult.data) {
+    for (const o of openingsResult.data) {
+      if (!openingsByScanId.has(o.scanId)) openingsByScanId.set(o.scanId, []);
+      openingsByScanId.get(o.scanId)!.push(o);
+    }
+  }
+
+  const scans = scansResult.data;
 
   if (scans && scans.length > 0) {
     const formattedScans = scans.map((s: any) => {
-      const openVacancies = (s.scan_recruitment_openings || []).filter((o: any) => o.status === 'OPEN');
+      const openVacancies = openingsByScanId.get(s.id) || [];
       return {
         ...s,
-        worksCount: s.work_scans?.[0]?.count ?? 0,
-        chaptersCount: s.chapter_scans?.[0]?.count ?? 0,
         openings: openVacancies,
         isRecruiting: openVacancies.length > 0,
         recruitingPositions: Array.from(
@@ -89,7 +103,7 @@ export const load = async ({ locals }) => {
 
   return {
     scans: [],
-    loadError: res.isDegraded,
+    loadError: scansResult.isDegraded,
     isStale: false
   };
 };

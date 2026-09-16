@@ -374,10 +374,10 @@
                         <div class="drawer-reporter-meta">
                           <User size={12} />
                           <strong class="drawer-reporter-name">
-                            {rep.reporter?.display_name || rep.reporter?.username || 'Usuário anônimo'}
+                            {rep.reporter?.displayName || rep.reporter?.username || 'Usuário anônimo'}
                           </strong>
                           <span class="drawer-dot">·</span>
-                          <span class="drawer-time">{relativeTime(rep.created_at)}</span>
+                          <span class="drawer-time">{relativeTime(rep.createdAt)}</span>
                         </div>
                         <span class="report-status-badge {getStatusBadge(rep.status).class}">
                           {getStatusBadge(rep.status).label}
@@ -394,9 +394,9 @@
                         </div>
                       {/if}
 
-                      {#if rep.resolution_notes}
+                      {#if rep.resolutionNotes}
                         <div class="drawer-report-notes">
-                          <strong>Parecer da Staff:</strong> {rep.resolution_notes}
+                          <strong>Parecer da Staff:</strong> {rep.resolutionNotes}
                         </div>
                       {/if}
                     </div>
@@ -429,13 +429,13 @@
       <div class="reports-list">
         {#each data.reports as report (report.id)}
           {@const statusMeta = getStatusBadge(report.status)}
-          {@const TargetIcon = getTargetIcon(report.target_type)}
+          {@const TargetIcon = getTargetIcon(report.targetType)}
           <div class="report-card" class:card-novo={report.status === 'NOVO'}>
             <div class="report-card-header">
               <div class="target-badge-cluster">
                 <span class="target-type-badge">
                   <TargetIcon size={12} />
-                  <span>{getTargetLabel(report.target_type)}</span>
+                  <span>{getTargetLabel(report.targetType)}</span>
                 </span>
                 <span class="report-status-badge {statusMeta.class}">
                   {statusMeta.label}
@@ -444,13 +444,13 @@
 
               <span class="report-timestamp">
                 <Clock size={12} />
-                <span>{relativeTime(report.created_at)}</span>
+                <span>{relativeTime(report.createdAt)}</span>
               </span>
             </div>
 
             <!-- Target context -->
             <div class="target-context">
-              {#if report.target_type === 'WORK' && report.work}
+              {#if report.targetType === 'WORK' && report.work}
                 <div class="target-item">
                   <span class="target-label">Obra:</span>
                   <a href="/admin/obras/{report.work.id}" class="target-link" target="_blank">
@@ -458,14 +458,14 @@
                     <ArrowUpRight size={12} />
                   </a>
                 </div>
-              {:else if report.target_type === 'CHAPTER' && report.chapter}
+              {:else if report.targetType === 'CHAPTER' && report.chapter}
                 <div class="target-item">
                   <span class="target-label">Capítulo:</span>
                   <span class="target-text">
                     Capítulo {report.chapter.number} {report.chapter.title ? `— ${report.chapter.title}` : ''}
                   </span>
                 </div>
-              {:else if report.target_type === 'COMMENT' && report.comment}
+              {:else if report.targetType === 'COMMENT' && report.comment}
                 <div class="target-item comment-preview">
                   <span class="target-label">Comentário:</span>
                   <blockquote class="target-quote">"{report.comment.body}"</blockquote>
@@ -488,21 +488,21 @@
             <div class="report-actors">
               <div class="actor-info">
                 <User size={13} />
-                <span>Denunciado por: <strong>{report.reporter?.display_name || report.reporter?.username || 'Usuário'}</strong></span>
+                <span>Denunciado por: <strong>{report.reporter?.displayName || report.reporter?.username || 'Usuário'}</strong></span>
               </div>
               {#if report.assigned}
                 <div class="actor-info assigned">
                   <Shield size={13} />
-                  <span>Atribuído a: <strong>{report.assigned.display_name || report.assigned.username}</strong></span>
+                  <span>Atribuído a: <strong>{report.assigned.displayName || report.assigned.username}</strong></span>
                 </div>
               {/if}
             </div>
 
             <!-- Resolution notes (if already resolved or rejected) -->
-            {#if report.resolution_notes}
+            {#if report.resolutionNotes}
               <div class="resolution-notes-box">
                 <span class="notes-label">Parecer da moderação:</span>
-                <p class="notes-text">{report.resolution_notes}</p>
+                <p class="notes-text">{report.resolutionNotes}</p>
               </div>
             {/if}
 

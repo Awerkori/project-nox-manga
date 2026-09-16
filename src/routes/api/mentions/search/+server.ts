@@ -1,5 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, like, and, or, desc } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) {
@@ -14,8 +16,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     type: 'user' | 'position' | 'all';
     id: string;
     username?: string;
-    display_name?: string;
-    avatar_id?: string | null;
+    displayName?: string;
+    avatarId?: string | null;
     label: string;
     sub: string;
   }> = [];
@@ -23,12 +25,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   // 1. Scan Context (se fornecido scan_id)
   if (scanId) {
     // Buscar cargos compatíveis
-    const { data: positions } = await locals.db
-      .from('scan_positions')
-      .select('id, name')
-      .eq('scan_id', scanId)
-      .ilike('name', `%${cleanQ}%`)
-      .limit(4);
+    const { data: positions } = await safeQuery(
+      db.select({ id: schema.scanPositions.id, name: schema.scanPositions.name })
+        .from(schema.scanPositions)
+        .where(
+          and(
+            eq(schema.scanPositions.scanId, scanId),
+            like(schema.scanPositions.name, `%${cleanQ}%`)
+          )
+        )
+        .limit(4)
+    );
 
     if (positions) {
       for (const p of positions) {
@@ -54,28 +61,39 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
 
     // Membros da Scan
-    let membersQuery = locals.db
-      .from('scan_members')
-      .select('user_id, role, members!scan_members_user_id_fkey(id, username, display_name, avatar_id)')
-      .eq('scan_id', scanId);
+    const { data: scanMems } = await safeQuery(
+      db.select({
+        userId: schema.scanMembers.userId,
+        role: schema.scanMembers.role,
+        members: {
+          id: schema.members.id,
+          username: schema.members.username,
+          displayName: schema.members.displayName,
+          avatarId: schema.members.avatarId
+        }
+      })
+      .from(schema.scanMembers)
+      .innerJoin(schema.members, eq(schema.scanMembers.userId, schema.members.id))
+      .where(eq(schema.scanMembers.scanId, scanId))
+      .limit(20)
+    );
 
-    const { data: scanMems } = await membersQuery.limit(20);
     if (scanMems) {
       for (const sm of scanMems) {
-        const m = (sm as any).members;
+        const m = sm.members;
         if (!m || !m.username) continue;
         const u = m.username.toLowerCase();
-        const d = (m.display_name || '').toLowerCase();
+        const d = (m.displayName || '').toLowerCase();
         const q = cleanQ.toLowerCase();
         if (!q || u.includes(q) || d.includes(q)) {
           candidates.push({
             type: 'user',
             id: m.id,
             username: m.username,
-            display_name: m.display_name,
-            avatar_id: m.avatar_id,
+            displayName: m.displayName,
+            avatarId: m.avatarId,
             label: '@' + m.username,
-            sub: m.display_name || sm.role || 'Membro'
+            sub: m.displayName || sm.role || 'Membro'
           });
         }
       }
@@ -91,17 +109,29 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   }
 
   // 2. Public Platform Context (Comentários de Obras, Capítulos, etc.)
-  let query = locals.db
-    .from('members')
-    .select('id, username, display_name, avatar_id')
-    .order('xp', { ascending: false })
-    .limit(8);
-
+  let conditions = undefined;
   if (cleanQ) {
-    query = query.or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`);
+    conditions = or(
+      like(schema.members.username, `%${cleanQ}%`),
+      like(schema.members.displayName, `%${cleanQ}%`)
+    ) as any;
   }
 
-  const { data: members, error: dbError } = await query;
+  const query = db.select({
+    id: schema.members.id,
+    username: schema.members.username,
+    displayName: schema.members.displayName,
+    avatarId: schema.members.avatarId
+  })
+  .from(schema.members)
+  .orderBy(desc(schema.members.xp))
+  .limit(8);
+
+  if (conditions) {
+    query.where(conditions);
+  }
+
+  const { data: members, error: dbError } = await safeQuery(query);
   if (dbError) {
     throw error(500, 'Erro ao buscar membros: ' + dbError.message);
   }
@@ -111,10 +141,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       type: 'user',
       id: m.id,
       username: m.username,
-      display_name: m.display_name,
-      avatar_id: m.avatar_id,
+      displayName: m.displayName,
+      avatarId: m.avatarId,
       label: '@' + m.username,
-      sub: m.display_name || 'Leitor'
+      sub: m.displayName || 'Leitor'
     });
   }
 

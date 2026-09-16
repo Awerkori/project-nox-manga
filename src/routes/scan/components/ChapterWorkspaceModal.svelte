@@ -37,17 +37,17 @@
 
   // Chapter specific QC issues
   let chapterQcIssues = $derived(
-    qcIssues.filter((q: any) => q.chapter_id === chapter?.id)
+    qcIssues.filter((q: any) => q.chapterId === chapter?.id)
   );
   let openQcCount = $derived(chapterQcIssues.filter((q: any) => q.status === 'OPEN').length);
 
   // Chapter specific tasks
   let chapterTasks = $derived(
-    tasks.filter((t: any) => t.chapter_id === chapter?.id)
+    tasks.filter((t: any) => t.chapterId === chapter?.id)
   );
 
   // Chapter stages progression
-  let currentStageSlug = $derived(chapter?.current_stage_slug || 'raw');
+  let currentStageSlug = $derived(chapter?.currentStageSlug || 'raw');
 
   // Automated publication checklist checks
   let checks = $derived(() => {
@@ -264,8 +264,8 @@
               {#each chapterQcIssues as qc}
                 <div class="ws-qc-row" class:resolved={qc.status === 'RESOLVED'}>
                   <div class="qc-info">
-                    <span class="qc-page-tag">Pág. {qc.page_number}</span>
-                    <span class="qc-type-tag">{qc.issue_type}</span>
+                    <span class="qc-page-tag">Pág. {qc.pageNumber}</span>
+                    <span class="qc-type-tag">{qc.issueType}</span>
                     <span class="qc-desc">{qc.description}</span>
                   </div>
                   <span class="qc-status-tag">{qc.status}</span>

@@ -1,4 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, or, and, like } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
@@ -15,24 +17,56 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   if (urlMatch) {
     const { provider, slug, cleanUrl } = urlMatch;
 
-    // Check if we already have this work mapped in our database
-    const { data: mappings } = await locals.db
-      .from('importer_work_mappings')
-      .select('work_id, source, source_work_id, source_slug, source_title, metadata, works(id, title, slug, cover_id)')
-      .eq('source', provider)
-      .or(`source_slug.eq.${slug},source_work_id.eq.${slug}`)
-      .limit(5);
+    const { data: rawMappings } = await safeQuery(
+      db.select({
+        workId: schema.importerWorkMappings.workId,
+        source: schema.importerWorkMappings.source,
+        sourceWorkId: schema.importerWorkMappings.sourceWorkId,
+        sourceSlug: schema.importerWorkMappings.sourceSlug,
+        sourceTitle: schema.importerWorkMappings.sourceTitle,
+        metadata: schema.importerWorkMappings.metadata,
+        workIdRef: schema.works.id,
+        workTitle: schema.works.title,
+        workSlug: schema.works.slug,
+        workCoverId: schema.works.coverId
+      })
+      .from(schema.importerWorkMappings)
+      .leftJoin(schema.works, eq(schema.importerWorkMappings.workId, schema.works.id))
+      .where(and(
+        eq(schema.importerWorkMappings.source, provider),
+        or(
+          eq(schema.importerWorkMappings.sourceSlug, slug),
+          eq(schema.importerWorkMappings.sourceWorkId, slug)
+        )
+      ))
+      .limit(5)
+    );
+
+    const mappings = (rawMappings || []).map(row => ({
+      workId: row.workId,
+      source: row.source,
+      sourceWorkId: row.sourceWorkId,
+      sourceSlug: row.sourceSlug,
+      sourceTitle: row.sourceTitle,
+      metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
+      works: row.workIdRef ? {
+        id: row.workIdRef,
+        title: row.workTitle,
+        slug: row.workSlug,
+        coverId: row.workCoverId
+      } : null
+    }));
 
     if (mappings && mappings.length > 0) {
       const candidates = mappings.map((m: any) => ({
-        workId: m.work_id,
-        title: m.works?.title || m.source_title || cleanSlugTitle(slug),
+        workId: m.workId,
+        title: m.works?.title || m.sourceTitle || cleanSlugTitle(slug),
         slug: m.works?.slug || slug,
-        coverId: m.works?.cover_id || null,
+        coverId: m.works?.coverId || null,
         provider: m.source || provider,
-        sourceWorkId: m.source_work_id || slug,
+        sourceWorkId: m.sourceWorkId || slug,
         sourceUrl: cleanUrl,
-        existsInNox: Boolean(m.work_id),
+        existsInNox: Boolean(m.workId),
         chapterCount: m.metadata?.totalChapters || null
       }));
 
@@ -64,21 +98,53 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const seenKeys = new Set<string>();
 
   // A. Search in existing works
-  const { data: works } = await locals.db
-    .from('works')
-    .select(`
-      id,
-      title,
-      slug,
-      cover_id,
-      kind,
-      importer_work_mappings(source, source_work_id, source_slug, metadata)
-    `)
-    .or(`title.ilike.%${q}%,slug.ilike.%${q}%`)
-    .limit(10);
+  const { data: rawWorks } = await safeQuery(
+    db.select({
+      id: schema.works.id,
+      title: schema.works.title,
+      slug: schema.works.slug,
+      coverId: schema.works.coverId,
+      kind: schema.works.kind,
+      mappingSource: schema.importerWorkMappings.source,
+      mappingSourceWorkId: schema.importerWorkMappings.sourceWorkId,
+      mappingSourceSlug: schema.importerWorkMappings.sourceSlug,
+      mappingMetadata: schema.importerWorkMappings.metadata
+    })
+    .from(schema.works)
+    .leftJoin(schema.importerWorkMappings, eq(schema.works.id, schema.importerWorkMappings.workId))
+    .where(or(
+      like(schema.works.title, `%${q}%`),
+      like(schema.works.slug, `%${q}%`)
+    ))
+    .limit(20) // a bit more because of joins
+  );
+
+  const worksMap = new Map();
+  for (const row of rawWorks || []) {
+    if (!worksMap.has(row.id)) {
+      worksMap.set(row.id, {
+        id: row.id,
+        title: row.title,
+        slug: row.slug,
+        coverId: row.coverId,
+        kind: row.kind,
+        importer_work_mappings: []
+      });
+    }
+    if (row.mappingSource) {
+      worksMap.get(row.id).importer_work_mappings.push({
+        source: row.mappingSource,
+        sourceWorkId: row.mappingSourceWorkId,
+        sourceSlug: row.mappingSourceSlug,
+        metadata: row.mappingMetadata ? (typeof row.mappingMetadata === 'string' ? JSON.parse(row.mappingMetadata) : row.mappingMetadata) : null
+      });
+    }
+  }
+
+  const works = Array.from(worksMap.values()).slice(0, 10);
 
   if (works) {
-    for (const w of works as any[]) {
+    for (const w of works) {
       const primaryMapping = w.importer_work_mappings?.[0];
       const key = `nox:${w.id}`;
       seenKeys.add(key);
@@ -87,9 +153,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         workId: w.id,
         title: w.title,
         slug: w.slug,
-        coverId: w.cover_id,
+        coverId: w.coverId,
         provider: primaryMapping?.source || 'nexus',
-        sourceWorkId: primaryMapping?.source_work_id || w.slug,
+        sourceWorkId: primaryMapping?.sourceWorkId || w.slug,
         sourceUrl: null,
         existsInNox: true,
         chapterCount: primaryMapping?.metadata?.totalChapters || null
@@ -98,26 +164,57 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   }
 
   // B. Search in existing importer_work_mappings
-  const { data: mappings } = await locals.db
-    .from('importer_work_mappings')
-    .select('work_id, source, source_work_id, source_slug, source_title, metadata, works(id, title, slug, cover_id)')
-    .or(`source_title.ilike.%${q}%,source_slug.ilike.%${q}%`)
-    .limit(10);
+  const { data: rawMappingsTitle } = await safeQuery(
+    db.select({
+      workId: schema.importerWorkMappings.workId,
+      source: schema.importerWorkMappings.source,
+      sourceWorkId: schema.importerWorkMappings.sourceWorkId,
+      sourceSlug: schema.importerWorkMappings.sourceSlug,
+      sourceTitle: schema.importerWorkMappings.sourceTitle,
+      metadata: schema.importerWorkMappings.metadata,
+      workIdRef: schema.works.id,
+      workTitle: schema.works.title,
+      workSlug: schema.works.slug,
+      workCoverId: schema.works.coverId
+    })
+    .from(schema.importerWorkMappings)
+    .leftJoin(schema.works, eq(schema.importerWorkMappings.workId, schema.works.id))
+    .where(or(
+      like(schema.importerWorkMappings.sourceTitle, `%${q}%`),
+      like(schema.importerWorkMappings.sourceSlug, `%${q}%`)
+    ))
+    .limit(10)
+  );
 
-  if (mappings) {
-    for (const m of mappings as any[]) {
-      const key = m.work_id ? `nox:${m.work_id}` : `src:${m.source}:${m.source_work_id}`;
+  const mappingsTitle = (rawMappingsTitle || []).map(row => ({
+    workId: row.workId,
+    source: row.source,
+    sourceWorkId: row.sourceWorkId,
+    sourceSlug: row.sourceSlug,
+    sourceTitle: row.sourceTitle,
+    metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
+    works: row.workIdRef ? {
+      id: row.workIdRef,
+      title: row.workTitle,
+      slug: row.workSlug,
+      coverId: row.workCoverId
+    } : null
+  }));
+
+  if (mappingsTitle) {
+    for (const m of mappingsTitle) {
+      const key = m.workId ? `nox:${m.workId}` : `src:${m.source}:${m.sourceWorkId}`;
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
         results.push({
-          workId: m.work_id,
-          title: m.works?.title || m.source_title || cleanSlugTitle(m.source_slug),
-          slug: m.works?.slug || m.source_slug,
-          coverId: m.works?.cover_id || null,
+          workId: m.workId,
+          title: m.works?.title || m.sourceTitle || cleanSlugTitle(m.sourceSlug),
+          slug: m.works?.slug || m.sourceSlug,
+          coverId: m.works?.coverId || null,
           provider: m.source,
-          sourceWorkId: m.source_work_id || m.source_slug,
+          sourceWorkId: m.sourceWorkId || m.sourceSlug,
           sourceUrl: null,
-          existsInNox: Boolean(m.work_id),
+          existsInNox: Boolean(m.workId),
           chapterCount: m.metadata?.totalChapters || null
         });
       }

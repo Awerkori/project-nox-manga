@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { member } from '$lib/server/db';
+import { member, db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, sql } from 'drizzle-orm';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import type { Json } from '$lib/database.types';
@@ -20,17 +21,17 @@ export const POST = async ({ request, locals, platform }: any) => {
   } catch {
     error(400, 'Solicitação inválida');
   }
-  const { data, error: problem } = await locals.db.rpc(`${body.scope}_action`, {
-    p_action: body.action,
-    p_data: body.data as Json
-  });
+  const { data: rpcData, error: problem } = await safeQuery(
+    db.execute(sql`SELECT ${sql.raw(body.scope + '_action')}(${body.action}, ${JSON.stringify(body.data)}) as result`)
+  );
+  const data = (rpcData as any[])?.[0]?.result;
   if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
 
   if (body.scope === 'member' && body.action === 'comment' && locals.user) {
     const commentBody = String(body.data.body || '');
-    const chapterId = body.data.chapter_id ? String(body.data.chapter_id) : null;
-    const workId = body.data.work_id ? String(body.data.work_id) : null;
-    const parentId = body.data.parent_id ? String(body.data.parent_id) : null;
+    const chapterId = body.data.chapterId ? String(body.data.chapterId) : null;
+    const workId = body.data.workId ? String(body.data.workId) : null;
+    const parentId = body.data.parentId ? String(body.data.parentId) : null;
     const commentId = (data as any)?.id;
 
     let workSlug = workId || '';
@@ -38,27 +39,32 @@ export const POST = async ({ request, locals, platform }: any) => {
     let chapterNumber = '';
 
     if (workId) {
-      const { data: w } = await locals.db
-        .from('works')
-        .select('slug, title')
-        .eq('id', workId)
-        .maybeSingle();
+      const { data: ws } = await safeQuerySingle(
+        db.select({ slug: schema.works.slug, title: schema.works.title })
+          .from(schema.works)
+          .where(eq(schema.works.id, workId))
+      );
+      const w = ws?.[0];
       if (w?.slug) workSlug = w.slug;
       if (w?.title) workTitle = w.title;
     }
 
     if (chapterId) {
-      const { data: chap } = await locals.db
-        .from('chapters')
-        .select('number, works(slug, title)')
-        .eq('id', chapterId)
-        .maybeSingle();
+      const { data: chaps } = await safeQuerySingle(
+        db.select({
+          number: schema.chapters.number,
+          slug: schema.works.slug,
+          title: schema.works.title
+        })
+        .from(schema.chapters)
+        .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+        .where(eq(schema.chapters.id, chapterId))
+      );
+      const chap = chaps?.[0];
       if (chap?.number !== undefined && chap?.number !== null) chapterNumber = ` #${chap.number}`;
-      if (chap?.works) {
-        const cw = chap.works as any;
-        if (cw.slug) workSlug = cw.slug;
-        if (cw.title) workTitle = cw.title;
-      }
+      if (chap?.slug) workSlug = chap.slug;
+      if (chap?.title) workTitle = chap.title;
+
     }
 
     const hash = commentId ? `#comment-${commentId}` : '';
@@ -69,29 +75,30 @@ export const POST = async ({ request, locals, platform }: any) => {
     const { data: authorMem } = await locals.db
       .from('members')
       .select('display_name, username')
-      .eq('id', locals.user.id)
+      .eq('id', locals.user!.id)
       .maybeSingle();
     if (authorMem) {
-      authorName = authorMem.display_name || authorMem.username || 'Alguém';
+      authorName = authorMem.displayName || authorMem.username || 'Alguém';
     }
 
     // Notify parent comment author if replying
     if (parentId) {
       try {
-        const { data: parent } = await locals.db
-          .from('comments')
-          .select('user_id, body')
-          .eq('id', parentId)
-          .maybeSingle();
+        const { data: parents } = await safeQuerySingle(
+          db.select({ userId: schema.comments.userId, body: schema.comments.body })
+            .from(schema.comments)
+            .where(eq(schema.comments.id, parentId))
+        );
+        const parent = parents?.[0];
 
-        if (parent && parent.user_id && parent.user_id !== locals.user.id) {
+        if (parent && parent.userId && parent.userId !== locals.user!.id) {
           const replyDeepLink = chapterId
             ? `/ler/${chapterId}#comment-${parentId}`
             : `/obra/${workSlug}#comment-${parentId}`;
 
           await createNotification({
-            recipientUserId: parent.user_id,
-            actorUserId: locals.user.id,
+            recipientUserId: parent.userId,
+            actorUserId: locals.user!.id,
             type: 'REPLY_COMMENT',
             title: chapterId
               ? `${authorName} respondeu ao seu comentário no capítulo${chapterNumber}`
@@ -119,7 +126,7 @@ export const POST = async ({ request, locals, platform }: any) => {
       await dispatchMentions({
         locals,
         text: commentBody,
-        authorId: locals.user.id,
+        authorId: locals.user!.id,
         title: chapterId
           ? `${authorName} mencionou você no capítulo${chapterNumber} de ${workTitle}`
           : `${authorName} mencionou você em ${workTitle}`,

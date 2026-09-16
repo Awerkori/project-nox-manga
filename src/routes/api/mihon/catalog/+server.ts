@@ -2,8 +2,7 @@ import { json } from '@sveltejs/kit';
 import { verifyMihonAuth } from '$lib/server/mihon';
 import { privileged } from '$lib/server/db';
 
-export const GET = async ({ request, url }) => {
-  const auth = await verifyMihonAuth(request);
+export const GET = async ({ request, url }) => {const auth = await verifyMihonAuth(request);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
@@ -15,12 +14,10 @@ export const GET = async ({ request, url }) => {
   const db = privileged();
   let query = db
     .from('works')
-    .select('id, title, slug, cover_id, kind, status, content_rating, synopsis, updated_at', { count: 'exact' })
+    .select('id, title, slug, coverId, kind, status, contentRating, synopsis, updatedAt', { count: 'exact'})
     .eq('published', true);
 
-  if (!allowAdult) {
-    query = query.neq('content_rating', 'ADULT_18');
-  }
+  if (!allowAdult) {query = query.neq('contentRating', 'ADULT_18');}
 
   if (search) {
     query = query.ilike('title', `%${search}%`);
@@ -40,16 +37,15 @@ export const GET = async ({ request, url }) => {
   }
 
   const origin = url.origin;
-  const items = (works || []).map((w) => ({
-    id: w.id,
+  const items = (works || []).map((w) => ({id: w.id,
     title: w.title,
     slug: w.slug,
     kind: w.kind,
     status: w.status,
-    content_rating: w.content_rating || 'GENERAL',
+    contentRating: w.contentRating || 'GENERAL',
     synopsis: w.synopsis,
-    cover_url: w.cover_id ? `${origin}/media/${w.cover_id}` : null,
-    updated_at: w.updated_at
+    cover_url: w.coverId ? `${origin}/media/${w.coverId}` : null,
+    updated_at: w.updatedAt
   }));
 
   const total = count ?? items.length;

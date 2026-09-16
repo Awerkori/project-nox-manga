@@ -10,7 +10,7 @@ export const GET = async ({ locals, params, url }) => {
     const { data: member } = await locals.db
       .from('members')
       .select('id,username,display_name,bio,avatar_id,banner_id,xp,avatar_frame_id,name_color,equipped_title_id,equipped_badge_id,equipped_medal_id,created_at')
-      .eq('id', locals.user.id)
+      .eq('id', locals.user!.id)
       .maybeSingle();
     if (!member) error(404, 'Perfil não encontrado');
     const { data: stats } = await locals.db.rpc('member_public_stats', { p_user: member.id });
@@ -58,7 +58,7 @@ export const GET = async ({ locals, params, url }) => {
     const { data: library, count } = await locals.db
       .from('library')
       .select(`status,favorite,following,updated_at,works(${WORK_FIELDS})`, { count: 'exact' })
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .range((page - 1) * limit, page * limit - 1);
     return json({ data: library || [], page, per_page: limit, total: count || 0 }, {
       headers: { 'Access-Control-Allow-Origin': '*' }
@@ -68,7 +68,7 @@ export const GET = async ({ locals, params, url }) => {
     const { data: history, count } = await locals.db
       .from('reading')
       .select(`page,max_page,completed_at,updated_at,chapters(id,number,title,work_id,works(${WORK_FIELDS}))`, { count: 'exact' })
-      .eq('user_id', locals.user.id)
+      .eq('user_id', locals.user!.id)
       .order('updated_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
     return json({ data: history || [], page, per_page: limit, total: count || 0 }, {
@@ -83,10 +83,8 @@ export const GET = async ({ locals, params, url }) => {
     const rating = url.searchParams.get('content_rating');
     if (rating) query = query.eq('content_rating', rating);
     const sort = url.searchParams.get('sort') || 'updated_at';
-    if (sort === 'views') {
-      query = query.order('views_total', { ascending: false });
-    } else {
-      query = query.order('updated_at', { ascending: false });
+    if (sort === 'views') {query = query.order('viewsTotal', { ascending: false});
+    } else {query = query.order('updatedAt', { ascending: false});
     }
     result = await query.range((page - 1) * limit, page * limit - 1);
   } else if (parts[0] === 'works' && parts.length === 2) {
@@ -126,7 +124,7 @@ export const GET = async ({ locals, params, url }) => {
             position: p.position,
             width: p.width,
             height: p.height,
-            url: `${url.origin}/media/${p.media_id}`
+            url: `${url.origin}/media/${p.mediaId}`
           }))
         },
         { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
@@ -144,7 +142,7 @@ export const POST = async ({ locals, params, request }) => {
   const parts = params.path.split('/');
   if (parts[0] === 'events' && parts[1] === 'read') {
     const body = await request.json().catch(() => ({}));
-    const chapterId = String(body.chapter_id || '').trim();
+    const chapterId = String(body.chapterId || '').trim();
     const origin = body.origin === 'MIHON' ? 'MIHON' : 'WEB';
     if (!chapterId) error(400, 'chapter_id é obrigatório');
 

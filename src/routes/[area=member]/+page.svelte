@@ -50,7 +50,7 @@
   ];
 
   const rank = $derived(
-    memberRank(data.profile?.xp || 0, data.profile?.equipped_title_id, data.profile?.equipped_badge_id)
+    memberRank(data.profile?.xp || 0, data.profile?.equippedTitleId, data.profile?.equippedBadgeId)
   );
   const progress = $derived(getLevelProgress(data.profile?.xp || 0));
   const unlockedTitles = $derived(getUnlockedTitles(progress.currentLevel));
@@ -322,15 +322,15 @@
                 alt="Prévia do seu avatar"
                 class="avatar-large-img"
               />
-            {:else if data.profile.avatar_id}
+            {:else if data.profile.avatarId}
               <img
-                src="/media/{data.profile.avatar_id}"
+                src="/media/{data.profile.avatarId}"
                 alt="Seu avatar"
                 class="avatar-large-img"
               />
             {:else}
               <span class="avatar-large-fallback">
-                {(data.profile.display_name[0] || 'N').toUpperCase()}
+                {(data.profile.displayName[0] || 'N').toUpperCase()}
               </span>
             {/if}
             <div class="avatar-glow-ring"></div>
@@ -358,9 +358,9 @@
             {/if}
             <span class="honorific-badge">{rank.title}</span>
           </div>
-          <h2 class="profile-user-display">{data.profile.display_name}</h2>
+          <h2 class="profile-user-display">{data.profile.displayName}</h2>
           <p class="profile-user-sub">
-            @{data.profile.username} · Na Nox desde {date(data.profile.created_at)}
+            @{data.profile.username} · Na Nox desde {date(data.profile.createdAt)}
           </p>
           <a class="public-profile-link" href="/u/{data.profile.username}">
             <span>Ver perfil público</span>
@@ -424,7 +424,7 @@
           <div class="badges-scroll-grid">
             {#each NOX_BADGES as b (b.id)}
               {@const isUnlocked = progress.currentLevel >= b.minLevel}
-              {@const isEquipped = (data.profile.equipped_badge_id || 'marca-inicial') === b.id}
+              {@const isEquipped = (data.profile.equippedBadgeId || 'marca-inicial') === b.id}
               <div class="badge-tile" class:locked={!isUnlocked} class:equipped={isEquipped}>
                 <div class="badge-tile-icon tier-{b.tier}">
                   {#if b.svgUrl}
@@ -472,7 +472,7 @@
           <div class="titles-scroll-list">
             {#each NOX_TITLES as t (t.id)}
               {@const isUnlocked = progress.currentLevel >= t.minLevel}
-              {@const isEquipped = (data.profile.equipped_title_id || 'nox-reader') === t.id}
+              {@const isEquipped = (data.profile.equippedTitleId || 'nox-reader') === t.id}
               <div class="title-row-item" class:locked={!isUnlocked} class:equipped={isEquipped}>
                 <div class="title-info">
                   <strong class="title-name">{t.name}</strong>
@@ -517,7 +517,7 @@
           <input
             name="display_name"
             class="field-input"
-            value={data.profile.display_name}
+            value={data.profile.displayName}
             required
             maxlength="60"
             placeholder="Como você quer ser chamado"
@@ -572,7 +572,7 @@
 
         <label class="field-label">
           <span>Confirmação de maioridade</span>
-          <select name="age_status" class="field-input" value={data.profile.age_status || 'UNKNOWN'}>
+          <select name="age_status" class="field-input" value={data.profile.ageStatus || 'UNKNOWN'}>
             <option value="UNKNOWN">Não especificado (perguntar na visita)</option>
             <option value="ADULT">Sim, tenho 18 anos ou mais</option>
             <option value="MINOR">Não, sou menor de 18 anos (bloquear obras +18)</option>
@@ -583,14 +583,14 @@
           <input
             type="checkbox"
             name="blur_nsfw"
-            checked={data.profile.blur_nsfw}
-            disabled={data.profile.age_status === 'MINOR'}
+            checked={data.profile.blurNsfw}
+            disabled={data.profile.ageStatus === 'MINOR'}
             style="width:18px;height:18px;accent-color:var(--purple,#a78bfa)"
           />
           <div>
             <span style="font-weight:600;display:block">Borrar capas de obras adultas (+18)</span>
             <small class="field-hint" style="margin-top:2px;display:block">
-              {data.profile.age_status === 'MINOR' ? 'Obrigatório para menores de 18 anos.' : 'Oculta as ilustrações com desfoque estético suave.'}
+              {data.profile.ageStatus === 'MINOR' ? 'Obrigatório para menores de 18 anos.' : 'Oculta as ilustrações com desfoque estético suave.'}
             </small>
           </div>
         </label>
@@ -661,10 +661,10 @@
         {#each data.notifications as item (item.id)}
           <a
             class="panel"
-            style="border-color:{item.read_at ? 'rgba(255,255,255,0.06)' : 'rgba(181,154,245,0.4)'};display:flex;align-items:flex-start;gap:16px;text-decoration:none"
+            style="border-color:{item.readAt ? 'rgba(255,255,255,0.06)' : 'rgba(181,154,245,0.4)'};display:flex;align-items:flex-start;gap:16px;text-decoration:none"
             href={item.href}
           >
-            <div style="color:{item.read_at ? 'var(--muted)' : 'var(--gold)'};margin-top:2px;flex-shrink:0">
+            <div style="color:{item.readAt ? 'var(--muted)' : 'var(--gold)'};margin-top:2px;flex-shrink:0">
               {#if item.kind === 'chapter'}
                 <BookOpen size={20} />
               {:else if item.kind === 'reply'}
@@ -678,7 +678,7 @@
               {/if}
             </div>
             <div style="flex:1">
-              <span class="eyebrow">{date(item.created_at)}</span>
+              <span class="eyebrow">{date(item.createdAt)}</span>
               <p style="color:#ddd7e5;margin-bottom:0">{item.body}</p>
             </div>
           </a>
@@ -704,16 +704,16 @@
         </button>
       </div>
       <div class="continue-grid">
-        {#each data.history as item (item.chapter_id)}
+        {#each data.history as item (item.chapterId)}
           {#if item.chapters}
-            <a class="continue-card" href="/ler/{item.chapter_id}">
+            <a class="continue-card" href="/ler/{item.chapterId}">
               <div>
                 <strong>{item.chapters.works?.title || 'Obra indisponível'}</strong>
                 <p>
                   Capítulo {item.chapters.number} · Página {item.page}
-                  {item.completed_at ? '· Concluído' : ''}
+                  {item.completedAt ? '· Concluído' : ''}
                 </p>
-                <p>{date(item.updated_at)}</p>
+                <p>{date(item.updatedAt)}</p>
               </div>
               <span style="margin-left:auto">→</span>
             </a>
@@ -747,7 +747,7 @@
         {data.total === 1 ? 'obra' : 'obras'}{data.tab ? ` · ${statusLabels[data.tab]}` : ''}
       </p>
       <div class="work-grid">
-        {#each data.library as item (item.work_id)}
+        {#each data.library as item (item.workId)}
           {#if item.works}
             <div>
               <WorkCard work={item.works} />

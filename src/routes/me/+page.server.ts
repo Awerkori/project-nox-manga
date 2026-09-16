@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   ] = await withTimeout(
     Promise.all([
       safeQuerySingle(
-        db.select().from(schema.members).where(eq(schema.members.id, locals.user.id))
+        db.select().from(schema.members).where(eq(schema.members.id, locals.user!.id))
       ),
       safeQuery(
         db.select({
@@ -49,7 +49,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         })
         .from(schema.library)
         .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
-        .where(and(eq(schema.library.userId, locals.user.id), eq(schema.works.published, true)))
+        .where(and(eq(schema.library.userId, locals.user!.id), eq(schema.works.published, true)))
         .orderBy(desc(schema.library.updatedAt))
       ),
       safeQuery(
@@ -67,12 +67,12 @@ export const load: PageServerLoad = async ({ locals }) => {
          .from(schema.reading)
          .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
          .innerJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
-         .where(eq(schema.reading.userId, locals.user.id))
+         .where(eq(schema.reading.userId, locals.user!.id))
          .orderBy(desc(schema.reading.updatedAt))
          .limit(60)
       ),
       safeQuery(
-        db.select().from(schema.notifications).where(eq(schema.notifications.userId, locals.user.id)).orderBy(desc(schema.notifications.createdAt)).limit(50)
+        db.select().from(schema.notifications).where(eq(schema.notifications.userId, locals.user!.id)).orderBy(desc(schema.notifications.createdAt)).limit(50)
       ),
       safeQuery(
         db.select().from(schema.achievements).orderBy(asc(schema.achievements.orderIndex))
@@ -81,7 +81,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         db.select({
           achievementId: schema.memberAchievements.achievementId,
           unlockedAt: schema.memberAchievements.unlockedAt
-        }).from(schema.memberAchievements).where(eq(schema.memberAchievements.userId, locals.user.id))
+        }).from(schema.memberAchievements).where(eq(schema.memberAchievements.userId, locals.user!.id))
       ),
       safeQuery(
         db.select({
@@ -90,7 +90,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         })
         .from(schema.memberInventory)
         .innerJoin(schema.shopItems, eq(schema.memberInventory.itemId, schema.shopItems.id))
-        .where(eq(schema.memberInventory.userId, locals.user.id))
+        .where(eq(schema.memberInventory.userId, locals.user!.id))
         .orderBy(desc(schema.memberInventory.acquiredAt))
       )
     ]),
@@ -101,113 +101,102 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const m = memberRes?.data;
   const rawMember =
-    (m ? {
-      id: m.id,
+    (m ? {id: m.id,
       username: m.username,
-      display_name: m.displayName,
+      displayName: m.displayName,
       bio: m.bio,
-      avatar_id: m.avatarId,
-      banner_id: m.bannerId,
-      avatar_frame_id: m.avatarFrameId,
-      name_color: m.nameColor,
-      equipped_title_id: m.equippedTitleId,
-      equipped_badge_id: m.equippedBadgeId,
-      equipped_banner_id: m.equippedBannerId,
-      equipped_comment_banner_id: m.equippedCommentBannerId,
+      avatarId: m.avatarId,
+      bannerId: m.bannerId,
+      avatarFrameId: m.avatarFrameId,
+      nameColor: m.nameColor,
+      equippedTitleId: m.equippedTitleId,
+      equippedBadgeId: m.equippedBadgeId,
+      equippedBannerId: m.equippedBannerId,
+      equippedCommentBannerId: m.equippedCommentBannerId,
       xp: m.xp,
-      age_status: m.ageStatus,
-      blur_nsfw: m.blurNsfw,
-      featured_achievement_id: m.featuredAchievementId,
-      privacy_show_achievements: m.privacyShowAchievements,
-      privacy_show_cosmetics: m.privacyShowCosmetics,
-      privacy_show_favorites: m.privacyShowFavorites,
-      privacy_show_reading_history: m.privacyShowReadingHistory,
-      privacy_show_scans: m.privacyShowScans,
-      privacy_scan_mode: m.privacyScanMode,
-      avatar_crop: m.avatarCrop,
-      banner_crop: m.bannerCrop,
-      created_at: m.createdAt
-    } : null) ||
+      ageStatus: m.ageStatus,
+      blurNsfw: m.blurNsfw,
+      featuredAchievementId: m.featuredAchievementId,
+      privacyShowAchievements: m.privacyShowAchievements,
+      privacyShowCosmetics: m.privacyShowCosmetics,
+      privacyShowFavorites: m.privacyShowFavorites,
+      privacyShowReadingHistory: m.privacyShowReadingHistory,
+      privacyShowScans: m.privacyShowScans,
+      privacyScanMode: m.privacyScanMode,
+      avatarCrop: m.avatarCrop,
+      bannerCrop: m.bannerCrop,
+      createdAt: m.createdAt} : null) ||
     locals.sessionCache?.profile ||
-    ({
-      id: locals.user.id,
+    ({id: locals.user!.id,
       username: locals.user.email ? locals.user.email.split('@')[0] : 'leitor',
-      display_name: locals.user.email ? locals.user.email.split('@')[0] : 'Leitor',
+      displayName: locals.user.email ? locals.user.email.split('@')[0] : 'Leitor',
       bio: '',
-      avatar_id: null,
-      banner_id: null,
-      avatar_frame_id: null,
-      name_color: null,
-      equipped_title_id: null,
-      equipped_badge_id: null,
-      equipped_banner_id: null,
-      equipped_comment_banner_id: null,
+      avatarId: null,
+      bannerId: null,
+      avatarFrameId: null,
+      nameColor: null,
+      equippedTitleId: null,
+      equippedBadgeId: null,
+      equippedBannerId: null,
+      equippedCommentBannerId: null,
       xp: 0,
-      age_status: 'UNKNOWN',
-      blur_nsfw: true,
-      featured_achievement_id: null,
-      privacy_show_achievements: true,
-      privacy_show_cosmetics: true,
-      privacy_show_favorites: true,
-      privacy_show_reading_history: true,
-      privacy_show_scans: true,
-      privacy_scan_mode: 'ALL',
-      avatar_crop: null,
-      banner_crop: null,
-      created_at: new Date().toISOString()
-    } as any);
+      ageStatus: 'UNKNOWN',
+      blurNsfw: true,
+      featuredAchievementId: null,
+      privacyShowAchievements: true,
+      privacyShowCosmetics: true,
+      privacyShowFavorites: true,
+      privacyShowReadingHistory: true,
+      privacyShowScans: true,
+      privacyScanMode: 'ALL',
+      avatarCrop: null,
+      bannerCrop: null,
+      createdAt: new Date().toISOString()} as any);
 
   const member = {
     ...rawMember,
-    frame_id: rawMember.avatar_frame_id
+    frame_id: rawMember.avatarFrameId
   };
 
   const unlockedMap = new Map(
     (memberAchievementsRes.data || []).map((ma: any) => [ma.achievementId, ma.unlockedAt])
   );
 
-  const achievements = (allAchievementsRes.data || []).map((ach: any) => ({
-    ...ach,
-    order_index: ach.orderIndex,
+  const achievements = (allAchievementsRes.data || []).map((ach: any) => ({...ach,
+    orderIndex: ach.orderIndex,
     image_url: ach.imageUrl,
-    xp_reward: ach.xpReward,
-    created_at: ach.createdAt,
+    xpReward: ach.xpReward,
+    createdAt: ach.createdAt,
     unlocked: unlockedMap.has(ach.id),
-    unlocked_at: unlockedMap.get(ach.id) || null
-  }));
+    unlockedAt: unlockedMap.get(ach.id) || null}));
 
-  const inventory = (inventoryRes.data || []).map((inv: any) => ({
-    acquired_at: inv.inventory.acquiredAt,
+  const inventory = (inventoryRes.data || []).map((inv: any) => ({acquiredAt: inv.inventory.acquiredAt,
     ...inv.shopItems,
     price_coins: inv.shopItems.priceCoins,
     content_id: inv.shopItems.contentId,
-    created_at: inv.shopItems.createdAt
-  }));
+    createdAt: inv.shopItems.createdAt}));
 
-  const mappedLibrary = (libraryRes.data || []).map(row => ({
-     ...row.library,
-     user_id: row.library.userId,
-     work_id: row.library.workId,
-     chapter_id: row.library.chapterId,
-     created_at: row.library.createdAt,
-     updated_at: row.library.updatedAt,
+  const mappedLibrary = (libraryRes.data || []).map(row => ({...row.library,
+     userId: row.library.userId,
+     workId: row.library.workId,
+     chapterId: row.library.chapterId,
+     createdAt: row.library.createdAt,
+     updatedAt: row.library.updatedAt,
      works: {
         ...row.works,
-        age_rating: row.works.ageRating,
-        cover_id: row.works.coverId,
+        ageRating: row.works.ageRating,
+        coverId: row.works.coverId,
         updated_at: row.works.updatedAt,
         created_at: row.works.createdAt,
-        content_rating: row.works.contentRating,
-        views_total: row.works.viewsTotal
-     }
+        contentRating: row.works.contentRating,
+        viewsTotal: row.works.viewsTotal}
   }));
 
-  const mappedHistory = (historyRes.data || []).map(row => ({
-     chapter_id: row.reading.chapterId,
+  const mappedHistory = (historyRes.data || []).map(row => ({chapterId: row.reading.chapterId,
      page: row.reading.page,
-     max_page: row.reading.maxPage,
-     completed_at: row.reading.completedAt,
-     updated_at: row.reading.updatedAt,
+     maxPage: row.reading.maxPage,
+     completedAt: row.reading.completedAt,
+     updatedAt: row.reading.updatedAt,
      chapters: {
         id: row.chapters.id,
         number: row.chapters.number,
@@ -216,23 +205,20 @@ export const load: PageServerLoad = async ({ locals }) => {
            id: row.works.id,
            title: row.works.title,
            slug: row.works.slug,
-           cover_id: row.works.coverId,
-           content_rating: row.works.contentRating
-        }
+           coverId: row.works.coverId,
+           contentRating: row.works.contentRating}
      }
   }));
 
-  const mappedNotifications = (notificationsRes.data || []).map(n => ({
-     ...n,
-     user_id: n.userId,
-     actor_id: n.actorId,
-     work_id: n.workId,
-     chapter_id: n.chapterId,
-     comment_id: n.commentId,
-     scan_id: n.scanId,
-     created_at: n.createdAt,
-     read_at: n.readAt
-  }));
+  const mappedNotifications = (notificationsRes.data || []).map(n => ({...n,
+     userId: n.userId,
+     actorId: n.actorId,
+     workId: n.workId,
+     chapterId: n.chapterId,
+     commentId: n.commentId,
+     scanId: n.scanId,
+     createdAt: n.createdAt,
+     readAt: n.readAt}));
 
   return {
     member,
@@ -265,7 +251,7 @@ export const actions: Actions = {
           displayName: displayName,
           bio: bio
         })
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
@@ -295,7 +281,7 @@ export const actions: Actions = {
           privacyShowScans: privacyShowScans,
           privacyScanMode: privacyScanMode as any
         })
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
@@ -309,14 +295,14 @@ export const actions: Actions = {
     const achievementId = (formData.get('achievement_id') as string)?.trim() || null;
 
     if (achievementId) {
-       const hasAchiev = await safeQuerySingle(db.select().from(schema.memberAchievements).where(and(eq(schema.memberAchievements.userId, locals.user.id), eq(schema.memberAchievements.achievementId, achievementId))));
+       const hasAchiev = await safeQuerySingle(db.select().from(schema.memberAchievements).where(and(eq(schema.memberAchievements.userId, locals.user!.id), eq(schema.memberAchievements.achievementId, achievementId))));
        if (hasAchiev.error || !hasAchiev.data) return fail(400, { message: 'Você não possui esta conquista.' });
     }
 
     const { error } = await safeQuerySingle(
       db.update(schema.members)
         .set({ featuredAchievementId: achievementId })
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
@@ -330,7 +316,7 @@ export const actions: Actions = {
       db.update(schema.notifications)
         .set({ readAt: new Date().toISOString() })
         .where(and(
-          eq(schema.notifications.userId, locals.user.id),
+          eq(schema.notifications.userId, locals.user!.id),
           isNull(schema.notifications.readAt)
         ))
         .returning()
@@ -346,13 +332,13 @@ export const actions: Actions = {
     const id = String(formData.get('id') || '');
     if (!id) return fail(400, { message: 'ID ausente' });
 
-    // ENFORCING RLS logic here by checking locals.user.id
+    // ENFORCING RLS logic here by checking locals.user!.id
     const { error } = await safeQuerySingle(
       db.update(schema.notifications)
         .set({ readAt: new Date().toISOString() })
         .where(and(
           eq(schema.notifications.id, id),
-          eq(schema.notifications.userId, locals.user.id)
+          eq(schema.notifications.userId, locals.user!.id)
         ))
         .returning()
     );
@@ -376,12 +362,12 @@ export const actions: Actions = {
     const { error } = await safeQuerySingle(
       db.update(schema.members)
         .set({ avatarCrop: crop })
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
     if (error) return fail(400, { message: error.message });
-    return { success: true, action: 'avatar_crop', crop };
+    return {success: true, action: 'avatarCrop', crop};
   },
 
   updateBannerCrop: async ({ request, locals }) => {
@@ -399,11 +385,11 @@ export const actions: Actions = {
     const { error } = await safeQuerySingle(
       db.update(schema.members)
         .set({ bannerCrop: crop })
-        .where(eq(schema.members.id, locals.user.id))
+        .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
     if (error) return fail(400, { message: error.message });
-    return { success: true, action: 'banner_crop', crop };
+    return {success: true, action: 'bannerCrop', crop};
   }
 };

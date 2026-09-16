@@ -226,9 +226,9 @@
               <!-- Cover Column -->
               <td class="td-cover">
                 <a href="/admin/obras/{work.id}" class="cover-mini-frame" tabindex="-1">
-                  {#if work.cover_id}
+                  {#if work.coverId}
                     <img
-                      src="/media/{work.cover_id}"
+                      src="/media/{work.coverId}"
                       alt=""
                       width="44"
                       height="62"
@@ -273,7 +273,7 @@
 
               <!-- Updated At Column -->
               <td class="td-date">
-                <span class="date-text">{date(work.updated_at || work.created_at)}</span>
+                <span class="date-text">{date(work.updatedAt || work.createdAt)}</span>
               </td>
 
               <!-- Actions Column -->
@@ -309,9 +309,9 @@
         <div class="mobile-work-card">
           <!-- Mini Cover -->
           <a href="/admin/obras/{work.id}" class="mobile-cover-wrap" tabindex="-1">
-            {#if work.cover_id}
+            {#if work.coverId}
               <img
-                src="/media/{work.cover_id}"
+                src="/media/{work.coverId}"
                 alt=""
                 width="56"
                 height="78"
@@ -344,7 +344,7 @@
 
             <div class="mobile-card-mid">
               <span class="kind-chip">{kindLabels[work.kind] || work.kind}</span>
-              <span class="mobile-date">{date(work.updated_at || work.created_at)}</span>
+              <span class="mobile-date">{date(work.updatedAt || work.createdAt)}</span>
             </div>
 
             <div class="mobile-card-actions">

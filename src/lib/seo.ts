@@ -25,15 +25,15 @@ export function workStructuredData(work: Work, tags: { name: string; kind: strin
         alternateName: work.aliases,
         description: work.synopsis,
         inLanguage: 'pt-BR',
-        dateModified: work.updated_at,
+        dateModified: work.updatedAt,
         ...(work.author ? { author: { '@type': 'Person', name: work.author } } : {}),
         ...(work.artist ? { illustrator: { '@type': 'Person', name: work.artist } } : {}),
-        ...(work.cover_id
+        ...(work.coverId
           ? {
               image:
-                work.content_rating === 'ADULT_18'
+                work.contentRating === 'ADULT_18'
                   ? `${origin}/brand/nox-symbol-256.webp`
-                  : `${origin}/media/${work.cover_id}`
+                  : `${origin}/media/${work.coverId}`
             }
           : {}),
         genre: tags.filter((tag) => tag.kind === 'GENRE').map((tag) => tag.name),

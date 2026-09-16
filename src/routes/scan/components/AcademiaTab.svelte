@@ -89,7 +89,7 @@
   );
 
   let activeAttachments = $derived(
-    attachments.filter((a: any) => a.context_type === 'TUTORIAL' && a.context_id === activeTutorial?.id)
+    attachments.filter((a: any) => a.contextType === 'TUTORIAL' && a.contextId === activeTutorial?.id)
   );
 
   function openCreate() {
@@ -107,8 +107,8 @@
     tutorialTitle = tut.title;
     tutorialCategory = tut.category;
     tutorialContent = tut.content;
-    tutorialStatus = tut.status || (tut.is_published === false ? 'DRAFT' : 'PUBLISHED');
-    tutorialPositionId = tut.target_position_id || '';
+    tutorialStatus = tut.status || (tut.isPublished === false ? 'DRAFT' : 'PUBLISHED');
+    tutorialPositionId = tut.targetPositionId || '';
     showCreateModal = true;
   }
 
@@ -374,7 +374,7 @@
 
               <div class="guide-actions-right">
                 <span class="guide-date">
-                  Atualizado em {new Date(activeTutorial.updated_at || activeTutorial.created_at).toLocaleDateString('pt-BR')}
+                  Atualizado em {new Date(activeTutorial.updatedAt || activeTutorial.createdAt).toLocaleDateString('pt-BR')}
                 </span>
 
                 {#if isOwnerOrAdmin}
@@ -482,13 +482,13 @@
                       <FileText size={16} />
                     </div>
                     <div class="file-info truncate">
-                      <span class="file-name truncate" title={att.original_filename}>{att.original_filename}</span>
-                      <span class="file-size">{formatBytes(att.size)} • {att.mime_type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}</span>
+                      <span class="file-name truncate" title={att.originalFilename}>{att.originalFilename}</span>
+                      <span class="file-size">{formatBytes(att.size)} • {att.mimeType?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}</span>
                     </div>
                     <a
                       href="/api/scan/attachments/{att.id}?download=1"
                       class="btn-download-sm"
-                      title="Baixar {att.original_filename}"
+                      title="Baixar {att.originalFilename}"
                       target="_blank"
                       rel="noopener noreferrer"
                     >

@@ -29,7 +29,7 @@
 
   let members = $derived(
     (data.members || []).filter((m) =>
-      ((m.username || '') + ' ' + (m.display_name || '')).toLowerCase().includes(search.toLowerCase())
+      ((m.username || '') + ' ' + (m.displayName || '')).toLowerCase().includes(search.toLowerCase())
     )
   );
 
@@ -219,10 +219,10 @@
             <tr class:suspended-row={m.access_roles?.suspended}>
               <td class="user-cell">
                 <div class="avatar-circle">
-                  {m.display_name?.charAt(0)?.toUpperCase() || m.username?.charAt(0)?.toUpperCase() || '?'}
+                  {m.displayName?.charAt(0)?.toUpperCase() || m.username?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div class="user-info">
-                  <strong>{m.display_name}</strong>
+                  <strong>{m.displayName}</strong>
                   <span class="username-tag">@{m.username}</span>
                 </div>
               </td>
@@ -232,7 +232,7 @@
                   class:role-admin={m.access_roles?.role === 'ADMIN'}
                   class:role-editor={m.access_roles?.role === 'STAFF_SITE' || m.access_roles?.role === 'EDITOR'}
                   value={m.access_roles?.role || 'USER'}
-                  aria-label="Cargo de {m.display_name}"
+                  aria-label="Cargo de {m.displayName}"
                   disabled={busy}
                   onchange={(e) => update('role', { id: m.id, role: e.currentTarget.value })}
                 >
@@ -283,10 +283,10 @@
         <div class="mobile-user-card" class:suspended-card={m.access_roles?.suspended}>
           <div class="card-top">
             <div class="avatar-circle">
-              {m.display_name?.charAt(0)?.toUpperCase() || m.username?.charAt(0)?.toUpperCase() || '?'}
+              {m.displayName?.charAt(0)?.toUpperCase() || m.username?.charAt(0)?.toUpperCase() || '?'}
             </div>
             <div class="user-info">
-              <strong>{m.display_name}</strong>
+              <strong>{m.displayName}</strong>
               <span class="username-tag">@{m.username}</span>
             </div>
             <span class="status-pill {m.access_roles?.suspended ? 'suspended' : 'active'}">
@@ -302,7 +302,7 @@
                 class:role-admin={m.access_roles?.role === 'ADMIN'}
                 class:role-editor={m.access_roles?.role === 'STAFF_SITE' || m.access_roles?.role === 'EDITOR'}
                 value={m.access_roles?.role || 'USER'}
-                aria-label="Cargo de {m.display_name}"
+                aria-label="Cargo de {m.displayName}"
                 disabled={busy}
                 onchange={(e) => update('role', { id: m.id, role: e.currentTarget.value })}
               >
@@ -401,16 +401,16 @@
 
       {#if staffLoaded}
         <div class="staff-members-list">
-          {#each staff as person (person.user_id)}
+          {#each staff as person (person.userId)}
             <div class="staff-row">
               <div class="staff-info">
-                <strong>{person.display_name}</strong>
+                <strong>{person.displayName}</strong>
                 <span class="small muted">@{person.github_login}</span>
               </div>
               <button
                 class="button secondary compact"
                 disabled={busy}
-                onclick={() => staffAccess(person.user_id)}
+                onclick={() => staffAccess(person.userId)}
               >
                 Autorizar acesso editorial
               </button>
@@ -443,7 +443,7 @@
           <article class="comment-card" class:comment-removed={comment.removed}>
             <div class="comment-card-top">
               <div class="comment-meta">
-                <strong>{comment.members?.display_name || 'Leitor Anônimo'}</strong>
+                <strong>{comment.members?.displayName || 'Leitor Anônimo'}</strong>
                 <span class="work-link-text">em {comment.works?.title || 'Obra'}</span>
               </div>
               <span class="chip {comment.removed ? 'chip-danger' : 'chip-success'}">

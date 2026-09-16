@@ -36,7 +36,7 @@
   let filteredPosts = $derived(
     filterType === 'ALL'
       ? muralPosts
-      : muralPosts.filter((p: any) => (p.post_type || 'GERAL') === filterType)
+      : muralPosts.filter((p: any) => (p.postType || 'GERAL') === filterType)
   );
 
   // New Post Modal State
@@ -196,30 +196,30 @@
   <div class="posts-feed">
     {#if filteredPosts.length > 0}
       {#each filteredPosts as post (post.id)}
-        <article class="mural-post-card" class:is-pinned={post.is_pinned}>
+        <article class="mural-post-card" class:is-pinned={post.isPinned}>
           <!-- Post Card Header -->
           <header class="post-card-header">
             <div class="author-lockup">
               <UserAvatar
-                avatarId={post.author?.avatar_id}
-                displayName={post.author?.display_name}
+                avatarId={post.author?.avatarId}
+                displayName={post.author?.displayName}
                 size={36}
               />
               <div class="author-meta">
-                <span class="author-name">{post.author?.display_name || 'Membro da Staff'}</span>
-                <span class="post-timestamp">{relativeTime(post.created_at)}</span>
+                <span class="author-name">{post.author?.displayName || 'Membro da Staff'}</span>
+                <span class="post-timestamp">{relativeTime(post.createdAt)}</span>
               </div>
             </div>
 
             <div class="post-badge-group">
-              {#if post.is_pinned}
+              {#if post.isPinned}
                 <span class="pinned-indicator-pill">
                   <Pin size={11} />
                   <span>FIXADO</span>
                 </span>
               {/if}
-              <span class="type-pill {post.post_type?.toLowerCase() || 'geral'}">
-                {post.post_type || 'GERAL'}
+              <span class="type-pill {post.postType?.toLowerCase() || 'geral'}">
+                {post.postType || 'GERAL'}
               </span>
 
               {#if ['OWNER', 'ADMIN'].includes(userRole)}
@@ -229,14 +229,14 @@
                   <button
                     type="submit"
                     class="btn-icon-action"
-                    title={post.is_pinned ? 'Desafixar post' : 'Fixar no topo'}
+                    title={post.isPinned ? 'Desafixar post' : 'Fixar no topo'}
                   >
-                    <Pin size={14} class={post.is_pinned ? 'text-amber-400' : ''} />
+                    <Pin size={14} class={post.isPinned ? 'text-amber-400' : ''} />
                   </button>
                 </form>
               {/if}
 
-              {#if post.author_id === userProfile?.id || ['OWNER', 'ADMIN'].includes(userRole)}
+              {#if post.authorId === userProfile?.id || ['OWNER', 'ADMIN'].includes(userRole)}
                 <form method="POST" action="?/deleteMuralPost" use:enhance>
                   <input type="hidden" name="post_id" value={post.id} />
                   <input type="hidden" name="scan_id" value={scanId} />
@@ -272,7 +272,7 @@
 
               <div class="attachments-grid">
                 {#each post.scan_attachments as att}
-                  {#if att.mime_type.startsWith('image/')}
+                  {#if att.mimeType.startsWith('image/')}
                     <!-- Inline Image Attachment Preview -->
                     <div class="attachment-image-card">
                       <button
@@ -281,8 +281,8 @@
                         onclick={() => (lightboxUrl = `/api/scan/attachments/${att.id}`)}
                       >
                         <img
-                          src="/media/{att.storage_reference || 'sample'}"
-                          alt={att.original_filename}
+                          src="/media/{att.storageReference || 'sample'}"
+                          alt={att.originalFilename}
                           class="preview-thumbnail"
                           onerror={(e) => {
                             (e.currentTarget as HTMLElement).style.display = 'none';
@@ -294,7 +294,7 @@
                         </div>
                       </button>
                       <div class="file-name-bar">
-                        <span class="truncate">{att.original_filename}</span>
+                        <span class="truncate">{att.originalFilename}</span>
                         <span class="file-size">{formatBytes(att.size)}</span>
                       </div>
                     </div>
@@ -305,14 +305,14 @@
                         <FileText size={20} class="text-purple-400" />
                       </div>
                       <div class="file-meta">
-                        <span class="filename" title={att.original_filename}>{att.original_filename}</span>
+                        <span class="filename" title={att.originalFilename}>{att.originalFilename}</span>
                         <span class="filesize">{formatBytes(att.size)}</span>
                       </div>
                       <div class="file-actions">
                         <a
                           href="/api/scan/attachments/{att.id}?download=1"
                           class="btn-file-action"
-                          download={att.original_filename}
+                          download={att.originalFilename}
                           title="Baixar arquivo"
                         >
                           <Download size={14} />
@@ -335,7 +335,7 @@
 
                 {#each ['👍', '❤️', '🎉', '🔥', '👀'] as emoji}
                   {@const rxCount = (post.scan_mural_reactions || []).filter((r: any) => r.emoji === emoji).length}
-                  {@const userReacted = (post.scan_mural_reactions || []).some((r: any) => r.emoji === emoji && r.user_id === userProfile?.id)}
+                  {@const userReacted = (post.scan_mural_reactions || []).some((r: any) => r.emoji === emoji && r.userId === userProfile?.id)}
                   <button
                     type="submit"
                     name="emoji"
@@ -370,14 +370,14 @@
                   {#each post.scan_mural_comments as c}
                     <div class="comment-bubble">
                       <UserAvatar
-                        avatarId={c.author?.avatar_id}
-                        displayName={c.author?.display_name}
+                        avatarId={c.author?.avatarId}
+                        displayName={c.author?.displayName}
                         size={24}
                       />
                       <div class="comment-content-box">
                         <div class="comment-top">
-                          <span class="comment-author">{c.author?.display_name || 'Membro'}</span>
-                          <span class="comment-time">{relativeTime(c.created_at)}</span>
+                          <span class="comment-author">{c.author?.displayName || 'Membro'}</span>
+                          <span class="comment-time">{relativeTime(c.createdAt)}</span>
                         </div>
                         <p class="comment-text">{c.content}</p>
                       </div>

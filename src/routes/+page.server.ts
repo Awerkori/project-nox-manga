@@ -1,8 +1,10 @@
-import { WORK_FIELDS } from '$lib/server/db';
-import { safeDbQuery, withTimeout } from '$lib/server/resilience';
+
+import { withTimeout } from '$lib/server/resilience';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, desc, asc, isNotNull, and, inArray } from 'drizzle-orm';
 
 
-const HOME_WORK_FIELDS = `${WORK_FIELDS}, work_scans(is_primary, status, scans(id, name, slug, logo_id, is_official))`;
+
 
 type HomeCachePayload = {
   timestamp: number;
@@ -38,33 +40,53 @@ export const load = async ({ locals, setHeaders }) => {
   }
 
   // If public content cache is fresh and user is authenticated, use cached public content and only fetch personal reading data
-  if (hasFreshPublicCache && homePublicCache && locals.user) {
-    const readingRes = await safeDbQuery(
-      locals.db
-        .from('reading')
-        .select(
-          'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
+  if (hasFreshPublicCache && homePublicCache && locals.user) {const readingRes = await safeQuery(
+      db.select({
+        chapterId: schema.reading.chapterId,
+        page: schema.reading.page,
+        maxPage: schema.reading.maxPage,
+        completedAt: schema.reading.completedAt,
+        updatedAt: schema.reading.updatedAt,
+        chapters: {
+          id: schema.chapters.id,
+          number: schema.chapters.number,
+          workId: schema.chapters.workId,
+          publishedAt: schema.chapters.publishedAt,
+          works: {
+            id: schema.works.id,
+            slug: schema.works.slug,
+            title: schema.works.title,
+            coverId: schema.works.coverId,
+            published: schema.works.published,
+            contentRating: schema.works.contentRating
+          }
+        }
+      })
+      .from(schema.reading)
+      .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
+      .innerJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+      .where(
+        and(
+          isNotNull(schema.chapters.publishedAt),
+          eq(schema.works.published, 1)
         )
-        .not('chapters.published_at', 'is', null)
-        .eq('chapters.works.published', true)
-        .order('updated_at', { ascending: false })
-        .limit(20),
-      3000,
-      'home_reading'
+      )
+      .orderBy(desc(schema.reading.updatedAt))
+      .limit(20)
     );
 
     let continueReading: any[] = [];
     if (readingRes.data && readingRes.data.length > 0) {
       const grouped = new Map<string, typeof readingRes.data>();
       for (const row of readingRes.data) {
-        const wid = (row as any).chapters?.work_id;
+        const wid = (row as any).chapters?.workId;
         if (!wid) continue;
         if (!grouped.has(wid)) grouped.set(wid, []);
         grouped.get(wid)!.push(row);
       }
       for (const [wid, rows] of grouped.entries()) {
         const sorted = rows.sort((a: any, b: any) => (b.chapters?.number ?? 0) - (a.chapters?.number ?? 0));
-        const mostRecent = rows.sort((a: any, b: any) => b.updated_at.localeCompare(a.updated_at))[0];
+        const mostRecent = rows.sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt))[0];
         const highestRead = sorted[0];
         const currentCh = highestRead.chapters as any;
         const work = currentCh.works as any;
@@ -76,28 +98,28 @@ export const load = async ({ locals, setHeaders }) => {
             workId: wid,
             workTitle: work.title,
             workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
+            coverId: work.coverId,
+            contentRating: work.contentRating,
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
             progressText: `Próximo: Capítulo ${nextCh.number}`,
             actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: mostRecent.updatedAt
           });
         } else {
           continueReading.push({
             workId: wid,
             workTitle: work.title,
             workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
+            coverId: work.coverId,
+            contentRating: work.contentRating,
             chapterId: currentCh.id,
             chapterNumber: currentCh.number,
             destinationUrl: `/obra/${work.slug}`,
             progressText: `Em dia · Cap. ${currentCh.number}`,
             actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: mostRecent.updatedAt
           });
         }
       }
@@ -118,48 +140,74 @@ export const load = async ({ locals, setHeaders }) => {
 
   // Cold cache: execute reading query and public queries concurrently
   const [worksRes, chaptersRes, readingRes, mostReadRes] = await Promise.all([
-    safeDbQuery(
-      locals.db
-        .from('works')
-        .select(HOME_WORK_FIELDS)
-        .eq('published', true)
-        .order('updated_at', { ascending: false })
-        .limit(16),
-      3000,
-      'home_works'
+    safeQuery(
+      db.query.works.findMany({
+        where: eq(schema.works.published, 1),
+        orderBy: [desc(schema.works.updatedAt)],
+        limit: 16,
+        with: {
+          workScans: {
+            columns: { isPrimary: true, status: true },
+            with: {
+              scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
+            }
+          }
+        }
+      })
     ),
-    safeDbQuery(
-      locals.db
-        .rpc('get_recent_releases', { p_limit: 16, p_chapters_per_work: 3 }),
-      4500,
-      'home_chapters'
-    ),
+    Promise.resolve({ data: null, error: null, isDegraded: false }),
     locals.user
-      ? safeDbQuery(
-          locals.db
-            .from('reading')
-            .select(
-              'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
+      ? safeQuery(
+          db.select({
+            chapterId: schema.reading.chapterId,
+            page: schema.reading.page,
+            maxPage: schema.reading.maxPage,
+            completedAt: schema.reading.completedAt,
+            updatedAt: schema.reading.updatedAt,
+            chapters: {
+              id: schema.chapters.id,
+              number: schema.chapters.number,
+              workId: schema.chapters.workId,
+              publishedAt: schema.chapters.publishedAt,
+              works: {
+                id: schema.works.id,
+                slug: schema.works.slug,
+                title: schema.works.title,
+                coverId: schema.works.coverId,
+                published: schema.works.published,
+                contentRating: schema.works.contentRating
+              }
+            }
+          })
+          .from(schema.reading)
+          .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
+          .innerJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+          .where(
+            and(
+              isNotNull(schema.chapters.publishedAt),
+              eq(schema.works.published, 1)
             )
-            .not('chapters.published_at', 'is', null)
-            .eq('chapters.works.published', true)
-            .order('updated_at', { ascending: false })
-            .limit(20),
-          3000,
-          'home_reading'
+          )
+          .orderBy(desc(schema.reading.updatedAt))
+          .limit(20)
         )
       : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false }),
     hasFreshPublicCache
       ? Promise.resolve({ data: homePublicCache!.mostReadWorks, error: null, status: 'SUCCESS' as const, isDegraded: false })
-      : safeDbQuery(
-          locals.db
-            .from('works')
-            .select(HOME_WORK_FIELDS)
-            .eq('published', true)
-            .order('views_total', { ascending: false })
-            .limit(16),
-          3000,
-          'home_most_read'
+      : safeQuery(
+          db.query.works.findMany({
+            where: eq(schema.works.published, 1),
+            orderBy: [desc(schema.works.viewsTotal)],
+            limit: 16,
+            with: {
+              workScans: {
+                columns: { isPrimary: true, status: true },
+                with: {
+                  scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
+                }
+              }
+            }
+          })
         )
   ]);
 
@@ -181,7 +229,7 @@ export const load = async ({ locals, setHeaders }) => {
   if (readingRes.data && readingRes.data.length > 0) {
     const grouped = new Map<string, typeof readingRes.data>();
     for (const row of readingRes.data) {
-      const wid = (row.chapters as any).work_id as string;
+      const wid = (row.chapters as any).workId as string;
       const list = grouped.get(wid) || [];
       list.push(row);
       grouped.set(wid, list);
@@ -191,21 +239,21 @@ export const load = async ({ locals, setHeaders }) => {
 
     for (const [wid, rows] of grouped.entries()) {
       const work = (rows[0].chapters as any).works;
-      const incomplete = rows.find((r) => !r.completed_at);
+      const incomplete = rows.find((r) => !r.completedAt);
       if (incomplete) {
         const ch = incomplete.chapters as any;
         continueReading.push({
           workId: wid,
           workTitle: work.title,
           workSlug: work.slug,
-          coverId: work.cover_id,
-          contentRating: work.content_rating,
+          coverId: work.coverId,
+          contentRating: work.contentRating,
           chapterId: ch.id,
           chapterNumber: ch.number,
           destinationUrl: `/ler/${ch.id}`,
           progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
           actionLabel: 'Retomar leitura ↗',
-          updatedAt: incomplete.updated_at
+          updatedAt: incomplete.updatedAt
         });
       } else {
         needsNextChapter.push({ wid, rows, currentCh: rows[0].chapters as any });
@@ -213,15 +261,23 @@ export const load = async ({ locals, setHeaders }) => {
     }
 
     // Single batch query for next chapters instead of N separate round-trips
-    if (needsNextChapter.length > 0) {
-      const workIds = Array.from(new Set(needsNextChapter.map((n) => n.wid)));
+    if (needsNextChapter.length > 0) {const workIds = Array.from(new Set(needsNextChapter.map((n) => n.wid)));
       const nextChaptersRes = await withTimeout(
-        locals.db
-          .from('chapters')
-          .select('id,number,work_id')
-          .in('work_id', workIds)
-          .not('published_at', 'is', null)
-          .order('number', { ascending: true }),
+        safeQuery(
+          db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number,
+            workId: schema.chapters.workId
+          })
+          .from(schema.chapters)
+          .where(
+            and(
+              inArray(schema.chapters.workId, workIds),
+              isNotNull(schema.chapters.publishedAt)
+            )
+          )
+          .orderBy(asc(schema.chapters.number))
+        ),
         1500,
         { data: [] } as any,
         'home_batch_next_chapters'
@@ -230,7 +286,7 @@ export const load = async ({ locals, setHeaders }) => {
       const allNext = nextChaptersRes?.data || [];
 
       for (const { wid, rows, currentCh } of needsNextChapter) {
-        const nextCh = allNext.find((c: any) => c.work_id === wid && c.number > currentCh.number);
+        const nextCh = allNext.find((c: any) => c.workId === wid && c.number > currentCh.number);
         const work = (rows[0].chapters as any).works;
         const mostRecent = rows[0];
         if (nextCh) {
@@ -238,28 +294,28 @@ export const load = async ({ locals, setHeaders }) => {
             workId: wid,
             workTitle: work.title,
             workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
+            coverId: work.coverId,
+            contentRating: work.contentRating,
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
             progressText: `Próximo: Capítulo ${nextCh.number}`,
             actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: mostRecent.updatedAt
           });
         } else {
           continueReading.push({
             workId: wid,
             workTitle: work.title,
             workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
+            coverId: work.coverId,
+            contentRating: work.contentRating,
             chapterId: currentCh.id,
             chapterNumber: currentCh.number,
             destinationUrl: `/obra/${work.slug}`,
             progressText: `Em dia · Cap. ${currentCh.number}`,
             actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: mostRecent.updatedAt
           });
         }
       }
@@ -289,10 +345,9 @@ export const load = async ({ locals, setHeaders }) => {
   };
 
   const releasesMap = new Map<string, ReleaseGroup>();
-  if (chaptersRes.data && Array.isArray(chaptersRes.data)) {
-    for (const row of chaptersRes.data) {
-      // RPC get_recent_releases returns flat rows with work_id, work_slug, etc.
-      const workId = (row as any).work_id as string;
+  if (chaptersRes.data && Array.isArray(chaptersRes.data)) {for (const row of chaptersRes.data) {
+      // RPC get_recent_releases returns flat rows with workId, work_slug, etc.
+      const workId = (row as any).workId as string;
       if (!workId) continue;
       if (!releasesMap.has(workId)) {
         releasesMap.set(workId, {
@@ -303,15 +358,14 @@ export const load = async ({ locals, setHeaders }) => {
           kind: (row as any).work_kind || 'UNKNOWN',
           contentRating: (row as any).work_content_rating || null,
           latestPublishedAt: (row as any).latest_published_at || '',
-          chapters: []
-        });
+          chapters: []});
       }
       const group = releasesMap.get(workId)!;
       if (group.chapters.length < 3) {
         group.chapters.push({
-          id: (row as any).chapter_id,
-          number: (row as any).chapter_number,
-          title: (row as any).chapter_title,
+          id: (row as any).chapterId,
+          number: (row as any).chapterNumber,
+          title: (row as any).chapterTitle,
           publishedAt: (row as any).chapter_published_at || ''
         });
       }
@@ -321,30 +375,52 @@ export const load = async ({ locals, setHeaders }) => {
   let recentReleases = Array.from(releasesMap.values());
 
   // Resilient secondary fallback: if RPC timed out, do it manually with two queries
-  if (recentReleases.length === 0) {
-    const fallbackWorksRes = await withTimeout(
-      locals.db
-        .from('works')
-        .select('id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at')
-        .eq('published', true)
-        .not('latest_chapter_published_at', 'is', null)
-        .order('latest_chapter_published_at', { ascending: false })
-        .limit(16),
+  if (recentReleases.length === 0) {const fallbackWorksRes = await withTimeout(
+      safeQuery(
+        db.select({
+          id: schema.works.id,
+          slug: schema.works.slug,
+          title: schema.works.title,
+          coverId: schema.works.coverId,
+          kind: schema.works.kind,
+          contentRating: schema.works.contentRating,
+          latestChapterPublishedAt: schema.works.latestChapterPublishedAt
+        })
+        .from(schema.works)
+        .where(
+          and(
+            eq(schema.works.published, 1),
+            isNotNull(schema.works.latestChapterPublishedAt)
+          )
+        )
+        .orderBy(desc(schema.works.latestChapterPublishedAt))
+        .limit(16)
+      ),
       1500,
       { data: [] } as any,
       'home_chapters_fallback_works'
     );
 
     const fallbackWorks = fallbackWorksRes?.data || [];
-    if (fallbackWorks.length > 0) {
-      const workIds = fallbackWorks.map((w: any) => w.id);
+    if (fallbackWorks.length > 0) {const workIds = fallbackWorks.map((w: any) => w.id);
       const fallbackChaptersRes = await withTimeout(
-        locals.db
-          .from('chapters')
-          .select('id,number,title,published_at,work_id')
-          .in('work_id', workIds)
-          .not('published_at', 'is', null)
-          .order('published_at', { ascending: false }),
+        safeQuery(
+          db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number,
+            title: schema.chapters.title,
+            publishedAt: schema.chapters.publishedAt,
+            workId: schema.chapters.workId
+          })
+          .from(schema.chapters)
+          .where(
+            and(
+              inArray(schema.chapters.workId, workIds),
+              isNotNull(schema.chapters.publishedAt)
+            )
+          )
+          .orderBy(desc(schema.chapters.publishedAt))
+        ),
         1500,
         { data: [] } as any,
         'home_chapters_fallback_chapters'
@@ -353,17 +429,17 @@ export const load = async ({ locals, setHeaders }) => {
       const fallbackChapters = fallbackChaptersRes?.data || [];
       const worksById = new Map(fallbackWorks.map((w: any) => [w.id, w]));
       for (const row of fallbackChapters) {
-        const w = worksById.get(row.work_id);
+        const w = worksById.get(row.workId);
         if (!w) continue;
         if (!releasesMap.has(w.id)) {
           releasesMap.set(w.id, {
             workId: w.id,
             workSlug: w.slug,
             workTitle: w.title,
-            coverId: w.cover_id,
+            coverId: w.coverId,
             kind: w.kind,
-            contentRating: w.content_rating,
-            latestPublishedAt: w.latest_chapter_published_at || '',
+            contentRating: w.contentRating,
+            latestPublishedAt: w.latestChapterPublishedAt || '',
             chapters: []
           });
         }
@@ -373,7 +449,7 @@ export const load = async ({ locals, setHeaders }) => {
             id: row.id,
             number: row.number,
             title: row.title,
-            publishedAt: row.published_at || ''
+            publishedAt: row.publishedAt || ''
           });
         }
       }
@@ -384,20 +460,18 @@ export const load = async ({ locals, setHeaders }) => {
   }
 
   // Derive works from RPC data if works query timed out but chapters succeeded
-  if (works.length === 0 && chaptersRes.data && chaptersRes.data.length > 0) {
-    const derivedWorks = new Map<string, any>();
+  if (works.length === 0 && chaptersRes.data && chaptersRes.data.length > 0) {const derivedWorks = new Map<string, any>();
     for (const row of chaptersRes.data) {
-      const wid = (row as any).work_id;
+      const wid = (row as any).workId;
       if (wid && !derivedWorks.has(wid)) {
         derivedWorks.set(wid, {
           id: wid,
           slug: (row as any).work_slug,
           title: (row as any).work_title,
-          cover_id: (row as any).work_cover_id,
+          coverId: (row as any).work_cover_id,
           kind: (row as any).work_kind,
-          content_rating: (row as any).work_content_rating,
-          published: true
-        });
+          contentRating: (row as any).work_content_rating,
+          published: true});
       }
     }
     works = Array.from(derivedWorks.values());

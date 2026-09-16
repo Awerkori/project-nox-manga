@@ -1,54 +1,90 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { desc, eq, inArray, and, sql } from 'drizzle-orm';
 import { withTimeout } from '$lib/server/resilience';
 
-export const GET = async ({ url, locals }) => {
-  const db = locals.db || privileged();
-  
+export const GET = async ({ url }) => {
   const cursorTime = url.searchParams.get('cursorTime') || null;
   const cursorId = url.searchParams.get('cursorId') || null;
   const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '16', 10)));
 
-  const { data: chaptersData, error: chaptersError } = await withTimeout(
-    db.rpc('get_recent_releases', {
-      p_limit: limit,
-      p_chapters_per_work: 3,
-      p_cursor_time: cursorTime,
-      p_cursor_id: cursorId
-    }),
-    4500,
-    { data: null, error: null } as any,
-    'api_recent_releases'
+  let whereClause = eq(schema.works.published, 1);
+  if (cursorTime && cursorId) {
+    whereClause = and(
+      eq(schema.works.published, 1),
+      sql`(${schema.works.latestChapterPublishedAt} < ${cursorTime} OR (${schema.works.latestChapterPublishedAt} = ${cursorTime} AND ${schema.works.id} < ${cursorId}))`
+    );
+  } else if (cursorTime) {
+    whereClause = and(
+      eq(schema.works.published, 1),
+      sql`${schema.works.latestChapterPublishedAt} < ${cursorTime}`
+    );
+  }
+
+  const { data: worksData, error: worksError } = await safeQuery(
+    db.select({
+      workId: schema.works.id,
+      workSlug: schema.works.slug,
+      workTitle: schema.works.title,
+      coverId: schema.works.coverId,
+      kind: schema.works.kind,
+      contentRating: schema.works.contentRating,
+      latestPublishedAt: schema.works.latestChapterPublishedAt
+    })
+    .from(schema.works)
+    .where(whereClause)
+    .orderBy(desc(schema.works.latestChapterPublishedAt), desc(schema.works.id))
+    .limit(limit)
   );
 
-  if (chaptersError || !chaptersData) {
-    return json({ releases: [], error: chaptersError?.message || 'Timeout' }, { status: 500 });
+  if (worksError || !worksData) {
+    return json({ releases: [], error: worksError?.message || 'Error' }, { status: 500 });
   }
 
   const releasesMap = new Map();
-  for (const row of chaptersData) {
-    const workId = (row as any).work_id as string;
-    if (!workId) continue;
-    if (!releasesMap.has(workId)) {
-      releasesMap.set(workId, {
-        workId,
-        workSlug: (row as any).work_slug || '',
-        workTitle: (row as any).work_title || '',
-        coverId: (row as any).work_cover_id || null,
-        kind: (row as any).work_kind || 'UNKNOWN',
-        contentRating: (row as any).work_content_rating || null,
-        latestPublishedAt: (row as any).latest_published_at || '',
-        chapters: []
-      });
-    }
-    const group = releasesMap.get(workId);
-    if (group.chapters.length < 3) {
-      group.chapters.push({
-        id: (row as any).chapter_id,
-        number: (row as any).chapter_number,
-        title: (row as any).chapter_title,
-        publishedAt: (row as any).chapter_published_at || ''
-      });
+  for (const work of worksData) {
+    releasesMap.set(work.workId, {
+      ...work,
+      chapters: []
+    });
+  }
+
+  if (worksData.length > 0) {
+    const workIds = worksData.map(w => w.workId);
+    
+    // SQLite window functions to get top 3 chapters
+    const topChaptersSq = db.$with('top_chapters').as(
+      db.select({
+        id: schema.chapters.id,
+        workId: schema.chapters.workId,
+        number: schema.chapters.number,
+        title: schema.chapters.title,
+        publishedAt: schema.chapters.publishedAt,
+        row_num: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${schema.chapters.workId} ORDER BY ${schema.chapters.publishedAt} DESC)`
+      })
+      .from(schema.chapters)
+      .where(inArray(schema.chapters.workId, workIds))
+    );
+
+    const { data: chaptersData } = await safeQuery(
+      db.with(topChaptersSq)
+        .select()
+        .from(topChaptersSq)
+        .where(sql`${topChaptersSq.row_num} <= 3`)
+        .orderBy(desc(topChaptersSq.publishedAt))
+    );
+
+    if (chaptersData) {
+      for (const ch of chaptersData) {
+        if (releasesMap.has(ch.workId)) {
+          releasesMap.get(ch.workId).chapters.push({
+            id: ch.id,
+            number: ch.number,
+            title: ch.title,
+            publishedAt: ch.publishedAt
+          });
+        }
+      }
     }
   }
 

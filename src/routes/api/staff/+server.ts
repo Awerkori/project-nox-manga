@@ -43,8 +43,8 @@ export const GET = async ({ locals, url }) => {
   const workId = url.searchParams.get('work');
   if (!workId) error(400, 'Selecione uma obra.');
   const { data: work } = await db.from('works').select('source_id').eq('id', workId).maybeSingle();
-  if (!work?.source_id) return json({ chapters: [] });
-  return json(await staffRequest(locals, 'chapters', work.source_id), {
+  if (!work?.sourceId) return json({ chapters: [] });
+  return json(await staffRequest(locals, 'chapters', work.sourceId), {
     headers: { 'Cache-Control': 'private, no-store' }
   });
 };

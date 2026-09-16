@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { withTimeout } from '$lib/server/resilience';
+import { db, schema, safeQuery } from '$lib/server/db';
 
 const startTime = Date.now();
 
@@ -26,7 +27,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
   // Bounded DB probe with 1000ms strict timeout
   try {
     const probeRes = await withTimeout(
-      locals.db.from('works').select('id').limit(1),
+      safeQuery(db.select({ id: schema.works.id }).from(schema.works).limit(1)),
       1000,
       { data: null, error: { message: 'Database probe timeout (1000ms)' } } as any,
       'health_db_probe'

@@ -323,9 +323,9 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     }
 
     const shard = shardRows[0];
-    const shardId = shard.shard_id;
-    const botRef = shard.bot_reference || 'primary';
-    const channelId = shard.channel_id;
+    const shardId = shard.shardId;
+    const botRef = shard.botReference || 'primary';
+    const channelId = shard.channelId;
     const isOverflow = Boolean(shard.is_overflow);
 
     // 6. Reserve media record (zero artificial hourly limit, clean in-flight debounce)
@@ -348,14 +348,12 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     // Set router metadata on media record
     await db
       .from('media')
-      .update({
-        storage_pool_id: shard.pool_id,
-        storage_shard_id: shardId,
-        bot_reference: botRef,
-        access_class: accessClass,
-        scan_id: scanId || null,
-        chapter_id: chapterId || null
-      })
+      .update({storagePoolId: shard.poolId,
+        storageShardId: shardId,
+        botReference: botRef,
+        accessClass: accessClass,
+        scanId: scanId || null,
+        chapterId: chapterId || null})
       .eq('id', mediaId);
 
     // 7. Track upload start in control plane
@@ -365,10 +363,9 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const botClient = resolveBotClient(botRef, channelId);
 
     // Sync database shard channel_id only if shard had no channel configured
-    if (!channelId && botClient.chat && !shard.owner_scan_id) {
-      await db
+    if (!channelId && botClient.chat && !shard.ownerScanId) {await db
         .from('storage_shards')
-        .update({ channel_id: botClient.chat })
+        .update({ channelId: botClient.chat})
         .eq('id', shardId);
     }
 
@@ -504,9 +501,9 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     }
 
     const shard = shardRows[0];
-    const shardId = shard.shard_id;
-    const botRef = shard.bot_reference || 'PRODUCTION_STORAGE';
-    const channelId = shard.channel_id;
+    const shardId = shard.shardId;
+    const botRef = shard.botReference || 'PRODUCTION_STORAGE';
+    const channelId = shard.channelId;
 
     await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
     const botClient = resolveBotClient(botRef, channelId);
@@ -555,7 +552,7 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     return {
       telegramFileId,
       shardId,
-      poolId: shard.pool_id,
+      poolId: shard.poolId,
       botReference: botClient.botRef,
       sha256,
       byteSize: bytes.byteLength

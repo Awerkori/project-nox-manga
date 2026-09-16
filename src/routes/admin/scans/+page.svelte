@@ -71,10 +71,10 @@
     (data.partnerRequests || []).filter((r: any) => {
       const q = search.toLowerCase();
       const matchesSearch =
-        r.scan_name.toLowerCase().includes(q) ||
-        r.scan_slug.toLowerCase().includes(q) ||
+        r.scanName.toLowerCase().includes(q) ||
+        r.scanSlug.toLowerCase().includes(q) ||
         (r.members?.username || '').toLowerCase().includes(q) ||
-        (r.members?.display_name || '').toLowerCase().includes(q);
+        (r.members?.displayName || '').toLowerCase().includes(q);
       const matchesStatus = partnerFilter === 'ALL' || r.status === partnerFilter;
       return matchesSearch && matchesStatus;
     })
@@ -87,7 +87,7 @@
       if (auditSearch.trim()) {
         const q = auditSearch.toLowerCase();
         return (
-          (log.scan_name || '').toLowerCase().includes(q) ||
+          (log.scanName || '').toLowerCase().includes(q) ||
           (log.action || '').toLowerCase().includes(q) ||
           (log.reason || '').toLowerCase().includes(q) ||
           (log.admin?.username || '').toLowerCase().includes(q)
@@ -156,7 +156,7 @@
     formWebsite = scan.website || '';
     formDiscord = scan.discord || '';
     formStatus = scan.status || 'ACTIVE';
-    formIsOfficial = Boolean(scan.is_official);
+    formIsOfficial = Boolean(scan.isOfficial);
     showModal = true;
     notice = '';
   }
@@ -204,7 +204,7 @@
   }
 
   async function handleDeleteScan(scan: any) {
-    if (scan.is_official) {
+    if (scan.isOfficial) {
       alert('A scan oficial Project Nox não pode ser excluída.');
       return;
     }
@@ -364,7 +364,7 @@
     <!-- Scans List Grid -->
     <div class="scans-grid">
       {#each filteredScans as scan (scan.id)}
-        <div class="scan-card" class:is-official={scan.is_official}>
+        <div class="scan-card" class:is-official={scan.isOfficial}>
           <div class="scan-card-header">
             <div class="scan-title-group">
               <h3 class="scan-name">{scan.name}</h3>
@@ -372,7 +372,7 @@
             </div>
 
             <div class="scan-badges">
-              {#if scan.is_official}
+              {#if scan.isOfficial}
                 <span class="badge-official">
                   <Shield size={12} />
                   <span>OFICIAL NOX</span>
@@ -415,7 +415,7 @@
               <div class="owner-pill">
                 <span class="owner-lbl">Líder:</span>
                 <UserAvatar user={scan.owner} size={18} />
-                <span class="owner-name">{scan.owner.display_name || scan.owner.username}</span>
+                <span class="owner-name">{scan.owner.displayName || scan.owner.username}</span>
               </div>
             {:else}
               <div class="owner-pill empty">
@@ -471,7 +471,7 @@
               <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
                 <Edit3 size={14} />
               </button>
-              {#if !scan.is_official}
+              {#if !scan.isOfficial}
                 <button
                   class="btn-icon delete"
                   onclick={() => {
@@ -549,12 +549,12 @@
           <div class="request-header">
             <div class="request-user">
               <UserAvatar
-                avatarId={req.members?.avatar_id}
-                displayName={req.members?.display_name || req.members?.username || 'Usuário'}
+                avatarId={req.members?.avatarId}
+                displayName={req.members?.displayName || req.members?.username || 'Usuário'}
                 size={40}
               />
               <div class="request-user-meta">
-                <span class="request-user-name">{req.members?.display_name || req.members?.username}</span>
+                <span class="request-user-name">{req.members?.displayName || req.members?.username}</span>
                 <span class="request-user-sub">@{req.members?.username}</span>
               </div>
             </div>
@@ -567,8 +567,8 @@
           <div class="request-body">
             <div class="request-target-box">
               <span class="req-target-label">Scan Proposta:</span>
-              <strong class="req-target-name">{req.scan_name}</strong>
-              <span class="req-target-slug font-mono">/{req.scan_slug}</span>
+              <strong class="req-target-name">{req.scanName}</strong>
+              <span class="req-target-slug font-mono">/{req.scanSlug}</span>
             </div>
 
             {#if req.description}
@@ -593,17 +593,17 @@
               {/if}
             </div>
 
-            {#if req.sample_links}
+            {#if req.sampleLinks}
               <div class="sample-links-box">
                 <span class="sample-lbl">Amostras / Trabalhos:</span>
-                <p class="sample-txt">{req.sample_links}</p>
+                <p class="sample-txt">{req.sampleLinks}</p>
               </div>
             {/if}
 
-            {#if req.status === 'REJECTED' && req.rejection_reason}
+            {#if req.status === 'REJECTED' && req.rejectionReason}
               <div class="rejection-box">
                 <AlertTriangle size={14} />
-                <span>Motivo da recusa: {req.rejection_reason}</span>
+                <span>Motivo da recusa: {req.rejectionReason}</span>
               </div>
             {/if}
           </div>
@@ -695,8 +695,8 @@
         <div class="request-card status-{req.status.toLowerCase()}">
           <div class="request-header">
             <div class="request-user">
-              {#if req.scans?.logo_id}
-                <img src="/media/{req.scans.logo_id}" alt="" class="scan-mini-logo" />
+              {#if req.scans?.logoId}
+                <img src="/media/{req.scans.logoId}" alt="" class="scan-mini-logo" />
               {:else}
                 <div class="scan-mini-fallback"><Users size={16} /></div>
               {/if}
@@ -713,8 +713,8 @@
 
           <div class="request-body">
             <div class="obra-target-card">
-              {#if req.works?.cover_id}
-                <img src="/media/{req.works.cover_id}" alt="" class="obra-mini-cover" />
+              {#if req.works?.coverId}
+                <img src="/media/{req.works.coverId}" alt="" class="obra-mini-cover" />
               {:else}
                 <div class="obra-mini-placeholder">NOX</div>
               {/if}
@@ -729,10 +729,10 @@
               <p class="request-desc">"{req.message}"</p>
             {/if}
 
-            {#if req.status === 'REJECTED' && req.rejection_reason}
+            {#if req.status === 'REJECTED' && req.rejectionReason}
               <div class="rejection-box">
                 <AlertTriangle size={14} />
-                <span>Motivo da recusa: {req.rejection_reason}</span>
+                <span>Motivo da recusa: {req.rejectionReason}</span>
               </div>
             {/if}
           </div>
@@ -828,14 +828,14 @@
           <div class="audit-card">
             <div class="audit-top">
               <span class="audit-badge action-{log.action.toLowerCase()}">{log.action}</span>
-              <span class="audit-scan">{log.scan_name || 'Scan Removida'}</span>
-              <span class="audit-date">{new Date(log.created_at).toLocaleString('pt-BR')}</span>
+              <span class="audit-scan">{log.scanName || 'Scan Removida'}</span>
+              <span class="audit-date">{new Date(log.createdAt).toLocaleString('pt-BR')}</span>
             </div>
             <div class="audit-main">
               <div class="audit-admin">
                 {#if log.admin}
                   <UserAvatar user={log.admin} size={18} />
-                  <span>{log.admin.display_name || log.admin.username}</span>
+                  <span>{log.admin.displayName || log.admin.username}</span>
                 {:else}
                   <span class="muted">Sistema</span>
                 {/if}
@@ -983,7 +983,7 @@
             <label for="rec-owner" class="form-label">Selecionar Novo Dono / Líder:</label>
             <select id="rec-owner" name="new_owner_id" bind:value={recoverOwnerUserId} class="form-select" required>
               {#each (data.users || []) as u}
-                <option value={u.id}>{u.display_name || u.username} (@{u.username})</option>
+                <option value={u.id}>{u.displayName || u.username} (@{u.username})</option>
               {/each}
             </select>
           </div>
@@ -1166,7 +1166,7 @@
                   type="checkbox"
                   class="form-checkbox"
                   bind:checked={formIsOfficial}
-                  disabled={editingScan?.is_official && editingScan.slug === 'project-nox'}
+                  disabled={editingScan?.isOfficial && editingScan.slug === 'project-nox'}
                 />
                 <span>Scan Oficial Project Nox</span>
               </label>

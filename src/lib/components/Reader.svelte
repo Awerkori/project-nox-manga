@@ -133,7 +133,7 @@
 
     for (const page of ordered) {
       if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) break;
-      const id = page.media_id;
+      const id = page.mediaId;
       if (!id || preloadedMedia.has(id) || inFlightPreloads.has(id)) continue;
 
       inFlightPreloads.add(id);
@@ -182,7 +182,7 @@
       const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
       current = saved;
       maxSeenPage = saved;
-      chapterCompleted = !!data.progress?.completed_at;
+      chapterCompleted = !!data.progress?.completedAt;
       xpAwardConfirmed = chapterCompleted;
       xpClaimInFlight = false;
       requestAnimationFrame(() => {
@@ -233,12 +233,12 @@
     chapterCompleted = true;
     try {
       const res = (await action('member', 'read_page', {
-        work_id: data.chapter.work_id,
+        work_id: data.chapter.workId,
         chapter_id: data.chapter.id,
         page: data.pages.length,
         completed: true
       })) as { ok?: boolean; completed?: boolean } | null;
-      if (res?.completed && !data.progress?.completed_at) {
+      if (res?.completed && !data.progress?.completedAt) {
         // Completion registered — now claim XP separately with retry.
         void claimXp();
       }
@@ -277,7 +277,7 @@
   }
 
   onMount(() => {
-    chapterCompleted = !!data.progress?.completed_at;
+    chapterCompleted = !!data.progress?.completedAt;
     previousChapterId = data.chapter.id;
     resetHideTimer();
 
@@ -312,7 +312,7 @@
       fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
     }
     if (data.profile && !data.preview)
-      action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
+      action('member', 'read_start', { work_id: data.chapter.workId, chapter_id: data.chapter.id }).catch(
         () => {
           notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
         }
@@ -342,7 +342,7 @@
         sending = true;
         try {
           await action('member', 'read_page', {
-            work_id: data.chapter.work_id,
+            work_id: data.chapter.workId,
             chapter_id: data.chapter.id,
             page: pageToSave,
             completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
@@ -377,7 +377,7 @@
           scope: 'member',
           action: 'read_page',
           data: {
-            work_id: data.chapter.work_id,
+            work_id: data.chapter.workId,
             chapter_id: data.chapter.id,
             page: pageToSave,
             completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
@@ -468,7 +468,7 @@
     class:ui-hidden={!uiVisible && !settings}
   >
     <a
-      href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
+      href={data.preview ? `/admin/obras/${data.chapter.workId}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.workId}`)}
       aria-label="Voltar para obra"
     >
       <ArrowLeft size={20} />
@@ -583,7 +583,7 @@
   {/if}
 
   <div class="page-stack" style="max-width:{width}px;gap:{gap ? '20px' : '0'}">
-    {#each data.pages as page, index (page.media_id + ':' + page.position)}
+    {#each data.pages as page, index (page.mediaId + ':' + page.position)}
       <ReaderPage {page} eager={index < 2} onSeen={seen} />
     {/each}
   </div>
@@ -668,7 +668,7 @@
   <div class="reader-comments">
     {#if !data.preview}<Comments
         comments={data.comments}
-        workId={data.chapter.work_id}
+        workId={data.chapter.workId}
         chapterId={data.chapter.id}
         profile={data.profile}
       />{/if}

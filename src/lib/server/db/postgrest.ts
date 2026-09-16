@@ -22,10 +22,8 @@ export function createPostgrestWrapper(userId?: string, role?: string) {
       let values: any = null;
 
       // Automatic RLS
-      if (!isStaff && table.userId && userId) {
-        // Enforce user_id = current user
-        wheres.push(eq(table.userId, userId));
-      }
+      if (!isStaff && table.userId && userId) {// Enforce userId = current user
+        wheres.push(eq(table.userId, userId));}
 
       const applyEq = (colName: string, val: any) => {
         const camelCol = colName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());

@@ -10,13 +10,11 @@ export async function hashToken(token: string): Promise<string> {
     .join('');
 }
 
-export interface MihonUser {
-  id: string;
+export interface MihonUser {id: string;
   username: string;
-  age_status: 'UNKNOWN' | 'MINOR' | 'ADULT';
+  ageStatus: 'UNKNOWN' | 'MINOR' | 'ADULT';
   xp: number;
-  is_test: boolean;
-}
+  isTest: boolean;}
 
 export interface MihonAuthResult {
   authenticated: boolean;
@@ -68,15 +66,13 @@ export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token inválido ou expirado' };
   }
 
-  return {
-    authenticated: true,
+  return {authenticated: true,
     user: {
       id: row.member.id,
       username: row.member.username,
-      age_status: row.member.ageStatus as any,
+      ageStatus: row.member.ageStatus as any,
       xp: row.member.xp,
-      is_test: Boolean(row.member.isTest)
-    },
+      isTest: Boolean(row.member.isTest)},
     ageStatus: (row.member.ageStatus as any) || 'UNKNOWN'
   };
 }

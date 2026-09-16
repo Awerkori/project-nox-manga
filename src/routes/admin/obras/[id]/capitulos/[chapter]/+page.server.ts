@@ -1,51 +1,99 @@
 import { error } from '@sveltejs/kit';
-export const load = async ({ locals, params }) => {
-  const { data: work } = await locals.db.from('works').select('id,title').eq('id', params.id).maybeSingle();
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, desc, asc, and } from 'drizzle-orm';
+
+export const load = async ({ params }) => {
+  const work = await safeQuerySingle(
+    db.select({ id: schema.works.id, title: schema.works.title })
+      .from(schema.works)
+      .where(eq(schema.works.id, params.id))
+  );
   if (!work) error(404);
-  const chapter =
-    params.chapter === 'novo'
-      ? null
-      : (
-          await locals.db
-            .from('chapters')
-            .select('id,number,title,published_at')
-            .eq('id', params.chapter)
-            .eq('work_id', work.id)
-            .maybeSingle()
-        ).data;
+
+  const chapter = params.chapter === 'novo'
+    ? null
+    : await safeQuerySingle(
+        db.select({
+          id: schema.chapters.id,
+          number: schema.chapters.number,
+          title: schema.chapters.title,
+          publishedAt: schema.chapters.publishedAt
+        })
+        .from(schema.chapters)
+        .where(
+          and(
+            eq(schema.chapters.id, params.chapter),
+            eq(schema.chapters.workId, work.id)
+          )
+        )
+      );
+
   if (params.chapter !== 'novo' && !chapter) error(404);
+
   const [pagesRes, allScansRes, workScansRes, chapterScansRes] = await Promise.all([
     chapter
-      ? locals.db
-          .from('pages')
-          .select('media_id,position,width,height')
-          .eq('chapter_id', chapter.id)
-          .order('position')
-      : Promise.resolve({ data: [] }),
-    locals.db
-      .from('scans')
-      .select('id,name,slug,is_official,status')
-      .order('is_official', { ascending: false })
-      .order('name'),
-    locals.db
-      .from('work_scans')
-      .select('scan_id,is_primary,scans(id,name,slug,is_official)')
-      .eq('work_id', work.id),
+      ? safeQuery(
+          db.select({
+            mediaId: schema.pages.mediaId,
+            position: schema.pages.position,
+            width: schema.pages.width,
+            height: schema.pages.height
+          })
+          .from(schema.pages)
+          .where(eq(schema.pages.chapterId, chapter.id))
+          .orderBy(asc(schema.pages.position))
+        )
+      : Promise.resolve([]),
+    safeQuery(
+      db.select({
+        id: schema.scans.id,
+        name: schema.scans.name,
+        slug: schema.scans.slug,
+        isOfficial: schema.scans.isOfficial,
+        status: schema.scans.status
+      })
+      .from(schema.scans)
+      .orderBy(desc(schema.scans.isOfficial), asc(schema.scans.name))
+    ),
+    safeQuery(
+      db.select({
+        scanId: schema.workScans.scanId,
+        isPrimary: schema.workScans.isPrimary,
+        scans: {
+          id: schema.scans.id,
+          name: schema.scans.name,
+          slug: schema.scans.slug,
+          isOfficial: schema.scans.isOfficial
+        }
+      })
+      .from(schema.workScans)
+      .leftJoin(schema.scans, eq(schema.workScans.scanId, schema.scans.id))
+      .where(eq(schema.workScans.workId, work.id))
+    ),
     chapter
-      ? locals.db
-          .from('chapter_scans')
-          .select('scan_id,scans(id,name,slug,is_official)')
-          .eq('chapter_id', chapter.id)
-      : Promise.resolve({ data: [] })
+      ? safeQuery(
+          db.select({
+            scanId: schema.chapterScans.scanId,
+            scans: {
+              id: schema.scans.id,
+              name: schema.scans.name,
+              slug: schema.scans.slug,
+              isOfficial: schema.scans.isOfficial
+            }
+          })
+          .from(schema.chapterScans)
+          .leftJoin(schema.scans, eq(schema.chapterScans.scanId, schema.scans.id))
+          .where(eq(schema.chapterScans.chapterId, chapter.id))
+        )
+      : Promise.resolve([])
   ]);
 
-  const pages = pagesRes.data || [];
-  const allScans = allScansRes.data || [];
-  const workScans = workScansRes.data || [];
-  // For new chapters, default to work's scans; for existing chapters, use their assigned scans
+  const pages = pagesRes || [];
+  const allScans = allScansRes || [];
+  const workScans = workScansRes || [];
   const chapterScans = chapter
-    ? chapterScansRes.data || []
-    : workScans.map((ws) => ({ scan_id: ws.scan_id, scans: ws.scans }));
+    ? chapterScansRes || []
+    : workScans.map((ws) => ({ scanId: ws.scanId, scans: ws.scans }));
 
   return { work, chapter, pages, allScans, workScans, chapterScans };
 };

@@ -51,7 +51,7 @@
 
   // Find current chapter
   let chapterItem = $derived(
-    chapters.find((c: any) => (c.chapters?.id || c.id) === chapterId || c.target_chapter_id === chapterId) ||
+    chapters.find((c: any) => (c.chapters?.id || c.id) === chapterId || c.targetChapterId === chapterId) ||
       chapters[0] ||
       null
   );
@@ -59,32 +59,32 @@
   let chapterData = $derived(chapterItem?.chapters || chapterItem || {});
   let workData = $derived(chapterData?.works || chapterData?.work || {});
   let actualChapterId = $derived(chapterData.id || chapterId);
-  let previewId = $derived(chapterData.target_chapter_id || actualChapterId);
+  let previewId = $derived(chapterData.targetChapterId || actualChapterId);
 
   // Stages for this chapter
   let currentChapterStages = $derived(
     chapterStages
-      .filter((cs: any) => cs.production_chapter_id === actualChapterId)
-      .sort((a: any, b: any) => (a.stage?.display_order || 0) - (b.stage?.display_order || 0))
+      .filter((cs: any) => cs.productionChapterId === actualChapterId)
+      .sort((a: any, b: any) => (a.stage?.displayOrder || 0) - (b.stage?.displayOrder || 0))
   );
 
   // Files for this chapter
   let currentChapterFiles = $derived(
     productionFiles
-      .filter((f: any) => f.production_chapter_id === actualChapterId)
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .filter((f: any) => f.productionChapterId === actualChapterId)
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   );
 
   // Timeline for this chapter
   let currentChapterTimeline = $derived(
     chapterTimeline
-      .filter((t: any) => t.production_chapter_id === actualChapterId)
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .filter((t: any) => t.productionChapterId === actualChapterId)
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   );
 
   // QC issues for this chapter
   let currentQcIssues = $derived(
-    qcIssues.filter((q: any) => q.chapter_id === actualChapterId || q.chapter_id === chapterId)
+    qcIssues.filter((q: any) => q.chapterId === actualChapterId || q.chapterId === chapterId)
   );
   let openQcCount = $derived(currentQcIssues.filter((q: any) => q.status === 'OPEN').length);
 
@@ -97,7 +97,7 @@
 
   $effect(() => {
     if (currentChapterStages.length > 0 && !selectedStageId) {
-      const myStage = currentChapterStages.find((s: any) => s.assigned_to === currentUserId && s.status === 'IN_PROGRESS');
+      const myStage = currentChapterStages.find((s: any) => s.assignedTo === currentUserId && s.status === 'IN_PROGRESS');
       const inProgressStage = currentChapterStages.find((s: any) => s.status === 'IN_PROGRESS');
       const availStage = currentChapterStages.find((s: any) => s.status === 'AVAILABLE');
       const target = myStage || inProgressStage || availStage || currentChapterStages[0];
@@ -118,7 +118,7 @@
     const result: any[] = [];
     for (const depSlug of deps) {
       const file = currentChapterFiles.find(
-        (f: any) => (f.stage_slug === depSlug || f.stage?.slug === depSlug) && f.is_current
+        (f: any) => (f.stageSlug === depSlug || f.stage?.slug === depSlug) && f.isCurrent
       );
       if (file) {
         result.push(file);
@@ -132,10 +132,10 @@
     activeStageItem
       ? currentChapterFiles.find(
           (f: any) =>
-            (f.stage_id === activeStageItem.stage_id ||
-              f.stage_slug === activeStageItem.stage?.slug ||
+            (f.stageId === activeStageItem.stageId ||
+              f.stageSlug === activeStageItem.stage?.slug ||
               f.stage?.slug === activeStageItem.stage?.slug) &&
-            f.is_current
+            f.isCurrent
         )
       : null
   );
@@ -171,7 +171,7 @@
       const formData = new FormData();
       formData.set('scan_id', scanId);
       formData.set('production_chapter_id', actualChapterId);
-      formData.set('stage_id', activeStageItem.stage_id);
+      formData.set('stage_id', activeStageItem.stageId);
       formData.set('file', file);
 
       uploadProgress = 50;
@@ -207,7 +207,7 @@
 
   // Can the stage be completed?
   // Requires deliverable upload unless requires_output is false (like revisao or qc)
-  let requiresDeliverable = $derived(activeStageItem?.stage?.requires_output !== false);
+  let requiresDeliverable = $derived(activeStageItem?.stage?.requiresOutput !== false);
   let hasDeliverable = $derived(Boolean(activeStageCurrentFile));
   let canCompleteStage = $derived(
     activeStageItem &&
@@ -233,7 +233,7 @@
     <div class="nav-breadcrumbs">
       <span class="crumb-work">{workData.title || 'Obra'}</span>
       <span class="crumb-sep">/</span>
-      <span class="crumb-ch">Capítulo #{chapterData.chapter_number || chapterData.number || '—'}</span>
+      <span class="crumb-ch">Capítulo #{chapterData.chapterNumber || chapterData.number || '—'}</span>
     </div>
 
     <div class="nav-right-actions">
@@ -270,8 +270,8 @@
   <header class="workspace-hero">
     <div class="hero-left">
       <div class="hero-thumb">
-        {#if workData.cover_id}
-          <img src="/media/{workData.cover_id}" alt={workData.title} class="hero-thumb-img" />
+        {#if workData.coverId}
+          <img src="/media/{workData.coverId}" alt={workData.title} class="hero-thumb-img" />
         {:else}
           <BookOpen size={28} class="text-purple-400" />
         {/if}
@@ -280,9 +280,9 @@
       <div class="hero-title-cluster">
         <div class="hero-series-title">{workData.title || 'Obra em Produção'}</div>
         <h1 class="hero-chapter-heading">
-          Capítulo #{chapterData.chapter_number || chapterData.number || '—'}
-          {#if chapterData.chapter_title || chapterData.title}
-            <span class="hero-chapter-sub">— {chapterData.chapter_title || chapterData.title}</span>
+          Capítulo #{chapterData.chapterNumber || chapterData.number || '—'}
+          {#if chapterData.chapterTitle || chapterData.title}
+            <span class="hero-chapter-sub">— {chapterData.chapterTitle || chapterData.title}</span>
           {/if}
         </h1>
 
@@ -294,7 +294,7 @@
 
           <div class="hero-badge assignee-badge">
             <User size={13} />
-            <span>Responsável: {activeStageItem?.assignee?.display_name || activeStageItem?.assignee?.username || 'Disponível'}</span>
+            <span>Responsável: {activeStageItem?.assignee?.displayName || activeStageItem?.assignee?.username || 'Disponível'}</span>
           </div>
 
           <div class="hero-badge priority-badge">
@@ -442,7 +442,7 @@
                     <span>Pegar Esta Etapa</span>
                   </button>
                 </form>
-              {:else if activeStageItem.status === 'IN_PROGRESS' && activeStageItem.assigned_to === currentUserId}
+              {:else if activeStageItem.status === 'IN_PROGRESS' && activeStageItem.assignedTo === currentUserId}
                 <form method="POST" action="?/releaseStage" use:enhance>
                   <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
                   <button type="submit" class="btn-release-secondary" title="Devolver etapa para a fila de disponíveis">
@@ -485,16 +485,16 @@
                         <FileText size={20} class="text-purple-400" />
                       </div>
                       <div class="file-info-col">
-                        <span class="file-name">{file.file_name}</span>
+                        <span class="file-name">{file.fileName}</span>
                         <div class="file-sub-tags">
-                          <span class="file-tag-stage">Etapa: {file.stage?.name || file.stage_slug}</span>
+                          <span class="file-tag-stage">Etapa: {file.stage?.name || file.stageSlug}</span>
                           <span class="file-tag-version">v{file.version}</span>
-                          <span class="file-tag-size">{formatBytes(file.byte_size)}</span>
+                          <span class="file-tag-size">{formatBytes(file.byteSize)}</span>
                         </div>
                       </div>
                       <a
                         href="/api/scan/production/files/{file.id}?download=1"
-                        download={file.file_name}
+                        download={file.fileName}
                         class="btn-download-action"
                       >
                         <Download size={14} />
@@ -566,18 +566,18 @@
                   <div class="deliv-left">
                     <CheckCircle2 size={20} class="text-emerald-400" />
                     <div class="deliv-info">
-                      <span class="deliv-name">{activeStageCurrentFile.file_name}</span>
+                      <span class="deliv-name">{activeStageCurrentFile.fileName}</span>
                       <div class="deliv-sub">
                         <span class="deliv-badge-v">Versão v{activeStageCurrentFile.version}</span>
-                        <span>{formatBytes(activeStageCurrentFile.byte_size)}</span>
+                        <span>{formatBytes(activeStageCurrentFile.byteSize)}</span>
                         <span>•</span>
-                        <span>Enviado por {activeStageCurrentFile.uploader?.display_name || activeStageCurrentFile.uploader?.username || 'Membro'}</span>
+                        <span>Enviado por {activeStageCurrentFile.uploader?.displayName || activeStageCurrentFile.uploader?.username || 'Membro'}</span>
                       </div>
                     </div>
                   </div>
                   <a
                     href="/api/scan/production/files/{activeStageCurrentFile.id}?download=1"
-                    download={activeStageCurrentFile.file_name}
+                    download={activeStageCurrentFile.fileName}
                     class="btn-deliv-download"
                   >
                     <Download size={14} />
@@ -647,7 +647,7 @@
                   <CheckCircle2 size={24} class="text-emerald-400" />
                   <div>
                     <strong>Etapa Concluída com Sucesso!</strong>
-                    <p>Concluída por {activeStageItem.completer?.display_name || activeStageItem.completer?.username || 'Membro'}.</p>
+                    <p>Concluída por {activeStageItem.completer?.displayName || activeStageItem.completer?.username || 'Membro'}.</p>
                   </div>
                 </div>
               {:else if activeStageItem.status === 'IN_PROGRESS'}
@@ -702,7 +702,7 @@
         {#if currentChapterFiles.length > 0}
           <div class="files-lineage-list">
             {#each currentChapterFiles as f}
-              <div class="file-lineage-card" class:is-stale={f.is_stale}>
+              <div class="file-lineage-card" class:is-stale={f.isStale}>
                 <div class="file-lineage-top">
                   <div class="file-left-cluster">
                     <div class="file-icon-square">
@@ -710,22 +710,22 @@
                     </div>
                     <div class="file-text-col">
                       <div class="file-title-line">
-                        <span class="file-name-bold">{f.file_name}</span>
+                        <span class="file-name-bold">{f.fileName}</span>
                         <span class="file-badge-version">v{f.version}</span>
-                        <span class="file-stage-pill">{f.stage?.name || f.stage_slug}</span>
+                        <span class="file-stage-pill">{f.stage?.name || f.stageSlug}</span>
                       </div>
                       <div class="file-meta-sub">
-                        <span>{formatBytes(f.byte_size)}</span>
+                        <span>{formatBytes(f.byteSize)}</span>
                         <span>•</span>
-                        <span>Enviado por {f.uploader?.display_name || f.uploader?.username || 'Membro'}</span>
+                        <span>Enviado por {f.uploader?.displayName || f.uploader?.username || 'Membro'}</span>
                         <span>•</span>
-                        <span>{new Date(f.created_at).toLocaleString('pt-BR')}</span>
+                        <span>{new Date(f.createdAt).toLocaleString('pt-BR')}</span>
                       </div>
                     </div>
                   </div>
 
                   <div class="file-right-cluster">
-                    {#if f.is_stale}
+                    {#if f.isStale}
                       <div class="stale-alert-badge">
                         <AlertTriangle size={14} />
                         <span>DESATUALIZADO (STALE)</span>
@@ -739,7 +739,7 @@
 
                     <a
                       href="/api/scan/production/files/{f.id}?download=1"
-                      download={f.file_name}
+                      download={f.fileName}
                       class="btn-download-file-lineage"
                     >
                       <Download size={14} />
@@ -749,24 +749,24 @@
                 </div>
 
                 <!-- Stale Explanation banner if stale -->
-                {#if f.is_stale}
+                {#if f.isStale}
                   <div class="stale-banner-explanation">
                     <AlertTriangle size={15} class="text-red-400" />
                     <div>
                       <strong>Atenção:</strong> Este arquivo foi marcado como obsoleto porque:
-                      <em>{f.stale_reason || 'Uma das dependências upstream foi regravada com uma versão mais recente.'}</em>
+                      <em>{f.staleReason || 'Uma das dependências upstream foi regravada com uma versão mais recente.'}</em>
                     </div>
                   </div>
                 {/if}
 
                 <!-- Upstream Input Lineage -->
-                {#if f.input_files && Object.keys(f.input_files).length > 0}
+                {#if f.inputFiles && Object.keys(f.inputFiles).length > 0}
                   <div class="input-lineage-box">
                     <span class="lineage-label">Linhagem de Entrada (Inputs Utilizados):</span>
                     <div class="lineage-tags-strip">
-                      {#each Object.entries(f.input_files) as [depSlug, info]}
+                      {#each Object.entries(f.inputFiles) as [depSlug, info]}
                         <span class="lineage-tag">
-                          <strong>{depSlug.toUpperCase()}:</strong> {(info as any).file_name || 'arquivo'} (v{(info as any).version || 1})
+                          <strong>{depSlug.toUpperCase()}:</strong> {(info as any).fileName || 'arquivo'} (v{(info as any).version || 1})
                         </span>
                       {/each}
                     </div>
@@ -803,13 +803,13 @@
                 </div>
                 <div class="timeline-content-card">
                   <div class="timeline-top">
-                    <span class="timeline-event-name">{item.event_type}</span>
-                    <span class="timeline-stage-tag">{item.stage_slug || 'PRODUÇÃO'}</span>
-                    <span class="timeline-time">{relativeTime(item.created_at)}</span>
+                    <span class="timeline-event-name">{item.eventType}</span>
+                    <span class="timeline-stage-tag">{item.stageSlug || 'PRODUÇÃO'}</span>
+                    <span class="timeline-time">{relativeTime(item.createdAt)}</span>
                   </div>
                   <div class="timeline-user-row">
                     <User size={12} />
-                    <span>{item.user_name || 'Membro'}</span>
+                    <span>{item.userName || 'Membro'}</span>
                   </div>
                   {#if item.details}
                     <div class="timeline-details-snippet">
@@ -819,8 +819,8 @@
                       {#if item.details.notes}
                         <p class="detail-notes"><strong>Notas:</strong> {item.details.notes}</p>
                       {/if}
-                      {#if item.details.file_name}
-                        <p class="detail-file"><strong>Arquivo:</strong> {item.details.file_name} (v{item.details.version})</p>
+                      {#if item.details.fileName}
+                        <p class="detail-file"><strong>Arquivo:</strong> {item.details.fileName} (v{item.details.version})</p>
                       {/if}
                     </div>
                   {/if}
@@ -855,13 +855,13 @@
             {#each currentQcIssues as q}
               <div class="qc-card" class:resolved={q.status === 'RESOLVED'}>
                 <div class="qc-card-top">
-                  <span class="qc-page-pill">Página #{q.page_number}</span>
-                  <span class="qc-type-pill">{q.issue_type}</span>
+                  <span class="qc-page-pill">Página #{q.pageNumber}</span>
+                  <span class="qc-type-pill">{q.issueType}</span>
                   <span class="qc-status-badge status-{q.status.toLowerCase()}">{q.status}</span>
                 </div>
                 <p class="qc-desc-text">{q.description}</p>
                 <div class="qc-card-footer">
-                  <span class="qc-author">Criado por {q.creator?.display_name || q.creator?.username || 'Revisor'}</span>
+                  <span class="qc-author">Criado por {q.creator?.displayName || q.creator?.username || 'Revisor'}</span>
                 </div>
               </div>
             {/each}

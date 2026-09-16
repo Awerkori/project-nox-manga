@@ -36,7 +36,7 @@
   let { data } = $props();
   let decodedTitle = $derived(decodeHtmlEntities(data.work.title));
   let decodedSynopsis = $derived(decodeHtmlEntities(data.work.synopsis || data.work.description));
-  let obraCover = $derived(resolveCoverUrl(data.work.cover_id, data.work.slug, data.work.id));
+  let obraCover = $derived(resolveCoverUrl(data.work.coverId, data.work.slug, data.work.id));
   let notice = $state(''),
     busy = $state(false),
     ascending = $state(false),
@@ -87,7 +87,7 @@
 
       await saveChapterOffline(
         { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
-        { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
+        { title: data.work.title, slug: data.work.slug, cover_id: data.work.coverId },
         payload.pages,
         (loaded, total) => {
           const pct = Math.round((loaded / total) * 100);
@@ -132,7 +132,7 @@
           if (payload.pages && payload.pages.length) {
             await saveChapterOffline(
               { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
-              { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
+              { title: data.work.title, slug: data.work.slug, cover_id: data.work.coverId },
               payload.pages,
               (loaded, total) => {
                 const pct = Math.round((loaded / total) * 100);
@@ -163,7 +163,7 @@
     return new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(n);
   }
 
-  let isAdult = $derived(data.work.content_rating === 'ADULT_18');
+  let isAdult = $derived(data.work.contentRating === 'ADULT_18');
   // Unblur automatically when visiting the individual work page per UX requirements
   let effectiveBlur = false;
 
@@ -177,7 +177,7 @@
     })
   );
 
-  let resume = $derived(data.progress[0]?.chapter_id || data.chapters.at(-1)?.id);
+  let resume = $derived(data.progress[0]?.chapterId || data.chapters.at(-1)?.id);
 
   async function library(update: Record<string, unknown>) {
     if (!data.profile) {
@@ -313,10 +313,10 @@
               <span class="meta-label">Classificação</span>
               <span class="meta-value adult-meta-val">+18 Adulto</span>
             </div>
-          {:else if data.work.age_rating}
+          {:else if data.work.ageRating}
             <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
               <span class="meta-label">Classificação</span>
-              <span class="meta-value">{data.work.age_rating} anos</span>
+              <span class="meta-value">{data.work.ageRating} anos</span>
             </div>
           {/if}
           {#if data.work.author}
@@ -338,8 +338,8 @@
                 {#each data.scans as scan, i}
                   {#if i > 0}<span class="scan-comma">·</span>{/if}
                   <a href="/scans/{scan.slug}" class="meta-scan-link">
-                    {#if scan.logo_id}
-                      <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
+                    {#if scan.logoId}
+                      <img src="/media/{scan.logoId}" alt={scan.name} class="scan-meta-thumb" />
                     {/if}
                     <span>{scan.name}</span>
                   </a>
@@ -368,7 +368,7 @@
               <a
                 href="/scans/{scan.slug}"
                 class="badge-scan-partner"
-                title="Scan {scan.is_official ? 'Oficial' : 'Parceira'}: {scan.name}"
+                title="Scan {scan.isOfficial ? 'Oficial' : 'Parceira'}: {scan.name}"
               >
                 <Users size={11} />
                 <span>{scan.name}</span>
@@ -464,10 +464,10 @@
                 <span class="meta-label">Classificação</span>
                 <span class="meta-value adult-meta-val">+18 Adulto</span>
               </div>
-            {:else if data.work.age_rating}
+            {:else if data.work.ageRating}
               <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
                 <span class="meta-label">Classificação</span>
-                <span class="meta-value">{data.work.age_rating} anos</span>
+                <span class="meta-value">{data.work.ageRating} anos</span>
               </div>
             {/if}
             {#if data.work.author}
@@ -489,8 +489,8 @@
                   {#each data.scans as scan, i}
                     {#if i > 0}<span class="scan-comma">·</span>{/if}
                     <a href="/scans/{scan.slug}" class="meta-scan-link">
-                      {#if scan.logo_id}
-                        <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
+                      {#if scan.logoId}
+                        <img src="/media/{scan.logoId}" alt={scan.name} class="scan-meta-thumb" />
                       {/if}
                       <span>{scan.name}</span>
                     </a>
@@ -516,16 +516,16 @@
 
             <button
               class="btn-glass-action btn-like"
-              class:is-active={data.likes.some((l) => l.user_id === data.profile?.id)}
+              class:is-active={data.likes.some((l) => l.userId === data.profile?.id)}
               onclick={like}
               disabled={busy}
-              aria-label={data.likes.some((l) => l.user_id === data.profile?.id)
+              aria-label={data.likes.some((l) => l.userId === data.profile?.id)
                 ? 'Remover curtida da obra'
                 : 'Curtir obra'}
             >
               <Heart
                 size={18}
-                fill={data.likes.some((l) => l.user_id === data.profile?.id) ? 'currentColor' : 'none'}
+                fill={data.likes.some((l) => l.userId === data.profile?.id) ? 'currentColor' : 'none'}
               />
               <span>{data.likes.length}</span>
             </button>
@@ -591,7 +591,7 @@
                 <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
               </a>
             {/if}
-            <span class="small muted">Atualizado em {date(data.work.updated_at)}</span>
+            <span class="small muted">Atualizado em {date(data.work.updatedAt)}</span>
           </div>
         </div>
 
@@ -627,8 +627,8 @@
 
         <div class="chapters-list-card">
           {#each chapters as chapter (chapter.id)}
-            {@const isRead = data.progress.some((p) => p.chapter_id === chapter.id && p.completed_at)}
-            {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
+            {@const isRead = data.progress.some((p) => p.chapterId === chapter.id && p.completedAt)}
+            {@const isNew = chapter.publishedAt && (Date.now() - new Date(chapter.publishedAt).getTime()) < 7 * 24 * 60 * 60 * 1000}
             {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
             {@const isDl = downloadedChapterIds.has(chapter.id)}
             {@const dlProgress = downloadingChapterIds[chapter.id]}
@@ -644,7 +644,7 @@
                   {/if}
                 </div>
                 <div class="chapter-meta-row">
-                  <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.views_total || 0)}</span>
+                  <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.viewsTotal || 0)}</span>
                   {#if scanLabel}
                     {@const chScanSlug = (chapter.chapter_scans?.[0]?.scans?.slug) || (data.scans?.[0]?.slug) || null}
                     <span class="chapter-meta-dot">·</span>
@@ -665,9 +665,9 @@
                       <span class="chapter-meta-scan">{scanLabel}</span>
                     {/if}
                   {/if}
-                  {#if chapter.published_at}
+                  {#if chapter.publishedAt}
                     <span class="chapter-meta-dot">·</span>
-                    <time class="chapter-meta-date">{date(chapter.published_at)}</time>
+                    <time class="chapter-meta-date">{date(chapter.publishedAt)}</time>
                   {/if}
                 </div>
               </div>

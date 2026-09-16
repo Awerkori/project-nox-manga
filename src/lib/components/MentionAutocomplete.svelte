@@ -166,8 +166,8 @@
         >
           {#if cand.type === 'user'}
             <UserAvatar
-              avatarId={cand.avatar_id}
-              displayName={cand.display_name || cand.username || cand.label}
+              avatarId={cand.avatarId}
+              displayName={cand.displayName || cand.username || cand.label}
               size={30}
             />
           {:else}

@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { privileged, db, schema, safeQuerySingle } from '$lib/server/db';
+import { eq } from 'drizzle-orm';
 import {
   resolveBotDownloadClient,
   normalizeBotReference,
@@ -8,7 +9,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
-export const GET = async ({ locals, params, request, platform, cookies }: any) => {
+export const GET = async ({ params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
 
@@ -32,9 +33,12 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  const db = privileged();
-  const { data: media } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
-  if (!media || media.storage_ready === false || media.status === 'DELETED') {
+  const supabase = privileged();
+  const { data: media } = await safeQuerySingle(
+    db.select().from(schema.media).where(eq(schema.media.id, params.id))
+  );
+
+  if (!media || media.storageReady === false || media.status === 'DELETED') {
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,
       headers: {
@@ -47,26 +51,26 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   
   // Public media includes all editorial assets, covers, avatars, banners, and any media marked PUBLIC
   const isPublic =
-    media.access_class === 'PUBLIC' ||
+    media.accessClass === 'PUBLIC' ||
     media.purpose === 'editorial' ||
     media.purpose === 'avatar' ||
     media.purpose === 'banner' ||
     media.purpose === 'scan_logo' ||
     media.purpose === 'scan_banner' ||
-    !media.access_class;
+    !media.accessClass;
 
   if (!isPublic) {
     let verifiedSession = null;
     const raw = extractFullAuthCookie(cookies.getAll());
     if (raw) {
-      const { jwt, accessToken } = decodeSessionJwt(raw);
+      const { jwt } = decodeSessionJwt(raw);
       if (jwt) {
-        try { verifiedSession = await resolveSessionData(locals.db, jwt, accessToken); } catch {}
+        try { verifiedSession = await resolveSessionData(jwt); } catch {}
       }
     }
     const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
-    const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
-    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+    const isOwner = Boolean(verifiedSession?.user?.id && media.createdBy === verifiedSession.user.id);
+    const isAuthenticatedAllowed = media.accessClass === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
     if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
       return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
@@ -94,7 +98,16 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   let body: BodyInit;
   if (media.provider === 'supabase') {
-    const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
+    if (!media.providerKey) {
+      return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
+        status: 502,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
+    }
+    const { data, error: problem } = await supabase.storage.from('nox-media').download(media.providerKey);
     if (problem || !data) {
       return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
         status: 502,
@@ -105,56 +118,57 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       });
     }
     body = data;
-  } else {
-    // Determine exact bot with strict Bot Affinity
-    let botRef = media.bot_reference;
-    let shardId = media.storage_shard_id;
+  } else {// Determine exact bot with strict Bot Affinity
+    let botRef = media.botReference;
+    let shardId = media.storageShardId;
 
-    // 1. If storage_shard_id is present and botRef is missing or default 'primary', lookup shard definition
+    // 1. If storageShardId is present and botRef is missing or default 'primary', lookup shard definition
     if (shardId && (!botRef || botRef === 'primary')) {
-      const { data: shardRow } = await db
-        .from('storage_shards')
-        .select('bot_reference')
-        .eq('id', shardId)
-        .maybeSingle();
-      if (shardRow?.bot_reference) {
-        botRef = shardRow.bot_reference;
+      const { data: shardRow } = await safeQuerySingle(
+        db.select({ botReference: schema.storageShards.botReference })
+          .from(schema.storageShards)
+          .where(eq(schema.storageShards.id, shardId))
+      );
+      if (shardRow?.botReference) {
+        botRef = shardRow.botReference;
       }
     }
 
     // 2. If botRef is still primary or null, deduce from file_id channel signature
     if (!botRef || botRef === 'primary') {
-      const deduced = deduceMangaShardFromFileId(media.provider_key);
-      if (deduced) {
-        botRef = deduced.botRef;
-        shardId = shardId || deduced.shardId;
+      if (media.providerKey) {
+        const deduced = deduceMangaShardFromFileId(media.providerKey);
+        if (deduced) {
+          botRef = deduced.botRef;
+          shardId = shardId || deduced.shardId;
+        }
       }
     }
 
     botRef = normalizeBotReference(botRef);
 
     try {
+      if (!media.providerKey) throw new Error('Missing provider key');
       const client = resolveBotDownloadClient(botRef);
-      const stream = await client.download(media.provider_key);
+      const stream = await client.download(media.providerKey);
       body = stream;
-    } catch (firstErr) {
-      const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
-      if (isTg400) {
-        // Bot mismatch (wrong file_id) - attempt alternative bot
+    } catch (firstErr) {const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
+      if (isTg400 && media.providerKey) {
+        // Bot mismatch (wrong fileId) - attempt alternative bot
         const altBotRef = botRef === 'MANGA_STORAGE_2' ? 'MANGA_STORAGE_01' : 'MANGA_STORAGE_2';
         try {
           const altClient = resolveBotDownloadClient(altBotRef);
-          const stream = await altClient.download(media.provider_key);
+          const stream = await altClient.download(media.providerKey);
           body = stream;
           botRef = altBotRef;
           // Self-heal DB mapping in background
-          const healingUpdate = { bot_reference: altBotRef };
+          const healingUpdate = { botReference: altBotRef};
           if (platform?.context?.waitUntil) {
             platform.context.waitUntil(
-              db.from('media').update(healingUpdate).eq('id', media.id)
+              db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id)).execute()
             );
           } else {
-            db.from('media').update(healingUpdate).eq('id', media.id).then();
+            db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id)).execute().then();
           }
         } catch {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {

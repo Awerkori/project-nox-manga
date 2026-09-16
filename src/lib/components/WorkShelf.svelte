@@ -42,20 +42,20 @@
       if (work.primary_scan?.name) {
         return {
           name: work.primary_scan.name,
-          logo_id: work.primary_scan.logo_id,
-          is_official: work.primary_scan.is_official,
+          logo_id: work.primary_scan.logoId,
+          is_official: work.primary_scan.isOfficial,
           extraCount: 0
         };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logo_id: primary.logoId,
+      is_official: primary.isOfficial,
       extraCount
     };
   }
@@ -192,9 +192,9 @@
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
         {#each currentWorks as work (work.id)}
-          {@const isAdult = work.content_rating === 'ADULT_18'}
+          {@const isAdult = work.contentRating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id)}
+          {@const shelfCover = resolveCoverUrl(work.coverId, work.slug, work.id)}
           {@const scanInfo = getScanInfo(work)}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
@@ -210,9 +210,9 @@
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-              <div class="card-views-badge" title="{work.views_total || 0} visualizações">
+              <div class="card-views-badge" title="{work.viewsTotal || 0} visualizações">
                 <Eye size={10} />
-                <span>{formatViews(work.views_total)}</span>
+                <span>{formatViews(work.viewsTotal)}</span>
               </div>
 
               <!-- 2. Type: Superior Direito (Top-Right) -->
@@ -226,9 +226,9 @@
               <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, múltiplos compactos) -->
               {#if scanInfo}
                 <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
-                  {#if scanInfo.logo_id}
-                    <img src="/media/{scanInfo.logo_id}" alt="" class="scan-badge-logo" />
-                  {:else if scanInfo.is_official}
+                  {#if scanInfo.logoId}
+                    <img src="/media/{scanInfo.logoId}" alt="" class="scan-badge-logo" />
+                  {:else if scanInfo.isOfficial}
                     <ShieldCheck size={10} />
                   {/if}
                   <span class="scan-badge-name">

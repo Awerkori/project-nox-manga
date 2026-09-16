@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuerySingle } from '$lib/server/db';
+import { eq, and, sql } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const code = params.code?.trim();
@@ -8,47 +9,45 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     return { status: 'INVALID', invite: null, user: null };
   }
 
-  const db = privileged();
-
-  const { data: invite, error: invErr } = await db
-    .from('scan_invites')
-    .select(`
-      id,
-      code,
-      role,
-      expires_at,
-      used_at,
-      revoked,
-      created_at,
-      scans!inner(
-        id,
-        name,
-        slug,
-        description,
-        logo_id,
-        banner_id,
-        is_official
-      )
-    `)
-    .eq('code', code)
-    .maybeSingle();
+  const { data: invite, error: invErr } = await safeQuerySingle(
+    db.select({
+      id: schema.scanInvites.id,
+      code: schema.scanInvites.code,
+      role: schema.scanInvites.role,
+      expiresAt: schema.scanInvites.expiresAt,
+      usedAt: schema.scanInvites.usedAt,
+      revoked: schema.scanInvites.revoked,
+      createdAt: schema.scanInvites.createdAt,
+      scan: {
+        id: schema.scans.id,
+        name: schema.scans.name,
+        slug: schema.scans.slug,
+        description: schema.scans.description,
+        logoId: schema.scans.logoId,
+        bannerId: schema.scans.bannerId,
+        isOfficial: schema.scans.isOfficial
+      }
+    })
+    .from(schema.scanInvites)
+    .innerJoin(schema.scans, eq(schema.scanInvites.scanId, schema.scans.id))
+    .where(eq(schema.scanInvites.code, code))
+  );
 
   if (invErr || !invite) {
     return { status: 'NOT_FOUND', invite: null, user: null };
   }
 
   const isRevoked = Boolean(invite.revoked);
-  const isUsed = Boolean(invite.used_at);
-  const isExpired = new Date(invite.expires_at).getTime() <= Date.now();
+  const isUsed = Boolean(invite.usedAt);
+  const isExpired = new Date(invite.expiresAt).getTime() <= Date.now();
 
   let alreadyMember = false;
   if (locals.user) {
-    const { data: existingMember } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', (invite.scans as any).id)
-      .eq('user_id', locals.user.id)
-      .maybeSingle();
+    const { data: existingMember } = await safeQuerySingle(
+      db.select({ role: schema.scanMembers.role })
+        .from(schema.scanMembers)
+        .where(and(eq(schema.scanMembers.scanId, invite.scan.id), eq(schema.scanMembers.userId, locals.user!.id)))
+    );
 
     if (existingMember) {
       alreadyMember = true;
@@ -68,10 +67,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       id: invite.id,
       code: invite.code,
       role: invite.role,
-      expiresAt: invite.expires_at,
-      scan: invite.scans
+      expiresAt: invite.expiresAt,
+      scan: invite.scan
     },
-    user: locals.user ? { id: locals.user.id } : null
+    user: locals.user ? { id: locals.user!.id } : null
   };
 };
 
@@ -84,15 +83,15 @@ export const actions: Actions = {
     const code = params.code?.trim();
     if (!code) return fail(400, { message: 'Código de convite inválido.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('claim_scan_invite', {
-      p_code: code
-    });
+    const { data, error: rpcErr } = await safeQuerySingle(
+      db.execute(sql`SELECT * FROM claim_scan_invite(${code})`)
+    );
 
     if (rpcErr) {
       return fail(400, { message: rpcErr.message });
     }
 
-    const scanId = (data as any)?.scan_id;
+    const scanId = (data as any)?.scanId ?? (data as any)?.scan_id;
     throw redirect(303, `/scan${scanId ? `?id=${scanId}` : ''}`);
   }
 };

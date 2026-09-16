@@ -3,11 +3,9 @@ import { z } from 'zod';
 import { verifyMihonAuth } from '$lib/server/mihon';
 import { privileged } from '$lib/server/db';
 
-const progressSchema = z.object({
-  chapter_id: z.string().uuid(),
+const progressSchema = z.object({chapterId: z.string().uuid(),
   page: z.number().int().min(1).default(1),
-  completed: z.boolean().default(false)
-});
+  completed: z.boolean().default(false)});
 
 export const POST = async ({ request }) => {
   const auth = await verifyMihonAuth(request);
@@ -33,7 +31,7 @@ export const POST = async ({ request }) => {
   const { data: chapter, error: chErr } = await db
     .from('chapters')
     .select('id, work_id, number')
-    .eq('id', body.chapter_id)
+    .eq('id', body.chapterId)
     .maybeSingle();
 
   if (chErr || !chapter) {
@@ -44,13 +42,11 @@ export const POST = async ({ request }) => {
 
   // 2. Upsert reading_sessions for anti-cheat tracking
   await db.from('reading_sessions').upsert(
-    {
-      user_id: userId,
-      chapter_id: body.chapter_id,
-      next_page: body.page + 1,
-      accepted_at: now
-    },
-    { onConflict: 'user_id,chapter_id' }
+    {userId: userId,
+      chapterId: body.chapterId,
+      nextPage: body.page + 1,
+      acceptedAt: now},
+    {onConflict: 'userId,chapterId'}
   );
 
   // 3. Upsert reading entry
@@ -58,29 +54,27 @@ export const POST = async ({ request }) => {
     .from('reading')
     .select('page, max_page, completed_at')
     .eq('user_id', userId)
-    .eq('chapter_id', body.chapter_id)
+    .eq('chapter_id', body.chapterId)
     .maybeSingle();
 
   const completedAt =
-    existingRead?.completed_at || (body.completed ? now : null);
+    existingRead?.completedAt || (body.completed ? now : null);
 
   await db.from('reading').upsert(
-    {
-      user_id: userId,
-      chapter_id: body.chapter_id,
+    {userId: userId,
+      chapterId: body.chapterId,
       page: body.page,
-      max_page: Math.max(existingRead?.max_page || 1, body.page),
-      completed_at: completedAt,
-      updated_at: now
-    },
-    { onConflict: 'user_id,chapter_id' }
+      maxPage: Math.max(existingRead?.maxPage || 1, body.page),
+      completedAt: completedAt,
+      updatedAt: now},
+    {onConflict: 'userId,chapterId'}
   );
 
   // 4. If completed, claim XP
   let xpResult = null;
   if (body.completed) {
     const { data: claimData, error: claimErr } = await db.rpc('claim_chapter_xp', {
-      p_chapter_id: body.chapter_id,
+      p_chapter_id: body.chapterId,
       p_user_id: userId,
       p_source: 'mihon'
     });
@@ -96,12 +90,10 @@ export const POST = async ({ request }) => {
     .eq('id', userId)
     .single();
 
-  return json({
-    ok: true,
-    chapter_id: body.chapter_id,
+  return json({ok: true,
+    chapterId: body.chapterId,
     page: body.page,
     completed: body.completed,
     xp: memberData?.xp ?? auth.user.xp,
-    xp_claim: xpResult
-  });
+    xp_claim: xpResult});
 };

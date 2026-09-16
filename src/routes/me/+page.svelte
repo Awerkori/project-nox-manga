@@ -84,8 +84,8 @@
   let filteredAchievements = $derived(
     (data.achievements || []).filter((ach: any) => {
       if (achStatusFilter === 'UNLOCKED' && !ach.unlocked) return false;
-      if (achStatusFilter === 'LOCKED' && (ach.unlocked || ach.is_secret)) return false;
-      if (achStatusFilter === 'SECRET' && !ach.is_secret) return false;
+      if (achStatusFilter === 'LOCKED' && (ach.unlocked || ach.isSecret)) return false;
+      if (achStatusFilter === 'SECRET' && !ach.isSecret) return false;
       if (achCategoryFilter !== 'ALL' && ach.category !== achCategoryFilter) return false;
       return true;
     })
@@ -94,7 +94,7 @@
   let achStats = $derived.by(() => {
     const list = data.achievements || [];
     const unlocked = list.filter((a: any) => a.unlocked);
-    const totalXp = unlocked.reduce((acc: number, a: any) => acc + (a.xp_reward || 0), 0);
+    const totalXp = unlocked.reduce((acc: number, a: any) => acc + (a.xpReward || 0), 0);
     const rarities = ['COMUM', 'INCOMUM', 'RARA', 'EPICA', 'LENDARIA', 'MITICA'] as const;
     const byRarity: Record<string, { total: number; unlocked: number }> = {};
     for (const r of rarities) {
@@ -235,11 +235,11 @@
 
   let displayedNotifs = $derived(
     notifFilter === 'UNREAD'
-      ? notifsList.filter((n: any) => !n.read_at)
+      ? notifsList.filter((n: any) => !n.readAt)
       : notifsList
   );
 
-  let unreadNotifsCount = $derived(notifsList.filter((n: any) => !n.read_at).length);
+  let unreadNotifsCount = $derived(notifsList.filter((n: any) => !n.readAt).length);
 
   async function markSingleRead(notifId: string) {
     notifsList = notifsList.map((n) => (n.id === notifId ? { ...n, read_at: new Date().toISOString() } : n));
@@ -276,7 +276,7 @@
       URL.revokeObjectURL(cropPreviewUrl);
     }
     cropPreviewUrl = URL.createObjectURL(file);
-    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    const existing = (type === 'avatar' ? data.member.avatarCrop : data.member.bannerCrop) as any;
     cropX = existing?.x ?? 50;
     cropY = existing?.y ?? 50;
     cropZoom = existing?.zoom ?? 1;
@@ -287,10 +287,10 @@
     modalNotice = '';
     cropType = type;
     pendingFile = null;
-    const mediaId = type === 'avatar' ? data.member.avatar_id : data.member.banner_id;
+    const mediaId = type === 'avatar' ? data.member.avatarId : data.member.bannerId;
     if (!mediaId) return;
     cropPreviewUrl = `/media/${mediaId}`;
-    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    const existing = (type === 'avatar' ? data.member.avatarCrop : data.member.bannerCrop) as any;
     cropX = existing?.x ?? 50;
     cropY = existing?.y ?? 50;
     cropZoom = existing?.zoom ?? 1;
@@ -379,10 +379,10 @@
     <header class="me-header-strip">
       <div class="header-avatar-col">
         <UserAvatar
-          avatarId={data.member.avatar_id}
+          avatarId={data.member.avatarId}
           frameId={data.member.frame_id}
-          crop={data.member.avatar_crop}
-          displayName={data.member.display_name || data.member.username}
+          crop={data.member.avatarCrop}
+          displayName={data.member.displayName || data.member.username}
           size={72}
         />
       </div>
@@ -391,16 +391,16 @@
         <div class="title-row">
           <h1
             class="me-display-name"
-            style={data.member.name_color ? `color: ${data.member.name_color}` : ''}
+            style={data.member.nameColor ? `color: ${data.member.nameColor}` : ''}
           >
-            {data.member.display_name || data.member.username}
+            {data.member.displayName || data.member.username}
           </h1>
           <span class="level-pill">
             <Crown size={13} />
             <span>Nível {userLevel}</span>
           </span>
-          {#if data.member.equipped_title_id}
-            <span class="cosmetic-title">{data.member.equipped_title_id}</span>
+          {#if data.member.equippedTitleId}
+            <span class="cosmetic-title">{data.member.equippedTitleId}</span>
           {/if}
         </div>
 
@@ -571,11 +571,11 @@
                 </div>
 
                 <div class="recent-history-list">
-                  {#each data.history.slice(0, 5) as item (item.chapter_id)}
-                    <a href="/ler/{item.chapter_id}" class="history-item-row">
-                      {#if item.chapters?.works?.cover_id}
+                  {#each data.history.slice(0, 5) as item (item.chapterId)}
+                    <a href="/ler/{item.chapterId}" class="history-item-row">
+                      {#if item.chapters?.works?.coverId}
                         <img
-                          src="/media/{item.chapters.works.cover_id}"
+                          src="/media/{item.chapters.works.coverId}"
                           alt={item.chapters.works.title}
                           class="h-mini-cover"
                         />
@@ -584,7 +584,7 @@
                         <span class="h-work">{item.chapters?.works?.title}</span>
                         <span class="h-ch">Capítulo {item.chapters?.number} · Pág. {item.page}</span>
                       </div>
-                      <span class="h-time">{relativeTime(item.updated_at)}</span>
+                      <span class="h-time">{relativeTime(item.updatedAt)}</span>
                     </a>
                   {/each}
                 </div>
@@ -635,7 +635,7 @@
 
             {#if filteredLibrary.length > 0}
               <div class="works-grid">
-                {#each filteredLibrary as item (item.work_id)}
+                {#each filteredLibrary as item (item.workId)}
                   <WorkCard work={item.works} />
                 {/each}
               </div>
@@ -653,7 +653,7 @@
             <h2 class="pane-title">Obras Favoritas ({favorites.length})</h2>
             {#if favorites.length > 0}
               <div class="works-grid">
-                {#each favorites as item (item.work_id)}
+                {#each favorites as item (item.workId)}
                   <WorkCard work={item.works} />
                 {/each}
               </div>
@@ -671,20 +671,20 @@
             <h2 class="pane-title">Histórico de Leitura ({data.history.length})</h2>
             {#if data.history.length > 0}
               <div class="history-table">
-                {#each data.history as item (item.chapter_id)}
-                  <a href="/ler/{item.chapter_id}" class="history-item-row">
-                    {#if item.chapters?.works?.cover_id}
+                {#each data.history as item (item.chapterId)}
+                  <a href="/ler/{item.chapterId}" class="history-item-row">
+                    {#if item.chapters?.works?.coverId}
                       <img
-                        src="/media/{item.chapters.works.cover_id}"
+                        src="/media/{item.chapters.works.coverId}"
                         alt={item.chapters.works.title}
                         class="h-mini-cover"
                       />
                     {/if}
                     <div class="h-meta">
                       <span class="h-work">{item.chapters?.works?.title}</span>
-                      <span class="h-ch">Capítulo {item.chapters?.number} {item.completed_at ? '✓ Concluído' : `· Pág. ${item.page}`}</span>
+                      <span class="h-ch">Capítulo {item.chapters?.number} {item.completedAt ? '✓ Concluído' : `· Pág. ${item.page}`}</span>
                     </div>
-                    <span class="h-time">{relativeTime(item.updated_at)}</span>
+                    <span class="h-time">{relativeTime(item.updatedAt)}</span>
                   </a>
                 {/each}
               </div>
@@ -781,7 +781,7 @@
                   class:active={achStatusFilter === 'SECRET'}
                   onclick={() => (achStatusFilter = 'SECRET')}
                 >
-                  Secretas ({data.achievements.filter((a: any) => a.is_secret).length})
+                  Secretas ({data.achievements.filter((a: any) => a.isSecret).length})
                 </button>
               </div>
 
@@ -797,7 +797,7 @@
             <!-- Achievements Cards Grid -->
             <div class="achievements-catalog-grid">
               {#each filteredAchievements as ach (ach.id)}
-                {@const isSecretLocked = ach.is_secret && !ach.unlocked}
+                {@const isSecretLocked = ach.isSecret && !ach.unlocked}
                 {@const rarityClass = `rarity-${ach.rarity.toLowerCase()}`}
                 <div
                   class="ach-catalog-card {rarityClass}"
@@ -806,7 +806,7 @@
                 >
                   <div
                     class="ach-icon-circle"
-                    style="background: {ach.unlocked ? `${ach.badge_color || '#8b5cf6'}22` : 'rgba(255, 255, 255, 0.04)'}; color: {ach.unlocked ? (ach.badge_color || '#c4b5fd') : '#64748b'}"
+                    style="background: {ach.unlocked ? `${ach.badgeColor || '#8b5cf6'}22` : 'rgba(255, 255, 255, 0.04)'}; color: {ach.unlocked ? (ach.badgeColor || '#c4b5fd') : '#64748b'}"
                   >
                     {#if isSecretLocked}
                       <Lock size={18} />
@@ -867,7 +867,7 @@
                         <span class="ach-rarity-badge">{ach.rarity}</span>
                         <span class="ach-category-tag">{categoryLabels[ach.category] || ach.category}</span>
                       </div>
-                      <span class="ach-xp">+{ach.xp_reward} XP</span>
+                      <span class="ach-xp">+{ach.xpReward} XP</span>
                     </div>
 
                     <h4 class="ach-title">
@@ -891,24 +891,24 @@
                         <div class="ach-footer-actions">
                           <span class="unlocked-tag">
                             <CheckCircle2 size={12} />
-                            <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
+                            <span>Desbloqueada {ach.unlockedAt ? `em ${date(ach.unlockedAt)}` : ''}</span>
                           </span>
                           <form method="POST" action="?/setFeaturedAchievement" use:enhance>
                             <input
                               type="hidden"
                               name="achievement_id"
-                              value={data.member.featured_achievement_id === ach.id ? '' : ach.id}
+                              value={data.member.featuredAchievementId === ach.id ? '' : ach.id}
                             />
                             <button
                               type="submit"
                               class="btn-pin-featured"
-                              class:is-featured={data.member.featured_achievement_id === ach.id}
-                              title={data.member.featured_achievement_id === ach.id
+                              class:is-featured={data.member.featuredAchievementId === ach.id}
+                              title={data.member.featuredAchievementId === ach.id
                                 ? 'Remover destaque do perfil público'
                                 : 'Destacar esta conquista no seu perfil público'}
                             >
                               <Star size={12} />
-                              <span>{data.member.featured_achievement_id === ach.id ? 'Em Destaque' : 'Destacar'}</span>
+                              <span>{data.member.featuredAchievementId === ach.id ? 'Em Destaque' : 'Destacar'}</span>
                             </button>
                           </form>
                         </div>
@@ -1043,8 +1043,8 @@
                   <a
                     href={n.href || '/me'}
                     class="notif-card"
-                    class:unread={!n.read_at}
-                    onclick={() => { if (!n.read_at) markSingleRead(n.id); }}
+                    class:unread={!n.readAt}
+                    onclick={() => { if (!n.readAt) markSingleRead(n.id); }}
                   >
                     <div class="notif-card-header">
                       <div class="notif-tag-wrap">
@@ -1055,7 +1055,7 @@
                           <span class="notif-context-pill">{n.context}</span>
                         {/if}
                       </div>
-                      <span class="notif-time">{relativeTime(n.created_at)}</span>
+                      <span class="notif-time">{relativeTime(n.createdAt)}</span>
                     </div>
 
                     <h3 class="notif-title">{n.title || n.body || 'Notificação'}</h3>
@@ -1067,7 +1067,7 @@
                         <ExternalLink size={13} />
                       </span>
 
-                      {#if !n.read_at}
+                      {#if !n.readAt}
                         <button
                           type="button"
                           class="btn-mark-single-read"
@@ -1109,10 +1109,10 @@
                 <span class="upload-label">Foto de Perfil (Suporta GIFs)</span>
                 <div class="avatar-preview-wrap">
                   <UserAvatar
-                    avatarId={data.member.avatar_id}
+                    avatarId={data.member.avatarId}
                     frameId={data.member.frame_id}
-                    crop={data.member.avatar_crop}
-                    displayName={data.member.display_name || data.member.username}
+                    crop={data.member.avatarCrop}
+                    displayName={data.member.displayName || data.member.username}
                     size={80}
                   />
                 </div>
@@ -1128,7 +1128,7 @@
                       hidden
                     />
                   </label>
-                  {#if data.member.avatar_id}
+                  {#if data.member.avatarId}
                     <button
                       type="button"
                       class="btn-reposition"
@@ -1145,12 +1145,12 @@
               <div class="uploader-box">
                 <span class="upload-label">Banner de Perfil (Suporta GIFs)</span>
                 <div class="banner-preview-box">
-                  {#if data.member.banner_id}
+                  {#if data.member.bannerId}
                     <img
-                      src="/media/{data.member.banner_id}"
+                      src="/media/{data.member.bannerId}"
                       alt="Banner atual"
                       class="banner-preview-img"
-                      style={(data.member.banner_crop as any) ? `object-position: ${(data.member.banner_crop as any).x ?? 50}% ${(data.member.banner_crop as any).y ?? 50}%; transform: scale(${(data.member.banner_crop as any).zoom ?? 1});` : ''}
+                      style={(data.member.bannerCrop as any) ? `object-position: ${(data.member.bannerCrop as any).x ?? 50}% ${(data.member.bannerCrop as any).y ?? 50}%; transform: scale(${(data.member.bannerCrop as any).zoom ?? 1});` : ''}
                     />
                   {:else}
                     <div class="banner-preview-placeholder">Nenhum banner</div>
@@ -1168,7 +1168,7 @@
                       hidden
                     />
                   </label>
-                  {#if data.member.banner_id}
+                  {#if data.member.bannerId}
                     <button
                       type="button"
                       class="btn-reposition"
@@ -1203,7 +1203,7 @@
                   id="display_name"
                   name="display_name"
                   type="text"
-                  value={data.member.display_name}
+                  value={data.member.displayName}
                   required
                   minlength="2"
                   maxlength="50"
@@ -1246,7 +1246,7 @@
                 <input
                   type="checkbox"
                   name="blur_nsfw"
-                  checked={data.member.blur_nsfw}
+                  checked={data.member.blurNsfw}
                   class="toggle-input"
                 />
               </div>
@@ -1259,7 +1259,7 @@
                 <input
                   type="checkbox"
                   name="privacy_show_achievements"
-                  checked={data.member.privacy_show_achievements ?? true}
+                  checked={data.member.privacyShowAchievements ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1272,7 +1272,7 @@
                 <input
                   type="checkbox"
                   name="privacy_show_cosmetics"
-                  checked={data.member.privacy_show_cosmetics ?? true}
+                  checked={data.member.privacyShowCosmetics ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1285,7 +1285,7 @@
                 <input
                   type="checkbox"
                   name="privacy_show_favorites"
-                  checked={data.member.privacy_show_favorites ?? true}
+                  checked={data.member.privacyShowFavorites ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1298,7 +1298,7 @@
                 <input
                   type="checkbox"
                   name="privacy_show_reading_history"
-                  checked={data.member.privacy_show_reading_history ?? true}
+                  checked={data.member.privacyShowReadingHistory ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1311,7 +1311,7 @@
                 <input
                   type="checkbox"
                   name="privacy_show_scans"
-                  checked={data.member.privacy_show_scans ?? true}
+                  checked={data.member.privacyShowScans ?? true}
                   class="toggle-input"
                 />
               </div>
@@ -1322,9 +1322,9 @@
                   <p>Escolha se deseja destacar apenas o cargo principal ou todas as equipes em que você atua.</p>
                 </div>
                 <select name="privacy_scan_mode" class="form-input" style="width: auto; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15);">
-                  <option value="PRIMARY" selected={(data.member.privacy_scan_mode ?? 'PRIMARY') === 'PRIMARY'}>Somente Cargo Principal</option>
-                  <option value="ALL" selected={data.member.privacy_scan_mode === 'ALL'}>Todas as Equipes</option>
-                  <option value="NONE" selected={data.member.privacy_scan_mode === 'NONE'}>Nenhuma (Ocultar)</option>
+                  <option value="PRIMARY" selected={(data.member.privacyScanMode ?? 'PRIMARY') === 'PRIMARY'}>Somente Cargo Principal</option>
+                  <option value="ALL" selected={data.member.privacyScanMode === 'ALL'}>Todas as Equipes</option>
+                  <option value="NONE" selected={data.member.privacyScanMode === 'NONE'}>Nenhuma (Ocultar)</option>
                 </select>
               </div>
 

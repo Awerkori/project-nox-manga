@@ -35,7 +35,7 @@
   let { data } = $props();
 
   let rank = $derived(
-    memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id)
+    memberRank(data.member.xp, data.member.equippedTitleId, data.member.equippedBadgeId)
   );
   let progress = $derived(getLevelProgress(data.member.xp));
 
@@ -128,16 +128,16 @@
 
   function isItemEquipped(item: any): boolean {
     if (!item) return false;
-    if (item.kind === 'AVATAR_FRAME' && data.member.avatar_frame_id === item.id) return true;
+    if (item.kind === 'AVATAR_FRAME' && data.member.avatarFrameId === item.id) return true;
     if (
       item.kind === 'TITLE' &&
-      (data.member.equipped_title_id === item.id || data.member.equipped_title_id === item.name)
+      (data.member.equippedTitleId === item.id || data.member.equippedTitleId === item.name)
     )
       return true;
-    if (item.kind === 'PROFILE_BANNER' && data.member.equipped_banner_id === item.id) return true;
+    if (item.kind === 'PROFILE_BANNER' && data.member.equippedBannerId === item.id) return true;
     if (item.kind === 'NAME_COLOR') {
-      const colorVal = item.style_data?.color || item.style_data?.backgroundImage || item.id;
-      return data.member.name_color === colorVal;
+      const colorVal = item.styleData?.color || item.styleData?.backgroundImage || item.id;
+      return data.member.nameColor === colorVal;
     }
     return false;
   }
@@ -195,10 +195,10 @@
 </script>
 
 <svelte:head>
-  <title>{data.member.display_name} (@{data.member.username}) — Project Nox</title>
+  <title>{data.member.displayName} (@{data.member.username}) — Project Nox</title>
   <meta
     name="description"
-    content={data.member.bio || `Perfil de ${data.member.display_name} no Project Nox.`}
+    content={data.member.bio || `Perfil de ${data.member.displayName} no Project Nox.`}
   />
 </svelte:head>
 
@@ -208,12 +208,12 @@
     <article class="profile-card">
       <!-- Profile Banner -->
       <div class="profile-banner-wrap">
-        {#if data.member.banner_id}
+        {#if data.member.bannerId}
           <img
-            src="/media/{data.member.banner_id}"
-            alt="Banner de {data.member.display_name}"
+            src="/media/{data.member.bannerId}"
+            alt="Banner de {data.member.displayName}"
             class="profile-banner-img"
-            style={(data.member.banner_crop as any) ? `object-position: ${(data.member.banner_crop as any).x ?? 50}% ${(data.member.banner_crop as any).y ?? 50}%; transform: scale(${(data.member.banner_crop as any).zoom ?? 1});` : ''}
+            style={(data.member.bannerCrop as any) ? `object-position: ${(data.member.bannerCrop as any).x ?? 50}% ${(data.member.bannerCrop as any).y ?? 50}%; transform: scale(${(data.member.bannerCrop as any).zoom ?? 1});` : ''}
           />
         {:else if data.cosmetic_banner?.background}
           <div
@@ -231,10 +231,10 @@
           <!-- Avatar with cosmetic frame -->
           <div class="avatar-holder">
             <UserAvatar
-              avatarId={data.member.avatar_id}
+              avatarId={data.member.avatarId}
               frameId={data.member.frame_id}
-              crop={data.member.avatar_crop as any}
-              displayName={data.member.display_name}
+              crop={data.member.avatarCrop as any}
+              displayName={data.member.displayName}
               size={96}
             />
           </div>
@@ -271,15 +271,15 @@
           <div class="name-line">
             <h1
               class="display-name"
-              style={data.member.name_color ? `color: ${data.member.name_color}` : ''}
+              style={data.member.nameColor ? `color: ${data.member.nameColor}` : ''}
             >
-              {data.member.display_name}
+              {data.member.displayName}
             </h1>
 
-            {#if data.member.equipped_title_id}
+            {#if data.member.equippedTitleId}
               <span class="cosmetic-title-pill">
                 <Crown size={13} />
-                <span>{data.member.equipped_title_id}</span>
+                <span>{data.member.equippedTitleId}</span>
               </span>
             {:else if rank.title}
               <span class="rank-title-pill">{rank.title}</span>
@@ -303,7 +303,7 @@
             <span class="meta-dot">·</span>
             <span class="join-date">
               <Calendar size={13} />
-              <span>Na Nox desde {date(data.member.created_at)}</span>
+              <span>Na Nox desde {date(data.member.createdAt)}</span>
             </span>
           </div>
 
@@ -318,8 +318,8 @@
                   class:uploader={sr.role === 'UPLOADER'}
                   title={sr.fullTitle || `Membro da equipe ${sr.scan.name}`}
                 >
-                  {#if sr.scan.logo_id}
-                    <img src="/media/{sr.scan.logo_id}" alt="" class="scan-badge-logo" />
+                  {#if sr.scan.logoId}
+                    <img src="/media/{sr.scan.logoId}" alt="" class="scan-badge-logo" />
                   {:else if sr.role === 'OWNER'}
                     <Crown size={13} class="text-amber" />
                   {:else}
@@ -520,15 +520,15 @@
               <div class="featured-text-block">
                 <div class="featured-title-row">
                   <h3 class="featured-title">{data.featuredAchievement.title}</h3>
-                  {#if data.featuredAchievement.xp_reward}
-                    <span class="featured-xp-tag">+{data.featuredAchievement.xp_reward} XP</span>
+                  {#if data.featuredAchievement.xpReward}
+                    <span class="featured-xp-tag">+{data.featuredAchievement.xpReward} XP</span>
                   {/if}
                 </div>
                 <p class="featured-description">{data.featuredAchievement.description}</p>
                 <div class="featured-meta-row">
                   <span class="featured-unlock-date">
                     <CheckCircle2 size={13} />
-                    <span>Desbloqueada em {date(data.featuredAchievement.unlocked_at)}</span>
+                    <span>Desbloqueada em {date(data.featuredAchievement.unlockedAt)}</span>
                   </span>
                   {#if data.isSelf}
                     <a href="/me?tab=achievements" class="featured-edit-link">
@@ -640,7 +640,7 @@
                 <p>Este leitor optou por manter suas obras favoritas privadas no seu perfil público.</p>
               </div>
             {:else}
-              {#if data.isSelf && !data.member.privacy_show_favorites}
+              {#if data.isSelf && !data.member.privacyShowFavorites}
                 <div class="self-privacy-hint">
                   <Lock size={14} />
                   <span>Seus favoritos estão configurados como privados e são visíveis apenas para você.</span>
@@ -675,7 +675,7 @@
                 <p>Este leitor optou por manter seu histórico recente de leituras privado.</p>
               </div>
             {:else}
-              {#if data.isSelf && !data.member.privacy_show_reading_history}
+              {#if data.isSelf && !data.member.privacyShowReadingHistory}
                 <div class="self-privacy-hint">
                   <Lock size={14} />
                   <span>Seu histórico de leituras está configurado como privado e é visível apenas para você.</span>
@@ -795,7 +795,7 @@
                     >
                       <div
                         class="ach-icon-circle"
-                        style="background: {ach.badge_color ? `${ach.badge_color}22` : rInfo.bg}; color: {ach.badge_color || rInfo.text}"
+                        style="background: {ach.badgeColor ? `${ach.badgeColor}22` : rInfo.bg}; color: {ach.badgeColor || rInfo.text}"
                       >
                         <AchievementIcon icon={ach.icon} size={20} />
                       </div>
@@ -808,8 +808,8 @@
                           >
                             {rInfo.label}
                           </span>
-                          {#if ach.xp_reward}
-                            <span class="ach-xp-tag">+{ach.xp_reward} XP</span>
+                          {#if ach.xpReward}
+                            <span class="ach-xp-tag">+{ach.xpReward} XP</span>
                           {/if}
                         </div>
 
@@ -819,7 +819,7 @@
                         <div class="ach-footer-meta">
                           <span class="ach-date">
                             <CheckCircle2 size={12} />
-                            <span>Desbloqueada {ach.unlocked_at ? `em ${date(ach.unlocked_at)}` : ''}</span>
+                            <span>Desbloqueada {ach.unlockedAt ? `em ${date(ach.unlockedAt)}` : ''}</span>
                           </span>
                         </div>
                       </div>
@@ -915,9 +915,9 @@
                       <div class="cosmetic-preview-box">
                         {#if item.kind === 'AVATAR_FRAME'}
                           <div class="preview-avatar-wrap">
-                            <div class="preview-frame" style={item.style_data ? Object.entries(item.style_data).map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`).join(';') : ''}>
+                            <div class="preview-frame" style={item.styleData ? Object.entries(item.styleData).map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`).join(';') : ''}>
                               <div class="preview-avatar-placeholder">
-                                {data.member.display_name?.slice(0, 1) || 'N'}
+                                {data.member.displayName?.slice(0, 1) || 'N'}
                               </div>
                             </div>
                           </div>
@@ -929,14 +929,14 @@
                         {:else if item.kind === 'PROFILE_BANNER'}
                           <div
                             class="preview-banner-strip"
-                            style="background: {item.style_data?.background || 'linear-gradient(135deg, #1e1b4b, #0d101a)'};"
+                            style="background: {item.styleData?.background || 'linear-gradient(135deg, #1e1b4b, #0d101a)'};"
                           ></div>
                         {:else if item.kind === 'NAME_COLOR'}
                           <div
                             class="preview-color-name"
-                            style="color: {item.style_data?.color || item.id};"
+                            style="color: {item.styleData?.color || item.id};"
                           >
-                            <span>{data.member.display_name}</span>
+                            <span>{data.member.displayName}</span>
                           </div>
                         {:else}
                           <div class="preview-generic-icon">
@@ -1009,7 +1009,7 @@
                     <input
                       type="checkbox"
                       name="show_scans"
-                      checked={data.member.privacy_show_scans ?? true}
+                      checked={data.member.privacyShowScans ?? true}
                       onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
                     />
                     <span>Exibir emblemas de equipes</span>
@@ -1017,7 +1017,7 @@
 
                   <select
                     name="mode"
-                    value={data.member.privacy_scan_mode ?? 'PRIMARY'}
+                    value={data.member.privacyScanMode ?? 'PRIMARY'}
                     class="privacy-select-field"
                     onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
                   >
@@ -1030,13 +1030,13 @@
             {/if}
 
             {#if data.isViewerGlobalAdmin && !data.isSelf}
-              <div class="admin-mod-control-box" class:is-hidden={data.member.admin_hide_scan_badges}>
+              <div class="admin-mod-control-box" class:is-hidden={data.member.adminHideScanBadges}>
                 <div class="admin-mod-left">
-                  <AlertTriangle size={18} class={data.member.admin_hide_scan_badges ? 'text-red' : 'text-amber'} />
+                  <AlertTriangle size={18} class={data.member.adminHideScanBadges ? 'text-red' : 'text-amber'} />
                   <div>
                     <strong class="admin-mod-title">Moderação Global de Equipes (Admin)</strong>
                     <p class="admin-mod-sub">
-                      {data.member.admin_hide_scan_badges ? 'Emblemas de equipe deste leitor estão OCULTOS globalmente por um administrador.' : 'Emblemas de equipe deste leitor estão visíveis normalmente conforme a privacidade do usuário.'}
+                      {data.member.adminHideScanBadges ? 'Emblemas de equipe deste leitor estão OCULTOS globalmente por um administrador.' : 'Emblemas de equipe deste leitor estão visíveis normalmente conforme a privacidade do usuário.'}
                     </p>
                   </div>
                 </div>
@@ -1046,14 +1046,14 @@
                   <input
                     type="hidden"
                     name="hide_badges"
-                    value={data.member.admin_hide_scan_badges ? 'false' : 'true'}
+                    value={data.member.adminHideScanBadges ? 'false' : 'true'}
                   />
                   <button
                     type="submit"
                     class="btn-admin-mod"
-                    class:restore={data.member.admin_hide_scan_badges}
+                    class:restore={data.member.adminHideScanBadges}
                   >
-                    {data.member.admin_hide_scan_badges ? 'Restaurar Emblemas do Usuário' : 'Ocultar Emblemas Globalmente'}
+                    {data.member.adminHideScanBadges ? 'Restaurar Emblemas do Usuário' : 'Ocultar Emblemas Globalmente'}
                   </button>
                 </form>
               </div>
@@ -1065,8 +1065,8 @@
                   <div class="user-team-card">
                     <div class="user-team-header">
                       <div class="team-logo-wrap">
-                        {#if sr.scan.logo_id}
-                          <img src="/media/{sr.scan.logo_id}" alt={sr.scan.name} class="team-logo-img" />
+                        {#if sr.scan.logoId}
+                          <img src="/media/{sr.scan.logoId}" alt={sr.scan.name} class="team-logo-img" />
                         {:else}
                           <div class="team-logo-fallback">NOX</div>
                         {/if}
@@ -1074,7 +1074,7 @@
                       <div class="team-title-wrap">
                         <div class="team-name-row">
                           <h3 class="team-name">{sr.scan.name}</h3>
-                          {#if sr.scan.is_official}
+                          {#if sr.scan.isOfficial}
                             <span class="official-verified-badge" title="Scan Oficial Project Nox">
                               <Sparkles size={12} /> Oficial
                             </span>
@@ -1091,8 +1091,8 @@
                         <span class="team-positions-label">Cargos Editoriais:</span>
                         <div class="team-positions-tags">
                           {#each sr.positions as pos}
-                            <span class="user-pos-tag" class:primary={pos.is_primary}>
-                              {#if pos.is_primary}★ {/if}{pos.name}
+                            <span class="user-pos-tag" class:primary={pos.isPrimary}>
+                              {#if pos.isPrimary}★ {/if}{pos.name}
                             </span>
                           {/each}
                         </div>
@@ -1104,10 +1104,10 @@
                     {/if}
 
                     <div class="user-team-footer">
-                      {#if sr.created_at}
+                      {#if sr.createdAt}
                         <span class="team-member-since">
                           <Calendar size={13} />
-                          <span>Membro desde {date(sr.created_at)}</span>
+                          <span>Membro desde {date(sr.createdAt)}</span>
                         </span>
                       {/if}
                       <a href="/scans/{sr.scan.slug}" class="btn-team-link">

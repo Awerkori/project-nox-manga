@@ -1,6 +1,6 @@
-import { WORK_FIELDS } from '$lib/server/db';
+import { db, schema, safeQuery } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
-
+import { eq, ilike, and, inArray, desc, asc, count, sql } from 'drizzle-orm';
 
 let cachedTags: { timestamp: number; data: any[] } | null = null;
 const TAGS_CACHE_TTL_MS = 300_000;
@@ -48,26 +48,18 @@ export const load = async ({ locals, url, setHeaders }) => {
 
   const needExactCount = !isUnfiltered || !cachedTotalWorksCount || Date.now() - cachedTotalWorksCount.timestamp > COUNT_CACHE_TTL_MS;
 
-  let query = locals.db
-    .from('works')
-    .select(WORK_FIELDS, needExactCount ? { count: 'exact' } : {})
-    .eq('published', true);
-
-  if (q) query = query.ilike('search_text', `%${q.replace(/[%_\\]/g, '')}%`);
-  if (kind) query = query.eq('kind', kind);
+  let filters = [eq(schema.works.published, 1)];
+  
+  if (q) filters.push(ilike(schema.works.searchText, `%${q.replace(/[%_\\]/g, '')}%`));
+  if (kind) filters.push(eq(schema.works.kind, kind));
   if (['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status))
-    query = query.eq('status', status);
+    filters.push(eq(schema.works.status, status));
 
   // If tag filtering is needed, fetch tag IDs first
   if (tag) {
     let currentTags = cachedTags?.data || [];
     if (!currentTags.length) {
-      const tRes = await withTimeout(
-        locals.db.from('tags').select('*').order('name'),
-        1000,
-        { data: [] } as any,
-        'catalogo_tags'
-      );
+      const tRes = await safeQuery(db.select().from(schema.tags).orderBy(schema.tags.name));
       currentTags = tRes?.data || [];
       cachedTags = { timestamp: Date.now(), data: currentTags };
     }
@@ -75,35 +67,43 @@ export const load = async ({ locals, url, setHeaders }) => {
     const selected = currentTags.find((t: any) => t.slug === tag);
     const ids = selected
       ? (
-          await withTimeout(
-            locals.db.from('work_tags').select('work_id').eq('tag_id', selected.id),
-            1000,
-            { data: [] } as any,
-            'catalogo_tag_ids'
-          )
+          await safeQuery(db.select({ workId: schema.workTags.workId }).from(schema.workTags).where(eq(schema.workTags.tagId, selected.id)))
         ).data || []
       : [];
-    query = query.in('id', ids.map((t: any) => t.work_id));
+    if (ids.length > 0) {
+      filters.push(inArray(schema.works.id, ids.map(t => t.workId)));
+    } else {
+      // no results possible since tag matches nothing
+      filters.push(eq(schema.works.id, 'NO_MATCH'));
+    }
   }
+
+  const orderBy = sort === 'titulo' ? asc(schema.works.title) : desc(schema.works.updatedAt);
+  
+  const worksPromise = async () => {
+    let countResult = 0;
+    if (needExactCount) {
+      const { data: countData } = await safeQuery(
+        db.select({ count: count() }).from(schema.works).where(and(...filters))
+      );
+      countResult = countData?.[0]?.count || 0;
+    }
+    
+    const { data: worksData } = await safeQuery(
+      db.select().from(schema.works).where(and(...filters))
+        .orderBy(orderBy)
+        .limit(20)
+        .offset((page - 1) * 20)
+    );
+    
+    return { data: worksData || [], count: countResult };
+  };
 
   const [tagsRes, result] = await Promise.all([
     tag || !tagsNeedRefresh
       ? Promise.resolve({ data: cachedTags?.data || [] })
-      : withTimeout(
-          locals.db.from('tags').select('*').order('name'),
-          1200,
-          { data: cachedTags?.data || [] } as any,
-          'catalogo_tags'
-        ),
-    withTimeout(
-      query
-        .order(sort === 'titulo' ? 'title' : 'updated_at', { ascending: sort === 'titulo' })
-        .range((page - 1) * 20, page * 20 - 1),
-      6000,
-      { data: [], count: 0 } as any,
-      'catalogo_works'
-    )
-
+      : safeQuery(db.select().from(schema.tags).orderBy(schema.tags.name)),
+    worksPromise()
   ]);
 
   if (tagsRes?.data && tagsRes.data.length > 0) {
@@ -120,7 +120,6 @@ export const load = async ({ locals, url, setHeaders }) => {
     works = cachedUnfilteredPage1.works;
     totalCount = cachedUnfilteredPage1.count;
   }
-
 
   if (isUnfiltered) {
     if (result.count && result.count > 0) {

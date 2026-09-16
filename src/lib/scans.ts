@@ -1,96 +1,86 @@
-export interface ScanPosition {
-  id: string;
-  scan_id: string;
+export interface ScanPosition {id: string;
+  scanId: string;
   name: string;
   description: string;
   icon?: string | null;
-  display_order: number;
-  is_active: boolean;
-  created_at?: string;
-}
+  displayOrder: number;
+  isActive: boolean;
+  createdAt?: string;}
 
-export interface ScanMemberPosition {
-  id: string;
-  scan_id: string;
-  user_id: string;
-  position_id: string;
-  is_primary: boolean;
-  created_at?: string;
-  position?: ScanPosition;
-}
+export interface ScanMemberPosition {id: string;
+  scanId: string;
+  userId: string;
+  positionId: string;
+  isPrimary: boolean;
+  createdAt?: string;
+  position?: ScanPosition;}
 
-export interface ScanRecruitmentOpening {
-  id: string;
-  scan_id: string;
-  position_id: string;
+export interface ScanRecruitmentOpening {id: string;
+  scanId: string;
+  positionId: string;
   title: string;
   description: string;
   requirements: string;
   language: string;
-  experience_level: string;
+  experienceLevel: string;
   availability: string;
   slots?: number | null;
   notes: string;
   status: "OPEN" | "PAUSED" | "CLOSED";
-  created_at: string;
-  updated_at?: string;
+  createdAt: string;
+  updatedAt?: string;
   position?: ScanPosition;
   scan?: {
     id: string;
     name: string;
     slug: string;
-    logo_id?: string | null;
-    is_official?: boolean;
-    display_preposition?: string;
-  };
+    logoId?: string | null;
+    isOfficial?: boolean;
+    displayPreposition?: string;};
 }
 
-export interface ScanApplication {
-  id: string;
-  scan_id: string;
-  opening_id: string;
-  position_id: string;
-  user_id: string;
+export interface ScanApplication {id: string;
+  scanId: string;
+  openingId: string;
+  positionId: string;
+  userId: string;
   experience: string;
   availability: string;
   presentation: string;
-  portfolio_url?: string | null;
-  contact_info: string;
+  portfolioUrl?: string | null;
+  contactInfo: string;
   status: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "WITHDRAWN";
-  internal_notes?: string | null;
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
-  created_at: string;
-  updated_at?: string;
+  internalNotes?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
   opening?: ScanRecruitmentOpening;
   position?: ScanPosition;
   user?: {
     id: string;
     username: string;
-    display_name?: string | null;
-    avatar_id?: string | null;
-    xp?: number;
-  };
+    displayName?: string | null;
+    avatarId?: string | null;
+    xp?: number;};
 }
 
-export interface ScanActivity {
-  id: string;
-  scan_id: string;
-  user_id?: string | null;
+export interface ScanActivity {id: string;
+  scanId: string;
+  userId?: string | null;
   action: string;
   details: Record<string, any>;
-  created_at: string;
+  createdAt: string;
   user?: {
     id: string;
     username: string;
-    display_name?: string | null;
-    avatar_id?: string | null;
-  };
+    displayName?: string | null;
+    avatarId?: string | null;};
 }
 
-export function getScanPreposition(scan?: { display_preposition?: string; slug?: string; name?: string } | null): string {
+export function getScanPreposition(scan?: {displayPreposition?: string; slug?: string; name?: string} | null): string {
   if (!scan) return "de";
-  if (scan.display_preposition) return scan.display_preposition;
+  if (scan.displayPreposition) return scan.displayPreposition;
   if (scan.slug === "project-nox") return "do";
   const lower = (scan.name || "").toLowerCase();
   if (lower.includes("scan") || lower.includes("toons") || lower.includes("equipe")) {
@@ -138,60 +128,54 @@ export function formatScanBadgeText(
   return `${role === "UPLOADER" ? "Uploader" : "Staff"} · ${scanName}`;
 }
 
-export interface ScanComment {
-  id: string;
-  scan_id: string;
-  user_id: string;
-  parent_id?: string | null;
+export interface ScanComment {id: string;
+  scanId: string;
+  userId: string;
+  parentId?: string | null;
   body: string;
   removed: boolean;
   pinned: boolean;
-  created_at: string;
-  updated_at?: string;
+  createdAt: string;
+  updatedAt?: string;
   user?: {
     id: string;
     username: string;
-    display_name?: string | null;
-    avatar_id?: string | null;
-    avatar_frame_id?: string | null;
-    name_color?: string | null;
+    displayName?: string | null;
+    avatarId?: string | null;
+    avatarFrameId?: string | null;
+    nameColor?: string | null;
     xp?: number;
-    equipped_badge_id?: string | null;
-  };
+    equippedBadgeId?: string | null;};
   likes_count: number;
   user_liked?: boolean;
   replies?: ScanComment[];
 }
 
-export interface ScanStaffNote {
-  id: string;
-  scan_id: string;
-  user_id: string;
-  parent_id?: string | null;
+export interface ScanStaffNote {id: string;
+  scanId: string;
+  userId: string;
+  parentId?: string | null;
   body: string;
-  is_pinned: boolean;
-  created_at: string;
-  updated_at?: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt?: string;
   user?: {
     id: string;
     username: string;
-    display_name?: string | null;
-    avatar_id?: string | null;
-  };
+    displayName?: string | null;
+    avatarId?: string | null;};
   replies?: ScanStaffNote[];
 }
 
-export interface ScanCommentReport {
-  id: string;
-  comment_id: string;
-  user_id: string;
+export interface ScanCommentReport {id: string;
+  commentId: string;
+  userId: string;
   reason: string;
   status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
-  created_at: string;
+  createdAt: string;
   comment?: ScanComment;
   reporter?: {
     id: string;
     username: string;
-    display_name?: string | null;
-  };
+    displayName?: string | null;};
 }

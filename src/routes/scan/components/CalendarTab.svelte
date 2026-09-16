@@ -42,13 +42,13 @@
   // Upcoming items with deadlines
   let tasksWithDeadlines = $derived(
     tasks
-      .filter((t: any) => t.due_at && t.status !== 'DONE' && t.status !== 'CANCELLED')
-      .sort((a: any, b: any) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+      .filter((t: any) => t.dueAt && t.status !== 'DONE' && t.status !== 'CANCELLED')
+      .sort((a: any, b: any) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
   );
 
   let recentChapters = $derived(
     chapters
-      .filter((c: any) => c.published_at)
+      .filter((c: any) => c.publishedAt)
       .slice(0, 10)
   );
 </script>
@@ -78,12 +78,12 @@
         {:else}
           <div class="deadline-list">
             {#each tasksWithDeadlines as task}
-              {@const assignee = team.find((m: any) => m.id === task.assigned_to)}
-              {@const isOverdue = new Date(task.due_at) < new Date()}
+              {@const assignee = team.find((m: any) => m.id === task.assignedTo)}
+              {@const isOverdue = new Date(task.dueAt) < new Date()}
               <div class="deadline-item {isOverdue ? 'overdue' : ''}">
                 <div class="item-date">
-                  <span class="day">{new Date(task.due_at).getDate()}</span>
-                  <span class="month">{MONTH_NAMES[new Date(task.due_at).getMonth()].substring(0, 3)}</span>
+                  <span class="day">{new Date(task.dueAt).getDate()}</span>
+                  <span class="month">{MONTH_NAMES[new Date(task.dueAt).getMonth()].substring(0, 3)}</span>
                 </div>
                 <div class="item-details">
                   <span class="item-title">{task.title}</span>
@@ -91,7 +91,7 @@
                     <span class="prio-tag {task.priority.toLowerCase()}">{task.priority}</span>
                     {#if assignee}
                       <span class="assignee-tag">
-                        <User size={12} /> {assignee.display_name || assignee.username}
+                        <User size={12} /> {assignee.displayName || assignee.username}
                       </span>
                     {/if}
                     {#if isOverdue}
@@ -116,14 +116,14 @@
           {#each recentChapters as chapter}
             <div class="deadline-item done">
               <div class="item-date">
-                <span class="day">{new Date(chapter.published_at).getDate()}</span>
-                <span class="month">{MONTH_NAMES[new Date(chapter.published_at).getMonth()].substring(0, 3)}</span>
+                <span class="day">{new Date(chapter.publishedAt).getDate()}</span>
+                <span class="month">{MONTH_NAMES[new Date(chapter.publishedAt).getMonth()].substring(0, 3)}</span>
               </div>
               <div class="item-details">
                 <span class="item-title">{chapter.works?.title} - Cap. #{chapter.number}</span>
                 <div class="item-meta">
                   <span class="item-subtitle">{chapter.title || 'Lançado no site'}</span>
-                  <span class="views-tag">{chapter.views_total || 0} visualizações</span>
+                  <span class="views-tag">{chapter.viewsTotal || 0} visualizações</span>
                 </div>
               </div>
             </div>
@@ -171,13 +171,13 @@
           {#each team as member}
             <div class="avail-row">
               <div class="avail-user">
-                <span class="status-dot {member.availability_status?.toLowerCase() || 'active'}"></span>
-                <span class="avail-name">{member.display_name || member.username}</span>
+                <span class="status-dot {member.availabilityStatus?.toLowerCase() || 'active'}"></span>
+                <span class="avail-name">{member.displayName || member.username}</span>
               </div>
-              <span class="status-label {member.availability_status?.toLowerCase() || 'active'}">
-                {member.availability_status === 'BUSY' ? 'Ocupado' :
-                 member.availability_status === 'AWAY' ? 'Ausente' :
-                 member.availability_status === 'HIATUS' ? 'Em Hiato' : 'Disponível'}
+              <span class="status-label {member.availabilityStatus?.toLowerCase() || 'active'}">
+                {member.availabilityStatus === 'BUSY' ? 'Ocupado' :
+                 member.availabilityStatus === 'AWAY' ? 'Ausente' :
+                 member.availabilityStatus === 'HIATUS' ? 'Em Hiato' : 'Disponível'}
               </span>
             </div>
           {/each}

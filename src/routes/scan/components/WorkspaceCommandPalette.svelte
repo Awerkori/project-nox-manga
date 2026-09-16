@@ -79,9 +79,9 @@
 
     // Team
     for (const m of team) {
-      const name = m.member?.display_name || m.member?.username || '';
+      const name = m.member?.displayName || m.member?.username || '';
       if (name.toLowerCase().includes(q)) {
-        results.push({ type: 'member', id: m.user_id, label: name, icon: Users, cat: 'Equipe' });
+        results.push({ type: 'member', id: m.userId, label: name, icon: Users, cat: 'Equipe' });
       }
     }
 

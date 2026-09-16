@@ -1,6 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, ilike } from 'drizzle-orm';
+import { auth } from '$lib/server/auth';
+
 export const load = ({ params, url }) => ({
   mode: params.auth,
   error:
@@ -8,6 +12,7 @@ export const load = ({ params, url }) => ({
       ? 'Este link é inválido ou expirou. Solicite um novo link de recuperação ou entre na sua conta.'
       : ''
 });
+
 export const actions = {
   default: async ({ request, locals, params, url }) => {
     const f = await request.formData(),
@@ -19,8 +24,17 @@ export const actions = {
     if (mode !== 'recuperar' && password.length < 10)
       return fail(400, { message: 'Use uma senha com pelo menos 10 caracteres.' });
     if (password.length > 128) return fail(400, { message: 'A senha pode ter até 128 caracteres.' });
+
     if (mode === 'entrar') {
-      const { error } = await locals.db.auth.signInWithPassword({ email, password });
+      let error = null;
+      try {
+        await auth.api.signInEmail({
+          body: { email, password },
+          headers: request.headers
+        });
+      } catch (err: any) {
+        error = err;
+      }
       if (error)
         return fail(400, {
           message: 'Não foi possível entrar. Confira o e-mail, a senha e a confirmação da conta.'
@@ -28,12 +42,13 @@ export const actions = {
       await claimInvite(locals);
       redirect(303, '/biblioteca');
     }
+
     if (mode === 'cadastrar') {
-      const displayName = String(f.get('displayName') || f.get('display_name') || '').trim();
+      const displayName = String(f.get('displayName') || '').trim();
       const rawUsername = String(f.get('username') || '').trim().toLowerCase();
 
       if (displayName && (displayName.length < 2 || displayName.length > 50)) {
-        return fail(400, { message: 'Nome de exibição deve ter entre 2 e 50 caracteres.' });
+        return fail(400, { message: 'Nome de exibição deve ter entre 2 e 50 caracteres.'});
       }
       if (rawUsername) {
         if (rawUsername.length < 3 || rawUsername.length > 30) {
@@ -43,48 +58,52 @@ export const actions = {
           return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
         }
 
-        // Check username collision if locals.db.from exists
-        if (typeof locals.db.from === 'function') {
-          const { data: collision } = await locals.db
-            .from('members')
-            .select('id')
-            .ilike('username', rawUsername)
-            .maybeSingle();
+        // Check username collision
+        const { data: collision } = await safeQuerySingle(
+          db.select({ id: schema.members.id })
+            .from(schema.members)
+            .where(ilike(schema.members.username, rawUsername))
+        );
 
-          if (collision) {
-            return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
-          }
+        if (collision) {
+          return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
         }
       }
 
-      const signUpOptions: { emailRedirectTo: string; data?: Record<string, string> } = {
-        emailRedirectTo: `${url.origin}/auth/confirm`
-      };
-      if (rawUsername || displayName) {
-        signUpOptions.data = {
-          ...(rawUsername ? { username: rawUsername } : {}),
-          ...(displayName ? { display_name: displayName } : {})
-        };
+      let error = null;
+      try {
+        await auth.api.signUpEmail({
+          body: {
+            email,
+            password,
+            name: displayName || rawUsername || email.split('@')[0],
+            callbackURL: `${url.origin}/auth/confirm`
+          }
+        });
+      } catch (err: any) {
+        error = err;
       }
-
-      const { error } = await locals.db.auth.signUp({
-        email,
-        password,
-        options: signUpOptions
-      });
+      
       if (error)
         return fail(400, {
-          message:
-            error.code === 'over_email_send_rate_limit'
-              ? 'Limite de envio atingido. Tente novamente mais tarde.'
-              : 'Não foi possível enviar a confirmação. Tente novamente mais tarde.'
+          message: 'Não foi possível enviar a confirmação. Tente novamente mais tarde.'
         });
       return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
     }
+
     if (mode === 'recuperar') {
-      const { error } = await locals.db.auth.resetPasswordForEmail(email, {
-        redirectTo: `${url.origin}/auth/confirm?next=/redefinir`
-      });
+      let error = null;
+      try {
+        await auth.api.forgetPassword({
+          body: {
+            email,
+            redirectTo: `${url.origin}/auth/confirm?next=/redefinir`
+          }
+        });
+      } catch (err: any) {
+        error = err;
+      }
+      
       if (error)
         return fail(400, { message: 'Não foi possível enviar o e-mail agora. Tente novamente mais tarde.' });
       return {
@@ -92,9 +111,22 @@ export const actions = {
         message: 'Se houver uma conta com esse e-mail, você receberá um link de recuperação.'
       };
     }
+
     if (!locals.user) return fail(401, { message: 'Abra o link de recuperação enviado para seu e-mail.' });
-    const { error } = await locals.db.auth.updateUser({ password });
-    if (error) return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
+    
+    let updateError = null;
+    try {
+      await auth.api.changePassword({
+        body: {
+          newPassword: password
+        },
+        headers: request.headers
+      });
+    } catch (err: any) {
+      updateError = err;
+    }
+    
+    if (updateError) return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
     return { success: true, message: 'Senha alterada. Você já pode acessar sua biblioteca.' };
   }
 };

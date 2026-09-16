@@ -35,17 +35,17 @@
         {@const bronze = data.members[2]}
 
         <!-- Silver #2 -->
-        {@const r2 = memberRank(silver.xp, silver.equipped_title_id, silver.equipped_badge_id)}
+        {@const r2 = memberRank(silver.xp, silver.equippedTitleId, silver.equippedBadgeId)}
         <a href="/u/{silver.username}" class="podium-card podium-tier-2 olympic-silver">
           <div class="podium-medal">🥈</div>
           <div class="podium-avatar-wrap">
-            {#if silver.avatar_id}
-              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {#if silver.avatarId}
+              <img src="/media/{silver.avatarId}" alt="" width="64" height="64" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback">{(silver.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name">{silver.display_name}</strong>
+          <strong class="podium-user-name">{silver.displayName}</strong>
           <span class="podium-user-handle">@{silver.username}</span>
           <div class="podium-tags">
             {#if r2.badgeSvg}
@@ -57,7 +57,7 @@
         </a>
 
         <!-- Gold #1 (Dominant Center) -->
-        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
+        {@const r1 = memberRank(gold.xp, gold.equippedTitleId, gold.equippedBadgeId)}
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 olympic-gold">
           <div class="gold-crown-tag">
             <Sparkles size={13} />
@@ -65,13 +65,13 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="76" height="76" class="podium-avatar-img" />
+            {#if gold.avatarId}
+              <img src="/media/{gold.avatarId}" alt="" width="76" height="76" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback gold-fallback">{(gold.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name gold-name">{gold.display_name}</strong>
+          <strong class="podium-user-name gold-name">{gold.displayName}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
           <div class="podium-tags">
             {#if r1.badgeSvg}
@@ -83,17 +83,17 @@
         </a>
 
         <!-- Bronze #3 -->
-        {@const r3 = memberRank(bronze.xp, bronze.equipped_title_id, bronze.equipped_badge_id)}
+        {@const r3 = memberRank(bronze.xp, bronze.equippedTitleId, bronze.equippedBadgeId)}
         <a href="/u/{bronze.username}" class="podium-card podium-tier-3 olympic-bronze">
           <div class="podium-medal">🥉</div>
           <div class="podium-avatar-wrap">
-            {#if bronze.avatar_id}
-              <img src="/media/{bronze.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {#if bronze.avatarId}
+              <img src="/media/{bronze.avatarId}" alt="" width="64" height="64" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback">{(bronze.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback">{(bronze.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name">{bronze.display_name}</strong>
+          <strong class="podium-user-name">{bronze.displayName}</strong>
           <span class="podium-user-handle">@{bronze.username}</span>
           <div class="podium-tags">
             {#if r3.badgeSvg}
@@ -108,8 +108,8 @@
         <!-- 2 Readers: Gold & Silver side-by-side -->
         {@const gold = data.members[0]}
         {@const silver = data.members[1]}
-        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
-        {@const r2 = memberRank(silver.xp, silver.equipped_title_id, silver.equipped_badge_id)}
+        {@const r1 = memberRank(gold.xp, gold.equippedTitleId, gold.equippedBadgeId)}
+        {@const r2 = memberRank(silver.xp, silver.equippedTitleId, silver.equippedBadgeId)}
 
         <a href="/u/{gold.username}" class="podium-card podium-tier-1">
           <div class="gold-crown-tag">
@@ -118,13 +118,13 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="72" height="72" class="podium-avatar-img" />
+            {#if gold.avatarId}
+              <img src="/media/{gold.avatarId}" alt="" width="72" height="72" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback gold-fallback">{(gold.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name">{gold.display_name}</strong>
+          <strong class="podium-user-name">{gold.displayName}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
           <div class="podium-tags">
             <span class="rank-title-chip gold-chip">{r1.title}</span>
@@ -135,13 +135,13 @@
         <a href="/u/{silver.username}" class="podium-card podium-tier-2">
           <div class="podium-medal">🥈</div>
           <div class="podium-avatar-wrap">
-            {#if silver.avatar_id}
-              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
+            {#if silver.avatarId}
+              <img src="/media/{silver.avatarId}" alt="" width="64" height="64" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback">{(silver.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name">{silver.display_name}</strong>
+          <strong class="podium-user-name">{silver.displayName}</strong>
           <span class="podium-user-handle">@{silver.username}</span>
           <div class="podium-tags">
             <span class="rank-title-chip silver-chip">{r2.title}</span>
@@ -152,7 +152,7 @@
       {:else if data.members.length === 1}
         <!-- 1 Reader: Single Dominant Card -->
         {@const gold = data.members[0]}
-        {@const r1 = memberRank(gold.xp, gold.equipped_title_id, gold.equipped_badge_id)}
+        {@const r1 = memberRank(gold.xp, gold.equippedTitleId, gold.equippedBadgeId)}
 
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 single-gold-card">
           <div class="gold-crown-tag">
@@ -161,13 +161,13 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="80" height="80" class="podium-avatar-img" />
+            {#if gold.avatarId}
+              <img src="/media/{gold.avatarId}" alt="" width="80" height="80" class="podium-avatar-img" />
             {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
+              <span class="podium-avatar-fallback gold-fallback">{(gold.displayName[0] || 'N').toUpperCase()}</span>
             {/if}
           </div>
-          <strong class="podium-user-name gold-name">{gold.display_name}</strong>
+          <strong class="podium-user-name gold-name">{gold.displayName}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
           <div class="podium-tags">
             <span class="rank-title-chip gold-chip">{r1.title}</span>
@@ -191,7 +191,7 @@
         </thead>
         <tbody>
           {#each data.members as member, i (member.id)}
-            {@const r = memberRank(member.xp, member.equipped_title_id, member.equipped_badge_id)}
+            {@const r = memberRank(member.xp, member.equippedTitleId, member.equippedBadgeId)}
             <tr class="leaderboard-row" class:is-top-three={i < 3}>
               <td class="rank-col">
                 {#if i === 0}
@@ -206,20 +206,20 @@
               </td>
               <td>
                 <div class="user-cell">
-                  {#if member.avatar_id}
+                  {#if member.avatarId}
                     <img
-                      src="/media/{member.avatar_id}"
+                      src="/media/{member.avatarId}"
                       alt=""
                       width="38"
                       height="38"
                       class="row-avatar-img"
                     />
                   {:else}
-                    <span class="row-avatar-fallback">{member.display_name[0] || 'N'}</span>
+                    <span class="row-avatar-fallback">{member.displayName[0] || 'N'}</span>
                   {/if}
                   <div class="user-titles">
                     <a href="/u/{member.username}" class="user-link">
-                      <strong>{member.display_name}</strong>
+                      <strong>{member.displayName}</strong>
                     </a>
                     <span class="user-slug">@{member.username}</span>
                   </div>
@@ -244,7 +244,7 @@
     <!-- Mobile Leaderboard Cards -->
     <section class="ranking-mobile-list mobile-only">
       {#each data.members as member, i (member.id)}
-        {@const r = memberRank(member.xp, member.equipped_title_id, member.equipped_badge_id)}
+        {@const r = memberRank(member.xp, member.equippedTitleId, member.equippedBadgeId)}
         <a href="/u/{member.username}" class="ranking-mobile-card" class:top-card={i < 3}>
           <div class="ranking-mobile-pos">
             {#if i === 0}
@@ -259,22 +259,22 @@
           </div>
 
           <div class="ranking-mobile-avatar">
-            {#if member.avatar_id}
+            {#if member.avatarId}
               <img
-                src="/media/{member.avatar_id}"
+                src="/media/{member.avatarId}"
                 alt=""
                 width="42"
                 height="42"
                 class="row-avatar-img"
               />
             {:else}
-              <span class="row-avatar-fallback">{member.display_name[0] || 'N'}</span>
+              <span class="row-avatar-fallback">{member.displayName[0] || 'N'}</span>
             {/if}
           </div>
 
           <div class="ranking-mobile-info">
             <div class="ranking-mobile-name-row">
-              <strong class="ranking-mobile-name">{member.display_name}</strong>
+              <strong class="ranking-mobile-name">{member.displayName}</strong>
             </div>
             <span class="ranking-mobile-handle">@{member.username}</span>
             <div class="ranking-mobile-chips">

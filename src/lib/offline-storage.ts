@@ -60,9 +60,9 @@ export function isOfflineSupported(): boolean {
 }
 
 export async function saveChapterOffline(
-  chapter: { id: string; work_id: string; number: number; title: string | null },
-  work: { title: string; slug: string; cover_id?: string | null },
-  pages: Array<{ position: number; media_id: string }>,
+  chapter: {id: string; workId: string; number: number; title: string | null},
+  work: {title: string; slug: string; coverId?: string | null},
+  pages: Array<{position: number; mediaId: string}>,
   onProgress?: (loaded: number, total: number) => void
 ): Promise<void> {
   const db = await openDb();
@@ -73,7 +73,7 @@ export async function saveChapterOffline(
 
   for (const page of pages) {
     try {
-      const res = await fetch(`/media/${page.media_id}`);
+      const res = await fetch(`/media/${page.mediaId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const reader = new FileReader();
@@ -88,7 +88,7 @@ export async function saveChapterOffline(
 
       fetchedPages.push({
         position: page.position,
-        mediaId: page.media_id,
+        mediaId: page.mediaId,
         blobUrl: base64Data
       });
     } catch (err) {
@@ -102,10 +102,10 @@ export async function saveChapterOffline(
 
   const record: OfflineChapter = {
     chapterId: chapter.id,
-    workId: chapter.work_id,
+    workId: chapter.workId,
     workTitle: work.title,
     workSlug: work.slug,
-    coverId: work.cover_id,
+    coverId: work.coverId,
     number: chapter.number,
     title: chapter.title,
     pages: fetchedPages,

@@ -1,4 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, desc, inArray, and } from 'drizzle-orm';
 
 export const load = async ({ locals, url }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
@@ -8,86 +10,51 @@ export const load = async ({ locals, url }) => {
   const statusFilter = url.searchParams.get('status') || 'ALL';
   const typeFilter = url.searchParams.get('type') || 'ALL';
 
-  let query = locals.db
-    .from('reports')
-    .select(`
-      id,
-      target_type,
-      reason,
-      details,
-      status,
-      resolution_notes,
-      created_at,
-      updated_at,
-      reporter:members!reports_reporter_id_fkey(id, username, display_name),
-      assigned:members!reports_assigned_to_fkey(id, username, display_name),
-      work:works(id, title, slug),
-      chapter:chapters(id, number, title, works(id, title, slug)),
-      comment:comments(id, body, user_id)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(200);
+  let conditions = [];
+  if (statusFilter !== 'ALL') conditions.push(eq(schema.reports.status, statusFilter));
+  if (typeFilter !== 'ALL') conditions.push(eq(schema.reports.targetType, typeFilter));
 
-  if (statusFilter !== 'ALL') {
-    query = query.eq('status', statusFilter);
-  }
-  if (typeFilter !== 'ALL') {
-    query = query.eq('target_type', typeFilter);
-  }
+  const query = db.select().from(schema.reports);
+  const reportsRes = await safeQuery(
+    conditions.length > 0 
+      ? query.where(and(...conditions)).orderBy(desc(schema.reports.createdAt)).limit(200)
+      : query.orderBy(desc(schema.reports.createdAt)).limit(200)
+  );
 
-  const [reportsRes, countsRes] = await Promise.all([
-    query,
-    locals.db
-      .from('reports')
-      .select('status, target_type')
-  ]);
+  const countsRes = await safeQuery(db.select({ status: schema.reports.status, targetType: schema.reports.targetType }).from(schema.reports));
 
-  const allReports = countsRes.data || [];
+  const allReports = countsRes.success ? countsRes.data : [];
   const statusCounts = {
     ALL: allReports.length,
-    NOVO: allReports.filter(r => r.status === 'NOVO').length,
-    EM_ANALISE: allReports.filter(r => r.status === 'EM_ANALISE').length,
-    ATRIBUIDO: allReports.filter(r => r.status === 'ATRIBUIDO').length,
-    RESOLVIDO: allReports.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: allReports.filter(r => r.status === 'REJEITADO').length
+    NOVO: allReports.filter((r: any) => r.status === 'NOVO').length,
+    EM_ANALISE: allReports.filter((r: any) => r.status === 'EM_ANALISE').length,
+    ATRIBUIDO: allReports.filter((r: any) => r.status === 'ATRIBUIDO').length,
+    RESOLVIDO: allReports.filter((r: any) => r.status === 'RESOLVIDO').length,
+    REJEITADO: allReports.filter((r: any) => r.status === 'REJEITADO').length
   };
 
-  const rawReports = (reportsRes.data as any[]) || [];
+  const rawReports = reportsRes.success ? reportsRes.data : [];
 
-  // Group into clusters by target item
-  const clustersMap = new Map<string, {
-    clusterKey: string;
-    targetType: string;
-    targetTitle: string;
-    targetLink?: string;
-    count: number;
-    newCount: number;
-    status: string;
-    latestCreatedAt: string;
-    reasons: string[];
-    reportIds: string[];
-    reports: any[];
-  }>();
+  const clustersMap = new Map<string, any>();
 
   for (const rep of rawReports) {
     let key = `SINGLE:${rep.id}`;
     let title = 'Conteúdo Geral';
     let link = '';
 
-    if (rep.target_type === 'CHAPTER' && rep.chapter) {
-      key = `CHAPTER:${rep.chapter.id}`;
-      const workTitle = rep.chapter.works?.title || 'Obra';
-      title = `${workTitle} — Cap. ${rep.chapter.number}${rep.chapter.title ? ` (${rep.chapter.title})` : ''}`;
-      link = `/ler/${rep.chapter.id}`;
-    } else if (rep.target_type === 'WORK' && rep.work) {
-      key = `WORK:${rep.work.id}`;
-      title = `Obra: ${rep.work.title}`;
-      link = `/obra/${rep.work.slug}`;
-    } else if (rep.target_type === 'COMMENT' && rep.comment) {
-      key = `COMMENT:${rep.comment.id}`;
-      title = `Comentário: "${rep.comment.body.slice(0, 40)}${rep.comment.body.length > 40 ? '...' : ''}"`;
-    } else if (rep.target_type === 'USER' && rep.target_user_id) {
-      key = `USER:${rep.target_user_id}`;
+    if (rep.targetType === 'CHAPTER' && rep.chapterId) {
+      key = `CHAPTER:${rep.chapterId}`;
+      title = `Obra — Cap.`;
+      link = `/ler/${rep.chapterId}`;
+    } else if (rep.targetType === 'WORK' && rep.workId) {
+      key = `WORK:${rep.workId}`;
+      title = `Obra: `;
+      link = `/obra/${rep.workId}`;
+    } else if (rep.targetType === 'COMMENT' && rep.commentId) {
+      key = `COMMENT:${rep.commentId}`;
+      title = `Comentário`;
+    } else if (rep.targetType === 'USER' && rep.targetUserId) {
+      key = `USER:${rep.targetUserId}`;
       title = `Perfil de Usuário`;
     }
 
@@ -95,13 +62,13 @@ export const load = async ({ locals, url }) => {
     if (!cluster) {
       cluster = {
         clusterKey: key,
-        targetType: rep.target_type,
+        targetType: rep.targetType,
         targetTitle: title,
         targetLink: link,
         count: 0,
         newCount: 0,
         status: rep.status,
-        latestCreatedAt: rep.created_at,
+        latestCreatedAt: rep.createdAt,
         reasons: [],
         reportIds: [],
         reports: []
@@ -115,15 +82,15 @@ export const load = async ({ locals, url }) => {
     cluster.reportIds.push(rep.id);
     cluster.reports.push(rep);
 
-    if (cluster.reports.some(r => r.status === 'NOVO')) {
+    if (cluster.reports.some((r: any) => r.status === 'NOVO')) {
       cluster.status = 'NOVO';
-    } else if (cluster.reports.some(r => r.status === 'EM_ANALISE')) {
+    } else if (cluster.reports.some((r: any) => r.status === 'EM_ANALISE')) {
       cluster.status = 'EM_ANALISE';
-    } else if (cluster.reports.some(r => r.status === 'ATRIBUIDO')) {
+    } else if (cluster.reports.some((r: any) => r.status === 'ATRIBUIDO')) {
       cluster.status = 'ATRIBUIDO';
-    } else if (cluster.reports.every(r => r.status === 'RESOLVIDO')) {
+    } else if (cluster.reports.every((r: any) => r.status === 'RESOLVIDO')) {
       cluster.status = 'RESOLVIDO';
-    } else if (cluster.reports.every(r => r.status === 'REJEITADO')) {
+    } else if (cluster.reports.every((r: any) => r.status === 'REJEITADO')) {
       cluster.status = 'REJEITADO';
     }
   }
@@ -154,46 +121,22 @@ export const actions = {
       return fail(400, { error: 'Status inválido.' });
     }
 
-    const updatePayload: any = {
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
+    const updatePayload: any = { status: newStatus, updatedAt: new Date().toISOString() };
 
     if (newStatus === 'ATRIBUIDO' || newStatus === 'EM_ANALISE') {
-      updatePayload.assigned_to = locals.user.id;
+      updatePayload.assignedTo = locals.user!.id;
     }
     if (notes) {
-      updatePayload.resolution_notes = notes;
+      updatePayload.resolutionNotes = notes;
     }
 
-    const { data: rep } = await locals.db
-      .from('reports')
-      .select('reporter_id, target_type')
-      .eq('id', reportId)
-      .maybeSingle();
+    const repRes = await safeQuerySingle(db.select({ reporterId: schema.reports.reporterId, targetType: schema.reports.targetType }).from(schema.reports).where(eq(schema.reports.id, reportId)));
+    const rep = repRes.success ? repRes.data : null;
 
-    const { error } = await locals.db
-      .from('reports')
-      .update(updatePayload)
-      .eq('id', reportId);
+    const res = await safeQuery(db.update(schema.reports).set(updatePayload).where(eq(schema.reports.id, reportId)));
 
-    if (error) {
-      return fail(500, { error: 'Erro ao atualizar denúncia: ' + error.message });
-    }
-
-    if (rep?.reporter_id) {
-      try {
-        const statusLabel = newStatus === 'RESOLVIDO' ? 'resolvida' : newStatus === 'EM_ANALISE' ? 'em análise' : newStatus === 'REJEITADO' ? 'encerrada' : 'atualizada';
-        await locals.db.from('notifications').insert({
-          user_id: rep.reporter_id,
-          kind: 'report',
-          body: `Sua denúncia foi marcada como ${statusLabel} pela equipe editorial.`,
-          href: '/notificacoes',
-          dedupe_key: `report:${reportId}:${newStatus}`
-        });
-      } catch {
-        // Notification failure should not abort report resolution
-      }
+    if (!res.success) {
+      return fail(500, { error: 'Erro ao atualizar denúncia: ' + res.error.message });
     }
 
     return { success: true };
@@ -214,49 +157,24 @@ export const actions = {
       return fail(400, { error: 'Requisição inválida.' });
     }
 
-    const updatePayload: any = {
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
+    const updatePayload: any = { status: newStatus, updatedAt: new Date().toISOString() };
 
     if (newStatus === 'ATRIBUIDO' || newStatus === 'EM_ANALISE') {
-      updatePayload.assigned_to = locals.user.id;
+      updatePayload.assignedTo = locals.user!.id;
     }
     if (notes) {
-      updatePayload.resolution_notes = notes;
+      updatePayload.resolutionNotes = notes;
     }
 
-    const { data: reps } = await locals.db
-      .from('reports')
-      .select('id, reporter_id')
-      .in('id', reportIds);
+    const repsRes = await safeQuery(db.select({ id: schema.reports.id, reporterId: schema.reports.reporterId }).from(schema.reports).where(inArray(schema.reports.id, reportIds)));
+    const reps = repsRes.success ? repsRes.data : [];
 
-    const { error } = await locals.db
-      .from('reports')
-      .update(updatePayload)
-      .in('id', reportIds);
+    const res = await safeQuery(db.update(schema.reports).set(updatePayload).where(inArray(schema.reports.id, reportIds)));
 
-    if (error) {
-      return fail(500, { error: 'Erro ao atualizar denúncias: ' + error.message });
-    }
-
-    if (reps && reps.length > 0) {
-      try {
-        const statusLabel = newStatus === 'RESOLVIDO' ? 'resolvida' : newStatus === 'EM_ANALISE' ? 'em análise' : newStatus === 'REJEITADO' ? 'encerrada' : 'atualizada';
-        const notifs = reps.map((r: any) => ({
-          user_id: r.reporter_id,
-          kind: 'report',
-          body: `Sua denúncia foi marcada como ${statusLabel} pela equipe editorial.`,
-          href: '/notificacoes',
-          dedupe_key: `report:${r.id}:${newStatus}`
-        }));
-        await locals.db.from('notifications').insert(notifs);
-      } catch {
-        // Notification failure should not abort report resolution
-      }
+    if (!res.success) {
+      return fail(500, { error: 'Erro ao atualizar denúncias: ' + res.error.message });
     }
 
     return { success: true, count: reportIds.length };
   }
 };
-

@@ -1,5 +1,4 @@
-export async function loadSnapshot({ locals }: any) {
-  const [
+export async function loadSnapshot({ locals }: any) {const [
     telemetryRes,
     stagedCountRes,
     importingJobsRes,
@@ -18,7 +17,7 @@ export async function loadSnapshot({ locals }: any) {
     locals.db
       .from('importer_telemetry')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('createdAt', { ascending: false})
       .limit(1)
       .maybeSingle(),
 
@@ -178,16 +177,15 @@ export async function loadSnapshot({ locals }: any) {
     attempts: number;
   } | null = null;
 
-  if (activeFocus) {
-    const focusWorkId = activeFocus.work_id;
+  if (activeFocus) {const focusWorkId = activeFocus.workId;
     const [mappingsRes, publishedCountRes, currentJobRes, failedJobRes] = await Promise.all([
       locals.db
         .from('importer_chapter_mappings')
-        .select('id, status, chapter_number, chapter_sort_key')
-        .eq('work_id', focusWorkId),
+        .select('id, status, chapterNumber, chapterSortKey')
+        .eq('workId', focusWorkId),
       locals.db
         .from('chapters')
-        .select('id', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true})
         .eq('work_id', focusWorkId)
         .not('published_at', 'is', null),
       locals.db
@@ -213,7 +211,7 @@ export async function loadSnapshot({ locals }: any) {
     const published = publishedCountRes.count || 0;
     const percent = totalDiscovered > 0 ? Math.round((completed / totalDiscovered) * 100) : 0;
     const currentChapter = currentJobRes.data
-      ? ((currentJobRes.data.payload as any)?.chapterNumber ?? currentJobRes.data.chapter_sort_key)
+      ? ((currentJobRes.data.payload as any)?.chapterNumber ?? currentJobRes.data.chapterSortKey)
       : null;
 
     activeFocusStats = {
@@ -228,10 +226,10 @@ export async function loadSnapshot({ locals }: any) {
 
     if (failedJobRes.data && (failedJobRes.data.payload as any)?.workId === focusWorkId) {
       activeFocusFailure = {
-        lastError: failedJobRes.data.last_error,
+        lastError: failedJobRes.data.lastError,
         source: failedJobRes.data.source,
-        chapterNumber: (failedJobRes.data.payload as any)?.chapterNumber ?? failedJobRes.data.chapter_sort_key,
-        updatedAt: failedJobRes.data.updated_at,
+        chapterNumber: (failedJobRes.data.payload as any)?.chapterNumber ?? failedJobRes.data.chapterSortKey,
+        updatedAt: failedJobRes.data.updatedAt,
         attempts: failedJobRes.data.attempts
       };
     }
@@ -255,11 +253,11 @@ export async function loadSnapshot({ locals }: any) {
   const providerBlockers = upstreamBlockedSources.map((s: any) => ({
     sourceId: s.id,
     sourceName: s.name,
-    reason: s.blocked_reason || 'CLOUDFLARE_DATACENTER_BLOCK',
-    message: (s.blocked_details as any)?.message || 'Fonte bloqueada; diagnóstico detalhado indisponível.',
+    reason: s.blockedReason || 'CLOUDFLARE_DATACENTER_BLOCK',
+    message: (s.blockedDetails as any)?.message || 'Fonte bloqueada; diagnóstico detalhado indisponível.',
     affectedJobsCount: s.blockedJobsCount,
-    localStatus: (s.blocked_details as any)?.local_status ?? null,
-    remoteStatus: (s.blocked_details as any)?.discloud_status ?? null
+    localStatus: (s.blockedDetails as any)?.local_status ?? null,
+    remoteStatus: (s.blockedDetails as any)?.discloud_status ?? null
   }));
 
   return {
@@ -314,24 +312,22 @@ export async function loadSnapshot({ locals }: any) {
     })),
     stagedChapters: stagedRes.data || [],
     catalogWorks: worksListRes.data || [],
-    workHealth: (workHealthRes.data || []).map((h: any) => ({
-      ...h,
+    workHealth: (workHealthRes.data || []).map((h: any) => ({...h,
       work: h.works,
       gapCount: Array.isArray(h.gaps) ? h.gaps.length : 0,
-      unresolvedGapCount: Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.length : 0,
+      unresolvedGapCount: Array.isArray(h.unresolvedGaps) ? h.unresolvedGaps.length : 0,
       gaps: Array.isArray(h.gaps) ? h.gaps.slice(0, 8) : [],
-      unresolved_gaps: Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.slice(0, 3) : []
-    })),
+      unresolvedGaps: Array.isArray(h.unresolvedGaps) ? h.unresolvedGaps.slice(0, 3) : []})),
     chapterManifest: recentManifestRes.data || [],
     healthMetrics: {
-      healthyCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'HEALTHY').length,
-      incompleteCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'INCOMPLETE').length,
-      reconcilingCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'RECONCILING').length,
-      unverifiedCount: (workHealthRes.data || []).filter((h: any) => h.health_status === 'UNVERIFIED').length,
+      healthyCount: (workHealthRes.data || []).filter((h: any) => h.healthStatus === 'HEALTHY').length,
+      incompleteCount: (workHealthRes.data || []).filter((h: any) => h.healthStatus === 'INCOMPLETE').length,
+      reconcilingCount: (workHealthRes.data || []).filter((h: any) => h.healthStatus === 'RECONCILING').length,
+      unverifiedCount: (workHealthRes.data || []).filter((h: any) => h.healthStatus === 'UNVERIFIED').length,
       totalGaps: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (Array.isArray(h.gaps) ? h.gaps.length : 0), 0),
-      totalUnresolvedGaps: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (Array.isArray(h.unresolved_gaps) ? h.unresolved_gaps.length : 0), 0),
-      totalKnownChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.total_known_chapters || 0), 0),
-      totalImportedChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.total_imported_chapters || 0), 0),
+      totalUnresolvedGaps: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (Array.isArray(h.unresolvedGaps) ? h.unresolvedGaps.length : 0), 0),
+      totalKnownChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.totalKnownChapters || 0), 0),
+      totalImportedChapters: (workHealthRes.data || []).reduce((acc: number, h: any) => acc + (h.totalImportedChapters || 0), 0),
     }
   };
 };

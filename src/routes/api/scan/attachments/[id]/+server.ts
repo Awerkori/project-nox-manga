@@ -27,8 +27,8 @@ export const GET = async ({ locals, params, url }) => {
     const { data: member } = await db
       .from('scan_members')
       .select('role')
-      .eq('scan_id', attachment.scan_id)
-      .eq('user_id', locals.user.id)
+      .eq('scan_id', attachment.scanId)
+      .eq('user_id', locals.user!.id)
       .maybeSingle();
 
     if (!member) {
@@ -44,18 +44,18 @@ export const GET = async ({ locals, params, url }) => {
 
   return new Response(JSON.stringify({
     id: attachment.id,
-    filename: attachment.original_filename,
+    filename: attachment.originalFilename,
     size: attachment.size,
-    mimeType: attachment.mime_type,
-    contextType: attachment.context_type,
-    scanId: attachment.scan_id,
-    createdAt: attachment.created_at,
+    mimeType: attachment.mimeType,
+    contextType: attachment.contextType,
+    scanId: attachment.scanId,
+    createdAt: attachment.createdAt,
     status: 'AUTHORIZED'
   }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
-      'Content-Disposition': disposition + '; filename="' + encodeURIComponent(attachment.safe_filename) + '"',
+      'Content-Disposition': disposition + '; filename="' + encodeURIComponent(attachment.safeFilename) + '"',
       'Cache-Control': 'private, no-transform, max-age=3600',
       'X-Content-Type-Options': 'nosniff'
     }

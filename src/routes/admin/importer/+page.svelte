@@ -52,15 +52,15 @@
     showManifestModal = true;
     manifestLoading = true;
     try {
-      const res = await fetch(`/api/internal/importer/manifest?workId=${workHealthItem.work_id}`);
+      const res = await fetch(`/api/internal/importer/manifest?workId=${workHealthItem.workId}`);
       if (res.ok) {
         const json = await res.json();
         manifestChapters = json.chapters || [];
       } else {
-        manifestChapters = (data.chapterManifest || []).filter((m: any) => m.work_id === workHealthItem.work_id);
+        manifestChapters = (data.chapterManifest || []).filter((m: any) => m.workId === workHealthItem.workId);
       }
     } catch {
-      manifestChapters = (data.chapterManifest || []).filter((m: any) => m.work_id === workHealthItem.work_id);
+      manifestChapters = (data.chapterManifest || []).filter((m: any) => m.workId === workHealthItem.workId);
     } finally {
       manifestLoading = false;
     }
@@ -75,10 +75,10 @@
 
       if (!matchesSearch) return false;
 
-      if (healthFilter === 'HEALTHY') return item.health_status === 'HEALTHY';
-      if (healthFilter === 'INCOMPLETE') return item.health_status === 'INCOMPLETE' || item.missing_start || (item.gaps && item.gaps.length > 0);
-      if (healthFilter === 'RECONCILING') return item.health_status === 'RECONCILING';
-      if (healthFilter === 'UNRESOLVED') return Array.isArray(item.unresolved_gaps) && item.unresolved_gaps.length > 0;
+      if (healthFilter === 'HEALTHY') return item.healthStatus === 'HEALTHY';
+      if (healthFilter === 'INCOMPLETE') return item.healthStatus === 'INCOMPLETE' || item.missingStart || (item.gaps && item.gaps.length > 0);
+      if (healthFilter === 'RECONCILING') return item.healthStatus === 'RECONCILING';
+      if (healthFilter === 'UNRESOLVED') return Array.isArray(item.unresolvedGaps) && item.unresolvedGaps.length > 0;
 
       return true;
     })
@@ -243,7 +243,7 @@
 
     for (const job of jobs) {
       const src = (job.source || 'desconhecido').toLowerCase();
-      const raw = (job.last_error || '').toLowerCase();
+      const raw = (job.lastError || '').toLowerCase();
       let patternKey = 'outros';
       let patternName = 'Falha transitória';
 
@@ -306,7 +306,7 @@
         return false;
       }
       if (retryFilterGroup.pattern) {
-        const err = (job.last_error || '').toLowerCase();
+        const err = (job.lastError || '').toLowerCase();
         if (retryFilterGroup.pattern === '403' && !err.includes('403') && !err.includes('cloudflare')) return false;
         if (retryFilterGroup.pattern === '404' && !err.includes('404')) return false;
         if (retryFilterGroup.pattern === 'lease' && !err.includes('lease') && !err.includes('stalled')) return false;
@@ -356,8 +356,8 @@
 
   // Calculate worker health
   let isWorkerActive = $derived(() => {
-    if (!data.telemetry?.created_at) return false;
-    const diffMs = Date.now() - new Date(data.telemetry.created_at).getTime();
+    if (!data.telemetry?.createdAt) return false;
+    const diffMs = Date.now() - new Date(data.telemetry.createdAt).getTime();
     return diffMs < 180_000; // < 3 minutes
   });
 </script>
@@ -377,8 +377,8 @@
           <div class="status-dot" class:pulsing={isWorkerActive()}></div>
           <span>{isWorkerActive() ? 'Worker Online' : 'Worker Offline / Aguardando'}</span>
         </div>
-        {#if data.telemetry?.worker_id}
-          <span class="worker-id-tag">({data.telemetry.worker_id})</span>
+        {#if data.telemetry?.workerId}
+          <span class="worker-id-tag">({data.telemetry.workerId})</span>
         {/if}
       </div>
 
@@ -392,11 +392,11 @@
         <div class="telemetry-pills-row">
           <div class="telemetry-pill">
             <Cpu size={12} />
-            <span>RSS: <strong>{data.telemetry.rss_mb} MB</strong></span>
+            <span>RSS: <strong>{data.telemetry.rssMb} MB</strong></span>
           </div>
           <div class="telemetry-pill">
             <Zap size={12} />
-            <span>Lag: <strong>{data.telemetry.event_loop_lag_ms} ms</strong></span>
+            <span>Lag: <strong>{data.telemetry.eventLoopLagMs} ms</strong></span>
           </div>
           <div class="telemetry-pill">
             <Activity size={12} />
@@ -404,7 +404,7 @@
           </div>
           <div class="telemetry-pill">
             <Clock size={12} />
-            <span>Heartbeat: <strong>{relativeTime(data.telemetry.created_at)}</strong></span>
+            <span>Heartbeat: <strong>{relativeTime(data.telemetry.createdAt)}</strong></span>
           </div>
         </div>
       {/if}
@@ -443,8 +443,8 @@
       <div class="hero-content">
         <div class="hero-work-row">
           <div class="hero-cover-wrap">
-            {#if data.activeFocus.works?.cover_id}
-              <img src="/media/{data.activeFocus.works.cover_id}" alt="" class="hero-cover-img" />
+            {#if data.activeFocus.works?.coverId}
+              <img src="/media/{data.activeFocus.works.coverId}" alt="" class="hero-cover-img" />
             {:else}
               <div class="hero-cover-placeholder">NOX</div>
             {/if}
@@ -499,7 +499,7 @@
             {/if}
 
             <div class="hero-requester">
-              Solicitado por @{data.activeFocus.requester?.username || 'staff'} · {relativeTime(data.activeFocus.created_at)}
+              Solicitado por @{data.activeFocus.requester?.username || 'staff'} · {relativeTime(data.activeFocus.createdAt)}
             </div>
           </div>
 
@@ -514,7 +514,7 @@
                 };
               }}>
                 <input type="hidden" name="request_id" value={data.activeFocus.id} />
-                <input type="hidden" name="work_id" value={data.activeFocus.work_id} />
+                <input type="hidden" name="work_id" value={data.activeFocus.workId} />
                 <button type="submit" class="btn-retry-priority" disabled={submitting}>
                   <RotateCw size={14} />
                   <span>Tentar Novamente</span>
@@ -532,7 +532,7 @@
           </div>
         </div>
 
-        {#if data.activeFocus.status === 'RETRYING' || data.activeFocus.last_error}
+        {#if data.activeFocus.status === 'RETRYING' || data.activeFocus.lastError}
           <div class="hero-retry-info-card">
             <div class="retry-header">
               <AlertTriangle size={15} class="retry-icon" />
@@ -542,19 +542,19 @@
             <div class="retry-details-grid">
               <div class="retry-detail-item wide">
                 <span class="detail-label">Motivo do Erro:</span>
-                <span class="detail-value error-text">{data.activeFocus.last_error || 'Aguardando recuperação técnica'}</span>
+                <span class="detail-value error-text">{data.activeFocus.lastError || 'Aguardando recuperação técnica'}</span>
               </div>
               <div class="retry-detail-item">
                 <span class="detail-label">Tentativas:</span>
-                <span class="detail-value">{data.activeFocus.attempt_count || 1}</span>
+                <span class="detail-value">{data.activeFocus.attemptCount || 1}</span>
               </div>
               <div class="retry-detail-item">
                 <span class="detail-label">Última tentativa:</span>
-                <span class="detail-value">{relativeTime(data.activeFocus.last_attempt_at || data.activeFocus.updated_at)}</span>
+                <span class="detail-value">{relativeTime(data.activeFocus.lastAttemptAt || data.activeFocus.updatedAt)}</span>
               </div>
               <div class="retry-detail-item">
                 <span class="detail-label">Próxima tentativa:</span>
-                <span class="detail-value highlight">{data.activeFocus.next_attempt_at ? relativeTime(data.activeFocus.next_attempt_at) : 'Em instantes'}</span>
+                <span class="detail-value highlight">{data.activeFocus.nextAttemptAt ? relativeTime(data.activeFocus.nextAttemptAt) : 'Em instantes'}</span>
               </div>
             </div>
           </div>
@@ -957,14 +957,14 @@
             </tr>
           </thead>
           <tbody>
-            {#each filteredWorkHealth as item (item.work_id)}
+            {#each filteredWorkHealth as item (item.workId)}
               <tr class="health-row">
                 <!-- Obra -->
                 <td class="td-work">
                   <div class="health-work-info">
                     <div class="health-cover-box">
-                      {#if item.work?.cover_id}
-                        <img src="/media/{item.work.cover_id}" alt="" width="34" height="48" class="health-cover-img" />
+                      {#if item.work?.coverId}
+                        <img src="/media/{item.work.coverId}" alt="" width="34" height="48" class="health-cover-img" />
                       {:else}
                         <div class="health-cover-fallback">NOX</div>
                       {/if}
@@ -974,24 +974,24 @@
                         {item.work?.title || 'Obra Desconhecida'}
                         <ExternalLink size={12} />
                       </a>
-                      <span class="health-work-slug">slug: {item.work?.slug || item.work_id.slice(0, 8)}</span>
+                      <span class="health-work-slug">slug: {item.work?.slug || item.workId.slice(0, 8)}</span>
                     </div>
                   </div>
                 </td>
 
                 <!-- Status de Saúde -->
                 <td class="td-status">
-                  {#if item.health_status === 'HEALTHY'}
+                  {#if item.healthStatus === 'HEALTHY'}
                     <span class="health-status-badge status-healthy">
                       <CheckCircle2 size={13} />
                       100% Saudável
                     </span>
-                  {:else if item.health_status === 'RECONCILING' || reconcilingWorkId === item.work_id}
+                  {:else if item.healthStatus === 'RECONCILING' || reconcilingWorkId === item.workId}
                     <span class="health-status-badge status-reconciling">
                       <RotateCw size={13} class="animate-spin" />
                       Reconciliando
                     </span>
-                  {:else if item.health_status === 'INCOMPLETE'}
+                  {:else if item.healthStatus === 'INCOMPLETE'}
                     <span class="health-status-badge status-incomplete">
                       <AlertTriangle size={13} />
                       Lacunas Detectadas
@@ -1006,15 +1006,15 @@
 
                 <!-- Início -->
                 <td class="td-start">
-                  {#if item.missing_start}
+                  {#if item.missingStart}
                     <span class="start-badge badge-missing-start" title="Faltam capítulos anteriores ao primeiro conhecido">
                       <AlertTriangle size={12} />
-                      Inicia no Cap. {item.first_chapter_number}
+                      Inicia no Cap. {item.firstChapterNumber}
                     </span>
                   {:else}
                     <span class="start-badge badge-start-ok">
                       <Check size={12} />
-                      Início OK (Cap. {item.first_chapter_number || 1})
+                      Início OK (Cap. {item.firstChapterNumber || 1})
                     </span>
                   {/if}
                 </td>
@@ -1025,14 +1025,14 @@
                     <div class="coverage-bar-track">
                       <div
                         class="coverage-bar-fill"
-                        class:fill-complete={item.total_imported_chapters >= item.total_known_chapters && item.total_known_chapters > 0}
-                        style="width: {Math.min(100, Math.round((item.total_imported_chapters / Math.max(1, item.total_known_chapters)) * 100))}%"
+                        class:fill-complete={item.totalImportedChapters >= item.totalKnownChapters && item.totalKnownChapters > 0}
+                        style="width: {Math.min(100, Math.round((item.totalImportedChapters / Math.max(1, item.totalKnownChapters)) * 100))}%"
                       ></div>
                     </div>
                     <div class="coverage-text">
-                      <strong>{item.total_imported_chapters}</strong> / {item.total_known_chapters} caps
+                      <strong>{item.totalImportedChapters}</strong> / {item.totalKnownChapters} caps
                       <span class="coverage-percent">
-                        ({Math.round((item.total_imported_chapters / Math.max(1, item.total_known_chapters)) * 100)}%)
+                        ({Math.round((item.totalImportedChapters / Math.max(1, item.totalKnownChapters)) * 100)}%)
                       </span>
                     </div>
                   </div>
@@ -1041,8 +1041,8 @@
                 <!-- Fontes Mapeadas -->
                 <td class="td-providers">
                   <div class="provider-badges-list">
-                    {#if Array.isArray(item.providers_summary) && item.providers_summary.length > 0}
-                      {#each item.providers_summary as prov}
+                    {#if Array.isArray(item.providersSummary) && item.providersSummary.length > 0}
+                      {#each item.providersSummary as prov}
                         <span class="prov-tag prov-{prov.provider.toLowerCase()}" class:inactive={!prov.active}>
                           <span class="prov-dot"></span>
                           <span class="prov-name">{prov.provider}</span>
@@ -1072,12 +1072,12 @@
                         <span class="gap-pill">+{item.gapCount - 8} lacunas</span>
                       {/if}
                     {/if}
-                    {#if Array.isArray(item.unresolved_gaps) && item.unresolved_gaps.length > 0}
+                    {#if Array.isArray(item.unresolvedGaps) && item.unresolvedGaps.length > 0}
                       <span class="gap-pill gap-unresolved" title="Nenhum provedor disponível possui estes capítulos">
-                        Irresolvível: {item.unresolved_gaps.slice(0, 3).join(', ')}{item.unresolvedGapCount > 3 ? ` (+${item.unresolvedGapCount - 3})` : ''}
+                        Irresolvível: {item.unresolvedGaps.slice(0, 3).join(', ')}{item.unresolvedGapCount > 3 ? ` (+${item.unresolvedGapCount - 3})` : ''}
                       </span>
                     {/if}
-                    {#if (!item.gaps || item.gaps.length === 0) && (!item.unresolved_gaps || item.unresolved_gaps.length === 0) && !item.missing_start}
+                    {#if (!item.gaps || item.gaps.length === 0) && (!item.unresolvedGaps || item.unresolvedGaps.length === 0) && !item.missingStart}
                       <span class="gaps-none text-emerald">
                         <Check size={12} />
                         Sem lacunas
@@ -1093,22 +1093,22 @@
                       method="POST"
                       action="?/reconcile"
                       use:enhance={() => {
-                        reconcilingWorkId = item.work_id;
+                        reconcilingWorkId = item.workId;
                         return async ({ update }) => {
                           await update();
                           reconcilingWorkId = null;
                         };
                       }}
                     >
-                      <input type="hidden" name="work_id" value={item.work_id} />
+                      <input type="hidden" name="work_id" value={item.workId} />
                       <button
                         type="submit"
                         class="btn-reconcile-action"
-                        disabled={reconcilingWorkId === item.work_id || item.health_status === 'RECONCILING'}
+                        disabled={reconcilingWorkId === item.workId || item.healthStatus === 'RECONCILING'}
                         title="Executar reconciliação imediata em todas as fontes (Kuro, MangaFlix, Nexus, Manhastro, MangoToons)"
                       >
-                        <RotateCw size={13} class={reconcilingWorkId === item.work_id || item.health_status === 'RECONCILING' ? 'animate-spin' : ''} />
-                        <span>{reconcilingWorkId === item.work_id ? 'Reconciliando...' : 'Reconciliar'}</span>
+                        <RotateCw size={13} class={reconcilingWorkId === item.workId || item.healthStatus === 'RECONCILING' ? 'animate-spin' : ''} />
+                        <span>{reconcilingWorkId === item.workId ? 'Reconciliando...' : 'Reconciliar'}</span>
                       </button>
                     </form>
 
@@ -1163,8 +1163,8 @@
               <div class="active-job-card">
                 <!-- Work Thumb -->
                 <div class="job-thumb">
-                  {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                  {#if job.work?.coverId}
+                    <img src="/media/{job.work.coverId}" alt="" width="38" height="52" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -1184,8 +1184,8 @@
 
                   <div class="job-line-sub">
                     <span class="job-source-tag">{job.source}</span>
-                    {#if job.chapter_sort_key}
-                      <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
+                    {#if job.chapterSortKey}
+                      <span class="job-chapter-num">Cap. {job.chapterSortKey}</span>
                     {/if}
                     <span class="job-priority-pill" class:boosted={job.priority >= 80}>
                       {job.priority >= 90 ? 'P:90 BLOCKER' : job.priority >= 85 ? 'P:85 STAFF' : job.priority >= 80 ? 'P:80 NOVO' : job.priority >= 70 ? 'P:70 GAP' : 'P:' + job.priority}
@@ -1194,33 +1194,33 @@
 
                   <!-- Real-time Progress Bar & Stage -->
                   <div class="job-progress-block">
-                    {#if job.progress_total && job.progress_total > 0}
+                    {#if job.progressTotal && job.progressTotal > 0}
                       <div class="progress-bar-track">
                         <div
                           class="progress-bar-fill"
-                          style="width: {Math.min(100, Math.max(5, Math.round(((job.progress_current || 0) / job.progress_total) * 100)))}%"
+                          style="width: {Math.min(100, Math.max(5, Math.round(((job.progressCurrent || 0) / job.progressTotal) * 100)))}%"
                         ></div>
                       </div>
                       <div class="progress-meta-row">
                         <span class="progress-page-count">
-                          Página {job.progress_current || 0} / {job.progress_total}
+                          Página {job.progressCurrent || 0} / {job.progressTotal}
                         </span>
-                        <span class="progress-stage-pill stage-{(job.progress_stage || 'UPLOADING').toLowerCase()}">
-                          {job.progress_stage || 'UPLOADING'}
+                        <span class="progress-stage-pill stage-{(job.progressStage || 'UPLOADING').toLowerCase()}">
+                          {job.progressStage || 'UPLOADING'}
                         </span>
                       </div>
                     {:else}
                       <div class="progress-meta-row">
-                        <span class="progress-stage-pill stage-{(job.progress_stage || 'DOWNLOADING').toLowerCase()}">
+                        <span class="progress-stage-pill stage-{(job.progressStage || 'DOWNLOADING').toLowerCase()}">
                           <span class="pulse-stage-dot"></span>
-                          {job.progress_stage === 'DOWNLOADING' ? 'Baixando páginas…' : (job.progress_stage || 'Processando capítulo…')}
+                          {job.progressStage === 'DOWNLOADING' ? 'Baixando páginas…' : (job.progressStage || 'Processando capítulo…')}
                         </span>
                       </div>
                     {/if}
                   </div>
 
                   <!-- Discrete Neutral Note for Recovered Incident (NEVER RED!) -->
-                  {#if job.last_recovered_error}
+                  {#if job.lastRecoveredError}
                     <button
                       type="button"
                       class="job-recovered-badge"
@@ -1422,8 +1422,8 @@
               <div class="retry-job-card">
                 <!-- Work Thumb -->
                 <div class="job-thumb">
-                  {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                  {#if job.work?.coverId}
+                    <img src="/media/{job.work.coverId}" alt="" width="38" height="52" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -1440,12 +1440,12 @@
 
                   <div class="job-line-sub">
                     <span class="job-source-tag">{job.source}</span>
-                    {#if job.chapter_sort_key}
-                      <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
+                    {#if job.chapterSortKey}
+                      <span class="job-chapter-num">Cap. {job.chapterSortKey}</span>
                     {/if}
                     <span class="retry-countdown-badge">
                       <Clock size={11} />
-                      <span>Retry {formatCountdown(job.next_run_at)}</span>
+                      <span>Retry {formatCountdown(job.nextRunAt)}</span>
                     </span>
                     <span class="retry-attempts-count" title="Total de tentativas executadas sem teto artificial">
                       {formatAttempts(job.attempts)}
@@ -1453,9 +1453,9 @@
                   </div>
 
                   <!-- Clean Summarized Error Badge (NO HTML, NO STACK TRACE) -->
-                  <div class="retry-error-summary-box" title={job.last_error || ''}>
+                  <div class="retry-error-summary-box" title={job.lastError || ''}>
                     <AlertTriangle size={13} class="summary-warn-icon" />
-                    <span class="summary-error-text">{summarizeError(job.last_error)}</span>
+                    <span class="summary-error-text">{summarizeError(job.lastError)}</span>
                   </div>
                 </div>
 
@@ -1595,8 +1595,8 @@
             {#each (data.pausedJobs || []) as job (job.id)}
               <div class="active-job-card" style="border-left: 3px solid #fbbf24;">
                 <div class="job-thumb">
-                  {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                  {#if job.work?.coverId}
+                    <img src="/media/{job.work.coverId}" alt="" width="38" height="52" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -1614,11 +1614,11 @@
 
                   <div class="job-line-sub">
                     <span class="job-source-tag">{job.source}</span>
-                    {#if job.chapter_sort_key}
-                      <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
+                    {#if job.chapterSortKey}
+                      <span class="job-chapter-num">Cap. {job.chapterSortKey}</span>
                     {/if}
-                    {#if job.pause_reason}
-                      <span style="font-size: 11px; color: #94a3b8;">Motivo: {job.pause_reason}</span>
+                    {#if job.pauseReason}
+                      <span style="font-size: 11px; color: #94a3b8;">Motivo: {job.pauseReason}</span>
                     {/if}
                   </div>
                 </div>
@@ -1700,8 +1700,8 @@
             {#each (data.staffRequests || []) as req (req.id)}
               <div class="staff-request-row">
                 <div class="req-work-thumb">
-                  {#if req.works?.cover_id}
-                    <img src="/media/{req.works.cover_id}" alt="" width="34" height="46" class="thumb-img" />
+                  {#if req.works?.coverId}
+                    <img src="/media/{req.works.coverId}" alt="" width="34" height="46" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -1711,19 +1711,19 @@
                   <div class="req-header-line">
                     <strong class="req-work-title">{req.works?.title || 'Obra'}</strong>
                     <span class="req-status-pill status-{req.status.toLowerCase()}">{req.status}</span>
-                    {#if req.cancel_reason}
+                    {#if req.cancelReason}
                       <span class="req-cancel-reason-tag">
-                        {req.cancel_reason === 'STAFF_CANCELLED' ? 'Cancelado pela Staff' : req.cancel_reason === 'REPLACED_BY_STAFF' ? 'Substituído pela Staff' : req.cancel_reason}
+                        {req.cancelReason === 'STAFF_CANCELLED' ? 'Cancelado pela Staff' : req.cancelReason === 'REPLACED_BY_STAFF' ? 'Substituído pela Staff' : req.cancelReason}
                       </span>
                     {/if}
-                    {#if req.status === 'RETRYING' && req.last_error}
-                      <span class="req-error-tag" title={req.last_error}>Retry: {req.last_error}</span>
+                    {#if req.status === 'RETRYING' && req.lastError}
+                      <span class="req-error-tag" title={req.lastError}>Retry: {req.lastError}</span>
                     {/if}
                   </div>
                   <div class="req-details-line">
-                    <span class="req-operator">Solicitado por: <strong>{req.requester?.display_name || req.requester?.username || 'Staff'}</strong></span>
-                    <span class="req-date">· {relativeTime(req.created_at)}</span>
-                    <span class="req-boost-tag">Boost +{req.priority_boost}</span>
+                    <span class="req-operator">Solicitado por: <strong>{req.requester?.displayName || req.requester?.username || 'Staff'}</strong></span>
+                    <span class="req-date">· {relativeTime(req.createdAt)}</span>
+                    <span class="req-boost-tag">Boost +{req.priorityBoost}</span>
                   </div>
                   {#if req.reason}
                     <p class="req-reason">"{req.reason}"</p>
@@ -1770,7 +1770,7 @@
               <div class="staged-row">
                 <div class="staged-info">
                   <strong class="staged-work">{staged.works?.title || 'Obra'}</strong>
-                  <span class="staged-ch">Capítulo {staged.chapter_sort_key}</span>
+                  <span class="staged-ch">Capítulo {staged.chapterSortKey}</span>
                   <span class="staged-source-chip">{staged.source}</span>
                 </div>
                 <div class="staged-barrier-tag">
@@ -1804,11 +1804,11 @@
             {#each (data.queuedJobs || []) as q (q.id)}
               <div class="queued-row">
                 <div class="queued-meta">
-                  <strong class="queued-title">{q.work?.title || (q.payload as any)?.workTitle || q.task_type}</strong>
+                  <strong class="queued-title">{q.work?.title || (q.payload as any)?.workTitle || q.taskType}</strong>
                   <div class="queued-sub">
                     <span class="source-tag">{q.source}</span>
-                    {#if q.chapter_sort_key}
-                      <span class="ch-tag">Cap. {q.chapter_sort_key}</span>
+                    {#if q.chapterSortKey}
+                      <span class="ch-tag">Cap. {q.chapterSortKey}</span>
                     {/if}
                     <span class="prio-tag" class:high={q.priority >= 80}>
                       {q.priority >= 90 ? 'P:90 BLOCKER' : q.priority >= 85 ? 'P:85 STAFF' : q.priority >= 80 ? 'P:80 NOVO' : q.priority >= 70 ? 'P:70 GAP' : 'P:' + q.priority}
@@ -1875,9 +1875,9 @@
               <div class="source-top">
                 <div class="source-ident-col" style="display: flex; flex-direction: column; gap: 2px;">
                   <strong class="source-name">{src.name}</strong>
-                  {#if src.base_url}
+                  {#if src.baseUrl}
                     <span class="source-domain-tag" style="font-size: 0.68rem; color: #a1a1aa; font-family: monospace;">
-                      {src.base_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                      {src.baseUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
                     </span>
                   {/if}
                 </div>
@@ -1886,13 +1886,13 @@
                 </span>
               </div>
               <div class="source-details">
-                <span class="source-rate">Taxa: {src.rate_limit_per_second} req/s</span>
-                <span class="source-sync">Ciclo: {src.sync_interval_minutes}m</span>
+                <span class="source-rate">Taxa: {src.rateLimitPerSecond} req/s</span>
+                <span class="source-sync">Ciclo: {src.syncIntervalMinutes}m</span>
               </div>
-              {#if src.last_sync_at}
+              {#if src.lastSyncAt}
                 <div class="source-time">
                   <Clock size={11} />
-                  <span>Último sync {relativeTime(src.last_sync_at)}</span>
+                  <span>Último sync {relativeTime(src.lastSyncAt)}</span>
                 </div>
               {/if}
             </div>
@@ -1913,7 +1913,7 @@
                       <div style="background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                           <strong style="color: #f3f4f6;">{s.name}</strong>
-                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.base_url?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.baseUrl?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                           <span style="font-size: 0.7rem; color: #94a3b8; font-family: monospace;">
@@ -1938,7 +1938,7 @@
                       <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                           <strong style="color: #f3f4f6;">{s.name}</strong>
-                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.base_url?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+                          <span style="opacity: 0.6; margin-left: 6px; font-family: monospace;">{s.baseUrl?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
                         </div>
                         <span style="color: #ef4444; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;">EXCLUDED</span>
                       </div>
@@ -1972,19 +1972,19 @@
               <div class="diag-meta-grid">
                 <div class="diag-stat">
                   <span class="diag-label">Heap Usado</span>
-                  <strong class="diag-val">{data.telemetry.heap_used_mb} MB / {data.telemetry.heap_total_mb} MB</strong>
+                  <strong class="diag-val">{data.telemetry.heapUsedMb} MB / {data.telemetry.heapTotalMb} MB</strong>
                 </div>
                 <div class="diag-stat">
                   <span class="diag-label">Array Buffers</span>
-                  <strong class="diag-val">{data.telemetry.array_buffers_mb} MB</strong>
+                  <strong class="diag-val">{data.telemetry.arrayBuffersMb} MB</strong>
                 </div>
                 <div class="diag-stat">
                   <span class="diag-label">Ação do Ciclo</span>
-                  <strong class="diag-val">{data.telemetry.cycle_action}</strong>
+                  <strong class="diag-val">{data.telemetry.cycleAction}</strong>
                 </div>
                 <div class="diag-stat">
                   <span class="diag-label">Jobs Ativos</span>
-                  <strong class="diag-val">{data.telemetry.active_jobs}</strong>
+                  <strong class="diag-val">{data.telemetry.activeJobs}</strong>
                 </div>
               </div>
             {/if}
@@ -1997,13 +1997,13 @@
                   <div class="recent-failure-item">
                     <div class="fail-top">
                       <span class="fail-source">{fail.source}</span>
-                      {#if fail.chapter_sort_key}
-                        <span class="fail-ch">Cap. {fail.chapter_sort_key}</span>
+                      {#if fail.chapterSortKey}
+                        <span class="fail-ch">Cap. {fail.chapterSortKey}</span>
                       {/if}
-                      <span class="fail-time">{relativeTime(fail.updated_at)}</span>
+                      <span class="fail-time">{relativeTime(fail.updatedAt)}</span>
                     </div>
-                    {#if fail.last_error}
-                      <code class="fail-err-msg">{fail.last_error}</code>
+                    {#if fail.lastError}
+                      <code class="fail-err-msg">{fail.lastError}</code>
                     {/if}
                   </div>
                 {/each}
@@ -2020,13 +2020,13 @@
                   <div class="recent-failure-item" style="border-left-color: #38bdf8;">
                     <div class="fail-top">
                       <span class="fail-source" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">{audit.action}</span>
-                      <span class="fail-ch">{audit.target_type} {audit.target_id.slice(0, 8)}...</span>
+                      <span class="fail-ch">{audit.targetType} {audit.targetId.slice(0, 8)}...</span>
                       <span class="fail-time">
-                        {audit.actor?.display_name || audit.actor?.username || 'Staff'} · {relativeTime(audit.created_at)}
+                        {audit.actor?.displayName || audit.actor?.username || 'Staff'} · {relativeTime(audit.createdAt)}
                       </span>
                     </div>
                     {#if audit.reason}
-                      <code class="fail-err-msg" style="color: #94a3b8;">Motivo: {audit.reason} ({audit.old_state || 'N/A'} &rarr; {audit.new_state})</code>
+                      <code class="fail-err-msg" style="color: #94a3b8;">Motivo: {audit.reason} ({audit.oldState || 'N/A'} &rarr; {audit.newState})</code>
                     {/if}
                   </div>
                 {/each}
@@ -2064,7 +2064,7 @@
               {selectedJobForDetails.work?.title || (selectedJobForDetails.payload as any)?.workTitle || 'Detalhes do Job'}
             </h3>
             <p class="modal-sub">
-              Fonte: <strong>{selectedJobForDetails.source.toUpperCase()}</strong> · Capítulo {selectedJobForDetails.chapter_sort_key || (selectedJobForDetails.payload as any)?.chapterNumber || '—'}
+              Fonte: <strong>{selectedJobForDetails.source.toUpperCase()}</strong> · Capítulo {selectedJobForDetails.chapterSortKey || (selectedJobForDetails.payload as any)?.chapterNumber || '—'}
             </p>
           </div>
         </div>
@@ -2087,17 +2087,17 @@
               <span class="diag-status-badge-ok">Worker Concorrente Ativo</span>
             </div>
 
-            {#if selectedJobForDetails.last_recovered_error}
+            {#if selectedJobForDetails.lastRecoveredError}
               <div class="diag-incident-box recovered">
                 <div class="incident-box-head">
                   <CheckCircle2 size={15} class="text-emerald-400" />
                   <strong>Incidente Anterior Recuperado</strong>
                 </div>
                 <div class="incident-meta-row">
-                  <span>Recuperado em: <strong>{selectedJobForDetails.recovered_at ? new Date(selectedJobForDetails.recovered_at).toLocaleString() : 'Recentemente'}</strong></span>
+                  <span>Recuperado em: <strong>{selectedJobForDetails.recoveredAt ? new Date(selectedJobForDetails.recoveredAt).toLocaleString() : 'Recentemente'}</strong></span>
                 </div>
                 <div class="incident-pre-wrap">
-                  {selectedJobForDetails.last_recovered_error}
+                  {selectedJobForDetails.lastRecoveredError}
                 </div>
               </div>
             {/if}
@@ -2109,18 +2109,18 @@
             </div>
 
             <div class="diag-retry-countdown-line">
-              Próxima tentativa em: <strong>{formatCountdown(selectedJobForDetails.next_run_at)}</strong>
-              ({selectedJobForDetails.next_run_at ? new Date(selectedJobForDetails.next_run_at).toLocaleString() : 'em instantes'})
+              Próxima tentativa em: <strong>{formatCountdown(selectedJobForDetails.nextRunAt)}</strong>
+              ({selectedJobForDetails.nextRunAt ? new Date(selectedJobForDetails.nextRunAt).toLocaleString() : 'em instantes'})
             </div>
 
-            {#if selectedJobForDetails.last_error}
+            {#if selectedJobForDetails.lastError}
               <div class="diag-incident-box active-error">
                 <div class="incident-box-head">
                   <AlertTriangle size={15} class="text-rose-400" />
                   <strong>Erro Ativo do Incidente</strong>
                 </div>
                 <div class="incident-pre-wrap">
-                  {selectedJobForDetails.last_error}
+                  {selectedJobForDetails.lastError}
                 </div>
               </div>
             {/if}
@@ -2139,16 +2139,16 @@
           </div>
           <div class="diag-attr">
             <span class="attr-label">Worker / Locked By</span>
-            <span class="attr-val">{selectedJobForDetails.locked_by || 'Aguardando worker'}</span>
+            <span class="attr-val">{selectedJobForDetails.lockedBy || 'Aguardando worker'}</span>
           </div>
           <div class="diag-attr">
             <span class="attr-label">Lease Expira Em</span>
-            <span class="attr-val">{selectedJobForDetails.lease_expires_at ? new Date(selectedJobForDetails.lease_expires_at).toLocaleTimeString() : 'N/A'}</span>
+            <span class="attr-val">{selectedJobForDetails.leaseExpiresAt ? new Date(selectedJobForDetails.leaseExpiresAt).toLocaleTimeString() : 'N/A'}</span>
           </div>
           <div class="diag-attr">
             <span class="attr-label">Progresso Atual</span>
             <span class="attr-val">
-              {selectedJobForDetails.progress_current || 0} / {selectedJobForDetails.progress_total || 0} páginas ({selectedJobForDetails.progress_stage || 'N/A'})
+              {selectedJobForDetails.progressCurrent || 0} / {selectedJobForDetails.progressTotal || 0} páginas ({selectedJobForDetails.progressStage || 'N/A'})
             </span>
           </div>
           <div class="diag-attr">
@@ -2506,22 +2506,22 @@
         <div class="manifest-summary-strip">
           <div class="manifest-kpi">
             <span class="kpi-title">Capítulos Conhecidos:</span>
-            <strong class="kpi-num">{selectedManifestWork.total_known_chapters || 0}</strong>
+            <strong class="kpi-num">{selectedManifestWork.totalKnownChapters || 0}</strong>
           </div>
           <div class="manifest-kpi">
             <span class="kpi-title">Importados:</span>
-            <strong class="kpi-num text-emerald">{selectedManifestWork.total_imported_chapters || 0}</strong>
+            <strong class="kpi-num text-emerald">{selectedManifestWork.totalImportedChapters || 0}</strong>
           </div>
           <div class="manifest-kpi">
             <span class="kpi-title">Status da Obra:</span>
-            <span class="health-status-badge status-{selectedManifestWork.health_status?.toLowerCase()}">
-              {selectedManifestWork.health_status}
+            <span class="health-status-badge status-{selectedManifestWork.healthStatus?.toLowerCase()}">
+              {selectedManifestWork.healthStatus}
             </span>
           </div>
-          {#if selectedManifestWork.missing_start}
+          {#if selectedManifestWork.missingStart}
             <div class="manifest-kpi alert">
               <AlertTriangle size={13} class="text-amber" />
-              <span class="text-amber">Falta início (1..{selectedManifestWork.first_chapter_number - 1})</span>
+              <span class="text-amber">Falta início (1..{selectedManifestWork.firstChapterNumber - 1})</span>
             </div>
           {/if}
         </div>
@@ -2548,7 +2548,7 @@
                 {#each manifestChapters as ch}
                   <tr class="manifest-row status-{ch.status?.toLowerCase()}">
                     <td class="td-ch-num">
-                      <strong>Cap. {ch.chapter_sort_key ?? ch.chapter_number}</strong>
+                      <strong>Cap. {ch.chapterSortKey ?? ch.chapterNumber}</strong>
                     </td>
                     <td class="td-ch-status">
                       <span class="ch-badge ch-{ch.status?.toLowerCase()}">
@@ -2570,9 +2570,9 @@
                       </span>
                     </td>
                     <td class="td-ch-source">
-                      {#if ch.selected_source}
-                        <span class="source-tag source-{ch.selected_source}">
-                          {ch.selected_source}
+                      {#if ch.selectedSource}
+                        <span class="source-tag source-{ch.selectedSource}">
+                          {ch.selectedSource}
                         </span>
                       {:else}
                         <span class="source-none">—</span>
@@ -2580,10 +2580,10 @@
                     </td>
                     <td class="td-ch-fallbacks">
                       <div class="fallback-sources-list">
-                        {#if Array.isArray(ch.available_sources) && ch.available_sources.length > 0}
-                          {#each ch.available_sources as s}
-                            <span class="fallback-tag" class:is-selected={s.source === ch.selected_source}>
-                              {s.source} ({s.page_count || '?'}p)
+                        {#if Array.isArray(ch.availableSources) && ch.availableSources.length > 0}
+                          {#each ch.availableSources as s}
+                            <span class="fallback-tag" class:is-selected={s.source === ch.selectedSource}>
+                              {s.source} ({s.pageCount || '?'}p)
                             </span>
                           {/each}
                         {:else}
@@ -2592,10 +2592,10 @@
                       </div>
                     </td>
                     <td class="td-ch-pages">
-                      {ch.page_count > 0 ? ch.page_count + ' páginas' : '—'}
+                      {ch.pageCount > 0 ? ch.pageCount + ' páginas' : '—'}
                     </td>
                     <td class="td-ch-time">
-                      {ch.last_checked_at ? relativeTime(ch.last_checked_at) : '—'}
+                      {ch.lastCheckedAt ? relativeTime(ch.lastCheckedAt) : '—'}
                     </td>
                   </tr>
                 {/each}

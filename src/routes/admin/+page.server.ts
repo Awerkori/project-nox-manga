@@ -1,4 +1,7 @@
 import { error } from '@sveltejs/kit';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, inArray, isNull, isNotNull, desc, count, gte, and } from 'drizzle-orm';
+import { withTimeout } from '$lib/server/resilience';
 
 const snapshots = new Map<string, { timestamp: number; payload: any }>();
 const inFlight = new Map<string, Promise<any>>();
@@ -10,7 +13,7 @@ const loadSnapshot = async (locals: App.Locals) => {
   const [
     works,
     publishedChapters,
-    draftsCount,
+    draftsCountRes,
     tags,
     drafts,
     recentPublished,
@@ -21,83 +24,75 @@ const loadSnapshot = async (locals: App.Locals) => {
     failedJobsRes,
     failedMappingsRes
   ] = await Promise.all([
-      locals.db.from('works').select('id', { count: 'exact', head: true }),
-      locals.db
-        .from('chapters')
-        .select('id', { count: 'exact', head: true })
-        .not('published_at', 'is', null),
-    locals.db
-      .from('chapters')
-      .select('id', { count: 'exact', head: true })
-      .is('published_at', null)
-      .eq('origin', 'MANUAL'),
-    locals.db.from('tags').select('id', { count: 'exact', head: true }),
-    locals.db
-      .from('chapters')
-      .select('id,number,title,created_at,works(id,title,slug,cover_id)')
-      .is('published_at', null)
-      .eq('origin', 'MANUAL')
-      .order('created_at', { ascending: false })
-      .limit(8),
-    locals.db
-      .from('chapters')
-      .select('id,number,title,published_at,works(id,title,slug,cover_id)')
-      .not('published_at', 'is', null)
-      .order('published_at', { ascending: false })
-      .limit(6),
-    locals.db
-      .from('works')
-      .select('id,title,slug,kind,status,published,cover_id,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(5),
-    locals.db
-      .from('importer_queue')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['QUEUED', 'IMPORTING', 'RETRY']),
-    locals.db
-      .from('reports')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['NOVO', 'EM_ANALISE']),
-    locals.db
-      .from('access_roles')
-      .select('user_id', { count: 'exact', head: true })
-      .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
-      .eq('suspended', false),
-    locals.db
-      .from('importer_queue')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'FAILED')
-      .gte('updated_at', twentyFourHoursAgo),
-    locals.db
-      .from('importer_chapter_mappings')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['FAILED', 'VERIFICATION_FAILED'])
-    ].map(async (query) => {
-      try { return await query.abortSignal(AbortSignal.timeout(3500)); }
-      catch { return { error: true, count: null, data: null }; }
-    }));
+    safeQuery(db.select({ count: count() }).from(schema.works)),
+    safeQuery(db.select({ count: count() }).from(schema.chapters).where(isNotNull(schema.chapters.publishedAt))),
+    safeQuery(db.select({ count: count() }).from(schema.chapters).where(and(isNull(schema.chapters.publishedAt), eq(schema.chapters.origin, 'MANUAL')))),
+    safeQuery(db.select({ count: count() }).from(schema.tags)),
+    safeQuery(db.select({
+      id: schema.chapters.id,
+      number: schema.chapters.number,
+      title: schema.chapters.title,
+      createdAt: schema.chapters.createdAt,
+      works: {
+        id: schema.works.id,
+        title: schema.works.title,
+        slug: schema.works.slug,
+        coverId: schema.works.coverId
+      }
+    }).from(schema.chapters).leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id)).where(and(isNull(schema.chapters.publishedAt), eq(schema.chapters.origin, 'MANUAL'))).orderBy(desc(schema.chapters.createdAt)).limit(8)),
+    safeQuery(db.select({
+      id: schema.chapters.id,
+      number: schema.chapters.number,
+      title: schema.chapters.title,
+      publishedAt: schema.chapters.publishedAt,
+      works: {
+        id: schema.works.id,
+        title: schema.works.title,
+        slug: schema.works.slug,
+        coverId: schema.works.coverId
+      }
+    }).from(schema.chapters).leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id)).where(isNotNull(schema.chapters.publishedAt)).orderBy(desc(schema.chapters.publishedAt)).limit(6)),
+    safeQuery(db.select({
+      id: schema.works.id,
+      title: schema.works.title,
+      slug: schema.works.slug,
+      kind: schema.works.kind,
+      status: schema.works.status,
+      published: schema.works.published,
+      coverId: schema.works.coverId,
+      updatedAt: schema.works.updatedAt
+    }).from(schema.works).orderBy(desc(schema.works.updatedAt)).limit(5)),
+    safeQuery(db.select({ count: count() }).from(schema.importerQueue).where(inArray(schema.importerQueue.status, ['QUEUED', 'IMPORTING', 'RETRY']))),
+    safeQuery(db.select({ count: count() }).from(schema.reports).where(inArray(schema.reports.status, ['NOVO', 'EM_ANALISE']))),
+    safeQuery(db.select({ count: count() }).from(schema.accessRoles).where(and(inArray(schema.accessRoles.role, ['ADMIN', 'STAFF_SITE', 'EDITOR']), eq(schema.accessRoles.suspended, false)))),
+    safeQuery(db.select({ count: count() }).from(schema.importerQueue).where(and(eq(schema.importerQueue.status, 'FAILED'), gte(schema.importerQueue.updatedAt, twentyFourHoursAgo)))),
+    safeQuery(db.select({ count: count() }).from(schema.importerChapterMappings).where(inArray(schema.importerChapterMappings.status, ['FAILED', 'VERIFICATION_FAILED'])))
+  ].map(async (query) => {
+    try { return await withTimeout(query, 3500, { error: true as any, data: null }, 'admin_metric'); }
+    catch { return { error: true as any, data: null }; }
+  }));
 
-  const metricsUnavailable = [works, publishedChapters, draftsCount, tags, drafts,
+  const metricsUnavailable = [works, publishedChapters, draftsCountRes, tags, drafts,
     recentPublished, recentWorks, importerQueue, pendingReports, staffCountRes,
     failedJobsRes, failedMappingsRes].some(result => result.error);
 
-  const totalFailedJobs24h = failedJobsRes.count ?? null;
-  const unrecoveredFailures = failedMappingsRes.count ?? null;
+  const totalFailedJobs24h = failedJobsRes.data?.[0]?.count ?? null;
+  const unrecoveredFailures = failedMappingsRes.data?.[0]?.count ?? null;
   const recoveredFailures = totalFailedJobs24h === null || unrecoveredFailures === null
     ? null : Math.max(0, totalFailedJobs24h - unrecoveredFailures);
 
   const payload = {
     metricsUnavailable,
-    works: works.count ?? null,
-    chapters: publishedChapters.count ?? null,
-    draftsCount: draftsCount.count ?? null,
-    tagsCount: tags.count ?? null,
+    works: works.data?.[0]?.count ?? null,
+    chapters: publishedChapters.data?.[0]?.count ?? null,
+    draftsCount: draftsCountRes.data?.[0]?.count ?? null,
+    tagsCount: tags.data?.[0]?.count ?? null,
     drafts: (drafts.data as any[]) || [],
     recentPublished: (recentPublished.data as any[]) || [],
     recentWorks: (recentWorks.data as any[]) || [],
-    importerActiveCount: importerQueue.count ?? null,
-    pendingReportsCount: pendingReports.count ?? null,
-    staffCount: staffCountRes.count ?? null,
+    importerActiveCount: importerQueue.data?.[0]?.count ?? null,
+    pendingReportsCount: pendingReports.data?.[0]?.count ?? null,
+    staffCount: staffCountRes.data?.[0]?.count ?? null,
     failedJobs24h: totalFailedJobs24h,
     unrecoveredFailures,
     recoveredFailures

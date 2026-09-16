@@ -7,12 +7,10 @@ export const GET = async ({ locals }) => {
   const userId = member(locals);
 
   const { data, error } = await safeQuery(
-    db.select({
-      id: schema.mihonTokens.id,
-      device_name: schema.mihonTokens.deviceName,
-      created_at: schema.mihonTokens.createdAt,
-      expires_at: schema.mihonTokens.expiresAt
-    })
+    db.select({id: schema.mihonTokens.id,
+      deviceName: schema.mihonTokens.deviceName,
+      createdAt: schema.mihonTokens.createdAt,
+      expiresAt: schema.mihonTokens.expiresAt})
     .from(schema.mihonTokens)
     .where(and(eq(schema.mihonTokens.userId, userId), eq(schema.mihonTokens.revoked, 0)))
     .orderBy(desc(schema.mihonTokens.createdAt))
@@ -31,8 +29,8 @@ export const POST = async ({ request, locals }) => {
   let deviceName = 'Mihon App';
   try {
     const body = await request.json();
-    if (body.device_name && typeof body.device_name === 'string') {
-      deviceName = body.device_name.slice(0, 50);
+    if (body.deviceName && typeof body.deviceName === 'string') {
+      deviceName = body.deviceName.slice(0, 50);
     }
   } catch {
     // Body optional
@@ -40,7 +38,7 @@ export const POST = async ({ request, locals }) => {
 
   try {
     const { token, expiresAt } = await generateMihonToken(userId, deviceName);
-    return json({ token, expires_at: expiresAt });
+    return json({token, expiresAt: expiresAt});
   } catch (err) {
     return json({ error: (err as Error).message || 'Erro ao gerar token' }, { status: 500 });
   }

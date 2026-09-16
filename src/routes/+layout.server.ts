@@ -1,4 +1,6 @@
 import { databaseConfig } from '$lib/server/config';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, isNull, count } from 'drizzle-orm';
 import { withTimeout } from '$lib/server/resilience';
 
 const DEFAULT_CONFIG: Record<string, string> = {
@@ -21,12 +23,22 @@ export const load = async ({ locals, url, cookies }) => {
   if (locals.user && !locals.sessionCache) {
     const [profileRes, unreadRes, userScansRes] = await withTimeout(
       Promise.all([
-        locals.db.from('members').select('*').eq('id', locals.user.id).maybeSingle(),
-        locals.db.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
-        locals.db
-          .from('scan_members')
-          .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-          .eq('user_id', locals.user.id)
+        safeQuerySingle(db.select().from(schema.members).where(eq(schema.members.id, locals.user!.id))),
+        safeQuerySingle(db.select({ count: count() }).from(schema.notifications).where(isNull(schema.notifications.readAt))),
+        safeQuery(db.select({
+            role: schema.scanMembers.role,
+            scanId: schema.scanMembers.scanId,
+            scans: {
+              id: schema.scans.id,
+              name: schema.scans.name,
+              slug: schema.scans.slug,
+              logoId: schema.scans.logoId,
+              status: schema.scans.status
+            }
+          })
+          .from(schema.scanMembers)
+          .innerJoin(schema.scans, eq(schema.scanMembers.scanId, schema.scans.id))
+          .where(eq(schema.scanMembers.userId, locals.user!.id)))
       ]),
       1500,
       [{ data: null }, { count: 0 }, { data: [] }] as any,
@@ -35,14 +47,12 @@ export const load = async ({ locals, url, cookies }) => {
     profile =
       profileRes?.data ||
       (locals.authState !== 'ANONYMOUS'
-        ? ({
-            id: locals.user.id,
-            display_name: locals.user.email ? locals.user.email.split('@')[0] : 'Leitor',
+        ? ({id: locals.user!.id,
+            displayName: locals.user.email ? locals.user.email.split('@')[0] : 'Leitor',
             username: locals.user.email ? locals.user.email.split('@')[0] : 'leitor',
-            avatar_id: null,
-            avatar_frame_id: null,
-            role: locals.role || 'LEITOR'
-          } as any)
+            avatarId: null,
+            avatarFrameId: null,
+            role: locals.role || 'LEITOR'} as any)
         : null);
 
     unread = unreadRes?.count || 0;
@@ -62,7 +72,7 @@ export const load = async ({ locals, url, cookies }) => {
          
        
       const settingsRes = await withTimeout(
-        locals.db.rpc('public_settings'),
+        safeQuery(db.select().from(schema.settings)),
         1200,
         { data: null } as any,
         'public_settings'
@@ -80,8 +90,8 @@ export const load = async ({ locals, url, cookies }) => {
 
   const rawAgeCookie = cookies.get('nox-age-status');
   const ageStatus: 'UNKNOWN' | 'MINOR' | 'ADULT' =
-    profile?.age_status === 'ADULT' || profile?.age_status === 'MINOR'
-      ? profile.age_status
+    profile?.ageStatus === 'ADULT' || profile?.ageStatus === 'MINOR'
+      ? profile.ageStatus
       : rawAgeCookie === 'ADULT' || rawAgeCookie === 'MINOR'
         ? rawAgeCookie
         : 'UNKNOWN';
@@ -90,25 +100,23 @@ export const load = async ({ locals, url, cookies }) => {
     ageStatus === 'MINOR'
       ? true
       : profile
-        ? profile.blur_nsfw
+        ? profile.blurNsfw
         : cookies.get('nox-blur-nsfw') !== 'false';
 
-  const isPlatformOwner = Boolean(locals.user?.id && (locals.user.id === (process.env.STAFF_OWNER_USER_ID || '732fbe87-5040-41fb-9983-0aedb2af44c8')));
+  const isPlatformOwner = Boolean(locals.user?.id && (locals.user!.id === (process.env.STAFF_OWNER_USER_ID || '732fbe87-5040-41fb-9983-0aedb2af44c8')));
   const effectiveRole = locals.role || (isPlatformOwner ? 'ADMIN' : null);
 
-  if (isPlatformOwner && (!userScans || userScans.length === 0)) {
-    userScans = [{
+  if (isPlatformOwner && (!userScans || userScans.length === 0)) {userScans = [{
       id: '04872e99-37ad-4d45-aed4-35759d0eae33',
       name: 'Project Nox',
       slug: 'project-nox',
-      logo_id: null,
+      logoId: null,
       status: 'ACTIVE',
-      role: 'OWNER'
-    }];
+      role: 'OWNER'}];
   }
 
   return {
-    user: locals.user ? { id: locals.user.id, email: locals.user.email } : null,
+    user: locals.user ? { id: locals.user!.id, email: locals.user.email } : null,
     profile,
     role: effectiveRole,
     authState: locals.authState,

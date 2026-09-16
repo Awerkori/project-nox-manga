@@ -29,7 +29,7 @@
 
   let title = $state(initial.work?.title || '');
   let slug = $state(initial.work?.slug || '');
-  let cover = $state(initial.work?.cover_id || '');
+  let cover = $state(initial.work?.coverId || '');
   let notice = $state('');
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let busy = $state(false);
@@ -39,9 +39,9 @@
   let selected = $state<string[]>(initial.selected);
   let prioritizing = $state(false);
 
-  let selectedScanIds = $state<string[]>((initial.workScans || []).map((ws: any) => ws.scan_id));
+  let selectedScanIds = $state<string[]>((initial.workScans || []).map((ws: any) => ws.scanId));
   let primaryScanId = $state<string>(
-    initial.workScans?.find((ws: any) => ws.is_primary)?.scan_id || selectedScanIds[0] || ''
+    initial.workScans?.find((ws: any) => ws.isPrimary)?.scanId || selectedScanIds[0] || ''
   );
   let applyToExistingChapters = $state(false);
   let applyingScans = $state(false);
@@ -430,7 +430,7 @@
       <!-- Age Rating -->
       <label class="field-wrap">
         <span class="field-label">Classificação Indicativa</span>
-        <select name="age_rating" class="field-select" value={data.work?.age_rating ?? 12}>
+        <select name="age_rating" class="field-select" value={data.work?.ageRating ?? 12}>
           {#each [0, 10, 12, 14, 16, 18] as val (val)}
             <option value={val}>{val === 0 ? 'Livre' : `${val} anos`}</option>
           {/each}
@@ -440,7 +440,7 @@
       <!-- Content Rating (+18) -->
       <label class="field-wrap col-full">
         <span class="field-label">Classificação Editorial de Conteúdo (+18)</span>
-        <select name="content_rating" class="field-select" value={(data.work as any)?.content_rating || 'GENERAL'}>
+        <select name="content_rating" class="field-select" value={(data.work as any)?.contentRating || 'GENERAL'}>
           <option value="GENERAL">Geral — Recomendado para todos os leitores</option>
           <option value="ADULT_18">Adulto (+18) — Conteúdo adulto/explícito (aplica tags automáticas e blur)</option>
         </select>
@@ -491,7 +491,7 @@
 
       <div class="scans-chips-wrap">
         {#each data.allScans as scan (scan.id)}
-          <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.is_official}>
+          <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.isOfficial}>
             <input
               type="checkbox"
               bind:group={selectedScanIds}
@@ -503,11 +503,11 @@
                 }
               }}
             />
-            {#if scan.is_official}
+            {#if scan.isOfficial}
               <Shield size={13} class="icon-gold" />
             {/if}
             <span class="scan-name">{scan.name}</span>
-            {#if scan.is_official}
+            {#if scan.isOfficial}
               <span class="badge-official-mini">OFICIAL</span>
             {/if}
           </label>
@@ -523,7 +523,7 @@
           <label for="primary-scan-select" class="field-label-sm">Scan Principal (Destaque editorial):</label>
           <select id="primary-scan-select" class="primary-select" bind:value={primaryScanId}>
             {#each data.allScans.filter((s: any) => selectedScanIds.includes(s.id)) as s (s.id)}
-              <option value={s.id}>{s.name} {s.is_official ? '(Oficial Nox)' : ''}</option>
+              <option value={s.id}>{s.name} {s.isOfficial ? '(Oficial Nox)' : ''}</option>
             {/each}
           </select>
         </div>
@@ -627,7 +627,7 @@
                     {/if}
                   </td>
                   <td class="td-ch-status">
-                    {#if ch.published_at}
+                    {#if ch.publishedAt}
                       <span class="status-badge status-live">
                         <CheckCircle2 size={11} />
                         <span>Publicado</span>
@@ -640,7 +640,7 @@
                     {/if}
                   </td>
                   <td class="td-ch-date">
-                    <span>{ch.published_at ? new Date(ch.published_at).toLocaleDateString('pt-BR') : '—'}</span>
+                    <span>{ch.publishedAt ? new Date(ch.publishedAt).toLocaleDateString('pt-BR') : '—'}</span>
                   </td>
                   <td class="td-ch-action">
                     <a

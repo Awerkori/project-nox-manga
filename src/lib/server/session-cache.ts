@@ -87,21 +87,18 @@ export async function resolveSessionData(
 
       const scansMap = new Map<string, any>();
 
-      if (ownedScansRes.data) {
-        for (const s of ownedScansRes.data) {
+      if (ownedScansRes.data) {for (const s of ownedScansRes.data) {
           scansMap.set(s.id, {
             id: s.id,
             name: s.name,
             slug: s.slug,
-            logo_id: s.logoId,
+            logoId: s.logoId,
             status: s.status,
-            role: 'OWNER'
-          });
+            role: 'OWNER'});
         }
       }
 
-      if (userScansRes.data) {
-        for (const m of userScansRes.data) {
+      if (userScansRes.data) {for (const m of userScansRes.data) {
           if (m.scan) {
             const existing = scansMap.get(m.scan.id);
             const finalRole = existing?.role === 'OWNER' ? 'OWNER' : m.role;
@@ -109,35 +106,30 @@ export async function resolveSessionData(
               id: m.scan.id,
               name: m.scan.name,
               slug: m.scan.slug,
-              logo_id: m.scan.logoId,
+              logoId: m.scan.logoId,
               status: m.scan.status,
-              role: finalRole
-            });
+              role: finalRole});
           }
         }
       }
 
-      if (scansMap.size === 0 && isPlatformOwner) {
-        scansMap.set('04872e99-37ad-4d45-aed4-35759d0eae33', {
+      if (scansMap.size === 0 && isPlatformOwner) {scansMap.set('04872e99-37ad-4d45-aed4-35759d0eae33', {
           id: '04872e99-37ad-4d45-aed4-35759d0eae33',
           name: 'Project Nox',
           slug: 'project-nox',
-          logo_id: null,
+          logoId: null,
           status: 'ACTIVE',
-          role: 'OWNER'
-        });
+          role: 'OWNER'});
       }
 
       const consolidatedUserScans = Array.from(scansMap.values());
 
-      const profile = profileRes.data || {
-        id: userId,
-        display_name: sessionObject.user.name || 'Leitor',
+      const profile = profileRes.data || {id: userId,
+        displayName: sessionObject.user.name || 'Leitor',
         username: sessionObject.user.email ? sessionObject.user.email.split('@')[0] : 'leitor',
-        avatar_id: null,
-        avatar_frame_id: null,
-        role: effectiveRole || 'LEITOR'
-      };
+        avatarId: null,
+        avatarFrameId: null,
+        role: effectiveRole || 'LEITOR'};
 
       const result: CachedSession = {
         user: sessionObject.user,
@@ -159,17 +151,15 @@ export async function resolveSessionData(
       }
 
       return result;
-    } catch (error) {
-      const userId = sessionObject.user.id;
+    } catch (error) {const userId = sessionObject.user.id;
       return {
         user: sessionObject.user,
         role: null,
         profile: {
           id: userId,
-          display_name: sessionObject.user.name || 'Leitor',
+          displayName: sessionObject.user.name || 'Leitor',
           username: sessionObject.user.email ? sessionObject.user.email.split('@')[0] : 'leitor',
-          role: 'LEITOR'
-        },
+          role: 'LEITOR'},
         userScans: [],
         unread: 0,
         cachedAt: now,

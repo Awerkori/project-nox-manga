@@ -1,5 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import { inviteEditor } from '$lib/server/invites';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq } from 'drizzle-orm';
+
 export const POST = async ({ request, locals }) => {
   if (locals.role !== 'ADMIN') error(403, 'Somente administradores');
   const { email } = await request.json();
@@ -14,8 +17,8 @@ export const DELETE = async ({ request, locals }) => {
   if (locals.role !== 'ADMIN') error(403, 'Somente administradores');
   const { email } = await request.json();
   if (typeof email !== 'string' || email.length > 254) error(400, 'E-mail inválido');
-  const { error: problem } = await locals.db.rpc('revoke_editor_invite', { p_email: email });
-  if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+  const { error: problem } = await safeQuery(db.delete(schema.editorInvites).where(eq(schema.editorInvites.email, email)));
+  if (problem) error(400, problem.message);
   return json({
     message: 'Convite revogado. Para remover o acesso de quem já entrou, altere o cargo na lista de usuários.'
   });

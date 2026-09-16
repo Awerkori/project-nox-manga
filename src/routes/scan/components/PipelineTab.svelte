@@ -38,20 +38,20 @@
 
   // 7 Canonical stages ordered by display_order
   let orderedStages = $derived(
-    [...stages].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+    [...stages].sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0))
   );
 
   // Map of chapter_id -> array of chapter_stages ordered
   let chapterStagesMap = $derived(() => {
     const map = new Map<string, any[]>();
     for (const cs of chapterStages) {
-      const chId = cs.production_chapter_id;
+      const chId = cs.productionChapterId;
       if (!chId) continue;
       if (!map.has(chId)) map.set(chId, []);
       map.get(chId)!.push(cs);
     }
     for (const [k, v] of map.entries()) {
-      v.sort((a: any, b: any) => (a.stage?.display_order || 0) - (b.stage?.display_order || 0));
+      v.sort((a: any, b: any) => (a.stage?.displayOrder || 0) - (b.stage?.displayOrder || 0));
     }
     return map;
   });
@@ -60,12 +60,12 @@
   let filteredChapters = $derived(
     chapters.filter((c: any) => {
       const chData = c.chapters || c;
-      const workId = chData.work_id || chData.works?.id || chData.work?.id;
+      const workId = chData.workId || chData.works?.id || chData.work?.id;
       const matchesWork = selectedWorkId === 'ALL' || workId === selectedWorkId;
 
-      const title = chData.title || chData.chapter_title || '';
+      const title = chData.title || chData.chapterTitle || '';
       const workTitle = chData.works?.title || chData.work?.title || '';
-      const num = String(chData.number || chData.chapter_number || '');
+      const num = String(chData.number || chData.chapterNumber || '');
       const matchesSearch =
         !searchQuery.trim() ||
         title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,8 +92,8 @@
   });
 
   function getChapterMeta(chId: string) {
-    const chTasks = tasks.filter((t: any) => t.chapter_id === chId);
-    const chQc = qcIssues.filter((q: any) => q.chapter_id === chId && q.status === 'OPEN');
+    const chTasks = tasks.filter((t: any) => t.chapterId === chId);
+    const chQc = qcIssues.filter((q: any) => q.chapterId === chId && q.status === 'OPEN');
     return {
       tasksCount: chTasks.length,
       openQcCount: chQc.length
@@ -102,7 +102,7 @@
 
   function getStageState(chId: string, stageSlug: string) {
     const list = chapterStagesMap().get(chId) || [];
-    const cs = list.find((s: any) => s.stage?.slug === stageSlug || s.stage_slug === stageSlug);
+    const cs = list.find((s: any) => s.stage?.slug === stageSlug || s.stageSlug === stageSlug);
     if (!cs) {
       return { status: 'UNKNOWN', label: '—', assignee: null, cs: null };
     }
@@ -118,7 +118,7 @@
               : cs.status === 'REWORK'
                 ? 'Retrabalho'
                 : 'Bloqueado',
-      assignee: cs.assignee?.display_name || cs.assignee?.username || null,
+      assignee: cs.assignee?.displayName || cs.assignee?.username || null,
       cs
     };
   }
@@ -226,11 +226,11 @@
       <div class="chapters-vertical-list">
         {#each filteredChapters as c (c.id || c.chapters?.id)}
           {@const chData = c.chapters || c}
-          {@const chId = chData.id || chData.target_chapter_id || c.id}
+          {@const chId = chData.id || chData.targetChapterId || c.id}
           {@const meta = getChapterMeta(chId)}
           {@const work = chData.work || chData.works || {}}
-          {@const chNum = chData.chapter_number || chData.number || '—'}
-          {@const chTitle = chData.chapter_title || chData.title || ''}
+          {@const chNum = chData.chapterNumber || chData.number || '—'}
+          {@const chTitle = chData.chapterTitle || chData.title || ''}
           {@const chStatus = chData.status || 'IN_PROGRESS'}
 
           <article class="chapter-pipeline-card">
@@ -238,8 +238,8 @@
             <div class="card-main-header">
               <div class="work-badge-cluster">
                 <div class="work-thumb-mini">
-                  {#if work.cover_id}
-                    <img src="/media/{work.cover_id}" alt={work.title} class="work-thumb-img" />
+                  {#if work.coverId}
+                    <img src="/media/{work.coverId}" alt={work.title} class="work-thumb-img" />
                   {:else}
                     <BookOpen size={14} class="text-purple-300" />
                   {/if}

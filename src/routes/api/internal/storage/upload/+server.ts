@@ -169,10 +169,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
       }
     } else {
       const selectedShard = shardRows[0];
-      shardId = selectedShard.shard_id;
-      selectedShardDisplayName = selectedShard.display_name;
-      const targetBotRef = selectedShard.bot_reference || 'primary';
-      const targetChannel = selectedShard.channel_id;
+      shardId = selectedShard.shardId;
+      selectedShardDisplayName = selectedShard.displayName;
+      const targetBotRef = selectedShard.botReference || 'primary';
+      const targetChannel = selectedShard.channelId;
 
       botClient = resolveBotClient(targetBotRef, targetChannel);
     }

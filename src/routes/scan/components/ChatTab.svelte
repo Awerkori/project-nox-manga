@@ -49,13 +49,13 @@
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
 
-  let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId));
-  let myDisplayName = $derived(myMemberInfo?.display_name || myMemberInfo?.username || 'Membro');
+  let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.userId === currentUserId));
+  let myDisplayName = $derived(myMemberInfo?.displayName || myMemberInfo?.username || 'Membro');
 
   let localChannels = $state<any[]>([]);
 
   $effect(() => {
-    localChannels = [...channels].sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    localChannels = [...channels].sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   });
 
   let activeChannelId = $state<string>('');
@@ -74,7 +74,7 @@
   let activeChannel = $derived(localChannels.find((c: any) => c.id === activeChannelId) || localChannels[0]);
 
   let channelMessages = $derived(
-    messages.filter((m: any) => m.channel_id === activeChannelId)
+    messages.filter((m: any) => m.channelId === activeChannelId)
   );
 
   let messageInput = $state('');
@@ -145,7 +145,7 @@
 
     try {
       isReordering = true;
-      const payload = updated.map((ch) => ({ id: ch.id, display_order: ch.display_order }));
+      const payload = updated.map((ch) => ({ id: ch.id, display_order: ch.displayOrder }));
       const fd = new FormData();
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
@@ -173,7 +173,7 @@
 
     try {
       isReordering = true;
-      const payload = updated.map((ch) => ({ id: ch.id, display_order: ch.display_order }));
+      const payload = updated.map((ch) => ({ id: ch.id, display_order: ch.displayOrder }));
       const fd = new FormData();
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
@@ -264,8 +264,8 @@
       const targetMsgId = window.location.hash.replace('#msg-', '');
       const foundMsg = messages.find((m: any) => m.id === targetMsgId);
       if (foundMsg) {
-        if (foundMsg.channel_id && foundMsg.channel_id !== activeChannelId) {
-          activeChannelId = foundMsg.channel_id;
+        if (foundMsg.channelId && foundMsg.channelId !== activeChannelId) {
+          activeChannelId = foundMsg.channelId;
         }
         setTimeout(() => {
           scrollToMessage(targetMsgId);
@@ -292,7 +292,7 @@
       }
       const item = map.get(r.emoji)!;
       item.count++;
-      if (r.user_id === currentUserId) item.reactedByMe = true;
+      if (r.userId === currentUserId) item.reactedByMe = true;
     }
     return Array.from(map.values());
   }
@@ -373,7 +373,7 @@
       setTimeout(() => el.classList.remove('highlight-pulse'), 2500);
 
       const msgObj = messages.find((m: any) => m.id === id);
-      if (msgObj?.deleted_at) {
+      if (msgObj?.deletedAt) {
         showDeepLinkNotice('Esta mensagem não está mais disponível.');
       }
     } else {
@@ -389,14 +389,14 @@
 
   // Channel Unread Divider State
   let activeChannelReadState = $derived(
-    channelReadStates.find((s: any) => s.channel_id === activeChannelId)
+    channelReadStates.find((s: any) => s.channelId === activeChannelId)
   );
 
   let firstUnreadMsgId = $derived.by(() => {
-    if (!activeChannelReadState || !activeChannelReadState.last_read_at) return null;
-    const readAt = new Date(activeChannelReadState.last_read_at).getTime();
+    if (!activeChannelReadState || !activeChannelReadState.lastReadAt) return null;
+    const readAt = new Date(activeChannelReadState.lastReadAt).getTime();
     const unread = displayedMessages.find(
-      (m: any) => new Date(m.created_at).getTime() > readAt && m.user_id !== currentUserId
+      (m: any) => new Date(m.createdAt).getTime() > readAt && m.userId !== currentUserId
     );
     return unread ? unread.id : null;
   });
@@ -442,7 +442,7 @@
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Falha ao anexar arquivo');
 
-      const fileLink = '📎 [' + data.attachment.original_filename + '](/api/scan/attachments/' + data.attachment.id + '?download=1) (' + Math.round(data.attachment.size / 1024) + ' KB)';
+      const fileLink = '📎 [' + data.attachment.originalFilename + '](/api/scan/attachments/' + data.attachment.id + '?download=1) (' + Math.round(data.attachment.size / 1024) + ' KB)';
       messageInput = (messageInput ? messageInput + '\n' : '') + fileLink;
       if (textareaEl) textareaEl.focus();
     } catch (err: any) {
@@ -529,9 +529,9 @@
       // team items are flat: id, username, display_name, role are direct properties
       // (server spreads ...r.members into the object)
       const username = m.username || m.members?.username || m.member?.username;
-      const displayName = m.display_name || m.members?.display_name || m.member?.display_name;
+      const displayName = m.displayName || m.members?.displayName || m.member?.displayName;
       const memberId = m.id || m.members?.id || m.member?.id;
-      const avatarId = m.avatar_id || m.members?.avatar_id || m.member?.avatar_id;
+      const avatarId = m.avatarId || m.members?.avatarId || m.member?.avatarId;
       if (username) {
         const matchName = (displayName || '').toLowerCase().includes(q) || username.toLowerCase().includes(q);
         if (matchName) {
@@ -679,7 +679,7 @@
                     <Hash size={14} class="channel-icon" />
                   {/if}
                   <span class="channel-label">{ch.name}</span>
-                  {#if ch.is_private}
+                  {#if ch.isPrivate}
                     <Shield size={11} class="private-badge" title="Canal Privado" />
                   {/if}
                 </button>
@@ -782,28 +782,28 @@
               </div>
             {/if}
 
-            {#if msg.deleted_at}
+            {#if msg.deletedAt}
               <div class="message-card deleted-msg-card" id="msg-{msg.id}">
                 <div class="deleted-msg-inner">
                   <span class="deleted-msg-icon"><Trash2 size={13} /></span>
                   <span class="deleted-msg-text">Mensagem excluída</span>
-                  <span class="deleted-msg-time">{new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span class="deleted-msg-time">{new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
             {:else}
               <div class="message-card" id="msg-{msg.id}" class:pinned={msg.pinned}>
-                {#if msg.reply_to_id}
+                {#if msg.replyToId}
                   <button
                     type="button"
                     class="reply-quote-row"
-                    onclick={() => scrollToMessage(msg.reply_to_id)}
+                    onclick={() => scrollToMessage(msg.replyToId)}
                     title="Ir para a mensagem original"
                   >
                     <CornerDownRight size={12} class="reply-curve" />
-                    {#if msg.reply_to?.deleted_at || !msg.reply_to}
+                    {#if msg.reply_to?.deletedAt || !msg.reply_to}
                       <span class="reply-content-preview reply-unavailable">Mensagem original indisponível</span>
                     {:else}
-                      <span class="reply-author">@{msg.reply_to?.user?.display_name || msg.reply_to?.user?.username || 'Membro'}:</span>
+                      <span class="reply-author">@{msg.reply_to?.user?.displayName || msg.reply_to?.user?.username || 'Membro'}:</span>
                       <span class="reply-content-preview">{msg.reply_to?.content ? (msg.reply_to.content.slice(0, 75) + (msg.reply_to.content.length > 75 ? '...' : '')) : 'Mensagem original indisponível'}</span>
                     {/if}
                   </button>
@@ -817,17 +817,17 @@
               >
                 <div class="message-avatar-col">
                   <UserAvatar
-                    displayName={msg.user?.display_name || msg.user?.username || 'Membro'}
-                    avatarId={msg.user?.avatar_id}
+                    displayName={msg.user?.displayName || msg.user?.username || 'Membro'}
+                    avatarId={msg.user?.avatarId}
                     size={36}
                   />
                 </div>
 
                 <div class="message-body-col">
                   <div class="message-meta-row">
-                    <span class="author-name">{msg.user?.display_name || msg.user?.username || 'Membro'}</span>
-                    <span class="msg-timestamp">{new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                    {#if msg.is_edited}
+                    <span class="author-name">{msg.user?.displayName || msg.user?.username || 'Membro'}</span>
+                    <span class="msg-timestamp">{new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {#if msg.isEdited}
                       <span class="edited-tag" title="Editada">(editado)</span>
                     {/if}
                     {#if msg.pinned}
@@ -958,7 +958,7 @@
 
                     {#if activeMenuMsgId === msg.id}
                       <div class="hover-dropdown-menu">
-                        {#if msg.user_id === currentUserId}
+                        {#if msg.userId === currentUserId}
                           <button
                             type="button"
                             class="dropdown-item"
@@ -972,7 +972,7 @@
                             <span>Editar mensagem</span>
                           </button>
                         {/if}
-                        {#if msg.user_id === currentUserId || isOwnerOrAdmin}
+                        {#if msg.userId === currentUserId || isOwnerOrAdmin}
                           <button
                             type="button"
                             class="dropdown-item danger"
@@ -1043,7 +1043,7 @@
           <div class="composer-reply-banner">
             <div class="reply-banner-left">
               <CornerDownRight size={13} class="text-indigo-400" />
-              <span class="replying-to-text">Respondendo a <strong>@{replyingTo.user?.display_name || replyingTo.user?.username || 'Membro'}</strong>:</span>
+              <span class="replying-to-text">Respondendo a <strong>@{replyingTo.user?.displayName || replyingTo.user?.username || 'Membro'}</strong>:</span>
               <span class="replying-preview">"{replyingTo.content.slice(0, 50)}..."</span>
             </div>
             <button type="button" class="btn-cancel-reply" onclick={() => (replyingTo = null)} title="Cancelar resposta">
@@ -1065,8 +1065,8 @@
               >
                 {#if cand.type === 'user'}
                   <UserAvatar
-                    avatarId={cand.avatar_id}
-                    displayName={cand.display_name || cand.label.replace(/^@/, '')}
+                    avatarId={cand.avatarId}
+                    displayName={cand.displayName || cand.label.replace(/^@/, '')}
                     size={28}
                   />
                 {:else}
@@ -1168,7 +1168,7 @@
     <div class="mobile-msg-menu-backdrop" onclick={closeMobileMsgMenu}>
       <div class="mobile-msg-menu" onclick={(e) => e.stopPropagation()}>
         <div class="mobile-msg-menu-header">
-          <span class="mobile-menu-author">{mobileLongPressMsg.user?.display_name || mobileLongPressMsg.user?.username || 'Membro'}</span>
+          <span class="mobile-menu-author">{mobileLongPressMsg.user?.displayName || mobileLongPressMsg.user?.username || 'Membro'}</span>
           <span class="mobile-menu-preview">{mobileLongPressMsg.content?.slice(0, 60)}{mobileLongPressMsg.content?.length > 60 ? '...' : ''}</span>
         </div>
         <button type="button" class="mobile-menu-item" onclick={() => { replyingTo = mobileLongPressMsg; closeMobileMsgMenu(); if (textareaEl) textareaEl.focus(); }}>
@@ -1179,7 +1179,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           <span>Reagir</span>
         </button>
-        {#if mobileLongPressMsg.user_id === currentUserId}
+        {#if mobileLongPressMsg.userId === currentUserId}
           <button type="button" class="mobile-menu-item" onclick={() => { editingMessageId = mobileLongPressMsg.id; editingContent = mobileLongPressMsg.content; closeMobileMsgMenu(); }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             <span>Editar</span>
@@ -1189,7 +1189,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           <span>Copiar texto</span>
         </button>
-        {#if mobileLongPressMsg.user_id === currentUserId || isOwnerOrAdmin}
+        {#if mobileLongPressMsg.userId === currentUserId || isOwnerOrAdmin}
           <button type="button" class="mobile-menu-item danger" onclick={() => { openDeleteModal(mobileLongPressMsg); }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             <span>Excluir</span>
@@ -1264,12 +1264,12 @@
 
       <div class="thread-parent-card">
         <UserAvatar
-          displayName={activeThreadMessage.user?.display_name || 'Membro'}
-          avatarId={activeThreadMessage.user?.avatar_id}
+          displayName={activeThreadMessage.user?.displayName || 'Membro'}
+          avatarId={activeThreadMessage.user?.avatarId}
           size={30}
         />
         <div class="thread-parent-body">
-          <span class="thread-author">{activeThreadMessage.user?.display_name || 'Membro'}</span>
+          <span class="thread-author">{activeThreadMessage.user?.displayName || 'Membro'}</span>
           <p class="thread-parent-text">{activeThreadMessage.content}</p>
         </div>
       </div>

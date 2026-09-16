@@ -64,7 +64,7 @@
     pageSlug = page.slug;
     pageCategory = page.category || 'Geral';
     pageContent = page.content;
-    pagePinned = Boolean(page.is_pinned);
+    pagePinned = Boolean(page.isPinned);
     showEditorModal = true;
   }
 </script>
@@ -126,7 +126,7 @@
             class:active={selectedPage?.id === page.id}
             onclick={() => (selectedPage = page)}
           >
-            {#if page.is_pinned}
+            {#if page.isPinned}
               <Pin size={12} class="pin-icon" />
             {:else}
               <FileText size={12} />
@@ -153,7 +153,7 @@
               {#if selectedPage.author}
                 <span>Por @{selectedPage.author.username}</span>
               {/if}
-              <span>Atualizado em {new Date(selectedPage.updated_at || selectedPage.created_at).toLocaleDateString('pt-BR')}</span>
+              <span>Atualizado em {new Date(selectedPage.updatedAt || selectedPage.createdAt).toLocaleDateString('pt-BR')}</span>
             </div>
           </div>
 

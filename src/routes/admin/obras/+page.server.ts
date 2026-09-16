@@ -1,10 +1,9 @@
-import { WORK_FIELDS, check } from '$lib/server/db';
-export const load = async ({ locals }) => {
-  const result = await locals.db
-    .from('works')
-    .select(WORK_FIELDS)
-    .order('updated_at', { ascending: false })
-    .limit(200);
-  check(result);
-  return { works: result.data || [] };
+import { db, schema, safeQuery } from '$lib/server/db';
+import { desc } from 'drizzle-orm';
+
+export const load = async () => {
+  const works = await safeQuery(
+    db.select().from(schema.works).orderBy(desc(schema.works.updatedAt)).limit(200)
+  );
+  return { works: works || [] };
 };
