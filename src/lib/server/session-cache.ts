@@ -89,12 +89,12 @@ export async function resolveSessionData(
       const scansMap = new Map<string, any>();
 
       if (ownedScansRes.data) {for (const s of ownedScansRes.data) {
-          scansMap.set(s.scan?.id || s.id, {
-            id: s.scan?.id || s.id,
-            name: s.scan?.name || s.name,
-            slug: s.scan?.slug || s.slug,
-            logoId: s.scan?.logoId || s.logoId,
-            status: s.scan?.status || s.status,
+          scansMap.set(s.scan?.id || (s as any).id, {
+            id: s.scan?.id || (s as any).id,
+            name: s.scan?.name || (s as any).name,
+            slug: s.scan?.slug || (s as any).slug,
+            logoId: s.scan?.logoId || (s as any).logoId,
+            status: s.scan?.status || (s as any).status,
             role: 'OWNER'});
         }
       }

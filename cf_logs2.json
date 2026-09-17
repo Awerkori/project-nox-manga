@@ -1,0 +1,225 @@
+{
+    "wallTime": 3669,
+    "cpuTime": 26,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "646b8af0-1096-4a60-8338-850158077d40"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [
+        {
+            "message": [
+                "[TIMEOUT] dependency=SUPABASE operation=home_chapters_fallback_works timeout_ms=1500"
+            ],
+            "level": "warn",
+            "timestamp": 1789618583603
+        }
+    ],
+    "eventTimestamp": 1789618579953,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/",
+            "method": "GET",
+            "headers": {
+                "accept": "*/*",
+                "accept-encoding": "gzip, br",
+                "cf-connecting-ip": "2804:14d:5ca5:4148::2000",
+                "cf-ipcountry": "BR",
+                "cf-ray": "a3c54b7caa75b496",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "user-agent": "curl/8.22.0",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "2804:14d:5ca5:4148::2000"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/2",
+                "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 22,
+                "clientQuicRtt": 0,
+                "colo": "GRU",
+                "asn": 28573,
+                "asOrganization": "Claro NXT Telecomunicacoes Ltda",
+                "country": "BR",
+                "isEUCountry": false,
+                "city": "Rio de Janeiro",
+                "continent": "SA",
+                "region": "Rio de Janeiro",
+                "regionCode": "RJ",
+                "timezone": "America/Sao_Paulo",
+                "longitude": "-43.18223",
+                "latitude": "-22.90642",
+                "postalCode": "20000-000",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "bubnVwkdICgFyPLGtqkMql8mZlWSyxXorjS9XhX02L0=",
+                "tlsClientCiphersSha1": "hCCNuWP9ky6AR69i97wdKYbhFQo=",
+                "tlsClientExtensionsSha1": "4oF0LRxQXUDhrRY0MazQAVJh7Go=",
+                "tlsClientExtensionsSha1Le": "Ea9swA+X7+AQtmDnJ28MlyPK/Fg=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "0e398d33d1fa89ac1f9e3b857c995f6e2da47db240e4ac0b7fbb0b2908a876410640b5416d665b86bb4d5fde8b0ed2d6",
+                    "serverHandshake": "d228ca91d40bc257f8cda48f062e78204d29c88dd5a565bf3645738fb98995dc5a1bae62c2fe88ed0d7afa5ab7aa3d70",
+                    "clientFinished": "6e1bc308313f9211654aeb7ce3830c211960bf6290b82dd55c14176d31fae33e87bc014674d56f0e5a82c824e58dc125",
+                    "serverFinished": "ed576a3764e78e25e699ae4200b1d91c87777e5177fcf4e0bffae6966d5334334471c1bff0611c9b3d5d35c5f3246f42"
+                },
+                "tlsClientHelloLength": "1589",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 140173
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 200
+        }
+    }
+}
+{
+    "wallTime": 6,
+    "cpuTime": 1,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "646b8af0-1096-4a60-8338-850158077d40"
+    },
+    "scriptName": "manga",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [],
+    "eventTimestamp": 1789618588270,
+    "event": {
+        "request": {
+            "url": "https://manga.project-nox-awerkori.workers.dev/api/internal/importer/kuro-bridge",
+            "method": "GET",
+            "headers": {
+                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "accept-encoding": "gzip, br",
+                "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+                "cf-connecting-ip": "51.161.101.202",
+                "cf-ipcountry": "CA",
+                "cf-ray": "a3c54bb039f33a53",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "host": "manga.project-nox-awerkori.workers.dev",
+                "sec-fetch-mode": "cors",
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "51.161.101.202"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/1.1",
+                "clientAcceptEncoding": "gzip, deflate, br",
+                "requestPriority": "",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 8,
+                "clientQuicRtt": 0,
+                "colo": "YYZ",
+                "asn": 16276,
+                "asOrganization": "OVH Hosting, Inc.",
+                "country": "CA",
+                "isEUCountry": false,
+                "city": "Montréal",
+                "continent": "NA",
+                "region": "Quebec",
+                "regionCode": "QC",
+                "timezone": "America/Toronto",
+                "longitude": "-73.58781",
+                "latitude": "45.50884",
+                "postalCode": "H3H",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "ckCz06RwP59DDejLcqV7MSnIcw+9qVsFY64i4Vwtdbo=",
+                "tlsClientCiphersSha1": "JZtiTn8H/ntxORk+XXvU2EvNoz8=",
+                "tlsClientExtensionsSha1": "Y7DIC8A6G0/aXviZ8ie/xDbJb7g=",
+                "tlsClientExtensionsSha1Le": "6e+q3vPm88rSgMTN/h7WTTxQ2wQ=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "7381d853f1d3c10433d32de629d12d982aea7c2427fb383dfed942da31894d39ffe1a3dfa9a9f31e2de408cc190faea9",
+                    "serverHandshake": "30add4f1e8cfc4df339ee70de48b9b1624b2d39e4e3be8fa02ce52fd443d9928013ae397cac74c098f5ddd75ed865a75",
+                    "clientFinished": "823d08f03208323ad6f5cf65b689f9bf1d640c684e183879a55295c772e82e9748b30c58fc5a8b69fb9bda33a7c0e81f",
+                    "serverFinished": "e42e203e9db9160d007ef93224a07fd86e29a12d1b4b8b8775f87b1d3c51064f2d849efdb55816de0b57db9b462f25f6"
+                },
+                "tlsClientHelloLength": "402",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 343861
+                },
+                "botManagement": {
+                    "corporateProxy": false,
+                    "verifiedBot": false,
+                    "jsDetection": {
+                        "passed": false
+                    },
+                    "staticResource": false,
+                    "detectionIds": {},
+                    "score": 99
+                }
+            }
+        },
+        "response": {
+            "status": 405
+        }
+    }
+}

@@ -129,7 +129,7 @@
       <AlertTriangle size={16} />
       <span>{form.error}</span>
     </div>
-  {:else if form?.success}
+  {:else if (form as any)?.success}
     <div class="feedback-banner success">
       <CheckCircle2 size={16} />
       <span>Operao realizada com sucesso na equipe.</span>

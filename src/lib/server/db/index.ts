@@ -4,9 +4,9 @@ import * as schema from './schema';
 import * as relations from './relations';
 import { env } from '$env/dynamic/private';
 
-const client = createClient({
+console.log("URL:", env.TURSO_DB_URL, "AUTH_TOKEN length:", env.TURSO_AUTH_TOKEN?.length); const client = createClient({
   url: env.TURSO_DB_URL || 'libsql://dummy.turso.io',
-  authToken: env.TURSO_DB_TOKEN || '',
+  authToken: env.TURSO_AUTH_TOKEN || env.TURSO_DB_TOKEN || '',
 });
 
 const drizzleDb = drizzle(client, { schema: { ...schema, ...relations } });

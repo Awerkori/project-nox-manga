@@ -270,7 +270,7 @@ export const POST = async ({ locals, request }) => {
         version: nextVersion,
         uploadedBy: locals.user!.id,
         isCurrent: true,
-        note: note || null, inputFiles: [], isStale: false
+        note: note || null, inputFiles: '[]', isStale: false
       })
       .returning()
   );
@@ -313,12 +313,12 @@ export const POST = async ({ locals, request }) => {
         eventType: 'FILE_UPLOADED' as any,
         userId: locals.user!.id,
         userName: callerName,
-        details: {
+        details: JSON.stringify({
           fileName: rawFilename,
           version: nextVersion,
           byteSize: file.size,
-          note: note || null, inputFiles: [], isStale: false
-        }
+          note: note || null, inputFiles: '[]', isStale: false
+        })
       })
   );
 

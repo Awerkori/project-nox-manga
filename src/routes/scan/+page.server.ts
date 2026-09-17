@@ -4,6 +4,10 @@ import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 import type { PageServerLoad, Actions } from './$types';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import * as scanRpcs from '$lib/server/scan-rpcs';
+import { eq, and, count } from 'drizzle-orm';
+
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) {
@@ -48,8 +52,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }
 
   const memberRowsRes = await withTimeout(
-    locals.db
-      .from('scan_members')
+    (locals as any).db.from('scan_members')
       .select(`
         role,
         scan_id,
@@ -69,13 +72,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }
 
   if (!memberRows || memberRows.length === 0) {const [partnerRequestsRes, incomingTransferRes] = await Promise.all([
-      locals.db
-        .from('scan_partner_requests')
+      (locals as any).db.from('scan_partner_requests')
         .select('*')
         .eq('userId', locals.user!.id)
         .order('createdAt', { ascending: false}),
-      locals.db
-        .from('scan_transfer_requests')
+      (locals as any).db.from('scan_transfer_requests')
         .select(`
           *,
           scans(id, name, slug),
@@ -182,8 +183,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     seenStagesRes
   ] = await withTimeout(
     Promise.all([
-    locals.db
-      .from('work_scans')
+    (locals as any).db.from('work_scans')
       .select(`
         is_primary,
         status,
@@ -191,8 +191,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         works!inner(${WORK_FIELDS})
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('chapter_scans')
+    (locals as any).db.from('chapter_scans')
       .select(`
         created_at,
         chapters!inner(
@@ -207,8 +206,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false })
       .limit(20),
-    locals.db
-      .from('scan_members')
+    (locals as any).db.from('scan_members')
       .select(`
         user_id,
         role,
@@ -227,30 +225,26 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         )
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_invites')
+    (locals as any).db.from('scan_invites')
       .select('*')
       .eq('scan_id', currentScan.id)
       .eq('revoked', false)
       .is('used_at', null)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_project_requests')
+    (locals as any).db.from('scan_project_requests')
       .select(`
         *,
         works!inner(id, title, slug, cover_id)
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('works')
+    (locals as any).db.from('works')
       .select('id, title, slug, cover_id')
       .eq('published', true)
       .order('title')
       .limit(100),
-    locals.db
-      .from('scan_transfer_requests')
+    (locals as any).db.from('scan_transfer_requests')
       .select(`
         *,
         from_user:from_user_id(id, username, display_name),
@@ -258,8 +252,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_transfer_requests')
+    (locals as any).db.from('scan_transfer_requests')
       .select(`
         *,
         scans(id, name, slug),
@@ -268,21 +261,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .eq('to_user_id', locals.user!.id)
       .eq('status', 'PENDING')
       .maybeSingle(),
-    locals.db
-      .from('scan_positions')
+    (locals as any).db.from('scan_positions')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_recruitment_openings')
+    (locals as any).db.from('scan_recruitment_openings')
       .select(`
         *,
         scan_positions(id, name, description, icon, display_order)
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_applications')
+    (locals as any).db.from('scan_applications')
       .select(`
         *,
         scan_positions(id, name, description, icon, display_order),
@@ -291,8 +281,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_activity')
+    (locals as any).db.from('scan_activity')
       .select(`
         *,
         members:user_id(id, username, display_name, avatar_id)
@@ -300,8 +289,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false })
       .limit(50),
-    locals.db
-      .from('scan_member_positions')
+    (locals as any).db.from('scan_member_positions')
       .select(`
         user_id,
         position_id,
@@ -311,8 +299,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         scan_positions!inner(id, name, description, icon, display_order)
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_staff_notes')
+    (locals as any).db.from('scan_staff_notes')
       .select(`
         id,
         scan_id,
@@ -334,13 +321,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .eq('scan_id', currentScan.id)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_workflow_stages')
+    (locals as any).db.from('scan_workflow_stages')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_chapter_stages')
+    (locals as any).db.from('scan_chapter_stages')
       .select(`
         *,
         stage:stage_id(id, name, slug, color, display_order, dependencies, dependency_operator, requires_output),
@@ -348,8 +333,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         completer:completed_by(id, username, display_name, avatar_id)
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_tasks')
+    (locals as any).db.from('scan_tasks')
       .select(`
         *,
         scan_task_comments(
@@ -362,47 +346,39 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_wiki_pages')
+    (locals as any).db.from('scan_wiki_pages')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('is_pinned', { ascending: false })
       .order('title', { ascending: true }),
-    locals.db
-      .from('work_glossary_entries')
+    (locals as any).db.from('work_glossary_entries')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('source_term', { ascending: true }),
-    locals.db
-      .from('work_references')
+    (locals as any).db.from('work_references')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_integrations')
+    (locals as any).db.from('scan_integrations')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_work_uploaders')
+    (locals as any).db.from('scan_work_uploaders')
       .select(`
         *,
         members:user_id(id, username, display_name),
         works:work_id(id, title)
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_recruitment_questions')
+    (locals as any).db.from('scan_recruitment_questions')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_channels')
+    (locals as any).db.from('scan_channels')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_messages')
+    (locals as any).db.from('scan_messages')
       .select(`
         *,
         user:user_id(id, username, display_name, avatar_id),
@@ -412,90 +388,73 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: true })
       .limit(150),
-    locals.db
-      .from('scan_notifications')
+    (locals as any).db.from('scan_notifications')
       .select('*')
       .eq('scan_id', currentScan.id)
       .eq('user_id', locals.user!.id)
       .order('created_at', { ascending: false })
       .limit(50),
-    locals.db
-      .from('scan_notification_preferences')
+    (locals as any).db.from('scan_notification_preferences')
       .select('*')
       .eq('scan_id', currentScan.id)
       .eq('user_id', locals.user!.id)
       .maybeSingle(),
-    locals.db
-      .from('scan_academy_tutorials')
+    (locals as any).db.from('scan_academy_tutorials')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_chapter_qc_issues')
+    (locals as any).db.from('scan_chapter_qc_issues')
       .select('*, assignee:assigned_to(id, username, display_name, avatar_id), creator:created_by(id, username, display_name)')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_production_chapters')
+    (locals as any).db.from('scan_production_chapters')
       .select('*, work:work_id(id, title, slug, cover_id)')
       .eq('scan_id', currentScan.id)
       .order('chapter_sort_key', { ascending: true }),
-    locals.db
-      .from('scan_pipeline_templates')
+    (locals as any).db.from('scan_pipeline_templates')
       .select('*'),
-    locals.db
-      .from('scan_mural_posts')
+    (locals as any).db.from('scan_mural_posts')
       .select('*, author:author_id(id, username, display_name, avatar_id)')
       .eq('scan_id', currentScan.id)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_mural_comments')
+    (locals as any).db.from('scan_mural_comments')
       .select('*, author:author_id(id, username, display_name, avatar_id)')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: true }),
-    locals.db
-      .from('scan_mural_reactions')
+    (locals as any).db.from('scan_mural_reactions')
       .select('*')
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_attachments')
+    (locals as any).db.from('scan_attachments')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: true }),
-    locals.db
-      .from('scan_production_files')
+    (locals as any).db.from('scan_production_files')
       .select('*, uploader:uploaded_by(id, username, display_name, avatar_id), stage:stage_id(id, name, slug)')
       .eq('scan_id', currentScan.id)
       .order('version', { ascending: false }),
-    locals.db
-      .from('scan_chapter_timeline')
+    (locals as any).db.from('scan_chapter_timeline')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false })
       .limit(200),
-    locals.db
-      .from('scan_work_workflow_overrides')
+    (locals as any).db.from('scan_work_workflow_overrides')
       .select('*')
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('chapter_credit_snapshots')
+    (locals as any).db.from('chapter_credit_snapshots')
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('role_order', { ascending: true }),
-    locals.db
-      .from('scan_channel_read_states')
+    (locals as any).db.from('scan_channel_read_states')
       .select('*')
       .eq('scan_id', currentScan.id)
       .eq('user_id', locals.user!.id),
-    locals.db
-      .from('scan_application_answers')
+    (locals as any).db.from('scan_application_answers')
       .select(`
         *,
         question:question_id(id, question, question_type, display_order)
       `),
-    locals.db
-      .from('scan_pipeline_stage_seen')
+    (locals as any).db.from('scan_pipeline_stage_seen')
       .select('chapter_stage_id, availability_version, seen_at')
       .eq('scan_id', currentScan.id)
       .eq('user_id', locals.user!.id)
@@ -654,7 +613,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-  updateProfile: async ({ request, locals }) => {
+  updateProfile: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -664,8 +623,7 @@ export const actions: Actions = {
     const rawPrep = (formData.get('display_preposition') as string)?.trim() || 'de';
     const displayPreposition = ['de', 'da', 'do'].includes(rawPrep) ? rawPrep : 'de';
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -675,20 +633,19 @@ export const actions: Actions = {
       return fail(403, { message: 'Permissão negada. Apenas Líderes ou Administradores podem editar as informações da scan.' });
     }
 
-    const { error } = await locals.db
-      .from('scans')
+    const { error } = await (locals as any).db.from('scans')
       .update({description: description.slice(0, 2000),
         discord: discord.slice(0, 255),
         website: website.slice(0, 255),
         displayPreposition: displayPreposition,
-        updatedAt: new Date().toISOString()})
+        })
       .eq('id', scanId);
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, profileUpdated: true };
   },
 
-  updateScanBranding: async ({ request, locals }) => {
+  updateScanBranding: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -703,8 +660,7 @@ export const actions: Actions = {
     const logoId = formData.get('logo_id') as string | null;
     const bannerId = formData.get('banner_id') as string | null;
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -722,28 +678,26 @@ export const actions: Actions = {
       fluxer: fluxer.slice(0, 255),
       website: website.slice(0, 255),
       displayPreposition: displayPreposition,
-      updatedAt: new Date().toISOString()};
+      };
 
     if (name) updates.name = name.slice(0, 100);
     if (logoId !== null && logoId !== undefined) updates.logoId = logoId.trim() ? logoId.trim() : null;
     if (bannerId !== null && bannerId !== undefined) updates.bannerId = bannerId.trim() ? bannerId.trim() : null;
 
-    const { error } = await locals.db
-      .from('scans')
+    const { error } = await (locals as any).db.from('scans')
       .update(updates)
       .eq('id', scanId);
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, brandingUpdated: true };
   },
 
-  removeScanLogo: async ({ request, locals }) => {
+  removeScanLogo: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -753,18 +707,17 @@ export const actions: Actions = {
       if (locals.role !== 'ADMIN') return fail(403, { message: 'Permissão negada.' });
     }
 
-    const { error } = await locals.db.from('scans').update({logoId: null, updatedAt: new Date().toISOString()}).eq('id', scanId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scans).set({logoId: null, }).where(eq(schema.scans.id, scanId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, logoRemoved: true };
   },
 
-  removeScanBanner: async ({ request, locals }) => {
+  removeScanBanner: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -774,35 +727,35 @@ export const actions: Actions = {
       if (locals.role !== 'ADMIN') return fail(403, { message: 'Permissão negada.' });
     }
 
-    const { error } = await locals.db.from('scans').update({bannerId: null, updatedAt: new Date().toISOString()}).eq('id', scanId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scans).set({bannerId: null, }).where(eq(schema.scans.id, scanId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, bannerRemoved: true };
   },
 
-  claimTask: async ({ request, locals }) => {
+  claimTask: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = (formData.get('task_id') || formData.get('taskId')) as string;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('claim_scan_task', { p_task_id: taskId });
-    if (error) return fail(400, { message: error.message });
+    const { data, error } = await (scanRpcs.claimScanTask as any)(db, { p_task_id: taskId } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, taskClaimed: data || true };
   },
 
-  releaseTask: async ({ request, locals }) => {
+  releaseTask: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
     const reason = (formData.get('reason') as string)?.trim() || null;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('release_scan_task', { p_task_id: taskId, p_reason: reason });
-    if (error) return fail(400, { message: error.message });
+    const { data, error } = await (scanRpcs.releaseScanTask as any)(db, { p_task_id: taskId, p_reason: reason } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, taskReleased: data };
   },
 
-  completeStage: async ({ request, locals }) => {
+  completeStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
@@ -810,16 +763,16 @@ export const actions: Actions = {
     const fileId = (formData.get('file_id') as string)?.trim() || null;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('complete_scan_stage', {
+    const { data, error } = await (scanRpcs.completeScanStage as any)(db, {
       p_task_id: taskId,
       p_note: note,
       p_file_id: fileId
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, stageCompleted: data };
   },
 
-  requestPartner: async ({ request, locals }) => {
+  requestPartner: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanName = (formData.get('scan_name') as string)?.trim();
@@ -834,8 +787,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Nome da scan e slug são obrigatórios.' });
     }
 
-    const { error: insErr } = await locals.db
-      .from('scan_partner_requests')
+    const { error: insErr } = await (locals as any).db.from('scan_partner_requests')
       .insert({userId: locals.user!.id,
         scanName: scanName,
         scanSlug: scanSlug,
@@ -845,35 +797,34 @@ export const actions: Actions = {
         website,
         sampleLinks: sampleLinks});
 
-    if (insErr) return fail(400, { message: insErr.message });
+    if (insErr) return fail(400, { message: (insErr as any).message });
     return { success: true, partnerRequested: true };
   },
 
-  createInvite: async ({ request, locals }) => {
+  createInvite: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const role = (formData.get('role') as string) || 'MEMBER';
     const hours = parseInt(formData.get('hours') as string) || 24;
 
-    const { data, error: rpcErr } = await locals.db.rpc('create_scan_invite', {
+    const { data, error: rpcErr } = await (scanRpcs.createScanInvite as any)(db, {
       p_scan_id: scanId,
       p_role: role,
       p_hours: hours
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, createdInvite: data };
   },
 
-  revokeInvite: async ({ request, locals }) => {
+  revokeInvite: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const inviteId = formData.get('invite_id') as string;
     const scanId = formData.get('scan_id') as string;
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -883,16 +834,15 @@ export const actions: Actions = {
       return fail(403, { message: 'Permissão negada para revogar convites.' });
     }
 
-    const { error: updErr } = await locals.db
-      .from('scan_invites')
+    const { error: updErr } = await (locals as any).db.from('scan_invites')
       .update({ revoked: true })
       .eq('id', inviteId);
 
-    if (updErr) return fail(400, { message: updErr.message });
+    if (updErr) return fail(400, { message: (updErr as any).message });
     return { success: true, revoked: true };
   },
 
-  manageScanMember: async ({ request, locals }) => {
+  manageScanMember: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -910,54 +860,54 @@ export const actions: Actions = {
       }
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_member', {
+    const { data, error: rpcErr } = await (scanRpcs.manageScanMember as any)(db, {
       p_scan_id: scanId,
       p_target_user_id: targetUserId,
       p_new_role: role || null,
       p_position_ids: positionIds,
       p_confirm_last_manager: confirmLastManager
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     if (data && !data.success && data.requires_confirmation) {
       return { success: false, requiresConfirmation: true, warning: data.warning };
     }
     return { success: true, memberManaged: true, data };
   },
 
-  updateMemberRole: async ({ request, locals }) => {
+  updateMemberRole: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const targetUserId = formData.get('user_id') as string;
     const newRole = formData.get('role') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_member', {
+    const { data, error: rpcErr } = await (scanRpcs.manageScanMember as any)(db, {
       p_scan_id: scanId,
       p_target_user_id: targetUserId,
       p_new_role: newRole,
       p_position_ids: null,
       p_confirm_last_manager: true
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, memberUpdated: true };
   },
 
-  removeMember: async ({ request, locals }) => {
+  removeMember: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const targetUserId = formData.get('user_id') as string;
     const resolution = formData.get('resolution') as string | null;
 
-    const { data, error: rpcErr } = await locals.db.rpc('remove_scan_member_safe', {
+    const { data, error: rpcErr } = await (scanRpcs.removeScanMemberSafe as any)(db, {
       p_scan_id: scanId,
       p_target_user_id: targetUserId,
       p_resolution: resolution || null
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     if (data && !data.success && data.has_active_tasks) {
       return fail(400, {
         hasActiveTasks: true,
@@ -968,50 +918,50 @@ export const actions: Actions = {
     return { success: true, memberRemoved: true, tasksReleased: data?.tasks_released || 0 };
   },
 
-  transferOwnership: async ({ request, locals }) => {
+  transferOwnership: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const targetUserId = formData.get('target_user_id') as string || formData.get('new_owner_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('request_scan_ownership_transfer', {
+    const { data, error: rpcErr } = await (scanRpcs.requestScanOwnershipTransfer as any)(db, {
       p_scan_id: scanId,
       p_target_user_id: targetUserId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, transferRequested: true };
   },
 
-  respondOwnershipTransfer: async ({ request, locals }) => {
+  respondOwnershipTransfer: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
     const accept = formData.get('accept') === 'true';
 
-    const { data, error: rpcErr } = await locals.db.rpc('respond_scan_ownership_transfer', {
+    const { data, error: rpcErr } = await (scanRpcs.respondScanOwnershipTransfer as any)(db, {
       p_request_id: requestId,
       p_accept: accept
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, transferResponded: true, accepted: accept };
   },
 
-  cancelOwnershipTransfer: async ({ request, locals }) => {
+  cancelOwnershipTransfer: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_transfer_request', {
+    const { data, error: rpcErr } = await (scanRpcs.cancelScanTransferRequest as any)(db, {
       p_request_id: requestId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, transferCancelled: true };
   },
 
-  requestProject: async ({ request, locals }) => {
+  requestProject: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1022,61 +972,60 @@ export const actions: Actions = {
       return fail(400, { message: 'Obra é obrigatória.' });
     }
 
-    const { error: insErr } = await locals.db
-      .from('scan_project_requests')
+    const { error: insErr } = await (locals as any).db.from('scan_project_requests')
       .insert({scanId: scanId,
         workId: workId,
         userId: locals.user!.id,
         message});
 
-    if (insErr) return fail(400, { message: insErr.message });
+    if (insErr) return fail(400, { message: (insErr as any).message });
     return { success: true, projectRequested: true };
   },
 
-  cancelProjectRequest: async ({ request, locals }) => {
+  cancelProjectRequest: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_project_request', {
+    const { data, error: rpcErr } = await (scanRpcs.cancelScanProjectRequest as any)(db, {
       p_request_id: requestId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, projectRequestCancelled: true };
   },
 
-  cancelPartnerRequest: async ({ request, locals }) => {
+  cancelPartnerRequest: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_partner_request', {
+    const { data, error: rpcErr } = await (scanRpcs.cancelScanPartnerRequest as any)(db, {
       p_request_id: requestId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, partnerRequestCancelled: true };
   },
 
-  updateProjectStatus: async ({ request, locals }) => {
+  updateProjectStatus: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const workId = formData.get('work_id') as string;
     const status = formData.get('status') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('update_work_scan_status', {
+    const { data, error: rpcErr } = await (scanRpcs.updateWorkScanStatus as any)(db, {
       p_scan_id: scanId,
       p_work_id: workId,
       p_status: status
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, projectStatusUpdated: true, newStatus: status };
   },
 
-  managePosition: async ({ request, locals }) => {
+  managePosition: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1088,20 +1037,20 @@ export const actions: Actions = {
 
     if (!name) return fail(400, { message: 'Nome do cargo é obrigatório' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_position', {
+    const { data, error: rpcErr } = await (scanRpcs.manageScanPosition as any)(db, {
       p_scan_id: scanId,
       p_position_id: positionId,
       p_name: name,
       p_description: description,
       p_display_order: displayOrder,
       p_is_active: isActive
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, positionManaged: true, data };
   },
 
-  manageOpening: async ({ request, locals }) => {
+  manageOpening: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1120,7 +1069,7 @@ export const actions: Actions = {
 
     if (!positionId) return fail(400, { message: 'Cargo é obrigatório' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_opening', {
+    const { data, error: rpcErr } = await (scanRpcs.manageScanOpening as any)(db, {
       p_scan_id: scanId,
       p_opening_id: openingId,
       p_position_id: positionId,
@@ -1133,13 +1082,13 @@ export const actions: Actions = {
       p_slots: slots,
       p_notes: notes,
       p_status: status
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, openingManaged: true, data };
   },
 
-  reviewApplication: async ({ request, locals }) => {
+  reviewApplication: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const applicationId = formData.get('application_id') as string;
@@ -1148,19 +1097,18 @@ export const actions: Actions = {
     const addToTeam = formData.get('add_to_team') === 'true';
     const initialRole = (formData.get('initial_role') as string) || 'MEMBER';
 
-    const { data, error: rpcErr } = await locals.db.rpc('review_scan_application', {
+    const { data, error: rpcErr } = await (scanRpcs.reviewScanApplication as any)(db, {
       p_application_id: applicationId,
       p_action: action,
       p_notes: notes,
       p_add_to_team: addToTeam,
       p_initial_role: initialRole
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
 
     try {
-      const { data: appRow } = await locals.db
-        .from('scan_applications')
+      const { data: appRow } = await (locals as any).db.from('scan_applications')
         .select('user_id, scan_id, scans(name), openings:opening_id(title)')
         .eq('id', applicationId)
         .maybeSingle();
@@ -1194,7 +1142,7 @@ export const actions: Actions = {
     return { success: true, applicationReviewed: true, data };
   },
 
-  assignPosition: async ({ request, locals }) => {
+  assignPosition: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1202,52 +1150,52 @@ export const actions: Actions = {
     const positionId = formData.get('position_id') as string;
     const isPrimary = formData.get('is_primary') === 'true';
 
-    const { data, error: rpcErr } = await locals.db.rpc('assign_scan_member_position', {
+    const { data, error: rpcErr } = await (scanRpcs.assignScanMemberPosition as any)(db, {
       p_scan_id: scanId,
       p_user_id: userId,
       p_position_id: positionId,
       p_is_primary: isPrimary
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, positionAssigned: true, data };
   },
 
-  removePosition: async ({ request, locals }) => {
+  removePosition: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const userId = formData.get('user_id') as string;
     const positionId = formData.get('position_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('remove_scan_member_position', {
+    const { data, error: rpcErr } = await (scanRpcs.removeScanMemberPosition as any)(db, {
       p_scan_id: scanId,
       p_user_id: userId,
       p_position_id: positionId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, positionRemoved: true, data };
   },
 
-  setPrimaryPosition: async ({ request, locals }) => {
+  setPrimaryPosition: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const userId = formData.get('user_id') as string;
     const positionId = formData.get('position_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('set_primary_scan_position', {
+    const { data, error: rpcErr } = await (scanRpcs.setPrimaryScanPosition as any)(db, {
       p_scan_id: scanId,
       p_user_id: userId,
       p_position_id: positionId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, primaryPositionSet: true, data };
   },
 
-  postStaffNote: async ({ request, locals }) => {
+  postStaffNote: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1257,33 +1205,33 @@ export const actions: Actions = {
 
     if (!scanId || !body) return fail(400, { message: 'Mensagem não pode estar vazia.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('post_scan_staff_note', {
+    const { data, error: rpcErr } = await (scanRpcs.postScanStaffNote as any)(db, {
       p_scan_id: scanId,
       p_body: body,
       p_parent_id: parentId,
       p_pinned: isPinned
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, staffNotePosted: true, data };
   },
 
-  deleteStaffNote: async ({ request, locals }) => {
+  deleteStaffNote: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const noteId = formData.get('note_id') as string;
 
     if (!noteId) return fail(400, { message: 'Nota não informada.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('delete_scan_staff_note', {
+    const { data, error: rpcErr } = await (scanRpcs.deleteScanStaffNote as any)(db, {
       p_note_id: noteId
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, staffNoteDeleted: true };
   },
 
-  updateMemberVisibility: async ({ request, locals }) => {
+  updateMemberVisibility: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1292,17 +1240,17 @@ export const actions: Actions = {
 
     if (!scanId || !targetUserId) return fail(400, { message: 'Dados insuficientes.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('update_scan_member_visibility', {
+    const { data, error: rpcErr } = await (scanRpcs.updateScanMemberVisibility as any)(db, {
       p_scan_id: scanId,
       p_user_id: targetUserId,
       p_is_public: isPublic
-    });
+    } as any);
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, memberVisibilityUpdated: true, isPublic };
   },
 
-  createTask: async ({ request, locals }) => {
+  createTask: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1316,7 +1264,7 @@ export const actions: Actions = {
 
     if (!scanId || !title) return fail(400, { message: 'Título da tarefa é obrigatório.' });
 
-    const { error } = await locals.db.from('scan_tasks').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanTasks).values({scanId: scanId,
       workId: workId,
       stageId: stageId,
       title,
@@ -1324,13 +1272,13 @@ export const actions: Actions = {
       assignedTo: assignedTo,
       createdBy: locals.user!.id,
       priority,
-      dueAt: dueAt ? new Date(dueAt).toISOString() : null});
+      dueAt: dueAt ? new Date(dueAt).toISOString() : null}));
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, taskCreated: true };
   },
 
-  updateTaskStatus: async ({ request, locals }) => {
+  updateTaskStatus: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
@@ -1339,19 +1287,19 @@ export const actions: Actions = {
     if (!taskId || !status) return fail(400, { message: 'Dados insuficientes.' });
 
     const updates: any = {status,
-      updatedAt: new Date().toISOString()};
+      };
     if (status === 'DONE') {
       updates.completedAt = new Date().toISOString();
     } else {
       updates.completedAt = null;
     }
 
-    const { error } = await locals.db.from('scan_tasks').update(updates).eq('id', taskId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanTasks).set(updates).where(eq(schema.scanTasks.id, taskId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, taskStatusUpdated: true };
   },
 
-  handoffTask: async ({ request, locals }) => {
+  handoffTask: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
@@ -1360,32 +1308,32 @@ export const actions: Actions = {
 
     if (!taskId || !targetUserId) return fail(400, { message: 'Membro de destino obrigatório.' });
 
-    const { data: task } = await locals.db.from('scan_tasks').select('assigned_to, scan_id').eq('id', taskId).single();
+    const { data: task } = await safeQuerySingle((db as any).select({ assignedTo: schema.scanTasks.assignedTo, scanId: schema.scanTasks.scanId }).from(schema.scanTasks).where(eq(schema.scanTasks.id, taskId)));
     if (!task) return fail(404, { message: 'Tarefa não encontrada.' });
 
-    await locals.db.from('scan_tasks').update({assignedTo: targetUserId, updatedAt: new Date().toISOString()}).eq('id', taskId);
+    await (safeQuery as any)((db as any).update(schema.scanTasks).set({assignedTo: targetUserId, }).where(eq(schema.scanTasks.id, taskId)));
 
-    await locals.db.from('scan_task_handoffs').insert({taskId: taskId,
-      fromUserId: task.assignedTo,
+    await (safeQuery as any)((db as any).insert(schema.scanTaskHandoffs).values({taskId: taskId,
+      fromUserId: (task as any)?.assignedTo,
       toUserId: targetUserId,
       transferredBy: locals.user!.id,
-      reason});
+      reason}));
 
     return { success: true, taskHandoff: true };
   },
 
-  deleteTask: async ({ request, locals }) => {
+  deleteTask: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
     if (!taskId) return fail(400, { message: 'ID da tarefa obrigatório.' });
 
-    const { error } = await locals.db.from('scan_tasks').delete().eq('id', taskId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanTasks).where(eq(schema.scanTasks.id, taskId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, taskDeleted: true };
   },
 
-  createStage: async ({ request, locals }) => {
+  createStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1397,16 +1345,16 @@ export const actions: Actions = {
 
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const { error } = await locals.db.from('scan_workflow_stages').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanWorkflowStages).values({scanId: scanId,
       name,
       slug,
       color,
-      required});
-    if (error) return fail(400, { message: error.message });
+      required}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, stageCreated: true };
   },
 
-  saveGlossaryEntry: async ({ request, locals }) => {
+  saveGlossaryEntry: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const entryId = formData.get('entry_id') as string;
@@ -1422,40 +1370,40 @@ export const actions: Actions = {
     }
 
     if (entryId) {
-      const { error } = await locals.db.from('work_glossary_entries').update({workId: workId,
+      const { error } = await (safeQuery as any)((db as any).update(schema.workGlossaryEntries).set({workId: workId,
         sourceTerm: sourceTerm,
         preferredTranslation: preferredTranslation,
         category,
         notes,
         updatedBy: locals.user!.id,
-        updatedAt: new Date().toISOString()}).eq('id', entryId);
-      if (error) return fail(400, { message: error.message });
+        }).where(eq(schema.workGlossaryEntries.id, entryId)));
+      if (error) return fail(400, { message: (error as any)?.message });
     } else {
-      const { error } = await locals.db.from('work_glossary_entries').insert({scanId: scanId,
+      const { error } = await (safeQuery as any)((db as any).insert(schema.workGlossaryEntries).values({scanId: scanId,
         workId: workId,
         sourceTerm: sourceTerm,
         preferredTranslation: preferredTranslation,
         category,
         notes,
         createdBy: locals.user!.id,
-        updatedBy: locals.user!.id});
-      if (error) return fail(400, { message: error.message });
+        updatedBy: locals.user!.id}));
+      if (error) return fail(400, { message: (error as any)?.message });
     }
     return { success: true, glossarySaved: true };
   },
 
-  deleteGlossaryEntry: async ({ request, locals }) => {
+  deleteGlossaryEntry: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const entryId = formData.get('entry_id') as string;
     if (!entryId) return fail(400, { message: 'ID ausente.' });
 
-    const { error } = await locals.db.from('work_glossary_entries').delete().eq('id', entryId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.workGlossaryEntries).where(eq(schema.workGlossaryEntries.id, entryId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, glossaryDeleted: true };
   },
 
-  saveReference: async ({ request, locals }) => {
+  saveReference: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1468,28 +1416,28 @@ export const actions: Actions = {
       return fail(400, { message: 'Preencha todos os campos obrigatórios.' });
     }
 
-    const { error } = await locals.db.from('work_references').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.workReferences).values({scanId: scanId,
       workId: workId,
       title,
       refType: refType,
       content,
-      createdBy: locals.user!.id});
-    if (error) return fail(400, { message: error.message });
+      createdBy: locals.user!.id}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, referenceSaved: true };
   },
 
-  deleteReference: async ({ request, locals }) => {
+  deleteReference: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const refId = formData.get('ref_id') as string;
     if (!refId) return fail(400, { message: 'ID ausente.' });
 
-    const { error } = await locals.db.from('work_references').delete().eq('id', refId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.workReferences).where(eq(schema.workReferences.id, refId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, referenceDeleted: true };
   },
 
-  createWikiPage: async ({ request, locals }) => {
+  createWikiPage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1501,19 +1449,19 @@ export const actions: Actions = {
 
     if (!scanId || !title || !content) return fail(400, { message: 'Título e conteúdo obrigatórios.' });
 
-    const { error } = await locals.db.from('scan_wiki_pages').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanWikiPages).values({scanId: scanId,
       title,
       slug,
       category,
       content,
       isPinned: isPinned,
       createdBy: locals.user!.id,
-      updatedBy: locals.user!.id});
-    if (error) return fail(400, { message: error.message });
+      updatedBy: locals.user!.id}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, wikiCreated: true };
   },
 
-  updateWikiPage: async ({ request, locals }) => {
+  updateWikiPage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const pageId = formData.get('page_id') as string;
@@ -1524,28 +1472,28 @@ export const actions: Actions = {
 
     if (!pageId || !title || !content) return fail(400, { message: 'Dados incompletos.' });
 
-    const { error } = await locals.db.from('scan_wiki_pages').update({title,
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanWikiPages).set({title,
       category,
       content,
       isPinned: isPinned,
       updatedBy: locals.user!.id,
-      updatedAt: new Date().toISOString()}).eq('id', pageId);
-    if (error) return fail(400, { message: error.message });
+      }).where(eq(schema.scanWikiPages.id, pageId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, wikiUpdated: true };
   },
 
-  deleteWikiPage: async ({ request, locals }) => {
+  deleteWikiPage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const pageId = formData.get('page_id') as string;
     if (!pageId) return fail(400, { message: 'ID ausente.' });
 
-    const { error } = await locals.db.from('scan_wiki_pages').delete().eq('id', pageId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanWikiPages).where(eq(schema.scanWikiPages.id, pageId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, wikiDeleted: true };
   },
 
-  setMaintenance: async ({ request, locals }) => {
+  setMaintenance: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1554,17 +1502,17 @@ export const actions: Actions = {
     const emergencyMode = formData.get('emergency_mode') === 'on';
     const emergencyReason = (formData.get('emergency_reason') as string)?.trim() || null;
 
-    const { error } = await locals.db.from('scans').update({pauseUploads: pauseUploads,
+    const { error } = await (safeQuery as any)((db as any).update(schema.scans).set({pauseUploads: pauseUploads,
       pauseRecruitment: pauseRecruitment,
       emergencyMode: emergencyMode,
       emergencyReason: emergencyReason,
-      updatedAt: new Date().toISOString()}).eq('id', scanId);
+      }).where(eq(schema.scans.id, scanId)));
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, maintenanceUpdated: true };
   },
 
-  changeSlug: async ({ request, locals }) => {
+  changeSlug: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1572,59 +1520,59 @@ export const actions: Actions = {
 
     if (!scanId || !newSlug) return fail(400, { message: 'Novo slug obrigatório.' });
 
-    const { error: rpcErr } = await locals.db.rpc('change_scan_slug', {
+    const { error: rpcErr } = await (scanRpcs.changeScanSlug as any)(db, {
       p_scan_id: scanId,
       p_new_slug: newSlug
-    });
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    } as any);
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     return { success: true, slugChanged: true };
   },
 
-  saveIntegration: async ({ request, locals }) => {
+  saveIntegration: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
-    const platform = formData.get('platform') as string;
+    const plat = formData.get('platform') as string;
     const name = (formData.get('name') as string)?.trim();
     const webhookUrl = (formData.get('webhook_url') as string)?.trim();
 
-    if (!scanId || !platform || !name || !webhookUrl) {
+    if (!scanId || !plat || !name || !webhookUrl) {
       return fail(400, { message: 'Campos obrigatórios ausentes.' });
     }
 
-    const { error } = await locals.db.from('scan_integrations').insert({scanId: scanId,
-      platform,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanIntegrations).values({scanId: scanId,
+      platform: plat,
       name,
-      webhookUrl: webhookUrl});
-    if (error) return fail(400, { message: error.message });
+      webhookUrl: webhookUrl}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, integrationSaved: true };
   },
 
-  deleteIntegration: async ({ request, locals }) => {
+  deleteIntegration: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const integrationId = formData.get('integration_id') as string;
     if (!integrationId) return fail(400, { message: 'ID ausente.' });
 
-    const { error } = await locals.db.from('scan_integrations').delete().eq('id', integrationId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanIntegrations).where(eq(schema.scanIntegrations.id, integrationId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, integrationDeleted: true };
   },
 
-  leaveScan: async ({ request, locals }) => {
+  leaveScan: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     if (!scanId) return fail(400, { message: 'Scan ausente.' });
 
-    const { error: rpcErr } = await locals.db.rpc('leave_scan', {
+    const { error: rpcErr } = await (scanRpcs.leaveScan as any)(db, {
       p_scan_id: scanId
-    });
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    } as any);
+    if (rpcErr) return fail(400, { message: (rpcErr as any).message });
     throw redirect(303, '/scan');
   },
 
-  updateAvailability: async ({ request, locals }) => {
+  updateAvailability: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1633,15 +1581,15 @@ export const actions: Actions = {
 
     if (!scanId || !status) return fail(400, { message: 'Dados inválidos.' });
 
-    const { error } = await locals.db.from('scan_members').update({availabilityStatus: status,
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanMembers).set({availabilityStatus: status,
       availabilityMessage: message,
-      availabilityUpdatedAt: new Date().toISOString()}).eq('scan_id', scanId).eq('user_id', locals.user!.id);
+      availabilityUpdatedAt: new Date().toISOString()}).where(eq(schema.scanMembers.scanId, scanId))).eq('user_id', locals.user!.id);
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, availabilityUpdated: true };
   },
 
-  saveRecruitmentQuestion: async ({ request, locals }) => {
+  saveRecruitmentQuestion: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1652,23 +1600,23 @@ export const actions: Actions = {
 
     if (!scanId || !openingId || !question) return fail(400, { message: 'Pergunta obrigatória.' });
 
-    const { error } = await locals.db.from('scan_recruitment_questions').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanRecruitmentQuestions).values({scanId: scanId,
       openingId: openingId,
       question,
       questionType: questionType,
-      required});
-    if (error) return fail(400, { message: error.message });
+      required}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, questionSaved: true };
   },
 
-  deleteRecruitmentQuestion: async ({ request, locals }) => {
+  deleteRecruitmentQuestion: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const questionId = formData.get('question_id') as string;
     if (!questionId) return fail(400, { message: 'ID ausente.' });
 
-    const { error } = await locals.db.from('scan_recruitment_questions').delete().eq('id', questionId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanRecruitmentQuestions).where(eq(schema.scanRecruitmentQuestions.id, questionId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, questionDeleted: true };
   },
 
@@ -1680,27 +1628,26 @@ export const actions: Actions = {
     const replyToId = String(formData.get('replyToId') || '').trim() || null;
     if (!channelId || !content) return fail(400, { message: 'Mensagem obrigatória' });
 
-    const { data: ch } = await locals.db.from('scan_channels').select('scan_id, name, type').eq('id', channelId).single();
+    const { data: ch } = await safeQuerySingle((db as any).select({ scanId: schema.scanChannels.scanId, name: schema.scanChannels.name, type: schema.scanChannels.type }).from(schema.scanChannels).where(eq(schema.scanChannels.id, channelId)));
     if (!ch) return fail(404, { message: 'Canal não encontrado' });
 
-    if (ch.type === 'ANNOUNCEMENT') {
-      const { data: mem } = await locals.db.from('scan_members').select('role').eq('scan_id', ch.scanId).eq('user_id', locals.user!.id).maybeSingle();
-      if (!mem || !['OWNER', 'ADMIN'].includes(mem.role)) {
+    if ((ch as any)?.type === 'ANNOUNCEMENT') {
+      const { data: mem } = await safeQuerySingle((db as any).select({ role: schema.scanMembers.role }).from(schema.scanMembers).where(and(eq(schema.scanMembers.scanId, (ch as any)?.scanId), eq(schema.scanMembers.userId, locals.user!.id))));
+      if (!mem || !['OWNER', 'ADMIN'].includes((mem as any)?.role)) {
         return fail(403, { message: 'Apenas Administradores e Donos da Scan podem postar em canais de avisos.' });
       }
     }
 
-    const { data: msg, error: msgErr } = await locals.db.from('scan_messages').insert({scanId: ch.scanId,
+    const { data: msg, error: msgErr } = await (safeQuery as any)((db as any).insert(schema.scanMessages).values({scanId: (ch as any)?.scanId,
       channelId: channelId,
       userId: locals.user!.id,
       replyToId: replyToId,
-      content}).select().single();
+      content})) as any;
 
     // Reply Notification Dispatch
     if (replyToId) {
       try {
-        const { data: origMsg } = await locals.db
-          .from('scan_messages')
+        const { data: origMsg } = await (locals as any).db.from('scan_messages')
           .select('user_id, content')
           .eq('id', replyToId)
           .maybeSingle();
@@ -1711,11 +1658,11 @@ export const actions: Actions = {
             recipientUserId: origMsg.userId,
             actorUserId: locals.user!.id,
             type: 'REPLY_CHAT',
-            title: `Respondeu ${preview} em #${ch.name || 'canal'}`,
+            title: `Respondeu ${preview} em #${(ch as any)?.name || 'canal'}`,
             body: content,
-            deepLink: `/scan?id=${ch.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
-            context: `#${ch.name || 'chat'}`,
-            scanId: ch.scanId,
+            deepLink: `/scan?id=${(ch as any)?.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
+            context: `#${(ch as any)?.name || 'chat'}`,
+            scanId: (ch as any)?.scanId,
             priority: 'NORMAL',
             dedupeKey: `reply:${replyToId}:${msg.id}`,
             platform
@@ -1741,40 +1688,39 @@ export const actions: Actions = {
       locals,
       text: content,
       messageId: msg.id,
-      scanId: ch.scanId,
+      scanId: (ch as any)?.scanId,
       channelId,
       authorId: locals.user!.id,
-      title: `Nova menção em #${ch.name || 'canal'}`,
-      deepLink: `/scan?id=${ch.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
+      title: `Nova menção em #${(ch as any)?.name || 'canal'}`,
+      deepLink: `/scan?id=${(ch as any)?.scanId}&tab=chat&channelId=${channelId}#msg-${msg.id}`,
       contextType: 'CHAT',
       mentionsData,
       platform
     }).catch(err => console.error('Error dispatching chat mentions:', err));
 
-    if (platform?.context?.waitUntil) {
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(10).catch(() => {}));
     }
 
     return { success: true, messageId: msg.id };
   },
 
-  editMessage: async ({ request, locals }) => {
+  editMessage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const messageId = String(formData.get('messageId') || '');
     const content = String(formData.get('content') || '').trim();
     if (!messageId || !content) return fail(400, { message: 'Conteúdo obrigatório' });
 
-    const { data, error } = await locals.db.rpc('edit_scan_message', {
+    const { data, error } = await (scanRpcs.editScanMessage as any)(db, {
       p_message_id: messageId,
       p_new_content: content
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
 
     // Disparar eventuais menções novas adicionadas na edição (deduplicação evita reenvio para quem já foi notificado)
     try {
-      const { data: currentMsg } = await locals.db
-        .from('scan_messages')
+      const { data: currentMsg } = await (locals as any).db.from('scan_messages')
         .select('scan_id, channel_id')
         .eq('id', messageId)
         .maybeSingle();
@@ -1805,38 +1751,37 @@ export const actions: Actions = {
     return { success: true, messageEdited: true, data };
   },
 
-  deleteMessage: async ({ request, locals }) => {
+  deleteMessage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const messageId = String(formData.get('messageId') || '');
     if (!messageId) return fail(400, { message: 'Mensagem obrigatória' });
 
-    const { data, error } = await locals.db.rpc('delete_scan_message', {
+    const { data, error } = await (scanRpcs.deleteScanMessage as any)(db, {
       p_message_id: messageId
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, messageDeleted: true, data };
   },
 
-  postThreadReply: async ({ request, locals }) => {
+  postThreadReply: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const parentMessageId = String(formData.get('parentMessageId') || '');
     const content = String(formData.get('content') || '').trim();
     if (!parentMessageId || !content) return fail(400, { message: 'Conteúdo obrigatório' });
 
-    const { data: parent } = await locals.db
-      .from('scan_messages')
+    const { data: parent } = await (locals as any).db.from('scan_messages')
       .select('scan_id, user_id, channel_id, content')
       .eq('id', parentMessageId)
       .single();
     if (!parent) return fail(404, { message: 'Mensagem original não encontrada' });
 
-    const { error } = await locals.db.from('scan_message_threads').insert({scanId: parent.scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanMessageThreads).values({scanId: (parent as any)?.scanId,
       parentMessageId: parentMessageId,
       userId: locals.user!.id,
-      content});
-    if (error) return fail(400, { message: error.message });
+      content}));
+    if (error) return fail(400, { message: (error as any)?.message });
 
     // Notify parent author
     if (parent.userId && parent.userId !== locals.user!.id) {
@@ -1847,9 +1792,9 @@ export const actions: Actions = {
         type: 'REPLY_CHAT',
         title: `Nova resposta na sua thread (${preview})`,
         body: content,
-        deepLink: `/scan?id=${parent.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
+        deepLink: `/scan?id=${(parent as any)?.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
         context: 'Thread',
-        scanId: parent.scanId,
+        scanId: (parent as any)?.scanId,
         priority: 'NORMAL',
         dedupeKey: `thread_reply:${parentMessageId}:${locals.user!.id}:${Date.now()}`
       }).catch(err => console.error('Error dispatching thread reply notification:', err));
@@ -1859,57 +1804,57 @@ export const actions: Actions = {
     await dispatchMentions({
       locals,
       text: content,
-      scanId: parent.scanId,
+      scanId: (parent as any)?.scanId,
       channelId: parent.channelId,
       authorId: locals.user!.id,
       title: 'Nova menção em resposta de thread',
-      deepLink: `/scan?id=${parent.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
+      deepLink: `/scan?id=${(parent as any)?.scanId}&tab=chat&channelId=${parent.channelId || ''}#msg-${parentMessageId}`,
       contextType: 'CHAT'
     }).catch(err => console.error('Error dispatching thread mentions:', err));
 
     return { success: true };
   },
 
-  togglePinMessage: async ({ request, locals }) => {
+  togglePinMessage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const messageId = String(formData.get('messageId') || '');
     const pinned = formData.get('pinned') === 'true';
-    const { error } = await locals.db.from('scan_messages').update({ pinned }).eq('id', messageId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanMessages).set({ pinned }).where(eq(schema.scanMessages.id, messageId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true };
   },
 
-  toggleReaction: async ({ request, locals }) => {
+  toggleReaction: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const messageId = String(formData.get('messageId') || '');
     const emoji = String(formData.get('emoji') || '').trim();
     if (!messageId || !emoji) return fail(400, { message: 'Dados inválidos' });
 
-    const { data, error } = await locals.db.rpc('toggle_scan_message_reaction', {
+    const { data, error } = await (scanRpcs.toggleScanMessageReaction as any)(db, {
       p_message_id: messageId,
       p_emoji: emoji
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, reactionToggled: true, data };
   },
 
-  reactMessage: async ({ request, locals }) => {
+  reactMessage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const messageId = String(formData.get('messageId') || '');
     const emoji = String(formData.get('emoji') || '👍').trim();
 
-    const { data, error } = await locals.db.rpc('toggle_scan_message_reaction', {
+    const { data, error } = await (scanRpcs.toggleScanMessageReaction as any)(db, {
       p_message_id: messageId,
       p_emoji: emoji
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, reactionToggled: true, data };
   },
 
-  markChannelRead: async ({ request, locals }) => {
+  markChannelRead: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scanId') || '');
@@ -1917,16 +1862,16 @@ export const actions: Actions = {
     const messageId = String(formData.get('messageId') || '') || null;
     if (!scanId || !channelId) return fail(400, { message: 'Dados inválidos' });
 
-    const { data, error } = await locals.db.rpc('mark_scan_channel_read', {
+    const { data, error } = await (scanRpcs.markScanChannelRead as any)(db, {
       p_scan_id: scanId,
       p_channel_id: channelId,
       p_message_id: messageId
-    });
-    if (error) return fail(400, { message: error.message });
+    } as any);
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, channelMarkedRead: true, data };
   },
 
-  createChannel: async ({ request, locals, url }) => {
+  createChannel: async ({ request, locals, url, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const name = String(formData.get('name') || '').trim();
@@ -1937,18 +1882,18 @@ export const actions: Actions = {
     if (!scanId || !name) return fail(400, { message: 'Nome obrigatório' });
 
     const slug = slugify(name);
-    const { error } = await locals.db.from('scan_channels').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanChannels).values({scanId: scanId,
       name,
       slug,
       category,
       type,
       description,
-      createdBy: locals.user!.id});
-    if (error) return fail(400, { message: error.message });
+      createdBy: locals.user!.id}));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, channelCreated: true };
   },
 
-  createQcIssue: async ({ request, locals, url }) => {
+  createQcIssue: async ({ request, locals, url, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const chapterId = String(formData.get('chapterId') || '');
@@ -1959,14 +1904,14 @@ export const actions: Actions = {
     const scanId = url.searchParams.get('id');
     if (!scanId || !chapterId || !description) return fail(400, { message: 'Dados incompletos' });
 
-    const { error } = await locals.db.from('scan_chapter_qc_issues').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanChapterQcIssues).values({scanId: scanId,
       chapterId: chapterId,
       pageNumber: pageNumber,
       issueType: issueType,
       description,
       assignedTo: assignedTo,
-      createdBy: locals.user!.id});
-    if (error) return fail(400, { message: error.message });
+      createdBy: locals.user!.id}));
+    if (error) return fail(400, { message: (error as any)?.message });
 
     if (assignedTo && assignedTo !== locals.user!.id) {
       await createNotification({
@@ -1985,23 +1930,23 @@ export const actions: Actions = {
     return { success: true, qcIssueCreated: true };
   },
 
-  updateQcStatus: async ({ request, locals }) => {
+  updateQcStatus: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const issueId = String(formData.get('issueId') || '');
     const status = String(formData.get('status') || 'OPEN');
-    const updateData: any = {status, updatedAt: new Date().toISOString()};
+    const updateData: any = {status, };
     let localUpdateData: any = { status };
     if (status === 'RESOLVED') {
       localUpdateData.resolvedBy = locals.user!.id;
       localUpdateData.resolvedAt = new Date().toISOString();
     }
-    const { error } = await locals.db.from('scan_chapter_qc_issues').update(updateData).eq('id', issueId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanChapterQcIssues).set(updateData).where(eq(schema.scanChapterQcIssues.id, issueId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, qcStatusUpdated: true };
   },
 
-  saveAcademyTutorial: async ({ request, locals, url }) => {
+  saveAcademyTutorial: async ({ request, locals, url, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const tutorialId = formData.get('tutorialId') ? String(formData.get('tutorialId')) : null;
@@ -2016,17 +1961,17 @@ export const actions: Actions = {
 
     const slug = slugify(title) || 'tutorial';
     if (tutorialId) {
-      const { error } = await locals.db.from('scan_academy_tutorials').update({title,
+      const { error } = await (safeQuery as any)((db as any).update(schema.scanAcademyTutorials).set({title,
         slug,
         category,
         content,
         status,
         isPublished: isPublished,
         targetPositionId: targetPositionId || null,
-        updatedAt: new Date().toISOString()}).eq('id', tutorialId);
-      if (error) return fail(400, { message: error.message });
+        }).where(eq(schema.scanAcademyTutorials.id, tutorialId)));
+      if (error) return fail(400, { message: (error as any)?.message });
     } else {
-      const { error } = await locals.db.from('scan_academy_tutorials').insert({scanId: scanId,
+      const { error } = await (safeQuery as any)((db as any).insert(schema.scanAcademyTutorials).values({scanId: scanId,
         title,
         slug,
         category,
@@ -2034,21 +1979,20 @@ export const actions: Actions = {
         status,
         isPublished: isPublished,
         targetPositionId: targetPositionId || null,
-        createdBy: locals.user!.id});
-      if (error) return fail(400, { message: error.message });
+        createdBy: locals.user!.id}));
+      if (error) return fail(400, { message: (error as any)?.message });
     }
     return { success: true, tutorialSaved: true };
   },
 
-  deleteAcademyTutorial: async ({ request, locals }) => {
+  deleteAcademyTutorial: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const tutorialId = formData.get('tutorial_id') as string;
     const scanId = formData.get('scan_id') as string;
     if (!tutorialId || !scanId) return fail(400, { message: 'ID do tutorial ausente' });
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2059,13 +2003,13 @@ export const actions: Actions = {
     }
 
     // Delete associated attachments
-    await locals.db.from('scan_attachments').delete().eq('scan_id', scanId).eq('context_type', 'TUTORIAL').eq('context_id', tutorialId);
-    const { error } = await locals.db.from('scan_academy_tutorials').delete().eq('id', tutorialId).eq('scan_id', scanId);
-    if (error) return fail(400, { message: error.message });
+    await (safeQuery as any)((db as any).delete(schema.scanAttachments).where(and(eq(schema.scanAttachments.scanId, scanId), and(eq(schema.scanAttachments.contextType, 'TUTORIAL'), eq(schema.scanAttachments.contextId, tutorialId)))));
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanAcademyTutorials).where(and(eq(schema.scanAcademyTutorials.id, tutorialId), eq(schema.scanAcademyTutorials.scanId, scanId))));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, tutorialDeleted: true };
   },
 
-  advanceStage: async ({ request, locals, url }) => {
+  advanceStage: async ({ request, locals, url, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const chapterId = String(formData.get('chapterId') || '');
@@ -2073,35 +2017,36 @@ export const actions: Actions = {
     const scanId = url.searchParams.get('id');
     if (!scanId || !chapterId || !stageSlug) return fail(400, { message: 'Dados incompletos' });
 
-    const { error } = await locals.db.from('scan_production_chapters').update({currentStageSlug: stageSlug,
-      updatedAt: new Date().toISOString()}).eq('id', chapterId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanProductionChapters).set({currentStageSlug: stageSlug,
+      }).where(eq(schema.scanProductionChapters.id, chapterId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, stageAdvanced: true };
   },
 
-  publishChapter: async ({ request, locals }) => {
+  publishChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const chapterId = String(formData.get('chapterId') || '');
     if (!chapterId) return fail(400, { message: 'ID do capítulo ausente' });
 
     // Check open QC issues
-    const { count } = await locals.db.from('scan_chapter_qc_issues').select('id', { count: 'exact', head: true }).eq('chapter_id', chapterId).eq('status', 'OPEN');
-    if ((count ?? 0) > 0) {
+    const _countRes = await (safeQuerySingle as any)((db as any).select({ count: count() }).from(schema.scanChapterQcIssues).where(and(eq(schema.scanChapterQcIssues.chapterId, chapterId), eq(schema.scanChapterQcIssues.status, 'OPEN'))));
+    let countVal = _countRes.data?.count;
+    if ((countVal ?? 0) > 0) {
       return fail(400, { message: 'Publicação bloqueada: existem apontamentos de QC em aberto!' });
     }
 
-    const { error } = await locals.db.from('chapters').update({publishedAt: new Date().toISOString()}).eq('id', chapterId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).update(schema.chapters).set({publishedAt: new Date().toISOString()}).where(eq(schema.chapters.id, chapterId)));
+    if (error) return fail(400, { message: (error as any)?.message });
 
     // Update in-production chapter if exists
-    await locals.db.from('scan_production_chapters').update({status: 'PUBLISHED',
-      updatedAt: new Date().toISOString()}).eq('target_chapter_id', chapterId);
+    await (safeQuery as any)((db as any).update(schema.scanProductionChapters).set({status: 'PUBLISHED',
+      }).where(eq(schema.scanProductionChapters.targetChapterId, chapterId)));
 
     return { success: true, chapterPublished: true };
   },
 
-  createMuralPost: async ({ request, locals }) => {
+  createMuralPost: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2114,8 +2059,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Título e conteúdo são obrigatórios' });
     }
 
-    const { data: member } = await locals.db
-      .from('scan_members')
+    const { data: member } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2125,8 +2069,7 @@ export const actions: Actions = {
       return fail(403, { message: 'Acesso negado à Scan' });
     }
 
-    const { data: post, error } = await locals.db
-      .from('scan_mural_posts')
+    const { data: post, error } = await (locals as any).db.from('scan_mural_posts')
       .insert({scanId: scanId,
         authorId: locals.user!.id,
         title,
@@ -2138,7 +2081,7 @@ export const actions: Actions = {
       .select()
       .single();
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
 
     const files = formData.getAll('files') as File[];
     const BLOCKED_EXTENSIONS = ['.exe', '.apk', '.bat', '.cmd', '.sh', '.bin', '.dll', '.msi'];
@@ -2154,7 +2097,7 @@ export const actions: Actions = {
           .replace(/[^a-zA-Z0-9._-]/g, '_')
           .toLowerCase();
 
-        await locals.db.from('scan_attachments').insert({
+        await (safeQuery as any)((db as any).insert(schema.scanAttachments).values({
           scanId: scanId,
           contextType: 'MURAL_POST',
           contextId: post.id,
@@ -2164,7 +2107,7 @@ export const actions: Actions = {
           mimeType: f.type || 'application/octet-stream',
           size: f.size,
           storageReference: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-          storageProvider: 'PRIVATE_STORAGE'});
+          storageProvider: 'PRIVATE_STORAGE'}));
       }
     }
 
@@ -2181,7 +2124,7 @@ export const actions: Actions = {
     return { success: true, muralPostCreated: true };
   },
 
-  commentMuralPost: async ({ request, locals }) => {
+  commentMuralPost: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2193,13 +2136,13 @@ export const actions: Actions = {
       return fail(400, { message: 'Comentário inválido' });
     }
 
-    const { error } = await locals.db.from('scan_mural_comments').insert({scanId: scanId,
+    const { error } = await (safeQuery as any)((db as any).insert(schema.scanMuralComments).values({scanId: scanId,
       postId: postId,
       authorId: locals.user!.id,
       content,
-      parentCommentId: parentCommentId});
+      parentCommentId: parentCommentId}));
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
 
     await dispatchMentions({
       locals,
@@ -2214,7 +2157,7 @@ export const actions: Actions = {
     return { success: true, muralCommentCreated: true };
   },
 
-  reactMuralPost: async ({ request, locals }) => {
+  reactMuralPost: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2226,8 +2169,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Reação inválida' });
     }
 
-    let query = locals.db
-      .from('scan_mural_reactions')
+    let query = (locals as any).db.from('scan_mural_reactions')
       .select('id')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2239,47 +2181,47 @@ export const actions: Actions = {
     const { data: existing } = await query.maybeSingle();
 
     if (existing) {
-      await locals.db.from('scan_mural_reactions').delete().eq('id', existing.id);
-    } else {await locals.db.from('scan_mural_reactions').insert({
+      await (safeQuery as any)((db as any).delete(schema.scanMuralReactions).where(eq(schema.scanMuralReactions.id, existing.id)));
+    } else {await (safeQuery as any)((db as any).insert(schema.scanMuralReactions).values({
         scanId: scanId,
         postId: postId,
         commentId: commentId,
         userId: locals.user!.id,
-        emoji});
+        emoji}));
     }
 
     return { success: true, reacted: true };
   },
 
-  togglePinMuralPost: async ({ request, locals }) => {
+  togglePinMuralPost: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
     const postId = String(formData.get('post_id') || '');
 
-    const { data: post } = await locals.db.from('scan_mural_posts').select('is_pinned').eq('id', postId).single();
+    const { data: post } = await safeQuerySingle((db as any).select({ isPinned: schema.scanMuralPosts.isPinned }).from(schema.scanMuralPosts).where(eq(schema.scanMuralPosts.id, postId)));
     if (!post) return fail(404, { message: 'Post não encontrado' });
 
-    const newPinned = !post.isPinned;
-    const { error } = await locals.db.from('scan_mural_posts').update({isPinned: newPinned,
+    const newPinned = !(post as any)?.isPinned;
+    const { error } = await (safeQuery as any)((db as any).update(schema.scanMuralPosts).set({isPinned: newPinned,
       pinnedAt: newPinned ? new Date().toISOString() : null,
-      pinnedBy: newPinned ? locals.user!.id : null}).eq('id', postId);
+      pinnedBy: newPinned ? locals.user!.id : null}).where(eq(schema.scanMuralPosts.id, postId)));
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, pinToggled: true };
   },
 
-  deleteMuralPost: async ({ request, locals }) => {
+  deleteMuralPost: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const postId = String(formData.get('post_id') || '');
 
-    const { error } = await locals.db.from('scan_mural_posts').delete().eq('id', postId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanMuralPosts).where(eq(schema.scanMuralPosts.id, postId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, muralPostDeleted: true };
   },
 
-  savePipelineStage: async ({ request, locals }) => {
+  savePipelineStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2294,15 +2236,14 @@ export const actions: Actions = {
     const slug = slugify(name);
 
     if (stageId) {
-      const { error } = await locals.db.from('scan_workflow_stages').update({name,
+      const { error } = await (safeQuery as any)((db as any).update(schema.scanWorkflowStages).set({name,
         color,
         description,
         required,
-        updatedAt: new Date().toISOString()}).eq('id', stageId);
-      if (error) return fail(400, { message: error.message });
+        }).where(eq(schema.scanWorkflowStages.id, stageId)));
+      if (error) return fail(400, { message: (error as any)?.message });
     } else {
-      const { data: maxRow } = await locals.db
-        .from('scan_workflow_stages')
+      const { data: maxRow } = await (locals as any).db.from('scan_workflow_stages')
         .select('display_order')
         .eq('scan_id', scanId)
         .order('display_order', { ascending: false })
@@ -2311,30 +2252,30 @@ export const actions: Actions = {
 
       const nextOrder = (maxRow?.displayOrder || 0) + 1;
 
-      const { error } = await locals.db.from('scan_workflow_stages').insert({scanId: scanId,
+      const { error } = await (safeQuery as any)((db as any).insert(schema.scanWorkflowStages).values({scanId: scanId,
         name,
         slug,
         color,
         description,
         required,
-        displayOrder: nextOrder});
-      if (error) return fail(400, { message: error.message });
+        displayOrder: nextOrder}));
+      if (error) return fail(400, { message: (error as any)?.message });
     }
 
     return { success: true, stageSaved: true };
   },
 
-  deletePipelineStage: async ({ request, locals }) => {
+  deletePipelineStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('stage_id') || '');
 
-    const { error } = await locals.db.from('scan_workflow_stages').delete().eq('id', stageId);
-    if (error) return fail(400, { message: error.message });
+    const { error } = await (safeQuery as any)((db as any).delete(schema.scanWorkflowStages).where(eq(schema.scanWorkflowStages.id, stageId)));
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, stageDeleted: true };
   },
 
-  createProductionChapter: async ({ request, locals }) => {
+  createProductionChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2351,8 +2292,7 @@ export const actions: Actions = {
     }
 
     // Role-gating check: Dono/Gerente have leadership bypass. Staff MUST hold Raw Provider role.
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2364,8 +2304,7 @@ export const actions: Actions = {
 
     const isLeadership = ['OWNER', 'ADMIN'].includes(memberRow.role);
     if (!isLeadership) {
-      const { data: memberPositions } = await locals.db
-        .from('scan_member_positions')
+      const { data: memberPositions } = await (locals as any).db.from('scan_member_positions')
         .select('scan_positions(name)')
         .eq('scan_id', scanId)
         .eq('user_id', locals.user!.id);
@@ -2382,7 +2321,7 @@ export const actions: Actions = {
       }
     }
 
-    const { data, error } = await locals.db.rpc('create_scan_production_chapter', {
+    const { data, error } = await (scanRpcs.createScanProductionChapter as any)(db, {
       p_scan_id: scanId,
       p_work_id: workId,
       p_chapter_number: chapterNumber,
@@ -2391,16 +2330,16 @@ export const actions: Actions = {
       p_template: template,
       p_priority: priority,
       p_auto_claim: autoClaim
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, chapterId: data };
   },
 
-  bulkCreateProductionChapters: async ({ request, locals, platform }) => {
+  bulkCreateProductionChapters: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2414,78 +2353,78 @@ export const actions: Actions = {
       return fail(400, { message: 'Parâmetros de criação em lote inválidos.' });
     }
 
-    const { data, error } = await locals.db.rpc('bulk_create_scan_production_chapters', {
+    const { data, error } = await (scanRpcs.bulkCreateScanProductionChapters as any)(db, {
       p_scan_id: scanId,
       p_work_id: workId,
       p_from_number: fromNumber,
       p_to_number: toNumber,
       p_template: template,
       p_priority: priority
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  claimStage: async ({ request, locals, platform }) => {
+  claimStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('chapter_stage_id') || '');
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('claim_scan_chapter_stage', {
+    const { data, error } = await (scanRpcs.claimScanChapterStage as any)(db, {
       p_chapter_stage_id: stageId
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  releaseStage: async ({ request, locals, platform }) => {
+  releaseStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('chapter_stage_id') || '');
     const reason = formData.get('reason') ? String(formData.get('reason')) : null;
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('release_scan_chapter_stage', {
+    const { data, error } = await (scanRpcs.releaseScanChapterStage as any)(db, {
       p_chapter_stage_id: stageId,
       p_reason: reason
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  completeStageAction: async ({ request, locals, platform }) => {
+  completeStageAction: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('chapter_stage_id') || '');
     const notes = formData.get('notes') ? String(formData.get('notes')) : null;
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('complete_scan_chapter_stage', {
+    const { data, error } = await (scanRpcs.completeScanChapterStage as any)(db, {
       p_chapter_stage_id: stageId,
       p_notes: notes
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  returnStageAction: async ({ request, locals, platform }) => {
+  returnStageAction: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const sourceStageId = String(formData.get('source_stage_id') || '');
@@ -2496,20 +2435,20 @@ export const actions: Actions = {
       return fail(400, { message: 'Etapa de origem, destino e motivo (mín. 3 caracteres) são obrigatórios.' });
     }
 
-    const { data, error } = await locals.db.rpc('return_scan_chapter_stage', {
+    const { data, error } = await (scanRpcs.returnScanChapterStage as any)(db, {
       p_source_stage_id: sourceStageId,
       p_target_stage_slug: targetStageSlug,
       p_reason: reason
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  adminOverrideStage: async ({ request, locals, platform }) => {
+  adminOverrideStage: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('chapter_stage_id') || '');
@@ -2521,57 +2460,57 @@ export const actions: Actions = {
       return fail(400, { message: 'Etapa, ação e justificativa (mín. 3 caracteres) são obrigatórios.' });
     }
 
-    const { data, error } = await locals.db.rpc('admin_override_scan_stage', {
+    const { data, error } = await (scanRpcs.adminOverrideScanStage as any)(db, {
       p_chapter_stage_id: stageId,
       p_action: action,
       p_reason: reason,
       p_target_user_id: targetUserId
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  publishProductionChapter: async ({ request, locals, platform }) => {
+  publishProductionChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const productionChapterId = String(formData.get('production_chapter_id') || '');
     if (!productionChapterId) return fail(400, { message: 'ID do capítulo ausente.' });
 
-    const { data, error } = await locals.db.rpc('publish_scan_production_chapter', {
+    const { data, error } = await (scanRpcs.publishScanProductionChapter as any)(db, {
       p_production_chapter_id: productionChapterId
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  unpublishProductionChapter: async ({ request, locals, platform }) => {
+  unpublishProductionChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const productionChapterId = String(formData.get('production_chapter_id') || '');
     const reason = formData.get('reason') ? String(formData.get('reason')) : null;
     if (!productionChapterId) return fail(400, { message: 'ID do capítulo ausente.' });
 
-    const { data, error } = await locals.db.rpc('unpublish_scan_production_chapter', {
+    const { data, error } = await (scanRpcs.unpublishScanProductionChapter as any)(db, {
       p_production_chapter_id: productionChapterId,
       p_reason: reason
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
-    if (platform?.context?.waitUntil) {
+    if (error) return fail(400, { message: (error as any)?.message });
+    if ((platform as any)?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
   },
 
-  saveWorkWorkflowOverride: async ({ request, locals }) => {
+  saveWorkWorkflowOverride: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2586,19 +2525,18 @@ export const actions: Actions = {
       customStages = [];
     }
 
-    const { error } = await locals.db
-      .from('scan_work_workflow_overrides')
+    const { error } = await (locals as any).db.from('scan_work_workflow_overrides')
       .upsert({scanId: scanId,
         workId: workId,
         template,
         customStages: customStages,
-        updatedAt: new Date().toISOString()}, {onConflict: 'scanId,workId'});
+        }, {onConflict: 'scanId,workId'});
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, overrideSaved: true };
   },
 
-  deleteProductionChapter: async ({ request, locals }) => {
+  deleteProductionChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const productionChapterId = String(formData.get('production_chapter_id') || '');
@@ -2609,17 +2547,17 @@ export const actions: Actions = {
       return fail(400, { message: 'ID da produção e confirmação são obrigatórios.' });
     }
 
-    const { data, error } = await locals.db.rpc('delete_scan_production_chapter', {
+    const { data, error } = await (scanRpcs.deleteScanProductionChapter as any)(db, {
       p_production_chapter_id: productionChapterId,
       p_confirmation: confirmation,
       p_reason: reason
-    });
+    } as any);
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any)?.message });
     return { success: true, result: data };
   },
 
-  updateProductionChapter: async ({ request, locals }) => {
+  updateProductionChapter: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const productionChapterId = String(formData.get('production_chapter_id') || '');
@@ -2631,8 +2569,7 @@ export const actions: Actions = {
       return fail(400, { message: 'ID da produção é obrigatório.' });
     }
 
-    const { data: prodCh, error: prodErr } = await locals.db
-      .from('scan_production_chapters')
+    const { data: prodCh, error: prodErr } = await (locals as any).db.from('scan_production_chapters')
       .select('id, scan_id, status')
       .eq('id', productionChapterId)
       .maybeSingle();
@@ -2641,8 +2578,7 @@ export const actions: Actions = {
       return fail(404, { message: 'Capítulo de produção não encontrado.' });
     }
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', prodCh.scanId)
       .eq('user_id', locals.user!.id)
@@ -2653,23 +2589,21 @@ export const actions: Actions = {
       return fail(403, { message: 'Permissão negada. Apenas Administradores e Donos podem editar detalhes da produção.' });
     }
 
-    const updatePayload: Record<string, any> = {updatedAt: new Date().toISOString()};
+    const updatePayload: Record<string, any> = {};
     let localUpdatePayload: any = {};
     if (chapterLabel !== null) localUpdatePayload.chapterLabel = chapterLabel || null;
     if (priority && ['LOW', 'NORMAL', 'HIGH', 'URGENT'].includes(priority)) {
       localUpdatePayload.priority = priority;
     }
 
-    const { error: updateErr } = await locals.db
-      .from('scan_production_chapters')
+    const { error: updateErr } = await (locals as any).db.from('scan_production_chapters')
       .update(updatePayload)
       .eq('id', productionChapterId);
 
-    if (updateErr) return fail(400, { message: updateErr.message });
+    if (updateErr) return fail(400, { message: (updateErr as any).message });
 
-    if (notes !== null) {await locals.db
-        .from('scan_chapter_stages')
-        .update({ notes: notes || null, updatedAt: new Date().toISOString()})
+    if (notes !== null) {await (locals as any).db.from('scan_chapter_stages')
+        .update({ notes: notes || null, })
         .eq('production_chapter_id', productionChapterId)
         .in('status', ['AVAILABLE', 'IN_PROGRESS', 'REWORK']);
     }
@@ -2677,7 +2611,7 @@ export const actions: Actions = {
     return { success: true, chapterUpdated: true };
   },
 
-  deleteOpening: async ({ request, locals }) => {
+  deleteOpening: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2687,8 +2621,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados insuficientes para excluir vaga.' });
     }
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2698,17 +2631,16 @@ export const actions: Actions = {
       return fail(403, { message: 'Apenas Administradores ou Donos podem excluir vagas de recrutamento.' });
     }
 
-    const { error: delErr } = await locals.db
-      .from('scan_recruitment_openings')
+    const { error: delErr } = await (locals as any).db.from('scan_recruitment_openings')
       .delete()
       .eq('id', openingId)
       .eq('scan_id', scanId);
 
-    if (delErr) return fail(400, { message: delErr.message });
+    if (delErr) return fail(400, { message: (delErr as any).message });
     return { success: true, openingDeleted: true };
   },
 
-  reorderChannels: async ({ request, locals }) => {
+  reorderChannels: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = String(formData.get('scan_id') || '');
@@ -2718,8 +2650,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados inválidos para reordenar canais.' });
     }
 
-    const { data: memberRow } = await locals.db
-      .from('scan_members')
+    const { data: memberRow } = await (locals as any).db.from('scan_members')
       .select('role')
       .eq('scan_id', scanId)
       .eq('user_id', locals.user!.id)
@@ -2732,8 +2663,7 @@ export const actions: Actions = {
     try {const orders: Array<{ id: string; displayOrder: number}> = JSON.parse(ordersRaw);
       await Promise.all(
         orders.map(item =>
-          locals.db
-            .from('scan_channels')
+          (locals as any).db.from('scan_channels')
             .update({displayOrder: item.displayOrder})
             .eq('id', item.id)
             .eq('scan_id', scanId)

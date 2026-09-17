@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, schema, safeQuery } from '$lib/server/db';
-import { ilike, or, desc, eq } from 'drizzle-orm';
+import { like, or, desc, eq } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user || locals.role !== 'ADMIN') {
@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     })
     .from(schema.members)
     .leftJoin(schema.accessRoles, eq(schema.members.id, schema.accessRoles.userId))
-    .where(or(ilike(schema.members.username, `%${cleanQ}%`), ilike(schema.members.displayName, `%${cleanQ}%`)))
+    .where(or(like(schema.members.username, `%${cleanQ}%`), like(schema.members.displayName, `%${cleanQ}%`)))
     .orderBy(desc(schema.members.createdAt))
     .limit(15)
   );

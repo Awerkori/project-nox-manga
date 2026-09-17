@@ -1,0 +1,13 @@
+--- tests/public-content-parity.test.ts
++++ tests/public-content-parity.test.ts
+@@ -1,5 +1,11 @@
+ import { describe, expect, it, vi } from 'vitest';
+-vi.mock('$lib/server/db', () => ({ WORK_FIELDS: '*' }));
++vi.mock('$lib/server/db', () => ({
++  WORK_FIELDS: '*',
++  db: { select: vi.fn() },
++  schema: { works: {}, members: {}, tags: {}, workTags: {}, likes: {} },
++  safeQuery: vi.fn().mockResolvedValue({ data: [] }),
++  safeQuerySingle: vi.fn().mockResolvedValue({ data: null })
++}));
+ import { load as workLoad } from '../src/routes/obra/[slug]/+page.server';

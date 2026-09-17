@@ -18,6 +18,60 @@ type HomeCachePayload = {
 let homePublicCache: HomeCachePayload | null = null;
 const HOME_CACHE_TTL_MS = 60_000;
 
+
+async function fetchRecentReleases(db: any) {
+    const fallbackWorksRes = await safeQuery(
+        db.select({
+          id: schema.works.id,
+          slug: schema.works.slug,
+          title: schema.works.title,
+          coverId: schema.works.coverId,
+          kind: schema.works.kind,
+          contentRating: schema.works.contentRating,
+          latestChapterPublishedAt: schema.works.latestChapterPublishedAt
+        })
+        .from(schema.works)
+        .where(
+          and(
+            eq(schema.works.published, true),
+            isNotNull(schema.works.latestChapterPublishedAt)
+          )
+        )
+        .orderBy(desc(schema.works.latestChapterPublishedAt))
+        .limit(16)
+    );
+
+    const fallbackWorks = fallbackWorksRes?.data || [];
+    if (fallbackWorks.length === 0) return { data: [] };
+
+    const workIds = fallbackWorks.map((w: any) => w.id);
+    const fallbackChaptersRes = await safeQuery(
+        db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number,
+            title: schema.chapters.title,
+            publishedAt: schema.chapters.publishedAt,
+            workId: schema.chapters.workId,
+            work_slug: schema.works.slug,
+            work_title: schema.works.title,
+            work_cover_id: schema.works.coverId,
+            work_kind: schema.works.kind,
+            work_content_rating: schema.works.contentRating
+        })
+        .from(schema.chapters)
+        .innerJoin(schema.works, eq(schema.works.id, schema.chapters.workId))
+        .where(
+            and(
+                inArray(schema.chapters.workId, workIds),
+                isNotNull(schema.chapters.publishedAt)
+            )
+        )
+        .orderBy(desc(schema.chapters.publishedAt))
+    );
+
+    return { data: fallbackChaptersRes.data || [] };
+}
+
 export const load = async ({ locals, setHeaders }) => {
   // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
   setHeaders({
@@ -155,7 +209,7 @@ export const load = async ({ locals, setHeaders }) => {
         }
       })
     ),
-    Promise.resolve({ data: null, error: null,  }),
+    withTimeout(fetchRecentReleases(db), 4500, { data: [] } as any, 'home_chapters'),
     locals.user
       ? safeQuery(
           db.select({

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { verifyMihonAuth } from '$lib/server/mihon';
 import { db, schema, safeQuery } from '$lib/server/db';
-import { eq, ne, ilike, and, desc, count } from 'drizzle-orm';
+import { eq, ne, like, and, desc, count } from 'drizzle-orm';
 
 export const GET = async ({ request, url }) => {
   const auth = await verifyMihonAuth(request);
@@ -20,7 +20,7 @@ export const GET = async ({ request, url }) => {
   }
 
   if (search) {
-    conditions.push(ilike(schema.works.title, `%${search}%`));
+    conditions.push(like(schema.works.title, `%${search}%`));
   }
 
   if (status && (status === 'ONGOING' || status === 'COMPLETED' || status === 'HIATUS')) {
@@ -56,7 +56,7 @@ export const GET = async ({ request, url }) => {
   }
 
   const works = worksRes.data || [];
-  const totalCount = countRes.data[0]?.value ?? works.length;
+  const totalCount = countRes.data?.[0]?.value ?? works.length;
 
   const origin = url.origin;
   const items = works.map((w) => ({

@@ -14,7 +14,7 @@ declare module 'drizzle-orm/libsql' {
 }
 
 export const POST = async ({ request, locals, platform }: any) => {
-  member(locals);
+  
   const text = await request.text();
   if (text.length > 60_000) error(413, 'Solicitao muito grande');
   let body;

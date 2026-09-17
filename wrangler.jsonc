@@ -1,9 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "manga",
+  "name": "manga-staging",
   "main": "src/worker-wrapper.js",
   "triggers": {
-    "crons": ["*/2 * * * *"]
+    "crons": [
+      "*/2 * * * *"
+    ]
   },
   "compatibility_date": "2026-09-01",
   "compatibility_flags": [
@@ -19,5 +21,16 @@
   },
   "placement": {
     "region": "aws:sa-east-1"
+  },
+  "vars": {
+    "TURSO_DATABASE_URL": "libsql://project-nox-main-awerkori.aws-us-east-1.turso.io",
+    "TURSO_AUTH_TOKEN": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODk1OTU0MTQsImlkIjoiMDFhMGFjMWYtMzYwMS03Y2U5LTk0YTMtMTU4YzlkZDI3ZmMzIiwia2lkIjoiN3h3VmlDdGo2aVJ3LUZDTEhQZ0RmWlR1eWZ1X2g3UGtvTUM5S2J3VmpzayIsInJpZCI6ImVjOGYyZmRlLWJiNTctNDE0My04ZjliLWNkOTgxN2FkMzI1OCJ9.Ub9FB0Jmvz7W0o9CaJxsBtNlxjFrwtFKwjvK-Mkedpj9834m9L1R82869B3Qpv-McyBSPePQbNGJI_-kpQisCA",
+    "BETTER_AUTH_URL": "https://manga-staging.project-nox-awerkori.workers.dev",
+    "BETTER_AUTH_SECRET": "staging-secret-123",
+    "STAFF_SUPABASE_URL": "https://izregkwaqdygwioqzwwo.supabase.co",
+    "PUBLIC_SUPABASE_URL": "https://izregkwaqdygwioqzwwo.supabase.co",
+    "PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6cmVna3dhcWR5Z3dpb3F6d3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NjU0OTQsImV4cCI6MjEwNDE0MTQ5NH0.11p3Vh_dd0ynrH1qyZVKDNr9x7AFfoHVQW96MDPgNrQ",
+    "STAFF_SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBndW10ZXJndnRiZWVwenBndmt2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODU0NTEzMCwiZXhwIjoyMTA0MTIxMTMwfQ.gp3BA5tibz-VCvbm6YFIGKqMKEYLkvtdNkA41yUbPco",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6cmVna3dhcWR5Z3dpb3F6d3dvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODU2NTQ5NCwiZXhwIjoyMTA0MTQxNDk0fQ.ChnMmsSg_w4goxLFbDxEUnxOaBDAAMNG4KoO4RlqQHk"
   }
 }

@@ -2353,7 +2353,7 @@
       </div>
 
       <p class="modal-desc">
-        J existe uma prioridade absoluta ativa: <strong>{form?.activeWorkTitle}</strong>.
+        J existe uma prioridade absoluta ativa: <strong>{(form as any)?.activeWorkTitle}</strong>.
       </p>
 
       <p class="conflict-prompt">

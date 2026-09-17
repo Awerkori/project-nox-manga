@@ -14,7 +14,6 @@
   "exclude": [
     "tests/**",
     "scripts/**",
-    ".svelte-kit/**",
     "node_modules/**"
   ]
 }

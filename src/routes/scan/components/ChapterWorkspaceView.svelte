@@ -225,7 +225,7 @@
 <div class="workspace-shell">
   <!-- Top Navigation Bar -->
   <nav class="workspace-nav-bar">
-    <button type="button" class="btn-back" onclick={onBackToPipeline}>
+    <button type="button" class="btn-back" onclick={() => onBackToPipeline()}>
       <ArrowLeft size={16} />
       <span>Voltar ao Pipeline</span>
     </button>

@@ -76,7 +76,8 @@ test('published content has a readable cover, chapter API and progressive reader
   test.setTimeout(90000);
   const catalog = await (await request.get('/api/v1/works')).json();
   const work = catalog.data[0];
-  test.skip(!work, 'No published work available for the content-dependent smoke test');
+  expect(work).toBeDefined();
+  expect(catalog.data.length).toBeGreaterThan(0);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   for (const width of [390, 768, 1366, 1440]) {
@@ -124,8 +125,9 @@ for (const width of [390, 768, 1440])
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.locator('h1, h2, h3').first()).toBeVisible();
+    await expect(page.locator('.work-card, .chapter-item, a[href^="/obra/"]')).not.toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('a[href="/catalogo"]').first().click();
+    await page.goto('/catalogo');
     await expect(page).toHaveURL(/catalogo/);
     await page.getByLabel('Título da obra').fill('Uma busca sem resultado');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();

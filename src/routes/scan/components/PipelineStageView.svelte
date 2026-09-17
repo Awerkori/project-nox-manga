@@ -962,7 +962,7 @@
                   claimFeedback = {
                     stageId: stageId || 'picker',
                     type: 'error',
-                    text: result.data?.message || 'Este captulo acabou de ser adquirido por outro membro.'
+                    text: result.data?.message as string || 'Este captulo acabou de ser adquirido por outro membro.'
                   };
                 } else {
                   claimFeedback = null;
@@ -1122,7 +1122,7 @@
                             claimFeedback = {
                               stageId: item.cs.id,
                               type: 'error',
-                              text: result.data?.message || 'Este captulo acabou de ser pego por outro membro.'
+                              text: result.data?.message as string || 'Este captulo acabou de ser pego por outro membro.'
                             };
                             expandedAvailable[item.cs.id] = true;
                           } else {
@@ -1312,7 +1312,7 @@
                                 claimFeedback = {
                                   stageId: item.cs.id,
                                   type: 'error',
-                                  text: result.data?.message || 'Este captulo acabou de ser pego por outro membro.'
+                                  text: result.data?.message as string || 'Este captulo acabou de ser pego por outro membro.'
                                 };
                               } else {
                                 claimFeedback = null;
@@ -1967,7 +1967,7 @@
           return async ({ result, update }) => {
             isDeletingChapter = false;
             if (result.type === 'failure') {
-              deleteError = result.data?.message || 'Falha ao excluir produo.';
+              deleteError = result.data?.message as string || 'Falha ao excluir produo.';
             } else {
               showDeleteModal = false;
               await update();

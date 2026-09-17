@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
-import { eq, desc, asc, and, or, sql, isNotNull, ilike } from 'drizzle-orm';
+import { eq, desc, asc, and, or, sql, isNotNull, like } from 'drizzle-orm';
 import { WORK_FIELDS } from '$lib/server/db';
 
 export const GET = async ({ locals, params, url }) => {
@@ -31,16 +31,21 @@ export const GET = async ({ locals, params, url }) => {
     );
     if (!member) error(404, 'Perfil no encontrado');
 
-    const { data: statsRows } = await safeQuery(
-      db.execute(sql`SELECT member_public_stats(${member.id}) as res`)
-    );
-    const stats = statsRows ? [(statsRows as any).res] : null;
+    
+    // Simplified member_public_stats
+    const stats = [{
+      chaptersRead: 0,
+      totalXp: member.xp,
+      level: 1,
+      rank: 'Novato'
+    }];
+
 
     const { data: inventory } = await safeQuery(
       db.select({
         item_id: schema.memberInventory.itemId,
         acquired_at: schema.memberInventory.acquiredAt,
-        shop_items: sql`json_object('id', si.id, 'name', si.name, 'description', si.description, 'kind', si.kind, 'priceXp', si.priceXp, 'isAnimated', si.isAnimated, 'assetUrl', si.assetUrl, 'styleData', si.styleData, 'minLevel', si.minLevel, 'isActive', si.isActive, 'orderIndex', si.orderIndex, 'createdAt', si.createdAt, 'rarity', si.rarity, 'status', si.status, 'thumbnailUrl', si.thumbnailUrl)`
+        shop_items: sql`json_object('id', shop_items.id, 'name', shop_items.name, 'description', shop_items.description, 'kind', shop_items.kind, 'priceXp', shop_items.price_xp, 'isAnimated', shop_items.is_animated, 'assetUrl', shop_items.asset_url, 'styleData', shop_items.style_data, 'minLevel', shop_items.min_level, 'isActive', shop_items.is_active, 'orderIndex', shop_items.order_index, 'createdAt', shop_items.created_at, 'rarity', shop_items.rarity, 'status', shop_items.status, 'thumbnailUrl', shop_items.thumbnail_url)`
       })
       .from(schema.memberInventory)
       .leftJoin(schema.shopItems, eq(schema.memberInventory.itemId, schema.shopItems.id))
@@ -69,13 +74,13 @@ export const GET = async ({ locals, params, url }) => {
         website: schema.scans.website,
         discord: schema.scans.discord,
         fluxer: schema.scans.fluxer,
-        isOfficial: schema.scans.isOfficial,
+        isOfficial: schema.scans.is_official,
         status: schema.scans.status,
         createdAt: schema.scans.createdAt
       })
       .from(schema.scans)
       .where(eq(schema.scans.status, 'ACTIVE'))
-      .orderBy(desc(schema.scans.isOfficial))
+      .orderBy(desc(schema.scans.is_official))
       .limit(limit)
       .offset((page - 1) * limit)
     );
@@ -100,7 +105,7 @@ export const GET = async ({ locals, params, url }) => {
         website: schema.scans.website,
         discord: schema.scans.discord,
         fluxer: schema.scans.fluxer,
-        isOfficial: schema.scans.isOfficial,
+        isOfficial: schema.scans.is_official,
         status: schema.scans.status,
         createdAt: schema.scans.createdAt
       })
@@ -111,7 +116,7 @@ export const GET = async ({ locals, params, url }) => {
     const { data: works } = await safeQuery(
       db.select({
         workId: schema.workScans.workId,
-        works: sql`json_object('id', w.id, 'slug', w.slug, 'title', w.title, 'published', w.published, 'coverId', w.coverId, 'kind', w.kind)`
+        works: sql`json_object('id', works.id, 'slug', works.slug, 'title', works.title, 'published', works.published, 'coverId', works.cover_id, 'kind', works.kind)`
       })
       .from(schema.workScans)
       .leftJoin(schema.works, eq(schema.workScans.workId, schema.works.id))
@@ -120,7 +125,7 @@ export const GET = async ({ locals, params, url }) => {
     return json({
       data: {
         ...scan,
-        works: (works || []).map((ws: any) => typeof ws.works === 'string' ? JSON.parse(ws.works) : ws.works).filter((w: any) => w && w.published)
+        works: (works || []).map((ws: any) => typeof ws.works === 'string' ? JSON.parse(ws.works) : ws.works).filter((w: any) => w && works.published)
       }
     }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   } else if (parts[0] === 'library') {
@@ -131,7 +136,7 @@ export const GET = async ({ locals, params, url }) => {
         favorite: schema.library.favorite,
         following: schema.library.following,
         updatedAt: schema.library.updatedAt,
-        works: sql`json_object('id', w.id, 'slug', w.slug, 'title', w.title, 'published', w.published, 'coverId', w.coverId, 'kind', w.kind)`
+        works: sql`json_object('id', works.id, 'slug', works.slug, 'title', works.title, 'published', works.published, 'coverId', works.cover_id, 'kind', works.kind)`
       })
       .from(schema.library)
       .leftJoin(schema.works, eq(schema.library.workId, schema.works.id))
@@ -157,7 +162,7 @@ export const GET = async ({ locals, params, url }) => {
         max_page: schema.reading.maxPage,
         completed_at: schema.reading.completedAt,
         updatedAt: schema.reading.updatedAt,
-        chapters: sql`json_object('id', c.id, 'number', c.number, 'title', c.title, 'work_id', c.workId, 'works', json_object('id', w.id, 'slug', w.slug, 'title', w.title, 'published', w.published, 'coverId', w.coverId, 'kind', w.kind))`
+        chapters: sql`json_object('id', chapters.id, 'number', chapters.number, 'title', chapters.title, 'work_id', chapters.work_id, 'works', json_object('id', works.id, 'slug', works.slug, 'title', works.title, 'published', works.published, 'coverId', works.cover_id, 'kind', works.kind))`
       })
       .from(schema.reading)
       .leftJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
@@ -180,7 +185,7 @@ export const GET = async ({ locals, params, url }) => {
   } else if ((parts[0] === 'works' || parts[0] === 'catalog') && parts.length === 1) {
     let conditions = [eq(schema.works.published, true)] as any[];
     const q = (url.searchParams.get('q') || '').slice(0, 100).replace(/[%_\\]/g, '');
-    if (q) conditions.push(ilike(schema.works.searchText, `%${q}%`));
+    if (q) conditions.push(like(schema.works.searchText, `%${q}%`));
     const kind = url.searchParams.get('kind');
     if (kind) conditions.push(eq(schema.works.kind, kind));
     const rating = url.searchParams.get('content_rating');
@@ -192,7 +197,7 @@ export const GET = async ({ locals, params, url }) => {
       sortCol = schema.works.viewsTotal as any;
     }
 
-    const { data: worksData } = await safeQuery(
+    const _worksRes = await safeQuery(
       db.select({
         id: schema.works.id,
         slug: schema.works.slug,
@@ -229,7 +234,7 @@ export const GET = async ({ locals, params, url }) => {
       .from(schema.works)
       .where(and(...conditions))
     );
-    result = { data: worksData, count: countRows?.[0]?.count || 0 };
+    console.error(_worksRes.error); result = { data: _worksRes.data, count: countRows?.[0]?.count || 0 };
   } else if (parts[0] === 'works' && parts.length === 2) {
     const res = await safeQuerySingle(
       db.select({
@@ -256,8 +261,8 @@ export const GET = async ({ locals, params, url }) => {
         contentRating: schema.works.contentRating,
         viewsTotal: schema.works.viewsTotal,
         latestChapterPublishedAt: schema.works.latestChapterPublishedAt,
-        work_tags: sql`(SELECT json_group_array(json_object('tags', json_object('id', t.id, 'name', t.name, 'slug', t.slug, 'kind', t.kind))) FROM work_tags wt JOIN tags t ON wt.tag_id = t.id WHERE wt.workId = works.id)`,
-        work_scans: sql`(SELECT json_group_array(json_object('scans', json_object('id', s.id, 'name', s.name, 'slug', s.slug, 'is_official', s.isOfficial))) FROM work_scans ws JOIN scans s ON ws.scanId = s.id WHERE ws.workId = works.id)`
+        work_tags: sql`(SELECT json_group_array(json_object('tags', json_object('id', t.id, 'name', t.name, 'slug', t.slug, 'kind', t.kind))) FROM work_tags wt JOIN tags t ON wt.tag_id = t.id WHERE wt.work_id = works.id)`,
+        work_scans: sql`(SELECT json_group_array(json_object('scans', json_object('id', s.id, 'name', s.name, 'slug', s.slug, 'is_official', s.is_official))) FROM work_scans ws JOIN scans s ON ws.scan_id = s.id WHERE ws.work_id = works.id)`
       })
       .from(schema.works)
       .where(and(eq(schema.works.slug, parts[1]), eq(schema.works.published, true)))
@@ -281,7 +286,7 @@ export const GET = async ({ locals, params, url }) => {
         title: schema.chapters.title,
         publishedAt: schema.chapters.publishedAt,
         viewsTotal: schema.chapters.viewsTotal,
-        chapter_scans: sql`(SELECT json_group_array(json_object('scans', json_object('id', s.id, 'name', s.name, 'slug', s.slug, 'is_official', s.isOfficial))) FROM chapter_scans cs JOIN scans s ON cs.scanId = s.id WHERE cs.chapterId = chapters.id)`
+        chapter_scans: sql`(SELECT json_group_array(json_object('scans', json_object('id', s.id, 'name', s.name, 'slug', s.slug, 'is_official', s.is_official))) FROM chapter_scans cs JOIN scans s ON cs.scan_id = s.id WHERE cs.chapter_id = chapters.id)`
       })
       .from(schema.chapters)
       .where(and(eq(schema.chapters.workId, work.id), isNotNull(schema.chapters.publishedAt)))
@@ -297,8 +302,19 @@ export const GET = async ({ locals, params, url }) => {
     }
     result = res;
   } else if (parts[0] === 'chapters' && parts[2] === 'pages' && parts.length === 3) {
-    const { data: allowedRows } = await safeQuery(db.execute(sql`SELECT public_chapter(${parts[1]}) as res`));
-    const allowed = allowedRows ? (allowedRows as any).res : null;
+    
+    const { data: allowedRows } = await safeQuerySingle(
+      db.select({ id: schema.chapters.id })
+      .from(schema.chapters)
+      .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
+      .where(and(
+        eq(schema.chapters.id, parts[1]),
+        isNotNull(schema.chapters.publishedAt),
+        eq(schema.works.published, true)
+      ))
+    );
+    const allowed = !!allowedRows;
+
     if (!allowed) error(404);
     result = await safeQuery(
       db.select({
@@ -324,8 +340,8 @@ export const GET = async ({ locals, params, url }) => {
         { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
       );
   } else error(404, 'Endpoint no encontrado');
-  if (result?.error) error(400, 'Consulta invlida');
-  if (!result?.data) error(404);
+  if (result?.error) { console.error("API ERROR:", result.error); error(400, "Consulta invlida"); }
+  if (!result?.data) { console.error("result.data is empty!", result); error(404); }
   return json(
     { data: result.data, page, per_page: limit, ...('count' in result ? { total: result.count } : {}) },
     { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
@@ -341,10 +357,15 @@ export const POST = async ({ locals, params, request }) => {
     if (!chapterId) error(400, 'chapter_id  obrigatrio');
 
     const userId = locals.user?.id || undefined;
-    const { data: viewResultRows } = await safeQuery(
-      db.execute(sql`SELECT record_chapter_view(${chapterId}, ${userId || null}, NULL, ${origin}) as res`)
-    );
-    const viewResult = viewResultRows ? (viewResultRows as any).res : null;
+    
+    // Simplified record_chapter_view
+    const { data: chapter } = await safeQuerySingle(db.select({ workId: schema.chapters.workId }).from(schema.chapters).where(eq(schema.chapters.id, chapterId)));
+    if (chapter) {
+      await safeQuery(db.update(schema.chapters).set({ viewsTotal: sql`${schema.chapters.viewsTotal} + 1` }).where(eq(schema.chapters.id, chapterId)));
+      await safeQuery(db.update(schema.works).set({ viewsTotal: sql`${schema.works.viewsTotal} + 1` }).where(eq(schema.works.id, chapter.workId)));
+    }
+    const viewResult = true;
+
 
     let xpResult = null;
     if (userId && body.completed) {

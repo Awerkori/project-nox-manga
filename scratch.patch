@@ -1,0 +1,62 @@
+--- src/routes/media/[id]/+server.ts
++++ src/routes/media/[id]/+server.ts
+@@ -1,5 +1,6 @@
+ import { error } from '@sveltejs/kit';
+-import { privileged } from '$lib/server/db';
++import { privileged, db, schema, safeQuerySingle } from '$lib/server/db';
++import { eq } from 'drizzle-orm';
+ import {
+   resolveBotDownloadClient,
+   normalizeBotReference,
+@@ -32,8 +33,10 @@
+     }
+   }
+ 
+-  const db = privileged();
+-  const { data: media } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
++  const supabase = privileged();
++  const { data: media } = await safeQuerySingle(
++    db.select().from(schema.media).where(eq(schema.media.id, params.id))
++  );
+   if (!media || media.storage_ready === false || media.status === 'DELETED') {
+     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
+       status: 404,
+@@ -94,7 +97,7 @@
+ 
+   let body: BodyInit;
+   if (media.provider === 'supabase') {
+-    const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
++    const { data, error: problem } = await supabase.storage.from('nox-media').download(media.provider_key);
+     if (problem || !data) {
+       return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
+         status: 502,
+@@ -112,11 +115,10 @@
+ 
+     // 1. If storage_shard_id is present and botRef is missing or default 'primary', lookup shard definition
+     if (shardId && (!botRef || botRef === 'primary')) {
+-      const { data: shardRow } = await db
+-        .from('storage_shards')
+-        .select('bot_reference')
+-        .eq('id', shardId)
+-        .maybeSingle();
++      const { data: shardRow } = await safeQuerySingle(
++        db.select({ bot_reference: schema.storageShards.botReference })
++        .from(schema.storageShards).where(eq(schema.storageShards.id, shardId))
++      );
+       if (shardRow?.bot_reference) {
+         botRef = shardRow.bot_reference;
+       }
+@@ -150,11 +152,11 @@
+           // Self-heal DB mapping in background
+           const healingUpdate = { bot_reference: altBotRef };
+           if (platform?.context?.waitUntil) {
+             platform.context.waitUntil(
+-              db.from('media').update(healingUpdate).eq('id', media.id)
++              db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id))
+             );
+           } else {
+-            db.from('media').update(healingUpdate).eq('id', media.id).then();
++            db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id)).then();
+           }
+         } catch {
+           console.error('[MEDIA_DOWNLOAD_FAILED]', {

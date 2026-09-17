@@ -2794,7 +2794,7 @@
             return async ({ result, update }) => {
               manageMemberSubmitting = false;
               if (result.type === 'failure') {
-                manageMemberError = result.data?.message || 'Erro ao atualizar membro.';
+                manageMemberError = result.data?.message as string || 'Erro ao atualizar membro.';
               } else if (result.type === 'success') {
                 if (result.data?.requiresConfirmation) {
                   manageMemberWarning = (result.data as any)?.warning;

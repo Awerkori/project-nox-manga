@@ -42,7 +42,7 @@
         name="q"
         value={data.q}
         placeholder="Buscar por ttulo ou autor…"
-        aria-label="Ttulo da obra"
+        aria-label="Título da obra"
       />
     </div>
 
@@ -92,7 +92,7 @@
   {:else}
     <Empty
       title={data.q || data.tag || data.kind
-        ? 'Nenhuma histria com esses filtros.'
+        ? 'Nenhuma história com esses filtros.'
         : 'O catlogo est sendo preparado.'}
       text={data.q || data.tag || data.kind
         ? 'Experimente outro ttulo, gnero ou formato.'

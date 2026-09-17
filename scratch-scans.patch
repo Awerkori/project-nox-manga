@@ -1,0 +1,76 @@
+--- src/routes/scans/+page.server.ts
++++ src/routes/scans/+page.server.ts
+@@ -1,4 +1,6 @@
+ import { safeDbQuery } from '$lib/server/resilience';
++import { db, schema, safeQuery } from '$lib/server/db';
++import { eq, desc, asc, sql } from 'drizzle-orm';
+ 
+ type ScansCache = {
+   timestamp: number;
+@@ -16,33 +18,18 @@
+     };
+   }
+ 
+-  const res = await safeDbQuery(
+-    locals.db
+-      .from('scans')
+-      .select(`
+-        id,
+-        name,
+-        slug,
+-        description,
+-        display_preposition,
+-        logo_id,
+-        banner_id,
+-        website,
+-        discord,
+-        fluxer,
+-        is_official,
+-        status,
+-        created_at,
+-        work_scans(count),
+-        chapter_scans(count),
+-        scan_recruitment_openings(
+-          id,
+-          title,
+-          status,
+-          position:scan_positions(id, name)
+-        )
+-      `)
+-      .eq('status', 'ACTIVE')
+-      .order('is_official', { ascending: false })
+-      .order('name', { ascending: true }),
++  const promise = db.select({
++    id: schema.scans.id,
++    name: schema.scans.name,
++    slug: schema.scans.slug,
++    description: schema.scans.description,
++    display_preposition: schema.scans.displayPreposition,
++    logo_id: schema.scans.logoId,
++    banner_id: schema.scans.bannerId,
++    website: schema.scans.website,
++    discord: schema.scans.discord,
++    fluxer: schema.scans.fluxer,
++    is_official: schema.scans.isOfficial,
++    status: schema.scans.status,
++    created_at: schema.scans.createdAt,
++    worksCount: sql<number>`(SELECT COUNT(*) FROM work_scans WHERE scan_id = scans.id)`,
++    chaptersCount: sql<number>`(SELECT COUNT(*) FROM chapter_scans WHERE scan_id = scans.id)`
++  }).from(schema.scans).where(eq(schema.scans.status, 'ACTIVE')).orderBy(desc(schema.scans.isOfficial), asc(schema.scans.name));
++
++  const res = await safeDbQuery(
++    promise,
+     4000,
+@@ -52,11 +39,11 @@
+   if (scans && scans.length > 0) {
+     const formattedScans = scans.map((s: any) => {
+-      const openVacancies = (s.scan_recruitment_openings || []).filter((o: any) => o.status === 'OPEN');
++      const openVacancies = [];
+       return {
+         ...s,
+-        worksCount: s.work_scans?.[0]?.count ?? 0,
+-        chaptersCount: s.chapter_scans?.[0]?.count ?? 0,
++        worksCount: s.worksCount ?? 0,
++        chaptersCount: s.chaptersCount ?? 0,
+         openings: openVacancies,
+         isRecruiting: openVacancies.length > 0,
