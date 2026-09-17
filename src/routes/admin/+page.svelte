@@ -39,7 +39,7 @@
 </script>
 
 <svelte:head>
-  <title>Visão Geral — Painel de Controle Project Nox</title>
+  <title>Viso Geral — Painel de Controle Project Nox</title>
 </svelte:head>
 
 <div class="editorial-workspace">
@@ -51,9 +51,9 @@
         <span class="eyebrow-sep">·</span>
         <span class="eyebrow-date">{capitalizedToday}</span>
       </div>
-      <h1 class="greeting-heading">Olá, {firstName}</h1>
+      <h1 class="greeting-heading">Ol, {firstName}</h1>
       <p class="greeting-sub">
-        Central de operações: acompanhe a mesa de edição, modere denúncias, gerencie a equipe e monitore o fluxo de importação.
+        Central de operaes: acompanhe a mesa de edio, modere denncias, gerencie a equipe e monitore o fluxo de importao.
       </p>
     </div>
 
@@ -69,32 +69,32 @@
       </a>
       <a href="/admin/reports" class="btn-secondary-action" class:has-reports-alert={data.pendingReportsCount > 0}>
         <Flag size={15} />
-        <span>Denúncias</span>
+        <span>Denncias</span>
         {#if data.pendingReportsCount > 0}
           <span class="reports-header-badge">{data.pendingReportsCount}</span>
         {/if}
       </a>
       <a href="/admin/staff" class="btn-secondary-action">
         <Users size={15} />
-        <span>Gestão da Staff</span>
+        <span>Gesto da Staff</span>
       </a>
     </div>
   </header>
 
-  <!-- 2. "Precisa de Atenção" Triage Section -->
-  <section class="triage-section" aria-label="Itens que precisam de atenção">
+  <!-- 2. "Precisa de Ateno" Triage Section -->
+  <section class="triage-section" aria-label="Itens que precisam de ateno">
     <div class="triage-header">
       <div class="triage-title-group">
         <span class="triage-indicator" class:alert={hasAttentionItems} class:green={!hasAttentionItems}></span>
-        <h2 class="triage-title">Precisa de Atenção</h2>
+        <h2 class="triage-title">Precisa de Ateno</h2>
       </div>
       {#if hasAttentionItems}
-        <span class="triage-counter-tag">Ações prioritárias pendentes</span>
+        <span class="triage-counter-tag">Aes prioritrias pendentes</span>
       {/if}
     </div>
 
     {#if data.metricsUnavailable}
-      <p role="status">Algumas informações estão indisponíveis. Atualize para tentar novamente; “—” indica uma contagem não confirmada.</p>
+      <p role="status">Algumas informaes esto indisponveis. Atualize para tentar novamente; “—” indica uma contagem no confirmada.</p>
     {/if}
     {#if hasAttentionItems}
       <div class="triage-grid">
@@ -105,14 +105,14 @@
             </div>
             <div class="triage-card-body">
               <div class="triage-card-top">
-                <span class="triage-card-badge crimson">Moderação</span>
+                <span class="triage-card-badge crimson">Moderao</span>
                 <span class="triage-card-count">{data.pendingReportsCount}</span>
               </div>
               <strong class="triage-card-title">
-                {data.pendingReportsCount} denúncia{data.pendingReportsCount > 1 ? 's' : ''} pendente{data.pendingReportsCount > 1 ? 's' : ''}
+                {data.pendingReportsCount} denncia{data.pendingReportsCount > 1 ? 's' : ''} pendente{data.pendingReportsCount > 1 ? 's' : ''}
               </strong>
               <p class="triage-card-desc">
-                Conteúdos e comentários sinalizados pela comunidade aguardando revisão.
+                Contedos e comentrios sinalizados pela comunidade aguardando reviso.
               </p>
             </div>
             <div class="triage-card-action crimson">
@@ -133,10 +133,10 @@
                 <span class="triage-card-count">{data.draftsCount}</span>
               </div>
               <strong class="triage-card-title">
-                {data.draftsCount} capítulo{data.draftsCount > 1 ? 's' : ''} em rascunho
+                {data.draftsCount} captulo{data.draftsCount > 1 ? 's' : ''} em rascunho
               </strong>
               <p class="triage-card-desc">
-                Capítulos criados na mesa de edição aguardando upload final e publicação.
+                Captulos criados na mesa de edio aguardando upload final e publicao.
               </p>
             </div>
             <div class="triage-card-action amber">
@@ -155,7 +155,7 @@
         <div class="clear-text">
           <strong class="clear-title">Tudo em ordem na plataforma</strong>
           <p class="clear-desc">
-            Nenhuma denúncia pendente e nenhum rascunho travado na mesa editorial.
+            Nenhuma denncia pendente e nenhum rascunho travado na mesa editorial.
           </p>
         </div>
       </div>
@@ -164,18 +164,18 @@
 
   <!-- 3. Primary Focused Workspace Grid -->
   <div class="workspace-layout">
-    <!-- Left / Primary: Mesa de Edição -->
+    <!-- Left / Primary: Mesa de Edio -->
     <main class="primary-editorial-col">
       <section id="mesa-de-edicao" class="workspace-section">
         <div class="section-title-bar">
           <div>
             <div class="section-title-row">
-              <h2 class="section-heading">Mesa de Edição</h2>
+              <h2 class="section-heading">Mesa de Edio</h2>
               {#if data.draftsCount > 0}
                 <span class="drafts-count-tag">{data.draftsCount} em preparo</span>
               {/if}
             </div>
-            <p class="section-subheading">Capítulos em rascunho aguardando revisão e publicação</p>
+            <p class="section-subheading">Captulos em rascunho aguardando reviso e publicao</p>
           </div>
 
           <a href="/admin/obras" class="section-corner-link">
@@ -211,12 +211,12 @@
                 <div class="draft-row-meta">
                   <div class="draft-title-line">
                     <a href="/admin/obras/{draft.works?.id}" class="draft-work-name">
-                      {draft.works?.title || 'Obra sem título'}
+                      {draft.works?.title || 'Obra sem ttulo'}
                     </a>
                     <span class="status-chip-draft">Rascunho</span>
                   </div>
                   <div class="draft-ch-line">
-                    <span class="draft-ch-number">Capítulo {draft.number}</span>
+                    <span class="draft-ch-number">Captulo {draft.number}</span>
                     {#if draft.title}
                       <span class="draft-ch-subtitle">— {draft.title}</span>
                     {/if}
@@ -246,24 +246,24 @@
             <div class="empty-icon-circle">
               <CheckCircle2 size={28} />
             </div>
-            <h3 class="empty-heading">Mesa de edição limpa</h3>
+            <h3 class="empty-heading">Mesa de edio limpa</h3>
             <p class="empty-paragraph">
-              Não há capítulos pendentes de revisão ou rascunhos abertos no momento.
+              No h captulos pendentes de reviso ou rascunhos abertos no momento.
             </p>
             <a href="/admin/obras" class="btn-empty-action">
               <BookOpen size={14} />
-              <span>Explorar Obras para Novo Capítulo</span>
+              <span>Explorar Obras para Novo Captulo</span>
             </a>
           </div>
         {/if}
       </section>
 
-      <!-- Section: Últimas Publicações -->
+      <!-- Section: ltimas Publicaes -->
       <section class="workspace-section" style="margin-top: 12px;">
         <div class="section-title-bar">
           <div>
-            <h2 class="section-heading">Últimas Publicações</h2>
-            <p class="section-subheading">Capítulos recém-lançados no ar</p>
+            <h2 class="section-heading">ltimas Publicaes</h2>
+            <p class="section-subheading">Captulos recm-lanados no ar</p>
           </div>
         </div>
 
@@ -273,7 +273,7 @@
               <div class="pub-row">
                 <div class="pub-main-info">
                   <span class="pub-work">{pub.works?.title}</span>
-                  <span class="pub-ch">Capítulo {pub.number}</span>
+                  <span class="pub-ch">Captulo {pub.number}</span>
                   {#if pub.publishedAt}
                     <span class="pub-time">{relativeTime(pub.publishedAt)}</span>
                   {/if}
@@ -282,7 +282,7 @@
                 <a
                   href="/admin/obras/{pub.works?.id}/capitulos/{pub.id}"
                   class="btn-review-pub"
-                  title="Revisar capítulo publicado"
+                  title="Revisar captulo publicado"
                 >
                   <span>Revisar</span>
                 </a>
@@ -290,7 +290,7 @@
             {/each}
           </div>
         {:else}
-          <p class="empty-state-hint">Nenhum capítulo publicado recentemente.</p>
+          <p class="empty-state-hint">Nenhum captulo publicado recentemente.</p>
         {/if}
       </section>
     </main>
@@ -302,7 +302,7 @@
         <div class="section-title-bar">
           <div>
             <h2 class="section-heading">Resumo Operacional</h2>
-            <p class="section-subheading">Métricas chave da plataforma</p>
+            <p class="section-subheading">Mtricas chave da plataforma</p>
           </div>
         </div>
 
@@ -312,7 +312,7 @@
               <span class="stat-icon-wrap gold">
                 <BookOpen size={16} />
               </span>
-              <span class="stat-trend">Catálogo</span>
+              <span class="stat-trend">Catlogo</span>
             </div>
             <strong class="stat-value">{data.works ?? '—'}</strong>
             <span class="stat-label">Obras Registradas</span>
@@ -323,10 +323,10 @@
               <span class="stat-icon-wrap purple">
                 <Layers size={16} />
               </span>
-              <span class="stat-trend">Público</span>
+              <span class="stat-trend">Pblico</span>
             </div>
             <strong class="stat-value">{data.chapters ?? '—'}</strong>
-            <span class="stat-label">Capítulos Publicados</span>
+            <span class="stat-label">Captulos Publicados</span>
           </div>
 
           <a href="/admin/staff" class="stat-card">
@@ -346,7 +346,7 @@
                 <Activity size={16} />
               </span>
               <span class="stat-trend" class:active-pulse={data.importerActiveCount > 0}>
-                {data.importerActiveCount == null ? 'Sem dados' : data.importerActiveCount > 0 ? 'Com pendências' : 'Fila vazia'}
+                {data.importerActiveCount == null ? 'Sem dados' : data.importerActiveCount > 0 ? 'Com pendncias' : 'Fila vazia'}
               </span>
             </div>
             <strong class="stat-value">{data.importerActiveCount ?? '—'}</strong>
@@ -397,12 +397,12 @@
         </section>
       {/if}
 
-      <!-- Section: Atalhos Rápidos -->
+      <!-- Section: Atalhos Rpidos -->
       <section class="workspace-section" style="margin-top: 12px;">
         <div class="section-title-bar">
           <div>
             <h2 class="section-heading">Atalhos do Sistema</h2>
-            <p class="section-subheading">Acesso rápido aos módulos administrativos</p>
+            <p class="section-subheading">Acesso rpido aos mdulos administrativos</p>
           </div>
         </div>
 
@@ -412,8 +412,8 @@
               <Tags size={15} />
             </div>
             <div class="shortcut-info">
-              <span class="shortcut-name">Gêneros e Tags</span>
-              <span class="shortcut-desc">Gerencie taxonomia e classificações</span>
+              <span class="shortcut-name">Gneros e Tags</span>
+              <span class="shortcut-desc">Gerencie taxonomia e classificaes</span>
             </div>
             <span class="shortcut-arrow">
               <ArrowRight size={14} />
@@ -426,7 +426,7 @@
             </div>
             <div class="shortcut-info">
               <span class="shortcut-name">Membros & Leitores</span>
-              <span class="shortcut-desc">Diretório de usuários e suspensões</span>
+              <span class="shortcut-desc">Diretrio de usurios e suspenses</span>
             </div>
             <span class="shortcut-arrow">
               <ArrowRight size={14} />
@@ -438,8 +438,8 @@
               <Settings size={15} />
             </div>
             <div class="shortcut-info">
-              <span class="shortcut-name">Configurações Gerais</span>
-              <span class="shortcut-desc">Regras de negócio e manutenções</span>
+              <span class="shortcut-name">Configuraes Gerais</span>
+              <span class="shortcut-desc">Regras de negcio e manutenes</span>
             </div>
             <span class="shortcut-arrow">
               <ArrowRight size={14} />
@@ -589,7 +589,7 @@
     line-height: 1.2;
   }
 
-  /* 2. Precisa de Atenção (Triage) Section */
+  /* 2. Precisa de Ateno (Triage) Section */
   .triage-section {
     display: flex;
     flex-direction: column;
@@ -926,7 +926,7 @@
     color: #ffffff;
   }
 
-  /* Mesa de Edição: Clean List */
+  /* Mesa de Edio: Clean List */
   .clean-drafts-list {
     display: flex;
     flex-direction: column;

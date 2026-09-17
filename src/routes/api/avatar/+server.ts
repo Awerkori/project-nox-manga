@@ -7,7 +7,7 @@ import { storeImage, RateLimitError } from '$lib/server/media';
 
 export const POST = async ({ request, locals }) => {
   const userId = locals.user?.id;
-  if (!userId) error(401, 'Não autorizado');
+  if (!userId) error(401, 'No autorizado');
 
   const formData = await request.formData();
   const file = formData.get('file');
@@ -28,7 +28,7 @@ export const POST = async ({ request, locals }) => {
   } catch (err) {
     if (err instanceof RateLimitError) {
       return json(
-        { message: 'Muitas requisições. Aguarde alguns instantes.', retryAfter: err.retryAfter },
+        { message: 'Muitas requisies. Aguarde alguns instantes.', retryAfter: err.retryAfter },
         { status: 429, headers: { 'retry-after': String(err.retryAfter) } }
       );
     }
@@ -38,14 +38,14 @@ export const POST = async ({ request, locals }) => {
 
   const { error: problem } = await safeQuery(
     db.update(schema.members)
-      .set({avatarId: image.id, avatarCrop: crop})
+      .set({avatarId: image.id, avatarCrop: JSON.stringify(crop)})
       .where(eq(schema.members.id, userId))
   );
 
   if (problem) {
     console.error('API_AVATAR_MEMBER_UPDATE_ERROR:', problem);
-    error(500, 'Não foi possível atualizar seu avatar.');
+    error(500, 'No foi possvel atualizar seu avatar.');
   }
 
-  return json({...image, avatarCrop: crop});
+  return json({...image, avatarCrop: JSON.stringify(crop)});
 };

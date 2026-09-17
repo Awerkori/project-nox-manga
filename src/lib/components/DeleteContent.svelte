@@ -26,12 +26,12 @@
 </script>
 
 <details class="panel" style="margin-top:28px">
-  <summary>Remoção definitiva — somente admin</summary>
+  <summary>Remoo definitiva — somente admin</summary>
   <p class="small">
     Excluir {kind === 'work'
-      ? 'a obra remove também seus capítulos, comentários e progressos'
-      : 'o capítulo remove também seus comentários e progressos'}. Esta ação não pode ser desfeita pelo
-    painel. Os arquivos originais da central da staff não serão alterados.
+      ? 'a obra remove tambm seus captulos, comentrios e progressos'
+      : 'o captulo remove tambm seus comentrios e progressos'}. Esta ao no pode ser desfeita pelo
+    painel. Os arquivos originais da central da staff no sero alterados.
   </p>
   <form onsubmit={remove}>
     <label class="field"

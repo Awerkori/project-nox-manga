@@ -30,10 +30,10 @@
 </script>
 
 <svelte:head>
-  <title>Scans & Grupos de Tradução | Project Nox</title>
+  <title>Scans & Grupos de Traduo | Project Nox</title>
   <meta
     name="description"
-    content="Conheça os grupos parceiros e a equipe editorial oficial responsável pelas traduções e lançamentos no Project Nox."
+    content="Conhea os grupos parceiros e a equipe editorial oficial responsvel pelas tradues e lanamentos no Project Nox."
   />
 </svelte:head>
 
@@ -48,7 +48,7 @@
         </div>
         <h1 class="hero-title">Scans & Grupos Parceiros</h1>
         <p class="hero-subtitle">
-          Descubra as equipes editoriais e os grupos independentes que trazem as melhores traduções para a comunidade do Project Nox.
+          Descubra as equipes editoriais e os grupos independentes que trazem as melhores tradues para a comunidade do Project Nox.
         </p>
 
         <!-- Search Bar -->
@@ -57,7 +57,7 @@
           <input
             type="text"
             bind:value={searchQuery}
-            placeholder="Buscar por nome, descrição ou vaga aberta..."
+            placeholder="Buscar por nome, descrio ou vaga aberta..."
             class="search-input"
           />
           {#if searchQuery}
@@ -112,7 +112,7 @@
           </div>
           <h2 class="cta-title">Tem um grupo de scan?</h2>
           <p class="cta-text">
-            Publique suas obras com atribuição real de direitos, página dedicada, métricas e sistema próprio de recrutamento.
+            Publique suas obras com atribuio real de direitos, pgina dedicada, mtricas e sistema prprio de recrutamento.
           </p>
           <a href="/scan" class="cta-button">
             <span>Acessar Painel de Scan</span>
@@ -179,7 +179,7 @@
                     <a href="/scans/{scan.slug}">{scan.name}</a>
                   </h3>
                   <p class="scan-desc">
-                    {scan.description || (scan.isOfficial ? "Scan oficial e núcleo editorial do Project Nox." : "Grupo parceiro de tradução e edição no Project Nox.")}
+                    {scan.description || (scan.isOfficial ? "Scan oficial e ncleo editorial do Project Nox." : "Grupo parceiro de traduo e edio no Project Nox.")}
                   </p>
                 </div>
 
@@ -203,14 +203,14 @@
 
                 <!-- Stats Bar -->
                 <div class="stats-row">
-                  <div class="stat-item" title="Total de obras com participação desta scan">
+                  <div class="stat-item" title="Total de obras com participao desta scan">
                     <BookOpen size={14} />
                     <span><strong>{scan.worksCount}</strong> {scan.worksCount === 1 ? "obra" : "obras"}</span>
                   </div>
                   <div class="stat-dot">·</div>
-                  <div class="stat-item" title="Total de capítulos lançados">
+                  <div class="stat-item" title="Total de captulos lanados">
                     <Layers size={14} />
-                    <span><strong>{scan.chaptersCount}</strong> {scan.chaptersCount === 1 ? "capítulo" : "capítulos"}</span>
+                    <span><strong>{scan.chaptersCount}</strong> {scan.chaptersCount === 1 ? "captulo" : "captulos"}</span>
                   </div>
                 </div>
 
@@ -236,7 +236,7 @@
 
                   <div class="action-buttons">
                     {#if scan.isRecruiting}
-                      <a href="/scans/{scan.slug}#recrutamento" class="btn-apply" title="Ver vagas disponíveis">
+                      <a href="/scans/{scan.slug}#recrutamento" class="btn-apply" title="Ver vagas disponveis">
                         <UserPlus size={13} />
                         <span>Candidatar-se</span>
                       </a>
@@ -254,8 +254,8 @@
       {:else if data.loadError}
         <div class="empty-state degraded-state" role="alert">
           <BookOpen size={42} />
-          <h3>Não foi possível carregar as scans agora</h3>
-          <p>As equipes e grupos parceiros continuam registrados na plataforma, mas ocorreu uma lentidão temporária na conexão. Tente recarregar.</p>
+          <h3>No foi possvel carregar as scans agora</h3>
+          <p>As equipes e grupos parceiros continuam registrados na plataforma, mas ocorreu uma lentido temporria na conexo. Tente recarregar.</p>
           <button type="button" class="btn-retry" onclick={() => window.location.reload()} style="margin-top: 1rem; padding: 0.5rem 1rem; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
             Recarregar scans
           </button>

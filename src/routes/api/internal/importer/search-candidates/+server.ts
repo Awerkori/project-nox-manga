@@ -4,7 +4,7 @@ import { eq, or, and, like } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
-    return json({ error: 'Não autorizado' }, { status: 403 });
+    return json({ error: 'No autorizado' }, { status: 403 });
   }
 
   const q = url.searchParams.get('q')?.trim() || '';

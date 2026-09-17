@@ -62,7 +62,7 @@
   const COLOR_PRESETS = [
     { name: 'Cyber Neon', gradient: 'linear-gradient(135deg, #06b6d4, #a855f7)', color: '#06b6d4' },
     { name: 'Ouro Real', gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#fbbf24' },
-    { name: 'Void Cósmico', gradient: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#a855f7' },
+    { name: 'Void Csmico', gradient: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#a855f7' },
     { name: 'Rubi Carmim', gradient: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#ef4444' },
     { name: 'Esmeralda', gradient: 'linear-gradient(135deg, #10b981, #059669)', color: '#10b981' },
     { name: 'Gelo Eterno', gradient: 'linear-gradient(135deg, #38bdf8, #818cf8)', color: '#38bdf8' }
@@ -127,7 +127,7 @@
 
       if (!res.ok) {
         const result = await res.json().catch(() => ({}));
-        throw new Error(result.message || result.error || 'Falha no upload do arquivo.');
+        throw new Error((result as any).message || result.error || 'Falha no upload do arquivo.');
       }
 
       const result = await res.json();
@@ -147,7 +147,7 @@
         }
       }
     } catch (err: any) {
-      uploadError = err.message || 'Erro ao processar o upload.';
+      uploadError = (err as any).message || 'Erro ao processar o upload.';
     } finally {
       uploading = false;
       input.value = '';
@@ -224,7 +224,7 @@
     editingItem = null;
     slugTouched = true;
     formId = `${it.id}_copy`;
-    formName = `${it.name} (Cópia)`;
+    formName = `${it.name} (Cpia)`;
     formDescription = it.description || '';
     formKind = it.kind;
     formRarity = it.rarity || 'COMUM';
@@ -237,14 +237,14 @@
     formStyleJson = JSON.stringify(it.styleData || {}, null, 2);
     uploadError = '';
     showModal = true;
-    notice = 'Item duplicado no formulário. Ajuste os campos e clique em Salvar.';
+    notice = 'Item duplicado no formulrio. Ajuste os campos e clique em Salvar.';
     noticeType = 'info';
   }
 
   async function handleSaveItem(e: SubmitEvent) {
     e.preventDefault();
     if (!formId.trim() || !formName.trim()) {
-      notice = 'ID e Nome são obrigatórios.';
+      notice = 'ID e Nome so obrigatrios.';
       noticeType = 'error';
       return;
     }
@@ -253,7 +253,7 @@
     try {
       parsedStyle = JSON.parse(formStyleJson);
     } catch {
-      notice = 'O campo Estilo (JSON) contém formato inválido.';
+      notice = 'O campo Estilo (JSON) contm formato invlido.';
       noticeType = 'error';
       return;
     }
@@ -280,10 +280,10 @@
 
       await invalidateAll();
       showModal = false;
-      notice = `Cosmético "${formName}" salvo com sucesso!`;
+      notice = `Cosmtico "${formName}" salvo com sucesso!`;
       noticeType = 'success';
     } catch (err: any) {
-      notice = err.message || 'Erro ao salvar item da loja.';
+      notice = (err as any).message || 'Erro ao salvar item da loja.';
       noticeType = 'error';
     } finally {
       busy = false;
@@ -303,7 +303,7 @@
       notice = isNowActive ? `Item "${it.name}" reativado!` : `Item "${it.name}" arquivado.`;
       noticeType = 'success';
     } catch (err: any) {
-      notice = err.message || 'Erro ao alterar status do item.';
+      notice = (err as any).message || 'Erro ao alterar status do item.';
       noticeType = 'error';
     } finally {
       busy = false;
@@ -313,7 +313,7 @@
   async function handleDelete(it: any) {
     if (it.owners_count > 0) {
       const ok = confirm(
-        `Este item pertence ao inventário de ${it.owners_count} usuário(s). Por segurança, ele será arquivado em vez de excluído para preservar o inventário dos leitores. Deseja arquivar?`
+        `Este item pertence ao inventrio de ${it.owners_count} usurio(s). Por segurana, ele ser arquivado em vez de excludo para preservar o inventrio dos leitores. Deseja arquivar?`
       );
       if (!ok) return;
     } else {
@@ -325,10 +325,10 @@
     try {
       const res = await action('editor', 'delete_shop_item', { id: it.id });
       await invalidateAll();
-      notice = res.message || `Item "${it.name}" processado com sucesso.`;
+      notice = (res as any).message || `Item "${it.name}" processado com sucesso.`;
       noticeType = 'success';
     } catch (err: any) {
-      notice = err.message || 'Erro ao excluir item.';
+      notice = (err as any).message || 'Erro ao excluir item.';
       noticeType = 'error';
     } finally {
       busy = false;
@@ -337,22 +337,22 @@
 </script>
 
 <svelte:head>
-  <title>Gestão da Loja de Cosméticos — Project Nox Admin</title>
+  <title>Gesto da Loja de Cosmticos — Project Nox Admin</title>
 </svelte:head>
 
 <div class="admin-page">
   <header class="page-header">
     <div class="header-left">
-      <span class="badge-mini">CATÁLOGO & ECONOMIA</span>
-      <h1 class="page-title">Gestão da Loja de Cosméticos</h1>
+      <span class="badge-mini">CATLOGO & ECONOMIA</span>
+      <h1 class="page-title">Gesto da Loja de Cosmticos</h1>
       <p class="page-desc">
-        Configure molduras, títulos, cores de nome e banners disponíveis para os leitores desbloquearem com XP.
+        Configure molduras, ttulos, cores de nome e banners disponveis para os leitores desbloquearem com XP.
       </p>
     </div>
     <div class="header-right">
       <button class="btn-primary" onclick={openCreateModal}>
         <Plus size={16} />
-        <span>Novo Cosmético</span>
+        <span>Novo Cosmtico</span>
       </button>
     </div>
   </header>
@@ -370,7 +370,7 @@
       <Search size={16} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar cosmético por nome ou ID…"
+        placeholder="Buscar cosmtico por nome ou ID…"
         bind:value={search}
         class="search-input"
       />
@@ -396,7 +396,7 @@
         class:active={kindFilter === 'COMMENT_BANNER'}
         onclick={() => (kindFilter = 'COMMENT_BANNER')}
       >
-        Banners Comentários ({data.items.filter((i: any) => i.kind === 'COMMENT_BANNER').length})
+        Banners Comentrios ({data.items.filter((i: any) => i.kind === 'COMMENT_BANNER').length})
       </button>
       <button
         class="filter-chip"
@@ -410,7 +410,7 @@
         class:active={kindFilter === 'TITLE'}
         onclick={() => (kindFilter = 'TITLE')}
       >
-        Títulos ({data.items.filter((i: any) => i.kind === 'TITLE').length})
+        Ttulos ({data.items.filter((i: any) => i.kind === 'TITLE').length})
       </button>
       <button
         class="filter-chip"
@@ -488,17 +488,17 @@
             <span class="item-id">{item.id}</span>
           </div>
 
-          <p class="item-desc">{item.description || 'Sem descrição cadastrada.'}</p>
+          <p class="item-desc">{item.description || 'Sem descrio cadastrada.'}</p>
 
           <div class="item-stats-row">
-            <div class="stat-pill xp" title="Preço em XP">
+            <div class="stat-pill xp" title="Preo em XP">
               <Sparkles size={13} />
               <span>{formatXp(item.priceXp)} XP</span>
             </div>
-            <div class="stat-pill lvl" title="Nível mínimo requerido">
+            <div class="stat-pill lvl" title="Nvel mnimo requerido">
               <span>Nv. {item.minLevel}</span>
             </div>
-            <div class="stat-pill owners" title="Usuários que possuem no inventário">
+            <div class="stat-pill owners" title="Usurios que possuem no inventrio">
               <Users size={12} />
               <span>{item.owners_count}</span>
             </div>
@@ -507,17 +507,17 @@
 
         <!-- Footer Actions -->
         <div class="item-card-footer">
-          <button class="btn-card-action edit" onclick={() => openEditModal(item)} title="Editar cosmético">
+          <button class="btn-card-action edit" onclick={() => openEditModal(item)} title="Editar cosmtico">
             <Edit3 size={14} />
             <span>Editar</span>
           </button>
-          <button class="btn-card-action duplicate" onclick={() => duplicateItem(item)} title="Duplicar cosmético">
+          <button class="btn-card-action duplicate" onclick={() => duplicateItem(item)} title="Duplicar cosmtico">
             <Copy size={14} />
           </button>
           <button
             class="btn-card-action archive"
             onclick={() => toggleArchive(item)}
-            title={isArchived ? 'Reativar cosmético na loja' : 'Arquivar cosmético'}
+            title={isArchived ? 'Reativar cosmtico na loja' : 'Arquivar cosmtico'}
           >
             {#if isArchived}
               <RotateCcw size={14} />
@@ -525,7 +525,7 @@
               <Archive size={14} />
             {/if}
           </button>
-          <button class="btn-card-action delete" onclick={() => handleDelete(item)} title="Excluir cosmético">
+          <button class="btn-card-action delete" onclick={() => handleDelete(item)} title="Excluir cosmtico">
             <Trash2 size={14} />
           </button>
         </div>
@@ -535,7 +535,7 @@
     {#if !filteredItems.length}
       <div class="empty-state">
         <ShoppingBag size={40} class="empty-icon" />
-        <p class="empty-text">Nenhum cosmético encontrado com os filtros selecionados.</p>
+        <p class="empty-text">Nenhum cosmtico encontrado com os filtros selecionados.</p>
       </div>
     {/if}
   </div>
@@ -545,7 +545,7 @@
     <div class="modal-backdrop" onclick={() => (showModal = false)}>
       <div class="modal-card" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title">{editingItem ? 'Editar Cosmético' : 'Novo Item Cosmético'}</h2>
+          <h2 class="modal-title">{editingItem ? 'Editar Cosmtico' : 'Novo Item Cosmtico'}</h2>
           <button class="btn-close-modal" onclick={() => (showModal = false)}>
             <X size={18} />
           </button>
@@ -555,7 +555,7 @@
           <!-- Live Preview Stage in Modal -->
           <div class="modal-preview-stage">
             <div class="preview-stage-header-row">
-              <span class="preview-stage-label">PRÉVIA EM TEMPO REAL</span>
+              <span class="preview-stage-label">PRVIA EM TEMPO REAL</span>
               {#if formIsAnimated}
                 <span class="anim-glow-badge">✨ GIF Animado Ativo</span>
               {/if}
@@ -571,9 +571,9 @@
                   size={80}
                 />
                 <div class="avatar-preview-meta">
-                  <span class="avatar-preview-name">{formName || 'Moldura Cósmica'}</span>
+                  <span class="avatar-preview-name">{formName || 'Moldura Csmica'}</span>
                   <span class="avatar-preview-hint">
-                    {formAssetUrl ? '✓ Renderizada via asset de imagem/GIF' : 'Moldura clássica baseada em CSS'}
+                    {formAssetUrl ? '✓ Renderizada via asset de imagem/GIF' : 'Moldura clssica baseada em CSS'}
                   </span>
                 </div>
               </div>
@@ -594,7 +594,7 @@
                       <strong>Leitor Nox</strong>
                       <span class="comment-tag">VIP</span>
                     </div>
-                    <p class="comment-preview-text">Que capítulo incrível! Traços e efeitos sensacionais.</p>
+                    <p class="comment-preview-text">Que captulo incrvel! Traos e efeitos sensacionais.</p>
                   </div>
                 </div>
               </div>
@@ -629,9 +629,9 @@
               <div class="modal-title-preview-box">
                 <span class="preview-title-badge" style="color: {parseStyle(formStyleJson).color || '#dfc28d'}">
                   <Crown size={15} />
-                  <span>{formName || 'Título Cósmico'}</span>
+                  <span>{formName || 'Ttulo Csmico'}</span>
                 </span>
-                <span class="title-preview-sub">Exibido com honra no perfil e comentários</span>
+                <span class="title-preview-sub">Exibido com honra no perfil e comentrios</span>
               </div>
 
             {:else if formKind === 'BADGE'}
@@ -641,7 +641,7 @@
                 {:else}
                   <Award size={36} class="modal-badge-icon" />
                 {/if}
-                <span class="modal-badge-label">{formName || 'Emblema Cósmico'}</span>
+                <span class="modal-badge-label">{formName || 'Emblema Csmico'}</span>
               </div>
             {/if}
           </div>
@@ -649,7 +649,7 @@
           <!-- Basic Info -->
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="item-name" class="form-label">Nome de Exibição *</label>
+              <label for="item-name" class="form-label">Nome de Exibio *</label>
               <input
                 id="item-name"
                 type="text"
@@ -662,7 +662,7 @@
             </div>
             <div class="form-group flex-1">
               <label for="item-id" class="form-label">
-                ID Único (slug) *
+                ID nico (slug) *
                 {#if !slugTouched && !editingItem}
                   <span class="auto-slug-badge">auto-gerado</span>
                 {/if}
@@ -681,13 +681,13 @@
           </div>
 
           <div class="form-group">
-            <label for="item-desc" class="form-label">Descrição Cosmética</label>
+            <label for="item-desc" class="form-label">Descrio Cosmtica</label>
             <textarea
               id="item-desc"
               rows={2}
               class="form-textarea"
               bind:value={formDescription}
-              placeholder="Explique o tema e efeito visual do cosmético…"
+              placeholder="Explique o tema e efeito visual do cosmtico…"
             ></textarea>
           </div>
 
@@ -696,9 +696,9 @@
               <label for="item-kind" class="form-label">Categoria de Slot</label>
               <select id="item-kind" class="form-select" bind:value={formKind}>
                 <option value="AVATAR_FRAME">Moldura de Avatar</option>
-                <option value="COMMENT_BANNER">Banner de Comentário</option>
+                <option value="COMMENT_BANNER">Banner de Comentrio</option>
                 <option value="NAME_COLOR">Cor de Nome</option>
-                <option value="TITLE">Título Cósmico</option>
+                <option value="TITLE">Ttulo Csmico</option>
                 <option value="BADGE">Emblema / Medalha</option>
               </select>
             </div>
@@ -709,16 +709,16 @@
                 <option value="COMUM">Comum (100–300 XP)</option>
                 <option value="INCOMUM">Incomum (350–600 XP)</option>
                 <option value="RARA">Rara (700–1.200 XP)</option>
-                <option value="EPICA">Épica (1.300–2.200 XP)</option>
-                <option value="LENDARIA">Lendária (2.500–4.000 XP)</option>
-                <option value="MITICA">Mítica (5.000+ XP)</option>
+                <option value="EPICA">pica (1.300–2.200 XP)</option>
+                <option value="LENDARIA">Lendria (2.500–4.000 XP)</option>
+                <option value="MITICA">Mtica (5.000+ XP)</option>
               </select>
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="item-price" class="form-label">Preço em XP</label>
+              <label for="item-price" class="form-label">Preo em XP</label>
               <input
                 id="item-price"
                 type="number"
@@ -730,7 +730,7 @@
               />
             </div>
             <div class="form-group flex-1">
-              <label for="item-min-level" class="form-label">Nível Mínimo Requerido</label>
+              <label for="item-min-level" class="form-label">Nvel Mnimo Requerido</label>
               <input
                 id="item-min-level"
                 type="number"
@@ -745,7 +745,7 @@
           <!-- Direct Image / GIF Uploader Zone -->
           <div class="uploader-box">
             <div class="uploader-header">
-              <label class="form-label">Upload de Imagem ou GIF (Molduras, Banners e Ícones)</label>
+              <label class="form-label">Upload de Imagem ou GIF (Molduras, Banners e cones)</label>
               {#if formAssetUrl}
                 <button
                   type="button"
@@ -771,7 +771,7 @@
                 {#if uploading}
                   <Loader2 size={24} class="spin dropzone-icon" />
                   <div class="dropzone-text-group">
-                    <strong class="dropzone-text">Enviando e validando animação…</strong>
+                    <strong class="dropzone-text">Enviando e validando animao…</strong>
                     <span class="dropzone-sub">Processando arquivo no servidor</span>
                   </div>
                 {:else if formAssetUrl}
@@ -785,7 +785,7 @@
                   <Upload size={24} class="dropzone-icon" />
                   <div class="dropzone-text-group">
                     <strong class="dropzone-text">Clique para selecionar imagem ou GIF</strong>
-                    <span class="dropzone-sub">Suporta GIF animado (frames preservados), WebP, PNG e JPG (até 50MB)</span>
+                    <span class="dropzone-sub">Suporta GIF animado (frames preservados), WebP, PNG e JPG (at 50MB)</span>
                   </div>
                 {/if}
               </label>
@@ -800,7 +800,7 @@
           {#if formKind === 'NAME_COLOR'}
             <div class="color-presets-section">
               <div class="presets-header">
-                <span class="form-label">Predefinições Rápidas de Gradiente</span>
+                <span class="form-label">Predefinies Rpidas de Gradiente</span>
               </div>
               <div class="preset-chips-wrap">
                 {#each COLOR_PRESETS as preset}
@@ -822,13 +822,13 @@
             <summary class="advanced-summary">
               <span class="summary-left">
                 <Layers size={14} />
-                <span>Configurações Avançadas (JSON CSS, Ordem & Status)</span>
+                <span>Configuraes Avanadas (JSON CSS, Ordem & Status)</span>
               </span>
             </summary>
             <div class="advanced-body">
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <label for="item-order" class="form-label">Ordem de Exibição</label>
+                  <label for="item-order" class="form-label">Ordem de Exibio</label>
                   <input
                     id="item-order"
                     type="number"
@@ -839,7 +839,7 @@
                 <div class="form-group flex-1">
                   <label for="item-status" class="form-label">Status na Loja</label>
                   <select id="item-status" class="form-select" bind:value={formStatus}>
-                    <option value="ACTIVE">Ativo (Visível na Loja)</option>
+                    <option value="ACTIVE">Ativo (Visvel na Loja)</option>
                     <option value="DRAFT">Rascunho (Oculto)</option>
                     <option value="ARCHIVED">Arquivado</option>
                   </select>
@@ -871,7 +871,7 @@
               <div class="form-row items-center">
                 <label class="checkbox-label">
                   <input type="checkbox" class="form-checkbox" bind:checked={formIsAnimated} />
-                  <span>Sinalizar como Cosmético Animado</span>
+                  <span>Sinalizar como Cosmtico Animado</span>
                 </label>
               </div>
             </div>
@@ -892,7 +892,7 @@
                 <span>Salvando…</span>
               {:else}
                 <CheckCircle2 size={16} />
-                <span>{editingItem ? 'Salvar Alterações' : 'Criar Cosmético'}</span>
+                <span>{editingItem ? 'Salvar Alteraes' : 'Criar Cosmtico'}</span>
               {/if}
             </button>
           </div>

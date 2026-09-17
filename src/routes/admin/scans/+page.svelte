@@ -60,15 +60,15 @@
 
   // Counters
   let pendingPartnersCount = $derived(
-    (data.partnerRequests || []).filter((r: any) => r.status === 'PENDING').length
+    (data.partnerRequests || [] || []).filter((r: any) => r.status === 'PENDING').length
   );
   let pendingProjectsCount = $derived(
-    (data.projectRequests || []).filter((r: any) => r.status === 'PENDING').length
+    (data.projectRequests || [] || []).filter((r: any) => r.status === 'PENDING').length
   );
 
   // Filtered lists
   let filteredPartners = $derived(
-    (data.partnerRequests || []).filter((r: any) => {
+    (data.partnerRequests || [] || []).filter((r: any) => {
       const q = search.toLowerCase();
       const matchesSearch =
         r.scanName.toLowerCase().includes(q) ||
@@ -90,7 +90,7 @@
           (log.scanName || '').toLowerCase().includes(q) ||
           (log.action || '').toLowerCase().includes(q) ||
           (log.reason || '').toLowerCase().includes(q) ||
-          (log.admin?.username || '').toLowerCase().includes(q)
+          ((log as any).admin?.username || '').toLowerCase().includes(q)
         );
       }
       return true;
@@ -98,7 +98,7 @@
   );
 
   let filteredProjects = $derived(
-    (data.projectRequests || []).filter((r: any) => {
+    (data.projectRequests || [] || []).filter((r: any) => {
       const q = search.toLowerCase();
       const matchesSearch =
         (r.works?.title || '').toLowerCase().includes(q) ||
@@ -171,7 +171,7 @@
   async function handleSaveScan(e: SubmitEvent) {
     e.preventDefault();
     if (!formName.trim() || !formSlug.trim()) {
-      notice = 'Nome e slug são obrigatórios.';
+      notice = 'Nome e slug so obrigatrios.';
       noticeType = 'error';
       return;
     }
@@ -188,7 +188,7 @@
         website: formWebsite.trim(),
         discord: formDiscord.trim(),
         status: formStatus,
-        is_official: formIsOfficial
+        isOfficial: formIsOfficial
       });
 
       await invalidateAll();
@@ -196,7 +196,7 @@
       notice = `Scan "${formName}" salva com sucesso.`;
       noticeType = 'success';
     } catch (err: any) {
-      notice = err.message || 'Erro ao salvar scan.';
+      notice = (err as any).message || 'Erro ao salvar scan.';
       noticeType = 'error';
     } finally {
       busy = false;
@@ -205,12 +205,12 @@
 
   async function handleDeleteScan(scan: any) {
     if (scan.isOfficial) {
-      alert('A scan oficial Project Nox não pode ser excluída.');
+      alert('A scan oficial Project Nox no pode ser excluda.');
       return;
     }
 
     const confirmPrompt = confirm(
-      `Tem certeza que deseja excluir a scan "${scan.name}"? As obras e capítulos associados não serão apagados, mas perderão a atribuição a esta scan.`
+      `Tem certeza que deseja excluir a scan "${scan.name}"? As obras e captulos associados no sero apagados, mas perdero a atribuio a esta scan.`
     );
     if (!confirmPrompt) return;
 
@@ -221,7 +221,7 @@
       notice = `Scan "${scan.name}" removida com sucesso.`;
       noticeType = 'success';
     } catch (err: any) {
-      notice = err.message || 'Erro ao remover scan.';
+      notice = (err as any).message || 'Erro ao remover scan.';
       noticeType = 'error';
     } finally {
       busy = false;
@@ -230,14 +230,14 @@
 </script>
 
 <svelte:head>
-  <title>Gestão Global de Scans — Project Nox Admin</title>
+  <title>Gesto Global de Scans — Project Nox Admin</title>
 </svelte:head>
 
 <div class="admin-page">
   <header class="page-header">
     <div class="header-left">
-      <span class="badge-mini">ADMINISTRAÇÃO GLOBAL</span>
-      <h1 class="page-title">Gestão Global de Scans</h1>
+      <span class="badge-mini">ADMINISTRAO GLOBAL</span>
+      <h1 class="page-title">Gesto Global de Scans</h1>
       <p class="page-desc">
         Administre, audite e controle as Scans cadastradas no Project Nox.
       </p>
@@ -289,7 +289,7 @@
       onclick={() => (activeSection = 'project_requests')}
     >
       <BookOpen size={16} />
-      <span>Solicitações de Projetos</span>
+      <span>Solicitaes de Projetos</span>
       {#if pendingProjectsCount > 0}
         <span class="count-badge-glow">{pendingProjectsCount}</span>
       {/if}
@@ -387,20 +387,20 @@
           {#if scan.description}
             <p class="scan-description">{scan.description}</p>
           {:else}
-            <p class="scan-description muted">Nenhuma descrição cadastrada.</p>
+            <p class="scan-description muted">Nenhuma descrio cadastrada.</p>
           {/if}
 
           <!-- Metrics -->
           <div class="scan-metrics-row">
-            <div class="metric-item" title="Obras atribuídas a esta scan">
+            <div class="metric-item" title="Obras atribudas a esta scan">
               <BookOpen size={14} />
               <span class="metric-val">{scan.works_count}</span>
               <span class="metric-lbl">obras</span>
             </div>
-            <div class="metric-item" title="Capítulos atribuídos">
+            <div class="metric-item" title="Captulos atribudos">
               <Layers size={14} />
               <span class="metric-val">{scan.chapters_count}</span>
-              <span class="metric-lbl">capítulos</span>
+              <span class="metric-lbl">captulos</span>
             </div>
             <div class="metric-item" title="Membros cadastrados na scan">
               <Users size={14} />
@@ -413,14 +413,14 @@
           <div class="scan-owner-info">
             {#if scan.owner}
               <div class="owner-pill">
-                <span class="owner-lbl">Líder:</span>
-                <UserAvatar user={scan.owner} size={18} />
+                <span class="owner-lbl">Lder:</span>
+                <UserAvatar avatarId={scan.owner.avatarId} displayName={scan.owner.displayName || scan.owner.username} size={18} />
                 <span class="owner-name">{scan.owner.displayName || scan.owner.username}</span>
               </div>
             {:else}
               <div class="owner-pill empty">
                 <AlertTriangle size={13} />
-                <span>Sem líder atribuído</span>
+                <span>Sem lder atribudo</span>
               </div>
             {/if}
           </div>
@@ -438,7 +438,7 @@
                   <MessageCircle size={14} />
                 </a>
               {/if}
-              <a href="/scans/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Página pública no site">
+              <a href="/scans/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Pgina pblica no site">
                 <ExternalLink size={14} />
               </a>
             </div>
@@ -463,10 +463,10 @@
                   recoverOwnerUserId = scan.owner?.id || (data.users?.[0]?.id || '');
                   recoverOwnerReason = '';
                 }}
-                title="Recuperar / Transferir Liderança"
+                title="Recuperar / Transferir Liderana"
               >
                 <Users size={14} />
-                <span>Liderança</span>
+                <span>Liderana</span>
               </button>
               <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
                 <Edit3 size={14} />
@@ -479,7 +479,7 @@
                     hardDeleteReason = '';
                     hardDeleteConfirmation = '';
                   }}
-                  title="Exclusão Definitiva (Admin Supremo)"
+                  title="Excluso Definitiva (Admin Supremo)"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -516,7 +516,7 @@
           class:active={partnerFilter === 'ALL'}
           onclick={() => (partnerFilter = 'ALL')}
         >
-          Todos ({data.partnerRequests.length})
+          Todos ({data.partnerRequests || [].length})
         </button>
         <button
           class="filter-chip"
@@ -530,14 +530,14 @@
           class:active={partnerFilter === 'APPROVED'}
           onclick={() => (partnerFilter = 'APPROVED')}
         >
-          Aprovados ({data.partnerRequests.filter((r: any) => r.status === 'APPROVED').length})
+          Aprovados ({data.partnerRequests || [].filter((r: any) => r.status === 'APPROVED').length})
         </button>
         <button
           class="filter-chip"
           class:active={partnerFilter === 'REJECTED'}
           onclick={() => (partnerFilter = 'REJECTED')}
         >
-          Rejeitados ({data.partnerRequests.filter((r: any) => r.status === 'REJECTED').length})
+          Rejeitados ({data.partnerRequests || [].filter((r: any) => r.status === 'REJECTED').length})
         </button>
       </div>
     </div>
@@ -549,13 +549,13 @@
           <div class="request-header">
             <div class="request-user">
               <UserAvatar
-                avatarId={req.members?.avatarId}
-                displayName={req.members?.displayName || req.members?.username || 'Usuário'}
+                avatarId={(req as any).members?.avatarId}
+                displayName={(req as any).members?.displayName || (req as any).members?.username || 'Usurio'}
                 size={40}
               />
               <div class="request-user-meta">
-                <span class="request-user-name">{req.members?.displayName || req.members?.username}</span>
-                <span class="request-user-sub">@{req.members?.username}</span>
+                <span class="request-user-name">{(req as any).members?.displayName || (req as any).members?.username}</span>
+                <span class="request-user-sub">@{(req as any).members?.username}</span>
               </div>
             </div>
 
@@ -615,7 +615,7 @@
                 <input type="hidden" name="action" value="APPROVE" />
                 <button type="submit" class="btn-action-approve">
                   <Check size={14} />
-                  <span>Aprovar Scan e Nomear Líder</span>
+                  <span>Aprovar Scan e Nomear Lder</span>
                 </button>
               </form>
 
@@ -663,7 +663,7 @@
           class:active={projectFilter === 'ALL'}
           onclick={() => (projectFilter = 'ALL')}
         >
-          Todos ({data.projectRequests.length})
+          Todos ({data.projectRequests || [].length})
         </button>
         <button
           class="filter-chip"
@@ -677,14 +677,14 @@
           class:active={projectFilter === 'APPROVED'}
           onclick={() => (projectFilter = 'APPROVED')}
         >
-          Aprovados ({data.projectRequests.filter((r: any) => r.status === 'APPROVED').length})
+          Aprovados ({data.projectRequests || [].filter((r: any) => r.status === 'APPROVED').length})
         </button>
         <button
           class="filter-chip"
           class:active={projectFilter === 'REJECTED'}
           onclick={() => (projectFilter = 'REJECTED')}
         >
-          Rejeitados ({data.projectRequests.filter((r: any) => r.status === 'REJECTED').length})
+          Rejeitados ({data.projectRequests || [].filter((r: any) => r.status === 'REJECTED').length})
         </button>
       </div>
     </div>
@@ -695,14 +695,14 @@
         <div class="request-card status-{req.status.toLowerCase()}">
           <div class="request-header">
             <div class="request-user">
-              {#if req.scans?.logoId}
-                <img src="/media/{req.scans.logoId}" alt="" class="scan-mini-logo" />
+              {#if (req as any).scans?.logoId}
+                <img src="/media/{(req as any).scans.logoId}" alt="" class="scan-mini-logo" />
               {:else}
                 <div class="scan-mini-fallback"><Users size={16} /></div>
               {/if}
               <div class="request-user-meta">
-                <span class="request-user-name">{req.scans?.name}</span>
-                <span class="request-user-sub">Solicitado por @{req.members?.username}</span>
+                <span class="request-user-name">{(req as any).scans?.name}</span>
+                <span class="request-user-sub">Solicitado por @{(req as any).members?.username}</span>
               </div>
             </div>
 
@@ -713,20 +713,20 @@
 
           <div class="request-body">
             <div class="obra-target-card">
-              {#if req.works?.coverId}
-                <img src="/media/{req.works.coverId}" alt="" class="obra-mini-cover" />
+              {#if (req as any).works?.coverId}
+                <img src="/media/{(req as any).works.coverId}" alt="" class="obra-mini-cover" />
               {:else}
                 <div class="obra-mini-placeholder">NOX</div>
               {/if}
               <div class="obra-target-info">
                 <span class="obra-target-label">Obra Solicitada:</span>
-                <strong class="obra-target-title">{req.works?.title}</strong>
-                <a href="/obra/{req.works?.slug}" target="_blank" class="obra-link">Ver no catálogo ↗</a>
+                <strong class="obra-target-title">{(req as any).works?.title}</strong>
+                <a href="/obra/{(req as any).works?.slug}" target="_blank" class="obra-link">Ver no catlogo ↗</a>
               </div>
             </div>
 
-            {#if req.message}
-              <p class="request-desc">"{req.message}"</p>
+            {#if (req as any).message}
+              <p class="request-desc">"{(req as any).message}"</p>
             {/if}
 
             {#if req.status === 'REJECTED' && req.rejectionReason}
@@ -744,7 +744,7 @@
                 <input type="hidden" name="action" value="APPROVE" />
                 <button type="submit" class="btn-action-approve">
                   <Check size={14} />
-                  <span>Vincular Obra à Scan</span>
+                  <span>Vincular Obra  Scan</span>
                 </button>
               </form>
 
@@ -768,7 +768,7 @@
       {#if !filteredProjects.length}
         <div class="empty-state">
           <BookOpen size={40} class="empty-icon" />
-          <p class="empty-text">Nenhuma solicitação de projeto encontrada com os filtros atuais.</p>
+          <p class="empty-text">Nenhuma solicitao de projeto encontrada com os filtros atuais.</p>
         </div>
       {/if}
     </div>
@@ -779,7 +779,7 @@
         <Search size={16} class="search-icon" />
         <input
           type="text"
-          placeholder="Buscar no log de auditoria por scan, ação ou admin…"
+          placeholder="Buscar no log de auditoria por scan, ao ou admin…"
           bind:value={auditSearch}
           class="search-input"
         />
@@ -791,28 +791,28 @@
           class:active={auditActionFilter === 'ALL'}
           onclick={() => (auditActionFilter = 'ALL')}
         >
-          Todas Ações ({data.auditLogs.length})
+          Todas Aes ({data.auditLogs.length})
         </button>
         <button
           class="filter-chip"
           class:active={auditActionFilter === 'SCAN_STATUS_CHANGED'}
           onclick={() => (auditActionFilter = 'SCAN_STATUS_CHANGED')}
         >
-          Mudança de Status
+          Mudana de Status
         </button>
         <button
           class="filter-chip"
           class:active={auditActionFilter === 'OWNER_RECOVERED'}
           onclick={() => (auditActionFilter = 'OWNER_RECOVERED')}
         >
-          Liderança Recuperada
+          Liderana Recuperada
         </button>
         <button
           class="filter-chip"
           class:active={auditActionFilter === 'SCAN_HARD_DELETED'}
           onclick={() => (auditActionFilter = 'SCAN_HARD_DELETED')}
         >
-          Exclusões
+          Excluses
         </button>
       </div>
     </div>
@@ -833,9 +833,9 @@
             </div>
             <div class="audit-main">
               <div class="audit-admin">
-                {#if log.admin}
-                  <UserAvatar user={log.admin} size={18} />
-                  <span>{log.admin.displayName || log.admin.username}</span>
+                {#if (log as any).admin}
+                  <UserAvatar avatarId={(log as any).admin.avatarId} displayName={(log as any).admin.displayName || (log as any).admin.username} size={18} />
+                  <span>{(log as any).admin.displayName || (log as any).admin.username}</span>
                 {:else}
                   <span class="muted">Sistema</span>
                 {/if}
@@ -860,7 +860,7 @@
     <div class="modal-backdrop" onclick={() => (rejectModalId = null)}>
       <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title">Recusar Solicitação</h2>
+          <h2 class="modal-title">Recusar Solicitao</h2>
           <button class="btn-close-modal" onclick={() => (rejectModalId = null)}>
             <X size={18} />
           </button>
@@ -890,7 +890,7 @@
               rows={3}
               class="form-textarea"
               bind:value={rejectReason}
-              placeholder="Ex: Já existe equipe ativa responsável por este projeto..."
+              placeholder="Ex: J existe equipe ativa responsvel por este projeto..."
             ></textarea>
           </div>
 
@@ -939,14 +939,14 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="st-reason" class="form-label">Motivo Administrativo Obrigatório:</label>
+            <label for="st-reason" class="form-label">Motivo Administrativo Obrigatrio:</label>
             <textarea
               id="st-reason"
               name="reason"
               rows={3}
               class="form-textarea"
               bind:value={statusModalReason}
-              placeholder="Descreva a razão desta alteração para o log de auditoria..."
+              placeholder="Descreva a razo desta alterao para o log de auditoria..."
               required
             ></textarea>
           </div>
@@ -964,7 +964,7 @@
     <div class="modal-backdrop" onclick={() => (recoverOwnerModalScan = null)}>
       <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title">Liderança da Scan: {recoverOwnerModalScan.name}</h2>
+          <h2 class="modal-title">Liderana da Scan: {recoverOwnerModalScan.name}</h2>
           <button class="btn-close-modal" onclick={() => (recoverOwnerModalScan = null)}><X size={18} /></button>
         </div>
         <form
@@ -980,28 +980,28 @@
         >
           <input type="hidden" name="scan_id" value={recoverOwnerModalScan.id} />
           <div class="form-group">
-            <label for="rec-owner" class="form-label">Selecionar Novo Dono / Líder:</label>
+            <label for="rec-owner" class="form-label">Selecionar Novo Dono / Lder:</label>
             <select id="rec-owner" name="new_owner_id" bind:value={recoverOwnerUserId} class="form-select" required>
-              {#each (data.users || []) as u}
+              {#each ((data.users as any[]) || []) as u}
                 <option value={u.id}>{u.displayName || u.username} (@{u.username})</option>
               {/each}
             </select>
           </div>
           <div class="form-group">
-            <label for="rec-reason" class="form-label">Motivo da Atribuição / Recuperação:</label>
+            <label for="rec-reason" class="form-label">Motivo da Atribuio / Recuperao:</label>
             <textarea
               id="rec-reason"
               name="reason"
               rows={3}
               class="form-textarea"
               bind:value={recoverOwnerReason}
-              placeholder="Ex: Titular anterior inativo ou solicitação formal de transferência..."
+              placeholder="Ex: Titular anterior inativo ou solicitao formal de transferncia..."
               required
             ></textarea>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick={() => (recoverOwnerModalScan = null)}>Cancelar</button>
-            <button type="submit" class="btn-primary" disabled={!recoverOwnerReason.trim()}>Atribuir Liderança</button>
+            <button type="submit" class="btn-primary" disabled={!recoverOwnerReason.trim()}>Atribuir Liderana</button>
           </div>
         </form>
       </div>
@@ -1013,7 +1013,7 @@
     <div class="modal-backdrop" onclick={() => (hardDeleteModalScan = null)}>
       <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title text-danger">Exclusão Definitiva (Admin Supremo)</h2>
+          <h2 class="modal-title text-danger">Excluso Definitiva (Admin Supremo)</h2>
           <button class="btn-close-modal" onclick={() => (hardDeleteModalScan = null)}><X size={18} /></button>
         </div>
         <form
@@ -1031,9 +1031,9 @@
           <div class="warning-alert-box">
             <AlertTriangle size={20} class="flex-shrink-0" />
             <div>
-              <strong>Atenção Máxima: Ação Irreversível</strong>
-              <p>Esta ação apagará permanentemente a scan <strong>{hardDeleteModalScan.name}</strong> e todo o seu workspace privado (tarefas, canais, mensagens, tutoriais, mural e membros).</p>
-              <p class="safe-note">✓ Obras e capítulos do catálogo público continuarão 100% intactos com suas páginas e leitor funcionando normalmente.</p>
+              <strong>Ateno Mxima: Ao Irreversvel</strong>
+              <p>Esta ao apagar permanentemente a scan <strong>{hardDeleteModalScan.name}</strong> e todo o seu workspace privado (tarefas, canais, mensagens, tutoriais, mural e membros).</p>
+              <p class="safe-note">✓ Obras e captulos do catlogo pblico continuaro 100% intactos com suas pginas e leitor funcionando normalmente.</p>
             </div>
           </div>
           <div class="form-group">
@@ -1052,7 +1052,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="hd-reason" class="form-label">Motivo da Exclusão Definitiva:</label>
+            <label for="hd-reason" class="form-label">Motivo da Excluso Definitiva:</label>
             <textarea
               id="hd-reason"
               name="reason"
@@ -1117,13 +1117,13 @@
           </div>
 
           <div class="form-group">
-            <label for="scan-desc" class="form-label">Descrição Editorial</label>
+            <label for="scan-desc" class="form-label">Descrio Editorial</label>
             <textarea
               id="scan-desc"
               rows={3}
               class="form-textarea"
               bind:value={formDescription}
-              placeholder="Apresentação do grupo, especialidades, créditos…"
+              placeholder="Apresentao do grupo, especialidades, crditos…"
             ></textarea>
           </div>
 
@@ -1154,9 +1154,9 @@
             <div class="form-group flex-1">
               <label for="scan-status" class="form-label">Status</label>
               <select id="scan-status" class="form-select" bind:value={formStatus}>
-                <option value="ACTIVE">Ativa (Em operação)</option>
+                <option value="ACTIVE">Ativa (Em operao)</option>
                 <option value="INACTIVE">Inativa (Pausada)</option>
-                <option value="ENDED">Encerrada (Histórica)</option>
+                <option value="ENDED">Encerrada (Histrica)</option>
               </select>
             </div>
 
@@ -1188,7 +1188,7 @@
                 <span>Salvando…</span>
               {:else}
                 <CheckCircle2 size={16} />
-                <span>{editingScan ? 'Salvar Alterações' : 'Criar Scan'}</span>
+                <span>{editingScan ? 'Salvar Alteraes' : 'Criar Scan'}</span>
               {/if}
             </button>
           </div>

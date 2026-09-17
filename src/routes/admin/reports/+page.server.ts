@@ -23,7 +23,7 @@ export const load = async ({ locals, url }) => {
 
   const countsRes = await safeQuery(db.select({ status: schema.reports.status, targetType: schema.reports.targetType }).from(schema.reports));
 
-  const allReports = countsRes.success ? countsRes.data : [];
+  const allReports = countsRes.data || [];
   const statusCounts = {
     ALL: allReports.length,
     NOVO: allReports.filter((r: any) => r.status === 'NOVO').length,
@@ -39,7 +39,7 @@ export const load = async ({ locals, url }) => {
 
   for (const rep of rawReports) {
     let key = `SINGLE:${rep.id}`;
-    let title = 'Conteúdo Geral';
+    let title = 'Contedo Geral';
     let link = '';
 
     if (rep.targetType === 'CHAPTER' && rep.chapterId) {
@@ -52,10 +52,10 @@ export const load = async ({ locals, url }) => {
       link = `/obra/${rep.workId}`;
     } else if (rep.targetType === 'COMMENT' && rep.commentId) {
       key = `COMMENT:${rep.commentId}`;
-      title = `Comentário`;
+      title = `Comentrio`;
     } else if (rep.targetType === 'USER' && rep.targetUserId) {
       key = `USER:${rep.targetUserId}`;
-      title = `Perfil de Usuário`;
+      title = `Perfil de Usurio`;
     }
 
     let cluster = clustersMap.get(key);
@@ -109,7 +109,7 @@ export const load = async ({ locals, url }) => {
 export const actions = {
   updateStatus: async ({ request, locals }) => {
     if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
-      return fail(403, { error: 'Não autorizado.' });
+      return fail(403, { error: 'No autorizado.' });
     }
 
     const formData = await request.formData();
@@ -118,7 +118,7 @@ export const actions = {
     const notes = (formData.get('notes') as string || '').trim();
 
     if (!reportId || !['NOVO', 'EM_ANALISE', 'ATRIBUIDO', 'RESOLVIDO', 'REJEITADO'].includes(newStatus)) {
-      return fail(400, { error: 'Status inválido.' });
+      return fail(400, { error: 'Status invlido.' });
     }
 
     const updatePayload: any = { status: newStatus, updatedAt: new Date().toISOString() };
@@ -131,12 +131,12 @@ export const actions = {
     }
 
     const repRes = await safeQuerySingle(db.select({ reporterId: schema.reports.reporterId, targetType: schema.reports.targetType }).from(schema.reports).where(eq(schema.reports.id, reportId)));
-    const rep = repRes.success ? repRes.data : null;
+    const rep = repRes.data;
 
     const res = await safeQuery(db.update(schema.reports).set(updatePayload).where(eq(schema.reports.id, reportId)));
 
-    if (!res.success) {
-      return fail(500, { error: 'Erro ao atualizar denúncia: ' + res.error.message });
+    if (res.error) {
+      return fail(500, { error: 'Erro ao atualizar denncia: ' + (res.error as any).message });
     }
 
     return { success: true };
@@ -144,7 +144,7 @@ export const actions = {
 
   resolveBatch: async ({ request, locals }) => {
     if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
-      return fail(403, { error: 'Não autorizado.' });
+      return fail(403, { error: 'No autorizado.' });
     }
 
     const formData = await request.formData();
@@ -154,7 +154,7 @@ export const actions = {
 
     const reportIds = rawIds ? rawIds.split(',').map(s => s.trim()).filter(Boolean) : [];
     if (reportIds.length === 0 || !['NOVO', 'EM_ANALISE', 'ATRIBUIDO', 'RESOLVIDO', 'REJEITADO'].includes(newStatus)) {
-      return fail(400, { error: 'Requisição inválida.' });
+      return fail(400, { error: 'Requisio invlida.' });
     }
 
     const updatePayload: any = { status: newStatus, updatedAt: new Date().toISOString() };
@@ -167,12 +167,12 @@ export const actions = {
     }
 
     const repsRes = await safeQuery(db.select({ id: schema.reports.id, reporterId: schema.reports.reporterId }).from(schema.reports).where(inArray(schema.reports.id, reportIds)));
-    const reps = repsRes.success ? repsRes.data : [];
+    const reps = repsRes.data || [];
 
     const res = await safeQuery(db.update(schema.reports).set(updatePayload).where(inArray(schema.reports.id, reportIds)));
 
-    if (!res.success) {
-      return fail(500, { error: 'Erro ao atualizar denúncias: ' + res.error.message });
+    if (res.error) {
+      return fail(500, { error: 'Erro ao atualizar denncias: ' + (res.error as any).message });
     }
 
     return { success: true, count: reportIds.length };

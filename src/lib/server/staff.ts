@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 
 export async function staffRequest(locals: App.Locals, action: string, id?: string) {
-  if (!env.STAFF_BRIDGE_URL) error(503, 'A conexão com a central ainda não está configurada.');
+  if (!env.STAFF_BRIDGE_URL) error(503, 'A conexo com a central ainda no est configurada.');
   
   const session = locals.session;
   if (!session) error(401, 'Entre novamente.');
@@ -18,7 +18,7 @@ export async function staffRequest(locals: App.Locals, action: string, id?: stri
   if (!response.ok)
     error(
       response.status >= 500 ? 502 : response.status,
-      result.message || 'Falha na conexão com a central.'
+      (result as any).message || 'Falha na conexo com a central.'
     );
   
   return result;

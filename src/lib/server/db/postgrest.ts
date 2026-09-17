@@ -52,12 +52,12 @@ export function createPostgrestWrapper(userId?: string, role?: string) {
         
         async maybeSingle() {
           limitNum = 1;
-          const { data, error } = await this.execute();
+          const { data, error } = (await this.execute()) as any;
           return { data: data && data.length > 0 ? data[0] : null, error };
         },
         async single() {
           limitNum = 1;
-          const { data, error } = await this.execute();
+          const { data, error } = (await this.execute()) as any;
           return { data: data && data.length > 0 ? data[0] : null, error };
         },
         async execute() {

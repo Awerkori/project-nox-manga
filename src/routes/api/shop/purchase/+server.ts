@@ -1,15 +1,16 @@
 import { json, error } from '@sveltejs/kit';
 import { db, schema, safeQuerySingle } from '$lib/server/db';
 import { eq, and, sql } from 'drizzle-orm';
-import { member } from '$lib/server/db';
+
 
 export const POST = async ({ request, locals }: any) => {
-  const userId = member(locals);
+  if (!locals.user) throw error(401, 'Unauthorized');
+  const userId = locals.user.id;
   const body = await request.json().catch(() => ({}));
   const itemId = String(body.itemId || '').trim();
 
   if (!itemId) {
-    error(400, 'Identificador do item não fornecido.');
+    error(400, 'Identificador do item no fornecido.');
   }
 
   // Find item
@@ -18,15 +19,15 @@ export const POST = async ({ request, locals }: any) => {
   );
 
   if (itemErr) error(500, 'Erro ao buscar item');
-  if (!item) error(404, 'Item não encontrado');
-  if (!item.isActive) error(400, 'Item não está disponível para compra');
+  if (!item) error(404, 'Item no encontrado');
+  if (!item.isActive) error(400, 'Item no est disponvel para compra');
 
   // Find member
   const { data: m, error: mErr } = await safeQuerySingle(
     db.select({ xp: schema.members.xp }).from(schema.members).where(eq(schema.members.id, userId))
   );
 
-  if (mErr || !m) error(500, 'Erro ao buscar usuário');
+  if (mErr || !m) error(500, 'Erro ao buscar usurio');
 
   if (m.xp < item.priceXp) {
     error(400, 'XP insuficiente para comprar este item.');
@@ -40,7 +41,7 @@ export const POST = async ({ request, locals }: any) => {
   );
 
   if (existing) {
-    error(400, 'Você já possui este item.');
+    error(400, 'Voc j possui este item.');
   }
 
   // Do transaction or just two queries
@@ -69,7 +70,7 @@ export const POST = async ({ request, locals }: any) => {
   if (insErr) {
     // Ideally we would rollback, but SQLite without a transaction helper from safeQuery is tricky.
     // For now we just return error.
-    error(500, 'Erro ao adicionar item ao inventário');
+    error(500, 'Erro ao adicionar item ao inventrio');
   }
 
   return json({ success: true, item });

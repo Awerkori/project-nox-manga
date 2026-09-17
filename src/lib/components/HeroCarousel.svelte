@@ -173,7 +173,7 @@
                 <div class="nsfw-overlay-hero">
                   <div class="nsfw-tag-hero">
                     <AlertTriangle size={15} />
-                    <span>CONTEÚDO +18</span>
+                    <span>CONTEDO +18</span>
                   </div>
                 </div>
               {/if}
@@ -234,7 +234,7 @@
             {:else}
               <a href="/obra/{currentWork.slug}" class="btn-primary-hero">
                 <BookOpen size={18} />
-                <span>Começar a Ler</span>
+                <span>Comear a Ler</span>
               </a>
             {/if}
 
@@ -257,7 +257,7 @@
             <ChevronLeft size={20} />
           </button>
 
-          <div class="indicators-track" role="tablist" aria-label="Navegação dos destaques">
+          <div class="indicators-track" role="tablist" aria-label="Navegao dos destaques">
             {#each works as _, idx}
               <button
                 class="indicator-pill"
@@ -273,7 +273,7 @@
           <button
             class="arrow-btn arrow-next"
             onclick={nextSlide}
-            aria-label="Próxima obra em destaque"
+            aria-label="Prxima obra em destaque"
           >
             <ChevronRight size={20} />
           </button>
@@ -358,7 +358,7 @@
     padding: 0 2rem;
   }
 
-  /* Desktop Layout: Cover on LEFT, Info on RIGHT (Kuro Mangás Layout) */
+  /* Desktop Layout: Cover on LEFT, Info on RIGHT (Kuro Mangs Layout) */
   .hero-editorial-layout {
     display: grid;
     grid-template-columns: 320px 1fr;

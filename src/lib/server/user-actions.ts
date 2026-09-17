@@ -7,7 +7,7 @@ export async function toggle_user_scan_privacy(showScans: boolean, mode: string,
 }
 
 export async function admin_moderate_user_scans(targetUserId: string, hideBadges: boolean, isAdmin: boolean) {
-  if (!isAdmin) return { error: { message: 'Não autorizado' } };
+  if (!isAdmin) return { error: { message: 'No autorizado' } };
   const { error } = await safeQuery(db.update(schema.members).set({ adminHideScanBadges: hideBadges ? 1 : 0 } as any).where(eq(schema.members.id, targetUserId)));
   return { error };
 }

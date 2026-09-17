@@ -15,18 +15,18 @@
 
   const DEFAULT_ONBOARDING_STEPS = [
     { id: 'discord', label: 'Entrar no Discord da Scan e obter cargos internos' },
-    { id: 'guidelines', label: 'Ler as diretrizes de tradução e regras de convivência' },
-    { id: 'wiki', label: 'Consultar o manual da Wiki e o Glossário de obras' },
+    { id: 'guidelines', label: 'Ler as diretrizes de traduo e regras de convivncia' },
+    { id: 'wiki', label: 'Consultar o manual da Wiki e o Glossrio de obras' },
     { id: 'fonts', label: 'Instalar o pack de fontes oficiais (para editores/typesetters)' },
-    { id: 'test_chapter', label: 'Realizar e aprovar o capítulo de teste supervisionado' }
+    { id: 'test_chapter', label: 'Realizar e aprovar o captulo de teste supervisionado' }
   ];
 </script>
 
 <div class="onboarding-tab">
   <div class="tab-header">
     <div>
-      <h2 class="title">Integração & Onboarding de Novos Membros</h2>
-      <p class="subtitle">Acompanhe os passos iniciais dos novos membros para garantir padronização e boas-vindas.</p>
+      <h2 class="title">Integrao & Onboarding de Novos Membros</h2>
+      <p class="subtitle">Acompanhe os passos iniciais dos novos membros para garantir padronizao e boas-vindas.</p>
     </div>
   </div>
 
@@ -35,7 +35,7 @@
     <div class="card-header">
       <CheckSquare size={20} class="header-icon purple" />
       <div>
-        <h3>Trilha Padrão de Integração</h3>
+        <h3>Trilha Padro de Integrao</h3>
         <p>Etapas fundamentais que todo novo integrante da staff deve cumprir ao ingressar.</p>
       </div>
     </div>
@@ -58,7 +58,7 @@
       <UserCheck size={20} class="header-icon green" />
       <div>
         <h3>Progresso dos Membros da Staff</h3>
-        <p>Visão geral de integração de cada integrante da equipe.</p>
+        <p>Viso geral de integrao de cada integrante da equipe.</p>
       </div>
     </div>
 
@@ -82,7 +82,7 @@
               ></div>
             </div>
             <span class="prog-text">
-              {member.role === 'OWNER' || member.role === 'ADMIN' ? '5 de 5 etapas concluídas (100%)' : '4 de 5 etapas concluídas (80%)'}
+              {member.role === 'OWNER' || member.role === 'ADMIN' ? '5 de 5 etapas concludas (100%)' : '4 de 5 etapas concludas (80%)'}
             </span>
           </div>
 

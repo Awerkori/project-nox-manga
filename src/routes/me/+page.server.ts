@@ -10,13 +10,13 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   const [
-    memberRes,
-    libraryRes,
+    { data: memberRes },
+    { data: libraryRes },
     historyRes,
-    notificationsRes,
+    { data: notificationsRes },
     allAchievementsRes,
     memberAchievementsRes,
-    inventoryRes
+    { data: inventoryRes }
   ] = await withTimeout(
     Promise.all([
       safeQuerySingle(
@@ -170,13 +170,13 @@ export const load: PageServerLoad = async ({ locals }) => {
     unlocked: unlockedMap.has(ach.id),
     unlockedAt: unlockedMap.get(ach.id) || null}));
 
-  const inventory = (inventoryRes.data || []).map((inv: any) => ({acquiredAt: inv.inventory.acquiredAt,
+  const inventory = ({ data: inventoryRes }.data || []).map((inv: any) => ({acquiredAt: inv.inventory.acquiredAt,
     ...inv.shopItems,
     price_coins: inv.shopItems.priceCoins,
     content_id: inv.shopItems.contentId,
     createdAt: inv.shopItems.createdAt}));
 
-  const mappedLibrary = (libraryRes.data || []).map(row => ({...row.library,
+  const mappedLibrary = (libraryRes.data || []).map((row: any) => ({...row.library,
      userId: row.library.userId,
      workId: row.library.workId,
      chapterId: row.library.chapterId,
@@ -186,13 +186,13 @@ export const load: PageServerLoad = async ({ locals }) => {
         ...row.works,
         ageRating: row.works.ageRating,
         coverId: row.works.coverId,
-        updated_at: row.works.updatedAt,
-        created_at: row.works.createdAt,
+        updatedAt: row.works.updatedAt,
+        createdAt: row.works.createdAt,
         contentRating: row.works.contentRating,
         viewsTotal: row.works.viewsTotal}
   }));
 
-  const mappedHistory = (historyRes.data || []).map(row => ({chapterId: row.reading.chapterId,
+  const mappedHistory = (historyRes.data || []).map((row: any) => ({chapterId: row.reading.chapterId,
      page: row.reading.page,
      maxPage: row.reading.maxPage,
      completedAt: row.reading.completedAt,
@@ -210,7 +210,7 @@ export const load: PageServerLoad = async ({ locals }) => {
      }
   }));
 
-  const mappedNotifications = (notificationsRes.data || []).map(n => ({...n,
+  const mappedNotifications = (notificationsRes.data || []).map((n: any) => ({...n,
      userId: n.userId,
      actorId: n.actorId,
      workId: n.workId,
@@ -232,17 +232,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   updateProfile: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const displayName = (formData.get('display_name') as string)?.trim();
     const bio = (formData.get('bio') as string)?.trim() ?? '';
 
     if (!displayName || displayName.length < 2 || displayName.length > 50) {
-      return fail(400, { message: 'O nome de exibição deve ter entre 2 e 50 caracteres.' });
+      return fail(400, { message: 'O nome de exibio deve ter entre 2 e 50 caracteres.' });
     }
 
     if (bio.length > 500) {
-      return fail(400, { message: 'A biografia não pode exceder 500 caracteres.' });
+      return fail(400, { message: 'A biografia no pode exceder 500 caracteres.' });
     }
 
     const { error } = await safeQuerySingle(
@@ -255,12 +255,12 @@ export const actions: Actions = {
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return { success: true, action: 'profile' };
   },
 
   updateSettings: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const blurNsfw = formData.get('blur_nsfw') === 'on';
     const privacyShowAchievements = formData.get('privacy_show_achievements') === 'on';
@@ -285,18 +285,18 @@ export const actions: Actions = {
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return { success: true, action: 'settings' };
   },
 
   setFeaturedAchievement: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const achievementId = (formData.get('achievement_id') as string)?.trim() || null;
 
     if (achievementId) {
-       const hasAchiev = await safeQuerySingle(db.select().from(schema.memberAchievements).where(and(eq(schema.memberAchievements.userId, locals.user!.id), eq(schema.memberAchievements.achievementId, achievementId))));
-       if (hasAchiev.error || !hasAchiev.data) return fail(400, { message: 'Você não possui esta conquista.' });
+       const { data: hasAchiev } = await safeQuerySingle(db.select().from(schema.memberAchievements).where(and(eq(schema.memberAchievements.userId, locals.user!.id), eq(schema.memberAchievements.achievementId, achievementId))));
+       if (!hasAchiev) return fail(400, { message: 'Voc no possui esta conquista.' });
     }
 
     const { error } = await safeQuerySingle(
@@ -306,12 +306,12 @@ export const actions: Actions = {
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return { success: true, action: 'featured_achievement' };
   },
 
   markAllNotificationsRead: async ({ locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const { error } = await safeQuery(
       db.update(schema.notifications)
         .set({ readAt: new Date().toISOString() })
@@ -322,12 +322,12 @@ export const actions: Actions = {
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return { success: true, action: 'notifications' };
   },
 
   markNotificationRead: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const id = String(formData.get('id') || '');
     if (!id) return fail(400, { message: 'ID ausente' });
@@ -343,12 +343,12 @@ export const actions: Actions = {
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return { success: true, markedReadId: id };
   },
 
   updateAvatarCrop: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const x = parseFloat(formData.get('x') as string) || 50;
     const y = parseFloat(formData.get('y') as string) || 50;
@@ -361,17 +361,17 @@ export const actions: Actions = {
 
     const { error } = await safeQuerySingle(
       db.update(schema.members)
-        .set({ avatarCrop: crop })
+        .set({ avatarCrop: JSON.stringify(crop) })
         .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return {success: true, action: 'avatarCrop', crop};
   },
 
   updateBannerCrop: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    if (!locals.user) return fail(401, { message: 'No autenticado' });
     const formData = await request.formData();
     const x = parseFloat(formData.get('x') as string) || 50;
     const y = parseFloat(formData.get('y') as string) || 50;
@@ -384,12 +384,12 @@ export const actions: Actions = {
 
     const { error } = await safeQuerySingle(
       db.update(schema.members)
-        .set({ bannerCrop: crop })
+        .set({ bannerCrop: JSON.stringify(crop) })
         .where(eq(schema.members.id, locals.user!.id))
         .returning()
     );
 
-    if (error) return fail(400, { message: error.message });
+    if (error) return fail(400, { message: (error as any).message });
     return {success: true, action: 'bannerCrop', crop};
   }
 };

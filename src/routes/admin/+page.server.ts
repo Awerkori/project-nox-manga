@@ -103,7 +103,7 @@ const loadSnapshot = async (locals: App.Locals) => {
 
 export const load = async ({ locals }: { locals: App.Locals }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
-    throw error(403, 'Acesso restrito à equipe');
+    throw error(403, 'Acesso restrito  equipe');
   }
   const key = `${locals.user.id}:${locals.role}`;
   const cached = snapshots.get(key);

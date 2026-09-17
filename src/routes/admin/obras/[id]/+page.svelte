@@ -49,11 +49,11 @@
   async function applyScansToChapters() {
     if (!data.work?.id) return;
     if (!selectedScanIds.length) {
-      alert('Selecione pelo menos uma scan antes de aplicar aos capítulos.');
+      alert('Selecione pelo menos uma scan antes de aplicar aos captulos.');
       return;
     }
     const ok = confirm(
-      'Deseja replicar as scans selecionadas para TODOS os capítulos existentes desta obra?'
+      'Deseja replicar as scans selecionadas para TODOS os captulos existentes desta obra?'
     );
     if (!ok) return;
 
@@ -62,8 +62,8 @@
     try {
       // First save the work's scans
       const scansPayload = selectedScanIds.map((sid) => ({
-        scan_id: sid,
-        is_primary: sid === primaryScanId
+        scanId: sid,
+        isPrimary: sid === primaryScanId
       }));
       await action('editor', 'work', {
         id: data.work.id,
@@ -74,10 +74,10 @@
       });
       await invalidateAll();
       noticeType = 'success';
-      notice = 'Scans aplicadas com sucesso a todos os capítulos da obra!';
+      notice = 'Scans aplicadas com sucesso a todos os captulos da obra!';
     } catch (e: any) {
       noticeType = 'error';
-      notice = e.message || 'Erro ao replicar scans aos capítulos.';
+      notice = (e as any).message || 'Erro ao replicar scans aos captulos.';
     } finally {
       applyingScans = false;
     }
@@ -96,9 +96,9 @@
         body: formData
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Erro ao priorizar obra.');
+      if (!res.ok) throw new Error((result as any).message || 'Erro ao priorizar obra.');
       noticeType = 'success';
-      notice = 'Obra priorizada no Importer com sucesso! O worker processará seus capítulos prioritariamente.';
+      notice = 'Obra priorizada no Importer com sucesso! O worker processar seus captulos prioritariamente.';
     } catch (e) {
       noticeType = 'error';
       notice = (e as Error).message;
@@ -122,7 +122,7 @@
         body: image
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Erro ao enviar capa.');
+      if (!response.ok) throw new Error((result as any).message || 'Erro ao enviar capa.');
       cover = result.id;
       notice = 'Capa atualizada com sucesso.';
       noticeType = 'success';
@@ -149,10 +149,10 @@
           .map((s) => s.trim())
           .filter(Boolean),
         tags: selected,
-        cover_id: cover,
+        coverId: cover,
         scans: selectedScanIds.map((sid) => ({
-          scan_id: sid,
-          is_primary: sid === primaryScanId
+          scanId: sid,
+          isPrimary: sid === primaryScanId
         })),
         apply_to_chapters: applyToExistingChapters
       });
@@ -178,13 +178,13 @@
   }
 
   async function archive() {
-    if (!confirm('Deseja realmente arquivar esta obra? Ela deixará de aparecer publicamente no catálogo.')) return;
+    if (!confirm('Deseja realmente arquivar esta obra? Ela deixar de aparecer publicamente no catlogo.')) return;
     busy = true;
     notice = '';
     try {
       await action('editor', 'archive', { id: data.work?.id });
       await invalidateAll();
-      notice = 'Obra arquivada. Ela não é mais exibida publicamente aos leitores.';
+      notice = 'Obra arquivada. Ela no  mais exibida publicamente aos leitores.';
       noticeType = 'info';
     } catch (e) {
       notice = (e as Error).message;
@@ -201,7 +201,7 @@
 
 <div class="work-editor-shell">
   <!-- Breadcrumb Navigation -->
-  <nav class="breadcrumb-bar" aria-label="Navegação">
+  <nav class="breadcrumb-bar" aria-label="Navegao">
     <a href="/admin/obras" class="breadcrumb-link">
       <ArrowLeft size={14} />
       <span>Voltar para Obras</span>
@@ -227,7 +227,7 @@
           class="btn-prioritize-importer"
           disabled={busy || prioritizing}
           onclick={prioritizeWork}
-          title="Solicitar priorização no worker do Importer"
+          title="Solicitar priorizao no worker do Importer"
         >
           <Flame size={14} />
           <span>{prioritizing ? 'Priorizando…' : 'Priorizar no Importer'}</span>
@@ -240,7 +240,7 @@
             rel="noopener noreferrer"
             class="btn-view-public"
           >
-            <span>Ver no site público</span>
+            <span>Ver no site pblico</span>
             <ExternalLink size={14} />
           </a>
         {/if}
@@ -271,7 +271,7 @@
     <div class="cover-studio-row">
       <div class="cover-preview-box">
         {#if cover}
-          <img src="/media/{cover}" alt="Prévia da capa" width="140" height="198" class="cover-image" />
+          <img src="/media/{cover}" alt="Prvia da capa" width="140" height="198" class="cover-image" />
         {:else}
           <div class="cover-empty-box">
             <BookOpen size={28} />
@@ -283,7 +283,7 @@
       <div class="cover-actions-col">
         <h3 class="cover-heading">Capa Oficial</h3>
         <p class="cover-hint">
-          Selecione uma imagem vertical de alta resolução (proporção aproximada 1:1.4). Formatos suportados: WebP, PNG, JPEG ou GIF animado.
+          Selecione uma imagem vertical de alta resoluo (proporo aproximada 1:1.4). Formatos suportados: WebP, PNG, JPEG ou GIF animado.
         </p>
 
         <label class="btn-select-cover" class:disabled={uploading}>
@@ -304,7 +304,7 @@
     <div class="fields-grid">
       <!-- Title -->
       <label class="field-wrap col-full">
-        <span class="field-label">Título da Obra <strong class="req">*</strong></span>
+        <span class="field-label">Ttulo da Obra <strong class="req">*</strong></span>
         <input
           name="title"
           class="field-input"
@@ -314,13 +314,13 @@
           }}
           required
           maxlength="200"
-          placeholder="Ex: Céu Distante"
+          placeholder="Ex: Cu Distante"
         />
       </label>
 
       <!-- Slug -->
       <label class="field-wrap col-full">
-        <span class="field-label">Endereço público (Slug) <strong class="req">*</strong></span>
+        <span class="field-label">Endereo pblico (Slug) <strong class="req">*</strong></span>
         <input
           name="slug"
           class="field-input monospace-input"
@@ -329,12 +329,12 @@
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           placeholder="ex: distante-ceu"
         />
-        <small class="field-hint">Endereço permanente da obra: <code>/obra/{slug || 'slug-da-obra'}</code></small>
+        <small class="field-hint">Endereo permanente da obra: <code>/obra/{slug || 'slug-da-obra'}</code></small>
       </label>
 
       <!-- Aliases -->
       <label class="field-wrap col-full">
-        <span class="field-label">Títulos Alternativos</span>
+        <span class="field-label">Ttulos Alternativos</span>
         <textarea
           name="aliases"
           class="field-textarea"
@@ -353,19 +353,19 @@
           rows="4"
           maxlength="5000"
           required
-          placeholder="Apresentação inicial para os leitores..."
+          placeholder="Apresentao inicial para os leitores..."
         >{data.work?.synopsis || ''}</textarea>
       </label>
 
       <!-- Additional Description -->
       <label class="field-wrap col-full">
-        <span class="field-label">Descrição Adicional ou Notas</span>
+        <span class="field-label">Descrio Adicional ou Notas</span>
         <textarea
           name="description"
           class="field-textarea"
           rows="3"
           maxlength="10000"
-          placeholder="Créditos de tradução, informações contextuais ou avisos..."
+          placeholder="Crditos de traduo, informaes contextuais ou avisos..."
         >{data.work?.description || ''}</textarea>
       </label>
 
@@ -405,7 +405,7 @@
 
       <!-- Status -->
       <label class="field-wrap">
-        <span class="field-label">Status da Publicação</span>
+        <span class="field-label">Status da Publicao</span>
         <select name="status" class="field-select" value={data.work?.status || 'ONGOING'}>
           {#each ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'] as val (val)}
             <option value={val}>{statusLabels[val]}</option>
@@ -415,7 +415,7 @@
 
       <!-- Year -->
       <label class="field-wrap">
-        <span class="field-label">Ano de Lançamento</span>
+        <span class="field-label">Ano de Lanamento</span>
         <input
           name="year"
           type="number"
@@ -429,7 +429,7 @@
 
       <!-- Age Rating -->
       <label class="field-wrap">
-        <span class="field-label">Classificação Indicativa</span>
+        <span class="field-label">Classificao Indicativa</span>
         <select name="age_rating" class="field-select" value={data.work?.ageRating ?? 12}>
           {#each [0, 10, 12, 14, 16, 18] as val (val)}
             <option value={val}>{val === 0 ? 'Livre' : `${val} anos`}</option>
@@ -439,18 +439,18 @@
 
       <!-- Content Rating (+18) -->
       <label class="field-wrap col-full">
-        <span class="field-label">Classificação Editorial de Conteúdo (+18)</span>
+        <span class="field-label">Classificao Editorial de Contedo (+18)</span>
         <select name="content_rating" class="field-select" value={(data.work as any)?.contentRating || 'GENERAL'}>
           <option value="GENERAL">Geral — Recomendado para todos os leitores</option>
-          <option value="ADULT_18">Adulto (+18) — Conteúdo adulto/explícito (aplica tags automáticas e blur)</option>
+          <option value="ADULT_18">Adulto (+18) — Contedo adulto/explcito (aplica tags automticas e blur)</option>
         </select>
-        <small class="field-hint">Obras marcadas como Adulto (+18) recebem a tag "Adulto (+18)" (e "Pornhwa" se for Manhwa) e têm capas borradas por padrão para proteção de menores.</small>
+        <small class="field-hint">Obras marcadas como Adulto (+18) recebem a tag "Adulto (+18)" (e "Pornhwa" se for Manhwa) e tm capas borradas por padro para proteo de menores.</small>
       </label>
     </div>
 
-    <!-- Tags & Gêneros Selector -->
+    <!-- Tags & Gneros Selector -->
     <fieldset class="tags-fieldset">
-      <legend class="tags-legend">Gêneros e Categorias Associadas</legend>
+      <legend class="tags-legend">Gneros e Categorias Associadas</legend>
       <div class="tag-chips-wrap">
         {#each data.tags as tag (tag?.id)}
           <label class="tag-chip-label" class:active={selected.includes(tag.id)}>
@@ -462,16 +462,16 @@
       </div>
     </fieldset>
 
-    <!-- Scans / Tradução Selector -->
+    <!-- Scans / Traduo Selector -->
     <fieldset class="scans-fieldset">
       <div class="scans-fieldset-header">
         <div>
           <legend class="scans-legend">
             <Users size={15} />
-            <span>Scans / Tradução & Créditos</span>
+            <span>Scans / Traduo & Crditos</span>
           </legend>
           <p class="scans-subtext">
-            Associe as scans parceiras ou a scan oficial Project Nox a esta obra. Obras sem scan selecionada não exibirão scan falsa publicamente.
+            Associe as scans parceiras ou a scan oficial Project Nox a esta obra. Obras sem scan selecionada no exibiro scan falsa publicamente.
           </p>
         </div>
 
@@ -481,10 +481,10 @@
             class="btn-apply-chapters"
             onclick={applyScansToChapters}
             disabled={busy || applyingScans || !selectedScanIds.length}
-            title="Replicar imediatamente estas scans para todos os capítulos desta obra"
+            title="Replicar imediatamente estas scans para todos os captulos desta obra"
           >
             <Zap size={14} />
-            <span>{applyingScans ? 'Replicando…' : 'Replicar nos Capítulos'}</span>
+            <span>{applyingScans ? 'Replicando…' : 'Replicar nos Captulos'}</span>
           </button>
         {/if}
       </div>
@@ -514,7 +514,7 @@
         {/each}
 
         {#if !data.allScans?.length}
-          <p class="no-scans-text">Nenhuma scan cadastrada no sistema. Cadastre na <a href="/admin/scans">Gestão de Scans</a>.</p>
+          <p class="no-scans-text">Nenhuma scan cadastrada no sistema. Cadastre na <a href="/admin/scans">Gesto de Scans</a>.</p>
         {/if}
       </div>
 
@@ -533,7 +533,7 @@
         <div class="scans-options-row">
           <label class="checkbox-option">
             <input type="checkbox" bind:checked={applyToExistingChapters} />
-            <span>Replicar estas scans para todos os capítulos existentes ao salvar esta obra</span>
+            <span>Replicar estas scans para todos os captulos existentes ao salvar esta obra</span>
           </label>
         </div>
       {/if}
@@ -549,7 +549,7 @@
           <span>Obra Salva!</span>
         {:else}
           <Save size={16} />
-          <span>{data.work ? 'Salvar Alterações' : 'Cadastrar Obra'}</span>
+          <span>{data.work ? 'Salvar Alteraes' : 'Cadastrar Obra'}</span>
         {/if}
       </button>
 
@@ -559,7 +559,7 @@
           class="btn-archive-work"
           onclick={archive}
           disabled={busy}
-          title="Arquivar obra e ocultar do catálogo público"
+          title="Arquivar obra e ocultar do catlogo pblico"
         >
           <Archive size={15} />
           <span>Arquivar Obra</span>
@@ -581,10 +581,10 @@
       <div class="chapters-header">
         <div class="chapters-title-cluster">
           <div class="chapters-title-row">
-            <h2 class="chapters-title">Capítulos</h2>
+            <h2 class="chapters-title">Captulos</h2>
             <span class="chapters-count-pill">{data.chapters.length}</span>
           </div>
-          <span class="chapters-subtitle">Acompanhe páginas, rascunhos e publicação da obra</span>
+          <span class="chapters-subtitle">Acompanhe pginas, rascunhos e publicao da obra</span>
         </div>
 
         <div class="chapters-action-buttons">
@@ -601,7 +601,7 @@
             class="btn-add-chapter"
           >
             <Plus size={15} />
-            <span>Adicionar Capítulo</span>
+            <span>Adicionar Captulo</span>
           </a>
         </div>
       </div>
@@ -611,17 +611,17 @@
           <table class="chapters-table">
             <thead>
               <tr>
-                <th>Capítulo</th>
+                <th>Captulo</th>
                 <th>Status</th>
                 <th>Data</th>
-                <th class="th-action">Ação</th>
+                <th class="th-action">Ao</th>
               </tr>
             </thead>
             <tbody>
               {#each data.chapters as ch (ch.id)}
                 <tr class="chapter-row">
                   <td class="td-ch-title">
-                    <strong class="ch-num">Capítulo {ch.number}</strong>
+                    <strong class="ch-num">Captulo {ch.number}</strong>
                     {#if ch.title}
                       <span class="ch-desc">— {ch.title}</span>
                     {/if}
@@ -659,8 +659,8 @@
       {:else}
         <div class="empty-chapters-card">
           <BookOpen size={30} class="empty-ch-icon" />
-          <h3>Nenhum capítulo cadastrado ainda</h3>
-          <p>Adicione o primeiro capítulo para iniciar a leitura desta obra.</p>
+          <h3>Nenhum captulo cadastrado ainda</h3>
+          <p>Adicione o primeiro captulo para iniciar a leitura desta obra.</p>
           <div class="empty-action-row">
             <button
               type="button"
@@ -675,7 +675,7 @@
               class="btn-primary-add-first"
             >
               <Plus size={15} />
-              <span>Cadastrar Capítulo 1</span>
+              <span>Cadastrar Captulo 1</span>
             </a>
           </div>
         </div>

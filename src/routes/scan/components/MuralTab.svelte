@@ -84,7 +84,7 @@
     for (const f of files) {
       const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
       if (BLOCKED_EXTENSIONS.includes(ext)) {
-        alert(`Arquivo "${f.name}" bloqueado: executáveis não são permitidos por segurança.`);
+        alert(`Arquivo "${f.name}" bloqueado: executveis no so permitidos por segurana.`);
         continue;
       }
       uploadedFiles.push({
@@ -127,9 +127,9 @@
     <div class="header-left">
       <div class="title-cluster">
         <Pin size={20} class="text-rose-400" />
-        <h1>Mural de Avisos & Produção</h1>
+        <h1>Mural de Avisos & Produo</h1>
       </div>
-      <p class="subtitle">Comunicação assíncrona, diretrizes oficiais, atualizações e modelos com arquivos anexos.</p>
+      <p class="subtitle">Comunicao assncrona, diretrizes oficiais, atualizaes e modelos com arquivos anexos.</p>
     </div>
 
     <div class="header-right">
@@ -172,7 +172,7 @@
       class:active={filterType === 'PRODUCAO'}
       onclick={() => (filterType = 'PRODUCAO')}
     >
-      ⚙️ Produção
+      ⚙️ Produo
     </button>
     <button
       type="button"
@@ -180,7 +180,7 @@
       class:active={filterType === 'ATUALIZACAO'}
       onclick={() => (filterType = 'ATUALIZACAO')}
     >
-      ✨ Atualizações
+      ✨ Atualizaes
     </button>
     <button
       type="button"
@@ -358,7 +358,7 @@
               onclick={() => (activeReplyPostId = activeReplyPostId === post.id ? null : post.id)}
             >
               <MessageCircle size={15} />
-              <span>{(post.scan_mural_comments || []).length} comentários</span>
+              <span>{(post.scan_mural_comments || []).length} comentrios</span>
             </button>
           </footer>
 
@@ -393,7 +393,7 @@
                 <input
                   type="text"
                   name="content"
-                  placeholder="Escreva um comentário ou mencione @..."
+                  placeholder="Escreva um comentrio ou mencione @..."
                   class="comment-input"
                   required
                 />
@@ -410,7 +410,7 @@
       <div class="empty-mural-state">
         <Pin size={36} class="text-rose-400" />
         <h3>Nenhum aviso encontrado no Mural</h3>
-        <p>Utilize o botão acima para publicar diretrizes, comunicados oficiais ou padrões de produção com arquivos anexos.</p>
+        <p>Utilize o boto acima para publicar diretrizes, comunicados oficiais ou padres de produo com arquivos anexos.</p>
       </div>
     {/if}
   </div>
@@ -446,13 +446,13 @@
         <input type="hidden" name="scan_id" value={scanId} />
 
         <div class="form-group">
-          <label for="post-title">Título do Aviso / Post *</label>
+          <label for="post-title">Ttulo do Aviso / Post *</label>
           <input
             id="post-title"
             type="text"
             name="title"
             bind:value={postTitle}
-            placeholder="Ex: 📌 Novo Padrão de Revisão & Fontes para Cap. 85"
+            placeholder="Ex: 📌 Novo Padro de Reviso & Fontes para Cap. 85"
             class="form-input"
             required
           />
@@ -464,9 +464,9 @@
             <select id="post-type" name="post_type" bind:value={postType} class="form-select">
               <option value="GERAL">💬 Geral</option>
               <option value="AVISO">📢 Aviso Oficial</option>
-              <option value="IMPORTANTE">🚨 Importante & Prioritário</option>
-              <option value="PRODUCAO">⚙️ Produção & Diretrizes</option>
-              <option value="ATUALIZACAO">✨ Atualização de Projeto</option>
+              <option value="IMPORTANTE">🚨 Importante & Prioritrio</option>
+              <option value="PRODUCAO">⚙️ Produo & Diretrizes</option>
+              <option value="ATUALIZACAO">✨ Atualizao de Projeto</option>
             </select>
           </div>
 
@@ -481,13 +481,13 @@
         </div>
 
         <div class="form-group">
-          <label for="post-content">Conteúdo (Suporta Markdown e @Menções) *</label>
+          <label for="post-content">Contedo (Suporta Markdown e @Menes) *</label>
           <textarea
             id="post-content"
             name="content"
             bind:value={postContent}
             rows={5}
-            placeholder="Descreva as instruções, orientações e mencione @Revisores ou membros da equipe..."
+            placeholder="Descreva as instrues, orientaes e mencione @Revisores ou membros da equipe..."
             class="form-textarea"
             required
           ></textarea>
@@ -511,7 +511,7 @@
                 <input type="file" multiple onchange={handleFileSelect} class="hidden-file-input" />
               </label>
             </div>
-            <span class="format-hints">Imagens, GIFs, PDFs, TXTs, ZIPs, PSDs (máx 50MB)</span>
+            <span class="format-hints">Imagens, GIFs, PDFs, TXTs, ZIPs, PSDs (mx 50MB)</span>
           </div>
 
           <!-- Uploaded files list preview in modal -->

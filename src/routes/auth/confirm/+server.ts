@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, isRedirect } from '@sveltejs/kit';
 import { claimInvite } from '$lib/server/invites';
 import { auth } from '$lib/server/auth';
 
@@ -27,6 +27,7 @@ export const GET = async ({ url, locals, request }) => {
         await claimInvite(locals);
         redirect(303, next);
       } catch (e) {
+        if (isRedirect(e)) throw e;
         // failed
       }
     } else if (type === 'recovery') {

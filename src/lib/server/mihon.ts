@@ -55,7 +55,7 @@ export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult
     .where(
       and(
         eq(schema.mihonTokens.tokenHash, hash),
-        eq(schema.mihonTokens.revoked, 0),
+        eq(schema.mihonTokens.revoked, false),
         gt(schema.mihonTokens.expiresAt, new Date().toISOString())
       )
     )
@@ -63,7 +63,7 @@ export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult
   );
 
   if (error || !row || !row.member) {
-    return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token inválido ou expirado' };
+    return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token invlido ou expirado' };
   }
 
   return {authenticated: true,
@@ -97,11 +97,11 @@ export async function generateMihonToken(userId: string, deviceName = 'Mihon App
       deviceName,
       expiresAt,
       scopes: '[]',
-      revoked: 0,
+      revoked: false,
       createdAt: new Date().toISOString()
     })
   );
 
-  if (error) throw new Error('Não foi possível registrar o token.');
+  if (error) throw new Error('No foi possvel registrar o token.');
   return { token, expiresAt };
 }

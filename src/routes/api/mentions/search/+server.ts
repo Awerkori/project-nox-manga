@@ -5,7 +5,7 @@ import { eq, like, and, or, desc } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) {
-    throw error(401, 'Não autenticado');
+    throw error(401, 'No autenticado');
   }
 
   const rawQuery = (url.searchParams.get('q') || '').trim();
@@ -22,9 +22,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     sub: string;
   }> = [];
 
-  // 1. Scan Context (se fornecido scan_id)
+  // 1. Scan Context (se fornecido scanId)
   if (scanId) {
-    // Buscar cargos compatíveis
+    // Buscar cargos compatveis
     const { data: positions } = await safeQuery(
       db.select({ id: schema.scanPositions.id, name: schema.scanPositions.name })
         .from(schema.scanPositions)
@@ -48,7 +48,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       }
     }
 
-    // @todos para liderança
+    // @todos para liderana
     if (locals.role === 'ADMIN' || locals.role === 'STAFF_SITE') {
       if ('todos'.includes(cleanQ.toLowerCase()) || 'everyone'.includes(cleanQ.toLowerCase()) || !cleanQ) {
         candidates.push({
@@ -108,7 +108,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     });
   }
 
-  // 2. Public Platform Context (Comentários de Obras, Capítulos, etc.)
+  // 2. Public Platform Context (Comentrios de Obras, Captulos, etc.)
   let conditions = undefined;
   if (cleanQ) {
     conditions = or(
@@ -133,7 +133,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
   const { data: members, error: dbError } = await safeQuery(query);
   if (dbError) {
-    throw error(500, 'Erro ao buscar membros: ' + dbError.message);
+    throw error(500, 'Erro ao buscar membros: ' + (dbError as any).message);
   }
 
   for (const m of (members || [])) {

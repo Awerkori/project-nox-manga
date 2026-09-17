@@ -13,8 +13,8 @@ export const load: PageServerLoad = async ({ locals }) => {
   try {
     const rawRoles = await safeQuery(db.select().from(schema.accessRoles).where(inArray(schema.accessRoles.role, ['ADMIN', 'STAFF_SITE', 'EDITOR'])));
 
-    if (rawRoles.success && rawRoles.data.length > 0) {
-      const userIds = rawRoles.data.map(r => r.userId);
+    if (!rawRoles.error && (rawRoles.data || []).length > 0) {
+      const userIds = (rawRoles.data || []).map(r => r.userId);
       const memberRows = await safeQuery(db.select({
           id: schema.members.id,
           username: schema.members.username,
@@ -26,7 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
       const memberMap = new Map((memberRows.data || []).map((m: any) => [m.id, m]));
 
-      staffList = rawRoles.data.map((sr: any) => {
+      staffList = (rawRoles.data || []).map((sr: any) => {
         const m = memberMap.get(sr.userId);
         return {
           userId: sr.userId,
@@ -71,7 +71,7 @@ export const actions: Actions = {
     const role = (formData.get('role') as string || '').trim();
 
     if (!userId || !['ADMIN', 'STAFF_SITE', 'EDITOR', 'USER'].includes(role)) {
-      return fail(400, { error: 'Parâmetros inválidos para alteração de cargo.' });
+      return fail(400, { error: 'Parmetros invlidos para alterao de cargo.' });
     }
 
     return fail(400, { error: 'Not implemented in Drizzle yet.' });
@@ -87,7 +87,7 @@ export const actions: Actions = {
     const role = (formData.get('role') as string || '').trim();
 
     if (!userId || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(role)) {
-      return fail(400, { error: 'Selecione um usuário e um cargo válido (Staff ou Administrador).' });
+      return fail(400, { error: 'Selecione um usurio e um cargo vlido (Staff ou Administrador).' });
     }
 
     return fail(400, { error: 'Not implemented in Drizzle yet.' });

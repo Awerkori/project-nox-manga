@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { ArrowRight, ArrowUp, BookOpen, Clock, ChevronDown, AlertTriangle, RefreshCw } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
@@ -35,7 +36,8 @@
 
   $effect(() => {
     // Keep it in sync if props change externally
-    if (releases !== currentReleases) {
+    const current = untrack(() => currentReleases);
+    if (releases && releases.length > 0 && releases[0] !== current[0]) {
       currentReleases = [...releases];
     }
   });

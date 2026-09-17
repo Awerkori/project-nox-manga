@@ -12,7 +12,7 @@ export async function importer_prioritize_work(workId: string, reason: string | 
   const active = activeRes.data;
   
   if (active && active.workId !== workId && !forceReplace) {
-    return { data: { conflict: true, active_request_id: active.id, active_work_title: active.workId, message: 'Já existe uma obra em prioridade.' }, error: null };
+    return { data: { conflict: true, active_request_id: active.id, active_work_title: active.workId, message: 'J existe uma obra em prioridade.' }, error: null };
   }
 
   if (active && active.workId !== workId && forceReplace) {

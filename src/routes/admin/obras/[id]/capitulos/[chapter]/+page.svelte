@@ -25,7 +25,7 @@
 
   let { data } = $props();
   const initial = untrack(() => data);
-  let pages = $state(initial.pages.map((p) => ({ id: p.mediaId, name: `Página ${p.position}` }))),
+  let pages = $state(initial.pages.map((p) => ({ id: p.mediaId, name: `Pgina ${p.position}` }))),
     number = $state(initial.chapter?.number ?? 1),
     title = $state(initial.chapter?.title || ''),
     notice = $state(''),
@@ -60,19 +60,19 @@
   let dirty = $derived(JSON.stringify({ number, title, pages: pages.map((p) => p.id) }) !== savedVersion);
   beforeNavigate(({ cancel, willUnload }) => {
     if (savedNavigation || (!dirty && !pendingUploads.length && !uploading)) return;
-    if (willUnload || !window.confirm('Há páginas pendentes ou alterações não salvas. Sair desta página?'))
+    if (willUnload || !window.confirm('H pginas pendentes ou alteraes no salvas. Sair desta pgina?'))
       cancel();
   });
   async function loadFinals() {
     loadingFinals = true;
     try {
       const response = await fetch(`/api/staff?work=${data.work.id}`);
-      if (!response.ok) throw new Error('Consulta indisponível');
+      if (!response.ok) throw new Error('Consulta indisponvel');
       finals = (await response.json()).chapters;
       finalsChecked = true;
-      if (!finals.length) notice = 'Nenhum capítulo final disponível para importação. O upload local continua disponível.';
+      if (!finals.length) notice = 'Nenhum captulo final disponvel para importao. O upload local continua disponvel.';
     } catch {
-      notice = 'A central está indisponível no momento. Você ainda pode selecionar arquivos locais.';
+      notice = 'A central est indisponvel no momento. Voc ainda pode selecionar arquivos locais.';
     } finally {
       loadingFinals = false;
     }
@@ -83,10 +83,10 @@
     try {
       const response = await fetch(`/api/staff?chapter=${sourceChapter}`);
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
+      if (!response.ok) throw new Error((result as any).message);
       notice = 'Baixando somente o arquivo final aprovado…';
       const download = await fetch(result.url);
-      if (!download.ok) throw new Error('Não foi possível baixar o arquivo final.');
+      if (!download.ok) throw new Error('No foi possvel baixar o arquivo final.');
       const file = new File([await download.blob()], result.name);
       number = Number(result.number);
       title = result.title || '';
@@ -112,7 +112,7 @@
     progress = 0;
     try {
       const files = await expandFiles(input);
-      if (pages.length + files.length > 500) throw new Error('Limite de 500 páginas por capítulo.');
+      if (pages.length + files.length > 500) throw new Error('Limite de 500 pginas por captulo.');
       pendingUploads = files;
       batchTotal = files.length;
       await resumeUploads();
@@ -151,7 +151,7 @@
       await flushUploads(
         pendingUploads,
         async (file) => {
-          notice = `Enviando página ${pages.length + 1} de ${batchTotal}: ${file.name}`;
+          notice = `Enviando pgina ${pages.length + 1} de ${batchTotal}: ${file.name}`;
           const image = await normalizePage(file);
           const response = await fetch('/api/upload?purpose=staff_manual', {
             method: 'POST',
@@ -164,10 +164,10 @@
           if (response.status === 429) {
             const body = await response.json().catch(() => ({}));
             const retryAfter = Number(response.headers.get('Retry-After') || body.retryAfter) || 15;
-            throw new UploadRateLimitError(retryAfter, body.error || 'Rate limit temporário');
+            throw new UploadRateLimitError(retryAfter, body.error || 'Rate limit temporrio');
           }
           const result = await response.json();
-          if (!response.ok) throw new Error(result.message);
+          if (!response.ok) throw new Error((result as any).message);
           return result;
         },
         (result, file) => {
@@ -196,7 +196,7 @@
               isRetryingTransient = false;
               transientRetrySeconds = 0;
               notice = waitSeconds > 0
-                ? `Rate limit temporário do servidor. Aguardando ${waitSeconds}s…`
+                ? `Rate limit temporrio do servidor. Aguardando ${waitSeconds}s…`
                 : 'Retomando envio…';
             } else {
               isRateLimited = false;
@@ -225,13 +225,13 @@
         }
       );
       notice = pendingUploads.length
-        ? 'Envio pausado. As páginas já enviadas foram preservadas.'
-        : 'Páginas enviadas. Confira a ordem e salve o rascunho.';
+        ? 'Envio pausado. As pginas j enviadas foram preservadas.'
+        : 'Pginas enviadas. Confira a ordem e salve o rascunho.';
     } catch (e) {
       isRateLimited = false;
       isRetryingTransient = false;
       inCooldown = false;
-      notice = `${(e as Error).message} As páginas já enviadas foram preservadas. Tente novamente para continuar.`;
+      notice = `${(e as Error).message} As pginas j enviadas foram preservadas. Tente novamente para continuar.`;
     } finally {
       busy = uploading = false;
     }
@@ -250,7 +250,7 @@
     try {
       const result = await action('editor', 'chapter', {
         id: data.chapter?.id,
-        work_id: data.work.id,
+        workId: data.work.id,
         number,
         title,
         pages: pages.map((p) => p.id),
@@ -282,7 +282,7 @@
   }
   async function publish(unpublish = false) {
     if (!unpublish && (dirty || pendingUploads.length)) {
-      notice = 'Salve as alterações e confira a prévia antes de publicar.';
+      notice = 'Salve as alteraes e confira a prvia antes de publicar.';
       return;
     }
     busy = true;
@@ -294,8 +294,8 @@
         confirmed_final: confirmed
       });
       notice = unpublish
-        ? 'Capítulo despublicado. Você já pode corrigir as páginas.'
-        : 'Publicado! O capítulo já está disponível no site.';
+        ? 'Captulo despublicado. Voc j pode corrigir as pginas.'
+        : 'Publicado! O captulo j est disponvel no site.';
       actionState = unpublish ? 'idle' : 'published';
       await invalidateAll();
       setTimeout(() => {
@@ -311,7 +311,7 @@
 </script>
 
 <svelte:head>
-  <title>Capítulo {number} — {data.work.title} — Nox Editorial</title>
+  <title>Captulo {number} — {data.work.title} — Nox Editorial</title>
 </svelte:head>
 
 <div class="chapter-editor-view">
@@ -320,13 +320,13 @@
     <div class="breadcrumb">
       <a href="/admin/obras/{data.work.id}">{data.work.title}</a>
       <span>/</span>
-      <span>{data.chapter ? `Capítulo ${number}` : 'Adicionar capítulo'}</span>
+      <span>{data.chapter ? `Captulo ${number}` : 'Adicionar captulo'}</span>
     </div>
 
     <div class="header-title-bar">
       <div class="title-group">
-        <h1 style="font-size:32px">Uma página de cada vez.</h1>
-        <p class="small">1. Dados do capítulo → 2. Enviar páginas → 3. Conferir → 4. Publicar</p>
+        <h1 style="font-size:32px">Uma pgina de cada vez.</h1>
+        <p class="small">1. Dados do captulo → 2. Enviar pginas → 3. Conferir → 4. Publicar</p>
       </div>
 
       <div class="status-badge-area">
@@ -341,13 +341,13 @@
         {:else if actionState === 'unpublishing'}
           <span class="action-pill saving"><Loader2 size={13} class="spin" /> Despublicando…</span>
         {:else if actionState === 'error'}
-          <span class="action-pill error"><AlertCircle size={13} /> Erro na operação</span>
+          <span class="action-pill error"><AlertCircle size={13} /> Erro na operao</span>
         {:else if data.chapter?.publishedAt}
           <span class="action-pill live"><span class="dot-live"></span> Publicado</span>
         {:else if data.chapter}
           <span class="action-pill draft"><span class="dot-draft"></span> Rascunho</span>
         {:else}
-          <span class="action-pill draft"><span class="dot-draft"></span> Novo Capítulo</span>
+          <span class="action-pill draft"><span class="dot-draft"></span> Novo Captulo</span>
         {/if}
       </div>
     </div>
@@ -363,22 +363,22 @@
     <section class="panel form-panel">
       <div class="panel-header">
         <FileText size={18} class="panel-icon" />
-        <h2>Dados do Capítulo</h2>
+        <h2>Dados do Captulo</h2>
       </div>
 
       {#if !data.chapter?.publishedAt && !finalsChecked}
         <details class="staff-import-accordion">
-          <summary>Importação opcional da central</summary>
+          <summary>Importao opcional da central</summary>
           <div class="staff-import-body">
             <p class="small muted">
-              Para arquivos deste computador, use o upload abaixo. A central só será consultada se você solicitar.
+              Para arquivos deste computador, use o upload abaixo. A central s ser consultada se voc solicitar.
             </p>
             <button class="button secondary compact" onclick={loadFinals} disabled={busy || loadingFinals}>
               {#if loadingFinals}
                 <Loader2 size={14} class="spin" />
                 <span>Consultando…</span>
               {:else}
-                <span>Consultar capítulos finais da central</span>
+                <span>Consultar captulos finais da central</span>
               {/if}
             </button>
           </div>
@@ -388,14 +388,14 @@
       {#if finals.length && !data.chapter?.publishedAt}
         <div class="finals-picker-card">
           <div class="finals-picker-info">
-            <strong>Capítulos aprovados na central</strong>
-            <p class="small muted">Importe o arquivo final e confira as páginas antes de publicar.</p>
+            <strong>Captulos aprovados na central</strong>
+            <p class="small muted">Importe o arquivo final e confira as pginas antes de publicar.</p>
           </div>
           <div class="finals-picker-controls">
-            <select class="control" bind:value={sourceChapter} aria-label="Capítulo final da central">
-              <option value="">Selecionar capítulo</option>
+            <select class="control" bind:value={sourceChapter} aria-label="Captulo final da central">
+              <option value="">Selecionar captulo</option>
               {#each finals as final (final.id)}
-                <option value={final.id}>Capítulo {final.number}{final.title ? ` — ${final.title}` : ''}</option>
+                <option value={final.id}>Captulo {final.number}{final.title ? ` — ${final.title}` : ''}</option>
               {/each}
             </select>
             <button
@@ -403,7 +403,7 @@
               onclick={importFinal}
               disabled={busy || !!pendingUploads.length || !sourceChapter}
             >
-              Importar páginas finais
+              Importar pginas finais
             </button>
           </div>
         </div>
@@ -411,7 +411,7 @@
 
       <div class="form-grid">
         <label class="field">
-          Número do capítulo
+          Nmero do captulo
           <input
             type="number"
             min="0"
@@ -424,7 +424,7 @@
         </label>
 
         <label class="field">
-          Título opcional
+          Ttulo opcional
           <input
             type="text"
             bind:value={title}
@@ -435,7 +435,7 @@
 
         <!-- Scan Attribution Selector -->
         <div class="field col-full">
-          <span class="field-label">Scans / Tradução deste Capítulo</span>
+          <span class="field-label">Scans / Traduo deste Captulo</span>
           <div class="chapter-scans-chips">
             {#each data.allScans as scan (scan.id)}
               <label class="scan-chip-label" class:active={selectedScanIds.includes(scan.id)} class:is-official={scan.isOfficial}>
@@ -458,7 +458,7 @@
           </div>
           <small class="small muted">
             {#if !selectedScanIds.length}
-              Nenhuma scan selecionada (o capítulo não exibirá nome de scan falso).
+              Nenhuma scan selecionada (o captulo no exibir nome de scan falso).
             {:else}
               Scan(s) vinculada(s): {data.allScans.filter((s: any) => selectedScanIds.includes(s.id)).map((s: any) => s.name).join(' × ')}
             {/if}
@@ -482,7 +482,7 @@
           >
             <span aria-hidden="true">+</span>
             <strong>Selecione imagens ou um arquivo ZIP / CBZ</strong>
-            <small>Formatos aceitos: ZIP, CBZ, PNG, JPEG, WebP, AVIF. Ordenação automática por nome.</small>
+            <small>Formatos aceitos: ZIP, CBZ, PNG, JPEG, WebP, AVIF. Ordenao automtica por nome.</small>
             <span class="file-choice">Escolher arquivos</span>
             <input
               type="file"
@@ -500,7 +500,7 @@
         <div class="upload-live-metrics-card">
           <div class="metrics-header-row">
             <span class="metrics-title">
-              Enviando página <strong>{Math.min(batchTotal, pages.length + 1)}</strong> de <strong>{batchTotal}</strong>
+              Enviando pgina <strong>{Math.min(batchTotal, pages.length + 1)}</strong> de <strong>{batchTotal}</strong>
             </span>
             <div class="metrics-chips">
               {#if uploadSpeedMBs > 0}
@@ -517,12 +517,12 @@
           {#if isRateLimited && rateLimitSeconds > 0}
             <div class="cooldown-alert">
               <Clock size={13} class="spin" />
-              <span>Rate limit temporário do servidor. Cooldown: <strong>{rateLimitSeconds}s</strong> · Retomada automática imediata.</span>
+              <span>Rate limit temporrio do servidor. Cooldown: <strong>{rateLimitSeconds}s</strong> · Retomada automtica imediata.</span>
             </div>
           {:else if isRetryingTransient && transientRetrySeconds > 0}
             <div class="cooldown-alert transient-alert">
               <RefreshCw size={13} class="spin" />
-              <span>Instabilidade temporária de rede. Nova tentativa ({transientAttempt}/6) em <strong>{transientRetrySeconds}s</strong>…</span>
+              <span>Instabilidade temporria de rede. Nova tentativa ({transientAttempt}/6) em <strong>{transientRetrySeconds}s</strong>…</span>
             </div>
           {/if}
         </div>
@@ -534,14 +534,14 @@
 
       {#if pendingUploads.length}
         <div class="row" style="margin-top:16px">
-          <span class="small">{pendingUploads.length} páginas pendentes</span>
+          <span class="small">{pendingUploads.length} pginas pendentes</span>
           {#if uploading}
             <button
               class="button secondary compact"
               disabled={pauseRequested}
               onclick={() => (pauseRequested = true)}
             >
-              {pauseRequested ? 'Pausando após esta página…' : 'Pausar envio'}
+              {pauseRequested ? 'Pausando aps esta pgina…' : 'Pausar envio'}
             </button>
           {:else}
             <button class="button secondary compact" onclick={resumeUploads} disabled={busy}>
@@ -553,11 +553,11 @@
               onclick={() => {
                 if (
                   window.confirm(
-                    'Descartar as páginas ainda não enviadas? As páginas recebidas serão preservadas.'
+                    'Descartar as pginas ainda no enviadas? As pginas recebidas sero preservadas.'
                   )
                 ) {
                   pendingUploads = [];
-                  notice = 'Pendências descartadas. Confira as páginas recebidas antes de salvar.';
+                  notice = 'Pendncias descartadas. Confira as pginas recebidas antes de salvar.';
                 }
               }}
             >
@@ -573,7 +573,7 @@
       <div class="row between" style="margin:0 0 20px">
         <div class="title-with-icon">
           <Layers size={18} class="panel-icon" />
-          <h3 style="margin:0">{pages.length} páginas</h3>
+          <h3 style="margin:0">{pages.length} pginas</h3>
         </div>
         <span class="small muted">Ordem de leitura: esquerda para direita</span>
       </div>
@@ -581,8 +581,8 @@
       {#if pages.length === 0}
         <div class="empty-pages-state">
           <Layers size={40} class="empty-icon" />
-          <h3>Nenhuma página carregada</h3>
-          <p class="small muted">Envie imagens ou um arquivo ZIP acima para montar o capítulo.</p>
+          <h3>Nenhuma pgina carregada</h3>
+          <p class="small muted">Envie imagens ou um arquivo ZIP acima para montar o captulo.</p>
         </div>
       {:else}
         <div class="page-grid">
@@ -590,7 +590,7 @@
             <div class="page-tile">
               <img
                 src="/media/{page.id}"
-                alt="Página {index + 1}: {page.name}"
+                alt="Pgina {index + 1}: {page.name}"
                 loading="lazy"
                 width="160"
                 height="220"
@@ -602,21 +602,21 @@
               {#if !data.chapter?.publishedAt}
                 <div class="page-controls">
                   <button
-                    aria-label="Mover página {index + 1} para antes"
+                    aria-label="Mover pgina {index + 1} para antes"
                     disabled={index === 0 || busy}
                     onclick={() => move(index, -1)}
                   >
                     ←
                   </button>
                   <button
-                    aria-label="Mover página {index + 1} para depois"
+                    aria-label="Mover pgina {index + 1} para depois"
                     disabled={index === pages.length - 1 || busy}
                     onclick={() => move(index, 1)}
                   >
                     →
                   </button>
                   <button
-                    aria-label="Remover página {index + 1}"
+                    aria-label="Remover pgina {index + 1}"
                     disabled={busy}
                     onclick={() => (pages = pages.filter((_, i) => i !== index))}
                   >
@@ -653,7 +653,7 @@
             target="_blank"
             rel="noreferrer"
           >
-            Visualizar capítulo ↗
+            Visualizar captulo ↗
           </a>
         {/if}
       </div>
@@ -662,11 +662,11 @@
     <!-- Publication Control Panel -->
     {#if data.chapter}
       <section class="panel publication-panel">
-        <h2 style="font-size:23px">{data.chapter.publishedAt ? 'Capítulo publicado' : 'Tudo conferido?'}</h2>
+        <h2 style="font-size:23px">{data.chapter.publishedAt ? 'Captulo publicado' : 'Tudo conferido?'}</h2>
 
         {#if data.chapter.publishedAt}
           <p class="small">
-            Despublique antes de fazer correções. As páginas deixam de ser acessíveis publicamente.
+            Despublique antes de fazer correes. As pginas deixam de ser acessveis publicamente.
           </p>
           <button
             class="button secondary"
@@ -683,13 +683,13 @@
         {:else}
           <p class="small">
             {dirty
-              ? 'Há alterações não salvas. Salve o rascunho antes de conferir e publicar.'
-              : 'Abra a prévia e confira todas as páginas antes de publicar.'}
+              ? 'H alteraes no salvas. Salve o rascunho antes de conferir e publicar.'
+              : 'Abra a prvia e confira todas as pginas antes de publicar.'}
           </p>
 
           <label class="small row" style="margin:20px 0">
             <input type="checkbox" bind:checked={confirmed} />
-            Confirmo que são páginas finais, revisadas e autorizadas para publicação.
+            Confirmo que so pginas finais, revisadas e autorizadas para publicao.
           </label>
 
           <button
@@ -701,7 +701,7 @@
               <Loader2 size={15} class="spin" />
               <span>Publicando…</span>
             {:else}
-              Publicar capítulo
+              Publicar captulo
             {/if}
           </button>
         {/if}
@@ -712,7 +712,7 @@
     {#if data.role === 'ADMIN' && data.chapter}
       <DeleteContent
         id={data.chapter.id}
-        label={`Capítulo ${data.chapter.number}`}
+        label={`Captulo ${data.chapter.number}`}
         kind="chapter"
         destination={`/admin/obras/${data.work.id}`}
       />

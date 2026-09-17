@@ -41,7 +41,7 @@
     [...stages].sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0))
   );
 
-  // Map of chapter_id -> array of chapter_stages ordered
+  // Map of chapterId -> array of chapter_stages ordered
   let chapterStagesMap = $derived(() => {
     const map = new Map<string, any[]>();
     for (const cs of chapterStages) {
@@ -110,11 +110,11 @@
       status: cs.status,
       label:
         cs.status === 'DONE'
-          ? 'Concluído'
+          ? 'Concludo'
           : cs.status === 'IN_PROGRESS'
             ? 'Em Andamento'
             : cs.status === 'AVAILABLE'
-              ? 'Disponível'
+              ? 'Disponvel'
               : cs.status === 'REWORK'
                 ? 'Retrabalho'
                 : 'Bloqueado',
@@ -133,9 +133,9 @@
           <Layers size={22} class="text-purple-400" />
         </div>
         <div>
-          <h1 class="page-title">Pipeline Operacional de Produção</h1>
+          <h1 class="page-title">Pipeline Operacional de Produo</h1>
           <p class="page-subtitle">
-            Acompanhamento contínuo dos capítulos ao longo das 7 etapas editoriais do Project Nox.
+            Acompanhamento contnuo dos captulos ao longo das 7 etapas editoriais do Project Nox.
           </p>
         </div>
       </div>
@@ -159,7 +159,7 @@
         onclick={() => (selectedStatusFilter = 'IN_PROGRESS')}
       >
         <span class="stat-num text-amber-400">{stats.inProgress}</span>
-        <span class="stat-lbl">Em Produção</span>
+        <span class="stat-lbl">Em Produo</span>
       </button>
       <button
         type="button"
@@ -188,7 +188,7 @@
       <Search size={15} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar capítulo, número ou obra..."
+        placeholder="Buscar captulo, nmero ou obra..."
         bind:value={searchQuery}
         class="search-field"
       />
@@ -212,7 +212,7 @@
         <Filter size={14} class="select-icon" />
         <select bind:value={selectedStatusFilter} class="filter-select">
           <option value="ALL">Todos os Status</option>
-          <option value="IN_PROGRESS">Em Produção</option>
+          <option value="IN_PROGRESS">Em Produo</option>
           <option value="READY">Pronto p/ Upar</option>
           <option value="PUBLISHED">Publicado</option>
         </select>
@@ -248,7 +248,7 @@
                 <div class="work-details-text">
                   <div class="work-title-row">
                     <span class="work-series-name">{work.title || 'Obra'}</span>
-                    <span class="chapter-tag">Capítulo #{chNum}</span>
+                    <span class="chapter-tag">Captulo #{chNum}</span>
                   </div>
                   {#if chTitle}
                     <h2 class="chapter-sub-heading">{chTitle}</h2>
@@ -260,14 +260,14 @@
               <div class="card-top-actions">
                 <div class="status-indicator-tag status-{chStatus.toLowerCase()}">
                   <span class="status-dot"></span>
-                  <span>{chStatus === 'PUBLISHED' ? 'Publicado' : chStatus === 'READY' ? 'Pronto p/ Upar' : 'Em Produção'}</span>
+                  <span>{chStatus === 'PUBLISHED' ? 'Publicado' : chStatus === 'READY' ? 'Pronto p/ Upar' : 'Em Produo'}</span>
                 </div>
 
                 <button
                   type="button"
                   class="btn-open-workspace"
                   onclick={() => onOpenChapter(chData)}
-                  title="Abrir o Workspace completo deste capítulo"
+                  title="Abrir o Workspace completo deste captulo"
                 >
                   <span>Abrir Workspace</span>
                   <ChevronRight size={14} />
@@ -335,7 +335,7 @@
                 {#if meta.openQcCount > 0}
                   <span class="meta-tag qc-tag">
                     <AlertTriangle size={12} />
-                    <span>QC: {meta.openQcCount} pendência{meta.openQcCount > 1 ? 's' : ''}</span>
+                    <span>QC: {meta.openQcCount} pendncia{meta.openQcCount > 1 ? 's' : ''}</span>
                   </span>
                 {/if}
 
@@ -357,7 +357,7 @@
                 class="mobile-open-link"
                 onclick={() => onOpenChapter(chData)}
               >
-                <span>Ver Detalhes do Capítulo</span>
+                <span>Ver Detalhes do Captulo</span>
                 <ArrowRight size={13} />
               </button>
             </div>
@@ -370,12 +370,12 @@
         <div class="empty-icon-circle">
           <Layers size={36} class="text-purple-400" />
         </div>
-        <h3 class="empty-title">Nenhum capítulo encontrado</h3>
+        <h3 class="empty-title">Nenhum captulo encontrado</h3>
         <p class="empty-desc">
           {#if searchQuery || selectedWorkId !== 'ALL' || selectedStatusFilter !== 'ALL'}
-            Nenhum capítulo corresponde aos filtros atuais. Tente limpar a busca ou selecionar outra obra.
+            Nenhum captulo corresponde aos filtros atuais. Tente limpar a busca ou selecionar outra obra.
           {:else}
-            Não há capítulos em produção ativos nesta scan no momento. Crie um novo capítulo na aba Produção.
+            No h captulos em produo ativos nesta scan no momento. Crie um novo captulo na aba Produo.
           {/if}
         </p>
       </div>

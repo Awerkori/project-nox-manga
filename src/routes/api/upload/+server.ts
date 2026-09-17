@@ -29,22 +29,22 @@ export const POST = async ({ request, locals, url }) => {
         const member = members?.[0];
 
         if (!member || !['OWNER', 'ADMIN'].includes(member.role)) {
-          throw kitError(403, 'Apenas o Dono ou Administrador da Scan podem alterar mídias institucionais.');
+          throw kitError(403, 'Apenas o Dono ou Administrador da Scan podem alterar mdias institucionais.');
         }
       }
       resolvedPurpose = resolvedPurpose || 'scan_media';
     } else {if (!workId) {
-        throw kitError(400, 'Identificador da obra (workId) é obrigatório para envio de capítulos.');}
+        throw kitError(400, 'Identificador da obra (workId)  obrigatrio para envio de captulos.');}
 
       // Check per-work upload authorization using the database RPC
       const { data: authRes, error: authErr } = await safeQuery(
-        db.execute(sql`SELECT can_upload_to_scan_work(${scanId}, ${workId}, ${locals.user!.id
+        (db as any).execute(sql`SELECT can_upload_to_scan_work(${scanId}, ${workId}, ${locals.user!.id
       }) as is_authorized`)
       );
       const isAuthorized = (authRes as any[])?.[0]?.is_authorized;
 
       if (authErr || !isAuthorized) {
-        throw kitError(403, 'Você não possui autorização para enviar capítulos desta obra ou a Scan está com envios pausados/em emergência.');
+        throw kitError(403, 'Voc no possui autorizao para enviar captulos desta obra ou a Scan est com envios pausados/em emergncia.');
       }
       resolvedPurpose = 'scan_chapter';
     }
@@ -74,7 +74,7 @@ export const POST = async ({ request, locals, url }) => {
     if (failure instanceof RateLimitError) {
       const retryAfter = failure.retryAfter;
       return new Response(
-        JSON.stringify({ error: 'Rate limit temporário. O envio será retomado automaticamente.', retryAfter }),
+        JSON.stringify({ error: 'Rate limit temporrio. O envio ser retomado automaticamente.', retryAfter }),
         {
           status: 429,
           headers: {

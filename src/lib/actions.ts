@@ -5,6 +5,6 @@ export async function action(scope: string, action: string, data: Record<string,
     body: JSON.stringify({ scope, action, data })
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.message || 'Não foi possível concluir. Tente novamente.');
+  if (!response.ok) throw new Error((result as any).message || 'No foi possvel concluir. Tente novamente.');
   return result;
 }

@@ -76,7 +76,7 @@
 </script>
 
 <svelte:head>
-  <title>Saúde do Sistema | Project Nox Admin</title>
+  <title>Sade do Sistema | Project Nox Admin</title>
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
@@ -91,19 +91,19 @@
         <div class="badge-row">
           <span class="status-pill {getStatusClass(data.overall.status)}">
             {#if data.overall.status === 'OTIMO' || data.overall.status === 'BOM'}
-              <CheckCircle2 size={15} /> 🟢 SAÚDE GERAL: {data.overall.statusLabel}
+              <CheckCircle2 size={15} /> 🟢 SADE GERAL: {data.overall.statusLabel}
             {:else if data.overall.status === 'ATENCAO'}
-              <AlertTriangle size={15} /> 🟡 SAÚDE GERAL: {data.overall.statusLabel}
+              <AlertTriangle size={15} /> 🟡 SADE GERAL: {data.overall.statusLabel}
             {:else}
-              <AlertOctagon size={15} /> 🔴 SAÚDE GERAL: {data.overall.statusLabel}
+              <AlertOctagon size={15} /> 🔴 SADE GERAL: {data.overall.statusLabel}
             {/if}
           </span>
           <span class="trend-chip">24h: {data.overall.trend24h}</span>
           <span class="trend-chip">7d: {data.overall.trend7d}</span>
           <span class="timestamp-label">Atualizado: {new Date(data.fetchedAt).toLocaleTimeString()}</span>
         </div>
-        <h1 class="health-title">Saúde do Sistema</h1>
-        <p class="health-subtitle">{data.overall.message}</p>
+        <h1 class="health-title">Sade do Sistema</h1>
+        <p class="health-subtitle">{(data.overall as any).message}</p>
       </div>
     </div>
     <div class="header-actions">
@@ -119,7 +119,7 @@
     {#if data.overall.criticalIssues.length > 0}
       <div class="attention-header">
         <AlertOctagon size={18} class="text-red" />
-        <strong>Pontos Críticos Requerendo Atenção Imediata</strong>
+        <strong>Pontos Crticos Requerendo Ateno Imediata</strong>
       </div>
       <ul>
         {#each data.overall.criticalIssues as issue}
@@ -129,7 +129,7 @@
     {:else if data.overall.attentionIssues.length > 0}
       <div class="attention-header">
         <AlertTriangle size={18} class="text-yellow" />
-        <strong>Pontos de Atenção Detectados</strong>
+        <strong>Pontos de Ateno Detectados</strong>
       </div>
       <ul>
         {#each data.overall.attentionIssues as issue}
@@ -139,7 +139,7 @@
     {:else}
       <div class="healthy-statement">
         <Check size={18} class="text-green" />
-        <span>Nenhum ponto crítico ou gargalo detectado no momento. Todos os serviços operando em condições nominais.</span>
+        <span>Nenhum ponto crtico ou gargalo detectado no momento. Todos os servios operando em condies nominais.</span>
       </div>
     {/if}
   </div>
@@ -159,7 +159,7 @@
       </div>
       <p class="human-summary">{data.components.database.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.database.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.database.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('database')}>
         <span>{openCards['database'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -191,7 +191,7 @@
       </div>
       <p class="human-summary">{data.components.web.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.web.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.web.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('web')}>
         <span>{openCards['web'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -210,7 +210,7 @@
       {/if}
     </div>
 
-    <!-- 3. Experiência Mobile -->
+    <!-- 3. Experincia Mobile -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><Smartphone size={18} /></div>
@@ -223,7 +223,7 @@
       </div>
       <p class="human-summary">{data.components.mobile.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.mobile.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.mobile.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('mobile')}>
         <span>{openCards['mobile'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -255,7 +255,7 @@
       </div>
       <p class="human-summary">{data.components.importer.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.importer.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.importer.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('importer')}>
         <span>{openCards['importer'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -287,7 +287,7 @@
       </div>
       <p class="human-summary">{data.components.storage.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.storage.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.storage.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('storage')}>
         <span>{openCards['storage'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -306,7 +306,7 @@
       {/if}
     </div>
 
-    <!-- 6. Fontes de Mídia (Sources) -->
+    <!-- 6. Fontes de Mdia (Sources) -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><Layers size={18} /></div>
@@ -319,7 +319,7 @@
       </div>
       <p class="human-summary">{data.components.sources.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.sources.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.sources.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('sources')}>
         <span>{openCards['sources'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -338,7 +338,7 @@
       {/if}
     </div>
 
-    <!-- 7. Autenticação & Sessões -->
+    <!-- 7. Autenticao & Sesses -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><ShieldCheck size={18} /></div>
@@ -351,7 +351,7 @@
       </div>
       <p class="human-summary">{data.components.auth.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.auth.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.auth.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('auth')}>
         <span>{openCards['auth'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -370,7 +370,7 @@
       {/if}
     </div>
 
-    <!-- 8. Leitor de Capítulos -->
+    <!-- 8. Leitor de Captulos -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><BookOpen size={18} /></div>
@@ -383,7 +383,7 @@
       </div>
       <p class="human-summary">{data.components.reader.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.reader.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.reader.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('reader')}>
         <span>{openCards['reader'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -415,7 +415,7 @@
       </div>
       <p class="human-summary">{data.components.postgrest.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.postgrest.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.postgrest.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('postgrest')}>
         <span>{openCards['postgrest'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -434,7 +434,7 @@
       {/if}
     </div>
 
-    <!-- 10. Serviço de Emails -->
+    <!-- 10. Servio de Emails -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><Mail size={18} /></div>
@@ -447,7 +447,7 @@
       </div>
       <p class="human-summary">{data.components.emails.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.emails.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.emails.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('emails')}>
         <span>{openCards['emails'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -466,7 +466,7 @@
       {/if}
     </div>
 
-    <!-- 11. Capacidade & Expansão de Fontes -->
+    <!-- 11. Capacidade & Expanso de Fontes -->
     <div class="metric-card">
       <div class="card-header">
         <div class="icon-bubble"><TrendingUp size={18} /></div>
@@ -479,7 +479,7 @@
       </div>
       <p class="human-summary">{data.components.readiness.summary}</p>
       <div class="trend-row">
-        <span class="trend-text">Últimas 24h: {data.components.readiness.trend24h}</span>
+        <span class="trend-text">ltimas 24h: {data.components.readiness.trend24h}</span>
       </div>
       <button class="btn-details-toggle" onclick={() => toggleCard('readiness')}>
         <span>{openCards['readiness'] ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -502,7 +502,7 @@
   <!-- Technical Telemetry Section: Top Slow Queries -->
   <section class="health-section">
     <div class="section-title-row">
-      <h2><Zap size={20} class="text-purple" /> Detalhes Técnicos: Top Queries (pg_stat_statements)</h2>
+      <h2><Zap size={20} class="text-purple" /> Detalhes Tcnicos: Top Queries (pg_stat_statements)</h2>
       <span class="section-badge">Telemetria Real</span>
     </div>
     <div class="table-container">
@@ -511,8 +511,8 @@
           <tr>
             <th>Query (Sanitizada)</th>
             <th class="text-right">Chamadas</th>
-            <th class="text-right">Tempo Médio</th>
-            <th class="text-right">Tempo Máximo</th>
+            <th class="text-right">Tempo Mdio</th>
+            <th class="text-right">Tempo Mximo</th>
           </tr>
         </thead>
         <tbody>
@@ -536,7 +536,7 @@
   <!-- Incident History Section -->
   <section class="health-section">
     <div class="section-title-row">
-      <h2><History size={20} class="text-purple" /> Histórico de Incidentes e Resoluções</h2>
+      <h2><History size={20} class="text-purple" /> Histrico de Incidentes e Resolues</h2>
     </div>
     <div class="incident-list">
       {#each data.incidents as inc}
@@ -548,7 +548,7 @@
           <div class="incident-content">
             <h4>{inc.title}</h4>
             <p><strong>Causa Raiz:</strong> {inc.rootCause}</p>
-            <p><strong>Resolução:</strong> {inc.resolution}</p>
+            <p><strong>Resoluo:</strong> {inc.resolution}</p>
           </div>
         </div>
       {/each}

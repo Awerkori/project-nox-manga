@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   );
 
   if (dbError) {
-    throw error(500, 'Erro ao buscar membros: ' + dbError.message);
+    throw error(500, 'Erro ao buscar membros: ' + (dbError as any).message);
   }
 
   const users = (members || []).map((m: any) => {const role = m.role || 'USER';

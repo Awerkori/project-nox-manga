@@ -21,7 +21,7 @@
 
   let { data } = $props();
 
-  let staff = $state<{ user_id: string; display_name: string; github_login: string }[]>([]);
+  let staff = $state<{ userId: string; displayName: string; github_login: string }[]>([]);
   let staffLoaded = $state(false);
   let notice = $state(''),
     busy = $state(false),
@@ -57,9 +57,9 @@
           : {}
       );
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
+      if (!response.ok) throw new Error((result as any).message);
       if (id) {
-        notice = result.message;
+        notice = (result as any).message;
         await invalidateAll();
       } else {
         staff = result.members;
@@ -76,10 +76,10 @@
     busy = true;
     try {
       await action('owner', name, details);
-      notice = 'Alteração registrada com sucesso.';
+      notice = 'Alterao registrada com sucesso.';
       await invalidateAll();
       setTimeout(() => {
-        if (notice === 'Alteração registrada com sucesso.') notice = '';
+        if (notice === 'Alterao registrada com sucesso.') notice = '';
       }, 3500);
     } catch (e) {
       notice = (e as Error).message;
@@ -100,8 +100,8 @@
         body: JSON.stringify({ email: f.get('email') })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
-      notice = result.message;
+      if (!response.ok) throw new Error((result as any).message);
+      notice = (result as any).message;
       form.reset();
       await invalidateAll();
     } catch (e) {
@@ -120,8 +120,8 @@
         body: JSON.stringify({ email })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
-      notice = result.message;
+      if (!response.ok) throw new Error((result as any).message);
+      notice = (result as any).message;
       await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;
@@ -132,17 +132,17 @@
 </script>
 
 <svelte:head>
-  <title>Usuários e Moderação — Nox Admin</title>
+  <title>Usurios e Moderao — Nox Admin</title>
 </svelte:head>
 
 <div class="gestao-view">
   <!-- Header -->
   <header class="page-header">
     <div class="header-left">
-      <span class="eyebrow">ADMINISTRAÇÃO DO SISTEMA</span>
+      <span class="eyebrow">ADMINISTRAO DO SISTEMA</span>
       <h1>Pessoas & Comunidade</h1>
       <p class="subtitle">
-        Gerencie permissões de acesso, convites da equipe editorial e moderação dos comentários dos leitores.
+        Gerencie permisses de acesso, convites da equipe editorial e moderao dos comentrios dos leitores.
       </p>
     </div>
 
@@ -150,7 +150,7 @@
     <div class="stats-pills">
       <div class="stat-item">
         <span class="stat-num">{data.members.length}</span>
-        <span class="stat-label">Usuários</span>
+        <span class="stat-label">Usurios</span>
       </div>
       <div class="stat-item">
         <span class="stat-num">{editorCount + adminCount}</span>
@@ -192,7 +192,7 @@
         <input
           class="control search-control"
           bind:value={search}
-          aria-label="Buscar usuário"
+          aria-label="Buscar usurio"
           placeholder="Buscar por nome ou username…"
         />
         {#if search}
@@ -208,10 +208,10 @@
       <table>
         <thead>
           <tr>
-            <th>Usuário</th>
+            <th>Usurio</th>
             <th>Cargo</th>
-            <th>Situação</th>
-            <th class="actions-th">Ações</th>
+            <th>Situao</th>
+            <th class="actions-th">Aes</th>
           </tr>
         </thead>
         <tbody>
@@ -269,7 +269,7 @@
           {#if members.length === 0}
             <tr>
               <td colspan="4" class="empty-table-cell">
-                Nenhum usuário encontrado para "{search}".
+                Nenhum usurio encontrado para "{search}".
               </td>
             </tr>
           {/if}
@@ -336,7 +336,7 @@
           <h2>Convidar Editor por E-mail</h2>
         </div>
         <p class="small muted">
-          A pessoa receberá a permissão de EDITOR ao fazer login com o e-mail informado. Não concede privilégios de Administrador.
+          A pessoa receber a permisso de EDITOR ao fazer login com o e-mail informado. No concede privilgios de Administrador.
         </p>
       </div>
 
@@ -388,7 +388,7 @@
           <h2>Equipe Central da Staff</h2>
         </div>
         <p class="small muted">
-          Sincronização estritamente unidirecional (leitura). Autorize membros ativos da Central da Staff para operar capítulos e obras no Manga.
+          Sincronizao estritamente unidirecional (leitura). Autorize membros ativos da Central da Staff para operar captulos e obras no Manga.
         </p>
       </div>
 
@@ -428,26 +428,26 @@
     <div class="panel-heading">
       <div class="title-with-icon">
         <MessageSquare size={18} class="section-icon" />
-        <h2>Moderação de Comentários ({data.comments.length})</h2>
+        <h2>Moderao de Comentrios ({data.comments.length})</h2>
       </div>
       <p class="small muted">
-        Supervisione os comentários deixados pelos leitores nas obras e capítulos. Ocultações são imediatas.
+        Supervisione os comentrios deixados pelos leitores nas obras e captulos. Ocultaes so imediatas.
       </p>
     </div>
 
     {#if data.comments.length === 0}
-      <p class="small muted empty-comments">Nenhum comentário registrado na plataforma ainda.</p>
+      <p class="small muted empty-comments">Nenhum comentrio registrado na plataforma ainda.</p>
     {:else}
       <div class="comments-grid">
         {#each data.comments as comment (comment.id)}
           <article class="comment-card" class:comment-removed={comment.removed}>
             <div class="comment-card-top">
               <div class="comment-meta">
-                <strong>{comment.members?.displayName || 'Leitor Anônimo'}</strong>
+                <strong>{comment.members?.displayName || 'Leitor Annimo'}</strong>
                 <span class="work-link-text">em {comment.works?.title || 'Obra'}</span>
               </div>
               <span class="chip {comment.removed ? 'chip-danger' : 'chip-success'}">
-                {comment.removed ? 'Removido' : 'Visível'}
+                {comment.removed ? 'Removido' : 'Visvel'}
               </span>
             </div>
 
@@ -464,7 +464,7 @@
                   <span>Restaurar</span>
                 {:else}
                   <Trash2 size={13} />
-                  <span>Remover comentário</span>
+                  <span>Remover comentrio</span>
                 {/if}
               </button>
             </div>

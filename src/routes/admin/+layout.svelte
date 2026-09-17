@@ -113,7 +113,7 @@
     </div>
 
     <!-- Grouped Admin Navigation -->
-    <nav class="sidebar-nav" aria-label="Navegação administrativa">
+    <nav class="sidebar-nav" aria-label="Navegao administrativa">
       <!-- Group: GERAL -->
       <div class="nav-group">
         <span class="group-label">GERAL</span>
@@ -124,13 +124,13 @@
           onclick={closeMobile}
         >
           <LayoutDashboard size={17} class="nav-icon" />
-          <span>Visão Geral</span>
+          <span>Viso Geral</span>
         </a>
       </div>
 
-      <!-- Group: CONTEÚDO -->
+      <!-- Group: CONTEDO -->
       <div class="nav-group">
-        <span class="group-label">CONTEÚDO</span>
+        <span class="group-label">CONTEDO</span>
         <a
           href="/admin/obras"
           class="nav-link"
@@ -138,7 +138,7 @@
           onclick={closeMobile}
         >
           <BookOpen size={17} class="nav-icon" />
-          <span>Obras e Capítulos</span>
+          <span>Obras e Captulos</span>
         </a>
         <a
           href="/admin/tags"
@@ -147,11 +147,11 @@
           onclick={closeMobile}
         >
           <Tags size={17} class="nav-icon" />
-          <span>Gêneros e Tags</span>
+          <span>Gneros e Tags</span>
         </a>
       </div>
 
-      <!-- Group: PAINEL DA SCAN (Mini-backoffice da própria Scan) -->
+      <!-- Group: PAINEL DA SCAN (Mini-backoffice da prpria Scan) -->
       {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
         <div class="nav-group">
           <span class="group-label">PAINEL DA SCAN</span>
@@ -191,9 +191,9 @@
         </div>
       {/if}
 
-      <!-- Group: OPERAÇÕES -->
+      <!-- Group: OPERAES -->
       <div class="nav-group">
-        <span class="group-label">OPERAÇÕES</span>
+        <span class="group-label">OPERAES</span>
         <a
           href="/admin/importer"
           class="nav-link"
@@ -215,16 +215,16 @@
           onclick={closeMobile}
         >
           <Flag size={17} class="nav-icon" />
-          <span>Denúncias & Moderação</span>
+          <span>Denncias & Moderao</span>
           {#if (data.pendingReportsCount ?? 0) > 0}
             <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
           {/if}
         </a>
       </div>
 
-      <!-- Group: ADMINISTRAÇÃO -->
+      <!-- Group: ADMINISTRAO -->
       <div class="nav-group">
-        <span class="group-label">ADMINISTRAÇÃO</span>
+        <span class="group-label">ADMINISTRAO</span>
         {#if data.role === 'ADMIN'}
           <a
             href="/admin/health"
@@ -233,7 +233,7 @@
             onclick={closeMobile}
           >
             <Activity size={17} class="nav-icon" />
-            <span>Saúde do Sistema</span>
+            <span>Sade do Sistema</span>
           </a>
           <a
             href="/admin/staff"
@@ -242,7 +242,7 @@
             onclick={closeMobile}
           >
             <UserCheck size={17} class="nav-icon" />
-            <span>Gestão da Staff</span>
+            <span>Gesto da Staff</span>
           </a>
           <a
             href="/admin/gestao"
@@ -261,7 +261,7 @@
           onclick={closeMobile}
         >
           <ShoppingBag size={17} class="nav-icon" />
-          <span>Gestão da Loja</span>
+          <span>Gesto da Loja</span>
         </a>
         {#if data.role === 'ADMIN'}
           <a
@@ -271,7 +271,7 @@
             onclick={closeMobile}
           >
             <Users size={17} class="nav-icon" />
-            <span>Gestão Global de Scans</span>
+            <span>Gesto Global de Scans</span>
           </a>
           <a
             href="/admin/gestao/configuracoes"
@@ -280,7 +280,7 @@
             onclick={closeMobile}
           >
             <Settings size={17} class="nav-icon" />
-            <span>Configurações</span>
+            <span>Configuraes</span>
           </a>
         {/if}
       </div>
@@ -289,7 +289,7 @@
       <div class="nav-group nav-group-bottom">
         <a href="/" class="nav-link public-link" target="_blank" rel="noopener noreferrer">
           <ArrowUpRight size={17} class="nav-icon" />
-          <span>Ver Site Público</span>
+          <span>Ver Site Pblico</span>
         </a>
       </div>
     </nav>

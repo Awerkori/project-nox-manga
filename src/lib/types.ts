@@ -19,14 +19,14 @@ export type Work = {id: string;
   viewsTotal?: number;};
 export const statusLabels: Record<string, string> = {
   ONGOING: 'Em andamento',
-  COMPLETED: 'Concluído',
+  COMPLETED: 'Concludo',
   HIATUS: 'Em pausa',
   CANCELLED: 'Cancelado',
   READING: 'Lendo',
   PLANNED: 'Quero ler'
 };
 export const kindLabels: Record<string, string> = {
-  MANGA: 'Mangá',
+  MANGA: 'Mang',
   MANHWA: 'Manhwa',
   MANHUA: 'Manhua',
   WEBTOON: 'Webtoon'
@@ -44,13 +44,13 @@ export function relativeTime(value?: string | null): string {
   if (isNaN(d.getTime())) return 'recentemente';
   const ms = Date.now() - d.getTime();
   const seconds = Math.max(0, Math.floor(ms / 1000));
-  if (seconds < 60) return 'agora há pouco';
+  if (seconds < 60) return 'agora h pouco';
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `há ${minutes} min`;
+  if (minutes < 60) return `h ${minutes} min`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+  if (hours < 24) return `h ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  if (days < 7) return `h ${days} ${days === 1 ? 'dia' : 'dias'}`;
   return date(value);
 }
 export const slugify = (value: string) =>

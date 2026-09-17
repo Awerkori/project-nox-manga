@@ -205,9 +205,9 @@
   let typingText = $derived.by(() => {
     const names = Object.values(typingUsers).map((u) => u.username);
     if (names.length === 0) return '';
-    if (names.length === 1) return names[0] + ' está digitando...';
-    if (names.length === 2) return names[0] + ' e ' + names[1] + ' estão digitando...';
-    return names[0] + ' e outros estão digitando...';
+    if (names.length === 1) return names[0] + ' est digitando...';
+    if (names.length === 2) return names[0] + ' e ' + names[1] + ' esto digitando...';
+    return names[0] + ' e outros esto digitando...';
   });
 
   onMount(() => {
@@ -374,10 +374,10 @@
 
       const msgObj = messages.find((m: any) => m.id === id);
       if (msgObj?.deletedAt) {
-        showDeepLinkNotice('Esta mensagem não está mais disponível.');
+        showDeepLinkNotice('Esta mensagem no est mais disponvel.');
       }
     } else {
-      showDeepLinkNotice('Esta mensagem não está mais disponível.');
+      showDeepLinkNotice('Esta mensagem no est mais disponvel.');
     }
   }
 
@@ -446,7 +446,7 @@
       messageInput = (messageInput ? messageInput + '\n' : '') + fileLink;
       if (textareaEl) textareaEl.focus();
     } catch (err: any) {
-      alert(err.message || 'Erro ao enviar anexo');
+      alert((err as any).message || 'Erro ao enviar anexo');
     } finally {
       isUploadingChatFile = false;
       input.value = '';
@@ -468,7 +468,7 @@
     );
 
     return withLinks.replace(
-      /(^|[^a-zA-Z0-9_])(@[a-zA-Z0-9_À-ÿ]+)/g,
+      /(^|[^a-zA-Z0-9_])(@[a-zA-Z0-9_-]+)/g,
       '$1<span class="mention-tag">$2</span>'
     );
   }
@@ -513,7 +513,7 @@
   let mentionCandidates = $derived.by(() => {
     if (!showMentionMenu) return [];
     const q = mentionQuery.toLowerCase();
-    const res: Array<{ type: 'user' | 'position' | 'all'; id: string; label: string; sub: string }> = [];
+    const res: any[] = [];
 
     if (isOwnerOrAdmin && ('todos'.includes(q) || 'everyone'.includes(q))) {
       res.push({ type: 'all', id: 'all', label: '@todos', sub: 'Notifica todos os membros da Scan' });
@@ -526,7 +526,7 @@
     }
 
     for (const m of team) {
-      // team items are flat: id, username, display_name, role are direct properties
+      // team items are flat: id, username, displayName, role are direct properties
       // (server spreads ...r.members into the object)
       const username = m.username || m.members?.username || m.member?.username;
       const displayName = m.displayName || m.members?.displayName || m.member?.displayName;
@@ -540,8 +540,8 @@
             id: memberId,
             label: '@' + username,
             sub: displayName || m.role || '',
-            avatar_id: avatarId,
-            display_name: displayName,
+            avatarId: avatarId,
+            displayName: displayName,
             username: username
           });
         }
@@ -764,7 +764,7 @@
           <p class="empty-feed-title">Nenhuma mensagem neste canal ainda</p>
           <p class="empty-feed-sub">
             {#if activeChannel?.type === 'ANNOUNCEMENT'}
-              Avisos oficiais da administração serão exibidos aqui.
+              Avisos oficiais da administrao sero exibidos aqui.
             {:else}
               Envie a primeira mensagem para iniciar a conversa da equipe!
             {/if}
@@ -786,7 +786,7 @@
               <div class="message-card deleted-msg-card" id="msg-{msg.id}">
                 <div class="deleted-msg-inner">
                   <span class="deleted-msg-icon"><Trash2 size={13} /></span>
-                  <span class="deleted-msg-text">Mensagem excluída</span>
+                  <span class="deleted-msg-text">Mensagem excluda</span>
                   <span class="deleted-msg-time">{new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
@@ -801,10 +801,10 @@
                   >
                     <CornerDownRight size={12} class="reply-curve" />
                     {#if msg.reply_to?.deletedAt || !msg.reply_to}
-                      <span class="reply-content-preview reply-unavailable">Mensagem original indisponível</span>
+                      <span class="reply-content-preview reply-unavailable">Mensagem original indisponvel</span>
                     {:else}
                       <span class="reply-author">@{msg.reply_to?.user?.displayName || msg.reply_to?.user?.username || 'Membro'}:</span>
-                      <span class="reply-content-preview">{msg.reply_to?.content ? (msg.reply_to.content.slice(0, 75) + (msg.reply_to.content.length > 75 ? '...' : '')) : 'Mensagem original indisponível'}</span>
+                      <span class="reply-content-preview">{msg.reply_to?.content ? (msg.reply_to.content.slice(0, 75) + (msg.reply_to.content.length > 75 ? '...' : '')) : 'Mensagem original indisponvel'}</span>
                     {/if}
                   </button>
                 {/if}
@@ -879,7 +879,7 @@
                           type="button"
                           class="reaction-pill"
                           class:reacted-by-me={g.reactedByMe}
-                          title="{g.reactedByMe ? 'Você reagiu' : 'Reagir'} com {g.emoji}"
+                          title="{g.reactedByMe ? 'Voc reagiu' : 'Reagir'} com {g.emoji}"
                           onclick={() => toggleReaction(msg.id, g.emoji)}
                         >
                           <span class="rx-emoji">{g.emoji}</span>
@@ -889,7 +889,7 @@
                       <button
                         type="button"
                         class="btn-add-reaction-pill"
-                        title="Adicionar reação"
+                        title="Adicionar reao"
                         onclick={() => (activeEmojiPickerMsgId = activeEmojiPickerMsgId === msg.id ? null : msg.id)}
                       >
                         <Smile size={12} />
@@ -950,7 +950,7 @@
                     <button
                       type="button"
                       class="hover-action-btn"
-                      title="Mais opções"
+                      title="Mais opes"
                       onclick={() => (activeMenuMsgId = activeMenuMsgId === msg.id ? null : msg.id)}
                     >
                       <MoreVertical size={14} />
@@ -1214,7 +1214,7 @@
         </div>
         <div class="delete-modal-body">
           <p class="delete-modal-desc">
-            Tem certeza de que deseja excluir esta mensagem? Ela não estará mais visível para os membros.
+            Tem certeza de que deseja excluir esta mensagem? Ela no estar mais visvel para os membros.
           </p>
           {#if messageToDelete.content}
             <div class="delete-modal-preview">
@@ -1275,7 +1275,7 @@
       </div>
 
       <div class="thread-replies-viewport">
-        <p class="thread-empty-sub">Responda diretamente a este tópico para manter a organização da equipe.</p>
+        <p class="thread-empty-sub">Responda diretamente a este tpico para manter a organizao da equipe.</p>
       </div>
 
       <form
@@ -1346,7 +1346,7 @@
           <label for="ch-type" class="form-label">Tipo de Canal</label>
           <select id="ch-type" name="type" class="form-select" bind:value={newChannelType}>
             <option value="CHAT">Chat de Equipe (Todos podem conversar)</option>
-            <option value="ANNOUNCEMENT">Canal de Avisos (Apenas Líderes postam)</option>
+            <option value="ANNOUNCEMENT">Canal de Avisos (Apenas Lderes postam)</option>
           </select>
         </div>
 
@@ -1354,14 +1354,14 @@
           <label for="ch-cat" class="form-label">Categoria</label>
           <select id="ch-cat" name="category" class="form-select" bind:value={newChannelCategory}>
             <option value="GERAL">GERAL</option>
-            <option value="PRODUÇÃO">PRODUÇÃO</option>
+            <option value="PRODUO">PRODUO</option>
             <option value="EDITORIAL">EDITORIAL</option>
             <option value="RECRUTAMENTO">RECRUTAMENTO</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label for="ch-desc" class="form-label">Descrição (Opcional)</label>
+          <label for="ch-desc" class="form-label">Descrio (Opcional)</label>
           <input
             id="ch-desc"
             type="text"

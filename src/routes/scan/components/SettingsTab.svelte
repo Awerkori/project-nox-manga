@@ -72,11 +72,11 @@
     if (!file) return;
 
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-      logoError = 'Selecione uma imagem válida (PNG, JPG, WEBP ou GIF animado).';
+      logoError = 'Selecione uma imagem vlida (PNG, JPG, WEBP ou GIF animado).';
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      logoError = 'A imagem do logo deve ter no máximo 5MB.';
+      logoError = 'A imagem do logo deve ter no mximo 5MB.';
       return;
     }
 
@@ -134,7 +134,7 @@
       logoSuccess = 'Logo atualizado e salvo com sucesso!';
       setTimeout(() => (logoSuccess = ''), 4000);
     } catch (err: any) {
-      logoError = err.message || 'Erro ao salvar logo';
+      logoError = (err as any).message || 'Erro ao salvar logo';
     } finally {
       isSavingLogo = false;
     }
@@ -146,11 +146,11 @@
     if (!file) return;
 
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-      bannerError = 'Selecione uma imagem válida (PNG, JPG, WEBP ou GIF animado).';
+      bannerError = 'Selecione uma imagem vlida (PNG, JPG, WEBP ou GIF animado).';
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      bannerError = 'O banner deve ter no máximo 10MB.';
+      bannerError = 'O banner deve ter no mximo 10MB.';
       return;
     }
 
@@ -208,7 +208,7 @@
       bannerSuccess = 'Banner atualizado e salvo com sucesso!';
       setTimeout(() => (bannerSuccess = ''), 4000);
     } catch (err: any) {
-      bannerError = err.message || 'Erro ao salvar banner';
+      bannerError = (err as any).message || 'Erro ao salvar banner';
     } finally {
       isSavingBanner = false;
     }
@@ -234,25 +234,25 @@
           description: currentScan.description,
           discord: currentScan.discord,
           website: currentScan.website,
-          created_at: currentScan.createdAt
+          createdAt: currentScan.createdAt
         },
         team: team.map((m: any) => ({
           username: m.username,
-          display_name: m.displayName,
+          displayName: m.displayName,
           role: m.role,
-          created_at: m.createdAt
+          createdAt: m.createdAt
         })),
         works: works.map((w: any) => ({
           title: w.title,
           slug: w.slug,
           status: w.project_status,
-          views_total: w.viewsTotal
+          viewsTotal: w.viewsTotal
         })),
         chapters: chapters.map((c: any) => ({
           work_title: c.works?.title,
           number: c.number,
           title: c.title,
-          published_at: c.publishedAt,
+          publishedAt: c.publishedAt,
           views: c.viewsTotal
         }))
       };
@@ -267,7 +267,7 @@
     } else {
       // CSV
       const rows = [
-        ['Tipo', 'Identificador', 'Nome/Título', 'Info Extra', 'Data'],
+        ['Tipo', 'Identificador', 'Nome/Ttulo', 'Info Extra', 'Data'],
         ['SCAN', currentScan.slug, currentScan.name, currentScan.website || '', currentScan.createdAt],
         ...team.map((m: any) => ['MEMBRO', m.username, m.displayName || '', m.role, m.createdAt]),
         ...works.map((w: any) => ['OBRA', w.slug, w.title, w.project_status, '']),
@@ -287,8 +287,8 @@
 <div class="settings-tab">
   <div class="tab-header">
     <div>
-      <h2 class="title">Configurações & Modos da Scan</h2>
-      <p class="subtitle">Controle de manutenção, integrações e dados de equipe da {currentScan?.name}.</p>
+      <h2 class="title">Configuraes & Modos da Scan</h2>
+      <p class="subtitle">Controle de manuteno, integraes e dados de equipe da {currentScan?.name}.</p>
     </div>
   </div>
 
@@ -299,7 +299,7 @@
         <Palette size={20} class="section-icon purple" />
         <div>
           <h3>Identidade Visual & Branding da Scan</h3>
-          <p>Personalize o logo, banner e informações públicas da {currentScan?.name}. As imagens são armazenadas de forma dedicada no pool SCAN_MEDIA.</p>
+          <p>Personalize o logo, banner e informaes pblicas da {currentScan?.name}. As imagens so armazenadas de forma dedicada no pool SCAN_MEDIA.</p>
         </div>
       </div>
 
@@ -320,12 +320,12 @@
               <span class="media-card-title">Logo da Scan</span>
               <span class="media-type-pill">GIF / PNG / WEBP</span>
             </div>
-            <p class="media-card-hint">Suporta GIF animado (preserva animação) ou imagem estática até 5MB.</p>
+            <p class="media-card-hint">Suporta GIF animado (preserva animao) ou imagem esttica at 5MB.</p>
             
             <div class="logo-preview-box">
               {#if pendingLogoPreviewUrl}
-                <img src={pendingLogoPreviewUrl} alt="Prévia do novo logo" class="logo-preview-img is-pending-preview" />
-                <span class="preview-badge-pill">PRÉVIA</span>
+                <img src={pendingLogoPreviewUrl} alt="Prvia do novo logo" class="logo-preview-img is-pending-preview" />
+                <span class="preview-badge-pill">PRVIA</span>
               {:else if logoId}
                 <img src="/media/{logoId}" alt="Logo da {currentScan?.name}" class="logo-preview-img" />
               {:else}
@@ -360,7 +360,7 @@
                   class="btn-cancel-staged"
                   onclick={cancelLogoPreview}
                   disabled={isSavingLogo}
-                  title="Descartar prévia"
+                  title="Descartar prvia"
                 >
                   <X size={14} />
                   <span>Cancelar</span>
@@ -399,12 +399,12 @@
               <span class="media-card-title">Banner da Scan</span>
               <span class="media-type-pill">GIF / JPG / WEBP</span>
             </div>
-            <p class="media-card-hint">Suporta GIF animado panorâmico ou imagem estática até 10MB.</p>
+            <p class="media-card-hint">Suporta GIF animado panormico ou imagem esttica at 10MB.</p>
 
             <div class="banner-preview-box">
               {#if pendingBannerPreviewUrl}
-                <img src={pendingBannerPreviewUrl} alt="Prévia do novo banner" class="banner-preview-img is-pending-preview" />
-                <span class="preview-badge-pill">PRÉVIA</span>
+                <img src={pendingBannerPreviewUrl} alt="Prvia do novo banner" class="banner-preview-img is-pending-preview" />
+                <span class="preview-badge-pill">PRVIA</span>
               {:else if bannerId}
                 <img src="/media/{bannerId}" alt="Banner da {currentScan?.name}" class="banner-preview-img" />
               {:else}
@@ -439,7 +439,7 @@
                   class="btn-cancel-staged"
                   onclick={cancelBannerPreview}
                   disabled={isSavingBanner}
-                  title="Descartar prévia"
+                  title="Descartar prvia"
                 >
                   <X size={14} />
                   <span>Cancelar</span>
@@ -481,7 +481,7 @@
           </div>
 
           <div class="form-group">
-            <label for="sc-prep" class="form-label">Preposição de Exibição</label>
+            <label for="sc-prep" class="form-label">Preposio de Exibio</label>
             <select id="sc-prep" name="display_preposition" bind:value={scanDisplayPrep} class="form-select">
               <option value="de">de (Ex: Projeto de {scanName || 'Nox'})</option>
               <option value="da">da (Ex: Projeto da {scanName || 'Nox'})</option>
@@ -504,13 +504,13 @@
         </div>
 
         <div class="form-group">
-          <label for="sc-desc" class="form-label">Descrição Institucional</label>
+          <label for="sc-desc" class="form-label">Descrio Institucional</label>
           <textarea
             id="sc-desc"
             name="description"
             rows={4}
             bind:value={scanDescription}
-            placeholder="Conte a história da sua scan, gêneros favoritos e projetos..."
+            placeholder="Conte a histria da sua scan, gneros favoritos e projetos..."
             class="form-textarea"
             maxlength={2000}
           ></textarea>
@@ -548,8 +548,8 @@
       <div class="section-title-row">
         <ShieldAlert size={20} class="section-icon warning" />
         <div>
-          <h3>Modos de Manutenção & Operação</h3>
-          <p>Pause fluxos ou ative modo de emergência quando a scan precisar de um hiato ou contenção.</p>
+          <h3>Modos de Manuteno & Operao</h3>
+          <p>Pause fluxos ou ative modo de emergncia quando a scan precisar de um hiato ou conteno.</p>
         </div>
       </div>
 
@@ -563,8 +563,8 @@
 
         <div class="toggle-card">
           <div class="toggle-info">
-            <span class="toggle-title">Pausar Uploads de Capítulos</span>
-            <span class="toggle-desc">Membros da equipe não poderão enviar novos capítulos até reativado.</span>
+            <span class="toggle-title">Pausar Uploads de Captulos</span>
+            <span class="toggle-desc">Membros da equipe no podero enviar novos captulos at reativado.</span>
           </div>
           <label class="switch">
             <input type="checkbox" name="pause_uploads" bind:checked={pauseUploads} />
@@ -575,7 +575,7 @@
         <div class="toggle-card">
           <div class="toggle-info">
             <span class="toggle-title">Pausar Recrutamento & Candidaturas</span>
-            <span class="toggle-desc">Oculta formulários de candidatura na página pública da scan.</span>
+            <span class="toggle-desc">Oculta formulrios de candidatura na pgina pblica da scan.</span>
           </div>
           <label class="switch">
             <input type="checkbox" name="pause_recruitment" bind:checked={pauseRecruitment} />
@@ -586,18 +586,18 @@
         <div class="toggle-card emergency">
           <div class="toggle-info">
             <span class="toggle-title emergency-txt">
-              <Flame size={16} /> Modo de Emergência
+              <Flame size={16} /> Modo de Emergncia
             </span>
-            <span class="toggle-desc">Congela todas as operações da scan imediatamente (uploads, convites e candidaturas).</span>
+            <span class="toggle-desc">Congela todas as operaes da scan imediatamente (uploads, convites e candidaturas).</span>
             {#if emergencyMode}
               <div class="emergency-reason-box">
-                <label for="em-reason">Motivo do Modo de Emergência (exibido internamente):</label>
+                <label for="em-reason">Motivo do Modo de Emergncia (exibido internamente):</label>
                 <input
                   id="em-reason"
                   type="text"
                   name="emergency_reason"
                   bind:value={emergencyReason}
-                  placeholder="Ex: Vazamento de raws / Hiato de emergência"
+                  placeholder="Ex: Vazamento de raws / Hiato de emergncia"
                   class="reason-input"
                 />
               </div>
@@ -610,7 +610,7 @@
         </div>
 
         <div class="form-btn-row">
-          <button type="submit" class="btn-primary">Salvar Modos de Manutenção</button>
+          <button type="submit" class="btn-primary">Salvar Modos de Manuteno</button>
         </div>
       </form>
     </div>
@@ -633,7 +633,7 @@
         use:enhance
         class="slug-form"
         onsubmit={(e) => {
-          if (!confirm(`Alterar a URL da scan para /scans/${newSlug}? Links antigos serão preservados via 301.`)) {
+          if (!confirm(`Alterar a URL da scan para /scans/${newSlug}? Links antigos sero preservados via 301.`)) {
             e.preventDefault();
           }
         }}
@@ -665,8 +665,8 @@
       <div class="section-title-row">
         <Webhook size={20} class="section-icon blue" />
         <div>
-          <h3>Webhooks & Notificações Externas</h3>
-          <p>Envie alertas automáticos para seus canais no Discord ou Fluxer sobre novos capítulos e membros.</p>
+          <h3>Webhooks & Notificaes Externas</h3>
+          <p>Envie alertas automticos para seus canais no Discord ou Fluxer sobre novos captulos e membros.</p>
         </div>
       </div>
 
@@ -707,8 +707,8 @@
     <div class="section-title-row">
       <Download size={20} class="section-icon green" />
       <div>
-        <h3>Exportação de Dados</h3>
-        <p>Baixe um relatório completo de todas as obras, capítulos publicados e equipe da scan.</p>
+        <h3>Exportao de Dados</h3>
+        <p>Baixe um relatrio completo de todas as obras, captulos publicados e equipe da scan.</p>
       </div>
     </div>
 
@@ -717,7 +717,7 @@
         <Download size={16} /> Exportar JSON Completo
       </button>
       <button class="btn-secondary" onclick={() => exportData('csv')}>
-        <Download size={16} /> Exportar Relatório CSV
+        <Download size={16} /> Exportar Relatrio CSV
       </button>
     </div>
   </div>
@@ -728,7 +728,7 @@
       <AlertTriangle size={20} class="section-icon danger" />
       <div>
         <h3 class="danger-txt">Zona de Risco</h3>
-        <p>Ações de desligamento de equipe e encerramento de vínculo.</p>
+        <p>Aes de desligamento de equipe e encerramento de vnculo.</p>
       </div>
     </div>
 
@@ -737,14 +737,14 @@
         <div class="warning-callout">
           <AlertTriangle size={18} class="callout-icon" />
           <p>
-            Você é o <strong>único Dono</strong> da {currentScan?.name}. Por segurança, você deve transferir a liderança da scan para outro membro na aba Equipe antes de poder sair.
+            Voc  o <strong>nico Dono</strong> da {currentScan?.name}. Por segurana, voc deve transferir a liderana da scan para outro membro na aba Equipe antes de poder sair.
           </p>
         </div>
       {:else}
         <div class="leave-row">
           <div>
             <span class="leave-title">Sair da Equipe da Scan</span>
-            <p class="leave-desc">Você perderá o acesso a este painel administrativo interno.</p>
+            <p class="leave-desc">Voc perder o acesso a este painel administrativo interno.</p>
           </div>
           <form
             method="POST"
@@ -771,7 +771,7 @@
     <div class="modal-backdrop" onclick={() => showWebhookModal = false} role="presentation">
       <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h3>Adicionar Webhook de Notificações</h3>
+          <h3>Adicionar Webhook de Notificaes</h3>
           <button class="btn-close" onclick={() => showWebhookModal = false}>&times;</button>
         </div>
 
@@ -803,7 +803,7 @@
               type="text"
               name="name"
               bind:value={webhookName}
-              placeholder="Ex: Canal #novidades-lançamentos"
+              placeholder="Ex: Canal #novidades-lanamentos"
               required
               class="input"
             />

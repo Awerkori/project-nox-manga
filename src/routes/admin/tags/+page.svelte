@@ -62,10 +62,10 @@
       const wasEdit = !!id;
       id = '';
       name = '';
-      notice = wasEdit ? 'Alteração salva com sucesso.' : 'Nova tag adicionada ao catálogo.';
+      notice = wasEdit ? 'Alterao salva com sucesso.' : 'Nova tag adicionada ao catlogo.';
       await invalidateAll();
       setTimeout(() => {
-        if (notice.startsWith('Alteração') || notice.startsWith('Nova')) {
+        if (notice.startsWith('Alterao') || notice.startsWith('Nova')) {
           notice = '';
         }
       }, 4000);
@@ -78,15 +78,15 @@
 </script>
 
 <svelte:head>
-  <title>Gêneros e Tags — Nox Editorial</title>
+  <title>Gneros e Tags — Nox Editorial</title>
 </svelte:head>
 
 <div class="tags-view">
   <header class="page-header">
-    <span class="eyebrow">ORGANIZAÇÃO DO CATÁLOGO</span>
-    <h1>Gêneros e Tags</h1>
+    <span class="eyebrow">ORGANIZAO DO CATLOGO</span>
+    <h1>Gneros e Tags</h1>
     <p class="subtitle">
-      Defina a taxonomia e os marcadores temáticos para classificação precisa das obras e filtros de busca.
+      Defina a taxonomia e os marcadores temticos para classificao precisa das obras e filtros de busca.
     </p>
   </header>
 
@@ -113,7 +113,7 @@
           {#if id}
             <div class="heading-badge edit-badge">
               <Pencil size={13} />
-              <span>Modo Edição</span>
+              <span>Modo Edio</span>
             </div>
             <h2>Editar Termo</h2>
           {:else}
@@ -127,7 +127,7 @@
 
         <!-- Kind Selector -->
         <div class="field">
-          <span class="field-label">Tipo de Classificação</span>
+          <span class="field-label">Tipo de Classificao</span>
           <div class="segmented-control">
             <button
               type="button"
@@ -136,7 +136,7 @@
               onclick={() => (kind = 'GENRE')}
             >
               <span>◈</span>
-              <strong>Gênero</strong>
+              <strong>Gnero</strong>
             </button>
             <button
               type="button"
@@ -150,8 +150,8 @@
           </div>
           <p class="field-help">
             {kind === 'GENRE'
-              ? 'Gêneros representam categorias centrais da história (ex: Romance, Fantasia, Ação).'
-              : 'Tags representam tropos, temas e especificidades (ex: Reencarnação, Dungeon, Protagonista OP).'}
+              ? 'Gneros representam categorias centrais da histria (ex: Romance, Fantasia, Ao).'
+              : 'Tags representam tropos, temas e especificidades (ex: Reencarnao, Dungeon, Protagonista OP).'}
           </p>
         </div>
 
@@ -162,7 +162,7 @@
             bind:value={name}
             required
             maxlength="40"
-            placeholder={kind === 'GENRE' ? 'Ex: Fantasia Sombria' : 'Ex: Sistema de Níveis'}
+            placeholder={kind === 'GENRE' ? 'Ex: Fantasia Sombria' : 'Ex: Sistema de Nveis'}
             class="control"
           />
         </label>
@@ -175,7 +175,7 @@
 
         <div class="form-buttons">
           <button class="button primary" disabled={busy || !name.trim()}>
-            {id ? 'Salvar Alteração' : 'Criar no Catálogo'}
+            {id ? 'Salvar Alterao' : 'Criar no Catlogo'}
           </button>
 
           {#if id}
@@ -195,7 +195,7 @@
         <input
           type="text"
           bind:value={searchQuery}
-          placeholder="Filtrar gêneros e tags cadastradas…"
+          placeholder="Filtrar gneros e tags cadastradas…"
           class="search-input"
           aria-label="Filtrar termos"
         />
@@ -211,13 +211,13 @@
         <div class="section-top">
           <div class="section-title">
             <span class="symbol-icon">◈</span>
-            <h3>Gêneros Principais</h3>
+            <h3>Gneros Principais</h3>
           </div>
           <span class="count-badge">{genres.length} cadastrados</span>
         </div>
 
         {#if genres.length === 0}
-          <p class="empty-text">Nenhum gênero encontrado{searchQuery ? ' para esta busca' : ''}.</p>
+          <p class="empty-text">Nenhum gnero encontrado{searchQuery ? ' para esta busca' : ''}.</p>
         {:else}
           <div class="chips-cloud">
             {#each genres as tag (tag.id)}
@@ -226,7 +226,7 @@
                 class="tax-chip genre-chip"
                 class:selected={id === tag.id}
                 onclick={() => selectForEdit(tag)}
-                title="Clique para editar este gênero"
+                title="Clique para editar este gnero"
               >
                 <span class="chip-symbol">◈</span>
                 <span class="chip-name">{tag.name}</span>
@@ -242,13 +242,13 @@
         <div class="section-top">
           <div class="section-title">
             <span class="symbol-icon">#</span>
-            <h3>Tags Temáticas & Tropos</h3>
+            <h3>Tags Temticas & Tropos</h3>
           </div>
           <span class="count-badge">{thematicTags.length} cadastradas</span>
         </div>
 
         {#if thematicTags.length === 0}
-          <p class="empty-text">Nenhuma tag temática encontrada{searchQuery ? ' para esta busca' : ''}.</p>
+          <p class="empty-text">Nenhuma tag temtica encontrada{searchQuery ? ' para esta busca' : ''}.</p>
         {:else}
           <div class="chips-cloud">
             {#each thematicTags as tag (tag.id)}

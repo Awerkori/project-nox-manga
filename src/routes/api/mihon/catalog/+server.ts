@@ -1,8 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { verifyMihonAuth } from '$lib/server/mihon';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuery } from '$lib/server/db';
+import { eq, ne, ilike, and, desc, count } from 'drizzle-orm';
 
-export const GET = async ({ request, url }) => {const auth = await verifyMihonAuth(request);
+export const GET = async ({ request, url }) => {
+  const auth = await verifyMihonAuth(request);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
@@ -11,33 +13,54 @@ export const GET = async ({ request, url }) => {const auth = await verifyMihonAu
   const status = url.searchParams.get('status')?.toUpperCase();
   const tagSlug = url.searchParams.get('tag')?.trim();
 
-  const db = privileged();
-  let query = db
-    .from('works')
-    .select('id, title, slug, coverId, kind, status, contentRating, synopsis, updatedAt', { count: 'exact'})
-    .eq('published', true);
+  const conditions = [eq(schema.works.published, true)];
 
-  if (!allowAdult) {query = query.neq('contentRating', 'ADULT_18');}
+  if (!allowAdult) {
+    conditions.push(ne(schema.works.contentRating, 'ADULT_18'));
+  }
 
   if (search) {
-    query = query.ilike('title', `%${search}%`);
+    conditions.push(ilike(schema.works.title, `%${search}%`));
   }
 
   if (status && (status === 'ONGOING' || status === 'COMPLETED' || status === 'HIATUS')) {
-    query = query.eq('status', status);
+    conditions.push(eq(schema.works.status, status));
   }
 
   const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  query = query.order('updated_at', { ascending: false }).range(from, to);
+  const whereClause = and(...conditions);
 
-  const { data: works, count, error } = await query;
-  if (error) {
-    return json({ error: 'Erro ao consultar catálogo' }, { status: 500 });
+  const [worksRes, countRes] = await Promise.all([
+    safeQuery(db.select({
+      id: schema.works.id,
+      title: schema.works.title,
+      slug: schema.works.slug,
+      coverId: schema.works.coverId,
+      kind: schema.works.kind,
+      status: schema.works.status,
+      contentRating: schema.works.contentRating,
+      synopsis: schema.works.synopsis,
+      updatedAt: schema.works.updatedAt,
+    })
+    .from(schema.works)
+    .where(whereClause)
+    .orderBy(desc(schema.works.updatedAt))
+    .limit(limit)
+    .offset(from)),
+
+    safeQuery(db.select({ value: count() }).from(schema.works).where(whereClause))
+  ]);
+
+  if (worksRes.error || countRes.error) {
+    return json({ error: 'Erro ao consultar catlogo' }, { status: 500 });
   }
 
+  const works = worksRes.data || [];
+  const totalCount = countRes.data[0]?.value ?? works.length;
+
   const origin = url.origin;
-  const items = (works || []).map((w) => ({id: w.id,
+  const items = works.map((w) => ({
+    id: w.id,
     title: w.title,
     slug: w.slug,
     kind: w.kind,
@@ -45,15 +68,14 @@ export const GET = async ({ request, url }) => {const auth = await verifyMihonAu
     contentRating: w.contentRating || 'GENERAL',
     synopsis: w.synopsis,
     cover_url: w.coverId ? `${origin}/media/${w.coverId}` : null,
-    updated_at: w.updatedAt
+    updatedAt: w.updatedAt
   }));
 
-  const total = count ?? items.length;
   return json({
     page,
     limit,
-    total,
-    has_more: to < total - 1,
+    total: totalCount,
+    has_more: (from + works.length) < totalCount,
     works: items
   });
 };

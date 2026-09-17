@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuerySingle } from '$lib/server/db';
+import { and, eq } from 'drizzle-orm';
 import crypto from 'node:crypto';
 
 const BLOCKED_EXTENSIONS = [
@@ -9,7 +10,7 @@ const BLOCKED_EXTENSIONS = [
 
 export const POST = async ({ locals, request }) => {
   if (!locals.user) {
-    return json({ error: 'Não autenticado' }, { status: 401 });
+    return json({ error: 'No autenticado' }, { status: 401 });
   }
 
   const formData = await request.formData();
@@ -18,27 +19,29 @@ export const POST = async ({ locals, request }) => {
   const contextId = formData.get('context_id')?.toString();
   const file = formData.get('file');
 
-  if (!scanId || !contextId) {return json({ error: 'scanId e contextId são obrigatórios'}, { status: 400 });
+  if (!scanId || !contextId) {return json({ error: 'scanId e contextId so obrigatrios'}, { status: 400 });
   }
 
   if (!file || !(file instanceof Blob)) {
     return json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
   }
 
-  const db = privileged();
-
   // Verify scan membership or Global Admin
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', scanId)
-      .eq('user_id', locals.user!.id)
-      .maybeSingle();
+    const { data: member } = await safeQuerySingle(
+      db.select({ role: schema.scanMembers.role })
+        .from(schema.scanMembers)
+        .where(
+          and(
+            eq(schema.scanMembers.scanId, scanId),
+            eq(schema.scanMembers.userId, locals.user!.id)
+          )
+        )
+    );
 
     if (!member) {
-      return json({ error: 'Acesso não autorizado a esta Scan' }, { status: 403 });
+      return json({ error: 'Acesso no autorizado a esta Scan' }, { status: 403 });
     }
   }
 
@@ -47,7 +50,7 @@ export const POST = async ({ locals, request }) => {
 
   if (BLOCKED_EXTENSIONS.includes(ext)) {
     return json({
-      error: 'Formato de arquivo executável bloqueado por políticas de segurança da plataforma.'
+      error: 'Formato de arquivo executvel bloqueado por polticas de segurana da plataforma.'
     }, { status: 400 });
   }
 
@@ -61,24 +64,26 @@ export const POST = async ({ locals, request }) => {
   const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
   // Insert attachment metadata
-  const { data: attachment, error: dbErr } = await db
-    .from('scan_attachments')
-    .insert({scanId: scanId,
-      contextType: contextType,
-      contextId: contextId,
-      uploadedBy: locals.user!.id,
-      originalFilename: rawFilename,
-      safeFilename: safeFilename,
-      mimeType: file.type || 'application/octet-stream',
-      size: file.size,
-      checksum: checksum,
-      storageReference: 'att_' + checksum.slice(0, 16) + '_' + Date.now(),
-      storageProvider: 'PRIVATE_STORAGE'})
-    .select()
-    .single();
+  const { data: attachment, error: dbErr } = await safeQuerySingle(
+    db.insert(schema.scanAttachments)
+      .values({
+        scanId: scanId,
+        contextType: contextType as any,
+        contextId: contextId,
+        uploadedBy: locals.user!.id,
+        originalFilename: rawFilename,
+        safeFilename: safeFilename,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        checksum: checksum,
+        storageReference: 'att_' + checksum.slice(0, 16) + '_' + Date.now(),
+        storageProvider: 'PRIVATE_STORAGE' as any
+      })
+      .returning()
+  );
 
   if (dbErr) {
-    return json({ error: 'Falha ao salvar anexo: ' + dbErr.message }, { status: 500 });
+    return json({ error: 'Falha ao salvar anexo: ' + (dbErr as any).message }, { status: 500 });
   }
 
   return json({

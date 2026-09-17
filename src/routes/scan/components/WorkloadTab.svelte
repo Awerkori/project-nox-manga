@@ -23,7 +23,7 @@
 
   // Availability statuses definition
   const AVAILABILITY_META: Record<string, { label: string; color: string; bg: string }> = {
-    ACTIVE: { label: 'Disponível / Ativo', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
+    ACTIVE: { label: 'Disponvel / Ativo', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
     BUSY: { label: 'Ocupado', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
     AWAY: { label: 'Ausente', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)' },
     HIATUS: { label: 'Em Hiato', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' }
@@ -78,7 +78,7 @@
       </div>
       <div>
         <h2 class="workload-main-title">Carga da Equipe & Disponibilidade</h2>
-        <p class="workload-subtitle">Visão transparente da distribuição de tarefas para evitar sobrecarga e identificar disponibilidade.</p>
+        <p class="workload-subtitle">Viso transparente da distribuio de tarefas para evitar sobrecarga e identificar disponibilidade.</p>
       </div>
     </div>
 
@@ -158,14 +158,14 @@
 
           <div class="metric-col">
             <span class="metric-val done">{member.completedTasksCount}</span>
-            <span class="metric-desc">Concluídas</span>
+            <span class="metric-desc">Concludas</span>
           </div>
         </div>
 
         {#if member.isOverloaded}
           <div class="overload-warning-banner">
             <AlertCircle size={13} />
-            <span>Atenção: Membro com alta demanda atribuída ({member.activeTasksCount} tarefas).</span>
+            <span>Ateno: Membro com alta demanda atribuda ({member.activeTasksCount} tarefas).</span>
           </div>
         {/if}
       </div>

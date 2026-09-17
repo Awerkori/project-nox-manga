@@ -34,12 +34,12 @@ export const GET = async ({ params, locals, cookies }) => {
   );
 
   if (chErr || !chapter) {
-    return json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    return json({ error: 'Captulo no encontrado' }, { status: 404 });
   }
 
   const work = chapter.works;
   if (!work || (!isStaff && !work.published)) {
-    return json({ error: 'Obra não publicada' }, { status: 404 });
+    return json({ error: 'Obra no publicada' }, { status: 404 });
   }
 
   if (work.contentRating === 'ADULT_18') {
@@ -52,7 +52,7 @@ export const GET = async ({ params, locals, cookies }) => {
       if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
-      return json({ error: 'Conteúdo restrito (+18).' }, { status: 403 });
+      return json({ error: 'Contedo restrito (+18).' }, { status: 403 });
     }
   }
 
@@ -69,7 +69,7 @@ export const GET = async ({ params, locals, cookies }) => {
   );
 
   if (pErr) {
-    return json({ error: 'Erro ao carregar páginas' }, { status: 500 });
+    return json({ error: 'Erro ao carregar pginas' }, { status: 500 });
   }
 
   return json({

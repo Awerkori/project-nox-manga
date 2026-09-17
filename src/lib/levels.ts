@@ -97,13 +97,13 @@ export const NOX_TITLES: readonly NoxTitle[] = [
     id: 'nox-reader',
     name: 'Nox Reader',
     minLevel: 1,
-    description: 'Primeiros passos pelo véu de sombras da biblioteca.'
+    description: 'Primeiros passos pelo vu de sombras da biblioteca.'
   },
   {
     id: 'aficionado',
     name: 'Aficionado',
     minLevel: 5,
-    description: 'Atenção constante voltada aos novos lançamentos da Nox.'
+    description: 'Ateno constante voltada aos novos lanamentos da Nox.'
   },
   {
     id: 'colecionador',
@@ -119,9 +119,9 @@ export const NOX_TITLES: readonly NoxTitle[] = [
   },
   {
     id: 'bibliofilo',
-    name: 'Bibliófilo',
+    name: 'Biblifilo',
     minLevel: 20,
-    description: 'Amor devoto aos arcos e universos mais memoráveis.'
+    description: 'Amor devoto aos arcos e universos mais memorveis.'
   },
   {
     id: 'vanguarda',
@@ -137,33 +137,33 @@ export const NOX_TITLES: readonly NoxTitle[] = [
   },
   {
     id: 'eminencia',
-    name: 'Eminência',
+    name: 'Eminncia',
     minLevel: 50,
-    description: 'Figura de prestígio e respeito nos corredores da Nox.'
+    description: 'Figura de prestgio e respeito nos corredores da Nox.'
   },
   {
     id: 'monolito',
-    name: 'Monólito',
+    name: 'Monlito',
     minLevel: 60,
-    description: 'Presença sólida e inabalável na comunidade.'
+    description: 'Presena slida e inabalvel na comunidade.'
   },
   {
     id: 'luminar',
     name: 'Luminar',
     minLevel: 70,
-    description: 'Luz radiante que guia novos leitores pela escuridão.'
+    description: 'Luz radiante que guia novos leitores pela escurido.'
   },
   {
     id: 'primor',
     name: 'Primor',
     minLevel: 80,
-    description: 'O ápice do bom gosto e dedicação contínua.'
+    description: 'O pice do bom gosto e dedicao contnua.'
   },
   {
     id: 'zenite',
-    name: 'Zênite',
+    name: 'Znite',
     minLevel: 90,
-    description: 'Nas mais altas altitudes onde apenas os supremos alcançam.'
+    description: 'Nas mais altas altitudes onde apenas os supremos alcanam.'
   },
   {
     id: 'apex-nox',
@@ -185,12 +185,12 @@ export const NOX_BADGES: readonly NoxBadge[] = [
   },
   {
     id: 'chama-novica',
-    name: 'Chama Noviça',
+    name: 'Chama Novia',
     minLevel: 5,
     icon: '✧',
     svgUrl: '/badges/badge-chama-novica.svg',
     tier: 'common',
-    description: 'A primeira faísca de paixão pela leitura acesa no peito.'
+    description: 'A primeira fasca de paixo pela leitura acesa no peito.'
   },
   {
     id: 'prisma-noturno',
@@ -199,7 +199,7 @@ export const NOX_BADGES: readonly NoxBadge[] = [
     icon: '✦',
     svgUrl: '/badges/badge-prisma-noturno.svg',
     tier: 'uncommon',
-    description: 'Refrata a essência de dezenas de histórias consumidas.'
+    description: 'Refrata a essncia de dezenas de histrias consumidas.'
   },
   {
     id: 'sigilo-prateado',
@@ -208,43 +208,43 @@ export const NOX_BADGES: readonly NoxBadge[] = [
     icon: '⬡',
     svgUrl: '/badges/badge-sigilo-prateado.svg',
     tier: 'rare',
-    description: 'Insígnia esculpida na prata pura reservada aos veteranos.'
+    description: 'Insgnia esculpida na prata pura reservada aos veteranos.'
   },
   {
     id: 'reliquia-astral',
-    name: 'Relíquia Astral',
+    name: 'Relquia Astral',
     minLevel: 35,
     icon: '❖',
     svgUrl: '/badges/badge-reliquia-astral.svg',
     tier: 'epic',
-    description: 'Carregada com poeira cósmica colhida em incontáveis arcos.'
+    description: 'Carregada com poeira csmica colhida em incontveis arcos.'
   },
   {
     id: 'coroa-de-onix',
-    name: 'Coroa de Ônix',
+    name: 'Coroa de nix',
     minLevel: 50,
     icon: '♛',
     svgUrl: '/badges/badge-coroa-de-onix.svg',
     tier: 'epic',
-    description: 'Símbolo de prestígio imperial reconhecido por toda a comunidade.'
+    description: 'Smbolo de prestgio imperial reconhecido por toda a comunidade.'
   },
   {
     id: 'olho-do-eter',
-    name: 'Olho do Éter',
+    name: 'Olho do ter',
     minLevel: 75,
     icon: '✪',
     svgUrl: '/badges/badge-olho-do-eter.svg',
     tier: 'legendary',
-    description: 'Visão onisciente que abrange todas as páginas já escritas.'
+    description: 'Viso onisciente que abrange todas as pginas j escritas.'
   },
   {
     id: 'brasao-apex',
-    name: 'Brasão Apex',
+    name: 'Braso Apex',
     minLevel: 100,
     icon: '🜚',
     svgUrl: '/badges/badge-brasao-apex.svg',
     tier: 'mythic',
-    description: 'O selo supremo. Raridade mitológica portada apenas pelos supremos.'
+    description: 'O selo supremo. Raridade mitolgica portada apenas pelos supremos.'
   }
 ];
 

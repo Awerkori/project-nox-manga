@@ -43,7 +43,7 @@ export function workStructuredData(work: Work, tags: { name: string; kind: strin
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Catálogo', item: `${origin}/catalogo` },
+          { '@type': 'ListItem', position: 1, name: 'Catlogo', item: `${origin}/catalogo` },
           { '@type': 'ListItem', position: 2, name: work.title, item: canonical }
         ]
       }

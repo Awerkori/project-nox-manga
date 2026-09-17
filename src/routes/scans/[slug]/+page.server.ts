@@ -5,13 +5,13 @@ import { createNotification } from "$lib/server/notifications";
 import type { PageServerLoad, Actions } from "./$types";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
-  const scan = await safeQuerySingle(
+  const { data: scan } = await safeQuerySingle(
     db.select().from(schema.scans).where(eq(schema.scans.slug, params.slug))
   );
 
   if (!scan) {
     // Check slug history for 301 redirection
-    const hist = await safeQuerySingle(
+    const { data: hist } = await safeQuerySingle(
       db.select({
         scanId: schema.scanSlugHistory.scanId,
         slug: schema.scans.slug
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       throw redirect(301, `/scans/${hist.slug}`);
     }
 
-    error(404, "Scan não encontrada");
+    error(404, "Scan no encontrada");
   }
 
   const [
@@ -149,7 +149,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
             )
           )
         )
-      : Promise.resolve([]),
+      : Promise.resolve({ data: [], error: null }),
     safeQuery(
       db.select({
         comment: schema.scanComments,
@@ -182,20 +182,20 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     )
   ]);
 
-  const works = (worksRes || []).map((row: any) => ({
+  const works = (worksRes.data || []).map((row: any) => ({
     ...row.works,
     scan_status: row.status || "ACTIVE",
     isPrimary: row.isPrimary
   })).filter(Boolean);
 
-  const chapters = (chaptersRes || []).map((row: any) => ({
+  const chapters = (chaptersRes.data || []).map((row: any) => ({
     ...row.chapters,
     works: row.works
   })).filter(Boolean);
 
   // Map member positions
   const positionsByUser = new Map<string, any[]>();
-  for (const p of (positionsRes || []) as any[]) {
+  for (const p of (positionsRes.data || []) as any[]) {
     if (!positionsByUser.has(p.userId)) positionsByUser.set(p.userId, []);
     if (p.position) {
       positionsByUser.get(p.userId)!.push({
@@ -207,7 +207,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     }
   }
 
-  const members = (membersRes || []).map((row: any) => {
+  const members = (membersRes.data || []).map((row: any) => {
     const userPositions = positionsByUser.get(row.members?.id) || [];
     const primary = userPositions.find((p: any) => p.isPrimary) || userPositions[0] || null;
     return {
@@ -220,17 +220,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     };
   });
 
-  const openings = (openingsRes || []).map((row: any) => ({
+  const openings = (openingsRes.data || []).map((row: any) => ({
     ...row.opening,
     positionName: row.position?.name || "Geral"
   }));
 
-  const activities = (activitiesRes || []).map((row: any) => ({
+  const activities = (activitiesRes.data || []).map((row: any) => ({
     ...row.activity,
     userName: row.user?.displayName || row.user?.username || null
   }));
 
-  const userApplications = userAppsRes || [];
+  const userApplications = userAppsRes.data || [];
   const userAppOpenings = new Set(userApplications.map((a: any) => a.openingId));
 
   // Calculate total views for this scan works
@@ -238,7 +238,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
   // Group comments by their likes because of left join
   const rawCommentsMap = new Map<string, any>();
-  for (const row of (commentsRes || [])) {
+  for (const row of (commentsRes.data || [])) {
     if (!rawCommentsMap.has(row.comment.id)) {
       rawCommentsMap.set(row.comment.id, {
         ...row.comment,
@@ -269,7 +269,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       pinned: !!c.pinned,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
-      author: c.members || { username: 'desconhecido', displayName: 'Usuário'},
+      author: c.members || { username: 'desconhecido', displayName: 'Usurio'},
       likesCount: likes.length,
       isLiked: viewerId ? likes.some((l: any) => l.userId === viewerId) : false,
       isStaff: memberUserIds.has(c.userId),
@@ -289,7 +289,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     canModerateComments,
     userApplications,
     userAppOpenings: Array.from(userAppOpenings),
-    recruitmentQuestions: questionsRes || [],
+    recruitmentQuestions: questionsRes.data || [],
     totalViews,
     viewer: locals.user
       ? {
@@ -306,7 +306,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 export const actions: Actions = {
   apply: async ({ request, locals }) => {
     if (!locals.user) {
-      return fail(401, { message: "Você precisa estar conectado para se candidatar." });
+      return fail(401, { message: "Voc precisa estar conectado para se candidatar." });
     }
     const formData = await request.formData();
     const openingId = formData.get("opening_id") as string;
@@ -317,12 +317,12 @@ export const actions: Actions = {
     const contactInfo = (formData.get("contact_info") as string)?.trim() || "";
 
     if (!openingId) {
-      return fail(400, { message: "Vaga não especificada." });
+      return fail(400, { message: "Vaga no especificada." });
     }
 
     let applicationId = null;
     try {
-      const res = await db.execute(sql`SELECT * FROM apply_for_scan_opening(
+      const res = await (db as any).execute(sql`SELECT * FROM apply_for_scan_opening(
         ${openingId},
         ${experience},
         ${availability},
@@ -334,7 +334,7 @@ export const actions: Actions = {
         applicationId = (res.rows[0] as any).applicationId || (res.rows[0] as any).application_id;
       }
     } catch (e: any) {
-      return fail(400, { message: e.message || "Erro ao se candidatar." });
+      return fail(400, { message: (e as any).message || "Erro ao se candidatar." });
     }
 
     if (applicationId) {
@@ -356,7 +356,7 @@ export const actions: Actions = {
 
     // Notify Scan Leaders
     try {
-      const opRes = await safeQuery(
+      const { data: opRes } = await safeQuery(
         db.select({
           title: schema.scanRecruitmentOpenings.title,
           scanId: schema.scanRecruitmentOpenings.scanId,
@@ -370,7 +370,7 @@ export const actions: Actions = {
       const op = opRes?.[0];
 
       if (op) {
-        const leads = await safeQuery(
+        const { data: leads } = await safeQuery(
           db.select({ userId: schema.scanMembers.userId })
           .from(schema.scanMembers)
           .where(
@@ -406,7 +406,7 @@ export const actions: Actions = {
 
   postComment: async ({ request, locals, params }) => {
     if (!locals.user) {
-      return fail(401, { message: "Você precisa estar conectado para comentar." });
+      return fail(401, { message: "Voc precisa estar conectado para comentar." });
     }
     const formData = await request.formData();
     const scanId = formData.get("scan_id") as string;
@@ -414,23 +414,23 @@ export const actions: Actions = {
     const parentId = (formData.get("parent_id") as string) || null;
 
     if (!scanId || !body) {
-      return fail(400, { message: "Comentário não pode estar em branco." });
+      return fail(400, { message: "Comentrio no pode estar em branco." });
     }
 
     try {
-      await db.execute(sql`SELECT post_scan_comment(
+      await (db as any).execute(sql`SELECT post_scan_comment(
         ${scanId},
         ${body},
         ${parentId}
       )`);
     } catch (e: any) {
-      return fail(400, { message: e.message || "Erro ao postar comentário." });
+      return fail(400, { message: (e as any).message || "Erro ao postar comentrio." });
     }
 
     // Notify parent comment author
     if (parentId) {
       try {
-        const parent = await safeQuerySingle(
+        const { data: parent } = await safeQuerySingle(
           db.select({
             userId: schema.scanComments.userId,
             body: schema.scanComments.body
@@ -444,7 +444,7 @@ export const actions: Actions = {
             recipientUserId: parent.userId,
             actorUserId: locals.user!.id,
             type: "REPLY_COMMENT",
-            title: "Responderam ao seu comentário na página da Scan",
+            title: "Responderam ao seu comentrio na pgina da Scan",
             body: body,
             deepLink: `/scans/${params.slug}#comment-${parentId}`,
             scanId,
@@ -462,19 +462,19 @@ export const actions: Actions = {
 
   likeComment: async ({ request, locals }) => {
     if (!locals.user) {
-      return fail(401, { message: "Você precisa estar conectado para curtir." });
+      return fail(401, { message: "Voc precisa estar conectado para curtir." });
     }
     const formData = await request.formData();
     const commentId = formData.get("comment_id") as string;
 
     if (!commentId) {
-      return fail(400, { message: "Comentário não informado." });
+      return fail(400, { message: "Comentrio no informado." });
     }
 
     try {
-      await db.execute(sql`SELECT like_scan_comment(${commentId})`);
+      await (db as any).execute(sql`SELECT like_scan_comment(${commentId})`);
     } catch (e: any) {
-      return fail(400, { message: e.message || "Erro ao curtir." });
+      return fail(400, { message: (e as any).message || "Erro ao curtir." });
     }
 
     return { success: true };
@@ -489,13 +489,13 @@ export const actions: Actions = {
     const actionType = formData.get("action_type") as string; // 'REMOVE' | 'RESTORE' | 'PIN' | 'UNPIN'
 
     if (!commentId || !actionType) {
-      return fail(400, { message: "Dados insuficientes para moderação." });
+      return fail(400, { message: "Dados insuficientes para moderao." });
     }
 
     try {
-      await db.execute(sql`SELECT moderate_scan_comment(${commentId}, ${actionType})`);
+      await (db as any).execute(sql`SELECT moderate_scan_comment(${commentId}, ${actionType})`);
     } catch (e: any) {
-      return fail(400, { message: e.message || "Erro ao moderar." });
+      return fail(400, { message: (e as any).message || "Erro ao moderar." });
     }
 
     return { success: true };
@@ -503,20 +503,20 @@ export const actions: Actions = {
 
   reportComment: async ({ request, locals }) => {
     if (!locals.user) {
-      return fail(401, { message: "Você precisa estar conectado para denunciar." });
+      return fail(401, { message: "Voc precisa estar conectado para denunciar." });
     }
     const formData = await request.formData();
     const commentId = formData.get("comment_id") as string;
     const reason = (formData.get("reason") as string)?.trim() || "";
 
     if (!commentId || !reason || reason.length < 2) {
-      return fail(400, { message: "Informe um motivo de denúncia válido." });
+      return fail(400, { message: "Informe um motivo de denncia vlido." });
     }
 
     try {
-      await db.execute(sql`SELECT report_scan_comment(${commentId}, ${reason})`);
+      await (db as any).execute(sql`SELECT report_scan_comment(${commentId}, ${reason})`);
     } catch (e: any) {
-      return fail(400, { message: e.message || "Erro ao denunciar." });
+      return fail(400, { message: (e as any).message || "Erro ao denunciar." });
     }
 
     return { success: true, reportSent: true };

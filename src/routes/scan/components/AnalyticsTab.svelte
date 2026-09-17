@@ -33,8 +33,8 @@
 <div class="analytics-tab">
   <div class="tab-header">
     <div>
-      <h2 class="title">Métricas & Desempenho da Scan</h2>
-      <p class="subtitle">Estatísticas exclusivas de alcance, produtividade e leitura da equipe {currentScan?.name}.</p>
+      <h2 class="title">Mtricas & Desempenho da Scan</h2>
+      <p class="subtitle">Estatsticas exclusivas de alcance, produtividade e leitura da equipe {currentScan?.name}.</p>
     </div>
   </div>
 
@@ -45,7 +45,7 @@
         <Eye size={22} />
       </div>
       <div class="kpi-info">
-        <span class="kpi-label">Visualizações Totais</span>
+        <span class="kpi-label">Visualizaes Totais</span>
         <span class="kpi-val">{totalViews.toLocaleString('pt-BR')}</span>
         <span class="kpi-sub">Acumulado em todas as obras</span>
       </div>
@@ -56,9 +56,9 @@
         <FileText size={22} />
       </div>
       <div class="kpi-info">
-        <span class="kpi-label">Capítulos Publicados</span>
+        <span class="kpi-label">Captulos Publicados</span>
         <span class="kpi-val">{chapters.length}</span>
-        <span class="kpi-sub">+{recentChapters.length} nos últimos 30 dias</span>
+        <span class="kpi-sub">+{recentChapters.length} nos ltimos 30 dias</span>
       </div>
     </div>
 
@@ -69,7 +69,7 @@
       <div class="kpi-info">
         <span class="kpi-label">Obras Ativas</span>
         <span class="kpi-val">{activeWorks.length} / {works.length}</span>
-        <span class="kpi-sub">Em tradução contínua</span>
+        <span class="kpi-sub">Em traduo contnua</span>
       </div>
     </div>
 
@@ -91,7 +91,7 @@
       <TrendingUp size={20} class="section-icon indigo" />
       <div>
         <h3>Obras Mais Populares da Scan</h3>
-        <p>Ranking de engajamento do público com os projetos da sua equipe.</p>
+        <p>Ranking de engajamento do pblico com os projetos da sua equipe.</p>
       </div>
     </div>
 
@@ -130,21 +130,21 @@
     <div class="section-title-row">
       <Users size={20} class="section-icon pink" />
       <div>
-        <h3>Distribuição da Equipe por Função</h3>
-        <p>Visão geral de disponibilidade e papéis na scan.</p>
+        <h3>Distribuio da Equipe por Funo</h3>
+        <p>Viso geral de disponibilidade e papis na scan.</p>
       </div>
     </div>
 
     <div class="team-dist-grid">
       <div class="dist-card">
-        <span class="dist-label">Liderança & Coordenação</span>
+        <span class="dist-label">Liderana & Coordenao</span>
         <span class="dist-val">{team.filter((m: any) => ['OWNER', 'ADMIN'].includes(m.role)).length}</span>
         <span class="dist-sub">Donos e Administradores</span>
       </div>
       <div class="dist-card">
         <span class="dist-label">Uploaders Autorizados</span>
         <span class="dist-val">{team.filter((m: any) => m.role === 'UPLOADER').length}</span>
-        <span class="dist-sub">Envio direto de capítulos</span>
+        <span class="dist-sub">Envio direto de captulos</span>
       </div>
       <div class="dist-card">
         <span class="dist-label">Membros Staff</span>
@@ -154,7 +154,7 @@
       <div class="dist-card">
         <span class="dist-label">Disponibilidade Ativa</span>
         <span class="dist-val">{team.filter((m: any) => m.availabilityStatus === 'ACTIVE' || !m.availabilityStatus).length}</span>
-        <span class="dist-sub">Prontos para assumir capítulos</span>
+        <span class="dist-sub">Prontos para assumir captulos</span>
       </div>
     </div>
   </div>

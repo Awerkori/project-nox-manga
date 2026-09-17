@@ -44,8 +44,8 @@
   const tabs = [
     { path: 'biblioteca', label: 'Biblioteca', icon: Library },
     { path: 'favoritos', label: 'Favoritos', icon: Bookmark },
-    { path: 'historico', label: 'Histórico', icon: History },
-    { path: 'notificacoes', label: 'Notificações', icon: Bell },
+    { path: 'historico', label: 'Histrico', icon: History },
+    { path: 'notificacoes', label: 'Notificaes', icon: Bell },
     { path: 'perfil', label: 'Perfil', icon: UserRound }
   ];
 
@@ -63,7 +63,7 @@
     try {
       await action('member', 'equip_title', { title_id: titleId });
       noticeType = 'success';
-      notice = 'Título equipado com sucesso!';
+      notice = 'Ttulo equipado com sucesso!';
       await invalidateAll();
     } catch (e) {
       noticeType = 'error';
@@ -80,7 +80,7 @@
     try {
       await action('member', 'equip_badge', { badge_id: badgeId });
       noticeType = 'success';
-      notice = 'Insígnia equipada com sucesso!';
+      notice = 'Insgnia equipada com sucesso!';
       await invalidateAll();
     } catch (e) {
       noticeType = 'error';
@@ -105,13 +105,13 @@
     previewAvatar = localUrl;
 
     try {
-      if (file.size > 5_000_000) throw new Error('Selecione uma imagem de até 5 MB.');
+      if (file.size > 5_000_000) throw new Error('Selecione uma imagem de at 5 MB.');
       const bitmap = await createImageBitmap(file);
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 256;
       const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Não foi possível processar a imagem.');
+      if (!ctx) throw new Error('No foi possvel processar a imagem.');
       const size = Math.min(bitmap.width, bitmap.height);
       ctx.drawImage(
         bitmap,
@@ -126,7 +126,7 @@
       );
       bitmap.close();
       const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Imagem inválida.'))), 'image/webp', 0.85)
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Imagem invlida.'))), 'image/webp', 0.85)
       );
       const response = await fetch('/api/avatar', {
         method: 'POST',
@@ -134,7 +134,7 @@
         body: blob
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
+      if (!response.ok) throw new Error((result as any).message);
       noticeType = 'success';
       notice = 'Avatar atualizado com sucesso!';
       await invalidateAll();
@@ -151,11 +151,11 @@
   let title = $derived(
     {
       biblioteca: 'Sua biblioteca',
-      favoritos: 'Histórias favoritas',
-      historico: 'Histórico de leitura',
-      notificacoes: 'Notificações',
+      favoritos: 'Histrias favoritas',
+      historico: 'Histrico de leitura',
+      notificacoes: 'Notificaes',
       perfil: 'Meu perfil'
-    }[data.area] || 'Meu espaço'
+    }[data.area] || 'Meu espao'
   );
 
   async function save(event: SubmitEvent) {
@@ -186,7 +186,7 @@
       await action('member', 'notifications', {});
       await invalidateAll();
       noticeType = 'success';
-      notice = 'Notificações marcadas como lidas.';
+      notice = 'Notificaes marcadas como lidas.';
     } catch (e) {
       noticeType = 'error';
       notice = (e as Error).message;
@@ -197,13 +197,13 @@
 
   async function clearHistory() {
     if (busy) return;
-    if (!window.confirm('Tem certeza que deseja limpar todo o seu histórico de leitura? Esta ação não pode ser desfeita.')) return;
+    if (!window.confirm('Tem certeza que deseja limpar todo o seu histrico de leitura? Esta ao no pode ser desfeita.')) return;
     busy = true;
     notice = '';
     try {
       await action('member', 'clear_history', {});
       noticeType = 'success';
-      notice = 'Histórico de leitura limpo com sucesso.';
+      notice = 'Histrico de leitura limpo com sucesso.';
       await invalidateAll();
     } catch (e) {
       noticeType = 'error';
@@ -226,7 +226,7 @@
       if (age_status === 'ADULT' || age_status === 'MINOR') setAgeStatus(age_status);
       setBlurNsfw(blur_nsfw);
       noticeType = 'success';
-      notice = 'Preferências de conteúdo atualizadas!';
+      notice = 'Preferncias de contedo atualizadas!';
       await invalidateAll();
     } catch (e) {
       noticeType = 'error';
@@ -268,13 +268,13 @@
   <div class="page-top">
     <div class="badge-tag">
       <Sparkles size={12} />
-      <span>MEU ESPAÇO</span>
+      <span>MEU ESPAO</span>
     </div>
     <h1 class="page-title">{title}</h1>
   </div>
 
   <!-- Modern Responsive Tab Bar -->
-  <nav class="member-tabs-bar" aria-label="Navegação da conta">
+  <nav class="member-tabs-bar" aria-label="Navegao da conta">
     <div class="member-tabs-scroll">
       {#each tabs as tab (tab.path)}
         <a
@@ -319,7 +319,7 @@
             {#if previewAvatar}
               <img
                 src={previewAvatar}
-                alt="Prévia do seu avatar"
+                alt="Prvia do seu avatar"
                 class="avatar-large-img"
               />
             {:else if data.profile.avatarId}
@@ -354,7 +354,7 @@
             {#if rank.badgeSvg}
               <img src={rank.badgeSvg} alt={rank.badge} width="24" height="24" class="profile-badge-vector" />
             {:else if rank.badgeIcon}
-              <span class="profile-badge-glyph tier-{rank.badgeTier}" title="Insígnia equipada">{rank.badgeIcon}</span>
+              <span class="profile-badge-glyph tier-{rank.badgeTier}" title="Insgnia equipada">{rank.badgeIcon}</span>
             {/if}
             <span class="honorific-badge">{rank.title}</span>
           </div>
@@ -363,7 +363,7 @@
             @{data.profile.username} · Na Nox desde {date(data.profile.createdAt)}
           </p>
           <a class="public-profile-link" href="/u/{data.profile.username}">
-            <span>Ver perfil público</span>
+            <span>Ver perfil pblico</span>
             <ExternalLink size={12} />
           </a>
         </div>
@@ -372,7 +372,7 @@
         <div class="profile-stats-grid">
           <div class="profile-stat-item">
             <span class="stat-number highlight-purple">{progress.currentLevel}</span>
-            <span class="stat-name">Nível</span>
+            <span class="stat-name">Nvel</span>
           </div>
           <div class="profile-stat-item">
             <span class="stat-number highlight-gold">{data.profile.xp}</span>
@@ -380,7 +380,7 @@
           </div>
           <div class="profile-stat-item">
             <span class="stat-number">{data.completed}</span>
-            <span class="stat-name">Capítulos</span>
+            <span class="stat-name">Captulos</span>
           </div>
           <div class="profile-stat-item">
             <span class="stat-number">{data.libraryTotal}</span>
@@ -388,14 +388,14 @@
           </div>
           <div class="profile-stat-item">
             <span class="stat-number">{data.completedWorks}</span>
-            <span class="stat-name">Concluídas</span>
+            <span class="stat-name">Concludas</span>
           </div>
         </div>
 
         <!-- Glowing XP Progress Track -->
         <div class="profile-xp-section">
           <div class="xp-bar-header">
-            <span class="xp-bar-label">Progresso do Nível {progress.currentLevel}</span>
+            <span class="xp-bar-label">Progresso do Nvel {progress.currentLevel}</span>
             <span class="xp-bar-percent">{progress.progressPercent}%</span>
           </div>
           <div class="profile-xp-track">
@@ -406,18 +406,18 @@
           </div>
           <p class="profile-xp-caption">
             {#if progress.isMaxLevel}
-              <strong>Nível Máximo Alcançado (100)</strong>
+              <strong>Nvel Mximo Alcanado (100)</strong>
             {:else}
-              Faltam <strong>{progress.xpNeededForNext} XP</strong> para o nível {progress.nextLevel}
+              Faltam <strong>{progress.xpNeededForNext} XP</strong> para o nvel {progress.nextLevel}
             {/if}
           </p>
         </div>
 
-        <!-- Coleção de Insígnias & Badges -->
+        <!-- Coleo de Insgnias & Badges -->
         <div class="profile-collection-card">
           <div class="collection-header">
             <div>
-              <h3 class="collection-title">Insígnias Colecionáveis</h3>
+              <h3 class="collection-title">Insgnias Colecionveis</h3>
               <span class="collection-sub">{unlockedBadges.length} de {NOX_BADGES.length} desbloqueadas</span>
             </div>
           </div>
@@ -461,11 +461,11 @@
           </div>
         </div>
 
-        <!-- Coleção de Títulos Honoríficos -->
+        <!-- Coleo de Ttulos Honorficos -->
         <div class="profile-collection-card" style="margin-top: 14px;">
           <div class="collection-header">
             <div>
-              <h3 class="collection-title">Títulos Honoríficos</h3>
+              <h3 class="collection-title">Ttulos Honorficos</h3>
               <span class="collection-sub">{unlockedTitles.length} de {NOX_TITLES.length} desbloqueados</span>
             </div>
           </div>
@@ -513,19 +513,19 @@
         <p class="edit-card-sub">Atualize sua identidade e bio na plataforma.</p>
 
         <label class="field-label">
-          <span>Nome de exibição</span>
+          <span>Nome de exibio</span>
           <input
             name="display_name"
             class="field-input"
             value={data.profile.displayName}
             required
             maxlength="60"
-            placeholder="Como você quer ser chamado"
+            placeholder="Como voc quer ser chamado"
           />
         </label>
 
         <label class="field-label">
-          <span>Nome de usuário</span>
+          <span>Nome de usurio</span>
           <div class="username-input-wrap">
             <span class="prefix">@</span>
             <input
@@ -539,43 +539,43 @@
               placeholder="seu_usuario"
             />
           </div>
-          <small class="field-hint">Apenas letras minúsculas, números e sublinhado (_).</small>
+          <small class="field-hint">Apenas letras minsculas, nmeros e sublinhado (_).</small>
         </label>
 
         <label class="field-label">
-          <span>Sobre você</span>
+          <span>Sobre voc</span>
           <textarea
             name="bio"
             class="field-textarea"
             rows="4"
             maxlength="500"
-            placeholder="Conte um pouco sobre suas leituras e gêneros favoritos..."
+            placeholder="Conte um pouco sobre suas leituras e gneros favoritos..."
           >{data.profile.bio || ''}</textarea>
         </label>
 
         <div class="form-actions">
           <button class="save-profile-btn" disabled={busy}>
             {#if busy}
-              <span>Salvando alterações…</span>
+              <span>Salvando alteraes…</span>
             {:else}
               <Check size={16} />
-              <span>Salvar alterações</span>
+              <span>Salvar alteraes</span>
             {/if}
           </button>
         </div>
       </form>
 
-      <!-- Preferences: Conteúdo Adulto (+18) -->
+      <!-- Preferences: Contedo Adulto (+18) -->
       <form class="profile-card profile-card-right" style="margin-top:20px" onsubmit={savePreferences}>
-        <h3 class="edit-card-title">Conteúdo Adulto (+18)</h3>
-        <p class="edit-card-sub">Configure a visualização e restrição de obras para maiores de 18 anos.</p>
+        <h3 class="edit-card-title">Contedo Adulto (+18)</h3>
+        <p class="edit-card-sub">Configure a visualizao e restrio de obras para maiores de 18 anos.</p>
 
         <label class="field-label">
-          <span>Confirmação de maioridade</span>
+          <span>Confirmao de maioridade</span>
           <select name="age_status" class="field-input" value={data.profile.ageStatus || 'UNKNOWN'}>
-            <option value="UNKNOWN">Não especificado (perguntar na visita)</option>
+            <option value="UNKNOWN">No especificado (perguntar na visita)</option>
             <option value="ADULT">Sim, tenho 18 anos ou mais</option>
-            <option value="MINOR">Não, sou menor de 18 anos (bloquear obras +18)</option>
+            <option value="MINOR">No, sou menor de 18 anos (bloquear obras +18)</option>
           </select>
         </label>
 
@@ -590,7 +590,7 @@
           <div>
             <span style="font-weight:600;display:block">Borrar capas de obras adultas (+18)</span>
             <small class="field-hint" style="margin-top:2px;display:block">
-              {data.profile.ageStatus === 'MINOR' ? 'Obrigatório para menores de 18 anos.' : 'Oculta as ilustrações com desfoque estético suave.'}
+              {data.profile.ageStatus === 'MINOR' ? 'Obrigatrio para menores de 18 anos.' : 'Oculta as ilustraes com desfoque esttico suave.'}
             </small>
           </div>
         </label>
@@ -598,21 +598,21 @@
         <div class="form-actions">
           <button class="save-profile-btn" disabled={busy}>
             <Check size={16} />
-            <span>Salvar preferências</span>
+            <span>Salvar preferncias</span>
           </button>
         </div>
       </form>
 
       <!-- Mihon Integration Token -->
       <div class="profile-card profile-card-right" style="margin-top:20px">
-        <h3 class="edit-card-title">Integração Mihon (Leitura Externa)</h3>
+        <h3 class="edit-card-title">Integrao Mihon (Leitura Externa)</h3>
         <p class="edit-card-sub">
-          Gere um token de acesso para sincronizar seu progresso, catálogo e XP diretamente pelo app Mihon no Android.
+          Gere um token de acesso para sincronizar seu progresso, catlogo e XP diretamente pelo app Mihon no Android.
         </p>
 
         {#if generatedMihonToken}
           <div class="mihon-token-box">
-            <span class="mihon-token-warning">⚠️ Copie este token agora. Por segurança, ele não será exibido novamente:</span>
+            <span class="mihon-token-warning">⚠️ Copie este token agora. Por segurana, ele no ser exibido novamente:</span>
             <div class="mihon-token-input-wrap">
               <input type="text" readonly value={generatedMihonToken} class="field-input monospace-input" />
               <button
@@ -647,12 +647,12 @@
     <div class="chips" style="margin-bottom:24px">
       <a class="chip" aria-current={!data.filter ? 'page' : undefined} href="/notificacoes">Todas</a>
       <a class="chip" aria-current={data.filter ? 'page' : undefined} href="/notificacoes?filtro=nao-lidas">
-        Não lidas{data.unread ? ` (${data.unread})` : ''}
+        No lidas{data.unread ? ` (${data.unread})` : ''}
       </a>
     </div>
     {#if data.notifications.length}
       <div class="notif-header-row">
-        <p class="small">{data.total} {data.total === 1 ? 'notificação' : 'notificações'}</p>
+        <p class="small">{data.total} {data.total === 1 ? 'notificao' : 'notificaes'}</p>
         <button class="button secondary compact" onclick={read} disabled={busy || !data.unread}>
           {busy ? 'Marcando…' : 'Marcar todas como lidas'}
         </button>
@@ -687,9 +687,9 @@
     {:else}
       <Empty
         title="Tudo em dia por aqui."
-        text="Novos capítulos das obras acompanhadas, respostas e conquistas aparecerão aqui."
+        text="Novos captulos das obras acompanhadas, respostas e conquistas aparecero aqui."
         href={data.filter ? '/notificacoes' : undefined}
-        label={data.filter ? 'Ver todas as notificações' : undefined}
+        label={data.filter ? 'Ver todas as notificaes' : undefined}
       />
     {/if}
   {:else if data.area === 'historico'}
@@ -697,10 +697,10 @@
       <div class="row between" style="margin-bottom:16px">
         <p class="small muted" style="margin:0">
           {data.total}
-          {data.total === 1 ? 'capítulo no histórico' : 'capítulos no histórico'}
+          {data.total === 1 ? 'captulo no histrico' : 'captulos no histrico'}
         </p>
         <button class="button secondary compact" onclick={clearHistory} disabled={busy}>
-          Limpar histórico
+          Limpar histrico
         </button>
       </div>
       <div class="continue-grid">
@@ -708,10 +708,10 @@
           {#if item.chapters}
             <a class="continue-card" href="/ler/{item.chapterId}">
               <div>
-                <strong>{item.chapters.works?.title || 'Obra indisponível'}</strong>
+                <strong>{item.works?.title || 'Obra indisponvel'}</strong>
                 <p>
-                  Capítulo {item.chapters.number} · Página {item.page}
-                  {item.completedAt ? '· Concluído' : ''}
+                  Captulo {item.chapters.number} · Pgina {item.page}
+                  {item.completedAt ? '· Concludo' : ''}
                 </p>
                 <p>{date(item.updatedAt)}</p>
               </div>
@@ -722,16 +722,16 @@
       </div>
     {:else}
       <Empty
-        title="Sua jornada começa com uma página."
-        text="Ao abrir um capítulo, seu progresso fica salvo aqui."
+        title="Sua jornada comea com uma pgina."
+        text="Ao abrir um captulo, seu progresso fica salvo aqui."
         href="/catalogo"
-        label="Explorar histórias"
+        label="Explorar histrias"
       />
     {/if}
   {:else}
     {#if data.area === 'biblioteca'}
       <div class="chips" style="margin-bottom:28px">
-        {#each [['', 'Todas'], ['READING', 'Lendo'], ['PLANNED', 'Quero ler'], ['COMPLETED', 'Concluído']] as [value, label] (value)}
+        {#each [['', 'Todas'], ['READING', 'Lendo'], ['PLANNED', 'Quero ler'], ['COMPLETED', 'Concludo']] as [value, label] (value)}
           <a
             class="chip"
             aria-current={data.tab === value ? 'page' : undefined}
@@ -763,13 +763,13 @@
         title={data.tab
           ? 'Nenhuma obra nesta lista.'
           : data.area === 'favoritos'
-            ? 'Guarde as histórias que marcaram você.'
+            ? 'Guarde as histrias que marcaram voc.'
             : 'Uma biblioteca com a sua cara.'}
         text={data.tab
-          ? 'Veja as outras listas ou organize uma obra pela página dela.'
-          : 'Abra uma obra e adicione à sua biblioteca para acompanhar a leitura.'}
+          ? 'Veja as outras listas ou organize uma obra pela pgina dela.'
+          : 'Abra uma obra e adicione  sua biblioteca para acompanhar a leitura.'}
         href={data.tab ? '/biblioteca' : '/catalogo'}
-        label={data.tab ? 'Ver toda a biblioteca' : 'Explorar o catálogo'}
+        label={data.tab ? 'Ver toda a biblioteca' : 'Explorar o catlogo'}
       />
     {/if}
   {/if}

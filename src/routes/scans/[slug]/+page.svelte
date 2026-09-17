@@ -94,7 +94,7 @@
   <title>{data.scan.name} — Scan {data.scan.isOfficial ? "Oficial" : "Parceira"} | Project Nox</title>
   <meta
     name="description"
-    content={data.scan.description || `Página oficial de traduções de ${data.scan.name} no Project Nox.`}
+    content={data.scan.description || `Pgina oficial de tradues de ${data.scan.name} no Project Nox.`}
   />
 </svelte:head>
 
@@ -156,7 +156,7 @@
             </div>
 
             <p class="scan-bio">
-              {data.scan.description || (data.scan.isOfficial ? "Scan oficial e núcleo editorial de traduções do Project Nox." : "Grupo independente de tradução e edição parceiro do Project Nox.")}
+              {data.scan.description || (data.scan.isOfficial ? "Scan oficial e ncleo editorial de tradues do Project Nox." : "Grupo independente de traduo e edio parceiro do Project Nox.")}
             </p>
           </div>
 
@@ -207,7 +207,7 @@
             <Layers size={18} class="metric-icon" />
             <div class="metric-info">
               <span class="metric-val">{data.chapters.length}</span>
-              <span class="metric-label">{data.chapters.length === 1 ? "Capítulo" : "Capítulos"}</span>
+              <span class="metric-label">{data.chapters.length === 1 ? "Captulo" : "Captulos"}</span>
             </div>
           </div>
 
@@ -259,7 +259,7 @@
         type="button"
       >
         <Layers size={16} />
-        <span>Capítulos ({data.chapters.length})</span>
+        <span>Captulos ({data.chapters.length})</span>
       </button>
 
       <button
@@ -303,7 +303,7 @@
         type="button"
       >
         <MessageSquare size={16} />
-        <span>Comentários ({(data.comments || []).length})</span>
+        <span>Comentrios ({(data.comments || []).length})</span>
       </button>
     </nav>
 
@@ -313,13 +313,13 @@
         <CheckCircle2 size={20} class="success-icon" />
         <div>
           <strong>Candidatura enviada com sucesso!</strong>
-          <p>A equipe de <strong>{data.scan.name}</strong> recebeu sua inscrição e responderá em breve.</p>
+          <p>A equipe de <strong>{data.scan.name}</strong> recebeu sua inscrio e responder em breve.</p>
         </div>
       </div>
     {:else if form?.message}
       <div class="error-banner">
         <AlertCircle size={20} class="error-icon" />
-        <span>{form.message}</span>
+        <span>{(form as any).message}</span>
       </div>
     {/if}
 
@@ -332,7 +332,7 @@
             <div class="section-block">
               <div class="section-title-wrap">
                 <h2 class="section-title">Projetos Atuais ({currentWorks.length})</h2>
-                <p class="section-subtitle">Obras ativas e em lançamento contínuo por {data.scan.name}</p>
+                <p class="section-subtitle">Obras ativas e em lanamento contnuo por {data.scan.name}</p>
               </div>
               <div class="works-grid">
                 {#each currentWorks as work}
@@ -346,7 +346,7 @@
             <div class="section-block past-works-block">
               <div class="section-title-wrap">
                 <h2 class="section-title">Projetos Anteriores ({pastWorks.length})</h2>
-                <p class="section-subtitle">Obras concluídas ou encerradas no catálogo</p>
+                <p class="section-subtitle">Obras concludas ou encerradas no catlogo</p>
               </div>
               <div class="works-grid">
                 {#each pastWorks as work}
@@ -360,7 +360,7 @@
             <div class="empty-state">
               <BookOpen size={40} />
               <h3>Nenhuma obra associada</h3>
-              <p>Esta scan ainda não possui obras públicas atribuídas no catálogo do Project Nox.</p>
+              <p>Esta scan ainda no possui obras pblicas atribudas no catlogo do Project Nox.</p>
             </div>
           {/if}
         </div>
@@ -390,7 +390,7 @@
                       <span>{relativeTime(ch.publishedAt)}</span>
                     </span>
                     <a href="/ler/{ch.id}" class="btn-read">
-                      <span>Ler Capítulo</span>
+                      <span>Ler Captulo</span>
                     </a>
                   </div>
                 </div>
@@ -399,8 +399,8 @@
           {:else}
             <div class="empty-state">
               <Layers size={40} />
-              <h3>Nenhum capítulo disponível</h3>
-              <p>Esta scan ainda não possui lançamentos recentes registrados.</p>
+              <h3>Nenhum captulo disponvel</h3>
+              <p>Esta scan ainda no possui lanamentos recentes registrados.</p>
             </div>
           {/if}
         </div>
@@ -414,7 +414,7 @@
               <div class="members-group">
                 <h3 class="group-title">
                   <Star size={16} fill="#dfc28d" color="#dfc28d" />
-                  <span>Liderança & Propriedade</span>
+                  <span>Liderana & Propriedade</span>
                 </h3>
                 <div class="members-grid">
                   {#each owners as member}
@@ -443,7 +443,7 @@
                               <span class="position-badge">{pos.name}</span>
                             {/each}
                           {:else}
-                            <span class="position-badge">Líder da Equipe</span>
+                            <span class="position-badge">Lder da Equipe</span>
                           {/if}
                         </div>
                       </div>
@@ -458,7 +458,7 @@
               <div class="members-group">
                 <h3 class="group-title">
                   <ShieldCheck size={16} color="#c084fc" />
-                  <span>Administração</span>
+                  <span>Administrao</span>
                 </h3>
                 <div class="members-grid">
                   {#each admins as member}
@@ -539,8 +539,8 @@
           {:else}
             <div class="empty-state">
               <Users size={40} />
-              <h3>Nenhum membro público registrado</h3>
-              <p>Os dados de membros desta equipe estão ocultos ou em atualização.</p>
+              <h3>Nenhum membro pblico registrado</h3>
+              <p>Os dados de membros desta equipe esto ocultos ou em atualizao.</p>
             </div>
           {/if}
         </div>
@@ -553,7 +553,7 @@
               <div>
                 <h2 class="recruitment-title">Vagas Abertas em {data.scan.name}</h2>
                 <p class="recruitment-subtitle">
-                  Faça parte da equipe! Candidate-se preenchendo o formulário específico para a vaga desejada.
+                  Faa parte da equipe! Candidate-se preenchendo o formulrio especfico para a vaga desejada.
                 </p>
               </div>
             </div>
@@ -585,7 +585,7 @@
                     {/if}
                     {#if opening.experienceLevel && opening.experienceLevel !== "QUALQUER"}
                       <div class="meta-row">
-                        <span class="meta-label">Experiência:</span>
+                        <span class="meta-label">Experincia:</span>
                         <span class="meta-val">{opening.experienceLevel}</span>
                       </div>
                     {/if}
@@ -624,7 +624,7 @@
                         onclick={() => openApplyModal(opening)}
                       >
                         <UserPlus size={15} />
-                        <span>Candidatar-se à Vaga</span>
+                        <span>Candidatar-se  Vaga</span>
                       </button>
                     {/if}
                   </div>
@@ -635,7 +635,7 @@
             <div class="empty-state">
               <Briefcase size={40} />
               <h3>Nenhuma vaga aberta no momento</h3>
-              <p>A equipe de {data.scan.name} não possui vagas de recrutamento abertas no momento. Volte em breve!</p>
+              <p>A equipe de {data.scan.name} no possui vagas de recrutamento abertas no momento. Volte em breve!</p>
             </div>
           {/if}
         </div>
@@ -673,7 +673,7 @@
             <div class="empty-state">
               <Clock size={40} />
               <h3>Nenhuma atividade recente</h3>
-              <p>As atualizações da equipe aparecerão aqui conforme novos lançamentos e membros forem registrados.</p>
+              <p>As atualizaes da equipe aparecero aqui conforme novos lanamentos e membros forem registrados.</p>
             </div>
           {/if}
         </div>
@@ -683,13 +683,13 @@
         <div class="tab-pane comments-pane">
           <div class="comments-header">
             <div>
-              <h2 class="section-title">Comentários & Mural da Comunidade</h2>
+              <h2 class="section-title">Comentrios & Mural da Comunidade</h2>
               <p class="section-subtitle">
                 Deixe seu apoio, feedback ou recado para a equipe de {data.scan.name}.
               </p>
             </div>
             <span class="comments-count-badge">
-              {(data.comments || []).length} comentário{(data.comments || []).length === 1 ? "" : "s"}
+              {(data.comments || []).length} comentrio{(data.comments || []).length === 1 ? "" : "s"}
             </span>
           </div>
 
@@ -715,7 +715,7 @@
                     name="body"
                     rows="3"
                     maxlength="2000"
-                    placeholder="Escreva um comentário ou mensagem para a scan {data.scan.name}..."
+                    placeholder="Escreva um comentrio ou mensagem para a scan {data.scan.name}..."
                     required
                     class="composer-textarea"
                   ></textarea>
@@ -725,7 +725,7 @@
                 <span class="composer-hint">Seja respeitoso e apoie os tradutores e editores!</span>
                 <button type="submit" class="btn-post-comment" disabled={isSubmitting}>
                   <Send size={15} />
-                  <span>Publicar Comentário</span>
+                  <span>Publicar Comentrio</span>
                 </button>
               </div>
             </form>
@@ -734,7 +734,7 @@
               <MessageSquare size={24} />
               <div class="login-msg-text">
                 <strong>Quer deixar um recado para a equipe?</strong>
-                <p>Faça login ou crie sua conta no Project Nox para comentar e interagir com as scans parceiras.</p>
+                <p>Faa login ou crie sua conta no Project Nox para comentar e interagir com as scans parceiras.</p>
               </div>
               <a href="/login" class="btn-login-comment">Entrar no Project Nox</a>
             </div>
@@ -749,14 +749,14 @@
                   {#if comment.pinned}
                     <div class="pinned-indicator">
                       <Pin size={12} />
-                      <span>Comentário Fixado pela Staff</span>
+                      <span>Comentrio Fixado pela Staff</span>
                     </div>
                   {/if}
 
                   <div class="comment-main">
                     <div class="comment-avatar">
                       <UserAvatar
-                        displayName={comment.author?.displayName || comment.author?.username || 'Usuário'}
+                        displayName={comment.author?.displayName || comment.author?.username || 'Usurio'}
                         avatarId={comment.author?.avatarId}
                         frameId={comment.author?.avatarFrameId}
                         size={38}
@@ -766,7 +766,7 @@
                       <div class="comment-meta-header">
                         <div class="comment-author-info">
                           <a href="/u/{comment.author?.username}" class="comment-author-name">
-                            {comment.author?.displayName || comment.author?.username || 'Usuário'}
+                            {comment.author?.displayName || comment.author?.username || 'Usurio'}
                           </a>
                           {#if comment.isStaff}
                             <span class="comment-staff-pill" title="Membro desta scan">Staff</span>
@@ -814,7 +814,7 @@
                             <button
                               type="submit"
                               class="btn-comment-action btn-mod-pin"
-                              title={comment.pinned ? "Desafixar comentário" : "Fixar comentário no topo"}
+                              title={comment.pinned ? "Desafixar comentrio" : "Fixar comentrio no topo"}
                             >
                               {#if comment.pinned}
                                 <PinOff size={14} />
@@ -832,7 +832,7 @@
                             method="POST"
                             action="?/moderateComment"
                             use:enhance={() => {
-                              if (!confirm("Tem certeza que deseja remover este comentário?")) return () => {};
+                              if (!confirm("Tem certeza que deseja remover este comentrio?")) return () => {};
                               return async ({ update }) => { await update(); };
                             }}
                             class="action-form"
@@ -842,7 +842,7 @@
                             <button
                               type="submit"
                               class="btn-comment-action btn-mod-delete"
-                              title="Remover comentário"
+                              title="Remover comentrio"
                             >
                               <Trash2 size={14} />
                               <span>Remover</span>
@@ -855,7 +855,7 @@
                             type="button"
                             class="btn-comment-action btn-report"
                             onclick={() => (reportingComment = comment)}
-                            title="Denunciar comentário inadequado"
+                            title="Denunciar comentrio inadequado"
                           >
                             <Flag size={13} />
                           </button>
@@ -884,7 +884,7 @@
                               name="body"
                               rows="2"
                               maxlength="2000"
-                              placeholder="Escreva sua resposta para @{comment.author?.username || 'usuário'}..."
+                              placeholder="Escreva sua resposta para @{comment.author?.username || 'usurio'}..."
                               required
                               class="composer-textarea reply-textarea"
                             ></textarea>
@@ -913,7 +913,7 @@
                               <CornerDownRight size={14} class="reply-turn-icon" />
                               <div class="reply-avatar">
                                 <UserAvatar
-                                  displayName={reply.author?.displayName || reply.author?.username || 'Usuário'}
+                                  displayName={reply.author?.displayName || reply.author?.username || 'Usurio'}
                                   avatarId={reply.author?.avatarId}
                                   frameId={reply.author?.avatarFrameId}
                                   size={28}
@@ -923,7 +923,7 @@
                                 <div class="comment-meta-header">
                                   <div class="comment-author-info">
                                     <a href="/u/{reply.author?.username}" class="comment-author-name">
-                                      {reply.author?.displayName || reply.author?.username || 'Usuário'}
+                                      {reply.author?.displayName || reply.author?.username || 'Usurio'}
                                     </a>
                                     {#if reply.isStaff}
                                       <span class="comment-staff-pill">Staff</span>
@@ -991,7 +991,7 @@
           {:else}
             <div class="empty-state">
               <MessageSquare size={40} />
-              <h3>Nenhum comentário ainda</h3>
+              <h3>Nenhum comentrio ainda</h3>
               <p>Seja o primeiro a deixar uma mensagem de incentivo ou feedback para {data.scan.name}!</p>
             </div>
           {/if}
@@ -1036,14 +1036,14 @@
 
         <div class="form-group">
           <label for="experience" class="form-label">
-            Experiência Prévia *
+            Experincia Prvia *
           </label>
           <textarea
             id="experience"
             name="experience"
             rows="3"
             required
-            placeholder="Conte se já trabalhou com tradução/edição de mangás ou se é iniciante dedicado..."
+            placeholder="Conte se j trabalhou com traduo/edio de mangs ou se  iniciante dedicado..."
             class="form-textarea"
           ></textarea>
         </div>
@@ -1057,28 +1057,28 @@
             name="availability"
             type="text"
             required
-            placeholder="Ex: 2 a 3 capítulos por semana, noites e finais de semana..."
+            placeholder="Ex: 2 a 3 captulos por semana, noites e finais de semana..."
             class="form-input"
           />
         </div>
 
         <div class="form-group">
           <label for="presentation" class="form-label">
-            Mensagem / Apresentação *
+            Mensagem / Apresentao *
           </label>
           <textarea
             id="presentation"
             name="presentation"
             rows="3"
             required
-            placeholder="Apresente-se para os líderes e comente por que deseja fazer parte desta scan..."
+            placeholder="Apresente-se para os lderes e comente por que deseja fazer parte desta scan..."
             class="form-textarea"
           ></textarea>
         </div>
 
         <div class="form-group">
           <label for="portfolio_url" class="form-label">
-            Link de Portfólio / Amostra de Trabalho (Opcional)
+            Link de Portflio / Amostra de Trabalho (Opcional)
           </label>
           <input
             id="portfolio_url"
@@ -1104,7 +1104,7 @@
 
         {#if openingQuestions.length > 0}
           <div class="custom-questions-box">
-            <h4 class="custom-questions-heading">Perguntas Específicas da Vaga</h4>
+            <h4 class="custom-questions-heading">Perguntas Especficas da Vaga</h4>
             {#each openingQuestions as q}
               <div class="form-group">
                 <label for="q-{q.id}" class="form-label">
@@ -1123,12 +1123,12 @@
                   <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
                     <option value="">Selecione...</option>
                     <option value="Sim">Sim</option>
-                    <option value="Não">Não</option>
+                    <option value="No">No</option>
                   </select>
                 {:else if q.questionType === 'SINGLE_CHOICE'}
                   {@const opts = Array.isArray(q.options) ? q.options : []}
                   <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
-                    <option value="">Selecione uma opção...</option>
+                    <option value="">Selecione uma opo...</option>
                     {#each opts as opt}
                       <option value={opt}>{opt}</option>
                     {/each}
@@ -1168,9 +1168,9 @@
         <div class="modal-title-wrap">
           <div class="modal-badge report-badge">
             <Flag size={14} />
-            <span>Denunciar Comentário</span>
+            <span>Denunciar Comentrio</span>
           </div>
-          <h2 class="modal-title">Denunciar comentário de @{reportingComment.author?.username}</h2>
+          <h2 class="modal-title">Denunciar comentrio de @{reportingComment.author?.username}</h2>
         </div>
         <button class="btn-close-modal" onclick={() => (reportingComment = null)} type="button">
           <X size={18} />
@@ -1196,7 +1196,7 @@
           <p>"{reportingComment.body}"</p>
         </div>
         <div class="form-group">
-          <label for="report_reason" class="form-label">Motivo da denúncia *</label>
+          <label for="report_reason" class="form-label">Motivo da denncia *</label>
           <textarea
             id="report_reason"
             name="reason"
@@ -1204,7 +1204,7 @@
             required
             maxlength="500"
             bind:value={reportReason}
-            placeholder="Descreva o motivo (ex: spam, assédio, spoiler sem aviso, conteúdo ofensivo)..."
+            placeholder="Descreva o motivo (ex: spam, assdio, spoiler sem aviso, contedo ofensivo)..."
             class="form-textarea"
           ></textarea>
         </div>
@@ -1214,7 +1214,7 @@
           </button>
           <button type="submit" class="btn-submit btn-submit-report" disabled={isSubmitting || reportReason.trim().length < 2}>
             <Flag size={14} />
-            <span>Enviar Denúncia</span>
+            <span>Enviar Denncia</span>
           </button>
         </div>
       </form>

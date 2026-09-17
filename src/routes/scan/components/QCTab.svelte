@@ -52,9 +52,9 @@
   const ISSUE_TYPES = [
     { code: 'TYPE', label: 'Typeset / Letreiramento', color: '#eab308' },
     { code: 'CLEAN', label: 'Clean / Limpeza', color: '#ec4899' },
-    { code: 'TRANSLATION', label: 'Tradução / Gramática', color: '#3b82f6' },
+    { code: 'TRANSLATION', label: 'Traduo / Gramtica', color: '#3b82f6' },
     { code: 'REDRAW', label: 'Redesenho de Arte', color: '#8b5cf6' },
-    { code: 'MISSING', label: 'Página Ausente / Danificada', color: '#ef4444' },
+    { code: 'MISSING', label: 'Pgina Ausente / Danificada', color: '#ef4444' },
     { code: 'OTHER', label: 'Outro Ajuste', color: '#64748b' }
   ];
 
@@ -71,8 +71,8 @@
         <CheckCircle2 size={20} />
       </div>
       <div>
-        <h2 class="qc-main-title">Quality Control (QC) & Auditoria de Páginas</h2>
-        <p class="qc-subtitle">Aponte falhas visuais, erros de letreiramento ou tradução página a página antes da publicação.</p>
+        <h2 class="qc-main-title">Quality Control (QC) & Auditoria de Pginas</h2>
+        <p class="qc-subtitle">Aponte falhas visuais, erros de letreiramento ou traduo pgina a pgina antes da publicao.</p>
       </div>
     </div>
 
@@ -88,11 +88,11 @@
   <div class="qc-filters-card">
     <div class="filter-selects-row">
       <div class="filter-col">
-        <label for="qc-chap" class="sr-only">Capítulo</label>
+        <label for="qc-chap" class="sr-only">Captulo</label>
         <select id="qc-chap" bind:value={selectedChapterId} class="form-select-sm">
-          <option value="ALL">Todos os Capítulos ({chapters.length})</option>
+          <option value="ALL">Todos os Captulos ({chapters.length})</option>
           {#each chapters as chap}
-            <option value={chap.id}>Capítulo #{chap.number} {chap.title ? `— ${chap.title}` : ''}</option>
+            <option value={chap.id}>Captulo #{chap.number} {chap.title ? `— ${chap.title}` : ''}</option>
           {/each}
         </select>
       </div>
@@ -102,7 +102,7 @@
         <select id="qc-status" bind:value={selectedStatus} class="form-select-sm">
           <option value="ALL">Status: Todos</option>
           <option value="OPEN">Abertas (Pendentes)</option>
-          <option value="IN_PROGRESS">Em Correção</option>
+          <option value="IN_PROGRESS">Em Correo</option>
           <option value="RESOLVED">Resolvidas</option>
           <option value="WONT_FIX">Ignoradas (Won't Fix)</option>
         </select>
@@ -126,7 +126,7 @@
       <div class="empty-qc-state">
         <CheckCircle2 size={40} class="empty-icon" />
         <p class="empty-title">Nenhuma issue de QC pendente</p>
-        <p class="empty-sub">Capítulos auditados e sem problemas aprovam direto para o checklist de publicação.</p>
+        <p class="empty-sub">Captulos auditados e sem problemas aprovam direto para o checklist de publicao.</p>
       </div>
     {:else}
       <div class="qc-cards-grid">
@@ -135,7 +135,7 @@
           <div class="qc-issue-card" class:resolved={issue.status === 'RESOLVED'}>
             <div class="issue-header-row">
               <div class="page-badge-wrap">
-                <span class="page-num-pill">Pág. {issue.pageNumber}</span>
+                <span class="page-num-pill">Pg. {issue.pageNumber}</span>
                 <span class="type-pill" style="--tag-color: {meta.color}">
                   {meta.label}
                 </span>
@@ -152,7 +152,7 @@
                   onchange={(e) => (e.target as HTMLSelectElement).form?.requestSubmit()}
                 >
                   <option value="OPEN" selected={issue.status === 'OPEN'}>Aberta</option>
-                  <option value="IN_PROGRESS" selected={issue.status === 'IN_PROGRESS'}>Em Correção</option>
+                  <option value="IN_PROGRESS" selected={issue.status === 'IN_PROGRESS'}>Em Correo</option>
                   <option value="RESOLVED" selected={issue.status === 'RESOLVED'}>Resolvida</option>
                   <option value="WONT_FIX" selected={issue.status === 'WONT_FIX'}>Won't Fix</option>
                 </select>
@@ -171,7 +171,7 @@
                   />
                   <span class="assignee-txt">{issue.assignee.displayName || issue.assignee.username}</span>
                 {:else}
-                  <span class="unassigned-txt">Sem responsável</span>
+                  <span class="unassigned-txt">Sem responsvel</span>
                 {/if}
               </div>
 
@@ -211,16 +211,16 @@
       >
         <div class="form-row-2">
           <div class="form-group">
-            <label for="qc-modal-chap" class="form-label">Capítulo</label>
+            <label for="qc-modal-chap" class="form-label">Captulo</label>
             <select id="qc-modal-chap" name="chapterId" class="form-select" bind:value={newIssueChapterId} required>
               {#each chapters as chap}
-                <option value={chap.id}>Capítulo #{chap.number} {chap.title ? `— ${chap.title}` : ''}</option>
+                <option value={chap.id}>Captulo #{chap.number} {chap.title ? `— ${chap.title}` : ''}</option>
               {/each}
             </select>
           </div>
 
           <div class="form-group">
-            <label for="qc-modal-page" class="form-label">Número da Página</label>
+            <label for="qc-modal-page" class="form-label">Nmero da Pgina</label>
             <input
               id="qc-modal-page"
               type="number"
@@ -246,7 +246,7 @@
           <div class="form-group">
             <label for="qc-modal-assignee" class="form-label">Atribuir a (Opcional)</label>
             <select id="qc-modal-assignee" name="assignedTo" class="form-select" bind:value={newIssueAssignee}>
-              <option value="">Ninguém (Fila Geral)</option>
+              <option value="">Ningum (Fila Geral)</option>
               {#each team as m}
                 <option value={m.userId}>{m.member?.displayName || m.member?.username || m.userId}</option>
               {/each}
@@ -255,14 +255,14 @@
         </div>
 
         <div class="form-group">
-          <label for="qc-modal-desc" class="form-label">Descrição do Ajuste Necessário</label>
+          <label for="qc-modal-desc" class="form-label">Descrio do Ajuste Necessrio</label>
           <textarea
             id="qc-modal-desc"
             name="description"
             rows="3"
             required
             class="form-textarea"
-            placeholder="ex: Texto do segundo balão está desalinhado ou cortando na borda direita."
+            placeholder="ex: Texto do segundo balo est desalinhado ou cortando na borda direita."
             bind:value={newIssueDesc}
           ></textarea>
         </div>

@@ -36,7 +36,7 @@ function parseAvifDimensions(a: Uint8Array, d: DataView): { width: number; heigh
 
   const ispe = findBox(0, a.length, 'ispe');
   if (!ispe || ispe.offset + 20 > a.length) {
-    throw new Error('AVIF inválido: dimensões não encontradas.');
+    throw new Error('AVIF invlido: dimenses no encontradas.');
   }
   return {
     width: d.getUint32(ispe.offset + 12),
@@ -45,7 +45,7 @@ function parseAvifDimensions(a: Uint8Array, d: DataView): { width: number; heigh
 }
 
 export function inspectImage(a: Uint8Array): ImageInfo {
-  if (a.length < 24 || a.length > 52_428_800) throw new Error('O arquivo deve ter no máximo 50 MB.');
+  if (a.length < 24 || a.length > 52_428_800) throw new Error('O arquivo deve ter no mximo 50 MB.');
   const d = new DataView(a.buffer, a.byteOffset, a.byteLength);
   let width = 0,
     height = 0;
@@ -53,7 +53,7 @@ export function inspectImage(a: Uint8Array): ImageInfo {
   let mime: ImageInfo['mime'];
   if (a[0] === 137 && text(a, 1, 3) === 'PNG' && d.getUint32(4) === 0x0d0a1a0a) {
     mime = 'image/png';
-    if (text(a, 12, 4) !== 'IHDR' || d.getUint32(8) !== 13) throw new Error('PNG inválido.');
+    if (text(a, 12, 4) !== 'IHDR' || d.getUint32(8) !== 13) throw new Error('PNG invlido.');
     width = d.getUint32(16);
     height = d.getUint32(20);
     let offset = 8,
@@ -75,11 +75,11 @@ export function inspectImage(a: Uint8Array): ImageInfo {
     mime = 'image/jpeg';
     let offset = 2;
     while (offset + 4 < a.length) {
-      if (a[offset] !== 255) throw new Error('JPEG inválido.');
+      if (a[offset] !== 255) throw new Error('JPEG invlido.');
       const marker = a[offset + 1];
       if (marker === 0xda) break;
       const len = d.getUint16(offset + 2);
-      if (len < 2 || offset + 2 + len > a.length) throw new Error('JPEG inválido.');
+      if (len < 2 || offset + 2 + len > a.length) throw new Error('JPEG invlido.');
       if ([0xc0, 0xc1, 0xc2].includes(marker)) {
         height = d.getUint16(offset + 5);
         width = d.getUint16(offset + 7);
@@ -135,10 +135,10 @@ export function inspectImage(a: Uint8Array): ImageInfo {
       width = dims.width;
       height = dims.height;
     } else {
-      throw new Error('Formato não permitido. Use PNG, JPEG, WebP, GIF ou AVIF.');
+      throw new Error('Formato no permitido. Use PNG, JPEG, WebP, GIF ou AVIF.');
     }
-  } else throw new Error('Formato não permitido. Use PNG, JPEG, WebP, GIF ou AVIF.');
+  } else throw new Error('Formato no permitido. Use PNG, JPEG, WebP, GIF ou AVIF.');
   if (!width || !height || width > 10000 || height > 60000 || width * height > 80_000_000)
-    throw new Error('Dimensões inválidas ou imagem muito grande.');
+    throw new Error('Dimenses invlidas ou imagem muito grande.');
   return { mime, width, height, isAnimated };
 }

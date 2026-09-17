@@ -1991,9 +1991,10 @@ export const actions: Actions = {
     const issueId = String(formData.get('issueId') || '');
     const status = String(formData.get('status') || 'OPEN');
     const updateData: any = {status, updatedAt: new Date().toISOString()};
+    let localUpdateData: any = { status };
     if (status === 'RESOLVED') {
-      updateData.resolvedBy = locals.user!.id;
-      updateData.resolvedAt = new Date().toISOString();
+      localUpdateData.resolvedBy = locals.user!.id;
+      localUpdateData.resolvedAt = new Date().toISOString();
     }
     const { error } = await locals.db.from('scan_chapter_qc_issues').update(updateData).eq('id', issueId);
     if (error) return fail(400, { message: error.message });
@@ -2653,9 +2654,10 @@ export const actions: Actions = {
     }
 
     const updatePayload: Record<string, any> = {updatedAt: new Date().toISOString()};
-    if (chapterLabel !== null) updatePayload.chapterLabel = chapterLabel || null;
+    let localUpdatePayload: any = {};
+    if (chapterLabel !== null) localUpdatePayload.chapterLabel = chapterLabel || null;
     if (priority && ['LOW', 'NORMAL', 'HIGH', 'URGENT'].includes(priority)) {
-      updatePayload.priority = priority;
+      localUpdatePayload.priority = priority;
     }
 
     const { error: updateErr } = await locals.db

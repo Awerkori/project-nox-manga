@@ -104,14 +104,14 @@
       ch.status = 'uploading';
       currentChapterPageTotal = ch.files.length;
       currentChapterPageDone = 0;
-      currentProgressText = `Capítulo ${ch.number}: preparando páginas…`;
+      currentProgressText = `Captulo ${ch.number}: preparando pginas…`;
 
       try {
         // 1. Get or create chapter record
         let chapterId = ch.id;
         if (!chapterId) {
           const createRes = (await action('editor', 'chapter', {
-            work_id: work.id,
+            workId: work.id,
             number: ch.number,
             title: ch.title || '',
             pages: []
@@ -127,7 +127,7 @@
         await flushUploads(
           pendingFiles,
           async (file) => {
-            currentProgressText = `Capítulo ${ch.number}: enviando ${file.name} (${uploadedMediaIds.length + 1}/${ch.files.length})…`;
+            currentProgressText = `Captulo ${ch.number}: enviando ${file.name} (${uploadedMediaIds.length + 1}/${ch.files.length})…`;
             const blob = await normalizePage(file);
             const res = await fetch('/api/upload?purpose=staff_manual', {
               method: 'POST',
@@ -140,11 +140,11 @@
             if (res.status === 429) {
               const retryAfter = Number(res.headers.get('Retry-After') || 5);
               const body = await res.json().catch(() => ({}));
-              throw new UploadRateLimitError(retryAfter, body.error || 'Rate limit temporário');
+              throw new UploadRateLimitError(retryAfter, body.error || 'Rate limit temporrio');
             }
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Falha no upload da página');
+            if (!res.ok) throw new Error((data as any).message || 'Falha no upload da pgina');
             return data;
           },
           (result) => {
@@ -165,12 +165,12 @@
 
         currentRetryNotice = '';
         ch.status = 'saving';
-        currentProgressText = `Capítulo ${ch.number}: salvando e publicando…`;
+        currentProgressText = `Captulo ${ch.number}: salvando e publicando…`;
 
         // 3. Save chapter pages
         await action('editor', 'chapter', {
           id: chapterId,
-          work_id: work.id,
+          workId: work.id,
           number: ch.number,
           title: ch.title || '',
           pages: uploadedMediaIds
@@ -203,7 +203,7 @@
       <div class="modal-title-cluster">
         <FolderArchive size={20} class="header-icon" />
         <div>
-          <h2 id="batch-title" class="modal-title">Importação em Lote por ZIP</h2>
+          <h2 id="batch-title" class="modal-title">Importao em Lote por ZIP</h2>
           <span class="modal-subtitle">{work.title}</span>
         </div>
       </div>
@@ -220,12 +220,12 @@
           <div class="info-guide">
             <strong>Estrutura recomendada de pastas dentro do ZIP:</strong>
             <ul>
-              <li><code>Capítulo 01/001.jpg</code>, <code>Capítulo 01/002.jpg</code>…</li>
+              <li><code>Captulo 01/001.jpg</code>, <code>Captulo 01/002.jpg</code>…</li>
               <li><code>Cap 02/01.png</code>, <code>Cap 02/02.png</code>…</li>
               <li>ou <code>001/01.webp</code>, <code>002/01.webp</code>…</li>
             </ul>
             <p class="guide-note">
-              O sistema detecta os números dos capítulos automaticamente, ordena as páginas por ordem natural e permite revisar tudo antes de iniciar o envio.
+              O sistema detecta os nmeros dos captulos automaticamente, ordena as pginas por ordem natural e permite revisar tudo antes de iniciar o envio.
             </p>
           </div>
 
@@ -239,7 +239,7 @@
           <label class="dropzone">
             <UploadCloud size={40} />
             <span class="dropzone-label">Clique para selecionar o arquivo ZIP ou CBZ</span>
-            <span class="dropzone-hint">Formatos aceitos: .zip, .cbz (máx. 800 MB)</span>
+            <span class="dropzone-hint">Formatos aceitos: .zip, .cbz (mx. 800 MB)</span>
             <input
               type="file"
               accept=".zip,.cbz,application/zip,application/x-zip-compressed,application/vnd.comicbook+zip,application/x-cbz"
@@ -259,7 +259,7 @@
       {:else if step === 'preview'}
         <div class="preview-view">
           <div class="preview-header">
-            <span><strong>{chapters.length}</strong> capítulos identificados:</span>
+            <span><strong>{chapters.length}</strong> captulos identificados:</span>
             <button
               type="button"
               class="btn-toggle-all"
@@ -278,9 +278,9 @@
                 <tr>
                   <th style="width: 40px"></th>
                   <th>Pasta no ZIP</th>
-                  <th style="width: 110px">Capítulo</th>
-                  <th>Título Opcional</th>
-                  <th style="width: 90px">Páginas</th>
+                  <th style="width: 110px">Captulo</th>
+                  <th>Ttulo Opcional</th>
+                  <th style="width: 90px">Pginas</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -306,19 +306,19 @@
                       <input
                         type="text"
                         bind:value={ch.title}
-                        placeholder="Sem título"
+                        placeholder="Sem ttulo"
                         class="input-table-title"
                         disabled={!ch.selected}
                       />
                     </td>
                     <td class="pages-cell">
-                      {ch.files.length} págs
+                      {ch.files.length} pgs
                     </td>
                     <td>
                       {#if ch.alreadyExists}
-                        <span class="tag-warn" title="O capítulo já existe no site. As páginas serão substituídas.">
+                        <span class="tag-warn" title="O captulo j existe no site. As pginas sero substitudas.">
                           <AlertTriangle size={12} />
-                          <span>Já existe</span>
+                          <span>J existe</span>
                         </span>
                       {:else}
                         <span class="tag-new">
@@ -341,7 +341,7 @@
               <div class="progress-bar-fill" style="width: {overallPercent}%"></div>
             </div>
             <div class="progress-text-row">
-              <span class="prog-label">Progresso Geral: {completedCount} de {selectedChapters.length} capítulos ({overallPercent}%)</span>
+              <span class="prog-label">Progresso Geral: {completedCount} de {selectedChapters.length} captulos ({overallPercent}%)</span>
             </div>
           </div>
 
@@ -363,7 +363,7 @@
                   style="width: {Math.round((currentChapterPageDone / currentChapterPageTotal) * 100)}%"
                 ></div>
               </div>
-              <span class="sub-progress-text">{currentChapterPageDone} / {currentChapterPageTotal} páginas enviadas</span>
+              <span class="sub-progress-text">{currentChapterPageDone} / {currentChapterPageTotal} pginas enviadas</span>
             {/if}
           </div>
 
@@ -379,7 +379,7 @@
                 {:else}
                   <span class="icon-pending">○</span>
                 {/if}
-                <span class="status-ch-name">Capítulo {ch.number} ({ch.files.length} págs)</span>
+                <span class="status-ch-name">Captulo {ch.number} ({ch.files.length} pgs)</span>
                 {#if ch.error}
                   <span class="status-ch-err">— {ch.error}</span>
                 {/if}
@@ -391,9 +391,9 @@
       {:else if step === 'completed'}
         <div class="completed-view">
           <CheckCircle2 size={52} class="icon-success-large" />
-          <h3 class="completed-heading">Lote Concluído com Sucesso!</h3>
+          <h3 class="completed-heading">Lote Concludo com Sucesso!</h3>
           <p class="completed-sub">
-            Todos os {completedCount} capítulos selecionados foram enviados e publicados na obra.
+            Todos os {completedCount} captulos selecionados foram enviados e publicados na obra.
           </p>
         </div>
       {/if}
@@ -411,7 +411,7 @@
           disabled={!selectedChapters.length}
         >
           <Play size={15} />
-          <span>Iniciar Importação ({selectedChapters.length})</span>
+          <span>Iniciar Importao ({selectedChapters.length})</span>
         </button>
       {:else if step === 'importing'}
         <button

@@ -55,11 +55,11 @@
   // 7 Canonical stages for editorial workflow in strict order
   const CANONICAL_STAGES = [
     { slug: 'raw', name: 'Raw Provider', icon: '📦', color: '#94a3b8', aliases: ['raw', 'raw provider'] },
-    { slug: 'traducao', name: 'Tradução', icon: '🌐', color: '#3b82f6', aliases: ['traducao', 'translation', 'tradutor'] },
+    { slug: 'traducao', name: 'Traduo', icon: '🌐', color: '#3b82f6', aliases: ['traducao', 'translation', 'tradutor'] },
     { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', color: '#ec4899', aliases: ['clean', 'clean_redraw', 'clean/redraw', 'redraw'] },
     { slug: 'typeset', name: 'Typeset', icon: '✒️', color: '#eab308', aliases: ['typeset', 'typer'] },
     { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', color: '#a855f7', aliases: ['revisor_qc', 'revisao', 'qc', 'revisor (qc)'] },
-    { slug: 'pre_aprovado', name: 'Pré Aprovado', icon: '✅', color: '#06b6d4', aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado'] },
+    { slug: 'pre_aprovado', name: 'Pr Aprovado', icon: '✅', color: '#06b6d4', aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pr aprovado'] },
     { slug: 'publicado', name: 'Publicado', icon: '📚', color: '#22c55e', aliases: ['publicado', 'published'] }
   ];
 
@@ -71,7 +71,7 @@
       return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
     }
     if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') {
-      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado';
+      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pr aprovado';
     }
     if (t === 'traducao' || t === 'translation') {
       return s === 'traducao' || s === 'translation';
@@ -294,13 +294,13 @@
   <div class="sidebar-search-action">
     <button type="button" class="command-palette-btn" onclick={onOpenCommandPalette}>
       <Search size={14} />
-      <span>Busca rápida...</span>
+      <span>Busca rpida...</span>
       <kbd>Ctrl+K</kbd>
     </button>
   </div>
 
   <!-- Primary Workspace Navigation -->
-  <nav class="sidebar-nav-tree" aria-label="Navegação do workspace">
+  <nav class="sidebar-nav-tree" aria-label="Navegao do workspace">
     <!-- Home Shortcut -->
     <div class="nav-section">
       <button
@@ -310,13 +310,13 @@
         onclick={() => selectTab('home')}
       >
         <Home size={16} class="nav-icon" />
-        <span>Início</span>
+        <span>Incio</span>
       </button>
     </div>
 
-    <!-- Group: PRODUÇÃO -->
+    <!-- Group: PRODUO -->
     <div class="nav-section">
-      <div class="section-title">PRODUÇÃO</div>
+      <div class="section-title">PRODUO</div>
 
       <button
         type="button"
@@ -375,7 +375,7 @@
                 <span class="sub-stage-icon" aria-hidden="true">{st.icon}</span>
                 <span class="sub-stage-title">{st.name}</span>
                 {#if personalNew > 0}
-                  <span class="nav-sub-personal-badge" title="{personalNew} capítulos novos para você">✨ {personalNew}</span>
+                  <span class="nav-sub-personal-badge" title="{personalNew} captulos novos para voc">✨ {personalNew}</span>
                 {:else if availCount > 0}
                   <span class="nav-sub-badge">{availCount}</span>
                 {/if}
@@ -402,13 +402,13 @@
         onclick={() => selectTab('calendario')}
       >
         <Calendar size={16} class="nav-icon" />
-        <span>Calendário</span>
+        <span>Calendrio</span>
       </button>
     </div>
 
-    <!-- Group: COMUNICAÇÃO -->
+    <!-- Group: COMUNICAO -->
     <div class="nav-section">
-      <div class="section-title">COMUNICAÇÃO</div>
+      <div class="section-title">COMUNICAO</div>
 
       <button
         type="button"
@@ -440,7 +440,7 @@
         onclick={() => selectTab('inbox')}
       >
         <Inbox size={16} class="nav-icon" />
-        <span>Notificações</span>
+        <span>Notificaes</span>
         {#if unreadNotifications > 0}
           <span class="nav-badge alert">{unreadNotifications}</span>
         {/if}
@@ -478,7 +478,7 @@
         onclick={() => selectTab('glossario')}
       >
         <BookA size={16} class="nav-icon" />
-        <span>Glossário</span>
+        <span>Glossrio</span>
       </button>
 
       <button
@@ -488,7 +488,7 @@
         onclick={() => selectTab('referencias')}
       >
         <Link2 size={16} class="nav-icon" />
-        <span>Referências</span>
+        <span>Referncias</span>
       </button>
     </div>
 
@@ -542,10 +542,10 @@
       {/if}
     </div>
 
-    <!-- Group: GESTÃO (Owner & Admin only) -->
+    <!-- Group: GESTO (Owner & Admin only) -->
     {#if ['OWNER', 'ADMIN'].includes(userRole)}
       <div class="nav-section">
-        <div class="section-title">GESTÃO DA SCAN</div>
+        <div class="section-title">GESTO DA SCAN</div>
 
         <button
           type="button"
@@ -564,7 +564,7 @@
           onclick={() => selectTab('settings')}
         >
           <Settings size={16} class="nav-icon" />
-          <span>Configurações & Modos</span>
+          <span>Configuraes & Modos</span>
         </button>
       </div>
     {/if}
@@ -578,7 +578,7 @@
       rel="noopener noreferrer"
       class="public-page-link"
     >
-      <span>Ver Página Pública</span>
+      <span>Ver Pgina Pblica</span>
       <ExternalLink size={13} />
     </a>
   </div>

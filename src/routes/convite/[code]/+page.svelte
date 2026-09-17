@@ -5,9 +5,9 @@
 
   const roleLabels: Record<string, string> = {
     ADMIN: 'Administrador de Scan',
-    UPLOADER: 'Uploader de Capítulos',
+    UPLOADER: 'Uploader de Captulos',
     MEMBER: 'Membro da Equipe',
-    OWNER: 'Líder da Scan'
+    OWNER: 'Lder da Scan'
   };
 
   function formatTime(iso: string) {
@@ -62,13 +62,13 @@
         <div class="role-box">
           <span class="role-box-label">Cargo Proposto:</span>
           <strong class="role-box-name">{roleLabels[data.invite.role] || data.invite.role}</strong>
-          <span class="role-box-sub">Você terá permissões de colaboração na biblioteca desta scan.</span>
+          <span class="role-box-sub">Voc ter permisses de colaborao na biblioteca desta scan.</span>
         </div>
 
         {#if form?.message}
           <div class="error-banner">
             <AlertTriangle size={16} />
-            <span>{form.message}</span>
+            <span>{(form as any).message}</span>
           </div>
         {/if}
 
@@ -88,7 +88,7 @@
           {/if}
 
           <span class="expires-hint">
-            Válido até: {formatTime(data.invite.expiresAt)}
+            Vlido at: {formatTime(data.invite.expiresAt)}
           </span>
         </div>
       </div>
@@ -98,8 +98,8 @@
         <div class="status-icon-box success">
           <CheckCircle2 size={40} />
         </div>
-        <h2 class="status-title">Você já é membro desta equipe!</h2>
-        <p class="status-desc">Você já possui acesso de equipe na scan associada a este convite.</p>
+        <h2 class="status-title">Voc j  membro desta equipe!</h2>
+        <p class="status-desc">Voc j possui acesso de equipe na scan associada a este convite.</p>
         <div class="actions-group">
           <a href="/scan" class="btn-primary">
             <span>Acessar Painel da Scan</span>
@@ -113,11 +113,11 @@
         <div class="status-icon-box warning">
           <AlertTriangle size={40} />
         </div>
-        <h2 class="status-title">Convite já utilizado</h2>
-        <p class="status-desc">Este link de convite é de uso único e já foi aceito anteriormente.</p>
+        <h2 class="status-title">Convite j utilizado</h2>
+        <p class="status-desc">Este link de convite  de uso nico e j foi aceito anteriormente.</p>
         <a href="/" class="btn-secondary">
           <Home size={16} />
-          <span>Voltar ao Início</span>
+          <span>Voltar ao Incio</span>
         </a>
       </div>
 
@@ -130,7 +130,7 @@
         <p class="status-desc">O prazo deste convite expirou. Solicite um novo link aos administradores da scan.</p>
         <a href="/" class="btn-secondary">
           <Home size={16} />
-          <span>Voltar ao Início</span>
+          <span>Voltar ao Incio</span>
         </a>
       </div>
 
@@ -140,10 +140,10 @@
           <AlertTriangle size={40} />
         </div>
         <h2 class="status-title">Convite revogado</h2>
-        <p class="status-desc">Este convite foi cancelado pela administração da scan.</p>
+        <p class="status-desc">Este convite foi cancelado pela administrao da scan.</p>
         <a href="/" class="btn-secondary">
           <Home size={16} />
-          <span>Voltar ao Início</span>
+          <span>Voltar ao Incio</span>
         </a>
       </div>
 
@@ -152,11 +152,11 @@
         <div class="status-icon-box error">
           <AlertTriangle size={40} />
         </div>
-        <h2 class="status-title">Convite não encontrado</h2>
-        <p class="status-desc">O link informado é inválido ou não existe mais.</p>
+        <h2 class="status-title">Convite no encontrado</h2>
+        <p class="status-desc">O link informado  invlido ou no existe mais.</p>
         <a href="/" class="btn-secondary">
           <Home size={16} />
-          <span>Voltar ao Início</span>
+          <span>Voltar ao Incio</span>
         </a>
       </div>
     {/if}

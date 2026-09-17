@@ -9,7 +9,7 @@ export const load = ({ params, url }) => ({
   mode: params.auth,
   error:
     params.auth === 'entrar' && url.searchParams.get('erro') === 'link-expirado'
-      ? 'Este link é inválido ou expirou. Solicite um novo link de recuperação ou entre na sua conta.'
+      ? 'Este link  invlido ou expirou. Solicite um novo link de recuperao ou entre na sua conta.'
       : ''
 });
 
@@ -20,10 +20,10 @@ export const actions = {
     const email = String(f.get('email') || '').trim(),
       password = String(f.get('password') || '');
     if (mode !== 'redefinir' && !z.email().safeParse(email).success)
-      return fail(400, { message: 'Informe um e-mail válido.' });
+      return fail(400, { message: 'Informe um e-mail vlido.' });
     if (mode !== 'recuperar' && password.length < 10)
       return fail(400, { message: 'Use uma senha com pelo menos 10 caracteres.' });
-    if (password.length > 128) return fail(400, { message: 'A senha pode ter até 128 caracteres.' });
+    if (password.length > 128) return fail(400, { message: 'A senha pode ter at 128 caracteres.' });
 
     if (mode === 'entrar') {
       let error = null;
@@ -37,7 +37,7 @@ export const actions = {
       }
       if (error)
         return fail(400, {
-          message: 'Não foi possível entrar. Confira o e-mail, a senha e a confirmação da conta.'
+          message: 'No foi possvel entrar. Confira o e-mail, a senha e a confirmao da conta.'
         });
       await claimInvite(locals);
       redirect(303, '/biblioteca');
@@ -48,14 +48,14 @@ export const actions = {
       const rawUsername = String(f.get('username') || '').trim().toLowerCase();
 
       if (displayName && (displayName.length < 2 || displayName.length > 50)) {
-        return fail(400, { message: 'Nome de exibição deve ter entre 2 e 50 caracteres.'});
+        return fail(400, { message: 'Nome de exibio deve ter entre 2 e 50 caracteres.'});
       }
       if (rawUsername) {
         if (rawUsername.length < 3 || rawUsername.length > 30) {
-          return fail(400, { message: 'O nome de usuário (@) deve ter entre 3 e 30 caracteres.' });
+          return fail(400, { message: 'O nome de usurio (@) deve ter entre 3 e 30 caracteres.' });
         }
         if (!/^[a-z0-9_]+$/.test(rawUsername)) {
-          return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
+          return fail(400, { message: 'O nome de usurio deve conter apenas letras minsculas, nmeros e sublinhados (_).' });
         }
 
         // Check username collision
@@ -66,7 +66,7 @@ export const actions = {
         );
 
         if (collision) {
-          return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
+          return fail(400, { message: `O nome de usurio @${rawUsername} j est em uso.` });
         }
       }
 
@@ -86,7 +86,7 @@ export const actions = {
       
       if (error)
         return fail(400, {
-          message: 'Não foi possível enviar a confirmação. Tente novamente mais tarde.'
+          message: 'No foi possvel enviar a confirmao. Tente novamente mais tarde.'
         });
       return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
     }
@@ -105,14 +105,14 @@ export const actions = {
       }
       
       if (error)
-        return fail(400, { message: 'Não foi possível enviar o e-mail agora. Tente novamente mais tarde.' });
+        return fail(400, { message: 'No foi possvel enviar o e-mail agora. Tente novamente mais tarde.' });
       return {
         success: true,
-        message: 'Se houver uma conta com esse e-mail, você receberá um link de recuperação.'
+        message: 'Se houver uma conta com esse e-mail, voc receber um link de recuperao.'
       };
     }
 
-    if (!locals.user) return fail(401, { message: 'Abra o link de recuperação enviado para seu e-mail.' });
+    if (!locals.user) return fail(401, { message: 'Abra o link de recuperao enviado para seu e-mail.' });
     
     let updateError = null;
     try {
@@ -126,7 +126,7 @@ export const actions = {
       updateError = err;
     }
     
-    if (updateError) return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
-    return { success: true, message: 'Senha alterada. Você já pode acessar sua biblioteca.' };
+    if (updateError) return fail(400, { message: 'No foi possvel alterar a senha. Solicite um novo link.' });
+    return { success: true, message: 'Senha alterada. Voc j pode acessar sua biblioteca.' };
   }
 };

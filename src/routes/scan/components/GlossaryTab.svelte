@@ -28,7 +28,7 @@
   let formCategory = $state('Personagem');
   let formNotes = $state('');
 
-  const CATEGORIES = ['Personagem', 'Local', 'Habilidade', 'Título', 'Geral', 'Outro'];
+  const CATEGORIES = ['Personagem', 'Local', 'Habilidade', 'Ttulo', 'Geral', 'Outro'];
 
   let canEdit = $derived(isOwnerOrAdmin || isUploader);
 
@@ -78,8 +78,8 @@
   <!-- Header / Controls -->
   <div class="tab-header">
     <div>
-      <h2 class="title">Glossário & Terminologias</h2>
-      <p class="subtitle">Padronize nomes próprios, técnicas e termos específicos de tradução por obra.</p>
+      <h2 class="title">Glossrio & Terminologias</h2>
+      <p class="subtitle">Padronize nomes prprios, tcnicas e termos especficos de traduo por obra.</p>
     </div>
     {#if canEdit}
       <button class="btn-primary" onclick={openCreateModal}>
@@ -95,7 +95,7 @@
       <Search size={16} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar termo ou tradução..."
+        placeholder="Buscar termo ou traduo..."
         bind:value={searchQuery}
         class="search-input"
       />
@@ -130,7 +130,7 @@
     <div class="empty-state">
       <BookA size={48} class="empty-icon" />
       <h3>Nenhum termo cadastrado</h3>
-      <p>Crie termos no glossário para que a equipe mantenha a tradução coerente em todos os capítulos.</p>
+      <p>Crie termos no glossrio para que a equipe mantenha a traduo coerente em todos os captulos.</p>
       {#if canEdit}
         <button class="btn-secondary" onclick={openCreateModal}>
           <Plus size={16} /> Adicionar primeiro termo
@@ -165,7 +165,7 @@
                     };
                   }}
                   onsubmit={(e) => {
-                    if (!confirm('Excluir este termo do glossário?')) e.preventDefault();
+                    if (!confirm('Excluir este termo do glossrio?')) e.preventDefault();
                   }}
                 >
                   <input type="hidden" name="entry_id" value={entry.id} />
@@ -183,7 +183,7 @@
               <span class="val raw">{entry.sourceTerm}</span>
             </div>
             <div class="term-row">
-              <span class="label">Tradução Padrão:</span>
+              <span class="label">Traduo Padro:</span>
               <span class="val trans">{entry.preferredTranslation}</span>
             </div>
           </div>
@@ -204,7 +204,7 @@
     <div class="modal-backdrop" onclick={closeModal} role="presentation">
       <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h3>{editingEntry ? 'Editar Termo' : 'Novo Termo no Glossário'}</h3>
+          <h3>{editingEntry ? 'Editar Termo' : 'Novo Termo no Glossrio'}</h3>
           <button class="btn-close" onclick={closeModal}><X size={18} /></button>
         </div>
 
@@ -237,7 +237,7 @@
 
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="g-raw">Termo Original (Raw / Coreano / Inglês) *</label>
+              <label for="g-raw">Termo Original (Raw / Coreano / Ingls) *</label>
               <input
                 id="g-raw"
                 type="text"
@@ -259,7 +259,7 @@
           </div>
 
           <div class="form-group">
-            <label for="g-trans">Tradução Padronizada para PT-BR *</label>
+            <label for="g-trans">Traduo Padronizada para PT-BR *</label>
             <input
               id="g-trans"
               type="text"
@@ -272,13 +272,13 @@
           </div>
 
           <div class="form-group">
-            <label for="g-notes">Observações e Contexto para a Equipe</label>
+            <label for="g-notes">Observaes e Contexto para a Equipe</label>
             <textarea
               id="g-notes"
               name="notes"
               bind:value={formNotes}
               rows="3"
-              placeholder="Explique nuances de tradução, contexto de gênero ou regras de uso..."
+              placeholder="Explique nuances de traduo, contexto de gnero ou regras de uso..."
               class="input textarea"
             ></textarea>
           </div>
@@ -286,7 +286,7 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick={closeModal}>Cancelar</button>
             <button type="submit" class="btn-primary">
-              {editingEntry ? 'Salvar Alterações' : 'Cadastrar Termo'}
+              {editingEntry ? 'Salvar Alteraes' : 'Cadastrar Termo'}
             </button>
           </div>
         </form>

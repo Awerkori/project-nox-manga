@@ -38,7 +38,7 @@ export const load = async ({ locals, setHeaders }) => {
         equippedTitleId: schema.members.equippedTitleId,
         equippedBadgeId: schema.members.equippedBadgeId})
       .from(schema.members)
-      .where(and(eq(schema.members.isTest, 0), gt(schema.members.xp, 0)))
+      .where(and(eq(schema.members.isTest, false), gt(schema.members.xp, 0)))
       .orderBy(desc(schema.members.xp))
       .limit(50)
     ),

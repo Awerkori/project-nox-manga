@@ -36,9 +36,9 @@
     <div>
       <div class="title-cluster">
         <Sliders size={20} class="text-purple-400" />
-        <h1>Configuração do Pipeline & Automação</h1>
+        <h1>Configurao do Pipeline & Automao</h1>
       </div>
-      <p class="subtitle">Área exclusiva da administração. Ajuste as etapas, dependências, cores e templates sem poluir a operação diária.</p>
+      <p class="subtitle">rea exclusiva da administrao. Ajuste as etapas, dependncias, cores e templates sem poluir a operao diria.</p>
     </div>
 
     <button type="button" class="btn-primary" onclick={() => (showNewStageModal = true)}>
@@ -50,7 +50,7 @@
   <!-- Template Selector Section -->
   <section class="config-section">
     <h2>Template de Fluxo de Trabalho</h2>
-    <p class="section-desc">Escolha um dos modelos pré-configurados para a sua Scan ou mantenha o fluxo customizado.</p>
+    <p class="section-desc">Escolha um dos modelos pr-configurados para a sua Scan ou mantenha o fluxo customizado.</p>
 
     <div class="templates-grid">
       {#each pipelineTemplates as tpl}
@@ -80,7 +80,7 @@
   <!-- Active Stages Table -->
   <section class="config-section">
     <h2>Etapas Ativas ({stages.length})</h2>
-    <p class="section-desc">Sequência operacional atual seguida pelos capítulos desta scan.</p>
+    <p class="section-desc">Sequncia operacional atual seguida pelos captulos desta scan.</p>
 
     <div class="stages-table">
       {#each stages as st, idx}
@@ -92,11 +92,11 @@
             <span class="stage-slug">Slug: {st.slug}</span>
           </div>
           <div class="stage-desc-col">
-            <span>{st.description || 'Sem descrição'}</span>
+            <span>{st.description || 'Sem descrio'}</span>
           </div>
           <div class="stage-flags">
             {#if st.required}
-              <span class="flag-pill required">Obrigatória</span>
+              <span class="flag-pill required">Obrigatria</span>
             {:else}
               <span class="flag-pill optional">Opcional</span>
             {/if}
@@ -128,7 +128,7 @@
             type="text"
             name="name"
             bind:value={newStageName}
-            placeholder="Ex: Redraw Especial, Revisão Extra"
+            placeholder="Ex: Redraw Especial, Reviso Extra"
             class="form-input"
             required
           />
@@ -143,19 +143,19 @@
           <div class="form-group flex-1 pt-6">
             <label class="checkbox-label">
               <input type="checkbox" name="required" bind:checked={newStageRequired} value="true" />
-              <span>Etapa Obrigatória</span>
+              <span>Etapa Obrigatria</span>
             </label>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="stage-desc">Descrição / Instruções</label>
+          <label for="stage-desc">Descrio / Instrues</label>
           <textarea
             id="stage-desc"
             name="description"
             bind:value={newStageDesc}
             rows={3}
-            placeholder="Instruções para a equipe nesta etapa..."
+            placeholder="Instrues para a equipe nesta etapa..."
             class="form-textarea"
           ></textarea>
         </div>

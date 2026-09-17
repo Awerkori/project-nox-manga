@@ -32,8 +32,8 @@
 
   let title = $derived(
     {
-      entrar: 'Bom ter você de volta.',
-      cadastrar: 'Seu próximo capítulo.',
+      entrar: 'Bom ter voc de volta.',
+      cadastrar: 'Seu prximo captulo.',
       recuperar: 'Vamos recuperar seu acesso.',
       redefinir: 'Uma nova senha.'
     }[data.mode]
@@ -62,7 +62,7 @@
 
     if (sanitized.length < 3) {
       usernameStatus = 'error';
-      usernameMessage = 'Mínimo de 3 caracteres.';
+      usernameMessage = 'Mnimo de 3 caracteres.';
       return;
     }
 
@@ -75,10 +75,10 @@
         const json = await res.json();
         if (json.available) {
           usernameStatus = 'available';
-          usernameMessage = `@${sanitized} está disponível!`;
+          usernameMessage = `@${sanitized} est disponvel!`;
         } else {
           usernameStatus = 'error';
-          usernameMessage = json.reason || 'Nome indisponível.';
+          usernameMessage = json.reason || 'Nome indisponvel.';
         }
       } catch {
         usernameStatus = 'error';
@@ -103,14 +103,14 @@
       </div>
 
       <h1 class="brand-headline">
-        Sua história<br />
-        também faz<br />
+        Sua histria<br />
+        tambm faz<br />
         <span class="gradient-text">parte daqui.</span>
       </h1>
 
       <p class="brand-subtext">
-        Uma experiência definitiva de leitura digital, feita de leitores para leitores, com autonomia,
-        customização total e performance extrema.
+        Uma experincia definitiva de leitura digital, feita de leitores para leitores, com autonomia,
+        customizao total e performance extrema.
       </p>
 
       <!-- Platform Perks List -->
@@ -121,7 +121,7 @@
           </div>
           <div class="perk-content">
             <h4 class="perk-title">Progresso em Nuvem</h4>
-            <p class="perk-desc">Continue de onde parou em qualquer dispositivo sem perder suas páginas lidas.</p>
+            <p class="perk-desc">Continue de onde parou em qualquer dispositivo sem perder suas pginas lidas.</p>
           </div>
         </div>
 
@@ -130,8 +130,8 @@
             <Trophy size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Economia Cósmica & Cosméticos</h4>
-            <p class="perk-desc">Acumule XP lendo capítulos e desbloqueie molduras animadas, títulos e cores.</p>
+            <h4 class="perk-title">Economia Csmica & Cosmticos</h4>
+            <p class="perk-desc">Acumule XP lendo captulos e desbloqueie molduras animadas, ttulos e cores.</p>
           </div>
         </div>
 
@@ -140,8 +140,8 @@
             <Download size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Leitura Offline Rápida</h4>
-            <p class="perk-desc">Baixe obras completas em segundos para ler mesmo sem conexão de internet.</p>
+            <h4 class="perk-title">Leitura Offline Rpida</h4>
+            <p class="perk-desc">Baixe obras completas em segundos para ler mesmo sem conexo de internet.</p>
           </div>
         </div>
 
@@ -150,8 +150,8 @@
             <Bell size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Notificações em Tempo Real</h4>
-            <p class="perk-desc">Receba avisos instantâneos quando suas obras favoritas lançarem novos capítulos.</p>
+            <h4 class="perk-title">Notificaes em Tempo Real</h4>
+            <p class="perk-desc">Receba avisos instantneos quando suas obras favoritas lanarem novos captulos.</p>
           </div>
         </div>
       </div>
@@ -168,9 +168,9 @@
             {:else if data.mode === 'cadastrar'}
               Crie sua conta gratuita em segundos e garanta seu @username exclusivo.
             {:else if data.mode === 'recuperar'}
-              Informe seu e-mail cadastrado e enviaremos instruções de recuperação.
+              Informe seu e-mail cadastrado e enviaremos instrues de recuperao.
             {:else}
-              Defina sua nova senha de acesso com segurança.
+              Defina sua nova senha de acesso com segurana.
             {/if}
           </p>
         </header>
@@ -210,7 +210,7 @@
             <div class="form-group">
               <label for="displayName" class="input-label">
                 <User size={15} />
-                <span>Nome de Exibição</span>
+                <span>Nome de Exibio</span>
               </label>
               <div class="input-wrap">
                 <input
@@ -226,7 +226,7 @@
                   class="custom-input"
                 />
               </div>
-              <span class="field-hint">Como você será chamado publicamente na comunidade.</span>
+              <span class="field-hint">Como voc ser chamado publicamente na comunidade.</span>
             </div>
 
             <!-- Username (@) with real-time verification -->
@@ -234,7 +234,7 @@
               <div class="label-row">
                 <label for="username" class="input-label">
                   <AtSign size={15} />
-                  <span>Nome de Usuário (@)</span>
+                  <span>Nome de Usurio (@)</span>
                 </label>
                 {#if usernameStatus === 'checking'}
                   <span class="status-indicator checking">
@@ -244,7 +244,7 @@
                 {:else if usernameStatus === 'available'}
                   <span class="status-indicator available">
                     <CheckCircle2 size={13} />
-                    <span>Disponível</span>
+                    <span>Disponvel</span>
                   </span>
                 {:else if usernameStatus === 'error'}
                   <span class="status-indicator error">
@@ -273,7 +273,7 @@
                   class:invalid={usernameStatus === 'error'}
                 />
               </div>
-              <span class="field-hint">De 3 a 30 caracteres minúsculos, números e sublinhados (_).</span>
+              <span class="field-hint">De 3 a 30 caracteres minsculos, nmeros e sublinhados (_).</span>
             </div>
           {/if}
 
@@ -325,7 +325,7 @@
                   maxlength="128"
                   onkeydown={handleKeydown}
                   autocomplete={data.mode === 'entrar' ? 'current-password' : 'new-password'}
-                  placeholder={data.mode === 'cadastrar' ? 'Mínimo de 10 caracteres seguros' : 'Sua senha'}
+                  placeholder={data.mode === 'cadastrar' ? 'Mnimo de 10 caracteres seguros' : 'Sua senha'}
                   class="custom-input with-suffix"
                 />
                 <button
@@ -344,7 +344,7 @@
               </div>
 
               {#if data.mode === 'cadastrar'}
-                <span class="field-hint">Pelo menos 10 caracteres. Dica: use letras e números misturados.</span>
+                <span class="field-hint">Pelo menos 10 caracteres. Dica: use letras e nmeros misturados.</span>
               {/if}
             </div>
           {/if}
@@ -371,7 +371,7 @@
               <span>Criar Conta & Fazer Parte</span>
               <ArrowRight size={17} />
             {:else if data.mode === 'recuperar'}
-              <span>Enviar Link de Recuperação</span>
+              <span>Enviar Link de Recuperao</span>
               <ArrowRight size={17} />
             {:else}
               <span>Salvar Nova Senha</span>
@@ -384,18 +384,18 @@
         <footer class="auth-card-footer">
           {#if data.mode === 'entrar'}
             <p class="switch-text">
-              Ainda não faz parte?
+              Ainda no faz parte?
               <a href="/cadastrar" class="switch-link">Crie sua conta gratuita</a>
             </p>
           {:else}
             <p class="switch-text">
-              Já possui uma conta?
+              J possui uma conta?
               <a href="/entrar" class="switch-link">Voltar para o login</a>
             </p>
           {/if}
 
           <p class="privacy-note">
-            Seu e-mail permanece confidencial e nunca é exibido publicamente.
+            Seu e-mail permanece confidencial e nunca  exibido publicamente.
             <a href="/privacidade" class="privacy-link">Termos & Privacidade</a>
           </p>
         </footer>

@@ -5,13 +5,13 @@ import { sql } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) {
-    throw error(401, 'Não autenticado');
+    throw error(401, 'No autenticado');
   }
 
   const body = await request.json().catch(() => ({}));
   const chapterStageId = body.chapterStageId;
 
-  if (!chapterStageId) {throw error(400, 'chapterStageId é obrigatório');}
+  if (!chapterStageId) {throw error(400, 'chapterStageId  obrigatrio');}
 
   const { data, error: rpcErr } = await safeQuery(
     db.run(sql`SELECT mark_pipeline_stage_seen(${chapterStageId})`)

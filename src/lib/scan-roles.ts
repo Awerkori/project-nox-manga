@@ -16,14 +16,14 @@ export const SCAN_ADMIN_FUNCTIONS: Record<ScanAdminRole, ScanAdminFunctionConfig
     role: 'OWNER',
     label: 'Dono',
     icon: '👑',
-    description: 'Dono e fundador da Scan. Cargo único, não atribuível por gerenciador.',
+    description: 'Dono e fundador da Scan. Cargo nico, no atribuvel por gerenciador.',
     isAssignableByManager: false
   },
   ADMIN: {
     role: 'ADMIN',
     label: 'Gerente',
     icon: '🛡️',
-    description: 'Função administrativa. Gerencia equipe, tarefas e produção.',
+    description: 'Funo administrativa. Gerencia equipe, tarefas e produo.',
     isAssignableByManager: false // Only Owner can promote Staff -> Gerente
   },
   MEMBER: {
@@ -47,35 +47,35 @@ export const CANONICAL_EDITORIAL_ROLES: ScanEditorialRoleConfig[] = [
   {slug: 'raw_provider',
     name: 'Raw Provider',
     icon: '📦',
-    description: 'Obtenção e tratamento dos arquivos brutos em alta resolução.',
+    description: 'Obteno e tratamento dos arquivos brutos em alta resoluo.',
     displayOrder: 1,
     stageSlug: 'raw',
     stageName: 'Raw Provider'},
   {slug: 'tradutor',
     name: 'Tradutor',
     icon: '🌐',
-    description: 'Tradução e localização fiel dos diálogos e narrativas.',
+    description: 'Traduo e localizao fiel dos dilogos e narrativas.',
     displayOrder: 2,
     stageSlug: 'traducao',
-    stageName: 'Tradução'},
+    stageName: 'Traduo'},
   {slug: 'clean_redraw',
     name: 'Clean/Redraw',
     icon: '🎨',
-    description: 'Limpeza dos balões e reconstrução artística de fundos.',
+    description: 'Limpeza dos bales e reconstruo artstica de fundos.',
     displayOrder: 3,
     stageSlug: 'clean_redraw',
     stageName: 'Clean/Redraw'},
   {slug: 'typer',
     name: 'Typer',
     icon: '✒️',
-    description: 'Diagramação tipográfica e formatação de falas e efeitos sonoros.',
+    description: 'Diagramao tipogrfica e formatao de falas e efeitos sonoros.',
     displayOrder: 4,
     stageSlug: 'typeset',
     stageName: 'Typeset'},
   {slug: 'revisor_qc',
     name: 'Revisor (QC)',
     icon: '🔎',
-    description: 'Revisão gramatical, coesão editorial e controle de qualidade.',
+    description: 'Reviso gramatical, coeso editorial e controle de qualidade.',
     displayOrder: 5,
     stageSlug: 'revisor_qc',
     stageName: 'Revisor (QC)'}
@@ -104,9 +104,9 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: [],
     requiresOutput: true,
     color: '#64748b',
-    description: 'Upload dos arquivos brutos e preparação das páginas para o pipeline.'},
+    description: 'Upload dos arquivos brutos e preparao das pginas para o pipeline.'},
   {slug: 'traducao',
-    name: 'Tradução',
+    name: 'Traduo',
     icon: '🌐',
     displayOrder: 2,
     requiredRoleName: 'Tradutor',
@@ -114,7 +114,7 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['raw'],
     requiresOutput: true,
     color: '#3b82f6',
-    description: 'Tradução do texto original preservando termos do glossário.'},
+    description: 'Traduo do texto original preservando termos do glossrio.'},
   {slug: 'clean_redraw',
     name: 'Clean/Redraw',
     icon: '🎨',
@@ -124,7 +124,7 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['raw'],
     requiresOutput: true,
     color: '#ec4899',
-    description: 'Limpeza dos balões e reconstrução artística dos fundos.'},
+    description: 'Limpeza dos bales e reconstruo artstica dos fundos.'},
   {slug: 'typeset',
     name: 'Typeset',
     icon: '✒️',
@@ -134,7 +134,7 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['traducao', 'clean_redraw'],
     requiresOutput: true,
     color: '#eab308',
-    description: 'Inserção tipográfica da tradução sobre as páginas limpas.'},
+    description: 'Insero tipogrfica da traduo sobre as pginas limpas.'},
   {slug: 'revisor_qc',
     name: 'Revisor (QC)',
     icon: '🔎',
@@ -144,9 +144,9 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['typeset'],
     requiresOutput: false,
     color: '#a855f7',
-    description: 'Inspeção de qualidade e revisão minuciosa antes da aprovação.'},
+    description: 'Inspeo de qualidade e reviso minuciosa antes da aprovao.'},
   {slug: 'pre_aprovado',
-    name: 'Pré Aprovado',
+    name: 'Pr Aprovado',
     icon: '✅',
     displayOrder: 6,
     requiredRoleName: null,
@@ -154,7 +154,7 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['revisor_qc'],
     requiresOutput: false,
     color: '#10b981',
-    description: 'Capítulo revisado aguardando autorização da liderança para publicação.',
+    description: 'Captulo revisado aguardando autorizao da liderana para publicao.',
     adminOnly: true},
   {slug: 'publicado',
     name: 'Publicado',
@@ -165,7 +165,7 @@ export const CANONICAL_PIPELINE_STAGES: PipelineStageConfig[] = [
     dependencies: ['pre_aprovado'],
     requiresOutput: false,
     color: '#06b6d4',
-    description: 'Capítulo publicado e disponível para os leitores na plataforma.',
+    description: 'Captulo publicado e disponvel para os leitores na plataforma.',
     isFinal: true}
 ];
 
@@ -203,8 +203,8 @@ export function evaluateStageClaim(
     return {
       canClaim: false,
       isAdminOverride: false,
-      buttonLabel: 'Etapa Indisponível',
-      disabledReason: 'Etapa não encontrada no pipeline.'
+      buttonLabel: 'Etapa Indisponvel',
+      disabledReason: 'Etapa no encontrada no pipeline.'
     };
   }
 
@@ -224,7 +224,7 @@ export function evaluateStageClaim(
     return {
       canClaim: isLeadership,
       isAdminOverride: isLeadership,
-      buttonLabel: isLeadership ? 'Aprovar Capítulo' : 'Aguardando Liderança',
+      buttonLabel: isLeadership ? 'Aprovar Captulo' : 'Aguardando Liderana',
       disabledReason: isLeadership ? undefined : 'Somente Dono ou Gerente pode aprovar esta etapa.'
     };
   }
@@ -242,7 +242,7 @@ export function evaluateStageClaim(
     return {
       canClaim: true,
       isAdminOverride: false,
-      buttonLabel: 'Pegar este capítulo'
+      buttonLabel: 'Pegar este captulo'
     };
   }
 
@@ -252,7 +252,7 @@ export function evaluateStageClaim(
     return {
       canClaim: true,
       isAdminOverride: true,
-      buttonLabel: 'Assumir (Intervenção Administrativa)'
+      buttonLabel: 'Assumir (Interveno Administrativa)'
     };
   }
 
@@ -260,8 +260,8 @@ export function evaluateStageClaim(
   return {
     canClaim: false,
     isAdminOverride: false,
-    buttonLabel: `Disponível para ${stage.requiredRoleName}`,
-    disabledReason: `Você não possui o cargo necessário para assumir a etapa ${stage.name}.`
+    buttonLabel: `Disponvel para ${stage.requiredRoleName}`,
+    disabledReason: `Voc no possui o cargo necessrio para assumir a etapa ${stage.name}.`
   };
 }
 

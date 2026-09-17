@@ -64,19 +64,19 @@
 
   const categoryLabels: Record<string, string> = {
     ALL: 'Todas as Categorias',
-    INICIACAO: 'Iniciação',
+    INICIACAO: 'Iniciao',
     LEITURA: 'Leitura',
     MARATONA: 'Maratonas',
     OBRAS: 'Obras',
-    CONCLUSAO: 'Conclusões',
+    CONCLUSAO: 'Concluses',
     BIBLIOTECA: 'Biblioteca',
     FAVORITOS: 'Favoritos',
-    GENEROS: 'Gêneros',
-    EXPLORACAO: 'Exploração',
+    GENEROS: 'Gneros',
+    EXPLORACAO: 'Explorao',
     SCANS: 'Scans & Parcerias',
     COMUNIDADE: 'Comunidade',
     OFFLINE: 'Offline',
-    PROGRESSAO: 'Progressão',
+    PROGRESSAO: 'Progresso',
     LOJA: 'Loja',
     SECRETAS: 'Secretas'
   };
@@ -242,7 +242,7 @@
   let unreadNotifsCount = $derived(notifsList.filter((n: any) => !n.readAt).length);
 
   async function markSingleRead(notifId: string) {
-    notifsList = notifsList.map((n) => (n.id === notifId ? { ...n, read_at: new Date().toISOString() } : n));
+    notifsList = notifsList.map((n) => (n.id === notifId ? { ...n, readAt: new Date().toISOString() } : n));
     const fd = new FormData();
     fd.append('id', notifId);
     await fetch('?/markNotificationRead', { method: 'POST', body: fd }).catch(() => {});
@@ -331,7 +331,7 @@
           result = await res.json();
         }
 
-        if (!res.ok) throw new Error(result.message || 'Falha ao salvar mídia.');
+        if (!res.ok) throw new Error((result as any).message || 'Falha ao salvar mdia.');
         uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} atualizado com sucesso!`;
       } else {
         // Repositioning existing media
@@ -347,7 +347,7 @@
       await invalidateAll();
       closeCropModal();
     } catch (err: any) {
-      modalNotice = err.message || 'Erro ao salvar posicionamento.';
+      modalNotice = (err as any).message || 'Erro ao salvar posicionamento.';
       uploadNotice = modalNotice;
     } finally {
       cropSaving = false;
@@ -370,7 +370,7 @@
 </script>
 
 <svelte:head>
-  <title>Meu Espaço | Project Nox</title>
+  <title>Meu Espao | Project Nox</title>
 </svelte:head>
 
 <div class="me-page">
@@ -397,7 +397,7 @@
           </h1>
           <span class="level-pill">
             <Crown size={13} />
-            <span>Nível {userLevel}</span>
+            <span>Nvel {userLevel}</span>
           </span>
           {#if data.member.equippedTitleId}
             <span class="cosmetic-title">{data.member.equippedTitleId}</span>
@@ -413,7 +413,7 @@
           </span>
           <span class="dot">·</span>
           <a href="/u/{data.member.username}" class="public-link">
-            <span>Ver perfil público ↗</span>
+            <span>Ver perfil pblico ↗</span>
           </a>
         </div>
       </div>
@@ -422,7 +422,7 @@
     <!-- Main Tabs Layout -->
     <div class="me-layout">
       <!-- Navigation Sidebar / Tabs -->
-      <nav class="me-nav-sidebar" aria-label="Navegação do Meu Espaço">
+      <nav class="me-nav-sidebar" aria-label="Navegao do Meu Espao">
         <button
           type="button"
           class="me-nav-item"
@@ -430,7 +430,7 @@
           onclick={() => switchTab('overview')}
         >
           <Sparkles size={17} />
-          <span>Visão Geral</span>
+          <span>Viso Geral</span>
         </button>
 
         <button
@@ -462,7 +462,7 @@
           onclick={() => switchTab('history')}
         >
           <Clock size={17} />
-          <span>Histórico</span>
+          <span>Histrico</span>
         </button>
 
         <button
@@ -482,7 +482,7 @@
           onclick={() => switchTab('inventory')}
         >
           <ShoppingBag size={17} />
-          <span>Cosméticos</span>
+          <span>Cosmticos</span>
         </button>
 
         <button
@@ -505,7 +505,7 @@
           onclick={() => switchTab('notifications')}
         >
           <Bell size={17} />
-          <span>Notificações</span>
+          <span>Notificaes</span>
           {#if unreadNotifsCount > 0}
             <span class="count-badge">{unreadNotifsCount}</span>
           {/if}
@@ -530,7 +530,7 @@
           onclick={() => switchTab('settings')}
         >
           <Settings size={17} />
-          <span>Configurações</span>
+          <span>Configuraes</span>
         </button>
       </nav>
 
@@ -539,7 +539,7 @@
         {#if activeTab === 'overview'}
           <!-- 1. Overview -->
           <div class="pane-section">
-            <h2 class="pane-title">Visão Geral</h2>
+            <h2 class="pane-title">Viso Geral</h2>
 
             <div class="overview-stats-grid">
               <div class="ov-card">
@@ -552,7 +552,7 @@
               </div>
               <div class="ov-card">
                 <span class="ov-num">{data.history.length}</span>
-                <span class="ov-lbl">Capítulos Lidos</span>
+                <span class="ov-lbl">Captulos Lidos</span>
               </div>
               <div class="ov-card">
                 <span class="ov-num">{data.achievements.filter((a: any) => a.unlocked).length}</span>
@@ -566,7 +566,7 @@
                 <div class="sub-header">
                   <h3>Leituras Recentes</h3>
                   <button type="button" class="btn-text" onclick={() => switchTab('history')}>
-                    Ver histórico completo ↗
+                    Ver histrico completo ↗
                   </button>
                 </div>
 
@@ -582,7 +582,7 @@
                       {/if}
                       <div class="h-meta">
                         <span class="h-work">{item.chapters?.works?.title}</span>
-                        <span class="h-ch">Capítulo {item.chapters?.number} · Pág. {item.page}</span>
+                        <span class="h-ch">Captulo {item.chapters?.number} · Pg. {item.page}</span>
                       </div>
                       <span class="h-time">{relativeTime(item.updatedAt)}</span>
                     </a>
@@ -628,7 +628,7 @@
                   class:active={libStatus === 'COMPLETED'}
                   onclick={() => (libStatus = 'COMPLETED')}
                 >
-                  Concluídas
+                  Concludas
                 </button>
               </div>
             </div>
@@ -660,7 +660,7 @@
             {:else}
               <div class="empty-state">
                 <Bookmark size={36} />
-                <p>Você ainda não favoritou nenhuma obra.</p>
+                <p>Voc ainda no favoritou nenhuma obra.</p>
               </div>
             {/if}
           </div>
@@ -668,7 +668,7 @@
         {:else if activeTab === 'history'}
           <!-- 4. History -->
           <div class="pane-section">
-            <h2 class="pane-title">Histórico de Leitura ({data.history.length})</h2>
+            <h2 class="pane-title">Histrico de Leitura ({data.history.length})</h2>
             {#if data.history.length > 0}
               <div class="history-table">
                 {#each data.history as item (item.chapterId)}
@@ -682,7 +682,7 @@
                     {/if}
                     <div class="h-meta">
                       <span class="h-work">{item.chapters?.works?.title}</span>
-                      <span class="h-ch">Capítulo {item.chapters?.number} {item.completedAt ? '✓ Concluído' : `· Pág. ${item.page}`}</span>
+                      <span class="h-ch">Captulo {item.chapters?.number} {item.completedAt ? '✓ Concludo' : `· Pg. ${item.page}`}</span>
                     </div>
                     <span class="h-time">{relativeTime(item.updatedAt)}</span>
                   </a>
@@ -691,7 +691,7 @@
             {:else}
               <div class="empty-state">
                 <Clock size={36} />
-                <p>Seu histórico de leitura está vazio.</p>
+                <p>Seu histrico de leitura est vazio.</p>
               </div>
             {/if}
           </div>
@@ -702,7 +702,7 @@
             <div class="ach-header-block">
               <div class="ach-header-title-row">
                 <div>
-                  <h2 class="pane-title">Conquistas & Distintivos Cósmicos</h2>
+                  <h2 class="pane-title">Conquistas & Distintivos Csmicos</h2>
                   <p class="ach-header-sub">
                     {achStats.unlockedCount} de {achStats.total} desbloqueadas ({achStats.percentage}%) · <strong>+{achStats.totalXp} XP</strong> conquistados
                   </p>
@@ -732,17 +732,17 @@
                 </div>
                 <div class="rarity-stat-chip rarity-epica">
                   <span class="r-dot"></span>
-                  <span class="r-name">Épica</span>
+                  <span class="r-name">pica</span>
                   <span class="r-count">{achStats.byRarity['EPICA']?.unlocked || 0}/{achStats.byRarity['EPICA']?.total || 0}</span>
                 </div>
                 <div class="rarity-stat-chip rarity-lendaria">
                   <span class="r-dot"></span>
-                  <span class="r-name">Lendária</span>
+                  <span class="r-name">Lendria</span>
                   <span class="r-count">{achStats.byRarity['LENDARIA']?.unlocked || 0}/{achStats.byRarity['LENDARIA']?.total || 0}</span>
                 </div>
                 <div class="rarity-stat-chip rarity-mitica">
                   <span class="r-dot"></span>
-                  <span class="r-name">Mítica</span>
+                  <span class="r-name">Mtica</span>
                   <span class="r-count">{achStats.byRarity['MITICA']?.unlocked || 0}/{achStats.byRarity['MITICA']?.total || 0}</span>
                 </div>
               </div>
@@ -880,7 +880,7 @@
 
                     <p class="ach-desc">
                       {#if isSecretLocked}
-                        Conquista secreta oculta nas sombras. Continue explorando o Project Nox para desvendá-la.
+                        Conquista secreta oculta nas sombras. Continue explorando o Project Nox para desvend-la.
                       {:else}
                         {ach.description}
                       {/if}
@@ -904,8 +904,8 @@
                               class="btn-pin-featured"
                               class:is-featured={data.member.featuredAchievementId === ach.id}
                               title={data.member.featuredAchievementId === ach.id
-                                ? 'Remover destaque do perfil público'
-                                : 'Destacar esta conquista no seu perfil público'}
+                                ? 'Remover destaque do perfil pblico'
+                                : 'Destacar esta conquista no seu perfil pblico'}
                             >
                               <Star size={12} />
                               <span>{data.member.featuredAchievementId === ach.id ? 'Em Destaque' : 'Destacar'}</span>
@@ -941,7 +941,7 @@
           <!-- 6. Inventory -->
           <div class="pane-section">
             <div class="sub-header">
-              <h2 class="pane-title">Meus Cosméticos ({data.inventory.length})</h2>
+              <h2 class="pane-title">Meus Cosmticos ({data.inventory.length})</h2>
               <a href="/loja" class="btn-primary-subtle">Ir para a Loja Nox ↗</a>
             </div>
 
@@ -958,7 +958,7 @@
             {:else}
               <div class="empty-state">
                 <ShoppingBag size={36} />
-                <p>Você ainda não possui itens cosméticos. Visite a Loja Nox para adquirir molduras e cores!</p>
+                <p>Voc ainda no possui itens cosmticos. Visite a Loja Nox para adquirir molduras e cores!</p>
                 <a href="/loja" class="btn-primary">Visitar Loja Nox</a>
               </div>
             {/if}
@@ -968,7 +968,7 @@
           <!-- 7. Offline Downloads -->
           <div class="pane-section">
             <div class="sub-header">
-              <h2 class="pane-title">Capítulos Salvos Offline ({offlineList.length})</h2>
+              <h2 class="pane-title">Captulos Salvos Offline ({offlineList.length})</h2>
             </div>
 
             {#if offlineList.length > 0}
@@ -977,7 +977,7 @@
                   <div class="offline-row">
                     <div class="off-info">
                       <span class="off-work">{ch.workTitle}</span>
-                      <span class="off-ch">Capítulo {ch.number} ({ch.totalPages} páginas)</span>
+                      <span class="off-ch">Captulo {ch.number} ({ch.totalPages} pginas)</span>
                     </div>
                     <div class="off-actions">
                       <a href="/ler/{ch.chapterId}" class="btn-read-offline">Ler</a>
@@ -996,7 +996,7 @@
             {:else}
               <div class="empty-state">
                 <Download size={36} />
-                <p>Nenhum capítulo baixado para leitura offline no momento.</p>
+                <p>Nenhum captulo baixado para leitura offline no momento.</p>
               </div>
             {/if}
           </div>
@@ -1006,7 +1006,7 @@
           <div class="pane-section">
             <div class="sub-header">
               <div>
-                <h2 class="pane-title">Notificações</h2>
+                <h2 class="pane-title">Notificaes</h2>
                 <div class="notif-chips-row">
                   <button
                     type="button"
@@ -1022,14 +1022,14 @@
                     class:active={notifFilter === 'UNREAD'}
                     onclick={() => notifFilter = 'UNREAD'}
                   >
-                    Não lidas ({unreadNotifsCount})
+                    No lidas ({unreadNotifsCount})
                   </button>
                 </div>
               </div>
 
               {#if unreadNotifsCount > 0}
                 <form method="POST" action="?/markAllNotificationsRead" use:enhance={() => {
-                  notifsList = notifsList.map(n => ({ ...n, read_at: new Date().toISOString() }));
+                  notifsList = notifsList.map(n => ({ ...n, readAt: new Date().toISOString() }));
                   return async ({ update }) => { await update(); };
                 }}>
                   <button type="submit" class="btn-text">Marcar todas como lidas</button>
@@ -1049,7 +1049,7 @@
                     <div class="notif-card-header">
                       <div class="notif-tag-wrap">
                         <span class="notif-type-pill notif-type-{n.type ? n.type.toLowerCase() : (n.kind || 'system')}">
-                          {n.type === 'LEVEL_UP' ? 'LEVEL UP' : n.type === 'ACHIEVEMENT' ? 'CONQUISTA' : n.type === 'NEW_CHAPTER' ? 'CAPÍTULO' : n.type === 'ROLE_MENTION' ? 'CARGO' : n.type === 'MENTION' ? 'MENÇÃO' : n.type === 'REPLY_CHAT' || n.type === 'REPLY_COMMENT' ? 'RESPOSTA' : n.type === 'QC_ISSUE' ? 'QC' : n.type === 'APPLICATION' ? 'RECRUTAMENTO' : (n.type || 'SISTEMA')}
+                          {n.type === 'LEVEL_UP' ? 'LEVEL UP' : n.type === 'ACHIEVEMENT' ? 'CONQUISTA' : n.type === 'NEW_CHAPTER' ? 'CAPTULO' : n.type === 'ROLE_MENTION' ? 'CARGO' : n.type === 'MENTION' ? 'MENO' : n.type === 'REPLY_CHAT' || n.type === 'REPLY_COMMENT' ? 'RESPOSTA' : n.type === 'QC_ISSUE' ? 'QC' : n.type === 'APPLICATION' ? 'RECRUTAMENTO' : (n.type || 'SISTEMA')}
                         </span>
                         {#if n.context}
                           <span class="notif-context-pill">{n.context}</span>
@@ -1058,7 +1058,7 @@
                       <span class="notif-time">{relativeTime(n.createdAt)}</span>
                     </div>
 
-                    <h3 class="notif-title">{n.title || n.body || 'Notificação'}</h3>
+                    <h3 class="notif-title">{n.title || n.body || 'Notificao'}</h3>
                     <p class="notif-body">{n.body}</p>
 
                     <div class="notif-card-footer">
@@ -1085,7 +1085,7 @@
             {:else}
               <div class="empty-state">
                 <Bell size={36} />
-                <p>{notifFilter === 'UNREAD' ? 'Nenhuma notificação não lida.' : 'Nenhuma notificação recebida.'}</p>
+                <p>{notifFilter === 'UNREAD' ? 'Nenhuma notificao no lida.' : 'Nenhuma notificao recebida.'}</p>
               </div>
             {/if}
           </div>
@@ -1187,7 +1187,7 @@
               {#if form?.success && form?.action === 'profile'}
                 <div class="success-banner">
                   <CheckCircle2 size={16} />
-                  <span>Informações do perfil salvas com sucesso!</span>
+                  <span>Informaes do perfil salvas com sucesso!</span>
                 </div>
               {/if}
               {#if (form as any)?.message && (form as any)?.action === 'profile'}
@@ -1198,7 +1198,7 @@
               {/if}
 
               <div class="form-field">
-                <label for="display_name">Nome de Exibição</label>
+                <label for="display_name">Nome de Exibio</label>
                 <input
                   id="display_name"
                   name="display_name"
@@ -1217,31 +1217,31 @@
                   name="bio"
                   rows="4"
                   maxlength="500"
-                  placeholder="Escreva algo sobre seus gostos de mangás..."
+                  placeholder="Escreva algo sobre seus gostos de mangs..."
                 >{data.member.bio || ''}</textarea>
               </div>
 
-              <button type="submit" class="btn-primary">Salvar Alterações</button>
+              <button type="submit" class="btn-primary">Salvar Alteraes</button>
             </form>
           </div>
 
         {:else if activeTab === 'settings'}
           <!-- 10. Settings -->
           <div class="pane-section">
-            <h2 class="pane-title">Configurações da Conta</h2>
+            <h2 class="pane-title">Configuraes da Conta</h2>
 
             <form method="POST" action="?/updateSettings" use:enhance class="settings-form">
               {#if form?.success && form?.action === 'settings'}
                 <div class="success-banner">
                   <CheckCircle2 size={16} />
-                  <span>Preferências salvas!</span>
+                  <span>Preferncias salvas!</span>
                 </div>
               {/if}
 
               <div class="settings-row">
                 <div>
                   <h4>Ocultar capas adultas (+18)</h4>
-                  <p>Aplica efeito de desfoque nas capas de obras adultas em listas e catálogo.</p>
+                  <p>Aplica efeito de desfoque nas capas de obras adultas em listas e catlogo.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1253,8 +1253,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Exibir conquistas no Perfil Público</h4>
-                  <p>Permite que outros leitores vejam suas conquistas desbloqueadas no seu perfil público.</p>
+                  <h4>Exibir conquistas no Perfil Pblico</h4>
+                  <p>Permite que outros leitores vejam suas conquistas desbloqueadas no seu perfil pblico.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1266,8 +1266,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Exibir cosméticos no Perfil Público</h4>
-                  <p>Permite que outros leitores vejam sua vitrine de cosméticos no seu perfil público.</p>
+                  <h4>Exibir cosmticos no Perfil Pblico</h4>
+                  <p>Permite que outros leitores vejam sua vitrine de cosmticos no seu perfil pblico.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1279,8 +1279,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Exibir favoritos no Perfil Público</h4>
-                  <p>Permite que outros leitores vejam suas obras favoritas no seu perfil público.</p>
+                  <h4>Exibir favoritos no Perfil Pblico</h4>
+                  <p>Permite que outros leitores vejam suas obras favoritas no seu perfil pblico.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1292,8 +1292,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Exibir últimas leituras no Perfil Público</h4>
-                  <p>Permite que outros leitores vejam seu histórico recente de capítulos lidos.</p>
+                  <h4>Exibir ltimas leituras no Perfil Pblico</h4>
+                  <p>Permite que outros leitores vejam seu histrico recente de captulos lidos.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1305,8 +1305,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Exibir Vínculos e Títulos de Scans no Perfil</h4>
-                  <p>Permite exibir seus cargos editoriais e equipes parceiras na sua página pública de leitor.</p>
+                  <h4>Exibir Vnculos e Ttulos de Scans no Perfil</h4>
+                  <p>Permite exibir seus cargos editoriais e equipes parceiras na sua pgina pblica de leitor.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1318,8 +1318,8 @@
 
               <div class="settings-row">
                 <div>
-                  <h4>Modo de Exibição das Scans</h4>
-                  <p>Escolha se deseja destacar apenas o cargo principal ou todas as equipes em que você atua.</p>
+                  <h4>Modo de Exibio das Scans</h4>
+                  <p>Escolha se deseja destacar apenas o cargo principal ou todas as equipes em que voc atua.</p>
                 </div>
                 <select name="privacy_scan_mode" class="form-input" style="width: auto; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15);">
                   <option value="PRIMARY" selected={(data.member.privacyScanMode ?? 'PRIMARY') === 'PRIMARY'}>Somente Cargo Principal</option>
@@ -1328,7 +1328,7 @@
                 </select>
               </div>
 
-              <button type="submit" class="btn-primary">Salvar Configurações</button>
+              <button type="submit" class="btn-primary">Salvar Configuraes</button>
             </form>
           </div>
         {/if}
@@ -1343,7 +1343,7 @@
       <div class="crop-modal-header">
         <div class="header-titles">
           <h3>{cropType === 'avatar' ? 'Ajustar Foto de Perfil' : 'Ajustar Banner de Perfil'}</h3>
-          <p>Ajuste o zoom e posição. GIFs animados permanecem com todos os frames.</p>
+          <p>Ajuste o zoom e posio. GIFs animados permanecem com todos os frames.</p>
         </div>
         <button type="button" class="btn-close-modal" onclick={closeCropModal} aria-label="Fechar">
           <X size={18} />
@@ -1382,7 +1382,7 @@
         </div>
 
         <div class="control-row">
-          <label for="crop-x"><Move size={14} /> Posição Horizontal ({cropX}%)</label>
+          <label for="crop-x"><Move size={14} /> Posio Horizontal ({cropX}%)</label>
           <input
             id="crop-x"
             type="range"
@@ -1395,7 +1395,7 @@
         </div>
 
         <div class="control-row">
-          <label for="crop-y"><Move size={14} /> Posição Vertical ({cropY}%)</label>
+          <label for="crop-y"><Move size={14} /> Posio Vertical ({cropY}%)</label>
           <input
             id="crop-y"
             type="range"

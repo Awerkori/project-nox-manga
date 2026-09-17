@@ -1,39 +1,41 @@
 import { error, json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuerySingle } from '$lib/server/db';
+import { eq, and } from 'drizzle-orm';
 
 export const GET = async ({ locals, params, url }) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) {
-    return json({ error: 'ID de anexo inválido' }, { status: 404 });
+    return json({ error: 'ID de anexo invlido' }, { status: 404 });
   }
 
   if (!locals.user) {
-    return json({ error: 'Autenticação necessária' }, { status: 401 });
+    return json({ error: 'Autenticao necessria' }, { status: 401 });
   }
 
-  const db = privileged();
-  const { data: attachment } = await db
-    .from('scan_attachments')
-    .select('*')
-    .eq('id', params.id)
-    .maybeSingle();
+  const { data: attachment } = await safeQuerySingle(
+    db.select().from(schema.scanAttachments).where(eq(schema.scanAttachments.id, params.id))
+  );
 
   if (!attachment) {
-    return json({ error: 'Anexo não encontrado' }, { status: 404 });
+    return json({ error: 'Anexo no encontrado' }, { status: 404 });
   }
 
   // Cross-scan authorization enforcement
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', attachment.scanId)
-      .eq('user_id', locals.user!.id)
-      .maybeSingle();
+    const { data: member } = await safeQuerySingle(
+      db.select({ role: schema.scanMembers.role })
+        .from(schema.scanMembers)
+        .where(
+          and(
+            eq(schema.scanMembers.scanId, attachment.scanId),
+            eq(schema.scanMembers.userId, locals.user!.id)
+          )
+        )
+    );
 
     if (!member) {
       return json({
-        error: 'Acesso negado. Este arquivo é estritamente restrito aos membros desta Scan.'
+        error: 'Acesso negado. Este arquivo  estritamente restrito aos membros desta Scan.'
       }, { status: 403 });
     }
   }

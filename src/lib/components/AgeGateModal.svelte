@@ -65,12 +65,12 @@
         </div>
 
         <div class="step-content">
-          <span class="step-badge">CLASSIFICAÇÃO INDICATIVA</span>
-          <h2 id="age-gate-title" class="step-title">Aviso de Conteúdo +18</h2>
+          <span class="step-badge">CLASSIFICAO INDICATIVA</span>
+          <h2 id="age-gate-title" class="step-title">Aviso de Contedo +18</h2>
           <p class="step-desc">
-            O Project Nox disponibiliza obras e capítulos destinados exclusivamente a maiores de 18 anos, contendo temas adultos e ilustrações explícitas.
+            O Project Nox disponibiliza obras e captulos destinados exclusivamente a maiores de 18 anos, contendo temas adultos e ilustraes explcitas.
           </p>
-          <p class="step-question">Você tem 18 anos ou mais?</p>
+          <p class="step-question">Voc tem 18 anos ou mais?</p>
         </div>
 
         <div class="step-actions">
@@ -79,7 +79,7 @@
             onclick={handleMinor}
             disabled={busy}
           >
-            Não, sou menor de 18 anos
+            No, sou menor de 18 anos
           </button>
           <button
             class="btn-choice adult"
@@ -95,10 +95,10 @@
         </div>
 
         <div class="step-content">
-          <span class="step-badge">PREFERÊNCIAS DE VISUALIZAÇÃO</span>
-          <h2 id="age-gate-title" class="step-title">Exibição de Capas +18</h2>
+          <span class="step-badge">PREFERNCIAS DE VISUALIZAO</span>
+          <h2 id="age-gate-title" class="step-title">Exibio de Capas +18</h2>
           <p class="step-desc">
-            Você pode escolher se deseja manter as capas de obras adultas borradas ou exibidas normalmente. Você poderá alterar isso depois nas configurações de perfil.
+            Voc pode escolher se deseja manter as capas de obras adultas borradas ou exibidas normalmente. Voc poder alterar isso depois nas configuraes de perfil.
           </p>
         </div>
 
@@ -116,7 +116,7 @@
             </div>
             <div class="choice-info">
               <strong>Manter capas +18 borradas (Recomendado)</strong>
-              <small>Aplica desfoque visual suave com identificação +18 na capa.</small>
+              <small>Aplica desfoque visual suave com identificao +18 na capa.</small>
             </div>
             {#if blurChoice}
               <div class="choice-check">
@@ -138,7 +138,7 @@
             </div>
             <div class="choice-info">
               <strong>Mostrar capas +18 normalmente</strong>
-              <small>Exibe todas as capas adultas sem aplicar desfoque nas ilustrações.</small>
+              <small>Exibe todas as capas adultas sem aplicar desfoque nas ilustraes.</small>
             </div>
             {#if !blurChoice}
               <div class="choice-check">

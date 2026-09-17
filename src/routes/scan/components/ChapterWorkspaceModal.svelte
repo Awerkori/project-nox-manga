@@ -53,24 +53,24 @@
   let checks = $derived(() => {
     return [
       {
-        label: 'Páginas do capítulo carregadas',
+        label: 'Pginas do captulo carregadas',
         passed: (chapter?.pages_count ?? 0) > 0 || true,
-        desc: 'Mídia e ordem das páginas validadas no armazenamento.'
+        desc: 'Mdia e ordem das pginas validadas no armazenamento.'
       },
       {
-        label: 'Nenhuma issue crítica de QC aberta',
+        label: 'Nenhuma issue crtica de QC aberta',
         passed: openQcCount === 0,
-        desc: openQcCount > 0 ? `${openQcCount} apontamentos de QC em aberto.` : 'Qualidade visual e diagramação validadas.'
+        desc: openQcCount > 0 ? `${openQcCount} apontamentos de QC em aberto.` : 'Qualidade visual e diagramao validadas.'
       },
       {
-        label: 'Etapa de Revisão aprovada',
+        label: 'Etapa de Reviso aprovada',
         passed: true,
         desc: 'Texto revisado ortograficamente.'
       },
       {
-        label: 'Créditos da Scan vinculados',
+        label: 'Crditos da Scan vinculados',
         passed: true,
-        desc: 'Histórico preservado em chapter_scans.'
+        desc: 'Histrico preservado em chapter_scans.'
       }
     ];
   });
@@ -79,7 +79,7 @@
 </script>
 
 {#if chapter}
-  <div class="modal-backdrop" onclick={onClose}>
+  <div class="modal-backdrop" onclick={() => onClose()}>
     <div class="chapter-workspace-card" onclick={(e) => e.stopPropagation()}>
       <!-- Header -->
       <header class="workspace-header">
@@ -89,10 +89,10 @@
             <span>{work?.title || 'Obra'}</span>
           </div>
           <h2 class="chapter-number-heading">
-            Capítulo #{chapter.number} {chapter.title ? `— ${chapter.title}` : ''}
+            Captulo #{chapter.number} {chapter.title ? `— ${chapter.title}` : ''}
           </h2>
           <span class="status-indicator-badge" class:ready={chapter.status === 'READY'} class:published={chapter.status === 'PUBLISHED'}>
-            {chapter.status || 'EM PRODUÇÃO'}
+            {chapter.status || 'EM PRODUO'}
           </span>
         </div>
 
@@ -102,13 +102,13 @@
             href="/obra/{work?.slug || 'preview'}/{chapter.number}?preview=scan"
             target="_blank"
             class="btn-preview-action"
-            title="Abrir Leitor Privado para Conferência"
+            title="Abrir Leitor Privado para Conferncia"
           >
             <Eye size={14} />
             <span>Visualizar Preview</span>
           </a>
 
-          <button type="button" class="btn-close-modal" onclick={onClose}>
+          <button type="button" class="btn-close-modal" onclick={() => onClose()}>
             <X size={18} />
           </button>
         </div>
@@ -123,7 +123,7 @@
           onclick={() => (activeTab = 'overview')}
         >
           <Layers size={14} />
-          <span>Visão Geral</span>
+          <span>Viso Geral</span>
         </button>
         <button
           type="button"
@@ -159,7 +159,7 @@
           onclick={() => (activeTab = 'checklist')}
         >
           <CheckSquare size={14} />
-          <span>Checklist & Publicação</span>
+          <span>Checklist & Publicao</span>
         </button>
       </nav>
 
@@ -176,18 +176,18 @@
               <span class="stat-value" class:alert={openQcCount > 0}>{openQcCount} Pendentes</span>
             </div>
             <div class="stat-box">
-              <span class="stat-lbl">Tarefas do Capítulo</span>
+              <span class="stat-lbl">Tarefas do Captulo</span>
               <span class="stat-value">{chapterTasks.length} Registradas</span>
             </div>
             <div class="stat-box">
-              <span class="stat-lbl">Glossário Vinculado</span>
+              <span class="stat-lbl">Glossrio Vinculado</span>
               <span class="stat-value">{glossary.length} Termos da Obra</span>
             </div>
           </div>
 
           <!-- Dependency Stepper -->
           <div class="stepper-overview-card">
-            <h4 class="stepper-hdr">Progresso do Capítulo nas Etapas da Scan:</h4>
+            <h4 class="stepper-hdr">Progresso do Captulo nas Etapas da Scan:</h4>
             <div class="stepper-horizontal">
               {#each stages as st, idx}
                 {@const isDone = idx <= stages.findIndex((s: any) => s.slug === currentStageSlug)}
@@ -227,7 +227,7 @@
                       <input type="hidden" name="chapterId" value={chapter.id} />
                       <input type="hidden" name="stageSlug" value={st.slug} />
                       <button type="submit" class="btn-stage-advance" disabled={isCurrent}>
-                        {isCurrent ? 'Etapa Atual' : 'Mover Capítulo para Esta Etapa'}
+                        {isCurrent ? 'Etapa Atual' : 'Mover Captulo para Esta Etapa'}
                       </button>
                     </form>
                   {/if}
@@ -239,7 +239,7 @@
         {:else if activeTab === 'tasks'}
           <div class="ws-tasks-list">
             {#if chapterTasks.length === 0}
-              <p class="empty-ws-txt">Nenhuma tarefa criada especificamente para este capítulo.</p>
+              <p class="empty-ws-txt">Nenhuma tarefa criada especificamente para este captulo.</p>
             {:else}
               {#each chapterTasks as t}
                 <div class="ws-task-row">
@@ -258,13 +258,13 @@
             {#if chapterQcIssues.length === 0}
               <div class="zero-qc-state">
                 <CheckCircle2 size={32} class="zero-icon" />
-                <p class="zero-text">Nenhuma issue aberta para este capítulo. Qualidade 100% conferida!</p>
+                <p class="zero-text">Nenhuma issue aberta para este captulo. Qualidade 100% conferida!</p>
               </div>
             {:else}
               {#each chapterQcIssues as qc}
                 <div class="ws-qc-row" class:resolved={qc.status === 'RESOLVED'}>
                   <div class="qc-info">
-                    <span class="qc-page-tag">Pág. {qc.pageNumber}</span>
+                    <span class="qc-page-tag">Pg. {qc.pageNumber}</span>
                     <span class="qc-type-tag">{qc.issueType}</span>
                     <span class="qc-desc">{qc.description}</span>
                   </div>
@@ -276,7 +276,7 @@
 
         {:else if activeTab === 'checklist'}
           <div class="checklist-container">
-            <h3 class="checklist-heading">Validação Automática de Integridade</h3>
+            <h3 class="checklist-heading">Validao Automtica de Integridade</h3>
             <div class="checklist-items">
               {#each checks() as c}
                 <div class="check-item-row" class:passed={c.passed}>
@@ -301,7 +301,7 @@
                 {#if !canPublish}
                   <div class="publish-blocked-warning">
                     <AlertTriangle size={16} />
-                    <span>A publicação está travada pois existem apontamentos de QC em aberto.</span>
+                    <span>A publicao est travada pois existem apontamentos de QC em aberto.</span>
                   </div>
                 {/if}
 
@@ -326,7 +326,7 @@
                       <span>Publicando...</span>
                     {:else if chapter.status === 'PUBLISHED'}
                       <CheckCircle2 size={16} />
-                      <span>Capítulo Já Publicado</span>
+                      <span>Captulo J Publicado</span>
                     {:else}
                       <Sparkles size={16} />
                       <span>Aprovar & Publicar no Project Nox</span>

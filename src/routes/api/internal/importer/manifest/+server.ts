@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   );
 
   if (error) {
-    return json({ error: error.message }, { status: 500 });
+    return json({ error: (error as any).message }, { status: 500 });
   }
 
   return json({ chapters: chapters || [] });

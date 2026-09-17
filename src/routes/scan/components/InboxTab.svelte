@@ -61,7 +61,7 @@
         id: `task-unassigned-${task.id}`,
         type: 'TASK_UNASSIGNED',
         priority: task.priority === 'URGENT' ? 'URGENT' : 'NORMAL',
-        title: `Tarefa sem Responsável: ${task.title}`,
+        title: `Tarefa sem Responsvel: ${task.title}`,
         desc: task.description || 'Nenhum membro assumiu esta tarefa ainda.',
         date: task.createdAt,
         actionLabel: 'Assumir Tarefa',
@@ -77,7 +77,7 @@
         id: `qc-${qc.id}`,
         type: 'QC_OPEN',
         priority: 'HIGH',
-        title: `QC Pendente — Pág. ${qc.pageNumber} (${qc.issueType})`,
+        title: `QC Pendente — Pg. ${qc.pageNumber} (${qc.issueType})`,
         desc: qc.description,
         date: qc.createdAt,
         actionLabel: 'Inspecionar QC',
@@ -97,7 +97,7 @@
         date: notif.createdAt,
         actionLabel: 'Abrir',
         deepLink: notif.deepLink,
-        badge: notif.type === 'ROLE_MENTION' ? 'Cargo' : 'Menção'
+        badge: notif.type === 'ROLE_MENTION' ? 'Cargo' : 'Meno'
       });
     }
 
@@ -120,10 +120,10 @@
     for (const task of tasks.filter((t: any) => t.status === 'DONE').slice(0, 8)) {
       list.push({
         id: `task-done-${task.id}`,
-        title: `Tarefa Concluída: ${task.title}`,
+        title: `Tarefa Concluda: ${task.title}`,
         desc: `Finalizada por ${task.assignee?.displayName || 'Membro'}.`,
         date: task.completedAt || task.updatedAt,
-        badge: 'Produção'
+        badge: 'Produo'
       });
     }
 
@@ -139,7 +139,7 @@
       </div>
       <div>
         <h2 class="inbox-main-title">Inbox da Scan & Triagem</h2>
-        <p class="inbox-subtitle">Demandas urgentes, menções à sua função e itens que exigem ação direta da equipe.</p>
+        <p class="inbox-subtitle">Demandas urgentes, menes  sua funo e itens que exigem ao direta da equipe.</p>
       </div>
     </div>
 
@@ -158,7 +158,7 @@
         class:active={selectedFilter === 'ATTENTION'}
         onclick={() => (selectedFilter = 'ATTENTION')}
       >
-        Atenção Requerida ({attentionItems().length})
+        Ateno Requerida ({attentionItems().length})
       </button>
       <button
         type="button"
@@ -166,24 +166,24 @@
         class:active={selectedFilter === 'UPDATES'}
         onclick={() => (selectedFilter = 'UPDATES')}
       >
-        Atualizações Gerais ({updateItems().length})
+        Atualizaes Gerais ({updateItems().length})
       </button>
     </div>
   </div>
 
   <div class="inbox-sections-scroll">
-    <!-- SECTION: PRECISA DA SUA ATENÇÃO -->
+    <!-- SECTION: PRECISA DA SUA ATENO -->
     {#if selectedFilter === 'ALL' || selectedFilter === 'ATTENTION'}
       <section class="inbox-section">
         <div class="section-title-strip attention">
           <AlertCircle size={16} />
-          <h3 class="section-label">PRECISA DA SUA ATENÇÃO ({attentionItems().length})</h3>
+          <h3 class="section-label">PRECISA DA SUA ATENO ({attentionItems().length})</h3>
         </div>
 
         {#if attentionItems().length === 0}
           <div class="inbox-zero-state">
             <CheckCircle2 size={32} class="zero-icon" />
-            <p class="zero-text">Tudo em dia! Nenhuma pendência crítica requerendo ação agora.</p>
+            <p class="zero-text">Tudo em dia! Nenhuma pendncia crtica requerendo ao agora.</p>
           </div>
         {:else}
           <div class="inbox-cards-grid">
@@ -221,17 +221,17 @@
       </section>
     {/if}
 
-    <!-- SECTION: OUTRAS ATUALIZAÇÕES -->
+    <!-- SECTION: OUTRAS ATUALIZAES -->
     {#if selectedFilter === 'ALL' || selectedFilter === 'UPDATES'}
       <section class="inbox-section">
         <div class="section-title-strip">
           <Clock size={16} />
-          <h3 class="section-label">OUTRAS ATUALIZAÇÕES & HISTÓRICO ({updateItems().length})</h3>
+          <h3 class="section-label">OUTRAS ATUALIZAES & HISTRICO ({updateItems().length})</h3>
         </div>
 
         {#if updateItems().length === 0}
           <div class="inbox-zero-state">
-            <p class="zero-text">Nenhuma outra atualização recente.</p>
+            <p class="zero-text">Nenhuma outra atualizao recente.</p>
           </div>
         {:else}
           <div class="updates-timeline">

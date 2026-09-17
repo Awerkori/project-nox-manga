@@ -4,13 +4,13 @@ import { eq, and, sql } from 'drizzle-orm';
 
 export const POST = async ({ request, locals }: any) => {
   const currentUserId = locals.user?.id;
-  if (!currentUserId) error(401, 'Não autorizado');
+  if (!currentUserId) error(401, 'No autorizado');
 
   const body = await request.json().catch(() => ({}));
   const targetUserId = String(body.targetUserId || '').trim();
 
   if (!targetUserId) {
-    error(400, 'Usuário alvo não fornecido.');
+    error(400, 'Usurio alvo no fornecido.');
   }
 
   const { data: existing, error: findError } = await safeQuerySingle(
@@ -24,7 +24,7 @@ export const POST = async ({ request, locals }: any) => {
       )
   );
 
-  if (findError) error(500, findError.message);
+  if (findError) error(500, (findError as any).message);
 
   if (existing) {
     const { error: delErr } = await safeQuerySingle(
@@ -37,7 +37,7 @@ export const POST = async ({ request, locals }: any) => {
         )
         .returning()
     );
-    if (delErr) error(500, delErr.message);
+    if (delErr) error(500, (delErr as any).message);
     return json({ following: false });
   } else {
     const { error: insErr } = await safeQuerySingle(

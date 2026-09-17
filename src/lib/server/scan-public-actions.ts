@@ -4,11 +4,11 @@ import crypto from 'node:crypto';
 
 export async function apply_for_scan_opening(openingId: string, experience: string, availability: string, presentation: string, portfolioUrl: string | null, contactInfo: string, userId: string) {
   const { data: opening } = await safeQuerySingle(db.select().from(schema.scanRecruitmentOpenings).where(eq(schema.scanRecruitmentOpenings.id, openingId)));
-  if (!opening) return { error: { message: 'Vaga não encontrada' } };
+  if (!opening) return { error: { message: 'Vaga no encontrada' } };
 
   const id = crypto.randomUUID();
   const { error } = await safeQuery(db.insert(schema.scanApplications).values({
-    id, scanId: opening.scanId, openingId, userId,
+    scanId: opening.scanId, openingId, positionId: opening.positionId, userId,
     experience, availability, presentation, portfolioUrl, contactInfo,
     status: 'PENDING', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
   }));
@@ -19,7 +19,7 @@ export async function apply_for_scan_opening(openingId: string, experience: stri
 export async function post_scan_comment(scanId: string, body: string, parentId: string | null, userId: string) {
   const id = crypto.randomUUID();
   const { error } = await safeQuery(db.insert(schema.scanComments).values({
-    id, scanId, userId, body, parentId, createdAt: new Date().toISOString()
+    id, scanId, userId, body, parentId, removed: false, pinned: false
   }));
   return {data: { commentId: id}, error };
 }
@@ -37,13 +37,13 @@ export async function like_scan_comment(commentId: string, userId: string) {
 
 export async function moderate_scan_comment(commentId: string, action: string, adminId: string) {
   if (action === 'REMOVE') {
-    const { error } = await safeQuery(db.update(schema.scanComments).set({ removed: 1 }).where(eq(schema.scanComments.id, commentId)));
+    const { error } = await safeQuery(db.update(schema.scanComments).set({ removed: true }).where(eq(schema.scanComments.id, commentId)));
     return { data: { action }, error };
   } else if (action === 'RESTORE') {
-    const { error } = await safeQuery(db.update(schema.scanComments).set({ removed: 0 }).where(eq(schema.scanComments.id, commentId)));
+    const { error } = await safeQuery(db.update(schema.scanComments).set({ removed: false }).where(eq(schema.scanComments.id, commentId)));
     return { data: { action }, error };
   }
-  return { error: { message: 'Ação de moderação desconhecida' } };
+  return { error: { message: 'Ao de moderao desconhecida' } };
 }
 
 export async function report_scan_comment(commentId: string, reason: string, userId: string) {

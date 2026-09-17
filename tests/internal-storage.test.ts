@@ -11,13 +11,25 @@ const VALID_1X1_PNG = Uint8Array.from(
 describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () => {
   const TEST_TOKEN = 'a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef';
 
+
+
   beforeEach(() => {
     vi.resetModules();
+    vi.doMock('../src/lib/server/db', () => ({
+      db: {
+        execute: vi.fn().mockResolvedValue([{ id: '935e146d-de3f-4a8e-b393-692944c716fa', reference: 'MANGA_STORAGE_01', type: 'TELEGRAM', secret_chat_id: '-1004353931378', secret_token: 'super-secret-token', display_name: 'Nox Mangá' }]),
+        insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => [{ id: 'mocked-id' }]) })) })),
+        select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => [{ id: 'mocked' }]) })) }))
+      },
+      schema: {}
+    }));
   });
+
+
 
   it('rejects unauthenticated GET requests with 401', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
     }));
 
     const { GET } = await import('../src/routes/api/internal/storage/upload/+server');
@@ -43,7 +55,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
 
   it('rejects invalid bearer token with 401', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
     }));
 
     const { GET } = await import('../src/routes/api/internal/storage/upload/+server');
@@ -71,7 +83,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
 
   it('returns health status 200 on valid token GET', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
     }));
 
     const { GET } = await import('../src/routes/api/internal/storage/upload/+server');
@@ -101,7 +113,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
 
   it('rejects corrupt image bytes with 400', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
     }));
 
     const { POST } = await import('../src/routes/api/internal/storage/upload/+server');
@@ -131,7 +143,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
 
   it('uploads valid image and returns providerKey without leaking secrets', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'super-secret-token', TELEGRAM_CHAT_ID: '-100123' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'super-secret-token', TELEGRAM_CHAT_ID: '-100123' }
     }));
 
     const mockUpload = vi.fn().mockResolvedValue('tg-file-id-abc-123');
@@ -167,7 +179,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
     const body = await res.json();
     expect(body).toEqual({
       providerKey: 'tg-file-id-abc-123',
-      botReference: 'MANGA_STORAGE_01',
+      botReference: 'MANGA_STORAGE_01', channelId: '-1004353931378', displayName: 'Nox Mangá', shardId: '935e146d-de3f-4a8e-b393-692944c716fa',
       mime: 'image/png',
       width: 1,
       height: 1,
@@ -180,7 +192,7 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
 
   it('preserves Telegram 429 rate limit and returns 429 with Retry-After header', async () => {
     vi.doMock('$env/dynamic/private', () => ({
-      env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
+      env: { TURSO_DB_URL: 'libsql://dummy.turso.io', TURSO_DB_TOKEN: 'dummy', NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_CHAT_ID: 'chat' }
     }));
 
     class MockTelegramStorageError extends Error {

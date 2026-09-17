@@ -57,13 +57,13 @@
   <!-- Header / Controls -->
   <div class="tab-header">
     <div>
-      <h2 class="title">Referências & Recursos por Obra</h2>
-      <p class="subtitle">Armazene links de raws oficiais, diretórios de fontes, guias visuais e notas de edição.</p>
+      <h2 class="title">Referncias & Recursos por Obra</h2>
+      <p class="subtitle">Armazene links de raws oficiais, diretrios de fontes, guias visuais e notas de edio.</p>
     </div>
     {#if canEdit}
       <button class="btn-primary" onclick={openCreateModal}>
         <Plus size={16} />
-        Nova Referência
+        Nova Referncia
       </button>
     {/if}
   </div>
@@ -74,7 +74,7 @@
       <Search size={16} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar referências ou links..."
+        placeholder="Buscar referncias ou links..."
         bind:value={searchQuery}
         class="search-input"
       />
@@ -98,11 +98,11 @@
   {#if filteredReferences.length === 0}
     <div class="empty-state">
       <Link2 size={48} class="empty-icon" />
-      <h3>Nenhuma referência vinculada</h3>
-      <p>Cadastre links de raws (Naver, Kakao, Piccoma), pastas de drive com fontes ou diretrizes de edição da obra.</p>
+      <h3>Nenhuma referncia vinculada</h3>
+      <p>Cadastre links de raws (Naver, Kakao, Piccoma), pastas de drive com fontes ou diretrizes de edio da obra.</p>
       {#if canEdit}
         <button class="btn-secondary" onclick={openCreateModal}>
-          <Plus size={16} /> Adicionar primeira referência
+          <Plus size={16} /> Adicionar primeira referncia
         </button>
       {/if}
     </div>
@@ -114,7 +114,7 @@
           <div class="ref-header">
             <div class="badge-row">
               <span class="type-badge {ref.refType.toLowerCase()}">
-                {ref.refType === 'LINK' ? 'Link Externo' : ref.refType === 'TEXT' ? 'Texto / Guia' : 'Nota de Edição'}
+                {ref.refType === 'LINK' ? 'Link Externo' : ref.refType === 'TEXT' ? 'Texto / Guia' : 'Nota de Edio'}
               </span>
               {#if work}
                 <span class="work-badge">{work.title}</span>
@@ -131,7 +131,7 @@
                   };
                 }}
                 onsubmit={(e) => {
-                  if (!confirm('Excluir esta referência?')) e.preventDefault();
+                  if (!confirm('Excluir esta referncia?')) e.preventDefault();
                 }}
               >
                 <input type="hidden" name="ref_id" value={ref.id} />
@@ -170,7 +170,7 @@
     <div class="modal-backdrop" onclick={closeModal} role="presentation">
       <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div class="modal-header">
-          <h3>Adicionar Referência / Recurso</h3>
+          <h3>Adicionar Referncia / Recurso</h3>
           <button class="btn-close" onclick={closeModal}><X size={18} /></button>
         </div>
 
@@ -200,7 +200,7 @@
 
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="ref-title">Título do Recurso *</label>
+              <label for="ref-title">Ttulo do Recurso *</label>
               <input
                 id="ref-title"
                 type="text"
@@ -216,14 +216,14 @@
               <select id="ref-type" name="ref_type" bind:value={formRefType} class="input">
                 <option value="LINK">Link Externo</option>
                 <option value="TEXT">Texto / Guia</option>
-                <option value="NOTE">Nota Rápida</option>
+                <option value="NOTE">Nota Rpida</option>
               </select>
             </div>
           </div>
 
           <div class="form-group">
             <label for="ref-content">
-              {formRefType === 'LINK' ? 'URL (https://...) *' : 'Conteúdo / Informações *'}
+              {formRefType === 'LINK' ? 'URL (https://...) *' : 'Contedo / Informaes *'}
             </label>
             {#if formRefType === 'LINK'}
               <input
@@ -241,7 +241,7 @@
                 name="content"
                 bind:value={formContent}
                 rows="4"
-                placeholder="Insira diretrizes de lettering, convenções de balões..."
+                placeholder="Insira diretrizes de lettering, convenes de bales..."
                 required
                 class="input textarea"
               ></textarea>

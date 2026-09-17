@@ -1,10 +1,11 @@
 import { json, error } from '@sveltejs/kit';
 import { db, schema, safeQuerySingle } from '$lib/server/db';
 import { eq, and } from 'drizzle-orm';
-import { member } from '$lib/server/db';
+
 
 export const POST = async ({ request, locals }: any) => {
-  const userId = member(locals);
+  if (!locals.user) throw error(401, 'Unauthorized');
+  const userId = locals.user.id;
   const body = await request.json().catch(() => ({}));
   let kind = String(body.kind || '').trim();
   const itemId = String(body.itemId || '').trim(); // if empty, unequips
@@ -19,7 +20,7 @@ export const POST = async ({ request, locals }: any) => {
   }
 
   if (!kind) {
-    error(400, 'Tipo de cosmético não fornecido.');
+    error(400, 'Tipo de cosmtico no fornecido.');
   }
 
   if (itemId) {
@@ -30,7 +31,7 @@ export const POST = async ({ request, locals }: any) => {
         .where(and(eq(schema.memberInventory.userId, userId), eq(schema.memberInventory.itemId, itemId)))
     );
     if (!owns) {
-      error(400, 'Você não possui este item.');
+      error(400, 'Voc no possui este item.');
     }
   }
 
@@ -58,7 +59,7 @@ export const POST = async ({ request, locals }: any) => {
       updatePayload = { equippedCommentBannerId: itemId || null };
       break;
     default:
-      error(400, 'Tipo de cosmético desconhecido: ' + kind);
+      error(400, 'Tipo de cosmtico desconhecido: ' + kind);
   }
 
   const { error: updErr } = await safeQuerySingle(
@@ -69,7 +70,7 @@ export const POST = async ({ request, locals }: any) => {
   );
 
   if (updErr) {
-    error(500, updErr.message);
+    error(500, (updErr as any).message);
   }
 
   return json({ success: true, kind, itemId });

@@ -173,7 +173,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         chapter = {
           id: prodChapter.id,
           number: prodChapter.chapterNumber,
-          title: prodChapter.chapterLabel || prodChapter.chapterTitle || `Capítulo ${prodChapter.chapterNumber}`,
+          title: prodChapter.chapterLabel || prodChapter.chapterTitle || `Captulo ${prodChapter.chapterNumber}`,
           workId: prodChapter.workId,
           publishedAt: null,
           works: workData
@@ -183,15 +183,15 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   }
 
   if (!chapter && chapterRes.status === 'TIMEOUT') {
-    error(503, 'A conexão com o leitor está temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexo com o leitor est temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (!chapter && chapterRes.status === 'ERROR') {
-    error(500, 'Instabilidade temporária ao carregar o capítulo. Tente novamente em instantes.');
+    error(500, 'Instabilidade temporria ao carregar o captulo. Tente novamente em instantes.');
   }
 
-  if (!chapter) error(404, 'Capítulo indisponível');
-  if (!canAccessUnpublished && !chapter.works?.published) error(404, 'Obra ainda não publicada');
+  if (!chapter) error(404, 'Captulo indisponvel');
+  if (!canAccessUnpublished && !chapter.works?.published) error(404, 'Obra ainda no publicada');
 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.publishedAt || (isPreviewRequested && isStaff);
@@ -210,7 +210,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
-      error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
+      error(403, 'Contedo restrito: este captulo  destinado exclusivamente a maiores de 18 anos.');
     }
   }
 
@@ -349,18 +349,18 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   ]);
 
   if (pagesRes.status === 'TIMEOUT') {
-    error(503, 'A conexão com as páginas está temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexo com as pginas est temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (pagesRes.status === 'ERROR') {
-    error(500, 'Instabilidade ao carregar as páginas do capítulo.');
+    error(500, 'Instabilidade ao carregar as pginas do captulo.');
   }
 
   const pagesData = (pagesRes.data || []) as any[];
 
   // If chapter is published but has 0 pages returned, throw 503 so it re-attempts rather than showing an empty black box
   if (!preview && pagesData.length === 0) {
-    error(503, 'Capítulo em processamento ou temporariamente indisponível. Tente novamente em instantes.');
+    error(503, 'Captulo em processamento ou temporariamente indisponvel. Tente novamente em instantes.');
   }
 
   let scans = (((chapterScansRes && chapterScansRes.data) || []) as any[])

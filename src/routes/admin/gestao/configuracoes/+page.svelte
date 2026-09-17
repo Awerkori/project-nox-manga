@@ -28,9 +28,9 @@
     savingKey = key;
     try {
       await action('owner', 'setting', { key, value: f.get('value') });
-      notice = 'Configuração salva com sucesso.';
+      notice = 'Configurao salva com sucesso.';
       setTimeout(() => {
-        if (notice === 'Configuração salva com sucesso.') notice = '';
+        if (notice === 'Configurao salva com sucesso.') notice = '';
       }, 3500);
     } catch (e) {
       notice = (e as Error).message;
@@ -44,14 +44,14 @@
       case 'site_name':
         return {
           title: 'Nome da Plataforma',
-          desc: 'Identificador exibido no título das abas, cabeçalho e metadados SEO.',
+          desc: 'Identificador exibido no ttulo das abas, cabealho e metadados SEO.',
           placeholder: 'Project Nox Manga'
         };
       case 'description':
         return {
-          title: 'Descrição Pública (SEO)',
-          desc: 'Texto de apresentação para buscadores e compartilhamentos OpenGraph.',
-          placeholder: 'A leitura cósmica de mangás e manhwas do Project Nox.'
+          title: 'Descrio Pblica (SEO)',
+          desc: 'Texto de apresentao para buscadores e compartilhamentos OpenGraph.',
+          placeholder: 'A leitura csmica de mangs e manhwas do Project Nox.'
         };
       case 'contact_email':
         return {
@@ -62,7 +62,7 @@
       default:
         return {
           title: key,
-          desc: 'Parâmetro de configuração do sistema.',
+          desc: 'Parmetro de configurao do sistema.',
           placeholder: ''
         };
     }
@@ -70,16 +70,16 @@
 </script>
 
 <svelte:head>
-  <title>Configurações — Nox Admin</title>
+  <title>Configuraes — Nox Admin</title>
 </svelte:head>
 
 <div class="config-view">
   <!-- Header -->
   <header class="page-header">
-    <span class="eyebrow">SISTEMA & PREFERÊNCIAS</span>
-    <h1>Configurações da Plataforma</h1>
+    <span class="eyebrow">SISTEMA & PREFERNCIAS</span>
+    <h1>Configuraes da Plataforma</h1>
     <p class="subtitle">
-      Ajuste parâmetros editoriais públicos e monitore o estado operacional de todos os subsistemas integrados.
+      Ajuste parmetros editoriais pblicos e monitore o estado operacional de todos os subsistemas integrados.
     </p>
   </header>
 
@@ -99,7 +99,7 @@
       <section class="panel">
         <div class="panel-header">
           <Globe size={18} class="panel-icon" />
-          <h2>Identidade e Informações Públicas</h2>
+          <h2>Identidade e Informaes Pblicas</h2>
         </div>
 
         <div class="settings-forms-stack">
@@ -161,13 +161,13 @@
       <section class="panel">
         <div class="panel-header">
           <Server size={18} class="panel-icon" />
-          <h2>Status Operacional das Conexões</h2>
+          <h2>Status Operacional das Conexes</h2>
         </div>
 
         <div class="security-guarantee-note">
           <Lock size={14} />
           <span>
-            Arquitetura segura: Credenciais e segredos operam exclusivamente em runtime de servidor protegido e não são expostos.
+            Arquitetura segura: Credenciais e segredos operam exclusivamente em runtime de servidor protegido e no so expostos.
           </span>
         </div>
 
@@ -188,7 +188,7 @@
               </span>
             </div>
             <p class="small muted">
-              Autenticação segura via cookies HTTP-only assinados e isolamento via Row-Level Security (RLS).
+              Autenticao segura via cookies HTTP-only assinados e isolamento via Row-Level Security (RLS).
             </p>
           </div>
 
@@ -198,17 +198,17 @@
               <div class="integration-identity">
                 <HardDrive size={16} class="integration-icon" />
                 <div>
-                  <strong>Armazenamento de Mídia</strong>
+                  <strong>Armazenamento de Mdia</strong>
                   <span class="provider-name">{data.telegram ? 'Telegram Bot CDN' : 'Supabase Storage'}</span>
                 </div>
               </div>
               <span class="status-pill connected">
                 <span class="dot-connected"></span>
-                {data.telegram ? 'Configurado' : 'Padrão Ativo'}
+                {data.telegram ? 'Configurado' : 'Padro Ativo'}
               </span>
             </div>
             <p class="small muted">
-              Entrega de páginas e capas com reserva de quota gratuita R$ 0,00. Nenhuma cobrança ativada automaticamente.
+              Entrega de pginas e capas com reserva de quota gratuita R$ 0,00. Nenhuma cobrana ativada automaticamente.
             </p>
           </div>
 
@@ -235,7 +235,7 @@
               {/if}
             </div>
             <p class="small muted">
-              Bridge estritamente de leitura. Apenas arquivos finais aprovados na revisão da Staff podem ser consultados.
+              Bridge estritamente de leitura. Apenas arquivos finais aprovados na reviso da Staff podem ser consultados.
             </p>
           </div>
 
@@ -255,7 +255,7 @@
               </span>
             </div>
             <p class="small muted">
-              SSR executado em borda global com latência mínima e proteção contra tráfego malicioso.
+              SSR executado em borda global com latncia mnima e proteo contra trfego malicioso.
             </p>
           </div>
         </div>
@@ -271,26 +271,26 @@
             </div>
             <span class="status-pill connected">
               <span class="dot-connected"></span>
-              {data.storageShards.filter(s => s.enabled && s.writeStatus === 'HEALTHY').length}/{data.storageShards.length} Shards Saudáveis
+              {data.storageShards.filter(s => s.enabled && s.writeStatus === 'HEALTHY').length}/{data.storageShards.length} Shards Saudveis
             </span>
           </div>
           <p class="section-desc">
-            Topologia distribuída com isolamento estrito por pool, bot affinity, failover automático e circuit breakers de escrita independentes da leitura.
+            Topologia distribuda com isolamento estrito por pool, bot affinity, failover automtico e circuit breakers de escrita independentes da leitura.
           </p>
 
           <div class="shards-table-container">
             <table class="shards-table">
               <thead>
                 <tr>
-                  <th>Shard Físico</th>
-                  <th>Pool Canônico</th>
+                  <th>Shard Fsico</th>
+                  <th>Pool Cannico</th>
                   <th>Bot</th>
                   <th>Canal Telegram</th>
                   <th>Uploads</th>
                   <th>Share %</th>
                   <th>Escrita</th>
                   <th>Leitura</th>
-                  <th>Conexões</th>
+                  <th>Conexes</th>
                   <th>Peso</th>
                 </tr>
               </thead>
@@ -314,7 +314,7 @@
                       </div>
                     </td>
                     <td><code class="code-ref">{shard.channelId}</code></td>
-                    <td><span class="uploads-count">{shard.recent_uploads || 0} pág</span></td>
+                    <td><span class="uploads-count">{shard.recent_uploads || 0} pg</span></td>
                     <td><span class="share-cell">{shard.recent_share_percent || '0.0%'}</span></td>
                     <td>
                       <span class="status-chip {shard.writeStatus.toLowerCase()}">

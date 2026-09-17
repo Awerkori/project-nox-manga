@@ -239,7 +239,7 @@
     if (typeof ch === 'string') {
       const all = [...(data.productionChapters || []), ...(chapters || [])];
       const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.targetChapterId === ch);
-      activeWorkspaceChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo' };
+      activeWorkspaceChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Captulo' };
     } else {
       activeWorkspaceChapter = ch.chapters || ch;
     }
@@ -296,7 +296,7 @@
 
   let createdInvite = $derived(
     form && typeof form === 'object' && 'createdInvite' in form && form.createdInvite
-      ? (form.createdInvite as { code: string; expires_at: string; role: string; id: string })
+      ? (form.createdInvite as { code: string; expiresAt: string; role: string; id: string })
       : null
   );
 
@@ -483,10 +483,10 @@
               <Crown size={24} />
             </div>
             <div class="transfer-alert-text">
-              <h3>Proposta de Liderança Recebida</h3>
+              <h3>Proposta de Liderana Recebida</h3>
               <p>
-                <strong>{data.incomingTransfer.from_user?.displayName || data.incomingTransfer.from_user?.username || 'O líder atual'}</strong>
-                propôs transferir a liderança da scan <strong>{data.incomingTransfer.scans?.name}</strong> para você.
+                <strong>{data.incomingTransfer.from_user?.displayName || data.incomingTransfer.from_user?.username || 'O lder atual'}</strong>
+                props transferir a liderana da scan <strong>{data.incomingTransfer.scans?.name}</strong> para voc.
               </p>
             </div>
           </div>
@@ -496,7 +496,7 @@
               <input type="hidden" name="accept" value="true" />
               <button type="submit" class="btn-transfer-accept">
                 <Check size={16} />
-                <span>Aceitar Liderança</span>
+                <span>Aceitar Liderana</span>
               </button>
             </form>
             <form method="POST" action="?/respondOwnershipTransfer" use:enhance>
@@ -519,7 +519,7 @@
           </div>
           <h1 class="onboarding-title">Painel de Scan Parceira</h1>
           <p class="onboarding-sub">
-            Faça login ou crie sua conta no Project Nox para acessar seu painel editorial e gerenciar suas obras.
+            Faa login ou crie sua conta no Project Nox para acessar seu painel editorial e gerenciar suas obras.
           </p>
           <div class="onboarding-actions">
             <a href="/entrar" class="btn-primary">Entrar na Conta</a>
@@ -536,7 +536,7 @@
           </div>
           <h1 class="portal-title">Torne-se uma Scan Parceira no Project Nox</h1>
           <p class="portal-sub">
-            Traga sua equipe para uma plataforma focada na melhor experiência de leitura, com respeito integral aos
+            Traga sua equipe para uma plataforma focada na melhor experincia de leitura, com respeito integral aos
             tradutores e visibilidade para a sua comunidade.
           </p>
         </header>
@@ -545,7 +545,7 @@
           <div class="my-partner-requests-card">
             <div class="requests-card-header">
               <Clock size={18} />
-              <h2>Suas Solicitações de Parceria ({data.partnerRequests.length})</h2>
+              <h2>Suas Solicitaes de Parceria ({data.partnerRequests.length})</h2>
             </div>
             <div class="requests-track-list">
               {#each data.partnerRequests as req (req.id)}
@@ -557,12 +557,12 @@
                     </div>
                     <div class="track-status-cell">
                       <span class="status-pill status-{req.status.toLowerCase()}">
-                        {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
+                        {req.status === 'PENDING' ? 'Em Anlise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
                       </span>
                       {#if req.status === 'PENDING'}
                         <form method="POST" action="?/cancelPartnerRequest" use:enhance>
                           <input type="hidden" name="request_id" value={req.id} />
-                          <button type="submit" class="btn-cancel-req">Cancelar Solicitação</button>
+                          <button type="submit" class="btn-cancel-req">Cancelar Solicitao</button>
                         </form>
                       {/if}
                     </div>
@@ -580,17 +580,17 @@
                   {:else if req.status === 'APPROVED'}
                     <div class="track-approved-msg">
                       <CheckCircle2 size={14} />
-                      <span>Parceria aprovada! Você foi nomeado líder. Recarregue a página para acessar seu painel.</span>
+                      <span>Parceria aprovada! Voc foi nomeado lder. Recarregue a pgina para acessar seu painel.</span>
                     </div>
                   {:else if req.status === 'CANCELLED'}
                     <div class="track-cancelled-msg">
                       <X size={14} />
-                      <span>Solicitação cancelada por você.</span>
+                      <span>Solicitao cancelada por voc.</span>
                     </div>
                   {:else}
                     <div class="track-pending-msg">
                       <Clock size={14} />
-                      <span>Sua solicitação está sendo revisada por nossa equipe editorial.</span>
+                      <span>Sua solicitao est sendo revisada por nossa equipe editorial.</span>
                     </div>
                   {/if}
                   <span class="track-date">Enviado em {new Date(req.createdAt).toLocaleDateString('pt-BR')}</span>
@@ -605,24 +605,24 @@
             <div class="perk-icon">
               <ShieldCheck size={22} />
             </div>
-            <h3>Atribuição Oficial Garantida</h3>
-            <p>Seu nome e logotipo aparecem no topo de cada capítulo e na página da obra com selo de verificação.</p>
+            <h3>Atribuio Oficial Garantida</h3>
+            <p>Seu nome e logotipo aparecem no topo de cada captulo e na pgina da obra com selo de verificao.</p>
           </div>
 
           <div class="perk-card">
             <div class="perk-icon">
               <MessageSquare size={22} />
             </div>
-            <h3>Tráfego Direto para seu Discord</h3>
-            <p>Botões de atalho integrados levam os leitores diretamente para o servidor ou site da sua scan.</p>
+            <h3>Trfego Direto para seu Discord</h3>
+            <p>Botes de atalho integrados levam os leitores diretamente para o servidor ou site da sua scan.</p>
           </div>
 
           <div class="perk-card">
             <div class="perk-icon">
               <Eye size={22} />
             </div>
-            <h3>Métricas Reais de Audiência</h3>
-            <p>Acompanhe em tempo real leituras totais, obras mais lidas e retenção de público com proteção anti-bots.</p>
+            <h3>Mtricas Reais de Audincia</h3>
+            <p>Acompanhe em tempo real leituras totais, obras mais lidas e reteno de pblico com proteo anti-bots.</p>
           </div>
 
           <div class="perk-card">
@@ -630,7 +630,7 @@
               <Settings size={22} />
             </div>
             <h3>Painel Dedicado e Equipe</h3>
-            <p>Gerencie membros da sua scan (Líder, Admins, Uploaders) e personalize a bio e redes do seu grupo.</p>
+            <p>Gerencie membros da sua scan (Lder, Admins, Uploaders) e personalize a bio e redes do seu grupo.</p>
           </div>
         </div>
 
@@ -640,21 +640,21 @@
             <Sparkles size={20} class="accent-icon" />
             <div>
               <h2>Solicitar Parceria Direta</h2>
-              <p>Envie os dados do seu grupo para cadastro e validação pela equipe Project Nox.</p>
+              <p>Envie os dados do seu grupo para cadastro e validao pela equipe Project Nox.</p>
             </div>
           </div>
 
           {#if showSuccess && form?.partnerRequested}
             <div class="success-banner">
               <CheckCircle2 size={16} />
-              <span>Solicitação enviada com sucesso! Nossa equipe analisará sua solicitação em breve.</span>
+              <span>Solicitao enviada com sucesso! Nossa equipe analisar sua solicitao em breve.</span>
             </div>
           {/if}
 
           {#if form?.message}
             <div class="error-banner">
               <AlertCircle size={16} />
-              <span>{form.message}</span>
+              <span>{(form as any).message}</span>
             </div>
           {/if}
 
@@ -678,14 +678,14 @@
                   name="scan_name"
                   type="text"
                   required
-                  placeholder="Ex: Hanami Scans, Moonlight Traduções"
+                  placeholder="Ex: Hanami Scans, Moonlight Tradues"
                   value={reqScanName}
                   oninput={(e) => handleReqNameChange((e.currentTarget as HTMLInputElement).value)}
                 />
               </div>
 
               <div class="form-field flex-1">
-                <label for="req-slug">Slug da Scan (URL única) *</label>
+                <label for="req-slug">Slug da Scan (URL nica) *</label>
                 <input
                   id="req-slug"
                   name="scan_slug"
@@ -703,12 +703,12 @@
             </div>
 
             <div class="form-field">
-              <label for="req-desc">Descrição / Apresentação do Grupo</label>
+              <label for="req-desc">Descrio / Apresentao do Grupo</label>
               <textarea
                 id="req-desc"
                 name="description"
                 rows={3}
-                placeholder="Conte um pouco sobre sua scan, gêneros favoritos, histórico de projetos..."
+                placeholder="Conte um pouco sobre sua scan, gneros favoritos, histrico de projetos..."
               ></textarea>
             </div>
 
@@ -746,7 +746,7 @@
             </div>
 
             <div class="form-field">
-              <label for="req-samples">Amostras de Tradução / Obras Lançadas</label>
+              <label for="req-samples">Amostras de Traduo / Obras Lanadas</label>
               <textarea
                 id="req-samples"
                 name="sample_links"
@@ -758,10 +758,10 @@
             <div class="form-actions-bar">
               <button type="submit" class="btn-submit-request" disabled={reqSubmitting}>
                 {#if reqSubmitting}
-                  <span>Enviando solicitação...</span>
+                  <span>Enviando solicitao...</span>
                 {:else}
                   <Send size={16} />
-                  <span>Enviar Solicitação de Parceria</span>
+                  <span>Enviar Solicitao de Parceria</span>
                 {/if}
               </button>
             </div>
@@ -769,8 +769,8 @@
         </div>
 
         <div class="cta-box">
-          <h2>Dúvidas antes de solicitar?</h2>
-          <p>Entre no nosso Discord oficial e converse diretamente com a moderação na aba <strong>#parcerias-scan</strong>.</p>
+          <h2>Dvidas antes de solicitar?</h2>
+          <p>Entre no nosso Discord oficial e converse diretamente com a moderao na aba <strong>#parcerias-scan</strong>.</p>
           <a href="https://discord.gg/projectnox" target="_blank" rel="noopener noreferrer" class="btn-discord-cta">
             <MessageSquare size={18} />
             <span>Falar no Discord Oficial</span>
@@ -794,7 +794,7 @@
           chapters={data.productionChapters}
           userPositions={data.userPositions || []}
           seenStages={data.seenStages || []}
-          currentUserId={data.userId}
+          currentUserId={data.userId || undefined}
           onSelectTab={handleSelectTab}
           unreadNotifications={(data.notifications || []).filter((n: any) => !n.isRead).length}
           unreadMessages={0}
@@ -810,7 +810,7 @@
             <button
               type="button"
               class="btn-hamburger"
-              aria-label="Abrir menu de navegação"
+              aria-label="Abrir menu de navegao"
               onclick={() => (sidebarMobileOpen = true)}
             >
               <Menu size={20} />
@@ -822,7 +822,7 @@
             <button
               type="button"
               class="btn-search-mobile"
-              aria-label="Busca rápida"
+              aria-label="Busca rpida"
               onclick={() => (showCommandPalette = true)}
             >
               <Search size={18} />
@@ -833,14 +833,14 @@
             <div class="emergency-banner-alert">
               <AlertTriangle size={20} class="text-rose-500" />
               <div class="banner-text">
-                <strong>MODO DE EMERGÊNCIA ATIVO NA SCAN</strong>
-                <p>{data.currentScan?.emergencyReason || 'Operações e envios congelados temporariamente pela administração.'}</p>
+                <strong>MODO DE EMERGNCIA ATIVO NA SCAN</strong>
+                <p>{data.currentScan?.emergencyReason || 'Operaes e envios congelados temporariamente pela administrao.'}</p>
               </div>
             </div>
           {:else if data.currentScan?.pauseUploads}
             <div class="pause-banner-alert">
               <PauseCircle size={18} class="text-amber-500" />
-              <span>Uploads de capítulos estão temporariamente pausados pela administração da scan.</span>
+              <span>Uploads de captulos esto temporariamente pausados pela administrao da scan.</span>
             </div>
           {/if}
 
@@ -856,8 +856,8 @@
                 chapterTimeline={data.chapterTimeline || []}
                 tasks={(data.tasks || []).filter((t: any) => t.chapterId === activeChId || t.chapterId === activeWorkspaceChapter.id || t.chapterId === activeWorkspaceChapter.targetChapterId || t.chapterNumber === (activeWorkspaceChapter.number || activeWorkspaceChapter.chapterNumber))}
                 team={team}
-                userProfile={{ id: data.userId }}
-                currentUserId={data.userId}
+                userProfile={{ id: data.userId || undefined }}
+                currentUserId={data.userId || undefined}
                 userRole={data.userRole}
                 scanId={data.currentScan.id}
                 qcIssues={(data.qcIssues || []).filter((q: any) => q.chapterId === activeChId || q.chapterId === activeWorkspaceChapter.id || q.chapterId === activeWorkspaceChapter.targetChapterId)}
@@ -866,7 +866,7 @@
             {:else if currentWorkspaceTab === 'home'}
               <ScanHome
                 currentScan={data.currentScan}
-                userProfile={{ id: data.userId }}
+                userProfile={{ id: data.userId || undefined }}
                 userRole={data.userRole}
                 tasks={data.tasks || []}
                 stages={data.stages || []}
@@ -882,7 +882,7 @@
             {:else if currentWorkspaceTab === 'mural'}
               <MuralTab
                 scanId={data.currentScan.id}
-                userProfile={{ id: data.userId }}
+                userProfile={{ id: data.userId || undefined }}
                 userRole={data.userRole}
                 muralPosts={data.muralPosts || []}
                 positions={positions}
@@ -901,7 +901,7 @@
                 team={team}
                 positions={positions}
                 works={works}
-                currentUserId={data.userId}
+                currentUserId={data.userId || undefined}
                 currentScanId={data.currentScan?.id || ''}
                 userRole={data.userRole}
                 isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -918,7 +918,7 @@
                 productionFiles={data.productionFiles || []}
                 tasks={data.tasks || []}
                 qcIssues={data.qcIssues || []}
-                currentUserId={data.userId}
+                currentUserId={data.userId || undefined}
                 userRole={data.userRole}
                 userPositions={data.userPositions || []}
                 seenStages={data.seenStages || []}
@@ -985,13 +985,13 @@
                             >
                               <option value="ACTIVE">Ativo</option>
                               <option value="PAUSED">Pausado</option>
-                              <option value="COMPLETED">Concluído</option>
+                              <option value="COMPLETED">Concludo</option>
                               <option value="ABANDONED">Abandonado</option>
                             </select>
                           </form>
                         {:else}
                           <span class="status-pill status-{(work.project_status || 'ACTIVE').toLowerCase()}">
-                            {work.project_status === 'ACTIVE' ? 'Ativo' : work.project_status === 'PAUSED' ? 'Pausado' : work.project_status === 'COMPLETED' ? 'Concluído' : 'Abandonado'}
+                            {work.project_status === 'ACTIVE' ? 'Ativo' : work.project_status === 'PAUSED' ? 'Pausado' : work.project_status === 'COMPLETED' ? 'Concludo' : 'Abandonado'}
                           </span>
                         {/if}
                         <a href="/obra/{work.slug}" class="work-arrow-link" title="Abrir Obra">
@@ -1002,12 +1002,12 @@
                   {/each}
                 </div>
               {:else}
-                <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
+                <p class="empty-text">Nenhuma obra atribuda a esta scan ainda.</p>
               {/if}
 
               {#if data.projectRequests && data.projectRequests.length > 0}
                 <div class="project-requests-block">
-                  <span class="sub-section-title">Solicitações de Obras ({data.projectRequests.length})</span>
+                  <span class="sub-section-title">Solicitaes de Obras ({data.projectRequests.length})</span>
                   <div class="proj-requests-list">
                     {#each data.projectRequests as req (req.id)}
                       <div class="proj-req-item status-{req.status.toLowerCase()}">
@@ -1018,8 +1018,8 @@
                         {/if}
                         <div class="proj-info">
                           <strong class="proj-title">{req.works?.title}</strong>
-                          {#if req.message}
-                            <span class="proj-msg">"{req.message}"</span>
+                          {#if (req as any).message}
+                            <span class="proj-msg">"{(req as any).message}"</span>
                           {/if}
                           {#if req.status === 'REJECTED' && req.rejectionReason}
                             <span class="proj-rejection-note">
@@ -1030,7 +1030,7 @@
                         </div>
                         <div class="proj-actions-cell">
                           <span class="status-pill status-{req.status.toLowerCase()}">
-                            {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
+                            {req.status === 'PENDING' ? 'Em Anlise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
                           </span>
                           {#if req.status === 'PENDING' && ['OWNER', 'ADMIN'].includes(data.userRole)}
                             <form method="POST" action="?/cancelProjectRequest" use:enhance>
@@ -1051,7 +1051,7 @@
             <section class="card-section">
               <div class="section-top">
                 <Layers size={18} />
-                <h2>Últimos Capítulos Registrados ({chapters.length})</h2>
+                <h2>ltimos Captulos Registrados ({chapters.length})</h2>
               </div>
 
               {#if chapters.length > 0}
@@ -1060,7 +1060,7 @@
                     <a href="/ler/{ch.id}" class="dash-ch-item">
                       <div class="ch-left">
                         <span class="ch-work">{ch.works?.title}</span>
-                        <span class="ch-num">Capítulo {ch.number}</span>
+                        <span class="ch-num">Captulo {ch.number}</span>
                       </div>
                       <div class="ch-right">
                         <span class="ch-views-count">
@@ -1073,7 +1073,7 @@
                   {/each}
                 </div>
               {:else}
-                <p class="empty-text">Nenhum capítulo lançado recentemente.</p>
+                <p class="empty-text">Nenhum captulo lanado recentemente.</p>
               {/if}
             </section>
           </div>
@@ -1122,7 +1122,7 @@
                   {/if}
                 </button>
               </div>
-              <span class="invite-hint-txt">Link de uso único válido até {createdInvite.expiresAt ? new Date(createdInvite.expiresAt).toLocaleString('pt-BR') : 'expirar'}.</span>
+              <span class="invite-hint-txt">Link de uso nico vlido at {createdInvite.expiresAt ? new Date(createdInvite.expiresAt).toLocaleString('pt-BR') : 'expirar'}.</span>
             </div>
           {/if}
 
@@ -1168,7 +1168,7 @@
 
           {#if data.transferRequests && data.transferRequests.some((t: any) => t.status === 'PENDING')}
             <div class="pending-transfers-block">
-              <span class="sub-section-title"><Crown size={14} class="inline mr-1" /> Transferência Pendente</span>
+              <span class="sub-section-title"><Crown size={14} class="inline mr-1" /> Transferncia Pendente</span>
               {#each data.transferRequests.filter((t: any) => t.status === 'PENDING') as tr (tr.id)}
                 <div class="pending-transfer-item">
                   <div class="transfer-to-info">
@@ -1199,7 +1199,7 @@
                     <div class="member-name-row">
                       <strong class="member-display">{member.displayName || member.username}</strong>
                       {#if member.role === 'OWNER'}
-                        <span class="role-pill is-owner" title="Dono e Líder da Scan">
+                        <span class="role-pill is-owner" title="Dono e Lder da Scan">
                           <Crown size={12} class="mr-1 inline text-amber" />
                           Dono
                         </span>
@@ -1233,7 +1233,7 @@
                         </span>
                       {/each}
                     {:else}
-                      <span class="pos-none-text">Nenhum cargo editorial atribuído</span>
+                      <span class="pos-none-text">Nenhum cargo editorial atribudo</span>
                     {/if}
                   </div>
                 </div>
@@ -1243,7 +1243,7 @@
                   <div class="vis-status-row">
                     <span class="vis-label">Visibilidade no Perfil:</span>
                     {#if member.hiddenByAdmin}
-                      <span class="badge-vis-status hidden-admin" title="Ocultado pela administração global">
+                      <span class="badge-vis-status hidden-admin" title="Ocultado pela administrao global">
                         Oculto por Admin Global
                       </span>
                     {:else if !member.isPublic}
@@ -1251,8 +1251,8 @@
                         Oculto na Equipe
                       </span>
                     {:else}
-                      <span class="badge-vis-status public" title="Visível publicamente no perfil e equipe">
-                        Público
+                      <span class="badge-vis-status public" title="Visvel publicamente no perfil e equipe">
+                        Pblico
                       </span>
                     {/if}
                   </div>
@@ -1265,7 +1265,7 @@
                       <button
                         type="submit"
                         class="btn-vis-toggle"
-                        title={member.isPublic ? 'Tornar oculto' : 'Tornar público'}
+                        title={member.isPublic ? 'Tornar oculto' : 'Tornar pblico'}
                       >
                         {member.isPublic ? 'Ocultar da Equipe' : 'Exibir na Equipe'}
                       </button>
@@ -1280,7 +1280,7 @@
                       type="button"
                       class="btn-action-manage-member"
                       onclick={() => openManageMemberModal(member)}
-                      title="Gerenciar função administrativa e cargos editoriais"
+                      title="Gerenciar funo administrativa e cargos editoriais"
                     >
                       <Sliders size={13} />
                       <span>Gerenciar</span>
@@ -1290,7 +1290,7 @@
                       <button
                         type="button"
                         class="btn-icon-member crown"
-                        title="Transferir Liderança da Scan"
+                        title="Transferir Liderana da Scan"
                         onclick={() => (transferTarget = member)}
                       >
                         <Crown size={14} />
@@ -1363,11 +1363,11 @@
                     {#if op.language}
                       <span class="op-spec-item">🌐 {op.language}</span>
                     {/if}
-                    <span class="op-spec-item">🎯 Nível: {op.experienceLevel}</span>
+                    <span class="op-spec-item">🎯 Nvel: {op.experienceLevel}</span>
                     {#if op.slots}
                       <span class="op-spec-item">👥 {op.slots} vaga{op.slots === 1 ? '' : 's'}</span>
                     {:else}
-                      <span class="op-spec-item">👥 Vagas contínuas</span>
+                      <span class="op-spec-item">👥 Vagas contnuas</span>
                     {/if}
                     {#if op.availability}
                       <span class="op-spec-item">⏳ {op.availability}</span>
@@ -1443,7 +1443,7 @@
                         method="POST"
                         action="?/deleteOpening"
                         use:enhance={({ cancel }) => {
-                          if (!confirm(`Tem certeza que deseja excluir a vaga "${op.title}"? Esta ação removerá a vaga permanentemente.`)) {
+                          if (!confirm(`Tem certeza que deseja excluir a vaga "${op.title}"? Esta ao remover a vaga permanentemente.`)) {
                             cancel();
                             return;
                           }
@@ -1469,7 +1469,7 @@
             <div class="empty-tab-state">
               <Briefcase size={36} />
               <h4>Nenhuma Vaga Aberta</h4>
-              <p>Sua scan ainda não publicou nenhuma vaga de recrutamento. Abra vagas para encontrar tradutores, revisores e typesetters.</p>
+              <p>Sua scan ainda no publicou nenhuma vaga de recrutamento. Abra vagas para encontrar tradutores, revisores e typesetters.</p>
               {#if ['OWNER', 'ADMIN'].includes(data.userRole)}
                 <button type="button" class="btn-primary mt-4" onclick={openCreateOpeningModal}>
                   <Plus size={15} />
@@ -1512,7 +1512,7 @@
                 class:active={appFilter === 'UNDER_REVIEW'}
                 onclick={() => (appFilter = 'UNDER_REVIEW')}
               >
-                Em Análise
+                Em Anlise
               </button>
               <button
                 type="button"
@@ -1557,7 +1557,7 @@
                     <div class="app-status-badge-wrap">
                       <span class="app-pos-tag">{app.scan_positions?.name || 'Cargo'}</span>
                       <span class="status-pill status-{app.status.toLowerCase()}">
-                        {app.status === 'PENDING' ? 'Pendente' : app.status === 'UNDER_REVIEW' ? 'Em Análise' : app.status === 'APPROVED' ? 'Aprovado' : 'Recusado'}
+                        {app.status === 'PENDING' ? 'Pendente' : app.status === 'UNDER_REVIEW' ? 'Em Anlise' : app.status === 'APPROVED' ? 'Aprovado' : 'Recusado'}
                       </span>
                     </div>
                   </div>
@@ -1569,14 +1569,14 @@
                   <div class="app-card-body">
                     {#if app.presentation}
                       <div class="app-field-item">
-                        <span class="app-field-label">Apresentação:</span>
+                        <span class="app-field-label">Apresentao:</span>
                         <p class="app-field-val">{app.presentation}</p>
                       </div>
                     {/if}
 
                     {#if app.experience}
                       <div class="app-field-item">
-                        <span class="app-field-label">Experiência:</span>
+                        <span class="app-field-label">Experincia:</span>
                         <p class="app-field-val">{app.experience}</p>
                       </div>
                     {/if}
@@ -1604,14 +1604,14 @@
                           class="portfolio-link-btn"
                         >
                           <ExternalLink size={13} />
-                          <span>Ver Portfólio / Amostra de Trabalho ↗</span>
+                          <span>Ver Portflio / Amostra de Trabalho ↗</span>
                         </a>
                       </div>
                     {/if}
 
                     {#if appAnswers.length > 0}
                       <div class="app-qa-answers-box">
-                        <strong class="app-qa-title">Respostas ao Questionário da Vaga:</strong>
+                        <strong class="app-qa-title">Respostas ao Questionrio da Vaga:</strong>
                         <div class="app-qa-list">
                           {#each appAnswers as ans}
                             <div class="app-qa-entry">
@@ -1625,7 +1625,7 @@
 
                     {#if app.internalNotes}
                       <div class="app-internal-notes-box">
-                        <strong>Anotação da Avaliação:</strong>
+                        <strong>Anotao da Avaliao:</strong>
                         <p>{app.internalNotes}</p>
                       </div>
                     {/if}
@@ -1639,7 +1639,7 @@
                         onclick={() => openReviewModal(app)}
                       >
                         <UserCheck size={14} />
-                        <span>{app.status === 'PENDING' ? 'Avaliar Candidatura' : 'Alterar Avaliação'}</span>
+                        <span>{app.status === 'PENDING' ? 'Avaliar Candidatura' : 'Alterar Avaliao'}</span>
                       </button>
                     </div>
                   {/if}
@@ -1650,7 +1650,7 @@
             <div class="empty-tab-state">
               <FileText size={36} />
               <h4>Nenhuma Candidatura Encontrada</h4>
-              <p>Não há nenhuma candidatura nesta categoria no momento.</p>
+              <p>No h nenhuma candidatura nesta categoria no momento.</p>
             </div>
           {/if}
         </section>
@@ -1674,9 +1674,9 @@
           <div class="callout-info-box">
             <ShieldCheck size={20} class="text-purple flex-shrink-0" />
             <div>
-              <strong>Cargos Editoriais vs Permissões do Sistema</strong>
+              <strong>Cargos Editoriais vs Permisses do Sistema</strong>
               <p>
-                Os cargos editoriais (ex: <em>Tradutor</em>, <em>Clean/Redraw</em>, <em>Typer</em>, <em>Revisor (QC)</em>) definem as funções públicas dos membros e são exibidos nos perfis dos usuários como "Tradutor {settingsPreposition} {data.currentScan?.name}" e nos créditos das obras. A permissão técnica de acesso (Líder, Admin, Uploader, Staff) é gerenciada separadamente na aba <strong>Equipe</strong>.
+                Os cargos editoriais (ex: <em>Tradutor</em>, <em>Clean/Redraw</em>, <em>Typer</em>, <em>Revisor (QC)</em>) definem as funes pblicas dos membros e so exibidos nos perfis dos usurios como "Tradutor {settingsPreposition} {data.currentScan?.name}" e nos crditos das obras. A permisso tcnica de acesso (Lder, Admin, Uploader, Staff)  gerenciada separadamente na aba <strong>Equipe</strong>.
               </p>
             </div>
           </div>
@@ -1689,7 +1689,7 @@
                   <div class="pos-card-title-group">
                     <span class="pos-name-tag">{pos.name}</span>
                     <span class="pos-preset-pill">
-                      {pos.is_preset ? 'Padrão Nox' : 'Personalizado'}
+                      {pos.is_preset ? 'Padro Nox' : 'Personalizado'}
                     </span>
                   </div>
                   {#if ['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -1711,7 +1711,7 @@
                 <div class="pos-card-footer">
                   <span class="pos-members-count">
                     <Users size={12} />
-                    <span>{membersInPos} membro{membersInPos === 1 ? '' : 's'} atribuído{membersInPos === 1 ? '' : 's'}</span>
+                    <span>{membersInPos} membro{membersInPos === 1 ? '' : 's'} atribudo{membersInPos === 1 ? '' : 's'}</span>
                   </span>
                 </div>
               </div>
@@ -1727,14 +1727,14 @@
               <MessageSquare size={18} />
               <h2>Mural da Staff ({staffNotes.length})</h2>
             </div>
-            <span class="staff-isolation-pill" title="Isolamento estrito: visível apenas para membros desta scan e administradores globais">
+            <span class="staff-isolation-pill" title="Isolamento estrito: visvel apenas para membros desta scan e administradores globais">
               <ShieldCheck size={13} />
               <span>Canal Interno Privado</span>
             </span>
           </div>
 
           <p class="section-sub-desc">
-            Área de alinhamento e notas internas exclusivas para a equipe de <strong>{data.currentScan?.name}</strong>. Compartilhe orientações de tradução, avisos de capítulos, links de RAWs e recados internos.
+            rea de alinhamento e notas internas exclusivas para a equipe de <strong>{data.currentScan?.name}</strong>. Compartilhe orientaes de traduo, avisos de captulos, links de RAWs e recados internos.
           </p>
 
           <!-- Composer Card -->
@@ -1776,7 +1776,7 @@
                   <span>Fixar aviso no topo do mural</span>
                 </label>
               {:else}
-                <span class="composer-note-hint">Visível apenas para a staff de {data.currentScan?.name}</span>
+                <span class="composer-note-hint">Visvel apenas para a staff de {data.currentScan?.name}</span>
               {/if}
 
               <button
@@ -1849,17 +1849,17 @@
             <div class="empty-state-card">
               <MessageSquare size={36} />
               <h3>Nenhuma nota no mural</h3>
-              <p>O mural está limpo! Use o formulário acima para compartilhar avisos, prazos ou recados com os colegas de equipe.</p>
+              <p>O mural est limpo! Use o formulrio acima para compartilhar avisos, prazos ou recados com os colegas de equipe.</p>
             </div>
           {/if}
         </section>
 
-      <!-- TAB PANE: HISTÓRICO DE ATIVIDADE -->
+      <!-- TAB PANE: HISTRICO DE ATIVIDADE -->
       {:else if currentWorkspaceTab === 'activity' || activeDashTab === 'activity'}
         <section class="card-section">
           <div class="section-top">
             <Activity size={18} />
-            <h2>Histórico de Atividade & Auditoria ({activity.length})</h2>
+            <h2>Histrico de Atividade & Auditoria ({activity.length})</h2>
           </div>
 
           {#if activity.length > 0}
@@ -1910,30 +1910,30 @@
             <div class="empty-tab-state">
               <Activity size={36} />
               <h4>Nenhuma Atividade Registrada</h4>
-              <p>As ações da equipe, aberturas de vagas e candidaturas serão registradas aqui em tempo real.</p>
+              <p>As aes da equipe, aberturas de vagas e candidaturas sero registradas aqui em tempo real.</p>
             </div>
           {/if}
         </section>
 
-      <!-- TAB PANE: CONFIGURAÇÕES -->
+      <!-- TAB PANE: CONFIGURAES -->
       {:else if (currentWorkspaceTab === 'settings' || currentWorkspaceTab === 'canais_config' || activeDashTab === 'settings') && ['OWNER', 'ADMIN'].includes(data.userRole)}
         <section class="card-section">
           <div class="section-top">
             <Settings size={18} />
-            <h2>Configurações da Scan</h2>
+            <h2>Configuraes da Scan</h2>
           </div>
 
           {#if showSuccess}
             <div class="success-banner">
               <CheckCircle2 size={16} />
-              <span>Configurações salvas com sucesso!</span>
+              <span>Configuraes salvas com sucesso!</span>
             </div>
           {/if}
 
           {#if form?.message}
             <div class="error-banner">
               <AlertCircle size={16} />
-              <span>{form.message}</span>
+              <span>{(form as any).message}</span>
             </div>
           {/if}
 
@@ -1952,19 +1952,19 @@
             <input type="hidden" name="scan_id" value={data.currentScan.id} />
 
             <div class="form-field">
-              <label for="desc">Descrição / Bio da Scan:</label>
+              <label for="desc">Descrio / Bio da Scan:</label>
               <textarea
                 id="desc"
                 name="description"
                 rows="4"
                 maxlength="2000"
-                placeholder="Apresente sua scan para os leitores, gêneros preferidos, história do grupo..."
+                placeholder="Apresente sua scan para os leitores, gneros preferidos, histria do grupo..."
               >{data.currentScan.description || ''}</textarea>
             </div>
 
             <!-- Display Preposition with Live Preview -->
             <div class="form-field">
-              <label for="prep">Preposição Gramatical para Títulos e Perfis:</label>
+              <label for="prep">Preposio Gramatical para Ttulos e Perfis:</label>
               <select
                 id="prep"
                 name="display_preposition"
@@ -1976,7 +1976,7 @@
                 <option value="do">do — Ex: Tradutor do {data.currentScan.name}</option>
               </select>
               <div class="prep-live-preview">
-                <span>Prévia no Perfil dos Membros:</span>
+                <span>Prvia no Perfil dos Membros:</span>
                 <strong>Tradutor {settingsPreposition} {data.currentScan.name}</strong>
               </div>
             </div>
@@ -2006,7 +2006,7 @@
             </div>
 
             <button type="submit" class="btn-save" disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar Alterações'}
+              {saving ? 'Salvando...' : 'Salvar Alteraes'}
             </button>
           </form>
 
@@ -2017,7 +2017,7 @@
             team={data.team}
             works={data.works}
             chapters={data.chapters}
-            currentUserId={data.userId}
+            currentUserId={data.userId || undefined}
             userRole={data.userRole}
             isOwner={data.userRole === 'OWNER'}
             isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -2052,7 +2052,7 @@
           team={team}
           positions={positions}
           works={works}
-          currentUserId={data.userId}
+          currentUserId={data.userId || undefined}
           currentScanId={data.currentScan?.id || ''}
           userRole={data.userRole}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -2060,7 +2060,7 @@
           initialView="ALL"
         />
 
-      <!-- TAB PANE: CALENDÁRIO -->
+      <!-- TAB PANE: CALENDRIO -->
       {:else if currentWorkspaceTab === 'calendario' || activeDashTab === 'calendar'}
         <CalendarTab
           tasks={data.tasks}
@@ -2076,7 +2076,7 @@
           scanId={data.currentScan?.id}
         />
 
-      <!-- TAB PANE: GLOSSÁRIO -->
+      <!-- TAB PANE: GLOSSRIO -->
       {:else if currentWorkspaceTab === 'glossario' || activeDashTab === 'glossary'}
         <GlossaryTab
           glossary={data.glossary}
@@ -2086,7 +2086,7 @@
           isUploader={data.userRole === 'UPLOADER'}
         />
 
-      <!-- TAB PANE: REFERÊNCIAS -->
+      <!-- TAB PANE: REFERNCIAS -->
       {:else if currentWorkspaceTab === 'referencias' || activeDashTab === 'references'}
         <ReferencesTab
           references={data.references}
@@ -2108,11 +2108,11 @@
       {:else if currentWorkspaceTab === 'chat' || activeDashTab === 'chat'}
         <ChatTab
           channels={data.channels || []}
-          messages={data.messages || []}
+          messages={(data as any).messages || []}
           team={team}
           positions={positions}
           channelReadStates={data.channelReadStates || []}
-          currentUserId={data.userId}
+          currentUserId={data.userId || undefined}
           currentScanId={data.currentScan?.id}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
           userRole={data.userRole}
@@ -2126,7 +2126,7 @@
           tasks={data.tasks || []}
           applications={applications}
           qcIssues={data.qcIssues || []}
-          currentUserId={data.userId}
+          currentUserId={data.userId || undefined}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
         />
 
@@ -2137,7 +2137,7 @@
           chapters={chapters}
           works={works}
           team={team}
-          currentUserId={data.userId}
+          currentUserId={data.userId || undefined}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
         />
 
@@ -2146,8 +2146,8 @@
         <WorkloadTab
           team={team}
           tasks={data.tasks || []}
-          memberPositions={data.memberPositions || []}
-          currentUserId={data.userId}
+          memberPositions={data.userPositions || []}
+          currentUserId={data.userId || undefined}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
         />
 
@@ -2182,7 +2182,7 @@
         wikiPages={data.wikiPages || []}
         channels={data.channels || []}
         team={team}
-        onSelect={(type, id) => {
+        onSelect={(type: any, id: any) => {
           if (type === 'OPEN_PALETTE') {
             showCommandPalette = true;
           } else if (type === 'action') {
@@ -2263,7 +2263,7 @@
     <div class="modal-backdrop" onclick={() => (showProjectModal = false)}>
       <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title">Solicitar Obra do Catálogo</h2>
+          <h2 class="modal-title">Solicitar Obra do Catlogo</h2>
           <button class="btn-close-modal" onclick={() => (showProjectModal = false)}><X size={18} /></button>
         </div>
         <form
@@ -2296,7 +2296,7 @@
               name="message"
               rows={3}
               bind:value={projectMessage}
-              placeholder="Ex: Nossa equipe já traduz essa obra há 2 anos e gostaríamos de vincular nossos lançamentos..."
+              placeholder="Ex: Nossa equipe j traduz essa obra h 2 anos e gostaramos de vincular nossos lanamentos..."
               class="form-textarea"
             ></textarea>
           </div>
@@ -2304,7 +2304,7 @@
             <button type="button" class="btn-secondary" onclick={() => (showProjectModal = false)}>Cancelar</button>
             <button type="submit" class="btn-primary" disabled={projectSubmitting || !selectedWorkId}>
               <Send size={15} />
-              <span>{projectSubmitting ? 'Enviando...' : 'Enviar Solicitação'}</span>
+              <span>{projectSubmitting ? 'Enviando...' : 'Enviar Solicitao'}</span>
             </button>
           </div>
         </form>
@@ -2316,7 +2316,7 @@
     <div class="modal-backdrop" onclick={() => (transferTarget = null)}>
       <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2 class="modal-title">Transferir Liderança</h2>
+          <h2 class="modal-title">Transferir Liderana</h2>
           <button class="btn-close-modal" onclick={() => (transferTarget = null)}><X size={18} /></button>
         </div>
         <form
@@ -2337,11 +2337,11 @@
           <div class="warning-alert-box">
             <AlertTriangle size={24} class="warning-alert-icon" />
             <div>
-              <strong>Atenção: Confirmação em duas etapas</strong>
+              <strong>Ateno: Confirmao em duas etapas</strong>
               <p>
-                Você está prestes a propor a transferência de liderança da scan <strong>{data.currentScan?.name}</strong> para
+                Voc est prestes a propor a transferncia de liderana da scan <strong>{data.currentScan?.name}</strong> para
                 <strong>{transferTarget.displayName || transferTarget.username}</strong> (@{transferTarget.username}).
-                O membro receberá um alerta e precisará aceitar a transferência para se tornar o novo Dono.
+                O membro receber um alerta e precisar aceitar a transferncia para se tornar o novo Dono.
               </p>
             </div>
           </div>
@@ -2349,7 +2349,7 @@
             <button type="button" class="btn-secondary" onclick={() => (transferTarget = null)}>Cancelar</button>
             <button type="submit" class="btn-primary" disabled={transferSubmitting}>
               <Crown size={15} />
-              <span>{transferSubmitting ? 'Enviando Proposta...' : 'Enviar Proposta de Transferência'}</span>
+              <span>{transferSubmitting ? 'Enviando Proposta...' : 'Enviar Proposta de Transferncia'}</span>
             </button>
           </div>
         </form>
@@ -2388,8 +2388,8 @@
                 Tem certeza que deseja remover <strong>{removeTarget.displayName || removeTarget.username}</strong> (@{removeTarget.username}) desta Scan?
               </p>
               <p class="mt-2 text-xs text-slate-400">
-                • A conta global do usuário, histórico e créditos permanecem 100% preservados.<br/>
-                • Quaisquer tarefas ativas atribuídas a ele retornarão automaticamente para a fila da Scan como <strong>Disponível</strong>, para que outro membro possa continuá-las sem perda de progresso.
+                • A conta global do usurio, histrico e crditos permanecem 100% preservados.<br/>
+                • Quaisquer tarefas ativas atribudas a ele retornaro automaticamente para a fila da Scan como <strong>Disponvel</strong>, para que outro membro possa continu-las sem perda de progresso.
               </p>
             </div>
           </div>
@@ -2397,7 +2397,7 @@
             <button type="button" class="btn-secondary" onclick={() => (removeTarget = null)}>Cancelar</button>
             <button type="submit" class="btn-danger-action" disabled={removeSubmitting}>
               <UserMinus size={15} />
-              <span>{removeSubmitting ? 'Removendo...' : 'Confirmar Remoção'}</span>
+              <span>{removeSubmitting ? 'Removendo...' : 'Confirmar Remoo'}</span>
             </button>
           </div>
         </form>
@@ -2440,36 +2440,36 @@
           </div>
 
           <div class="form-field">
-            <label for="op-title">Título da Vaga (opcional):</label>
+            <label for="op-title">Ttulo da Vaga (opcional):</label>
             <input
               id="op-title"
               name="title"
               type="text"
               bind:value={openingTitle}
-              placeholder="Ex: Tradutor Japonês/Inglês -> PT-BR"
+              placeholder="Ex: Tradutor Japons/Ingls -> PT-BR"
             />
           </div>
 
           <div class="form-row">
             <div class="form-field flex-1">
-              <label for="op-exp">Nível de Experiência:</label>
+              <label for="op-exp">Nvel de Experincia:</label>
               <select id="op-exp" name="experience_level" bind:value={openingExpLevel} class="form-select">
-                <option value="QUALQUER">Qualquer Nível</option>
+                <option value="QUALQUER">Qualquer Nvel</option>
                 <option value="INICIANTE">Iniciante (Treinamos)</option>
-                <option value="INTERMEDIARIO">Intermediário</option>
-                <option value="AVANCADO">Avançado / Veterano</option>
+                <option value="INTERMEDIARIO">Intermedirio</option>
+                <option value="AVANCADO">Avanado / Veterano</option>
               </select>
             </div>
 
             <div class="form-field flex-1">
-              <label for="op-slots">Número de Vagas:</label>
+              <label for="op-slots">Nmero de Vagas:</label>
               <input
                 id="op-slots"
                 name="slots"
                 type="number"
                 min="1"
                 bind:value={openingSlots}
-                placeholder="Ex: 2 (deixe vazio para contínuas)"
+                placeholder="Ex: 2 (deixe vazio para contnuas)"
               />
             </div>
           </div>
@@ -2482,7 +2482,7 @@
                 name="availability"
                 type="text"
                 bind:value={openingAvail}
-                placeholder="Ex: 2 a 3 capítulos por semana"
+                placeholder="Ex: 2 a 3 captulos por semana"
               />
             </div>
 
@@ -2497,19 +2497,19 @@
           </div>
 
           <div class="form-field">
-            <label for="op-reqs">Requisitos Mínimos & Ferramentas:</label>
+            <label for="op-reqs">Requisitos Mnimos & Ferramentas:</label>
             <textarea
               id="op-reqs"
               name="requirements"
               rows={3}
               bind:value={openingReqs}
-              placeholder="Ex: Domínio de gramática PT-BR, noções básicas de Photoshop, pontualidade..."
+              placeholder="Ex: Domnio de gramtica PT-BR, noes bsicas de Photoshop, pontualidade..."
               class="form-textarea"
             ></textarea>
           </div>
 
           <div class="form-field">
-            <label for="op-desc">Descrição / Atividades:</label>
+            <label for="op-desc">Descrio / Atividades:</label>
             <textarea
               id="op-desc"
               name="description"
@@ -2562,14 +2562,14 @@
         <div class="review-app-body">
           {#if reviewingApp.presentation}
             <div class="review-info-item">
-              <span class="item-label">Apresentação:</span>
+              <span class="item-label">Apresentao:</span>
               <p>{reviewingApp.presentation}</p>
             </div>
           {/if}
 
           {#if reviewingApp.experience}
             <div class="review-info-item">
-              <span class="item-label">Experiência:</span>
+              <span class="item-label">Experincia:</span>
               <p>{reviewingApp.experience}</p>
             </div>
           {/if}
@@ -2597,14 +2597,14 @@
                 class="portfolio-link-btn"
               >
                 <ExternalLink size={13} />
-                <span>Abrir Link do Portfólio / Teste ↗</span>
+                <span>Abrir Link do Portflio / Teste ↗</span>
               </a>
             </div>
           {/if}
 
           {#if appAnswers.length > 0}
             <div class="review-info-item">
-              <span class="item-label">Respostas ao Questionário da Vaga:</span>
+              <span class="item-label">Respostas ao Questionrio da Vaga:</span>
               <div class="review-qa-list">
                 {#each appAnswers as ans}
                   <div class="review-qa-entry">
@@ -2633,7 +2633,7 @@
           <input type="hidden" name="application_id" value={reviewingApp.id} />
 
           <div class="form-field">
-            <label for="rev-action">Decisão da Avaliação *:</label>
+            <label for="rev-action">Deciso da Avaliao *:</label>
             <div class="decision-radios">
               <label class="decision-radio-label approve" class:active={reviewAction === 'APPROVE'}>
                 <input type="radio" name="action" value="APPROVE" bind:group={reviewAction} />
@@ -2641,7 +2641,7 @@
               </label>
               <label class="decision-radio-label under-review" class:active={reviewAction === 'UNDER_REVIEW'}>
                 <input type="radio" name="action" value="UNDER_REVIEW" bind:group={reviewAction} />
-                <span>⌛ Em Análise / Teste</span>
+                <span>⌛ Em Anlise / Teste</span>
               </label>
               <label class="decision-radio-label reject" class:active={reviewAction === 'REJECT'}>
                 <input type="radio" name="action" value="REJECT" bind:group={reviewAction} />
@@ -2655,17 +2655,17 @@
               <label class="checkbox-container">
                 <input type="checkbox" name="add_to_team" value="true" bind:checked={reviewAddToTeam} />
                 <span class="checkbox-label">
-                  Adicionar automaticamente à equipe da scan com o cargo <strong>{reviewingApp.scan_positions?.name}</strong>
+                  Adicionar automaticamente  equipe da scan com o cargo <strong>{reviewingApp.scan_positions?.name}</strong>
                 </span>
               </label>
 
               {#if reviewAddToTeam}
                 <div class="form-field mt-2">
-                  <label for="rev-role">Nível de Acesso Técnico:</label>
+                  <label for="rev-role">Nvel de Acesso Tcnico:</label>
                   <select id="rev-role" name="initial_role" bind:value={reviewInitialRole} class="form-select">
-                    <option value="MEMBER">Staff (Padrão editorial)</option>
-                    <option value="UPLOADER">Uploader (Permissão para postar capítulos)</option>
-                    <option value="ADMIN">Admin da Scan (Gestão de membros e vagas)</option>
+                    <option value="MEMBER">Staff (Padro editorial)</option>
+                    <option value="UPLOADER">Uploader (Permisso para postar captulos)</option>
+                    <option value="ADMIN">Admin da Scan (Gesto de membros e vagas)</option>
                   </select>
                 </div>
               {/if}
@@ -2673,13 +2673,13 @@
           {/if}
 
           <div class="form-field">
-            <label for="rev-notes">Feedback / Anotação Interna:</label>
+            <label for="rev-notes">Feedback / Anotao Interna:</label>
             <textarea
               id="rev-notes"
               name="notes"
               rows={2}
               bind:value={reviewNotes}
-              placeholder="Ex: Aprovado no teste de edição. Contato realizado pelo Discord..."
+              placeholder="Ex: Aprovado no teste de edio. Contato realizado pelo Discord..."
               class="form-textarea"
             ></textarea>
           </div>
@@ -2688,7 +2688,7 @@
             <button type="button" class="btn-secondary" onclick={() => (reviewingApp = null)}>Cancelar</button>
             <button type="submit" class="btn-primary" disabled={reviewSubmitting}>
               <UserCheck size={15} />
-              <span>{reviewSubmitting ? 'Salvando...' : 'Confirmar Avaliação'}</span>
+              <span>{reviewSubmitting ? 'Salvando...' : 'Confirmar Avaliao'}</span>
             </button>
           </div>
         </form>
@@ -2734,7 +2734,7 @@
           </div>
 
           <div class="form-field">
-            <label for="pos-desc">Descrição das Funções:</label>
+            <label for="pos-desc">Descrio das Funes:</label>
             <textarea
               id="pos-desc"
               name="description"
@@ -2746,7 +2746,7 @@
           </div>
 
           <div class="form-field">
-            <label for="pos-order">Ordem de Exibição:</label>
+            <label for="pos-order">Ordem de Exibio:</label>
             <input
               id="pos-order"
               name="display_order"
@@ -2759,7 +2759,7 @@
             <button type="button" class="btn-secondary" onclick={() => (showPositionModal = false)}>Cancelar</button>
             <button type="submit" class="btn-primary" disabled={positionSubmitting || !posName}>
               <Plus size={15} />
-              <span>{positionSubmitting ? 'Salvando...' : (editingPosition ? 'Salvar Alterações' : 'Criar Cargo')}</span>
+              <span>{positionSubmitting ? 'Salvando...' : (editingPosition ? 'Salvar Alteraes' : 'Criar Cargo')}</span>
             </button>
           </div>
         </form>
@@ -2797,7 +2797,7 @@
                 manageMemberError = result.data?.message || 'Erro ao atualizar membro.';
               } else if (result.type === 'success') {
                 if (result.data?.requiresConfirmation) {
-                  manageMemberWarning = result.data.warning;
+                  manageMemberWarning = (result.data as any)?.warning;
                 } else {
                   editingMember = null;
                   await update();
@@ -2826,32 +2826,32 @@
             <div class="modal-alert-warning">
               <AlertTriangle size={18} class="text-amber-400" />
               <div>
-                <strong>Atenção: Último Gerente da Scan</strong>
+                <strong>Ateno: ltimo Gerente da Scan</strong>
                 <p>{manageMemberWarning}</p>
-                <p class="text-xs text-amber-300/80 mt-1">Clique em "Salvar Alterações" novamente para confirmar o rebaixamento.</p>
+                <p class="text-xs text-amber-300/80 mt-1">Clique em "Salvar Alteraes" novamente para confirmar o rebaixamento.</p>
               </div>
             </div>
           {/if}
 
-          <!-- SECTION 1: FUNÇÃO ADMINISTRATIVA -->
+          <!-- SECTION 1: FUNO ADMINISTRATIVA -->
           <div class="manage-section">
             <div class="section-label-row">
               <span class="section-num-tag">1</span>
               <div>
-                <h3 class="manage-section-heading">Função na Scan (Nível Administrativo)</h3>
-                <p class="manage-section-hint">Define os privilégios operacionais e administrativos da pessoa dentro da Scan.</p>
+                <h3 class="manage-section-heading">Funo na Scan (Nvel Administrativo)</h3>
+                <p class="manage-section-hint">Define os privilgios operacionais e administrativos da pessoa dentro da Scan.</p>
               </div>
             </div>
 
-            {#if editingMember.role === 'OWNER' || editingMember.id === data.currentScan?.owner_id}
+            {#if editingMember.role === 'OWNER' || editingMember.id === data.currentScan?.ownerId}
               <div class="func-status-card owner-mode">
                 <div class="func-status-icon">👑</div>
                 <div class="func-status-details">
                   <div class="func-status-title-row">
                     <strong>Dono</strong>
-                    <span class="badge-role-fixed">Líder Supremo</span>
+                    <span class="badge-role-fixed">Lder Supremo</span>
                   </div>
-                  <p>Criador e líder supremo da Scan. Possui autoridade máxima, permissões totais e bypass administrativo permanente. Esta função é exclusiva e imutável.</p>
+                  <p>Criador e lder supremo da Scan. Possui autoridade mxima, permisses totais e bypass administrativo permanente. Esta funo  exclusiva e imutvel.</p>
                 </div>
               </div>
             {:else if data.userRole === 'OWNER'}
@@ -2889,7 +2889,7 @@
                       <strong class="choice-title">Gerente</strong>
                       {#if editingRole === 'ADMIN'}<Check size={14} class="choice-check" />{/if}
                     </div>
-                    <p class="choice-desc">Acesso administrativo. Gerencia equipe, recrutamento, distribuição de tarefas, intervenções e aprovação de capítulos.</p>
+                    <p class="choice-desc">Acesso administrativo. Gerencia equipe, recrutamento, distribuio de tarefas, intervenes e aprovao de captulos.</p>
                   </div>
                 </label>
               </div>
@@ -2902,9 +2902,9 @@
                 <div class="func-status-details">
                   <div class="func-status-title-row">
                     <strong>{editingMember.role === 'ADMIN' ? 'Gerente' : 'Staff'}</strong>
-                    <span class="badge-role-readonly">Função Atual</span>
+                    <span class="badge-role-readonly">Funo Atual</span>
                   </div>
-                  <p>Apenas o Dono da Scan possui autorização para promover membros a Gerente ou rebaixá-los para Staff.</p>
+                  <p>Apenas o Dono da Scan possui autorizao para promover membros a Gerente ou rebaix-los para Staff.</p>
                 </div>
               </div>
             {/if}
@@ -2916,7 +2916,7 @@
               <span class="section-num-tag">2</span>
               <div>
                 <h3 class="manage-section-heading">Cargos Editoriais (Trabalhos no Pipeline)</h3>
-                <p class="manage-section-hint">Selecione quais trabalhos este membro pode assumir no pipeline da Scan. As permissões se somam:</p>
+                <p class="manage-section-hint">Selecione quais trabalhos este membro pode assumir no pipeline da Scan. As permisses se somam:</p>
               </div>
             </div>
 
@@ -2982,7 +2982,7 @@
                   <span>Salvando...</span>
                 {:else}
                   <Check size={15} />
-                  <span>Salvar Alterações</span>
+                  <span>Salvar Alteraes</span>
                 {/if}
               </button>
             </div>

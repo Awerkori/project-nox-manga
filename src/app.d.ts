@@ -9,6 +9,7 @@ declare global {
       profile: any | null;
       userScans: any[];
       unread: number;
+      sessionCache?: any;
     }
     // interface Error {}
     // interface PageData {}

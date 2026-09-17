@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       throw redirect(301, `/scans/${hist.slug}/painel`);
     }
 
-    throw error(404, 'Scan não encontrada');
+    throw error(404, 'Scan no encontrada');
   }
 
   // Check authorization
@@ -39,7 +39,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     );
 
     if (!membership) {
-      throw error(403, `Você não possui permissão para acessar o painel de ${scan.name}.`);
+      throw error(403, `Voc no possui permisso para acessar o painel de ${scan.name}.`);
     }
   }
 

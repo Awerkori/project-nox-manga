@@ -5,24 +5,24 @@ import { eq, and, gte, inArray, count } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) {
-    throw error(401, 'Autenticação necessária para enviar uma denúncia.');
+    throw error(401, 'Autenticao necessria para enviar uma denncia.');
   }
 
   const body = await request.json();
   const { targetType, workId, chapterId, commentId, targetUserId, reason, details } = body;
 
   if (!targetType || !['WORK', 'CHAPTER', 'USER', 'COMMENT'].includes(targetType)) {
-    throw error(400, 'Tipo de denúncia inválido.');
+    throw error(400, 'Tipo de denncia invlido.');
   }
 
   const cleanReason = (reason || '').trim();
   if (cleanReason.length < 2 || cleanReason.length > 200) {
-    throw error(400, 'Motivo da denúncia deve ter entre 2 e 200 caracteres.');
+    throw error(400, 'Motivo da denncia deve ter entre 2 e 200 caracteres.');
   }
 
   const cleanDetails = (details || '').trim();
   if (cleanDetails.length > 2000) {
-    throw error(400, 'Detalhes não podem exceder 2000 caracteres.');
+    throw error(400, 'Detalhes no podem exceder 2000 caracteres.');
   }
 
   // Rate limit / cooldown: max 6 reports in 10 minutes per user
@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   );
 
   if ((countData?.[0]?.value || 0) >= 6) {
-    throw error(429, 'Limite de denúncias atingido. Aguarde alguns minutos antes de enviar outro reporte.');
+    throw error(429, 'Limite de denncias atingido. Aguarde alguns minutos antes de enviar outro reporte.');
   }
 
   // Anti-spam check: check if a pending report already exists from this user for this target
@@ -64,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({
       ok: true,
       alreadyReported: true,
-      message: 'Você já possui uma denúncia em análise para este item.'
+      message: 'Voc j possui uma denncia em anlise para este item.'
     });
   }
 
@@ -91,12 +91,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   );
 
   if (insertError) {
-    throw error(500, 'Erro ao registrar denúncia: ' + insertError.message);
+    throw error(500, 'Erro ao registrar denncia: ' + (insertError as any).message);
   }
 
   return json({
     ok: true,
-    reportId: inserted.id,
-    message: 'Denúncia recebida pela equipe editorial com sucesso.'
+    reportId: inserted?.id,
+    message: 'Denncia recebida pela equipe editorial com sucesso.'
   });
 };

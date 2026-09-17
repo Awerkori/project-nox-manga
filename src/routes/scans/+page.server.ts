@@ -103,7 +103,7 @@ export const load = async ({ locals }) => {
 
   return {
     scans: [],
-    loadError: scansResult.isDegraded,
+    loadError: !!scansResult.error,
     isStale: false
   };
 };

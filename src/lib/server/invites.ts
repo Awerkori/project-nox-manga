@@ -1,4 +1,5 @@
-import { db, schema, eq } from '$lib/server/db';
+import { db, schema, safeQuery, safeQuerySingle } from "$lib/server/db";
+import { eq } from "drizzle-orm";
 import { error } from '@sveltejs/kit';
 
 export async function inviteEditor(locals: App.Locals, email: string) {
@@ -12,7 +13,7 @@ export async function inviteEditor(locals: App.Locals, email: string) {
       createdAt: new Date().toISOString()
     });
   } catch (err: any) {
-    error(400, err.message);
+    error(400, (err as any).message);
   }
 }
 
@@ -25,11 +26,11 @@ export async function claimInvite(locals: App.Locals) {
       await db.insert(schema.accessRoles).values({
         userId: locals.user.id,
         role: 'EDITOR',
-        suspended: 0
+        suspended: false
       }).onConflictDoNothing();
       await db.delete(schema.editorInvites).where(eq(schema.editorInvites.email, locals.user.email));
     }
   } catch (err: any) {
-    console.error('Editor invite could not be checked:', err.message);
+    console.error('Editor invite could not be checked:', (err as any).message);
   }
 }

@@ -7,7 +7,7 @@ import { resolveSessionData } from '$lib/server/session-cache';
 export const handle: Handle = async ({ event, resolve }) => {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method)) {
     const isInternal = event.url.pathname.startsWith('/api/internal/');
-    if (!isInternal && event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem inválida');
+    if (!isInternal && event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem invlida');
     const isScanProductionUpload = event.url.pathname === '/api/scan/production/upload';
     const max = isScanProductionUpload
       ? 524_288_000
@@ -18,7 +18,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         ? 52_428_800
         : 10_000_000;
     if (Number(event.request.headers.get('content-length') || 0) > max)
-      error(413, 'Arquivo ou solicitação acima do limite');
+      error(413, 'Arquivo ou solicitao acima do limite');
   }
 
   // Better Auth integration

@@ -42,8 +42,8 @@
       if (work.primary_scan?.name) {
         return {
           name: work.primary_scan.name,
-          logo_id: work.primary_scan.logoId,
-          is_official: work.primary_scan.isOfficial,
+          logoId: work.primary_scan.logoId,
+          isOfficial: work.primary_scan.isOfficial,
           extraCount: 0
         };
       }
@@ -54,8 +54,8 @@
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logoId,
-      is_official: primary.isOfficial,
+      logoId: primary.logoId,
+      isOfficial: primary.isOfficial,
       extraCount
     };
   }
@@ -140,7 +140,7 @@
             class="expand-inline-btn"
             onclick={toggleExpand}
             disabled={loadingMore}
-            aria-label={isExpanded ? 'Recolher estante' : 'Carregar mais obras nesta seção'}
+            aria-label={isExpanded ? 'Recolher estante' : 'Carregar mais obras nesta seo'}
           >
             {#if loadingMore}
               <Loader2 size={13} class="spin" />
@@ -156,7 +156,7 @@
 
         {#if viewAllUrl && !isExpanded}
           <a href={viewAllUrl} class="view-all-link">
-            <span>Ver catálogo</span>
+            <span>Ver catlogo</span>
             <ArrowRight size={14} />
           </a>
         {/if}
@@ -210,20 +210,20 @@
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-              <div class="card-views-badge" title="{work.viewsTotal || 0} visualizações">
+              <div class="card-views-badge" title="{work.viewsTotal || 0} visualizaes">
                 <Eye size={10} />
                 <span>{formatViews(work.viewsTotal)}</span>
               </div>
 
               <!-- 2. Type: Superior Direito (Top-Right) -->
-              <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
+              <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mang'}</span>
 
-              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
+              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
               {#if isAdult}
                 <span class="adult-badge-bottom-left">+18</span>
               {/if}
 
-              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, múltiplos compactos) -->
+              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, mltiplos compactos) -->
               {#if scanInfo}
                 <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
                   {#if scanInfo.logoId}
@@ -296,7 +296,7 @@
             {/if}
           </button>
         {:else}
-          <span class="all-loaded-text">Todas as obras desta seção foram carregadas.</span>
+          <span class="all-loaded-text">Todas as obras desta seo foram carregadas.</span>
         {/if}
         <button
           type="button"

@@ -8,6 +8,6 @@ export const GET = async ({ locals }) => {
 export const POST = async ({ locals, request }) => {
   if (locals.role !== 'ADMIN') error(403, 'Somente administradores');
   const input = z.object({ id: z.uuid() }).safeParse(await request.json().catch(() => null));
-  if (!input.success) error(400, 'Selecione um membro válido da staff.');
+  if (!input.success) error(400, 'Selecione um membro vlido da staff.');
   return json(await staffRequest(locals, 'authorize_staff', input.data.id));
 };

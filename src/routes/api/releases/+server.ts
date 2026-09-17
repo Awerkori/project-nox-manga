@@ -8,15 +8,15 @@ export const GET = async ({ url }) => {
   const cursorId = url.searchParams.get('cursorId') || null;
   const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '16', 10)));
 
-  let whereClause = eq(schema.works.published, 1);
+  let whereClause: any = eq(schema.works.published, true);
   if (cursorTime && cursorId) {
     whereClause = and(
-      eq(schema.works.published, 1),
+      eq(schema.works.published, true),
       sql`(${schema.works.latestChapterPublishedAt} < ${cursorTime} OR (${schema.works.latestChapterPublishedAt} = ${cursorTime} AND ${schema.works.id} < ${cursorId}))`
     );
   } else if (cursorTime) {
     whereClause = and(
-      eq(schema.works.published, 1),
+      eq(schema.works.published, true),
       sql`${schema.works.latestChapterPublishedAt} < ${cursorTime}`
     );
   }

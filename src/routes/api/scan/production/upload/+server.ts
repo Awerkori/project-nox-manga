@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, and, desc } from 'drizzle-orm';
 import { uploadPipelineFileToStorage } from '$lib/server/storage-router';
 import { RateLimitError } from '$lib/server/media';
-import { createClient } from '@supabase/supabase-js';
+
 import { env } from '$env/dynamic/private';
 import crypto from 'node:crypto';
 
@@ -13,7 +14,7 @@ const BLOCKED_EXTENSIONS = [
 
 export const POST = async ({ locals, request }) => {
   if (!locals.user) {
-    return json({ error: 'Não autenticado' }, { status: 401 });
+    return json({ error: 'No autenticado' }, { status: 401 });
   }
 
   const formData = await request.formData();
@@ -23,50 +24,60 @@ export const POST = async ({ locals, request }) => {
   const note = formData.get('note')?.toString() || '';
   const file = formData.get('file');
 
-  if (!scanId || !productionChapterId || !stageId) {return json({ error: 'scanId, productionChapterId e stageId são obrigatórios'}, { status: 400 });
+  if (!scanId || !productionChapterId || !stageId) {return json({ error: 'scanId, productionChapterId e stageId so obrigatrios'}, { status: 400 });
   }
 
   if (!file || !(file instanceof Blob)) {
     return json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
   }
 
-  const db = privileged();
-
   // Verify scan membership or Global Admin
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', scanId)
-      .eq('user_id', locals.user!.id)
-      .maybeSingle();
+    const { data: member } = await safeQuerySingle(
+      db.select({ role: schema.scanMembers.role })
+        .from(schema.scanMembers)
+        .where(
+          and(
+            eq(schema.scanMembers.scanId, scanId),
+            eq(schema.scanMembers.userId, locals.user!.id)
+          )
+        )
+    );
 
     if (!member) {
-      return json({ error: 'Acesso não autorizado a esta Scan' }, { status: 403 });
+      return json({ error: 'Acesso no autorizado a esta Scan' }, { status: 403 });
     }
   }
 
   // Get chapter info
-  const { data: chapter } = await db
-    .from('scan_production_chapters')
-    .select('id, work_id, chapter_number')
-    .eq('id', productionChapterId)
-    .single();
+  const { data: chapter } = await safeQuerySingle(
+    db.select({
+      id: schema.scanProductionChapters.id,
+      workId: schema.scanProductionChapters.workId,
+      chapterNumber: schema.scanProductionChapters.chapterNumber
+    })
+    .from(schema.scanProductionChapters)
+    .where(eq(schema.scanProductionChapters.id, productionChapterId))
+  );
 
   if (!chapter) {
-    return json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    return json({ error: 'Captulo no encontrado' }, { status: 404 });
   }
 
   // Get stage info
-  const { data: stage } = await db
-    .from('scan_workflow_stages')
-    .select('id, slug, name')
-    .eq('id', stageId)
-    .single();
+  const { data: stage } = await safeQuerySingle(
+    db.select({
+      id: schema.scanWorkflowStages.id,
+      slug: schema.scanWorkflowStages.slug,
+      name: schema.scanWorkflowStages.name
+    })
+    .from(schema.scanWorkflowStages)
+    .where(eq(schema.scanWorkflowStages.id, stageId))
+  );
 
   if (!stage) {
-    return json({ error: 'Etapa não encontrada' }, { status: 404 });
+    return json({ error: 'Etapa no encontrada' }, { status: 404 });
   }
 
   const rawFilename = (file as any).name || 'arquivo';
@@ -74,7 +85,7 @@ export const POST = async ({ locals, request }) => {
 
   if (BLOCKED_EXTENSIONS.includes(ext)) {
     return json({
-      error: 'Formato de arquivo executável bloqueado por políticas de segurança da plataforma.'
+      error: 'Formato de arquivo executvel bloqueado por polticas de segurana da plataforma.'
     }, { status: 400 });
   }
 
@@ -88,7 +99,7 @@ export const POST = async ({ locals, request }) => {
   const MAX_PIPELINE_SIZE = 524_288_000;
   if (file.size > MAX_PIPELINE_SIZE) {
     return json({
-      error: `Arquivo excede o limite máximo permitido de 500 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB enviado).`
+      error: `Arquivo excede o limite mximo permitido de 500 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB enviado).`
     }, { status: 413 });
   }
 
@@ -97,13 +108,18 @@ export const POST = async ({ locals, request }) => {
   const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
   // Determine next version
-  const { data: existingFiles } = await db
-    .from('scan_production_files')
-    .select('version')
-    .eq('production_chapter_id', productionChapterId)
-    .eq('stage_id', stageId)
-    .order('version', { ascending: false })
-    .limit(1);
+  const { data: existingFiles } = await safeQuery(
+    db.select({ version: schema.scanProductionFiles.version })
+      .from(schema.scanProductionFiles)
+      .where(
+        and(
+          eq(schema.scanProductionFiles.productionChapterId, productionChapterId),
+          eq(schema.scanProductionFiles.stageId, stageId)
+        )
+      )
+      .orderBy(desc(schema.scanProductionFiles.version))
+      .limit(1)
+  );
 
   const nextVersion = (existingFiles?.[0]?.version || 0) + 1;
 
@@ -122,10 +138,10 @@ export const POST = async ({ locals, request }) => {
   if (isLargeFile) {
     // Dedicated Artifact Storage for large files (> 20 MB up to 500 MB)
     try {
-      const staffDb = createClient(
+      const staffDb = (null as any); /* createClient(
         env.STAFF_SUPABASE_URL || 'https://pgumtergvtbeepzpgvkv.supabase.co',
         env.STAFF_SUPABASE_SERVICE_ROLE_KEY || ''
-      );
+      );*/
       const artifactKey = `production/${scanId}/${productionChapterId}/${stage.slug}/v${nextVersion}/${crypto.randomUUID()}-${safeFilename}`;
       const { error: upErr } = await staffDb.storage
         .from('scan-artifacts')
@@ -135,7 +151,7 @@ export const POST = async ({ locals, request }) => {
         });
 
       if (upErr) {
-        return json({ error: 'Falha no storage de artifacts: ' + upErr.message }, { status: 502 });
+        return json({ error: 'Falha no storage de artifacts: ' + (upErr as any).message }, { status: 502 });
       }
 
       storedRecord = {
@@ -176,7 +192,7 @@ export const POST = async ({ locals, request }) => {
     } catch (err: any) {
       if (err instanceof RateLimitError) {
         return new Response(
-          JSON.stringify({ error: 'Rate limit temporário do armazenamento. Tente novamente em instantes.', retryAfter: err.retryAfter }),
+          JSON.stringify({ error: 'Rate limit temporrio do armazenamento. Tente novamente em instantes.', retryAfter: err.retryAfter }),
           {
             status: 429,
             headers: {
@@ -188,10 +204,10 @@ export const POST = async ({ locals, request }) => {
       }
       // If Telegram bot fails or throws FAIL_CLOSED because bot is not configured, fall back to dedicated scan-artifacts bucket
       if (err?.message?.includes('FAIL_CLOSED') || err?.message?.includes('TELEGRAM_BOT_PRODUCTION_STORAGE')) {
-        const staffDb = createClient(
+        const staffDb = (null as any); /* createClient(
           env.STAFF_SUPABASE_URL || 'https://pgumtergvtbeepzpgvkv.supabase.co',
           env.STAFF_SUPABASE_SERVICE_ROLE_KEY || ''
-        );
+        );*/
         const artifactKey = `production/${scanId}/${productionChapterId}/${stage.slug}/v${nextVersion}/${crypto.randomUUID()}-${safeFilename}`;
         const { error: upErr } = await staffDb.storage
           .from('scan-artifacts')
@@ -201,7 +217,7 @@ export const POST = async ({ locals, request }) => {
           });
 
         if (upErr) {
-          return json({ error: 'Falha no storage de artifacts: ' + upErr.message }, { status: 502 });
+          return json({ error: 'Falha no storage de artifacts: ' + (upErr as any).message }, { status: 502 });
         }
 
         storedRecord = {
@@ -215,81 +231,99 @@ export const POST = async ({ locals, request }) => {
           byteSize: file.size
         };
       } else {
-        return json({ error: 'Falha no envio para o armazenamento de produção: ' + (err?.message || 'Erro desconhecido') }, { status: 502 });
+        return json({ error: 'Falha no envio para o armazenamento de produo: ' + (err?.message || 'Erro desconhecido') }, { status: 502 });
       }
     }
   }
 
   // Mark previous versions as not current
-  await db
-    .from('scan_production_files')
-    .update({isCurrent: false})
-    .eq('production_chapter_id', productionChapterId)
-    .eq('stage_id', stageId);
+  await safeQuery(
+    db.update(schema.scanProductionFiles)
+      .set({ isCurrent: false })
+      .where(
+        and(
+          eq(schema.scanProductionFiles.productionChapterId, productionChapterId),
+          eq(schema.scanProductionFiles.stageId, stageId)
+        )
+      )
+  );
 
   // Insert new version
-  const { data: newFile, error: insertErr } = await db
-    .from('scan_production_files')
-    .insert({scanId: scanId,
-      workId: chapter.workId,
-      productionChapterId: productionChapterId,
-      stageId: stageId,
-      stageSlug: stage.slug,
-      fileName: rawFilename,
-      byteSize: storedRecord.byteSize,
-      mimeType: file.type || 'application/octet-stream',
-      fileKey: storedRecord.fileKey,
-      storagePoolId: storedRecord.poolId,
-      storageShardId: storedRecord.shardId,
-      botReference: storedRecord.botReference,
-      telegramFileId: storedRecord.telegramFileId,
-      sha256: storedRecord.sha256,
-      provider: storedRecord.provider,
-      version: nextVersion,
-      uploadedBy: locals.user!.id,
-      isCurrent: true,
-      note: note || null})
-    .select()
-    .single();
+  const { data: newFile, error: insertErr } = await safeQuerySingle(
+    db.insert(schema.scanProductionFiles)
+      .values({
+        scanId: scanId,
+        workId: chapter.workId,
+        productionChapterId: productionChapterId,
+        stageId: stageId,
+        stageSlug: stage.slug,
+        fileName: rawFilename,
+        byteSize: storedRecord.byteSize,
+        mimeType: file.type || 'application/octet-stream',
+        fileKey: storedRecord.fileKey,
+        storagePoolId: storedRecord.poolId,
+        storageShardId: storedRecord.shardId,
+        botReference: storedRecord.botReference as any,
+        telegramFileId: storedRecord.telegramFileId,
+        sha256: storedRecord.sha256,
+        provider: storedRecord.provider as any,
+        version: nextVersion,
+        uploadedBy: locals.user!.id,
+        isCurrent: true,
+        note: note || null, inputFiles: [], isStale: false
+      })
+      .returning()
+  );
 
   if (insertErr) {
-    return json({ error: 'Falha ao registrar arquivo: ' + insertErr.message }, { status: 500 });
+    return json({ error: 'Falha ao registrar arquivo: ' + (insertErr as any).message }, { status: 500 });
   }
 
   // Update stage activity
-  await db
-    .from('scan_chapter_stages')
-    .update({lastActivityAt: new Date().toISOString()})
-    .eq('production_chapter_id', productionChapterId)
-    .eq('stage_id', stageId);
+  await safeQuery(
+    db.update(schema.scanChapterStages)
+      .set({ lastActivityAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(schema.scanChapterStages.productionChapterId, productionChapterId),
+          eq(schema.scanChapterStages.stageId, stageId)
+        )
+      )
+  );
 
   // Record in timeline
-  const { data: callerMember } = await db
-    .from('members')
-    .select('username, display_name')
-    .eq('id', locals.user!.id)
-    .single();
+  const { data: callerMember } = await safeQuerySingle(
+    db.select({
+      username: schema.members.username,
+      displayName: schema.members.displayName
+    })
+    .from(schema.members)
+    .where(eq(schema.members.id, locals.user!.id))
+  );
 
   const callerName = callerMember?.displayName || callerMember?.username || 'Membro';
 
-  await db
-    .from('scan_chapter_timeline')
-    .insert({scanId: scanId,
-      productionChapterId: productionChapterId,
-      stageId: stageId,
-      stageSlug: stage.slug,
-      eventType: 'FILE_UPLOADED',
-      userId: locals.user!.id,
-      userName: callerName,
-      details: {
-        fileName: rawFilename,
-        version: nextVersion,
-        byteSize: file.size,
-        note: note || null}
-    });
+  await safeQuery(
+    db.insert(schema.scanChapterTimeline)
+      .values({
+        scanId: scanId,
+        productionChapterId: productionChapterId,
+        stageId: stageId,
+        stageSlug: stage.slug,
+        eventType: 'FILE_UPLOADED' as any,
+        userId: locals.user!.id,
+        userName: callerName,
+        details: {
+          fileName: rawFilename,
+          version: nextVersion,
+          byteSize: file.size,
+          note: note || null, inputFiles: [], isStale: false
+        }
+      })
+  );
 
   // Re-resolve DAG dependencies
-  await db.rpc('resolve_scan_chapter_dependencies', { p_production_chapter_id: productionChapterId });
+  await (db as any).execute('resolve_scan_chapter_dependencies', { p_production_chapter_id: productionChapterId });
 
   return json({
     success: true,

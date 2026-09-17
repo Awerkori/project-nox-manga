@@ -67,10 +67,10 @@
       try {
         const res = await fetch(`/api/internal/users/search?q=${encodeURIComponent(val.trim())}`);
         const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Falha ao buscar usuários.');
+        if (!res.ok) throw new Error((json as any).message || 'Falha ao buscar usurios.');
         userSearchResults = json.users || [];
       } catch (err: any) {
-        userSearchError = err.message || 'Erro de conexão na busca.';
+        userSearchError = (err as any).message || 'Erro de conexo na busca.';
       } finally {
         userSearchLoading = false;
       }
@@ -95,7 +95,7 @@
 </script>
 
 <svelte:head>
-  <title>Gestão da Staff — Painel de Controle Project Nox</title>
+  <title>Gesto da Staff — Painel de Controle Project Nox</title>
 </svelte:head>
 
 <div class="staff-workspace">
@@ -105,11 +105,11 @@
       <div class="eyebrow-line">
         <span class="eyebrow-tag">EQUIPE</span>
         <span class="eyebrow-sep">·</span>
-        <span class="eyebrow-date">GESTÃO DA STAFF</span>
+        <span class="eyebrow-date">GESTO DA STAFF</span>
       </div>
       <h1 class="heading">Equipe Editorial & Administradores</h1>
       <p class="subheading">
-        Gerencie permissões da equipe, atribua cargos de Editor ou Administrador e controle o acesso operacional ao Project Nox.
+        Gerencie permisses da equipe, atribua cargos de Editor ou Administrador e controle o acesso operacional ao Project Nox.
       </p>
     </div>
 
@@ -117,7 +117,7 @@
       <div class="header-actions">
         <button type="button" class="btn-primary-add" onclick={openAddStaffModal}>
           <Plus size={16} />
-          <span>Adicionar Membro à Staff</span>
+          <span>Adicionar Membro  Staff</span>
         </button>
       </div>
     {/if}
@@ -132,12 +132,12 @@
   {:else if form?.success}
     <div class="feedback-banner success">
       <CheckCircle2 size={16} />
-      <span>Operação realizada com sucesso na equipe.</span>
+      <span>Operao realizada com sucesso na equipe.</span>
     </div>
   {/if}
 
   <!-- Operational Stats Summary -->
-  <section class="stats-bar" aria-label="Métricas da Staff">
+  <section class="stats-bar" aria-label="Mtricas da Staff">
     <div class="stat-pill">
       <div class="stat-icon-circle blue">
         <Users size={16} />
@@ -207,7 +207,7 @@
       <span class="search-icon"><Search size={14} /></span>
       <input
         type="text"
-        placeholder="Filtrar por nome ou @usuário..."
+        placeholder="Filtrar por nome ou @usurio..."
         bind:value={searchQuery}
         class="search-field"
       />
@@ -240,7 +240,7 @@
               <div class="name-row">
                 <strong class="member-display-name">{member.displayName}</strong>
                 {#if isSelf}
-                  <span class="self-tag">Você</span>
+                  <span class="self-tag">Voc</span>
                 {/if}
               </div>
               <span class="member-handle">@{member.username}</span>
@@ -260,11 +260,11 @@
           <div class="capabilities-box">
             {#if member.role === 'ADMIN'}
               <p class="cap-text">
-                <strong>Acesso Total:</strong> Configurações globais, banco de dados, gestão da equipe e auditoria do sistema.
+                <strong>Acesso Total:</strong> Configuraes globais, banco de dados, gesto da equipe e auditoria do sistema.
               </p>
             {:else}
               <p class="cap-text">
-                <strong>Editorial:</strong> Criação e edição de obras, envio de capítulos, upload e moderação de denúncias.
+                <strong>Editorial:</strong> Criao e edio de obras, envio de captulos, upload e moderao de denncias.
               </p>
             {/if}
           </div>
@@ -304,7 +304,7 @@
       <span class="empty-icon"><Users size={36} /></span>
       <h3 class="empty-title">Nenhum membro encontrado</h3>
       <p class="empty-desc">
-        {searchQuery ? 'Nenhum membro da equipe corresponde à busca realizada.' : 'Nenhum membro nesta categoria de cargo.'}
+        {searchQuery ? 'Nenhum membro da equipe corresponde  busca realizada.' : 'Nenhum membro nesta categoria de cargo.'}
       </p>
     </div>
   {/if}
@@ -318,7 +318,7 @@
     <div class="modal-box" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
       <header class="modal-header">
         <div class="modal-header-info">
-          <h3 class="modal-title">Adicionar Membro à Staff</h3>
+          <h3 class="modal-title">Adicionar Membro  Staff</h3>
           <p class="modal-subtitle">Pesquise pelo leitor cadastrado na comunidade e atribua o cargo.</p>
         </div>
         <button type="button" class="btn-close-modal" onclick={closeAllModals}>
@@ -336,7 +336,7 @@
               id="picker-search"
               type="text"
               class="picker-input"
-              placeholder="Digite o @username ou nome de exibição..."
+              placeholder="Digite o @username ou nome de exibio..."
               value={userSearchInput}
               oninput={handleUserSearchInput}
               autocomplete="off"
@@ -377,7 +377,7 @@
                   <span class="user-result-handle">@{user.username}</span>
                 </div>
                 {#if user.isStaff}
-                  <span class="already-staff-tag">Já é {user.role}</span>
+                  <span class="already-staff-tag">J  {user.role}</span>
                 {:else}
                   <span class="btn-select-user">Selecionar</span>
                 {/if}
@@ -442,7 +442,7 @@
                       <span class="role-choice-tag">Recomendado</span>
                     </div>
                     <p class="role-choice-desc">
-                      Pode criar e editar obras, enviar capítulos, revisar mesa de edição e moderar denúncias de conteúdo.
+                      Pode criar e editar obras, enviar captulos, revisar mesa de edio e moderar denncias de contedo.
                     </p>
                   </div>
                 </label>
@@ -462,7 +462,7 @@
                       <strong>Administrador</strong>
                     </div>
                     <p class="role-choice-desc">
-                      Acesso irrestrito a configurações sensíveis, gestão da equipe, suspensão de usuários e auditoria.
+                      Acesso irrestrito a configuraes sensveis, gesto da equipe, suspenso de usurios e auditoria.
                     </p>
                   </div>
                 </label>
@@ -475,7 +475,7 @@
               </button>
               <button type="submit" class="btn-primary-modal">
                 <UserCheck size={15} />
-                <span>Confirmar Adição à Equipe</span>
+                <span>Confirmar Adio  Equipe</span>
               </button>
             </footer>
           </form>
@@ -507,7 +507,7 @@
 
         <div class="modal-content">
           <p class="modal-dialog-text">
-            Selecione o novo nível de acesso para <strong>@{showRoleModal.username}</strong>:
+            Selecione o novo nvel de acesso para <strong>@{showRoleModal.username}</strong>:
           </p>
 
           <div class="role-switch-options">
@@ -515,7 +515,7 @@
               <input type="radio" name="role" value="STAFF_SITE" checked={showRoleModal.role === 'STAFF_SITE' || showRoleModal.role === 'EDITOR'} />
               <div>
                 <strong>Staff Site</strong>
-                <span>Criação, edição e publicação de capítulos</span>
+                <span>Criao, edio e publicao de captulos</span>
               </div>
             </label>
 
@@ -534,7 +534,7 @@
             Cancelar
           </button>
           <button type="submit" class="btn-primary-modal">
-            Salvar Alteração
+            Salvar Alterao
           </button>
         </footer>
       </form>
@@ -576,7 +576,7 @@
           <div class="safety-reassurance-box">
             <span class="safety-icon"><CheckCircle2 size={15} /></span>
             <p class="safety-text">
-              A conta de leitor, histórico de leitura, XP e biblioteca do usuário <strong>permanecerão totalmente intactos</strong>. Ele apenas perderá o acesso ao Painel de Controle.
+              A conta de leitor, histrico de leitura, XP e biblioteca do usurio <strong>permanecero totalmente intactos</strong>. Ele apenas perder o acesso ao Painel de Controle.
             </p>
           </div>
         </div>
@@ -586,7 +586,7 @@
             Cancelar
           </button>
           <button type="submit" class="btn-danger-confirm">
-            Confirmar Remoção
+            Confirmar Remoo
           </button>
         </footer>
       </form>

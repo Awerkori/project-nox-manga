@@ -95,7 +95,7 @@
           queryCache.set(cacheKey, candidates);
         }
       } catch (err) {
-        console.warn('Erro ao buscar menções:', err);
+        console.warn('Erro ao buscar menes:', err);
       } finally {
         isLoading = false;
       }
@@ -121,7 +121,7 @@
         trackedMentions = [...trackedMentions, {
           type: cand.type,
           id: cand.id,
-          target_user_id: cand.type === 'user' ? cand.id : null,
+          targetUserId: cand.type === 'user' ? cand.id : null,
           target_role_id: cand.type === 'position' ? cand.id : null,
           label: cand.label,
           username: cand.username || cand.label.replace(/^@/, '')

@@ -36,7 +36,7 @@ export async function sendBrevoEmail({
   const senderName = fromName || privateEnv.BREVO_FROM_NAME || process.env.BREVO_FROM_NAME || 'Project Nox';
 
   if (!apiKey) {
-    console.error('[BREVO] BREVO_API_KEY não configurada no ambiente.');
+    console.error('[BREVO] BREVO_API_KEY no configurada no ambiente.');
     return { success: false, status: 500, error: 'Chave API da Brevo ausente', isPermanentFailure: false };
   }
 
@@ -82,7 +82,7 @@ export async function sendBrevoEmail({
     } else if (res.status === 429) {
       const retryAfterHeader = res.headers.get('retry-after');
       const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 60;
-      const errMsg = data?.message || 'Rate limit temporário excedido na API da Brevo (HTTP 429)';
+      const errMsg = data?.message || 'Rate limit temporrio excedido na API da Brevo (HTTP 429)';
       console.warn(`[BREVO_429] Rate limit atingido. Retry-After: ${retryAfterSeconds}s`);
       return {
         success: false,
@@ -95,7 +95,7 @@ export async function sendBrevoEmail({
     } else {
       const errMsg = data?.message || data?.code || JSON.stringify(data);
       console.error(`[BREVO_ERROR] HTTP ${res.status}:`, errMsg);
-      // Status 400 (ex: email com formato inválido, blocked, unverified domain) são permanentes
+      // Status 400 (ex: email com formato invlido, blocked, unverified domain) so permanentes
       const isPermanent = res.status === 400 || res.status === 401;
       return {
         success: false,
@@ -109,7 +109,7 @@ export async function sendBrevoEmail({
     return {
       success: false,
       status: 500,
-      error: err?.name === 'AbortError' ? 'Timeout na conexão com a Brevo' : err?.message || 'Falha de rede'
+      error: err?.name === 'AbortError' ? 'Timeout na conexo com a Brevo' : err?.message || 'Falha de rede'
     };
   }
 }

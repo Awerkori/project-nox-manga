@@ -3,7 +3,7 @@ import { db, schema, safeQuery } from '$lib/server/db';
 import { asc, desc } from 'drizzle-orm';
 
 export const load = async () => {
-  const [settings, pools, rawShards] = await Promise.all([
+  const [{ data: settings }, { data: pools }, { data: rawShards }] = await Promise.all([
     safeQuery(db.select().from(schema.settings)),
     safeQuery(db.select().from(schema.storagePools).orderBy(asc(schema.storagePools.displayName))),
     safeQuery(

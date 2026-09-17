@@ -152,7 +152,7 @@
   }
 
   $effect(() => {
-    if (form?.conflict) {
+    if ((form as any)?.conflict) {
       showConflictModal = true;
     }
   });
@@ -185,33 +185,33 @@
   }
 
   function summarizeError(raw: string | null | undefined): string {
-    if (!raw) return 'Falha transitória na operação';
+    if (!raw) return 'Falha transitria na operao';
     const clean = raw.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
 
     if (clean.includes('Cloudflare') || clean.includes('403') || clean.includes('cf-chl')) {
-      return 'Cloudflare 403 (Proteção ativa)';
+      return 'Cloudflare 403 (Proteo ativa)';
     }
     if (clean.includes('session expired') || clean.includes('invalid credentials') || clean.includes('authentication')) {
-      return 'Credenciais expiradas (Requer autenticação)';
+      return 'Credenciais expiradas (Requer autenticao)';
     }
     if (clean.includes('404') || clean.includes('Not Found')) {
-      const pageMatch = clean.match(/page\s*(\d+)/i) || clean.match(/página\s*(\d+)/i);
-      return pageMatch ? `Página ${pageMatch[1]} indisponível (HTTP 404)` : 'Recurso ou página indisponível (HTTP 404)';
+      const pageMatch = clean.match(/page\s*(\d+)/i) || clean.match(/pgina\s*(\d+)/i);
+      return pageMatch ? `Pgina ${pageMatch[1]} indisponvel (HTTP 404)` : 'Recurso ou pgina indisponvel (HTTP 404)';
     }
     if (clean.includes('Lease expirado') || clean.includes('stalled') || clean.includes('lease_expires_at')) {
       return 'Lease expirado (recuperado automaticamente)';
     }
     if (clean.includes('ETIMEDOUT') || clean.includes('ECONNRESET') || clean.includes('timed out') || clean.includes('Timeout')) {
-      return 'Timeout de conexão com o provider';
+      return 'Timeout de conexo com o provider';
     }
     if (clean.includes('429') || clean.includes('rate limit') || clean.includes('RateLimit')) {
       return 'Rate limit atingido (Cooldown ativado)';
     }
     if (clean.includes('0 pages') || clean.includes('returned 0 pages')) {
-      return 'Fonte retornou 0 páginas';
+      return 'Fonte retornou 0 pginas';
     }
     if (clean.includes('Verification failed') || clean.includes('integrity check')) {
-      return 'Falha na validação de integridade';
+      return 'Falha na validao de integridade';
     }
     if (clean.includes('Cancelado manualmente')) {
       return 'Cancelado manualmente via painel';
@@ -245,20 +245,20 @@
       const src = (job.source || 'desconhecido').toLowerCase();
       const raw = (job.lastError || '').toLowerCase();
       let patternKey = 'outros';
-      let patternName = 'Falha transitória';
+      let patternName = 'Falha transitria';
 
       if (raw.includes('403') || raw.includes('cloudflare')) {
         patternKey = '403';
         patternName = 'Cloudflare 403';
       } else if (raw.includes('404')) {
         patternKey = '404';
-        patternName = 'Páginas 404';
+        patternName = 'Pginas 404';
       } else if (raw.includes('lease') || raw.includes('stalled')) {
         patternKey = 'lease';
         patternName = 'Lease expirado';
       } else if (raw.includes('timeout') || raw.includes('timed out') || raw.includes('etimedout') || raw.includes('econnreset')) {
         patternKey = 'timeout';
-        patternName = 'Timeout de conexão';
+        patternName = 'Timeout de conexo';
       } else if (raw.includes('429') || raw.includes('rate limit')) {
         patternKey = '429';
         patternName = 'Rate limit (429)';
@@ -340,7 +340,7 @@
           }
         }
       } catch (error) {
-        console.warn('Não foi possível atualizar o painel do Importer', error);
+        console.warn('No foi possvel atualizar o painel do Importer', error);
       } finally {
         if (!disposed) pollInterval = setTimeout(poll, 4000);
       }
@@ -382,9 +382,9 @@
         {/if}
       </div>
 
-      <h1 class="importer-title">Central de Operações do Importer</h1>
+      <h1 class="importer-title">Central de Operaes do Importer</h1>
       <p class="importer-subtitle">
-        Monitoramento em tempo real do processamento contínuo 24/7 e gestão de prioridades da Staff.
+        Monitoramento em tempo real do processamento contnuo 24/7 e gesto de prioridades da Staff.
       </p>
 
       <!-- Telemetry Quick Pills -->
@@ -400,7 +400,7 @@
           </div>
           <div class="telemetry-pill">
             <Activity size={12} />
-            <span>Concorrência: <strong>{data.telemetry.concurrency}</strong></span>
+            <span>Concorrncia: <strong>{data.telemetry.concurrency}</strong></span>
           </div>
           <div class="telemetry-pill">
             <Clock size={12} />
@@ -432,7 +432,7 @@
   {:else if form?.message}
     <div class="alert-banner success">
       <CheckCircle2 size={16} />
-      <span>{form.message}</span>
+      <span>{(form as any).message}</span>
     </div>
   {/if}
 
@@ -461,7 +461,7 @@
                   PRIORIDADE ABSOLUTA (RETRYING)
                 </span>
                 <span class="focus-pause-badge retry-badge">
-                  Aguardando retry técnico · Fila normal pausada
+                  Aguardando retry tcnico · Fila normal pausada
                 </span>
               {:else if data.activeFocus.status === 'BLOCKED'}
                 <span class="focus-pill blocked">
@@ -469,7 +469,7 @@
                   PRIORIDADE BLOQUEADA
                 </span>
                 <span class="focus-pause-badge error-badge">
-                  Falha persistente na ingestão
+                  Falha persistente na ingesto
                 </span>
               {:else}
                 <span class="focus-pill">
@@ -542,18 +542,18 @@
             <div class="retry-details-grid">
               <div class="retry-detail-item wide">
                 <span class="detail-label">Motivo do Erro:</span>
-                <span class="detail-value error-text">{data.activeFocus.lastError || 'Aguardando recuperação técnica'}</span>
+                <span class="detail-value error-text">{data.activeFocus.lastError || 'Aguardando recuperao tcnica'}</span>
               </div>
               <div class="retry-detail-item">
                 <span class="detail-label">Tentativas:</span>
                 <span class="detail-value">{data.activeFocus.attemptCount || 1}</span>
               </div>
               <div class="retry-detail-item">
-                <span class="detail-label">Última tentativa:</span>
+                <span class="detail-label">ltima tentativa:</span>
                 <span class="detail-value">{relativeTime(data.activeFocus.lastAttemptAt || data.activeFocus.updatedAt)}</span>
               </div>
               <div class="retry-detail-item">
-                <span class="detail-label">Próxima tentativa:</span>
+                <span class="detail-label">Prxima tentativa:</span>
                 <span class="detail-value highlight">{data.activeFocus.nextAttemptAt ? relativeTime(data.activeFocus.nextAttemptAt) : 'Em instantes'}</span>
               </div>
             </div>
@@ -569,9 +569,9 @@
             </div>
             <div class="blocker-meta-row">
               {#if data.activeFocus.failure.source}<span><strong>Fonte:</strong> {data.activeFocus.failure.source.toUpperCase()}</span>{/if}
-              {#if data.activeFocus.failure.chapterNumber}<span><strong>Capítulo:</strong> {data.activeFocus.failure.chapterNumber}</span>{/if}
+              {#if data.activeFocus.failure.chapterNumber}<span><strong>Captulo:</strong> {data.activeFocus.failure.chapterNumber}</span>{/if}
               {#if data.activeFocus.failure.attempts}<span><strong>Tentativas:</strong> {data.activeFocus.failure.attempts}</span>{/if}
-              {#if data.activeFocus.failure.updatedAt}<span><strong>Última tentativa:</strong> {relativeTime(data.activeFocus.failure.updatedAt)}</span>{/if}
+              {#if data.activeFocus.failure.updatedAt}<span><strong>ltima tentativa:</strong> {relativeTime(data.activeFocus.failure.updatedAt)}</span>{/if}
             </div>
           </div>
         {/if}
@@ -582,15 +582,15 @@
             <div class="hero-progress-labels">
               <span class="progress-left-label">
                 {#if data.activeFocus.stats.currentChapter}
-                  <strong>Processando:</strong> Capítulo {data.activeFocus.stats.currentChapter}
+                  <strong>Processando:</strong> Captulo {data.activeFocus.stats.currentChapter}
                 {:else if data.activeFocus.stats.pending > 0}
-                  <strong>Sincronizando capítulos...</strong>
+                  <strong>Sincronizando captulos...</strong>
                 {:else}
-                  <strong>Finalizando sincronização...</strong>
+                  <strong>Finalizando sincronizao...</strong>
                 {/if}
               </span>
               <span class="progress-right-label">
-                {data.activeFocus.stats.completed} de {data.activeFocus.stats.totalDiscovered} capítulos ({data.activeFocus.stats.percent}%)
+                {data.activeFocus.stats.completed} de {data.activeFocus.stats.totalDiscovered} captulos ({data.activeFocus.stats.percent}%)
               </span>
             </div>
 
@@ -601,7 +601,7 @@
             <div class="hero-stats-chips">
               <span class="hero-chip done">
                 <CheckCircle2 size={12} />
-                {data.activeFocus.stats.completed} concluídos
+                {data.activeFocus.stats.completed} concludos
               </span>
               {#if data.activeFocus.stats.staged > 0}
                 <span class="hero-chip staged">
@@ -616,7 +616,7 @@
                 </span>
               {/if}
               <span class="hero-chip info">
-                {data.activeFocus.stats.published} publicados no catálogo
+                {data.activeFocus.stats.published} publicados no catlogo
               </span>
             </div>
           </div>
@@ -635,7 +635,7 @@
         <div>
           <h2 class="priority-entry-heading">Prioridade Absoluta</h2>
           <p class="priority-entry-desc">
-            Cole a URL de qualquer fonte suportada (Nexus, Kuro, MangaFlix, Manhastro, MangoToons) ou busque pelo título para dedicar 100% da capacidade do Importer à obra selecionada.
+            Cole a URL de qualquer fonte suportada (Nexus, Kuro, MangaFlix, Manhastro, MangoToons) ou busque pelo ttulo para dedicar 100% da capacidade do Importer  obra selecionada.
           </p>
         </div>
       </div>
@@ -651,7 +651,7 @@
         <input
           type="text"
           class="priority-search-input"
-          placeholder="Cole o link da obra ou digite o nome (ex: Vingança do Cão de Caça)..."
+          placeholder="Cole o link da obra ou digite o nome (ex: Vingana do Co de Caa)..."
           bind:value={searchQuery}
           oninput={handleSearchInput}
         />
@@ -680,7 +680,7 @@
             {candidateResults.length} {candidateResults.length === 1 ? 'obra encontrada' : 'obras encontradas'}
           </span>
           {#if isUrlQuery}
-            <span class="url-mode-badge">Resolução de URL Direta</span>
+            <span class="url-mode-badge">Resoluo de URL Direta</span>
           {/if}
         </div>
 
@@ -702,13 +702,13 @@
                 <strong class="candidate-title">{candidate.title}</strong>
                 <div class="candidate-sub-tags">
                   {#if candidate.existsInNox}
-                    <span class="status-pill in-nox">No Catálogo Nox</span>
+                    <span class="status-pill in-nox">No Catlogo Nox</span>
                   {:else}
                     <span class="status-pill new-work">Nova Obra</span>
                   {/if}
 
                   {#if candidate.chapterCount}
-                    <span class="status-pill ch-count">{candidate.chapterCount} capítulos</span>
+                    <span class="status-pill ch-count">{candidate.chapterCount} captulos</span>
                   {/if}
                 </div>
 
@@ -759,7 +759,7 @@
   </section>
 
   <!-- Metric Summary Pills -->
-  <section class="counts-pills-bar" aria-label="Métricas da Fila">
+  <section class="counts-pills-bar" aria-label="Mtricas da Fila">
     <div class="count-pill">
       <div class="dot blue pulse"></div>
       <span class="label">Importando:</span>
@@ -802,38 +802,38 @@
 
     <div class="count-pill">
       <div class="dot green"></div>
-      <span class="label">Concluídos:</span>
+      <span class="label">Concludos:</span>
       <strong class="value">{data.counts.completed}</strong>
     </div>
 
     <div class="count-pill" class:has-failures={data.counts.failed1h > 0}>
       <div class="dot red"></div>
-      <span class="label">Falhas Técnicas (1h / 24h):</span>
+      <span class="label">Falhas Tcnicas (1h / 24h):</span>
       <strong class="value">{data.counts.failed1h} / {data.counts.failed24h}</strong>
       {#if data.counts.failed > 0}
-        <span class="sub-val" title="Total histórico de falhas técnicas">({data.counts.failed})</span>
+        <span class="sub-val" title="Total histrico de falhas tcnicas">({data.counts.failed})</span>
       {/if}
     </div>
   </section>
 
-  <!-- 3. Saúde do Catálogo & Reconciliação Multi-Fonte -->
-  <section class="catalog-health-panel" aria-label="Saúde do Catálogo & Reconciliação Multi-Fonte">
+  <!-- 3. Sade do Catlogo & Reconciliao Multi-Fonte -->
+  <section class="catalog-health-panel" aria-label="Sade do Catlogo & Reconciliao Multi-Fonte">
     <div class="health-header">
       <div class="health-title-group">
         <div class="health-icon-box">
           <GitCompare size={22} class="text-crimson" />
         </div>
         <div>
-          <h2 class="health-title">Saúde do Catálogo & Reconciliação Multi-Fonte</h2>
+          <h2 class="health-title">Sade do Catlogo & Reconciliao Multi-Fonte</h2>
           <p class="health-subtitle">
-            Auditoria contínua de completude, descoberta cross-provider (Nexus, Kuro, MangaFlix, MangoToons, Manhastro) e eliminação determinística de lacunas sem duplicações.
+            Auditoria contnua de completude, descoberta cross-provider (Nexus, Kuro, MangaFlix, MangoToons, Manhastro) e eliminao determinstica de lacunas sem duplicaes.
           </p>
         </div>
       </div>
       <div class="health-actions-top">
         <span class="coverage-badge">
           <Layers size={13} />
-          {data.healthMetrics?.totalImportedChapters || 0} / {data.healthMetrics?.totalKnownChapters || 0} Capítulos Sincronizados
+          {data.healthMetrics?.totalImportedChapters || 0} / {data.healthMetrics?.totalKnownChapters || 0} Captulos Sincronizados
         </span>
       </div>
     </div>
@@ -842,11 +842,11 @@
     <div class="health-kpi-grid">
       <div class="kpi-card card-healthy">
         <div class="kpi-top">
-          <span class="kpi-label">100% Saudáveis</span>
+          <span class="kpi-label">100% Saudveis</span>
           <CheckCircle2 size={18} class="text-emerald" />
         </div>
         <div class="kpi-value text-emerald">{data.healthMetrics?.healthyCount || 0}</div>
-        <div class="kpi-sub">Obras sem lacunas nem início ausente</div>
+        <div class="kpi-sub">Obras sem lacunas nem incio ausente</div>
       </div>
 
       <div class="kpi-card card-incomplete">
@@ -860,7 +860,7 @@
 
       <div class="kpi-card card-reconciling">
         <div class="kpi-top">
-          <span class="kpi-label">Em Reconciliação Ativa</span>
+          <span class="kpi-label">Em Reconciliao Ativa</span>
           <RotateCw size={18} class="text-cyan animate-spin-slow" />
         </div>
         <div class="kpi-value text-cyan">{data.healthMetrics?.reconcilingCount || 0}</div>
@@ -869,11 +869,11 @@
 
       <div class="kpi-card card-unresolved">
         <div class="kpi-top">
-          <span class="kpi-label">Gaps Irresolvíveis</span>
+          <span class="kpi-label">Gaps Irresolvveis</span>
           <AlertOctagon size={18} class="text-purple" />
         </div>
         <div class="kpi-value text-purple">{data.healthMetrics?.totalUnresolvedGaps || 0}</div>
-        <div class="kpi-sub">Nenhum provedor possui esses capítulos</div>
+        <div class="kpi-sub">Nenhum provedor possui esses captulos</div>
       </div>
     </div>
 
@@ -883,7 +883,7 @@
         <Search size={16} class="health-search-icon" />
         <input
           type="text"
-          placeholder="Filtrar obras auditadas por título ou slug..."
+          placeholder="Filtrar obras auditadas por ttulo ou slug..."
           value={healthSearchQuery}
           oninput={(e) => (healthSearchQuery = (e.target as HTMLInputElement).value)}
           class="health-search-input"
@@ -918,7 +918,7 @@
           class:active={healthFilter === 'HEALTHY'}
           onclick={() => (healthFilter = 'HEALTHY')}
         >
-          Saudáveis ({data.healthMetrics?.healthyCount || 0})
+          Saudveis ({data.healthMetrics?.healthyCount || 0})
         </button>
         <button
           type="button"
@@ -935,7 +935,7 @@
             class:active={healthFilter === 'UNRESOLVED'}
             onclick={() => (healthFilter = 'UNRESOLVED')}
           >
-            Gaps Irresolvíveis ({data.healthMetrics?.totalUnresolvedGaps || 0})
+            Gaps Irresolvveis ({data.healthMetrics?.totalUnresolvedGaps || 0})
           </button>
         {/if}
       </div>
@@ -948,12 +948,12 @@
           <thead>
             <tr>
               <th>Obra</th>
-              <th>Status de Saúde</th>
-              <th>Início</th>
-              <th>Cobertura de Capítulos</th>
+              <th>Status de Sade</th>
+              <th>Incio</th>
+              <th>Cobertura de Captulos</th>
               <th>Fontes Mapeadas (Cross-Provider)</th>
               <th>Lacunas Detectadas</th>
-              <th class="th-actions">Ações</th>
+              <th class="th-actions">Aes</th>
             </tr>
           </thead>
           <tbody>
@@ -979,12 +979,12 @@
                   </div>
                 </td>
 
-                <!-- Status de Saúde -->
+                <!-- Status de Sade -->
                 <td class="td-status">
                   {#if item.healthStatus === 'HEALTHY'}
                     <span class="health-status-badge status-healthy">
                       <CheckCircle2 size={13} />
-                      100% Saudável
+                      100% Saudvel
                     </span>
                   {:else if item.healthStatus === 'RECONCILING' || reconcilingWorkId === item.workId}
                     <span class="health-status-badge status-reconciling">
@@ -1004,17 +1004,17 @@
                   {/if}
                 </td>
 
-                <!-- Início -->
+                <!-- Incio -->
                 <td class="td-start">
                   {#if item.missingStart}
-                    <span class="start-badge badge-missing-start" title="Faltam capítulos anteriores ao primeiro conhecido">
+                    <span class="start-badge badge-missing-start" title="Faltam captulos anteriores ao primeiro conhecido">
                       <AlertTriangle size={12} />
                       Inicia no Cap. {item.firstChapterNumber}
                     </span>
                   {:else}
                     <span class="start-badge badge-start-ok">
                       <Check size={12} />
-                      Início OK (Cap. {item.firstChapterNumber || 1})
+                      Incio OK (Cap. {item.firstChapterNumber || 1})
                     </span>
                   {/if}
                 </td>
@@ -1073,8 +1073,8 @@
                       {/if}
                     {/if}
                     {#if Array.isArray(item.unresolvedGaps) && item.unresolvedGaps.length > 0}
-                      <span class="gap-pill gap-unresolved" title="Nenhum provedor disponível possui estes capítulos">
-                        Irresolvível: {item.unresolvedGaps.slice(0, 3).join(', ')}{item.unresolvedGapCount > 3 ? ` (+${item.unresolvedGapCount - 3})` : ''}
+                      <span class="gap-pill gap-unresolved" title="Nenhum provedor disponvel possui estes captulos">
+                        Irresolvvel: {item.unresolvedGaps.slice(0, 3).join(', ')}{item.unresolvedGapCount > 3 ? ` (+${item.unresolvedGapCount - 3})` : ''}
                       </span>
                     {/if}
                     {#if (!item.gaps || item.gaps.length === 0) && (!item.unresolvedGaps || item.unresolvedGaps.length === 0) && !item.missingStart}
@@ -1086,7 +1086,7 @@
                   </div>
                 </td>
 
-                <!-- Ações -->
+                <!-- Aes -->
                 <td class="td-actions">
                   <div class="action-btn-group">
                     <form
@@ -1105,7 +1105,7 @@
                         type="submit"
                         class="btn-reconcile-action"
                         disabled={reconcilingWorkId === item.workId || item.healthStatus === 'RECONCILING'}
-                        title="Executar reconciliação imediata em todas as fontes (Kuro, MangaFlix, Nexus, Manhastro, MangoToons)"
+                        title="Executar reconciliao imediata em todas as fontes (Kuro, MangaFlix, Nexus, Manhastro, MangoToons)"
                       >
                         <RotateCw size={13} class={reconcilingWorkId === item.workId || item.healthStatus === 'RECONCILING' ? 'animate-spin' : ''} />
                         <span>{reconcilingWorkId === item.workId ? 'Reconciliando...' : 'Reconciliar'}</span>
@@ -1116,7 +1116,7 @@
                       type="button"
                       class="btn-manifest-action"
                       onclick={() => openManifestModal(item)}
-                      title="Abrir manifesto canônico unificado e proveniência de capítulos"
+                      title="Abrir manifesto cannico unificado e provenincia de captulos"
                     >
                       <FileText size={13} />
                       <span>Manifesto</span>
@@ -1149,7 +1149,7 @@
               <h2 class="panel-title">Importando Agora</h2>
               <span class="badge-accent">{data.counts?.importing ?? (data.importingJobs || []).length} ativos</span>
             </div>
-            <p class="panel-sub">Capítulos em execução concorrente no worker (download, validação e storage)</p>
+            <p class="panel-sub">Captulos em execuo concorrente no worker (download, validao e storage)</p>
           </div>
           <span class="live-tag">
             <span class="live-dot"></span>
@@ -1203,7 +1203,7 @@
                       </div>
                       <div class="progress-meta-row">
                         <span class="progress-page-count">
-                          Página {job.progressCurrent || 0} / {job.progressTotal}
+                          Pgina {job.progressCurrent || 0} / {job.progressTotal}
                         </span>
                         <span class="progress-stage-pill stage-{(job.progressStage || 'UPLOADING').toLowerCase()}">
                           {job.progressStage || 'UPLOADING'}
@@ -1213,7 +1213,7 @@
                       <div class="progress-meta-row">
                         <span class="progress-stage-pill stage-{(job.progressStage || 'DOWNLOADING').toLowerCase()}">
                           <span class="pulse-stage-dot"></span>
-                          {job.progressStage === 'DOWNLOADING' ? 'Baixando páginas…' : (job.progressStage || 'Processando capítulo…')}
+                          {job.progressStage === 'DOWNLOADING' ? 'Baixando pginas…' : (job.progressStage || 'Processando captulo…')}
                         </span>
                       </div>
                     {/if}
@@ -1240,8 +1240,8 @@
                     type="button"
                     class="btn-icon-dots"
                     onclick={(e) => toggleMenu(job.id, e)}
-                    title="Menu de opções"
-                    aria-label="Opções"
+                    title="Menu de opes"
+                    aria-label="Opes"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1284,7 +1284,7 @@
                         </form>
                       {/if}
 
-                      <div class="dropdown-submenu-header">Adiar execução:</div>
+                      <div class="dropdown-submenu-header">Adiar execuo:</div>
                       <div class="dropdown-btn-group">
                         <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
                           <input type="hidden" name="job_id" value={job.id} />
@@ -1338,12 +1338,12 @@
         {:else}
           <div class="empty-panel-notice">
             <CheckCircle2 size={24} class="empty-icon" />
-            <p>Nenhum job em importação ativa no exato momento. O worker consulta a fila continuamente.</p>
+            <p>Nenhum job em importao ativa no exato momento. O worker consulta a fila continuamente.</p>
           </div>
         {/if}
       </section>
 
-      <!-- 1b. Área Dedicada: Erros & Retries -->
+      <!-- 1b. rea Dedicada: Erros & Retries -->
       <section class="panel-card" style="margin-top: 24px;" id="sec-retries">
         <div class="panel-header">
           <div>
@@ -1369,7 +1369,7 @@
         <!-- Grouped Retries Summary -->
         {#if groupedRetries.length > 0}
           <div class="retry-groups-container">
-            <span class="retry-groups-title">Padrões de Incidentes Detectados:</span>
+            <span class="retry-groups-title">Padres de Incidentes Detectados:</span>
             <div class="retry-groups-grid">
               {#each groupedRetries as gr}
                 <div class="retry-group-pill" class:active-filter={retryFilterGroup?.source === gr.source && retryFilterGroup?.pattern === gr.patternKey}>
@@ -1473,7 +1473,7 @@
                     type="button"
                     class="btn-action-details"
                     onclick={() => (selectedJobForDetails = job)}
-                    title="Ver diagnóstico completo"
+                    title="Ver diagnstico completo"
                   >
                     Detalhes
                   </button>
@@ -1484,8 +1484,8 @@
                       type="button"
                       class="btn-icon-dots"
                       onclick={(e) => toggleMenu(job.id, e)}
-                      title="Mais opções"
-                      aria-label="Mais opções"
+                      title="Mais opes"
+                      aria-label="Mais opes"
                     >
                       <MoreVertical size={16} />
                     </button>
@@ -1518,7 +1518,7 @@
                           </button>
                         </form>
 
-                        <div class="dropdown-submenu-header">Adiar execução:</div>
+                        <div class="dropdown-submenu-header">Adiar execuo:</div>
                         <div class="dropdown-btn-group">
                           <form method="POST" action="?/postponeJob" use:enhance={() => { activeMenuJobId = null; }}>
                             <input type="hidden" name="job_id" value={job.id} />
@@ -1573,7 +1573,7 @@
         {:else}
           <div class="empty-panel-notice">
             <CheckCircle2 size={24} class="empty-icon text-emerald-400" />
-            <p>Nenhum job aguardando retry no momento. Todos os jobs em fila estão saudáveis ou importando.</p>
+            <p>Nenhum job aguardando retry no momento. Todos os jobs em fila esto saudveis ou importando.</p>
           </div>
         {/if}
       </section>
@@ -1587,7 +1587,7 @@
                 <h2 class="panel-title">Jobs Pausados pela Staff</h2>
                 <span class="badge-amber">{(data.pausedJobs || []).length} retidos</span>
               </div>
-              <p class="panel-sub">Jobs paralisados voluntariamente pela Staff até que sejam explicitamente retomados</p>
+              <p class="panel-sub">Jobs paralisados voluntariamente pela Staff at que sejam explicitamente retomados</p>
             </div>
           </div>
 
@@ -1636,8 +1636,8 @@
                     type="button"
                     class="btn-icon-dots"
                     onclick={(e) => toggleMenu(job.id, e)}
-                    title="Menu de opções"
-                    aria-label="Opções"
+                    title="Menu de opes"
+                    aria-label="Opes"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -1691,7 +1691,7 @@
               <h2 class="panel-title">Prioridades da Staff</h2>
               <span class="badge-accent">{(data.staffRequests || []).length} registradas</span>
             </div>
-            <p class="panel-sub">Obras com boost de prioridade manual atribuído por editores e administradores</p>
+            <p class="panel-sub">Obras com boost de prioridade manual atribudo por editores e administradores</p>
           </div>
         </div>
 
@@ -1713,7 +1713,7 @@
                     <span class="req-status-pill status-{req.status.toLowerCase()}">{req.status}</span>
                     {#if req.cancelReason}
                       <span class="req-cancel-reason-tag">
-                        {req.cancelReason === 'STAFF_CANCELLED' ? 'Cancelado pela Staff' : req.cancelReason === 'REPLACED_BY_STAFF' ? 'Substituído pela Staff' : req.cancelReason}
+                        {req.cancelReason === 'STAFF_CANCELLED' ? 'Cancelado pela Staff' : req.cancelReason === 'REPLACED_BY_STAFF' ? 'Substitudo pela Staff' : req.cancelReason}
                       </span>
                     {/if}
                     {#if req.status === 'RETRYING' && req.lastError}
@@ -1733,7 +1733,7 @@
                 {#if req.status === 'QUEUED'}
                   <form method="POST" action="?/cancel" use:enhance>
                     <input type="hidden" name="request_id" value={req.id} />
-                    <button type="submit" class="btn-cancel-req" title="Cancelar priorização">
+                    <button type="submit" class="btn-cancel-req" title="Cancelar priorizao">
                       Cancelar
                     </button>
                   </form>
@@ -1743,23 +1743,23 @@
           </div>
         {:else}
           <div class="empty-panel-notice">
-            <p>Nenhuma priorização manual ativa no momento. Use o botão <strong>Priorizar Obra</strong> para acelerar uma série.</p>
+            <p>Nenhuma priorizao manual ativa no momento. Use o boto <strong>Priorizar Obra</strong> para acelerar uma srie.</p>
           </div>
         {/if}
       </section>
 
-      <!-- 3. STAGED / Barreira Canônica -->
+      <!-- 3. STAGED / Barreira Cannica -->
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
             <div class="title-with-badge">
-              <h2 class="panel-title">STAGED · Barreira Canônica</h2>
+              <h2 class="panel-title">STAGED · Barreira Cannica</h2>
               {#if data.counts.staged > 0}
-                <span class="badge-purple">{data.counts.staged} capítulos retidos</span>
+                <span class="badge-purple">{data.counts.staged} captulos retidos</span>
               {/if}
             </div>
             <p class="panel-sub">
-              Capítulos baixados e verificados aguardando publicação sequencial de seus predecessores
+              Captulos baixados e verificados aguardando publicao sequencial de seus predecessores
             </p>
           </div>
         </div>
@@ -1770,7 +1770,7 @@
               <div class="staged-row">
                 <div class="staged-info">
                   <strong class="staged-work">{staged.works?.title || 'Obra'}</strong>
-                  <span class="staged-ch">Capítulo {staged.chapterSortKey}</span>
+                  <span class="staged-ch">Captulo {staged.chapterSortKey}</span>
                   <span class="staged-source-chip">{staged.source}</span>
                 </div>
                 <div class="staged-barrier-tag">
@@ -1782,20 +1782,20 @@
           </div>
         {:else}
           <div class="empty-panel-notice">
-            <p>Nenhum capítulo retido na Barreira Canônica. Todas as publicações estão em ordem contínua.</p>
+            <p>Nenhum captulo retido na Barreira Cannica. Todas as publicaes esto em ordem contnua.</p>
           </div>
         {/if}
       </section>
     </div>
 
-    <!-- Right Column: Próximos na Fila & Saúde das Fontes -->
+    <!-- Right Column: Prximos na Fila & Sade das Fontes -->
     <div class="grid-secondary-col">
-      <!-- 1. Próximos da Fila -->
+      <!-- 1. Prximos da Fila -->
       <section class="panel-card">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">Próximos da Fila</h2>
-            <p class="panel-sub">Ordenados por prioridade operacional e sort key canônica</p>
+            <h2 class="panel-title">Prximos da Fila</h2>
+            <p class="panel-sub">Ordenados por prioridade operacional e sort key cannica</p>
           </div>
         </div>
 
@@ -1824,11 +1824,11 @@
         {/if}
       </section>
 
-      <!-- 2. Saúde das Fontes -->
+      <!-- 2. Sade das Fontes -->
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">Saúde das Fontes Operacionais</h2>
+            <h2 class="panel-title">Sade das Fontes Operacionais</h2>
             <p class="panel-sub">
               Provedores: <span style="color: #22c55e; font-weight: 600;">{data.activeSourcesCount ?? 0} operacionais ativos</span>
               {#if (data.upstreamBlockedSourcesCount ?? 0) > 0}
@@ -1837,7 +1837,7 @@
               {/if}
               {#if (data.excludedByPolicySourcesCount ?? 0) > 0}
                 <span style="color: #64748b; margin: 0 4px;">•</span>
-                <span style="color: #ef4444;">{data.excludedByPolicySourcesCount} excluídas por diretriz</span>
+                <span style="color: #ef4444;">{data.excludedByPolicySourcesCount} excludas por diretriz</span>
               {/if}
             </p>
           </div>
@@ -1892,7 +1892,7 @@
               {#if src.lastSyncAt}
                 <div class="source-time">
                   <Clock size={11} />
-                  <span>Último sync {relativeTime(src.lastSyncAt)}</span>
+                  <span>ltimo sync {relativeTime(src.lastSyncAt)}</span>
                 </div>
               {/if}
             </div>
@@ -1931,7 +1931,7 @@
                 <div class="policy-group" style="flex: 1; min-width: 280px;">
                   <h4 style="font-size: 0.8rem; color: #ef4444; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
                     <Shield size={13} />
-                    Fontes Excluídas por Diretriz do Projeto ({data.excludedByPolicySources.length})
+                    Fontes Excludas por Diretriz do Projeto ({data.excludedByPolicySources.length})
                   </h4>
                   <div style="display: flex; flex-direction: column; gap: 6px;">
                     {#each data.excludedByPolicySources as s}
@@ -1951,18 +1951,18 @@
         {/if}
       </section>
 
-      <!-- 3. Diagnóstico Avançado & Falhas Recentes -->
+      <!-- 3. Diagnstico Avanado & Falhas Recentes -->
       <section class="panel-card" style="margin-top: 24px;">
         <details class="diagnosis-accordion">
           <summary class="diagnosis-summary">
             <div class="diag-header-wrap">
               <Activity size={16} />
-              <h2 class="panel-title-inline">Diagnóstico Avançado & Falhas</h2>
+              <h2 class="panel-title-inline">Diagnstico Avanado & Falhas</h2>
             </div>
             {#if data.counts.failed1h > 0}
               <span class="badge-red-mini">{data.counts.failed1h} falhas recentes</span>
             {:else}
-              <span class="badge-green-mini">Estável</span>
+              <span class="badge-green-mini">Estvel</span>
             {/if}
           </summary>
 
@@ -1979,7 +1979,7 @@
                   <strong class="diag-val">{data.telemetry.arrayBuffersMb} MB</strong>
                 </div>
                 <div class="diag-stat">
-                  <span class="diag-label">Ação do Ciclo</span>
+                  <span class="diag-label">Ao do Ciclo</span>
                   <strong class="diag-val">{data.telemetry.cycleAction}</strong>
                 </div>
                 <div class="diag-stat">
@@ -1991,7 +1991,7 @@
 
             <!-- Recent Failures List -->
             {#if data.recentFailures?.length > 0}
-              <h4 class="diag-sub-heading">Últimas Falhas Registradas</h4>
+              <h4 class="diag-sub-heading">ltimas Falhas Registradas</h4>
               <div class="recent-failures-list">
                 {#each data.recentFailures as fail (fail.id)}
                   <div class="recent-failure-item">
@@ -2014,7 +2014,7 @@
 
             <!-- Staff Audit Log -->
             {#if data.recentAudit?.length > 0}
-              <h4 class="diag-sub-heading" style="margin-top: 24px;">Auditoria de Intervenções da Staff</h4>
+              <h4 class="diag-sub-heading" style="margin-top: 24px;">Auditoria de Intervenes da Staff</h4>
               <div class="recent-failures-list">
                 {#each data.recentAudit as audit (audit.id)}
                   <div class="recent-failure-item" style="border-left-color: #38bdf8;">
@@ -2039,7 +2039,7 @@
   </div>
 </div>
 
-<!-- Modal: Detalhes e Diagnóstico do Job -->
+<!-- Modal: Detalhes e Diagnstico do Job -->
 {#if selectedJobForDetails}
   <div
     class="modal-backdrop"
@@ -2064,7 +2064,7 @@
               {selectedJobForDetails.work?.title || (selectedJobForDetails.payload as any)?.workTitle || 'Detalhes do Job'}
             </h3>
             <p class="modal-sub">
-              Fonte: <strong>{selectedJobForDetails.source.toUpperCase()}</strong> · Capítulo {selectedJobForDetails.chapterSortKey || (selectedJobForDetails.payload as any)?.chapterNumber || '—'}
+              Fonte: <strong>{selectedJobForDetails.source.toUpperCase()}</strong> · Captulo {selectedJobForDetails.chapterSortKey || (selectedJobForDetails.payload as any)?.chapterNumber || '—'}
             </p>
           </div>
         </div>
@@ -2109,7 +2109,7 @@
             </div>
 
             <div class="diag-retry-countdown-line">
-              Próxima tentativa em: <strong>{formatCountdown(selectedJobForDetails.nextRunAt)}</strong>
+              Prxima tentativa em: <strong>{formatCountdown(selectedJobForDetails.nextRunAt)}</strong>
               ({selectedJobForDetails.nextRunAt ? new Date(selectedJobForDetails.nextRunAt).toLocaleString() : 'em instantes'})
             </div>
 
@@ -2148,7 +2148,7 @@
           <div class="diag-attr">
             <span class="attr-label">Progresso Atual</span>
             <span class="attr-val">
-              {selectedJobForDetails.progressCurrent || 0} / {selectedJobForDetails.progressTotal || 0} páginas ({selectedJobForDetails.progressStage || 'N/A'})
+              {selectedJobForDetails.progressCurrent || 0} / {selectedJobForDetails.progressTotal || 0} pginas ({selectedJobForDetails.progressStage || 'N/A'})
             </span>
           </div>
           <div class="diag-attr">
@@ -2255,7 +2255,7 @@
       </div>
 
       <p class="modal-desc">
-        A obra selecionada receberá prioridade operacional Staff (P: 85), ultrapassando a fila de rotina sem quebrar a Barreira Canônica.
+        A obra selecionada receber prioridade operacional Staff (P: 85), ultrapassando a fila de rotina sem quebrar a Barreira Cannica.
       </p>
 
       <form method="POST" action="?/prioritize" use:enhance={() => {
@@ -2275,7 +2275,7 @@
             required
             bind:value={selectedWorkId}
           >
-            <option value="" disabled selected>Escolha uma obra do catálogo...</option>
+            <option value="" disabled selected>Escolha uma obra do catlogo...</option>
             {#each data.catalogWorks as w (w.id)}
               <option value={w.id}>{w.title}</option>
             {/each}
@@ -2283,13 +2283,13 @@
         </div>
 
         <div class="modal-field">
-          <label for="reason-input" class="field-label">Motivo da priorização (opcional)</label>
+          <label for="reason-input" class="field-label">Motivo da priorizao (opcional)</label>
           <input
             id="reason-input"
             name="reason"
             type="text"
             class="field-input"
-            placeholder="Ex: Novo arco lançado, pedido de assinante, etc."
+            placeholder="Ex: Novo arco lanado, pedido de assinante, etc."
             bind:value={reasonText}
             maxlength="150"
           />
@@ -2322,7 +2322,7 @@
 {/if}
 
 <!-- Modal: Conflito de Prioridade Absoluta -->
-{#if form?.conflict && showConflictModal}
+{#if (form as any)?.conflict && showConflictModal}
   <div
     class="modal-backdrop"
     role="dialog"
@@ -2353,7 +2353,7 @@
       </div>
 
       <p class="modal-desc">
-        Já existe uma prioridade absoluta ativa: <strong>{form.activeWorkTitle}</strong>.
+        J existe uma prioridade absoluta ativa: <strong>{form?.activeWorkTitle}</strong>.
       </p>
 
       <p class="conflict-prompt">
@@ -2366,7 +2366,7 @@
           class="btn-modal-cancel"
           onclick={() => (showConflictModal = false)}
         >
-          Não
+          No
         </button>
         <form method="POST" action="?/prioritize" use:enhance={() => {
           submitting = true;
@@ -2376,7 +2376,7 @@
             await update();
           };
         }}>
-          <input type="hidden" name="work_id" value={form.workId} />
+          <input type="hidden" name="work_id" value={(form as any)?.workId} />
           <input type="hidden" name="force_replace" value="true" />
           <button
             type="submit"
@@ -2396,7 +2396,7 @@
   </div>
 {/if}
 
-<!-- Modal: Confirmação de Cancelamento de Prioridade Absoluta -->
+<!-- Modal: Confirmao de Cancelamento de Prioridade Absoluta -->
 {#if showCancelConfirmModal && data.activeFocus}
   <div
     class="modal-backdrop"
@@ -2428,7 +2428,7 @@
       </div>
 
       <p class="modal-desc">
-        A obra <strong>{data.activeFocus.works?.title || 'atual'}</strong> deixará de receber prioridade absoluta e o Importer retomará a fila normal.
+        A obra <strong>{data.activeFocus.works?.title || 'atual'}</strong> deixar de receber prioridade absoluta e o Importer retomar a fila normal.
       </p>
 
       <div class="modal-actions">
@@ -2466,7 +2466,7 @@
   </div>
 {/if}
 
-<!-- Modal: Manifesto Canônico Multi-Fonte -->
+<!-- Modal: Manifesto Cannico Multi-Fonte -->
 {#if showManifestModal && selectedManifestWork}
   <div
     class="modal-backdrop"
@@ -2491,9 +2491,9 @@
             <FileText size={20} class="text-crimson" />
           </div>
           <div>
-            <h3 class="modal-title">{selectedManifestWork.work?.title || 'Manifesto Canônico'}</h3>
+            <h3 class="modal-title">{selectedManifestWork.work?.title || 'Manifesto Cannico'}</h3>
             <p class="manifest-sub-text">
-              Manifesto unificado de capítulos e proveniência multi-fonte (Zero duplicações na plataforma)
+              Manifesto unificado de captulos e provenincia multi-fonte (Zero duplicaes na plataforma)
             </p>
           </div>
         </div>
@@ -2505,7 +2505,7 @@
       <div class="manifest-modal-body">
         <div class="manifest-summary-strip">
           <div class="manifest-kpi">
-            <span class="kpi-title">Capítulos Conhecidos:</span>
+            <span class="kpi-title">Captulos Conhecidos:</span>
             <strong class="kpi-num">{selectedManifestWork.totalKnownChapters || 0}</strong>
           </div>
           <div class="manifest-kpi">
@@ -2521,7 +2521,7 @@
           {#if selectedManifestWork.missingStart}
             <div class="manifest-kpi alert">
               <AlertTriangle size={13} class="text-amber" />
-              <span class="text-amber">Falta início (1..{selectedManifestWork.firstChapterNumber - 1})</span>
+              <span class="text-amber">Falta incio (1..{selectedManifestWork.firstChapterNumber - 1})</span>
             </div>
           {/if}
         </div>
@@ -2529,18 +2529,18 @@
         {#if manifestLoading}
           <div class="manifest-loading-box">
             <RotateCw size={28} class="animate-spin text-crimson" />
-            <p>Carregando manifesto canônico da obra...</p>
+            <p>Carregando manifesto cannico da obra...</p>
           </div>
         {:else if manifestChapters.length > 0}
           <div class="manifest-table-wrap">
             <table class="manifest-table">
               <thead>
                 <tr>
-                  <th>Capítulo</th>
-                  <th>Status Canônico</th>
-                  <th>Fonte Primária</th>
-                  <th>Fontes Disponíveis (Fallback)</th>
-                  <th>Páginas</th>
+                  <th>Captulo</th>
+                  <th>Status Cannico</th>
+                  <th>Fonte Primria</th>
+                  <th>Fontes Disponveis (Fallback)</th>
+                  <th>Pginas</th>
                   <th>Verificado</th>
                 </tr>
               </thead>
@@ -2592,7 +2592,7 @@
                       </div>
                     </td>
                     <td class="td-ch-pages">
-                      {ch.pageCount > 0 ? ch.pageCount + ' páginas' : '—'}
+                      {ch.pageCount > 0 ? ch.pageCount + ' pginas' : '—'}
                     </td>
                     <td class="td-ch-time">
                       {ch.lastCheckedAt ? relativeTime(ch.lastCheckedAt) : '—'}
@@ -2605,8 +2605,8 @@
         {:else}
           <div class="manifest-empty-box">
             <FileText size={32} class="text-zinc-500" />
-            <p>Nenhum capítulo cadastrado no manifesto desta obra ainda.</p>
-            <p class="sub">Execute uma reconciliação para descobrir todos os capítulos nas fontes cadastradas.</p>
+            <p>Nenhum captulo cadastrado no manifesto desta obra ainda.</p>
+            <p class="sub">Execute uma reconciliao para descobrir todos os captulos nas fontes cadastradas.</p>
           </div>
         {/if}
       </div>

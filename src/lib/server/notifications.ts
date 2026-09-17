@@ -1,4 +1,6 @@
-import { privileged } from './db';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq, sql, and } from 'drizzle-orm';
+
 import { sendBrevoEmail, queryBrevoEvents } from './brevo';
 import { generateEmailHtml } from './email-templates';
 
@@ -58,16 +60,11 @@ async function resolveUserContact(userId: string): Promise<{ email: string | nul
     return { email: cached.email, name: cached.name };
   }
 
-  const db = privileged();
-
+  
   // 1. Get display name from public.members
   let name = 'Membro';
   try {
-    const { data: m } = await db
-      .from('members')
-      .select('username, display_name')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data: m } = await safeQuerySingle(db.select({ username: schema.members.username, displayName: schema.members.displayName }).from(schema.members).where(eq(schema.members.id, userId)));
     if (m) {
       name = m.displayName || m.username || 'Membro';
     }
@@ -78,9 +75,9 @@ async function resolveUserContact(userId: string): Promise<{ email: string | nul
   // 2. Get email from auth.users via admin client
   let email: string | null = null;
   try {
-    const { data: authUser } = await db.auth.admin.getUserById(userId);
-    if (authUser?.user?.email) {
-      email = authUser.user.email;
+    const [authUser] = await db.select({ email: schema.user.email }).from(schema.user).where(eq(schema.user.id, userId));
+    if (authUser?.email) {
+      email = authUser.email;
       emailCache.set(userId, { email, name, expires: Date.now() + 1000 * 60 * 15 }); // 15 mins cache
     }
   } catch (err) {
@@ -91,15 +88,15 @@ async function resolveUserContact(userId: string): Promise<{ email: string | nul
 }
 
 /**
- * Cria uma notificação no sistema global.
+ * Cria uma notificao no sistema global.
  * 
  * Regras:
- * 1. Não notifica auto-ações (ex: A menciona A, A responde A).
- * 2. Eventos de sistema (LEVEL_UP, ACHIEVEMENT) notificam o próprio usuário.
+ * 1. No notifica auto-aes (ex: A menciona A, A responde A).
+ * 2. Eventos de sistema (LEVEL_UP, ACHIEVEMENT) notificam o prprio usurio.
  * 3. Persiste em public.notifications como fonte de verdade.
  * 4. Se scanId presente, sincroniza com scan_notifications.
- * 5. Deriva automaticamente o registro em scan_email_outbox com idempotência.
- * 6. Dispara o processamento assíncrono do e-mail.
+ * 5. Deriva automaticamente o registro em scan_email_outbox com idempotncia.
+ * 6. Dispara o processamento assncrono do e-mail.
  */
 export async function createNotification(
   params: CreateNotificationParams,
@@ -124,15 +121,14 @@ export async function createNotification(
 
   const platform = paramPlatform || platformParam;
 
-  // 1. Auto-notificação permitida para menções (@usuário e @cargo), além de eventos de sistema
+  // 1. Auto-notificao permitida para menes (@usurio e @cargo), alm de eventos de sistema
   const isSelfAllowed = type === 'MENTION' || type === 'ROLE_MENTION' || type === 'LEVEL_UP' || type === 'ACHIEVEMENT';
   if (!isSelfAllowed && actorUserId && actorUserId === recipientUserId) {
     return { notificationId: null, emailQueued: false, skippedSelf: true };
   }
 
-  const db = privileged();
-
-  // 2. Chave determinística de deduplicação
+  
+  // 2. Chave determinstica de deduplicao
   const cleanDedupeKey = dedupeKey || `${type}:${recipientUserId}:${entityId || deepLink || Date.now()}`;
 
   // 3. Persistir em public.notifications
@@ -141,7 +137,7 @@ export async function createNotification(
     kind: type.toLowerCase(),
     type: type,
     title: title,
-    body: body,
+    body: body, isRead: false,
     href: deepLink,
     dedupeKey: cleanDedupeKey,
     priority: priority,
@@ -151,14 +147,12 @@ export async function createNotification(
     entityId: entityId};
 
   let notificationId: string | null = null;
-  const { data: insertedNotif, error: notifErr } = await db
-    .from('notifications')
-    .insert(notifInsertPayload)
-    .select('id')
-    .maybeSingle();
+  const { data: insertedNotif, error: notifErr } = await safeQuerySingle(
+    db.insert(schema.notifications).values(notifInsertPayload).returning({ id: schema.notifications.id })
+  );
 
   if (notifErr) {if (notifErr.code === '23505') {
-      // Violação de unique(userId, dedupeKey) - já foi notificado!
+      // Violao de unique(userId, dedupeKey) - j foi notificado!
       return { notificationId: null, emailQueued: false, deduped: true};
     }
     console.error('[NOTIF] Erro ao inserir public.notifications:', notifErr);
@@ -166,31 +160,30 @@ export async function createNotification(
     notificationId = insertedNotif.id;
   }
 
-  // Se não inseriu nem obteve ID, tentar recuperar ID existente pelo dedupeKey
+  // Se no inseriu nem obteve ID, tentar recuperar ID existente pelo dedupeKey
   if (!notificationId) {
-    const { data: existing } = await db
-      .from('notifications')
-      .select('id')
-      .eq('user_id', recipientUserId)
-      .eq('dedupe_key', cleanDedupeKey)
-      .maybeSingle();
+    const { data: existing } = await safeQuerySingle(
+      db.select({ id: schema.notifications.id })
+        .from(schema.notifications)
+        .where(and(eq(schema.notifications.userId, recipientUserId), eq(schema.notifications.dedupeKey, cleanDedupeKey)))
+    );
     if (existing) {
       notificationId = existing.id;
     }
   }
 
-  // 4. Sincronizar com scan_notifications se houver scan_id
+  // 4. Sincronizar com scan_notifications se houver scanId
   if (scanId && notificationId) {const scanType = ['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED', 'STAGE_READY', 'QC_ISSUE', 'APPLICATION', 'SYSTEM'].includes(type)
       ? type
       : 'SYSTEM';
 
     try {
-      await db.from('scan_notifications').insert({
+      await db.insert(schema.scanNotifications).values({
         scanId: scanId,
         userId: recipientUserId,
         type: scanType,
         title: title,
-        body: body,
+        body: body, isRead: false,
         deepLink: deepLink});
     } catch (e: any) {
       console.warn('[NOTIF] Aviso ao sincronizar scan_notifications:', e?.message);
@@ -205,7 +198,7 @@ export async function createNotification(
     const { email: recipientEmail, name: recipientName } = await resolveUserContact(recipientUserId);
 
     if (recipientEmail) {
-      // Obter nome do actor para personalização
+      // Obter nome do actor para personalizao
       let actorName: string | undefined = undefined;
       if (actorUserId) {
         const contact = await resolveUserContact(actorUserId);
@@ -228,9 +221,9 @@ export async function createNotification(
 
       const emailIdempotencyKey = `email:${notificationId}`;
 
-      const { data: outboxItem, error: outboxErr } = await db
-        .from('scan_email_outbox')
-        .insert({scanId: scanId,
+      const { data: outboxItem, error: outboxErr } = await safeQuerySingle(
+        db.insert(schema.scanEmailOutbox).values({
+          scanId: scanId,
           recipientUserId: recipientUserId,
           recipientEmail: recipientEmail,
           subject,
@@ -239,16 +232,17 @@ export async function createNotification(
           deliveryStatus: 'QUEUED',
           priority: outboxPriority,
           idempotencyKey: emailIdempotencyKey,
+          scheduledAt: new Date().toISOString(),
           notificationId: notificationId,
-          attempts: 0})
-        .select('id')
-        .maybeSingle();
+          attempts: 0
+        }).returning({ id: schema.scanEmailOutbox.id })
+      );
 
       if (!outboxErr && outboxItem) {
         emailQueued = true;
         outboxId = outboxItem.id;
       } else if (outboxErr?.code === '23505') {
-        // Já existe outbox para esta notificação (derivada pelo trigger ou inserção prévia)
+        // J existe outbox para esta notificao (derivada pelo trigger ou insero prvia)
         emailQueued = true;
       } else if (outboxErr) {
         console.error('[NOTIF] Erro ao inserir scan_email_outbox:', outboxErr);
@@ -260,8 +254,8 @@ export async function createNotification(
           console.error('[NOTIF] Erro no processamento imediato da outbox:', err);
         });
 
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(dispatchPromise);
+        if ((platform as any)?.context?.waitUntil) {
+          (platform as any).context.waitUntil(dispatchPromise);
         } else {
           await dispatchPromise;
         }
@@ -277,8 +271,8 @@ let hasQueuedRun = false;
 
 /**
  * Processa itens pendentes da outbox de e-mail enviando para o Brevo.
- * Garante concorrência atômica no banco (SKIP LOCKED + Lease),
- * prioridade justa sem starvation e envio instantâneo para specificId.
+ * Garante concorrncia atmica no banco (SKIP LOCKED + Lease),
+ * prioridade justa sem starvation e envio instantneo para specificId.
  */
 export async function processPendingEmailOutbox(
   limit: number = 20,
@@ -295,17 +289,16 @@ export async function processPendingEmailOutbox(
   }
 
   isDispatching = true;
-  const db = privileged();
-  const details: any[] = [];
+    const details: any[] = [];
   let sent = 0;
   let failed = 0;
   const workerId = `worker_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
 
   try {
-    // 1. Claim atômico persistente via RPC com FOR UPDATE SKIP LOCKED
+    // 1. Claim atmico persistente via RPC com FOR UPDATE SKIP LOCKED
     // Automaticamente recupera crashes/leases expirados, protege contra duplo envio entre workers
     // e aplica prioridade (HIGH > NORMAL > LOW) com FIFO estrito por prioridade (sem starvation).
-    const { data: items, error: claimErr } = await db.rpc('claim_scan_email_outbox_batch', {
+    const { data: items, error: claimErr } = await (db as any).execute('claim_scan_email_outbox_batch', {
       p_limit: limit,
       p_specific_id: specificId || null,
       p_lease_seconds: 300,
@@ -313,7 +306,7 @@ export async function processPendingEmailOutbox(
     });
 
     if (claimErr) {
-      console.error('[OUTBOX] Erro ao reivindicar lote de e-mails atômico:', claimErr);
+      console.error('[OUTBOX] Erro ao reivindicar lote de e-mails atmico:', claimErr);
       return { processed: 0, sent: 0, failed: 0, details: [] };
     }
 
@@ -321,21 +314,19 @@ export async function processPendingEmailOutbox(
       return { processed: 0, sent: 0, failed: 0, details: [] };
     }
 
-    // 2. Processar cada e-mail via Brevo REST API com pre-flight durável
+    // 2. Processar cada e-mail via Brevo REST API com pre-flight durvel
     for (const item of items) {
       const sendStartedAt = new Date().toISOString();
       const providerRequestKey = `${item.id}:${item.attempts || 1}`;
 
-      // 2.1. PRE-FLIGHT DURÁVEL:
-      // Persiste no banco que a requisição externa está iniciando.
-      // Caso ocorra crash durante ou após o POST da Brevo, o lease recovery detecta
+      // 2.1. PRE-FLIGHT DURVEL:
+      // Persiste no banco que a requisio externa est iniciando.
+      // Caso ocorra crash durante ou aps o POST da Brevo, o lease recovery detecta
       // send_started_at != null e move o item para DELIVERY_UNCERTAIN (bloqueando reenvio cego).
-      await db
-        .from('scan_email_outbox')
-        .update({sendStartedAt: sendStartedAt,
+      await safeQuery(db.update(schema.scanEmailOutbox).set({sendStartedAt: sendStartedAt,
           providerRequestKey: providerRequestKey,
           deliveryStatus: 'SENDING'})
-        .eq('id', item.id);
+        .where(eq(schema.scanEmailOutbox.id, item.id)));
 
       const result = await sendBrevoEmail({
         toEmail: item.recipientEmail,
@@ -348,40 +339,34 @@ export async function processPendingEmailOutbox(
         tags: ['nox', item.priority ? item.priority.toLowerCase() : 'normal']
       });
 
-      if (result.success && result.messageId) {// SUCESSO: accepted pelo Brevo
-        await db
-          .from('scan_email_outbox')
-          .update({
+      if (result.success && (result as any).messageId) {// SUCESSO: accepted pelo Brevo
+        await safeQuery(db.update(schema.scanEmailOutbox).set({
             status: 'SENT',
             deliveryStatus: 'ACCEPTED',
-            providerMessageId: result.messageId,
+            providerMessageId: (result as any).messageId,
             sentAt: new Date().toISOString(),
             lastError: null,
-            leaseExpiresAt: null})
-          .eq('id', item.id);
+            leaseExpiresAt: null}).where(eq(schema.scanEmailOutbox.id, item.id)));
 
         sent++;
         details.push({
           id: item.id,
           recipient: item.recipientEmail,
           status: 'SENT',
-          providerMessageId: result.messageId
+          providerMessageId: (result as any).messageId
         });
       } else if (result.isRateLimit) {// TRATAMENTO BREVO 429: Respeitar Retry-After sem descartar o e-mail
         const retryAfterSec = result.retryAfterSeconds || 60;
         const nextSchedule = new Date(Date.now() + retryAfterSec * 1000).toISOString();
 
-        await db
-          .from('scan_email_outbox')
-          .update({
+        await safeQuery(db.update(schema.scanEmailOutbox).set({
             status: 'PENDING',
             deliveryStatus: 'RATE_LIMITED',
             lastError: `Brevo Rate Limit 429 - retrying after ${retryAfterSec}s: ${result.error}`,
-            scheduled_at: nextSchedule,
-            send_started_at: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
+            scheduledAt: nextSchedule,
+            sendStartedAt: null,
+            leaseExpiresAt: null
+          }).where(eq(schema.scanEmailOutbox.id, item.id)));
 
         failed++;
         details.push({
@@ -391,17 +376,14 @@ export async function processPendingEmailOutbox(
           error: result.error,
           retryAfterSeconds: retryAfterSec
         });
-      } else if (result.isPermanentFailure) {// ERRO PERMANENTE: (ex: email inválido, unverified domain) -> não fazer retry infinito
-        await db
-          .from('scan_email_outbox')
-          .update({
+      } else if (result.isPermanentFailure) {// ERRO PERMANENTE: (ex: email invlido, unverified domain) -> no fazer retry infinito
+        await safeQuery(db.update(schema.scanEmailOutbox).set({
             status: 'FAILED',
             deliveryStatus: 'FAILED',
             lastError: `Permanent error from Brevo: ${result.error}`,
-            send_started_at: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
+            sendStartedAt: null,
+            leaseExpiresAt: null
+          }).where(eq(schema.scanEmailOutbox.id, item.id)));
 
         failed++;
         details.push({
@@ -411,22 +393,19 @@ export async function processPendingEmailOutbox(
           error: result.error,
           permanent: true
         });
-      } else {// FALHA TEMPORÁRIA: backoff exponencial controlado (2min, 4min, 8min, 16min)
+      } else {// FALHA TEMPORRIA: backoff exponencial controlado (2min, 4min, 8min, 16min)
         const nextAttempts = item.attempts || 1;
         const isPermanentFail = nextAttempts >= 5;
         const backoffMinutes = Math.min(30, Math.pow(2, Math.min(nextAttempts, 4)));
         const nextSchedule = new Date(Date.now() + backoffMinutes * 60 * 1000).toISOString();
 
-        await db
-          .from('scan_email_outbox')
-          .update({
+        await safeQuery(db.update(schema.scanEmailOutbox).set({
             status: isPermanentFail ? 'FAILED' : 'PENDING',
             deliveryStatus: isPermanentFail ? 'FAILED' : 'RETRYING',
             lastError: result.error || 'Erro desconhecido ao chamar Brevo',
             scheduledAt: nextSchedule,
             sendStartedAt: null,
-            leaseExpiresAt: null})
-          .eq('id', item.id);
+            leaseExpiresAt: null}).where(eq(schema.scanEmailOutbox.id, item.id)));
 
         failed++;
         details.push({
@@ -441,12 +420,12 @@ export async function processPendingEmailOutbox(
     // 3. Monitoramento e alerta de fila travada
     let metrics: any = null;
     try {
-      const res = await (db.rpc('get_scan_email_outbox_metrics') as any);
+      const res = await ((db as any).execute('get_scan_email_outbox_metrics') as any);
       metrics = res?.data;
     } catch {}
     if (metrics?.queue_stalled) {
       console.warn(
-        `[OUTBOX_STALLED_ALERT] Fila de e-mails com atraso superior a 10 minutos! Mais antigo aguardando há ${metrics.oldest_pending_age_seconds}s (${metrics.pending_count} pendentes).`
+        `[OUTBOX_STALLED_ALERT] Fila de e-mails com atraso superior a 10 minutos! Mais antigo aguardando h ${metrics.oldest_pending_age_seconds}s (${metrics.pending_count} pendentes).`
       );
     }
   } catch (err: any) {
@@ -467,15 +446,14 @@ export async function processPendingEmailOutbox(
 }
 
 /**
- * Reconcilia registros em DELIVERY_UNCERTAIN após crash ou perda de conexão.
+ * Reconcilia registros em DELIVERY_UNCERTAIN aps crash ou perda de conexo.
  * Consulta a API de eventos do Brevo para verificar se o e-mail foi aceito/entregue
  * antes de decidir entre marcar RECONCILED_SENT ou liberar para novo envio seguro.
  */
 export async function reconcileUncertainEmailOutbox(limit = 10) {
-  const db = privileged();
-  const workerId = `reconciler_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
+    const workerId = `reconciler_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
 
-  const { data: items, error: claimErr } = await db.rpc('claim_uncertain_email_outbox_batch', {
+  const { data: items, error: claimErr } = await (db as any).execute('claim_uncertain_email_outbox_batch', {
     p_limit: limit,
     p_worker_id: workerId,
     p_lease_seconds: 300
@@ -492,7 +470,7 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
   for (const item of items) {const sendStartedTime = item.sendStartedAt ? new Date(item.sendStartedAt).getTime() : 0;
     const ageSeconds = sendStartedTime ? (Date.now() - sendStartedTime) / 1000 : 9999;
 
-    // Janela de busca: 10 minutos antes até 15 minutos depois do sendStartedAt
+    // Janela de busca: 10 minutos antes at 15 minutos depois do sendStartedAt
     const startDate = sendStartedTime 
       ? new Date(Math.max(0, sendStartedTime - 10 * 60 * 1000)).toISOString()
       : undefined;
@@ -506,7 +484,7 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
       endDate,
       limit: 50});
 
-    // Procura por evento correspondente ao mesmo destinatário e assunto
+    // Procura por evento correspondente ao mesmo destinatrio e assunto
     const matchingEvent = events.find(e => {
       if (e.email.toLowerCase() !== item.recipientEmail.toLowerCase()) return false;
       const subjA = (e.subject || '').trim().toLowerCase();
@@ -514,48 +492,42 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
       return subjA === subjB || subjA.includes(subjB) || subjB.includes(subjA);
     });
 
-    if (matchingEvent && matchingEvent.messageId) {// PROVADO: Brevo recebeu e aceitou o e-mail!
-      // NÃO reenviar. Marcar como SENT com deliveryStatus = 'RECONCILED_SENT'
-      await db
-        .from('scan_email_outbox')
-        .update({
+    if (matchingEvent && (matchingEvent as any).messageId) {// PROVADO: Brevo recebeu e aceitou o e-mail!
+      // NO reenviar. Marcar como SENT com deliveryStatus = 'RECONCILED_SENT'
+      await safeQuery(db.update(schema.scanEmailOutbox).set({
           status: 'SENT',
-          delivery_status: 'RECONCILED_SENT',
-          providerMessageId: matchingEvent.messageId,
+          deliveryStatus: 'RECONCILED_SENT',
+          providerMessageId: (matchingEvent as any).messageId,
           sentAt: matchingEvent.date || new Date().toISOString(),
           reconciledAt: new Date().toISOString(),
           reconciliationNotes: `Reconciliado via evento Brevo "${matchingEvent.event}" em ${matchingEvent.date}`,
-          lease_expires_at: null
+          leaseExpiresAt: null
         })
-        .eq('id', item.id);
+        .where(eq(schema.scanEmailOutbox.id, item.id)));
       reconciled++;
     } else if (ageSeconds < 300) {
       // Menos de 5 minutos desde o envio: o evento Brevo pode ainda estar sendo propagado
-      // Manter em reconciliação aguardando próximo ciclo (limpando lease para novo ciclo)
+      // Manter em reconciliao aguardando prximo ciclo (limpando lease para novo ciclo)
       const evSample = events.slice(0, 3).map(e => `[${e.subject}]`).join(', ');
-      await db
-        .from('scan_email_outbox')
-        .update({deliveryStatus: 'RECONCILIATION_WAITING',
+      await safeQuery(db.update(schema.scanEmailOutbox).set({deliveryStatus: 'RECONCILIATION_WAITING',
           reconciliationNotes: `Aguardando Brevo (idade: ${Math.round(ageSeconds)}s, evs=${events.length}): ${evSample || 'nenhum'} vs buscado: [${item.subject}]`,
-          lease_expires_at: null
+          leaseExpiresAt: null
         })
-        .eq('id', item.id);
+        .where(eq(schema.scanEmailOutbox.id, item.id)));
       waiting++;
     } else {// Passaram mais de 5 minutos e nenhum evento foi registrado no Brevo:
-      // Comprovado que o Brevo NÃO recebeu a mensagem (falha na conexão antes de chegar ao Brevo)
+      // Comprovado que o Brevo NO recebeu a mensagem (falha na conexo antes de chegar ao Brevo)
       // Liberado para retry seguro!
-      await db
-        .from('scan_email_outbox')
-        .update({
+      await safeQuery(db.update(schema.scanEmailOutbox).set({
           status: 'PENDING',
           deliveryStatus: 'RECONCILED_RETRY',
           sendStartedAt: null,
-          lastError: `Reconciliação confirmou ausência de recebimento no Brevo após ${Math.round(ageSeconds)}s. Liberado para re-tentativa segura.`,
-          reconciled_at: new Date().toISOString(),
-          scheduled_at: new Date().toISOString(),
-          lease_expires_at: null
+          lastError: `Reconciliao confirmou ausncia de recebimento no Brevo aps ${Math.round(ageSeconds)}s. Liberado para re-tentativa segura.`,
+          reconciledAt: new Date().toISOString(),
+          scheduledAt: new Date().toISOString(),
+          leaseExpiresAt: null
         })
-        .eq('id', item.id);
+        .where(eq(schema.scanEmailOutbox.id, item.id)));
       retried++;
     }
   }
@@ -564,17 +536,16 @@ export async function reconcileUncertainEmailOutbox(limit = 10) {
 }
 
 /**
- * Consulta métricas e status de saúde da outbox.
+ * Consulta mtricas e status de sade da outbox.
  */
 export async function getOutboxMetrics() {
-  const db = privileged();
-  const { data, error } = await db.rpc('get_scan_email_outbox_metrics');
+    const { data, error } = await (db as any).execute('get_scan_email_outbox_metrics');
   if (error) throw error;
   return data;
 }
 
 /**
- * Aciona o envio assíncrono em segundo plano sem bloquear a resposta do servidor.
+ * Aciona o envio assncrono em segundo plano sem bloquear a resposta do servidor.
  */
 export function triggerImmediateOutboxDispatch() {
   setTimeout(() => {

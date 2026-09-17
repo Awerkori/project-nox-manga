@@ -225,18 +225,18 @@
       color: '#94a3b8',
       badgeBg: 'rgba(148, 163, 184, 0.14)',
       badgeBorder: 'rgba(148, 163, 184, 0.3)',
-      subtitle: 'Cadastre novos capítulos, baixe ou envie o RAW original para iniciar o fluxo.',
+      subtitle: 'Cadastre novos captulos, baixe ou envie o RAW original para iniciar o fluxo.',
       aliases: ['raw', 'raw provider'],
       requiresOutput: true
     },
     {
       slug: 'traducao',
-      name: 'Tradução',
+      name: 'Traduo',
       icon: '🌐',
       color: '#3b82f6',
       badgeBg: 'rgba(59, 130, 246, 0.14)',
       badgeBorder: 'rgba(59, 130, 246, 0.3)',
-      subtitle: 'Baixe o RAW, faça a tradução dos textos e envie o script/arquivo final.',
+      subtitle: 'Baixe o RAW, faa a traduo dos textos e envie o script/arquivo final.',
       aliases: ['traducao', 'translation', 'tradutor'],
       requiresOutput: true
     },
@@ -247,7 +247,7 @@
       color: '#ec4899',
       badgeBg: 'rgba(236, 72, 153, 0.14)',
       badgeBorder: 'rgba(236, 72, 153, 0.3)',
-      subtitle: 'Baixe o RAW, faça a limpeza dos balões e reconstrução da arte.',
+      subtitle: 'Baixe o RAW, faa a limpeza dos bales e reconstruo da arte.',
       aliases: ['clean', 'clean_redraw', 'clean/redraw', 'redraw'],
       requiresOutput: true
     },
@@ -258,7 +258,7 @@
       color: '#eab308',
       badgeBg: 'rgba(234, 179, 8, 0.14)',
       badgeBorder: 'rgba(234, 179, 8, 0.3)',
-      subtitle: 'Insira os textos traduzidos nas páginas limpas após a conclusão de Clean/Redraw e Tradução.',
+      subtitle: 'Insira os textos traduzidos nas pginas limpas aps a concluso de Clean/Redraw e Traduo.',
       aliases: ['typeset', 'typer'],
       requiresOutput: true
     },
@@ -269,19 +269,19 @@
       color: '#a855f7',
       badgeBg: 'rgba(168, 85, 247, 0.14)',
       badgeBorder: 'rgba(168, 85, 247, 0.3)',
-      subtitle: 'Revisão textual e controle de qualidade minucioso. Aprove o capítulo ou aponte correções necessárias.',
+      subtitle: 'Reviso textual e controle de qualidade minucioso. Aprove o captulo ou aponte correes necessrias.',
       aliases: ['revisor_qc', 'revisao', 'qc', 'review', 'revisor (qc)'],
       requiresOutput: false
     },
     {
       slug: 'pre_aprovado',
-      name: 'Pré Aprovado',
+      name: 'Pr Aprovado',
       icon: '✅',
       color: '#06b6d4',
       badgeBg: 'rgba(6, 182, 212, 0.14)',
       badgeBorder: 'rgba(6, 182, 212, 0.3)',
-      subtitle: 'Capítulo validado e pré-aprovado. Pronto para liberação oficial no catálogo.',
-      aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado'],
+      subtitle: 'Captulo validado e pr-aprovado. Pronto para liberao oficial no catlogo.',
+      aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pr aprovado'],
       requiresOutput: false
     },
     {
@@ -291,7 +291,7 @@
       color: '#22c55e',
       badgeBg: 'rgba(34, 197, 94, 0.14)',
       badgeBorder: 'rgba(34, 197, 94, 0.3)',
-      subtitle: 'Histórico de capítulos concluídos e links diretos para leitura pública.',
+      subtitle: 'Histrico de captulos concludos e links diretos para leitura pblica.',
       aliases: ['publicado', 'published'],
       requiresOutput: false
     }
@@ -305,7 +305,7 @@
       return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
     }
     if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') {
-      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado';
+      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pr aprovado';
     }
     if (t === 'traducao' || t === 'translation') {
       return s === 'traducao' || s === 'translation';
@@ -447,14 +447,14 @@
   let showDeleteModal = $state(false);
   let deleteTargetItem = $state<any>(null);
   let deleteConfirmationText = $state('');
-  let deleteReason = $state('Produção removida pela equipe editorial');
+  let deleteReason = $state('Produo removida pela equipe editorial');
   let isDeletingChapter = $state(false);
   let deleteError = $state<string | null>(null);
 
   function openDeleteModal(item: any) {
     deleteTargetItem = item;
     deleteConfirmationText = '';
-    deleteReason = 'Produção removida pela equipe editorial';
+    deleteReason = 'Produo removida pela equipe editorial';
     deleteError = null;
     showDeleteModal = true;
   }
@@ -601,7 +601,7 @@
     const deps: string[] = cs.stage?.dependencies || [];
     const files = productionFiles.filter((f: any) => f.productionChapterId === chId && f.isCurrent);
 
-    // If stage is Typeset, explicitly return Clean and Tradução separated
+    // If stage is Typeset, explicitly return Clean and Traduo separated
     if (matchesStageSlug(cs.stage?.slug, 'typeset')) {
       const cleanFile = files.find((f: any) => matchesStageSlug(f.stageSlug || f.stage?.slug, 'clean_redraw'));
       const tradFile = files.find((f: any) => matchesStageSlug(f.stageSlug || f.stage?.slug, 'traducao'));
@@ -669,14 +669,14 @@
       uploadFeedback = {
         stageId: item.cs.id,
         type: 'success',
-        text: `Arquivo "${file.name}" enviado com sucesso (v${data.version || 1})! Etapa pronta para ser concluída.`
+        text: `Arquivo "${file.name}" enviado com sucesso (v${data.version || 1})! Etapa pronta para ser concluda.`
       };
       await invalidateAll();
     } catch (err: any) {
       uploadFeedback = {
         stageId: item.cs.id,
         type: 'error',
-        text: err.message || 'Erro ao enviar arquivo'
+        text: (err as any).message || 'Erro ao enviar arquivo'
       };
     } finally {
       uploadBusyStageId = null;
@@ -698,7 +698,7 @@
   <!-- Top Location & Stage Header -->
   <header class="stage-page-header">
     <div class="breadcrumb-trail">
-      <span class="crumb-parent">Produção</span>
+      <span class="crumb-parent">Produo</span>
       <ChevronRight size={14} class="crumb-sep" />
       <span class="crumb-parent">Pipeline</span>
       <ChevronRight size={14} class="crumb-sep" />
@@ -722,7 +722,7 @@
     </div>
 
     <!-- Canonical Stages Switcher Bar with Personal & Total Badges -->
-    <nav class="canonical-stages-nav-bar" aria-label="Navegação entre etapas do pipeline">
+    <nav class="canonical-stages-nav-bar" aria-label="Navegao entre etapas do pipeline">
       <div class="stage-pills-scroll">
         {#each CANONICAL_STAGES as st}
           {@const isSelected = matchesStageSlug(st.slug, activeCanonical.slug)}
@@ -737,7 +737,7 @@
             <span class="pill-icon" aria-hidden="true">{st.icon}</span>
             <span class="pill-name">{st.name}</span>
             {#if personalNew > 0}
-              <span class="pill-personal-badge" title="{personalNew} novos capítulos para seu cargo editorial">
+              <span class="pill-personal-badge" title="{personalNew} novos captulos para seu cargo editorial">
                 ✨ {personalNew} novo{personalNew > 1 ? 's' : ''}
               </span>
             {:else if totalAvail > 0}
@@ -755,7 +755,7 @@
           <Search size={16} class="search-icon" />
           <input
             type="text"
-            placeholder="Buscar por obra ou número..."
+            placeholder="Buscar por obra ou nmero..."
             bind:value={searchQuery}
             class="search-text-field"
           />
@@ -790,14 +790,14 @@
             }}
           >
             <Plus size={16} />
-            <span>{showNewChapterCard ? 'Fechar Cadastro' : 'Cadastrar Novo Capítulo'}</span>
+            <span>{showNewChapterCard ? 'Fechar Cadastro' : 'Cadastrar Novo Captulo'}</span>
           </button>
         </div>
       {/if}
     </div>
   </header>
 
-  <!-- RAW SPECIAL FLOW: INICIAR NOVO CAPÍTULO -->
+  <!-- RAW SPECIAL FLOW: INICIAR NOVO CAPTULO -->
   {#if activeCanonical.slug === 'raw' && showNewChapterCard}
     <section class="raw-new-chapter-card">
       <div class="card-glass-header">
@@ -805,9 +805,9 @@
           <Sparkles size={18} class="text-amber-400" />
         </div>
         <div>
-          <h2 class="card-headline-title">Cadastrar Novo Capítulo na Produção</h2>
+          <h2 class="card-headline-title">Cadastrar Novo Captulo na Produo</h2>
           <p class="card-headline-subtitle">
-            Crie o capítulo no sistema para acionar a cadeia editorial automática com as 9 etapas canônicas.
+            Crie o captulo no sistema para acionar a cadeia editorial automtica com as 9 etapas cannicas.
           </p>
         </div>
       </div>
@@ -840,7 +840,7 @@
         </div>
 
         <div class="form-field">
-          <label for="raw_ch_num" class="field-label">Número do Capítulo *</label>
+          <label for="raw_ch_num" class="field-label">Nmero do Captulo *</label>
           <input
             id="raw_ch_num"
             type="number"
@@ -854,7 +854,7 @@
         </div>
 
         <div class="form-field">
-          <label for="raw_ch_label" class="field-label">Título / Subtítulo (Opcional)</label>
+          <label for="raw_ch_label" class="field-label">Ttulo / Subttulo (Opcional)</label>
           <input
             id="raw_ch_label"
             type="text"
@@ -877,7 +877,7 @@
         <div class="form-field full-width">
           <label class="auto-claim-checkbox-label">
             <input type="checkbox" name="auto_claim" value="true" bind:checked={newChapterAutoClaim} />
-            <span>Assumir a etapa RAW deste capítulo imediatamente na Minha Fila</span>
+            <span>Assumir a etapa RAW deste captulo imediatamente na Minha Fila</span>
           </label>
         </div>
 
@@ -895,7 +895,7 @@
               <span>Cadastrando...</span>
             {:else}
               <Plus size={16} />
-              <span>Iniciar Produção</span>
+              <span>Iniciar Produo</span>
             {/if}
           </button>
         </div>
@@ -903,15 +903,15 @@
     </section>
   {/if}
 
-  <!-- RAW SPECIAL: SELEÇÃO RÁPIDA DE OBRA E CAPÍTULO ELEGÍVEL -->
+  <!-- RAW SPECIAL: SELEO RPIDA DE OBRA E CAPTULO ELEGVEL -->
   {#if activeCanonical.slug === 'raw'}
-    <section class="raw-quick-picker-card" aria-label="Entrada e Seleção Rápida de RAW">
+    <section class="raw-quick-picker-card" aria-label="Entrada e Seleo Rpida de RAW">
       <div class="picker-header">
         <div class="picker-title-lockup">
           <Download size={18} class="text-amber-400" />
-          <h3 class="picker-title">Entrada e Seleção de RAW</h3>
+          <h3 class="picker-title">Entrada e Seleo de RAW</h3>
         </div>
-        <p class="picker-hint">Escolha a obra e o capítulo elegível para iniciar a produção imediata.</p>
+        <p class="picker-hint">Escolha a obra e o captulo elegvel para iniciar a produo imediata.</p>
       </div>
 
       <div class="picker-controls">
@@ -929,7 +929,7 @@
         </div>
 
         <div class="picker-field">
-          <label for="pipeline-raw-chapter-select">Capítulo Elegível para RAW</label>
+          <label for="pipeline-raw-chapter-select">Captulo Elegvel para RAW</label>
           <select
             id="pipeline-raw-chapter-select"
             bind:value={rawSelectedChapterStageId}
@@ -937,12 +937,12 @@
             disabled={eligibleRawChaptersForWork.length === 0}
           >
             {#if eligibleRawChaptersForWork.length === 0}
-              <option value="">Não há capítulos disponíveis para Raw Provider nesta obra.</option>
+              <option value="">No h captulos disponveis para Raw Provider nesta obra.</option>
             {:else}
-              <option value="">Selecione o capítulo...</option>
+              <option value="">Selecione o captulo...</option>
               {#each eligibleRawChaptersForWork as item}
                 <option value={item.cs.id}>
-                  Capítulo #{item.ch.chapterNumber} {item.ch.chapterLabel ? `(${item.ch.chapterLabel})` : ''}
+                  Captulo #{item.ch.chapterNumber} {item.ch.chapterLabel ? `(${item.ch.chapterLabel})` : ''}
                 </option>
               {/each}
             {/if}
@@ -962,7 +962,7 @@
                   claimFeedback = {
                     stageId: stageId || 'picker',
                     type: 'error',
-                    text: result.data?.message || 'Este capítulo acabou de ser adquirido por outro membro.'
+                    text: result.data?.message || 'Este captulo acabou de ser adquirido por outro membro.'
                   };
                 } else {
                   claimFeedback = null;
@@ -978,17 +978,17 @@
               class="btn-claim-highlight"
               class:btn-claim-disabled={!claimEvaluation.canClaim || !targetRawPickerItem}
               disabled={!claimEvaluation.canClaim || !targetRawPickerItem || isClaimingStageId !== null}
-              title={!claimEvaluation.canClaim ? 'Você precisa do cargo Raw Provider para assumir esta etapa.' : (!targetRawPickerItem ? 'Selecione um capítulo elegível' : 'Pegar este capítulo')}
+              title={!claimEvaluation.canClaim ? 'Voc precisa do cargo Raw Provider para assumir esta etapa.' : (!targetRawPickerItem ? 'Selecione um captulo elegvel' : 'Pegar este captulo')}
             >
               {#if isClaimingStageId === targetRawPickerItem?.cs.id}
                 <span class="spinner-xs"></span>
                 <span>Pegando...</span>
               {:else if !claimEvaluation.canClaim}
                 <Lock size={15} />
-                <span>Disponível para Raw Provider</span>
+                <span>Disponvel para Raw Provider</span>
               {:else}
                 <Zap size={15} />
-                <span>Pegar este capítulo</span>
+                <span>Pegar este captulo</span>
               {/if}
             </button>
           </form>
@@ -998,7 +998,7 @@
       {#if !claimEvaluation.canClaim}
         <div class="picker-disabled-notice">
           <Info size={14} />
-          <span>Você precisa do cargo Raw Provider para assumir esta etapa.</span>
+          <span>Voc precisa do cargo Raw Provider para assumir esta etapa.</span>
         </div>
       {/if}
     </section>
@@ -1006,17 +1006,17 @@
 
   <!-- TWO PRINCIPAL SECTIONS -->
   <main class="stage-sections-layout">
-    <!-- SECTION 1: CAPÍTULOS DISPONÍVEIS -->
+    <!-- SECTION 1: CAPTULOS DISPONVEIS -->
     {#if activeCanonical.slug !== 'publicado'}
       <section class="stage-flow-card available-flow-section">
         <div class="section-top-header">
           <div class="header-titles">
             <div class="title-with-badge">
               <Clock size={18} class="section-icon text-amber-400" />
-              <h2 class="section-title">Capítulos disponíveis</h2>
+              <h2 class="section-title">Captulos disponveis</h2>
               <span class="count-badge available-badge">{availableItems.length}</span>
             </div>
-            <p class="section-subtitle">Capítulos liberados para qualquer membro pegar e produzir</p>
+            <p class="section-subtitle">Captulos liberados para qualquer membro pegar e produzir</p>
           </div>
         </div>
 
@@ -1025,9 +1025,9 @@
             <div class="empty-icon-wrap">
               <Sparkles size={28} class="empty-icon text-purple-400" />
             </div>
-            <h3 class="empty-title">Nenhum capítulo disponível no momento</h3>
+            <h3 class="empty-title">Nenhum captulo disponvel no momento</h3>
             <p class="empty-desc">
-              Todos os capítulos nesta etapa já foram assumidos pela equipe ou aguardam a conclusão dos insumos anteriores.
+              Todos os captulos nesta etapa j foram assumidos pela equipe ou aguardam a concluso dos insumos anteriores.
             </p>
           </div>
         {:else}
@@ -1061,7 +1061,7 @@
                       <span class="work-title-name" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
                       <div class="chapter-number-row">
                         <h4 class="chapter-number-title">
-                          Capítulo #{item.ch.chapterNumber}
+                          Captulo #{item.ch.chapterNumber}
                           {#if item.ch.chapterLabel}
                             <span class="chapter-sublabel">· {item.ch.chapterLabel}</span>
                           {/if}
@@ -1074,14 +1074,14 @@
                       {#if isStageNewForMe(item)}
                         <span class="personal-badge badge-new" title="Novo trabalho liberado para o seu cargo editorial">
                           <Sparkles size={11} />
-                          <span class="badge-text-full">NOVO PARA VOCÊ</span>
+                          <span class="badge-text-full">NOVO PARA VOC</span>
                           <span class="badge-text-compact">NOVO</span>
                         </span>
                       {:else if isStageAvailableForMe(item)}
-                        <span class="personal-badge badge-available-for-me" title="Disponível para o seu cargo editorial">
+                        <span class="personal-badge badge-available-for-me" title="Disponvel para o seu cargo editorial">
                           <Check size={11} />
-                          <span class="badge-text-full">Disponível para você</span>
-                          <span class="badge-text-compact">Para você</span>
+                          <span class="badge-text-full">Disponvel para voc</span>
+                          <span class="badge-text-compact">Para voc</span>
                         </span>
                       {/if}
 
@@ -1102,7 +1102,7 @@
                       {/if}
 
                       {#if activeCanonical.slug === 'typeset'}
-                        <span class="status-tag tag-ready-deps">Clean & Tradução Prontos</span>
+                        <span class="status-tag tag-ready-deps">Clean & Traduo Prontos</span>
                       {:else if activeCanonical.slug !== 'raw'}
                         <span class="status-tag tag-ready-deps">Insumos Prontos</span>
                       {/if}
@@ -1122,7 +1122,7 @@
                             claimFeedback = {
                               stageId: item.cs.id,
                               type: 'error',
-                              text: result.data?.message || 'Este capítulo acabou de ser pego por outro membro.'
+                              text: result.data?.message || 'Este captulo acabou de ser pego por outro membro.'
                             };
                             expandedAvailable[item.cs.id] = true;
                           } else {
@@ -1140,7 +1140,7 @@
                         class="btn-claim-primary-compact"
                         class:btn-claim-disabled={!claimEvaluation.canClaim}
                         disabled={isClaiming || !claimEvaluation.canClaim}
-                        title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Intervenção Administrativa' : 'Pegar etapa')}
+                        title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Interveno Administrativa' : 'Pegar etapa')}
                       >
                         {#if isClaiming}
                           <span class="spinner-xs"></span>
@@ -1182,12 +1182,12 @@
                     {#if isStageNewForMe(item)}
                       <div class="card-personal-callout new-callout">
                         <Sparkles size={15} class="text-amber-400" />
-                        <span>Este capítulo foi liberado para o seu cargo editorial (<strong>{activeCanonical.name}</strong>). Você pode assumi-lo para começar a trabalhar.</span>
+                        <span>Este captulo foi liberado para o seu cargo editorial (<strong>{activeCanonical.name}</strong>). Voc pode assumi-lo para comear a trabalhar.</span>
                       </div>
                     {:else if isStageAvailableForMe(item)}
                       <div class="card-personal-callout available-callout">
                         <Check size={15} class="text-emerald-400" />
-                        <span>Etapa disponível para o seu cargo editorial.</span>
+                        <span>Etapa disponvel para o seu cargo editorial.</span>
                       </div>
                     {/if}
 
@@ -1203,11 +1203,11 @@
                         </p>
                       </div>
 
-                      <!-- Box 2: Insumos Anteriores (Download direto para inspeção) -->
+                      <!-- Box 2: Insumos Anteriores (Download direto para inspeo) -->
                       <div class="detail-panel-box">
                         <div class="panel-box-head">
                           <Download size={14} class="text-blue-400" />
-                          <span class="box-head-label">Insumos Disponíveis para Baixar</span>
+                          <span class="box-head-label">Insumos Disponveis para Baixar</span>
                         </div>
                         {#if upstream.isTypeset}
                           <div class="upstream-pill-list">
@@ -1228,7 +1228,7 @@
                                 class="btn-upstream-dl-pill traducao"
                               >
                                 <FileText size={13} />
-                                <span>Tradução: {upstream.tradFile.fileName} ({formatBytes(upstream.tradFile.byteSize)})</span>
+                                <span>Traduo: {upstream.tradFile.fileName} ({formatBytes(upstream.tradFile.byteSize)})</span>
                               </a>
                             {/if}
                           </div>
@@ -1254,13 +1254,13 @@
                         {/if}
                       </div>
 
-                      <!-- Box 3: Apontamentos / Retrabalho / Observações -->
+                      <!-- Box 3: Apontamentos / Retrabalho / Observaes -->
                       {#if item.cs.status === 'REWORK' || item.cs.rejectionReason || item.cs.notes}
                         <div class="detail-panel-box alert-box">
                           <div class="panel-box-head">
                             <AlertTriangle size={14} class="text-amber-400" />
                             <span class="box-head-label">
-                              {item.cs.status === 'REWORK' ? 'Instruções de Retrabalho' : 'Observações Editoriais'}
+                              {item.cs.status === 'REWORK' ? 'Instrues de Retrabalho' : 'Observaes Editoriais'}
                             </span>
                           </div>
                           <p class="box-head-text rework-alert-text">
@@ -1279,10 +1279,10 @@
                             type="button"
                             class="btn-action-ghost"
                             onclick={() => openEditModal(item)}
-                            title="Editar detalhes deste capítulo"
+                            title="Editar detalhes deste captulo"
                           >
                             <Edit2 size={13} />
-                            <span>Editar Capítulo</span>
+                            <span>Editar Captulo</span>
                           </button>
 
                           {#if item.ch.status !== 'PUBLISHED'}
@@ -1290,10 +1290,10 @@
                               type="button"
                               class="btn-action-ghost danger"
                               onclick={() => openDeleteModal(item)}
-                              title="Excluir produção deste capítulo"
+                              title="Excluir produo deste captulo"
                             >
                               <Trash2 size={13} />
-                              <span>Excluir Produção</span>
+                              <span>Excluir Produo</span>
                             </button>
                           {/if}
                         {/if}
@@ -1312,7 +1312,7 @@
                                 claimFeedback = {
                                   stageId: item.cs.id,
                                   type: 'error',
-                                  text: result.data?.message || 'Este capítulo acabou de ser pego por outro membro.'
+                                  text: result.data?.message || 'Este captulo acabou de ser pego por outro membro.'
                                 };
                               } else {
                                 claimFeedback = null;
@@ -1332,7 +1332,7 @@
                           >
                             {#if isClaiming}
                               <span class="spinner-sm"></span>
-                              <span>Assumindo capítulo...</span>
+                              <span>Assumindo captulo...</span>
                             {:else if !claimEvaluation.canClaim}
                               <Lock size={17} />
                               <span>{claimEvaluation.buttonLabel}</span>
@@ -1362,21 +1362,21 @@
       </section>
     {/if}
 
-    <!-- SECTION 2: MEUS CAPÍTULOS -->
+    <!-- SECTION 2: MEUS CAPTULOS -->
     <section class="stage-flow-card my-chapters-section">
       <div class="section-top-header">
         <div class="header-titles">
           <div class="title-with-badge">
             <CheckSquare size={18} class="section-icon text-purple-400" />
             <h2 class="section-title">
-              {activeCanonical.slug === 'publicado' ? 'Capítulos Publicados' : 'Meus capítulos'}
+              {activeCanonical.slug === 'publicado' ? 'Captulos Publicados' : 'Meus captulos'}
             </h2>
             <span class="count-badge mine-badge">{myItems.length}</span>
           </div>
           <p class="section-subtitle">
             {activeCanonical.slug === 'publicado'
-              ? 'Histórico completo de capítulos lançados publicamente no Project Nox.'
-              : 'Capítulos sob sua responsabilidade para produzir e concluir.'}
+              ? 'Histrico completo de captulos lanados publicamente no Project Nox.'
+              : 'Captulos sob sua responsabilidade para produzir e concluir.'}
           </p>
         </div>
       </div>
@@ -1388,13 +1388,13 @@
           </div>
           <h3 class="empty-title">
             {activeCanonical.slug === 'publicado'
-              ? 'Nenhum capítulo publicado registrado ainda.'
-              : 'Você não tem capítulos sob sua responsabilidade nesta etapa.'}
+              ? 'Nenhum captulo publicado registrado ainda.'
+              : 'Voc no tem captulos sob sua responsabilidade nesta etapa.'}
           </h3>
           <p class="empty-desc">
             {activeCanonical.slug === 'publicado'
-              ? 'Quando um capítulo for concluído no Ready e publicado, ele aparecerá aqui.'
-              : 'Pegue um dos capítulos disponíveis acima para começar a produzir!'}
+              ? 'Quando um captulo for concludo no Ready e publicado, ele aparecer aqui.'
+              : 'Pegue um dos captulos disponveis acima para comear a produzir!'}
           </p>
         </div>
       {:else}
@@ -1433,7 +1433,7 @@
                   <div class="header-titles-cluster">
                     <span class="work-title-name" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
                     <h3 class="chapter-number-title">
-                      Capítulo #{item.ch.chapterNumber}
+                      Captulo #{item.ch.chapterNumber}
                       {#if item.ch.chapterLabel}
                         <span class="chapter-sublabel">· {item.ch.chapterLabel}</span>
                       {/if}
@@ -1479,7 +1479,7 @@
                       onclick={(e) => { e.stopPropagation(); onOpenChapter(item.ch); }}
                     >
                       <Eye size={14} />
-                      <span>Ver capítulo</span>
+                      <span>Ver captulo</span>
                     </button>
                   {/if}
 
@@ -1487,7 +1487,7 @@
                     <button
                       type="button"
                       class="btn-icon-control"
-                      title="Editar capítulo"
+                      title="Editar captulo"
                       onclick={(e) => { e.stopPropagation(); openEditModal(item); }}
                     >
                       <Edit2 size={13} />
@@ -1496,7 +1496,7 @@
                       <button
                         type="button"
                         class="btn-icon-control danger"
-                        title="Excluir produção"
+                        title="Excluir produo"
                         onclick={(e) => { e.stopPropagation(); openDeleteModal(item); }}
                       >
                         <Trash2 size={13} />
@@ -1518,19 +1518,19 @@
                 <div class="accordion-expanded-body my-body">
                   <!-- NUMBERED ACTION STEPS -->
                   <div class="card-steps-container">
-                    <!-- PASSO 1: BAIXAR ARQUIVOS NECESSÁRIOS -->
+                    <!-- PASSO 1: BAIXAR ARQUIVOS NECESSRIOS -->
                     <div class="numbered-step-box">
                       <div class="step-head">
                         <span class="step-badge">1</span>
                         <div class="step-head-text">
-                          <h4 class="step-title">Baixar os arquivos necessários</h4>
-                          <p class="step-desc">Insumos gerados pelas etapas anteriores para você trabalhar.</p>
+                          <h4 class="step-title">Baixar os arquivos necessrios</h4>
+                          <p class="step-desc">Insumos gerados pelas etapas anteriores para voc trabalhar.</p>
                         </div>
                       </div>
 
                       <div class="step-body">
                         {#if isTypesetStage}
-                          <!-- Clearly separate Clean and Tradução for Typeset -->
+                          <!-- Clearly separate Clean and Traduo for Typeset -->
                           <div class="typeset-dual-downloads">
                             <div class="dual-download-card">
                               <span class="dual-label text-pink-400">Insumo: Clean / Redraw</span>
@@ -1556,7 +1556,7 @@
                             </div>
 
                             <div class="dual-download-card">
-                              <span class="dual-label text-blue-400">Insumo: Tradução</span>
+                              <span class="dual-label text-blue-400">Insumo: Traduo</span>
                               {#if upstream.tradFile}
                                 <div class="file-item-pill">
                                   <FileText size={16} class="text-blue-400" />
@@ -1570,11 +1570,11 @@
                                     class="btn-download-pill"
                                   >
                                     <Download size={14} />
-                                    <span>Baixar Tradução</span>
+                                    <span>Baixar Traduo</span>
                                   </a>
                                 </div>
                               {:else}
-                                <div class="waiting-dep-box">Aguardando envio do script de Tradução</div>
+                                <div class="waiting-dep-box">Aguardando envio do script de Traduo</div>
                               {/if}
                             </div>
                           </div>
@@ -1612,19 +1612,19 @@
                       </div>
                     </div>
 
-                    <!-- PASSO 2: ENVIAR ARQUIVO FINALIZADO / CONFERÊNCIA -->
+                    <!-- PASSO 2: ENVIAR ARQUIVO FINALIZADO / CONFERNCIA -->
                     <div class="numbered-step-box">
                       <div class="step-head">
                         <span class="step-badge">2</span>
                         <div class="step-head-text">
                           <h4 class="step-title">
                             {isRevisorQcStage
-                              ? 'Conferência e Inspeção de Revisor (QC)'
+                              ? 'Conferncia e Inspeo de Revisor (QC)'
                               : 'Enviar o arquivo finalizado'}
                           </h4>
                           <p class="step-desc">
                             {isRevisorQcStage
-                              ? 'Revise os textos, termos, diagramação e realize a auditoria de qualidade nas páginas.'
+                              ? 'Revise os textos, termos, diagramao e realize a auditoria de qualidade nas pginas.'
                               : 'Envie seu arquivo pronto (ZIP, PSD, script ou imagens).'}
                           </p>
                         </div>
@@ -1636,24 +1636,24 @@
                           <div class="revision-checklist-grid">
                             <label class="check-item-row">
                               <input type="checkbox" bind:checked={checks.spell} />
-                              <span>Ortografia, concordância e pontuação conferidas</span>
+                              <span>Ortografia, concordncia e pontuao conferidas</span>
                             </label>
                             <label class="check-item-row">
                               <input type="checkbox" bind:checked={checks.terms} />
-                              <span>Termos e golpes alinhados com o glossário da obra</span>
+                              <span>Termos e golpes alinhados com o glossrio da obra</span>
                             </label>
                             <label class="check-item-row">
                               <input type="checkbox" bind:checked={checks.formatting} />
-                              <span>Diagramação e controle de qualidade visual auditados</span>
+                              <span>Diagramao e controle de qualidade visual auditados</span>
                             </label>
                           </div>
 
                           <div class="revision-notes-field">
-                            <label for="rev_notes_{item.cs.id}" class="notes-label">Notas e apontamentos de Revisão (QC) (opcional):</label>
+                            <label for="rev_notes_{item.cs.id}" class="notes-label">Notas e apontamentos de Reviso (QC) (opcional):</label>
                             <textarea
                               id="rev_notes_{item.cs.id}"
                               bind:value={revisionNotes[item.cs.id]}
-                              placeholder="Apontamentos de revisão e controle de qualidade..."
+                              placeholder="Apontamentos de reviso e controle de qualidade..."
                               rows="2"
                               class="notes-textarea"
                             ></textarea>
@@ -1666,7 +1666,7 @@
                               onclick={() => onOpenChapter(item.ch)}
                             >
                               <FileCheck2 size={16} />
-                              <span>Abrir QC Inspector no Capítulo</span>
+                              <span>Abrir QC Inspector no Captulo</span>
                             </button>
 
                             <button
@@ -1685,7 +1685,7 @@
                               <CheckCircle2 size={18} class="text-emerald-400" />
                               <div class="uploaded-meta">
                                 <strong>Arquivo pronto: {deliverable.fileName}</strong>
-                                <span>Versão v{deliverable.version} · {formatBytes(deliverable.byteSize)}</span>
+                                <span>Verso v{deliverable.version} · {formatBytes(deliverable.byteSize)}</span>
                               </div>
                               <label class="btn-reupload-label">
                                 <input
@@ -1711,7 +1711,7 @@
                               <label class="drop-zone-label">
                                 <Upload size={22} class="upload-icon-cloud" />
                                 <span class="upload-prompt-title">
-                                  {deliverable ? 'Enviar nova versão do arquivo' : 'Selecionar arquivo final da etapa'}
+                                  {deliverable ? 'Enviar nova verso do arquivo' : 'Selecionar arquivo final da etapa'}
                                 </span>
                                 <span class="upload-prompt-hint">Formatos suportados: ZIP, RAR, DOCX, TXT, PSD ou PNG/JPG</span>
                                 <input
@@ -1743,7 +1743,7 @@
                         <span class="step-badge complete">3</span>
                         <div class="step-head-text">
                           <h4 class="step-title">Concluir etapa e repassar</h4>
-                          <p class="step-desc">Finalize para liberar automaticamente a próxima etapa do DAG.</p>
+                          <p class="step-desc">Finalize para liberar automaticamente a prxima etapa do DAG.</p>
                         </div>
                       </div>
 
@@ -1779,12 +1779,12 @@
 
                           <div class="editorial-returns-separator"></div>
 
-                          <!-- Action: Devolver à fila (Abandon task back to public queue) -->
+                          <!-- Action: Devolver  fila (Abandon task back to public queue) -->
                           <form
                             method="POST"
                             action="?/releaseStage"
                             use:enhance={({ cancel }) => {
-                              if (!confirm('Devolver à fila: você deixará de ser o responsável por esta etapa e ela ficará disponível para qualquer membro pegar. Deseja continuar?')) {
+                              if (!confirm('Devolver  fila: voc deixar de ser o responsvel por esta etapa e ela ficar disponvel para qualquer membro pegar. Deseja continuar?')) {
                                 cancel();
                               }
                             }}
@@ -1793,10 +1793,10 @@
                             <button
                               type="submit"
                               class="btn-abandon-queue"
-                              title="Largar etapa e devolvê-la para a fila de capítulos disponíveis"
+                              title="Largar etapa e devolv-la para a fila de captulos disponveis"
                             >
                               <RotateCcw size={14} />
-                              <span>Devolver à fila</span>
+                              <span>Devolver  fila</span>
                             </button>
                           </form>
 
@@ -1806,7 +1806,7 @@
                               type="button"
                               class="btn-rework-editorial"
                               onclick={() => openReworkModal(item)}
-                              title="Apontar correções e devolver para uma etapa anterior"
+                              title="Apontar correes e devolver para uma etapa anterior"
                             >
                               <AlertTriangle size={14} />
                               <span>Devolver para Retrabalho</span>
@@ -1816,7 +1816,7 @@
 
                         {#if !canComplete && activeCanonical.requiresOutput}
                           <span class="gate-warning-hint">
-                            ⚠️ Envie o arquivo finalizado no Passo 2 para habilitar o botão de conclusão.
+                            ⚠️ Envie o arquivo finalizado no Passo 2 para habilitar o boto de concluso.
                           </span>
                         {/if}
                       </div>
@@ -1839,7 +1839,7 @@
       <div class="modal-top">
         <div class="modal-title-wrap">
           <Edit2 size={18} class="text-purple-400" />
-          <h3>Editar Capítulo em Produção</h3>
+          <h3>Editar Captulo em Produo</h3>
         </div>
         <button type="button" class="btn-close-modal" onclick={() => (showEditModal = false)}>
           <X size={18} />
@@ -1847,7 +1847,7 @@
       </div>
 
       <p class="modal-subtitle">
-        Obra: <strong>{editTargetItem.work?.title}</strong> · Capítulo #{editTargetItem.ch.chapterNumber}
+        Obra: <strong>{editTargetItem.work?.title}</strong> · Captulo #{editTargetItem.ch.chapterNumber}
       </p>
 
       <form
@@ -1866,7 +1866,7 @@
         <input type="hidden" name="production_chapter_id" value={editTargetItem.ch.id} />
 
         <div class="form-field">
-          <label for="edit_ch_label" class="field-label">Título / Subtítulo do Capítulo</label>
+          <label for="edit_ch_label" class="field-label">Ttulo / Subttulo do Captulo</label>
           <input
             id="edit_ch_label"
             type="text"
@@ -1888,12 +1888,12 @@
         </div>
 
         <div class="form-field">
-          <label for="edit_ch_notes" class="field-label">Notas / Observações da Equipe</label>
+          <label for="edit_ch_notes" class="field-label">Notas / Observaes da Equipe</label>
           <textarea
             id="edit_ch_notes"
             name="notes"
             rows="3"
-            placeholder="Instruções específicas para quem pegar esta etapa..."
+            placeholder="Instrues especficas para quem pegar esta etapa..."
             bind:value={editChapterNotes}
             class="notes-textarea"
           ></textarea>
@@ -1909,7 +1909,7 @@
               <span>Salvando...</span>
             {:else}
               <Check size={16} />
-              <span>Salvar Alterações</span>
+              <span>Salvar Alteraes</span>
             {/if}
           </button>
         </div>
@@ -1925,7 +1925,7 @@
       <div class="modal-top">
         <div class="modal-title-wrap text-rose">
           <Trash2 size={20} class="text-rose-500" />
-          <h3>Excluir Produção de Capítulo</h3>
+          <h3>Excluir Produo de Captulo</h3>
         </div>
         <button type="button" class="btn-close-modal" onclick={() => (showDeleteModal = false)}>
           <X size={18} />
@@ -1935,13 +1935,13 @@
       <div class="delete-warning-box">
         <AlertTriangle size={20} class="text-rose-400 flex-shrink-0" />
         <div>
-          <strong>Atenção: Esta ação é irreversível!</strong>
+          <strong>Ateno: Esta ao  irreversvel!</strong>
           <p>
-            Você está prestes a excluir toda a linha de produção do <strong>Capítulo #{deleteTargetItem.ch.chapterNumber}</strong>
+            Voc est prestes a excluir toda a linha de produo do <strong>Captulo #{deleteTargetItem.ch.chapterNumber}</strong>
             {#if deleteTargetItem.ch.chapterLabel}
               ({deleteTargetItem.ch.chapterLabel})
             {/if}
-            da obra <strong>{deleteTargetItem.work?.title}</strong>. Todos os arquivos de rascunho e etapas associadas serão removidos.
+            da obra <strong>{deleteTargetItem.work?.title}</strong>. Todos os arquivos de rascunho e etapas associadas sero removidos.
           </p>
         </div>
       </div>
@@ -1959,7 +1959,7 @@
         use:enhance={({ cancel }) => {
           const expected = String(deleteTargetItem.ch.chapterNumber);
           if (deleteConfirmationText.trim() !== expected && deleteConfirmationText.trim() !== 'CONFIRMAR') {
-            deleteError = `Para confirmar, digite o número do capítulo (${expected}) ou CONFIRMAR.`;
+            deleteError = `Para confirmar, digite o nmero do captulo (${expected}) ou CONFIRMAR.`;
             cancel();
             return;
           }
@@ -1967,7 +1967,7 @@
           return async ({ result, update }) => {
             isDeletingChapter = false;
             if (result.type === 'failure') {
-              deleteError = result.data?.message || 'Falha ao excluir produção.';
+              deleteError = result.data?.message || 'Falha ao excluir produo.';
             } else {
               showDeleteModal = false;
               await update();
@@ -2033,7 +2033,7 @@
       </div>
 
       <p class="modal-subtitle">
-        Capítulo: <strong>{reworkChapterTitle}</strong>. A etapa selecionada voltará ao status de Retrabalho com suas observações.
+        Captulo: <strong>{reworkChapterTitle}</strong>. A etapa selecionada voltar ao status de Retrabalho com suas observaes.
       </p>
 
       <form
@@ -2050,17 +2050,17 @@
         <input type="hidden" name="source_stage_id" value={reworkSourceStageId} />
 
         <div class="form-field">
-          <label for="rework_target" class="field-label">Etapa de destino para correção *</label>
+          <label for="rework_target" class="field-label">Etapa de destino para correo *</label>
           <select id="rework_target" name="target_stage_slug" bind:value={reworkTargetSlug} class="field-input">
             <option value="raw">Raw Provider</option>
-            <option value="traducao">Tradução</option>
+            <option value="traducao">Traduo</option>
             <option value="clean_redraw">Clean/Redraw</option>
             <option value="typeset">Typeset</option>
           </select>
         </div>
 
         <div class="form-field">
-          <label for="rework_reason" class="field-label">Motivo do retrabalho / Instruções de correção *</label>
+          <label for="rework_reason" class="field-label">Motivo do retrabalho / Instrues de correo *</label>
           <textarea
             id="rework_reason"
             name="reason"
@@ -2068,7 +2068,7 @@
             minlength="3"
             rows="3"
             bind:value={reworkReason}
-            placeholder="Especifique com clareza as páginas, balões ou falhas que precisam ser ajustadas..."
+            placeholder="Especifique com clareza as pginas, bales ou falhas que precisam ser ajustadas..."
             class="notes-textarea"
           ></textarea>
         </div>
@@ -3712,7 +3712,7 @@
     color: #f87171;
   }
 
-  /* REVISÃO CHECKLIST */
+  /* REVISO CHECKLIST */
   .revision-checklist-grid {
     display: flex;
     flex-direction: column;
@@ -3797,7 +3797,7 @@
     background: rgba(239, 68, 68, 0.25);
   }
 
-  /* PASSO 3: CONCLUSÃO & AÇÕES EDITORIAIS */
+  /* PASSO 3: CONCLUSO & AES EDITORIAIS */
   .step-body-footer {
     display: flex;
     flex-direction: column;

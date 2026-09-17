@@ -21,7 +21,7 @@
 </script>
 
 <svelte:head>
-  <title>Explorar mangás, manhwas e webtoons — Project Nox</title>
+  <title>Explorar mangs, manhwas e webtoons — Project Nox</title>
 </svelte:head>
 
 <div class="container catalog-page spacer-bottom">
@@ -31,7 +31,7 @@
       <span>ACERVO OFICIAL</span>
     </div>
     <h1 class="catalog-title">Explorar Leituras</h1>
-    <p class="catalog-subtitle">Descubra mangás, manhwas e webtoons organizados por formato, gênero e status.</p>
+    <p class="catalog-subtitle">Descubra mangs, manhwas e webtoons organizados por formato, gnero e status.</p>
   </div>
 
   <form class="filters-glass-form" role="search">
@@ -41,14 +41,14 @@
         class="search-text-input"
         name="q"
         value={data.q}
-        placeholder="Buscar por título ou autor…"
-        aria-label="Título da obra"
+        placeholder="Buscar por ttulo ou autor…"
+        aria-label="Ttulo da obra"
       />
     </div>
 
     <div class="filters-selects-group">
-      <select name="tag" value={data.tag} aria-label="Gênero ou tag" class="filter-select">
-        <option value="">Todos os gêneros</option>
+      <select name="tag" value={data.tag} aria-label="Gnero ou tag" class="filter-select">
+        <option value="">Todos os gneros</option>
         {#each data.tags as tag (tag?.id)}
           <option value={tag.slug}>{tag.name}</option>
         {/each}
@@ -68,9 +68,9 @@
         {/each}
       </select>
 
-      <select name="ordem" value={data.sort} aria-label="Ordenação" class="filter-select">
+      <select name="ordem" value={data.sort} aria-label="Ordenao" class="filter-select">
         <option value="recentes">Atualizados recentemente</option>
-        <option value="titulo">Título A–Z</option>
+        <option value="titulo">Ttulo A–Z</option>
       </select>
 
       <button class="btn-filter-submit" aria-label="Buscar">Buscar</button>
@@ -92,13 +92,13 @@
   {:else}
     <Empty
       title={data.q || data.tag || data.kind
-        ? 'Nenhuma história com esses filtros.'
-        : 'O catálogo está sendo preparado.'}
+        ? 'Nenhuma histria com esses filtros.'
+        : 'O catlogo est sendo preparado.'}
       text={data.q || data.tag || data.kind
-        ? 'Experimente outro título, gênero ou formato.'
-        : 'Os capítulos aparecem aqui assim que a equipe concluir a revisão e publicação.'}
+        ? 'Experimente outro ttulo, gnero ou formato.'
+        : 'Os captulos aparecem aqui assim que a equipe concluir a reviso e publicao.'}
       href={data.q || data.tag || data.kind ? '/catalogo' : '/'}
-      label={data.q || data.tag || data.kind ? 'Limpar filtros' : 'Voltar ao início'}
+      label={data.q || data.tag || data.kind ? 'Limpar filtros' : 'Voltar ao incio'}
     />
   {/if}
 
@@ -107,9 +107,9 @@
       {#if data.page > 1}
         <a class="button secondary" href={pageUrl(data.page - 1)}>Anterior</a>
       {/if}
-      <span class="page-num">Página {data.page}</span>
+      <span class="page-num">Pgina {data.page}</span>
       {#if data.page * 20 < data.count}
-        <a class="button secondary" href={pageUrl(data.page + 1)}>Próxima</a>
+        <a class="button secondary" href={pageUrl(data.page + 1)}>Prxima</a>
       {/if}
     </div>
   {/if}

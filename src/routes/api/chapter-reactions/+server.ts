@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm';
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
   const chapterId = url.searchParams.get('chapterId');
   if (!chapterId) {
-    return json({ error: 'chapterId é obrigatório' }, { status: 400 });
+    return json({ error: 'chapterId  obrigatrio' }, { status: 400 });
   }
 
   let visitorId = locals.user?.id;
@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
   );
 
   if (error) {
-    return json({ error: error.message }, { status: 500 });
+    return json({ error: (error as any).message }, { status: 500 });
   }
 
   const counts: Record<string, number> = {};
@@ -50,12 +50,12 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   const { chapterId, emoji } = body;
 
   if (!chapterId || !emoji) {
-    return json({ error: 'chapterId e emoji são obrigatórios' }, { status: 400 });
+    return json({ error: 'chapterId e emoji so obrigatrios' }, { status: 400 });
   }
 
   const validEmojis = ['heart', 'fire', 'cry', 'shock', 'laugh'];
   if (!validEmojis.includes(emoji)) {
-    return json({ error: 'Emoji inválido' }, { status: 400 });
+    return json({ error: 'Emoji invlido' }, { status: 400 });
   }
 
   let visitorId = locals.user?.id;
@@ -83,7 +83,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   );
 
   if (existingError) {
-    return json({ error: existingError.message }, { status: 500 });
+    return json({ error: (existingError as any).message }, { status: 500 });
   }
 
   if (existing) {

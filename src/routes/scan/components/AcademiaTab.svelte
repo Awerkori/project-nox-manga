@@ -51,7 +51,7 @@
   let deleteTutorialModal = $state<any>(null);
   let editTutorialId = $state<string | null>(null);
   let tutorialTitle = $state('');
-  let tutorialCategory = $state('Tradução');
+  let tutorialCategory = $state('Traduo');
   let tutorialContent = $state('');
   let tutorialStatus = $state<'PUBLISHED' | 'DRAFT' | 'ARCHIVED'>('PUBLISHED');
   let tutorialPositionId = $state('');
@@ -63,8 +63,8 @@
   let uploadError = $state('');
 
   const CATEGORIES = [
-    'Tradução',
-    'Revisão',
+    'Traduo',
+    'Reviso',
     'Clean / Redraw',
     'Typeset',
     'QC',
@@ -95,7 +95,7 @@
   function openCreate() {
     editTutorialId = null;
     tutorialTitle = '';
-    tutorialCategory = 'Tradução';
+    tutorialCategory = 'Traduo';
     tutorialContent = '';
     tutorialStatus = 'PUBLISHED';
     tutorialPositionId = '';
@@ -153,7 +153,7 @@
       if (!res.ok || data.error) throw new Error(data.error || 'Falha no envio do anexo');
       await invalidateAll();
     } catch (err: any) {
-      uploadError = err.message || 'Erro ao enviar anexo';
+      uploadError = (err as any).message || 'Erro ao enviar anexo';
     } finally {
       isUploadingAttachment = false;
     }
@@ -253,7 +253,7 @@
         <span>ACADEMIA & TUTORIAIS</span>
       </div>
       <h2 class="title">Treinamentos e Guias Oficiais da {scanName}</h2>
-      <p class="subtitle">Manuais técnicos, templates, fontes e padrões de qualidade para os membros da equipe.</p>
+      <p class="subtitle">Manuais tcnicos, templates, fontes e padres de qualidade para os membros da equipe.</p>
     </div>
 
     {#if isOwnerOrAdmin}
@@ -355,7 +355,7 @@
         <div class="empty-reader-state">
           <BookOpen size={40} class="empty-icon" />
           <p class="empty-title">Selecione um guia na lista ao lado</p>
-          <p class="empty-sub">Tutoriais detalhados ajudam a equipe a manter padrões de excelência na produção.</p>
+          <p class="empty-sub">Tutoriais detalhados ajudam a equipe a manter padres de excelncia na produo.</p>
         </div>
       {:else}
         <article class="guide-article-card">
@@ -430,11 +430,11 @@
             <div class="resources-section-header">
               <div class="header-cluster">
                 <Download size={16} class="text-indigo-400" />
-                <h4 class="resources-section-title">Anexos & Arquivos Técnicos do Treinamento</h4>
+                <h4 class="resources-section-title">Anexos & Arquivos Tcnicos do Treinamento</h4>
               </div>
               <span class="resources-badge">{activeAttachments.length} {activeAttachments.length === 1 ? 'Arquivo' : 'Arquivos'}</span>
             </div>
-            <p class="resources-section-desc">Arquivos padrão de produção vinculados a esta norma técnica (PDF, GIF, ZIP, PSD, KRA, etc.) armazenados no pool privado da scan.</p>
+            <p class="resources-section-desc">Arquivos padro de produo vinculados a esta norma tcnica (PDF, GIF, ZIP, PSD, KRA, etc.) armazenados no pool privado da scan.</p>
 
             <!-- Attachments Dropzone (if leader/admin) -->
             {#if isOwnerOrAdmin}
@@ -448,7 +448,7 @@
                 <UploadCloud size={24} class="dropzone-icon" />
                 <div class="dropzone-text">
                   <span class="dropzone-title">Arraste arquivos aqui ou clique para selecionar</span>
-                  <span class="dropzone-sub">Suporta PDF, PNG, GIF, ZIP, PSD, KRA (máx 50MB)</span>
+                  <span class="dropzone-sub">Suporta PDF, PNG, GIF, ZIP, PSD, KRA (mx 50MB)</span>
                 </div>
                 <label class="btn-secondary sm cursor-pointer" class:disabled={isUploadingAttachment}>
                   <Paperclip size={13} />
@@ -535,14 +535,14 @@
 
         <div class="form-row-3">
           <div class="form-group flex-2">
-            <label for="tut-title" class="form-label">Título do Guia *</label>
+            <label for="tut-title" class="form-label">Ttulo do Guia *</label>
             <input
               id="tut-title"
               type="text"
               name="title"
               required
               class="form-input"
-              placeholder="ex: Padrão de Letreiramento de Balões"
+              placeholder="ex: Padro de Letreiramento de Bales"
               bind:value={tutorialTitle}
             />
           </div>
@@ -583,16 +583,16 @@
           <button type="button" class="btn-tool-icon" title="Negrito (**texto**)" onclick={() => insertFormat('**', '**', 'negrito')}>
             <Bold size={14} />
           </button>
-          <button type="button" class="btn-tool-icon" title="Itálico (*texto*)" onclick={() => insertFormat('*', '*', 'itálico')}>
+          <button type="button" class="btn-tool-icon" title="Itlico (*texto*)" onclick={() => insertFormat('*', '*', 'itlico')}>
             <Italic size={14} />
           </button>
-          <button type="button" class="btn-tool-icon" title="Título H2" onclick={() => insertFormat('\n## ', '\n', 'Título da Seção')}>
+          <button type="button" class="btn-tool-icon" title="Ttulo H2" onclick={() => insertFormat('\n## ', '\n', 'Ttulo da Seo')}>
             <Heading size={14} />
           </button>
           <button type="button" class="btn-tool-icon" title="Lista (- item)" onclick={() => insertFormat('\n- ', '\n', 'Item da lista')}>
             <List size={14} />
           </button>
-          <button type="button" class="btn-tool-icon" title="Checklist (- [ ] item)" onclick={() => insertFormat('\n- [ ] ', '\n', 'Item de verificação')}>
+          <button type="button" class="btn-tool-icon" title="Checklist (- [ ] item)" onclick={() => insertFormat('\n- [ ] ', '\n', 'Item de verificao')}>
             <CheckSquare size={14} />
           </button>
           <button type="button" class="btn-tool-icon" title="Aviso / Callout (> aviso)" onclick={() => insertFormat('\n> 💡 ', '\n', 'Dica importante')}>
@@ -607,7 +607,7 @@
         </div>
 
         <div class="form-group">
-          <label for="tut-content" class="form-label">Conteúdo do Guia (Markdown / Instruções) *</label>
+          <label for="tut-content" class="form-label">Contedo do Guia (Markdown / Instrues) *</label>
           <textarea
             id="tut-content"
             bind:this={editorTextarea}
@@ -615,7 +615,7 @@
             rows="12"
             required
             class="form-textarea code-font"
-            placeholder="# Introdução&#10;&#10;Instruções detalhadas passo a passo...&#10;&#10;### Checklist de Qualidade&#10;- [ ] Balões limpos&#10;- [ ] Tipografia alinhada"
+            placeholder="# Introduo&#10;&#10;Instrues detalhadas passo a passo...&#10;&#10;### Checklist de Qualidade&#10;- [ ] Bales limpos&#10;- [ ] Tipografia alinhada"
             bind:value={tutorialContent}
           ></textarea>
         </div>
@@ -625,7 +625,7 @@
             Cancelar
           </button>
           <button type="submit" class="btn-primary" disabled={!tutorialTitle.trim() || !tutorialContent.trim()}>
-            {editTutorialId ? 'Salvar Alterações' : 'Publicar Guia'}
+            {editTutorialId ? 'Salvar Alteraes' : 'Publicar Guia'}
           </button>
         </div>
       </form>
@@ -633,7 +633,7 @@
   </div>
 {/if}
 
-<!-- Modal: Excluir Tutorial Confirmação -->
+<!-- Modal: Excluir Tutorial Confirmao -->
 {#if deleteTutorialModal}
   <div class="modal-backdrop" onclick={() => (deleteTutorialModal = null)}>
     <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
@@ -660,7 +660,7 @@
 
         <div class="warning-alert-box">
           <AlertTriangle size={20} class="flex-shrink-0" />
-          <p>Tem certeza de que deseja excluir o tutorial <strong>{deleteTutorialModal.title}</strong>? Todos os arquivos e anexos vinculados a este guia serão excluídos permanentemente.</p>
+          <p>Tem certeza de que deseja excluir o tutorial <strong>{deleteTutorialModal.title}</strong>? Todos os arquivos e anexos vinculados a este guia sero excludos permanentemente.</p>
         </div>
 
         <div class="modal-actions">

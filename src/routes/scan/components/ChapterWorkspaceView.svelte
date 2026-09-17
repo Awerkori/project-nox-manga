@@ -190,7 +190,7 @@
       uploadSuccess = `Arquivo "${file.name}" enviado com sucesso (v${data.version || 1})!`;
       await invalidateAll();
     } catch (err: any) {
-      uploadError = err.message || 'Erro ao enviar arquivo';
+      uploadError = (err as any).message || 'Erro ao enviar arquivo';
     } finally {
       isUploadingFile = false;
       input.value = '';
@@ -233,7 +233,7 @@
     <div class="nav-breadcrumbs">
       <span class="crumb-work">{workData.title || 'Obra'}</span>
       <span class="crumb-sep">/</span>
-      <span class="crumb-ch">Capítulo #{chapterData.chapterNumber || chapterData.number || '—'}</span>
+      <span class="crumb-ch">Captulo #{chapterData.chapterNumber || chapterData.number || '—'}</span>
     </div>
 
     <div class="nav-right-actions">
@@ -278,9 +278,9 @@
       </div>
 
       <div class="hero-title-cluster">
-        <div class="hero-series-title">{workData.title || 'Obra em Produção'}</div>
+        <div class="hero-series-title">{workData.title || 'Obra em Produo'}</div>
         <h1 class="hero-chapter-heading">
-          Capítulo #{chapterData.chapterNumber || chapterData.number || '—'}
+          Captulo #{chapterData.chapterNumber || chapterData.number || '—'}
           {#if chapterData.chapterTitle || chapterData.title}
             <span class="hero-chapter-sub">— {chapterData.chapterTitle || chapterData.title}</span>
           {/if}
@@ -294,7 +294,7 @@
 
           <div class="hero-badge assignee-badge">
             <User size={13} />
-            <span>Responsável: {activeStageItem?.assignee?.displayName || activeStageItem?.assignee?.username || 'Disponível'}</span>
+            <span>Responsvel: {activeStageItem?.assignee?.displayName || activeStageItem?.assignee?.username || 'Disponvel'}</span>
           </div>
 
           <div class="hero-badge priority-badge">
@@ -305,7 +305,7 @@
           {#if openQcCount > 0}
             <div class="hero-badge qc-alert-badge">
               <AlertTriangle size={13} />
-              <span>QC: {openQcCount} pendência{openQcCount > 1 ? 's' : ''}</span>
+              <span>QC: {openQcCount} pendncia{openQcCount > 1 ? 's' : ''}</span>
             </div>
           {/if}
         </div>
@@ -388,7 +388,7 @@
       onclick={() => (activeTab = 'history')}
     >
       <History size={16} />
-      <span>Histórico ({currentChapterTimeline.length})</span>
+      <span>Histrico ({currentChapterTimeline.length})</span>
     </button>
 
     <button
@@ -428,7 +428,7 @@
                 {activeStageItem.stage?.name}
               </span>
               <div class="stage-state-tag status-{activeStageItem.status.toLowerCase()}">
-                Status: {activeStageItem.status === 'DONE' ? 'Concluído' : activeStageItem.status === 'IN_PROGRESS' ? 'Em Andamento' : activeStageItem.status === 'AVAILABLE' ? 'Disponível' : activeStageItem.status === 'REWORK' ? 'Retrabalho Solicitado' : 'Bloqueado'}
+                Status: {activeStageItem.status === 'DONE' ? 'Concludo' : activeStageItem.status === 'IN_PROGRESS' ? 'Em Andamento' : activeStageItem.status === 'AVAILABLE' ? 'Disponvel' : activeStageItem.status === 'REWORK' ? 'Retrabalho Solicitado' : 'Bloqueado'}
               </div>
             </div>
 
@@ -445,7 +445,7 @@
               {:else if activeStageItem.status === 'IN_PROGRESS' && activeStageItem.assignedTo === currentUserId}
                 <form method="POST" action="?/releaseStage" use:enhance>
                   <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
-                  <button type="submit" class="btn-release-secondary" title="Devolver etapa para a fila de disponíveis">
+                  <button type="submit" class="btn-release-secondary" title="Devolver etapa para a fila de disponveis">
                     <RotateCcw size={14} />
                     <span>Largar Etapa</span>
                   </button>
@@ -472,7 +472,7 @@
               <div class="step-number-bubble">1</div>
               <div>
                 <h3 class="step-card-title">O que baixar para trabalhar</h3>
-                <p class="step-card-desc">Arquivos upstream gerados pelas etapas anteriores necessários para a execução deste trabalho.</p>
+                <p class="step-card-desc">Arquivos upstream gerados pelas etapas anteriores necessrios para a execuo deste trabalho.</p>
               </div>
             </div>
 
@@ -506,7 +506,7 @@
               {:else}
                 <div class="no-upstream-box">
                   <Sparkles size={18} class="text-purple-400" />
-                  <span>Esta etapa não requer arquivos anteriores (ex: RAW) ou todas as dependências estão prontas.</span>
+                  <span>Esta etapa no requer arquivos anteriores (ex: RAW) ou todas as dependncias esto prontas.</span>
                 </div>
               {/if}
             </div>
@@ -518,26 +518,26 @@
               <div class="step-number-bubble">2</div>
               <div>
                 <h3 class="step-card-title">O que fazer nesta etapa</h3>
-                <p class="step-card-desc">Instruções editoriais e diretrizes de qualidade do Project Nox.</p>
+                <p class="step-card-desc">Instrues editoriais e diretrizes de qualidade do Project Nox.</p>
               </div>
             </div>
 
             <div class="step-card-body">
               <div class="instructions-block">
                 {#if activeStageItem.stage?.slug === 'raw'}
-                  <p>Obtenha os arquivos RAW originais em alta resolução, descompacte, verifique se não faltam páginas e empacote em ZIP/CBZ organizado numericamente (001.jpg, 002.jpg...).</p>
+                  <p>Obtenha os arquivos RAW originais em alta resoluo, descompacte, verifique se no faltam pginas e empacote em ZIP/CBZ organizado numericamente (001.jpg, 002.jpg...).</p>
                 {:else if activeStageItem.stage?.slug === 'clean_redraw'}
-                  <p>Abra as páginas no Photoshop/Clip Studio, limpe todos os textos e balões. Redesenhe onomatopeias e artes de fundo com capricho, preservando os detalhes da arte original.</p>
+                  <p>Abra as pginas no Photoshop/Clip Studio, limpe todos os textos e bales. Redesenhe onomatopeias e artes de fundo com capricho, preservando os detalhes da arte original.</p>
                 {:else if activeStageItem.stage?.slug === 'traducao'}
-                  <p>Traduza o texto mantendo o tom dos personagens, fluidez do português e fidelidade ao contexto da obra. Envie o roteiro em arquivo formatado (.docx, .txt ou .psd com texto).</p>
+                  <p>Traduza o texto mantendo o tom dos personagens, fluidez do portugus e fidelidade ao contexto da obra. Envie o roteiro em arquivo formatado (.docx, .txt ou .psd com texto).</p>
                 {:else if activeStageItem.stage?.slug === 'typeset'}
-                  <p>Diagramação completa dos balões e onomatopeias utilizando as fontes e tamanhos padrão do guia de estilo da scan. Garanta alinhamento centralizado e legibilidade perfeita.</p>
+                  <p>Diagramao completa dos bales e onomatopeias utilizando as fontes e tamanhos padro do guia de estilo da scan. Garanta alinhamento centralizado e legibilidade perfeita.</p>
                 {:else if activeStageItem.stage?.slug === 'revisao'}
-                  <p>Leitura atenta de todas as páginas diagramadas, caçando erros ortográficos, gramaticais, pontuação ou problemas de concordância. Nenhum upload obrigatório nesta etapa.</p>
+                  <p>Leitura atenta de todas as pginas diagramadas, caando erros ortogrficos, gramaticais, pontuao ou problemas de concordncia. Nenhum upload obrigatrio nesta etapa.</p>
                 {:else if activeStageItem.stage?.slug === 'qc'}
-                  <p>Inspeção final de controle de qualidade página por página. Se encontrar problemas pontuais, registre apontamentos no QC Inspector ou solicite retrabalho.</p>
+                  <p>Inspeo final de controle de qualidade pgina por pgina. Se encontrar problemas pontuais, registre apontamentos no QC Inspector ou solicite retrabalho.</p>
                 {:else}
-                  <p>Siga os procedimentos padrão da scan para a etapa {activeStageItem.stage?.name}. Em caso de dúvidas, consulte os líderes no chat da equipe.</p>
+                  <p>Siga os procedimentos padro da scan para a etapa {activeStageItem.stage?.name}. Em caso de dvidas, consulte os lderes no chat da equipe.</p>
                 {/if}
               </div>
             </div>
@@ -548,12 +548,12 @@
             <div class="step-card-header">
               <div class="step-number-bubble">3</div>
               <div>
-                <h3 class="step-card-title">O que enviar (Entregável da Etapa)</h3>
+                <h3 class="step-card-title">O que enviar (Entregvel da Etapa)</h3>
                 <p class="step-card-desc">
                   {#if requiresDeliverable}
-                    Upload obrigatório para que a etapa possa ser concluída e desbloqueie o próximo estágio no pipeline.
+                    Upload obrigatrio para que a etapa possa ser concluda e desbloqueie o prximo estgio no pipeline.
                   {:else}
-                    Upload opcional nesta etapa (Revisão / QC).
+                    Upload opcional nesta etapa (Reviso / QC).
                   {/if}
                 </p>
               </div>
@@ -568,7 +568,7 @@
                     <div class="deliv-info">
                       <span class="deliv-name">{activeStageCurrentFile.fileName}</span>
                       <div class="deliv-sub">
-                        <span class="deliv-badge-v">Versão v{activeStageCurrentFile.version}</span>
+                        <span class="deliv-badge-v">Verso v{activeStageCurrentFile.version}</span>
                         <span>{formatBytes(activeStageCurrentFile.byteSize)}</span>
                         <span>•</span>
                         <span>Enviado por {activeStageCurrentFile.uploader?.displayName || activeStageCurrentFile.uploader?.username || 'Membro'}</span>
@@ -592,9 +592,9 @@
                   <Upload size={24} class="text-purple-400" />
                   <div class="upload-text-group">
                     <span class="upload-main-text">
-                      {activeStageCurrentFile ? 'Enviar nova versão do arquivo entregável' : 'Selecione ou arraste o arquivo final desta etapa'}
+                      {activeStageCurrentFile ? 'Enviar nova verso do arquivo entregvel' : 'Selecione ou arraste o arquivo final desta etapa'}
                     </span>
-                    <span class="upload-sub-text">Formatos suportados: ZIP, RAR, PSD, KRA, DOCX, CBZ (Máx: 200MB)</span>
+                    <span class="upload-sub-text">Formatos suportados: ZIP, RAR, PSD, KRA, DOCX, CBZ (Mx: 200MB)</span>
                   </div>
 
                   <label class="btn-select-file" class:disabled={isUploadingFile}>
@@ -625,7 +625,7 @@
               {:else}
                 <div class="notice-box-muted">
                   <Lock size={15} />
-                  <span>Para enviar arquivos, você precisa primeiro assumir a etapa clicando em "Pegar Esta Etapa".</span>
+                  <span>Para enviar arquivos, voc precisa primeiro assumir a etapa clicando em "Pegar Esta Etapa".</span>
                 </div>
               {/if}
             </div>
@@ -636,8 +636,8 @@
             <div class="step-card-header">
               <div class="step-number-bubble complete-bubble">4</div>
               <div>
-                <h3 class="step-card-title">Conclusão da Etapa</h3>
-                <p class="step-card-desc">Finalize o trabalho para gravar a linhagem e liberar a próxima etapa aos colegas.</p>
+                <h3 class="step-card-title">Concluso da Etapa</h3>
+                <p class="step-card-desc">Finalize o trabalho para gravar a linhagem e liberar a prxima etapa aos colegas.</p>
               </div>
             </div>
 
@@ -646,8 +646,8 @@
                 <div class="completed-banner">
                   <CheckCircle2 size={24} class="text-emerald-400" />
                   <div>
-                    <strong>Etapa Concluída com Sucesso!</strong>
-                    <p>Concluída por {activeStageItem.completer?.displayName || activeStageItem.completer?.username || 'Membro'}.</p>
+                    <strong>Etapa Concluda com Sucesso!</strong>
+                    <p>Concluda por {activeStageItem.completer?.displayName || activeStageItem.completer?.username || 'Membro'}.</p>
                   </div>
                 </div>
               {:else if activeStageItem.status === 'IN_PROGRESS'}
@@ -655,28 +655,28 @@
                   <div class="gated-warning-banner">
                     <AlertTriangle size={18} class="text-amber-400" />
                     <div>
-                      <strong>Ação Bloqueada: Arquivo de entrega ausente</strong>
-                      <p>O Project Nox exige o upload do arquivo entregável no Passo 3 antes de permitir a conclusão da etapa.</p>
+                      <strong>Ao Bloqueada: Arquivo de entrega ausente</strong>
+                      <p>O Project Nox exige o upload do arquivo entregvel no Passo 3 antes de permitir a concluso da etapa.</p>
                     </div>
                   </div>
                 {/if}
 
                 <form method="POST" action="?/completeStageAction" use:enhance class="complete-form">
                   <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
-                  <input type="text" name="notes" placeholder="Observações opcionais sobre esta entrega..." class="notes-input" />
+                  <input type="text" name="notes" placeholder="Observaes opcionais sobre esta entrega..." class="notes-input" />
                   <button
                     type="submit"
                     class="btn-complete-submit"
                     disabled={!canCompleteStage}
                   >
                     <CheckCircle2 size={16} />
-                    <span>Concluir e Liberar Próxima Etapa</span>
+                    <span>Concluir e Liberar Prxima Etapa</span>
                   </button>
                 </form>
               {:else}
                 <div class="notice-box-muted">
                   <Clock size={15} />
-                  <span>Esta etapa não está em andamento. Assuma a etapa para poder trabalhar nela.</span>
+                  <span>Esta etapa no est em andamento. Assuma a etapa para poder trabalhar nela.</span>
                 </div>
               {/if}
             </div>
@@ -695,7 +695,7 @@
         <div class="panel-section-header">
           <div>
             <h2 class="panel-title">Arquivos & Linhagem Editorial</h2>
-            <p class="panel-desc">Registro rigoroso de todas as versões de arquivos produzidos e suas dependências diretas.</p>
+            <p class="panel-desc">Registro rigoroso de todas as verses de arquivos produzidos e suas dependncias diretas.</p>
           </div>
         </div>
 
@@ -733,7 +733,7 @@
                     {:else}
                       <div class="valid-alert-badge">
                         <ShieldCheck size={14} />
-                        <span>Válido</span>
+                        <span>Vlido</span>
                       </div>
                     {/if}
 
@@ -753,8 +753,8 @@
                   <div class="stale-banner-explanation">
                     <AlertTriangle size={15} class="text-red-400" />
                     <div>
-                      <strong>Atenção:</strong> Este arquivo foi marcado como obsoleto porque:
-                      <em>{f.staleReason || 'Uma das dependências upstream foi regravada com uma versão mais recente.'}</em>
+                      <strong>Ateno:</strong> Este arquivo foi marcado como obsoleto porque:
+                      <em>{f.staleReason || 'Uma das dependncias upstream foi regravada com uma verso mais recente.'}</em>
                     </div>
                   </div>
                 {/if}
@@ -778,18 +778,18 @@
         {:else}
           <div class="empty-tab-box">
             <FolderArchive size={32} class="text-purple-400" />
-            <p>Nenhum arquivo de produção foi anexado a este capítulo ainda.</p>
+            <p>Nenhum arquivo de produo foi anexado a este captulo ainda.</p>
           </div>
         {/if}
       </section>
 
-    <!-- TAB 3: HISTÓRICO -->
+    <!-- TAB 3: HISTRICO -->
     {:else if activeTab === 'history'}
       <section class="history-panel">
         <div class="panel-section-header">
           <div>
-            <h2 class="panel-title">Histórico de Atividades do Capítulo</h2>
-            <p class="panel-desc">Trilha de auditoria completa com todas as ações e transições executadas pela equipe.</p>
+            <h2 class="panel-title">Histrico de Atividades do Captulo</h2>
+            <p class="panel-desc">Trilha de auditoria completa com todas as aes e transies executadas pela equipe.</p>
           </div>
         </div>
 
@@ -804,7 +804,7 @@
                 <div class="timeline-content-card">
                   <div class="timeline-top">
                     <span class="timeline-event-name">{item.eventType}</span>
-                    <span class="timeline-stage-tag">{item.stageSlug || 'PRODUÇÃO'}</span>
+                    <span class="timeline-stage-tag">{item.stageSlug || 'PRODUO'}</span>
                     <span class="timeline-time">{relativeTime(item.createdAt)}</span>
                   </div>
                   <div class="timeline-user-row">
@@ -831,7 +831,7 @@
         {:else}
           <div class="empty-tab-box">
             <History size={32} class="text-purple-400" />
-            <p>Nenhum evento registrado no histórico deste capítulo ainda.</p>
+            <p>Nenhum evento registrado no histrico deste captulo ainda.</p>
           </div>
         {/if}
       </section>
@@ -842,7 +842,7 @@
         <div class="panel-section-header flex-between">
           <div>
             <h2 class="panel-title">Quality Control (QC) Inspector</h2>
-            <p class="panel-desc">Acompanhamento e resolução de apontamentos de erro por página.</p>
+            <p class="panel-desc">Acompanhamento e resoluo de apontamentos de erro por pgina.</p>
           </div>
           <button type="button" class="btn-create-qc-primary" onclick={() => (showNewQcModal = true)}>
             <Plus size={14} />
@@ -855,7 +855,7 @@
             {#each currentQcIssues as q}
               <div class="qc-card" class:resolved={q.status === 'RESOLVED'}>
                 <div class="qc-card-top">
-                  <span class="qc-page-pill">Página #{q.pageNumber}</span>
+                  <span class="qc-page-pill">Pgina #{q.pageNumber}</span>
                   <span class="qc-type-pill">{q.issueType}</span>
                   <span class="qc-status-badge status-{q.status.toLowerCase()}">{q.status}</span>
                 </div>
@@ -869,7 +869,7 @@
         {:else}
           <div class="empty-tab-box">
             <CheckCircle2 size={36} class="text-emerald-400" />
-            <p>Nenhum erro de QC registrado. O capítulo está limpo!</p>
+            <p>Nenhum erro de QC registrado. O captulo est limpo!</p>
           </div>
         {/if}
       </section>
@@ -879,14 +879,14 @@
       <section class="chapter-notes-panel">
         <div class="panel-section-header">
           <div>
-            <h2 class="panel-title">Chat & Notas do Capítulo</h2>
-            <p class="panel-desc">Comunicação e orientações internas entre os membros envolvidos na produção.</p>
+            <h2 class="panel-title">Chat & Notas do Captulo</h2>
+            <p class="panel-desc">Comunicao e orientaes internas entre os membros envolvidos na produo.</p>
           </div>
         </div>
 
         <div class="notes-placeholder-box">
           <MessageSquare size={32} class="text-purple-400" />
-          <p>Para interações em tempo real com a equipe completa da scan, utilize a aba geral <strong>Chat de Equipe</strong> no menu lateral.</p>
+          <p>Para interaes em tempo real com a equipe completa da scan, utilize a aba geral <strong>Chat de Equipe</strong> no menu lateral.</p>
         </div>
       </section>
     {/if}
@@ -921,14 +921,14 @@
           <label for="rw-target" class="form-label">Devolver para qual etapa?</label>
           <select id="rw-target" name="target_stage_slug" class="form-select" bind:value={reworkTargetSlug}>
             <option value="raw">Raw Provider</option>
-            <option value="traducao">Tradução</option>
+            <option value="traducao">Traduo</option>
             <option value="clean_redraw">Clean/Redraw</option>
             <option value="typeset">Typeset</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label for="rw-reason" class="form-label">Motivo do Retrabalho (Obrigatório, mín. 3 caracteres)</label>
+          <label for="rw-reason" class="form-label">Motivo do Retrabalho (Obrigatrio, mn. 3 caracteres)</label>
           <textarea
             id="rw-reason"
             name="reason"

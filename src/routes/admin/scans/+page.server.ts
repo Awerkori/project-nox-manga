@@ -32,25 +32,25 @@ export const load: PageServerLoad = async ({ locals }) => {
     safeQuery(db.select({ id: schema.members.id, username: schema.members.username, displayName: schema.members.displayName, avatarId: schema.members.avatarId }).from(schema.members).orderBy(asc(schema.members.username)).limit(100))
   ]);
 
-  if (!scansRes.success) throw svelteError(500, scansRes.error.message);
+  if (scansRes.error) throw svelteError(500, scansRes.error ? (scansRes.error as any).message : 'Erro');
 
   const workCountMap: Record<string, number> = {};
-  for (const row of (workCountsRes.success ? workCountsRes.data : [])) {
+  for (const row of (workCountsRes.data || [])) {
     workCountMap[row.scanId] = (workCountMap[row.scanId] || 0) + 1;
   }
 
   const chapterCountMap: Record<string, number> = {};
-  for (const row of (chapterCountsRes.success ? chapterCountsRes.data : [])) {
+  for (const row of (chapterCountsRes.data || [])) {
     chapterCountMap[row.scanId] = (chapterCountMap[row.scanId] || 0) + 1;
   }
 
   const memberCountMap: Record<string, number> = {};
-  for (const row of (memberCountsRes.success ? memberCountsRes.data : [])) {
+  for (const row of (memberCountsRes.data || [])) {
     memberCountMap[row.scanId] = (memberCountMap[row.scanId] || 0) + 1;
   }
 
   const openingsCountMap: Record<string, number> = {};
-  for (const row of (openingsCountsRes.success ? openingsCountsRes.data : [])) {
+  for (const row of (openingsCountsRes.data || [])) {
     openingsCountMap[row.scanId] = (openingsCountMap[row.scanId] || 0) + 1;
   }
 
@@ -65,10 +65,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   return {
     scans,
-    partnerRequests: partnerReqsRes.success ? partnerReqsRes.data : [],
-    projectRequests: projectReqsRes.success ? projectReqsRes.data : [],
-    auditLogs: auditLogsRes.success ? auditLogsRes.data : [],
-    users: usersRes.success ? usersRes.data : []
+    partnerRequests: partnerReqsRes.data || [],
+    projectRequests: projectReqsRes.data || [],
+    auditLogs: auditLogsRes.data || [],
+    users: usersRes.data || []
   };
 };
 

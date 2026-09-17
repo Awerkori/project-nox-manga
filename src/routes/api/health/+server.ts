@@ -40,7 +40,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
           status: 'degraded',
           db: {
             status: 'unreachable_or_degraded',
-            error: probeRes.error.message
+            error: (probeRes.error as any).message
           }
         },
         {

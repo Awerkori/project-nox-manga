@@ -10,12 +10,12 @@
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   type Comment = {
     id: string;
-    user_id: string;
+    userId: string;
     body: string;
-    created_at: string;
-    parent_id: string | null;
-    members: { username: string; display_name: string; avatar_id?: string | null } | null;
-    comment_likes: { user_id: string }[];
+    createdAt: string;
+    parentId: string | null;
+    members: { username: string; displayName: string; avatarId?: string | null } | null;
+    commentLikes: { userId: string }[];
   };
   let {
     comments,
@@ -93,7 +93,7 @@
         edit ? 'comment_edit' : 'comment',
         edit
           ? { id: edit, body, mentionsData }
-          : { work_id: workId, chapter_id: chapterId, parent_id: reply, body, mentionsData }
+          : { workId: workId, chapterId: chapterId, parentId: reply, body, mentionsData }
       );
       body = '';
       reply = null;
@@ -137,10 +137,10 @@
 <section class="comments">
   <div class="section-heading">
     <div>
-      <span class="eyebrow">{chapterId ? 'DEPOIS DA ÚLTIMA PÁGINA' : 'AVALIAÇÕES & DISCUSSÃO'}</span>
-      <h2>{chapterId ? 'O que você achou deste capítulo?' : 'O que você achou desta obra?'}</h2>
+      <span class="eyebrow">{chapterId ? 'DEPOIS DA LTIMA PGINA' : 'AVALIAES & DISCUSSO'}</span>
+      <h2>{chapterId ? 'O que voc achou deste captulo?' : 'O que voc achou desta obra?'}</h2>
     </div>
-    <span class="small muted">{comments.length} comentário{comments.length === 1 ? '' : 's'}</span>
+    <span class="small muted">{comments.length} comentrio{comments.length === 1 ? '' : 's'}</span>
   </div>
   {#if notice}<div class="notice error" role="alert">{notice}</div>{/if}
   {#if profile}<form use:bindSubmit>
@@ -165,7 +165,7 @@
 
       <div class="composer-field-wrapper">
         <label class="field"
-          >{edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}<textarea
+          >{edit ? 'Editar comentrio' : reply ? 'Sua resposta' : 'Seu comentrio'}<textarea
             bind:value={body}
             bind:this={composer}
             rows="3"
@@ -176,12 +176,12 @@
               if (mentionAutocompleteRef?.handleKeyDown(e)) return;
             }}
             placeholder={edit
-              ? 'Edite seu comentário…'
+              ? 'Edite seu comentrio…'
               : reply
                 ? `Respondendo a @${replyComment?.members?.displayName || replyComment?.members?.username || 'leitor'}…`
                 : chapterId
-                  ? 'O que achou deste capítulo? Compartilhe suas impressões… Evite spoilers sem aviso.'
-                  : 'O que achou desta obra? Compartilhe suas impressões sobre a história, personagens e arte…'
+                  ? 'O que achou deste captulo? Compartilhe suas impresses… Evite spoilers sem aviso.'
+                  : 'O que achou desta obra? Compartilhe suas impresses sobre a histria, personagens e arte…'
             }></textarea></label
         >
         <MentionAutocomplete
@@ -192,7 +192,7 @@
       </div>
       <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
         <button class="button compact" disabled={busy || !body.trim()}>
-          {busy ? 'Enviando…' : edit ? 'Salvar alteração' : reply ? 'Responder' : 'Comentar'}
+          {busy ? 'Enviando…' : edit ? 'Salvar alterao' : reply ? 'Responder' : 'Comentar'}
         </button>
         <button
           type="button"
@@ -217,7 +217,7 @@
             Cancelar
           </button>
         {/if}
-        <span class="small muted">{body.length}/2000 · Use [spoiler]texto[/spoiler] para ocultar revelações.</span>
+        <span class="small muted">{body.length}/2000 · Use [spoiler]texto[/spoiler] para ocultar revelaes.</span>
       </div>
     </form>{:else}<div class="panel">
       <p><a class="text-link" href="/entrar">Entre na sua conta</a> para participar da conversa.</p>
@@ -226,11 +226,11 @@
   {#if threaded.length === 0}
     <div class="empty-comments-state">
       <MessageSquare size={32} class="empty-comments-icon" />
-      <p class="empty-comments-title">Nenhum comentário por enquanto</p>
+      <p class="empty-comments-title">Nenhum comentrio por enquanto</p>
       <span class="empty-comments-subtitle">
         {chapterId
-          ? 'Seja o primeiro a compartilhar o que achou deste capítulo!'
-          : 'Seja o primeiro a compartilhar sua opinião sobre esta obra!'}
+          ? 'Seja o primeiro a compartilhar o que achou deste captulo!'
+          : 'Seja o primeiro a compartilhar sua opinio sobre esta obra!'}
       </span>
     </div>
   {:else}
@@ -281,7 +281,7 @@
           <button
             class="comment-button"
             onclick={() => mutate('comment_like', comment.id)}
-            disabled={!profile || busy}>♡ {comment.comment_likes.length}</button
+            disabled={!profile || busy}>♡ {comment.commentLikes.length}</button
           >{#if profile}{#if !comment.parentId}<button
                 class="comment-button"
                 onclick={() => compose(comment)}>Responder</button
@@ -296,7 +296,7 @@
                 type="button"
                 class="comment-button report-btn"
                 onclick={() => (reportingComment = comment)}
-                title="Denunciar este comentário para a moderação"
+                title="Denunciar este comentrio para a moderao"
               >
                 <Flag size={11} />
                 <span>Denunciar</span>
@@ -310,11 +310,11 @@
     <ReportModal
       targetType="COMMENT"
       commentId={reportingComment.id}
-      targetTitle={`Comentário de @${reportingComment.members?.username || 'leitor'}`}
+      targetTitle={`Comentrio de @${reportingComment.members?.username || 'leitor'}`}
       onclose={() => (reportingComment = null)}
       onsuccess={() => {
         reportingComment = null;
-        notice = 'Denúncia sobre o comentário enviada à moderação com sucesso.';
+        notice = 'Denncia sobre o comentrio enviada  moderao com sucesso.';
       }}
     />
   {/if}

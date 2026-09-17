@@ -125,12 +125,12 @@
 <svelte:head>
   <title
     >{data.config.site_name || 'Project Nox'} — {data.config.description ||
-      'Histórias que nascem nas sombras e conquistam a noite'}</title
+      'Histrias que nascem nas sombras e conquistam a noite'}</title
   >
   <meta
     name="description"
     content={data.config.description ||
-      'Mangás, manhwas e webtoons da Project Nox. Descubra sua próxima leitura, acompanhe capítulos e faça parte da comunidade.'}
+      'Mangs, manhwas e webtoons da Project Nox. Descubra sua prxima leitura, acompanhe captulos e faa parte da comunidade.'}
   />
   <meta property="og:site_name" content="Project Nox" />
   <meta property="og:type" content="website" />
@@ -150,7 +150,7 @@
   {/if}
 </svelte:head>
 
-<a class="skip" href="#conteudo">Pular para conteúdo</a>
+<a class="skip" href="#conteudo">Pular para contedo</a>
 
 <AgeGateModal status={data.ageStatus} isLoggedIn={!!data.profile} />
 
@@ -159,7 +159,7 @@
 
   <header class="site-header" class:scrolled class:menu-open={menu}>
     <div class="header-inner">
-      <a href="/" class="brand" aria-label="Project Nox, início" onclick={() => (menu = false)}>
+      <a href="/" class="brand" aria-label="Project Nox, incio" onclick={() => (menu = false)}>
         <div class="brand-symbol-wrap">
           <img
             src="/brand/nox-symbol-64.webp"
@@ -176,12 +176,12 @@
         </span>
       </a>
 
-      <nav class="desktop-nav" aria-label="Navegação principal" data-sveltekit-preload-data="hover">
+      <nav class="desktop-nav" aria-label="Navegao principal" data-sveltekit-preload-data="hover">
         <a class:active={currentPath === '/'} href="/">
-          <span>Início</span>
+          <span>Incio</span>
         </a>
         <a class:active={currentPath.startsWith('/catalogo')} href="/catalogo">
-          <span>Catálogo</span>
+          <span>Catlogo</span>
         </a>
         <a class:active={currentPath === '/ranking'} href="/ranking">
           <span>Ranking</span>
@@ -226,7 +226,7 @@
           </a>
         </div>
 
-        <a class="icon-button header-search-btn" href="/catalogo" aria-label="Pesquisar catálogo">
+        <a class="icon-button header-search-btn" href="/catalogo" aria-label="Pesquisar catlogo">
           <Search size={18} />
         </a>
 
@@ -234,7 +234,7 @@
           <a
             class="icon-button notification-link"
             href="/notificacoes"
-            aria-label="Notificações"
+            aria-label="Notificaes"
           >
             <Bell size={18} />
             {#if localUnread > 0}<i></i>{/if}
@@ -244,7 +244,7 @@
             <button
               type="button"
               class="avatar-btn"
-              aria-label="Menu do usuário"
+              aria-label="Menu do usurio"
               aria-expanded={userMenuOpen}
               onclick={(e) => {
                 e.stopPropagation();
@@ -282,11 +282,11 @@
                 <div class="dropdown-links">
                   <a href="/me" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <UserRound size={16} />
-                    <span>Meu Espaço</span>
+                    <span>Meu Espao</span>
                   </a>
                   <a href="/u/{data.profile.username}" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <BookOpen size={16} />
-                    <span>Perfil Público</span>
+                    <span>Perfil Pblico</span>
                   </a>
                   <a href="/me?tab=biblioteca" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Library size={16} />
@@ -298,7 +298,7 @@
                   </a>
                   <a href="/me?tab=historico" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <History size={16} />
-                    <span>Histórico</span>
+                    <span>Histrico</span>
                   </a>
                   <a href="/me?tab=conquistas" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Trophy size={16} />
@@ -306,14 +306,14 @@
                   </a>
                   <a href="/me?tab=notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Bell size={16} />
-                    <span>Notificações</span>
+                    <span>Notificaes</span>
                     {#if localUnread > 0}
                       <span class="dropdown-badge">{localUnread}</span>
                     {/if}
                   </a>
                   <a href="/loja" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <ShoppingBag size={16} />
-                    <span>Loja de Cosméticos</span>
+                    <span>Loja de Cosmticos</span>
                   </a>
                   {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
                     {#if data.userScans && data.userScans.length === 1}
@@ -333,7 +333,7 @@
                     {:else if data.role === 'ADMIN'}
                       <a href="/scan" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
                         <Users size={16} />
-                        <span>Painéis de Scan</span>
+                        <span>Painis de Scan</span>
                       </a>
                     {/if}
                   {/if}
@@ -392,7 +392,7 @@
             {/if}
           </div>
         {:else if data.authState === 'AUTH_PENDING' || data.authState === 'AUTH_ERROR'}
-          <div class="user-avatar-skeleton" title="Sincronizando sessão..." aria-label="Carregando conta"></div>
+          <div class="user-avatar-skeleton" title="Sincronizando sesso..." aria-label="Carregando conta"></div>
         {:else}
           <a class="btn-login-nav" href="/entrar">
             <span>Entrar</span>
@@ -413,14 +413,14 @@
     <!-- Mobile Drawer Dropdown -->
     {#if menu}
       <div class="mobile-drawer" role="dialog" aria-modal="true">
-        <nav class="mobile-drawer-nav" aria-label="Menu móvel" data-sveltekit-preload-data="tap">
+        <nav class="mobile-drawer-nav" aria-label="Menu mvel" data-sveltekit-preload-data="tap">
           <a class:active={currentPath === '/'} href="/" onclick={() => (menu = false)}>
             <BookOpen size={18} />
-            <span>Início</span>
+            <span>Incio</span>
           </a>
           <a class:active={currentPath.startsWith('/catalogo')} href="/catalogo" onclick={() => (menu = false)}>
             <Search size={18} />
-            <span>Catálogo</span>
+            <span>Catlogo</span>
           </a>
           <a class:active={currentPath === '/ranking'} href="/ranking" onclick={() => (menu = false)}>
             <Trophy size={18} />
@@ -432,17 +432,17 @@
           </a>
           <a class:active={currentPath.startsWith('/loja')} href="/loja" onclick={() => (menu = false)}>
             <ShoppingBag size={18} />
-            <span>Loja de Cosméticos</span>
+            <span>Loja de Cosmticos</span>
           </a>
           {#if data.profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
             <a class:active={currentPath.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
               <UserRound size={18} />
-              <span>Meu Espaço</span>
+              <span>Meu Espao</span>
             </a>
             {#if data.profile?.username}
               <a href="/u/{data.profile.username}" onclick={() => (menu = false)}>
                 <BookOpen size={18} />
-                <span>Perfil Público</span>
+                <span>Perfil Pblico</span>
               </a>
             {/if}
             <a href="/me?tab=biblioteca" onclick={() => (menu = false)}>
@@ -455,7 +455,7 @@
             </a>
             <a href="/me?tab=historico" onclick={() => (menu = false)}>
               <History size={18} />
-              <span>Histórico</span>
+              <span>Histrico</span>
             </a>
             {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
               {#if data.userScans && data.userScans.length === 1}
@@ -473,7 +473,7 @@
               {:else if data.role === 'ADMIN'}
                 <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
                   <Users size={18} />
-                  <span>Painéis de Scan</span>
+                  <span>Painis de Scan</span>
                 </a>
               {/if}
             {/if}
@@ -516,11 +516,11 @@
             <span class="brand-nox">NOX</span>
           </span>
         </a>
-        <p class="footer-tagline">Histórias que nascem nas sombras e conquistam a noite.</p>
+        <p class="footer-tagline">Histrias que nascem nas sombras e conquistam a noite.</p>
       </div>
 
       <div class="footer-links">
-        <a href="/catalogo">Catálogo</a>
+        <a href="/catalogo">Catlogo</a>
         <a href="/ranking">Ranking</a>
         <a href="/scans">Scans</a>
         <a href="/loja">Loja</a>
@@ -531,16 +531,16 @@
 
     <div class="footer-bottom">
       <span>© {new Date().getFullYear()} Project Nox</span>
-      <span class="footer-credit">Feito para quem vive histórias.</span>
+      <span class="footer-credit">Feito para quem vive histrias.</span>
     </div>
   </footer>
 
   <nav class="mobile-bottom" aria-label="Atalhos" data-sveltekit-preload-data="tap">
-    <a href="/" class:active={currentPath === '/'}><BookOpen size={20} /><span>Início</span></a>
+    <a href="/" class:active={currentPath === '/'}><BookOpen size={20} /><span>Incio</span></a>
     <a href="/catalogo" class:active={currentPath.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
     <a href="/scans" class:active={currentPath.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
     <a href="/loja" class:active={currentPath.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
-    <a href={data.profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{data.profile || data.authState !== 'ANONYMOUS' ? 'Espaço' : 'Entrar'}</span></a>
+    <a href={data.profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{data.profile || data.authState !== 'ANONYMOUS' ? 'Espao' : 'Entrar'}</span></a>
   </nav>
 {/if}
 

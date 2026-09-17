@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 
 export function requireUser(locals: App.Locals): string {
   if (!locals.user || !locals.user.id) {
-    error(401, 'Autenticação necessária.');
+    error(401, 'Autenticao necessria.');
   }
   return locals.user.id;
 }
@@ -12,7 +12,7 @@ export function requireUser(locals: App.Locals): string {
 export function requireRole(locals: App.Locals, allowedRoles: string[]) {
   const userId = requireUser(locals);
   if (!allowedRoles.includes(locals.role || '')) {
-    error(403, 'Você não tem permissão para realizar esta ação.');
+    error(403, 'Voc no tem permisso para realizar esta ao.');
   }
   return userId;
 }
@@ -41,11 +41,11 @@ export async function requireScanMember(locals: App.Locals, scanId: string, allo
   );
 
   if (dbErr || !member) {
-    error(403, 'Você não é membro desta scan.');
+    error(403, 'Voc no  membro desta scan.');
   }
 
   if (allowedRoles && !allowedRoles.includes(member.role)) {
-    error(403, 'Você não tem o cargo necessário nesta scan.');
+    error(403, 'Voc no tem o cargo necessrio nesta scan.');
   }
 
   return userId;
@@ -58,7 +58,7 @@ export async function requireScanLeader(locals: App.Locals, scanId: string) {
 export function requireOwnership(locals: App.Locals, ownerId: string) {
   const userId = requireUser(locals);
   if (userId !== ownerId && !['ADMIN', 'STAFF_SITE'].includes(locals.role || '')) {
-    error(403, 'Você não tem permissão para alterar este recurso.');
+    error(403, 'Voc no tem permisso para alterar este recurso.');
   }
   return userId;
 }

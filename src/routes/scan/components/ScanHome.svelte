@@ -35,11 +35,11 @@
 
   const CANONICAL_STAGES = [
     { slug: 'raw', name: 'Raw Provider', icon: '📦', color: '#94a3b8' },
-    { slug: 'traducao', name: 'Tradução', icon: '🌐', color: '#3b82f6' },
+    { slug: 'traducao', name: 'Traduo', icon: '🌐', color: '#3b82f6' },
     { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', color: '#ec4899' },
     { slug: 'typeset', name: 'Typeset', icon: '✒️', color: '#eab308' },
     { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', color: '#a855f7' },
-    { slug: 'pre_aprovado', name: 'Pré Aprovado', icon: '✅', color: '#06b6d4' },
+    { slug: 'pre_aprovado', name: 'Pr Aprovado', icon: '✅', color: '#06b6d4' },
     { slug: 'publicado', name: 'Publicado', icon: '📚', color: '#22c55e' }
   ];
 
@@ -49,7 +49,7 @@
     const t = targetSlug.toLowerCase().trim();
     if (s === t) return true;
     if (t === 'clean' || t === 'clean_redraw' || t === 'clean/redraw') return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
-    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado';
+    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pr aprovado';
     if (t === 'traducao' || t === 'translation') return s === 'traducao' || s === 'translation';
     if (t === 'revisor_qc' || t === 'revisao' || t === 'qc') return s === 'revisor_qc' || s === 'revisao' || s === 'qc' || s === 'revisor (qc)';
     if (t === 'publicado' || t === 'published') return s === 'publicado' || s === 'published';
@@ -61,7 +61,7 @@
     tasks.filter((t: any) => t.assignedTo === userProfile?.id && t.status !== 'DONE')
   );
 
-  // 1b. Meus Capítulos Editoriais (chapter stages assigned to logged in user)
+  // 1b. Meus Captulos Editoriais (chapter stages assigned to logged in user)
   let myEditorialStages = $derived.by(() => {
     if (!chapterStages || !userProfile?.id) return [];
     return chapterStages
@@ -76,7 +76,7 @@
 
   let totalMyAssignmentsCount = $derived(myTasks.length + myEditorialStages.length);
 
-  // 2. Precisa da sua atenção
+  // 2. Precisa da sua ateno
   let unreadMentions = $derived(
     notifications.filter((n: any) => !n.isRead && n.type === 'MENTION').length
   );
@@ -87,7 +87,7 @@
     tasks.filter((t: any) => !t.assignedTo && t.status === 'TODO').length
   );
 
-  // 3. Filas de Produção (7 canonical stages with real available counts)
+  // 3. Filas de Produo (7 canonical stages with real available counts)
   let stageCounts = $derived.by(() => {
     const map: Record<string, number> = {};
     for (const cSt of CANONICAL_STAGES) {
@@ -115,7 +115,7 @@
     return map;
   });
 
-  // 4. Capítulos em Andamento (active chapters)
+  // 4. Captulos em Andamento (active chapters)
   let activeChapters = $derived(
     chapters.slice(0, 4)
   );
@@ -137,7 +137,7 @@
     muralPosts.slice(0, 3)
   );
 
-  // 6. Próximos Prazos
+  // 6. Prximos Prazos
   let upcomingDeadlines = $derived(
     tasks
       .filter((t: any) => (t.due_date || t.dueAt) && t.status !== 'DONE')
@@ -152,10 +152,10 @@
     <div class="hero-text">
       <span class="scan-badge-label">{currentScan?.name || 'Project Nox'}</span>
       <h1 class="welcome-heading">
-        Olá, {userProfile?.displayName || 'Membro'}.
+        Ol, {userProfile?.displayName || 'Membro'}.
       </h1>
       <p class="welcome-sub">
-        O que precisa da sua atenção hoje na Scan?
+        O que precisa da sua ateno hoje na Scan?
       </p>
     </div>
 
@@ -177,12 +177,12 @@
     <div class="attention-banner">
       <div class="attention-header">
         <AlertCircle size={16} class="text-amber-500" />
-        <strong>PRECISA DA SUA ATENÇÃO</strong>
+        <strong>PRECISA DA SUA ATENO</strong>
       </div>
       <div class="attention-tags">
         {#if unreadMentions > 0}
           <button type="button" class="att-pill alert" onclick={() => onNavigateTab('inbox')}>
-            <span>{unreadMentions} {unreadMentions === 1 ? 'menção não lida' : 'menções não lidas'}</span>
+            <span>{unreadMentions} {unreadMentions === 1 ? 'meno no lida' : 'menes no lidas'}</span>
           </button>
         {/if}
         {#if openQcCount > 0}
@@ -192,7 +192,7 @@
         {/if}
         {#if unassignedTasks > 0}
           <button type="button" class="att-pill purple" onclick={() => onNavigateTab('minha_fila')}>
-            <span>{unassignedTasks} {unassignedTasks === 1 ? 'tarefa disponível para assumir' : 'tarefas disponíveis para assumir'}</span>
+            <span>{unassignedTasks} {unassignedTasks === 1 ? 'tarefa disponvel para assumir' : 'tarefas disponveis para assumir'}</span>
           </button>
         {/if}
       </div>
@@ -204,7 +204,7 @@
     <div class="section-header">
       <div class="header-left">
         <Layers size={16} class="text-purple-400" />
-        <h2>FILAS DE PRODUÇÃO</h2>
+        <h2>FILAS DE PRODUO</h2>
       </div>
       <button type="button" class="view-all-link" onclick={() => onNavigateTab('pipeline')}>
         <span>Ver Pipeline Completo</span>
@@ -212,7 +212,7 @@
       </button>
     </div>
 
-    <div class="queues-strip" role="region" aria-label="Filas de Produção">
+    <div class="queues-strip" role="region" aria-label="Filas de Produo">
       {#each CANONICAL_STAGES as stage}
         {@const count = stageCounts[stage.slug] || 0}
         <button
@@ -220,11 +220,11 @@
           class="queue-chip"
           class:has-items={count > 0}
           onclick={() => onNavigateTab('pipeline', stage.slug)}
-          title="Abrir fila {stage.name} no Pipeline ({count} disponível)"
+          title="Abrir fila {stage.name} no Pipeline ({count} disponvel)"
         >
           <span class="chip-stage-icon">{stage.icon}</span>
           <span class="chip-stage-name">{stage.name}:</span>
-          <span class="chip-count">{count} {count === 1 ? 'disponível' : 'disponíveis'}</span>
+          <span class="chip-count">{count} {count === 1 ? 'disponvel' : 'disponveis'}</span>
           <ArrowRight size={11} class="chip-arrow" />
         </button>
       {/each}
@@ -328,21 +328,21 @@
         {:else}
           <div class="empty-tasks-state">
             <CheckCircle2 size={32} class="text-emerald-500" />
-            <p>Você não possui demandas pendentes atribuídas no momento.</p>
-            <span class="empty-sub">Pegue um capítulo disponível no Pipeline para começar a produzir!</span>
+            <p>Voc no possui demandas pendentes atribudas no momento.</p>
+            <span class="empty-sub">Pegue um captulo disponvel no Pipeline para comear a produzir!</span>
             <button type="button" class="btn-empty-action" onclick={() => onNavigateTab('pipeline')}>
-              Ver Capítulos Disponíveis
+              Ver Captulos Disponveis
             </button>
           </div>
         {/if}
       </section>
 
-      <!-- Capítulos em Andamento -->
+      <!-- Captulos em Andamento -->
       <section class="home-card-panel mt-4">
         <div class="panel-header">
           <div class="header-left">
             <BookOpen size={16} class="text-blue-400" />
-            <h2>CAPÍTULOS RECENTES EM ANDAMENTO</h2>
+            <h2>CAPTULOS RECENTES EM ANDAMENTO</h2>
           </div>
           <button type="button" class="view-all-link" onclick={() => onNavigateTab('obras')}>
             Ver Obras
@@ -356,7 +356,7 @@
               <div class="chapter-quick-row">
                 <div class="chapter-work-meta">
                   <span class="work-name">{chData.work?.title || chData.works?.title || 'Obra'}</span>
-                  <span class="chapter-num">Capítulo #{chData.chapterNumber || chData.number || '—'}</span>
+                  <span class="chapter-num">Captulo #{chData.chapterNumber || chData.number || '—'}</span>
                 </div>
                 <div class="chapter-status-pill">
                   <span>Ativo</span>
@@ -376,13 +376,13 @@
           </div>
         {:else}
           <div class="empty-panel-text">
-            Nenhum capítulo ativo registrado recentemente nesta Scan.
+            Nenhum captulo ativo registrado recentemente nesta Scan.
           </div>
         {/if}
       </section>
     </div>
 
-    <!-- Right Column: Mural Recente + Próximos Prazos -->
+    <!-- Right Column: Mural Recente + Prximos Prazos -->
     <div class="col-right">
       <!-- Mural Pinned / Recente -->
       <section class="home-card-panel">
@@ -434,15 +434,15 @@
         {/if}
       </section>
 
-      <!-- Próximos Prazos -->
+      <!-- Prximos Prazos -->
       <section class="home-card-panel mt-4">
         <div class="panel-header">
           <div class="header-left">
             <Calendar size={16} class="text-emerald-400" />
-            <h2>PRÓXIMOS PRAZOS</h2>
+            <h2>PRXIMOS PRAZOS</h2>
           </div>
           <button type="button" class="view-all-link" onclick={() => onNavigateTab('calendario')}>
-            Calendário
+            Calendrio
           </button>
         </div>
 
@@ -464,7 +464,7 @@
           </div>
         {:else}
           <div class="empty-panel-text">
-            Nenhum prazo imediato agendado nos próximos dias.
+            Nenhum prazo imediato agendado nos prximos dias.
           </div>
         {/if}
       </section>

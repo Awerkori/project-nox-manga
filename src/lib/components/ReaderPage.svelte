@@ -5,7 +5,7 @@
     onSeen,
     eager = false
   }: {
-    page: { position: number; media_id: string; width: number; height: number; blobUrl?: string };
+    page: { position: number; mediaId: string; width: number; height: number; blobUrl?: string };
     onSeen: (page: number, visible: boolean) => void;
     eager?: boolean;
   } = $props();
@@ -91,14 +91,14 @@
   {#if (eager || near) && !broken}<img
       use:setupPageImg
       src={page.blobUrl || `/media/${page.mediaId}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
-      alt="Página {page.position}"
+      alt="Pgina {page.position}"
       width={page.width || 800}
       height={page.height || 1200}
       decoding="async"
       fetchpriority={eager ? 'high' : 'auto'}
     />{/if}
   {#if broken}<div class="page-retry">
-      <p>Não foi possível carregar a página {page.position}.</p>
+      <p>No foi possvel carregar a pgina {page.position}.</p>
       <button
         class="button secondary"
         onclick={() => {

@@ -6,10 +6,10 @@ export { db, schema };
 export * from './db/safe';
 
 export const WORK_FIELDS =
-  'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at,content_rating,views_total';
+  'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,ageRating,published,featured,coverId,updatedAt,createdAt,contentRating,views_total';
 
 export function check(result: { error: { message: string } | null }) {
-  if (result.error) error(400, result.error.message);
+  if (result.error) error(400, (result.error as any).message);
 }
 
 export function member(locals: App.Locals) {

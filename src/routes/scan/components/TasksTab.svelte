@@ -181,18 +181,18 @@
   // Combine stages with their parent production chapter
   interface UnifiedStageItem {
     id: string;
-    production_chapter_id: string;
-    stage_id: string;
+    productionChapterId: string;
+    stageId: string;
     status: 'BLOCKED' | 'AVAILABLE' | 'IN_PROGRESS' | 'DONE' | 'SKIPPED' | 'REWORK' | 'PAUSED' | 'CANCELLED';
-    assigned_to: string | null;
-    claimed_at: string | null;
-    last_activity_at: string | null;
-    previous_assigned_to: string | null;
-    rejection_reason: string | null;
-    return_to_stage_id: string | null;
-    is_override: boolean;
-    override_action: string | null;
-    override_reason: string | null;
+    assignedTo: string | null;
+    claimedAt: string | null;
+    lastActivityAt: string | null;
+    previous_assignedTo: string | null;
+    rejectionReason: string | null;
+    return_to_stageId: string | null;
+    isOverride: boolean;
+    overrideAction: string | null;
+    overrideReason: string | null;
     chapter: any;
     stage: any;
     assignee: any;
@@ -243,18 +243,18 @@
 
       items.push({
         id: cs.id,
-        production_chapter_id: cs.productionChapterId,
-        stage_id: cs.stageId,
+        productionChapterId: cs.productionChapterId,
+        stageId: cs.stageId,
         status: cs.status,
-        assigned_to: cs.assignedTo,
-        claimed_at: cs.claimedAt,
-        last_activity_at: cs.lastActivityAt,
-        previous_assigned_to: cs.previousAssignedTo,
-        rejection_reason: cs.rejectionReason,
-        return_to_stage_id: cs.returnToStageId,
-        is_override: cs.isOverride,
-        override_action: cs.overrideAction,
-        override_reason: cs.overrideReason,
+        assignedTo: cs.assignedTo,
+        claimedAt: cs.claimedAt,
+        lastActivityAt: cs.lastActivityAt,
+        previous_assignedTo: cs.previousAssignedTo,
+        rejectionReason: cs.rejectionReason,
+        return_to_stageId: cs.returnToStageId,
+        isOverride: cs.isOverride,
+        overrideAction: cs.overrideAction,
+        overrideReason: cs.overrideReason,
         chapter: ch,
         stage: wfStage,
         assignee: cs.assignee,
@@ -292,7 +292,7 @@
     });
   }
 
-  // Queue 1: Disponíveis para Você (AVAILABLE or REWORK without assignee)
+  // Queue 1: Disponveis para Voc (AVAILABLE or REWORK without assignee)
   let availableItems = $derived(
     applyFilters(
       unifiedItems.filter((item) => {
@@ -328,7 +328,7 @@
     )
   );
 
-  // Queue 4: Concluídos (DONE or SKIPPED)
+  // Queue 4: Concludos (DONE or SKIPPED)
   let doneItems = $derived(
     applyFilters(
       unifiedItems.filter((item) => item.status === 'DONE' || item.status === 'SKIPPED')
@@ -357,8 +357,8 @@
     try {
       const formData = new FormData();
       formData.set('scan_id', currentScanId);
-      formData.set('production_chapter_id', stageItem.productionChapterId);
-      formData.set('stage_id', stageItem.stageId);
+      formData.set('productionChapterId', stageItem.productionChapterId);
+      formData.set('stageId', stageItem.stageId);
       formData.set('file', file);
 
       uploadProgress = 40;
@@ -377,7 +377,7 @@
       uploadFeedback = {
         stageId: stageItem.id,
         type: 'success',
-        text: `Arquivo enviado com sucesso (Versão v${json.version}). Agora você pode concluir a etapa!`
+        text: `Arquivo enviado com sucesso (Verso v${json.version}). Agora voc pode concluir a etapa!`
       };
 
       await invalidateAll();
@@ -385,7 +385,7 @@
       uploadFeedback = {
         stageId: stageItem.id,
         type: 'error',
-        text: err.message || 'Erro ao enviar arquivo.'
+        text: (err as any).message || 'Erro ao enviar arquivo.'
       };
     } finally {
       uploadBusyStageId = null;
@@ -445,23 +445,23 @@
     <div class="header-titles">
       <div class="header-badge">
         <Zap size={14} />
-        <span>CENTRAL DE PRODUÇÃO & FLUXO EDITORIAL</span>
+        <span>CENTRAL DE PRODUO & FLUXO EDITORIAL</span>
       </div>
-      <h2 class="tab-title">Produção Operacional</h2>
-      <p class="tab-desc">Fluxo descomplicado para a equipe: pegue um capítulo, baixe o material pré-requisito, envie seu trabalho e avance a etapa.</p>
+      <h2 class="tab-title">Produo Operacional</h2>
+      <p class="tab-desc">Fluxo descomplicado para a equipe: pegue um captulo, baixe o material pr-requisito, envie seu trabalho e avance a etapa.</p>
     </div>
 
     <div class="header-actions">
       {#if isOwnerOrAdmin}
         <button type="button" class="btn-secondary-sm" onclick={() => (showBulkCreateModal = true)}>
           <Layers size={14} />
-          <span>Criação em Lote</span>
+          <span>Criao em Lote</span>
         </button>
       {/if}
       {#if canCreateChapters}
         <button type="button" class="btn-primary-sm" onclick={() => (showCreateChapterModal = true)}>
           <Plus size={14} />
-          <span>Novo Capítulo</span>
+          <span>Novo Captulo</span>
         </button>
       {/if}
     </div>
@@ -500,7 +500,7 @@
       onclick={() => (activeView = 'AVAILABLE')}
     >
       <Zap size={15} class="queue-icon yellow" />
-      <span class="queue-tab-label">Disponíveis para Você</span>
+      <span class="queue-tab-label">Disponveis para Voc</span>
       <span class="queue-counter-badge count-available">{availableItems.length}</span>
     </button>
 
@@ -533,7 +533,7 @@
       onclick={() => (activeView = 'DONE')}
     >
       <CheckCircle2 size={15} class="queue-icon green" />
-      <span class="queue-tab-label">Concluídos</span>
+      <span class="queue-tab-label">Concludos</span>
       <span class="queue-counter-badge count-done">{doneItems.length}</span>
     </button>
   </nav>
@@ -544,7 +544,7 @@
       <Search size={14} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar por obra ou número de capítulo..."
+        placeholder="Buscar por obra ou nmero de captulo..."
         bind:value={searchQuery}
         class="filter-input"
       />
@@ -566,9 +566,9 @@
       <div class="picker-header">
         <div class="picker-title-lockup">
           <Download size={18} class="text-amber-400" />
-          <h3>Entrada Rápida de RAW</h3>
+          <h3>Entrada Rpida de RAW</h3>
         </div>
-        <p class="picker-hint">Escolha a obra e o capítulo para iniciar a produção imediata.</p>
+        <p class="picker-hint">Escolha a obra e o captulo para iniciar a produo imediata.</p>
       </div>
 
       <div class="picker-controls">
@@ -582,7 +582,7 @@
         </div>
 
         <div class="picker-field">
-          <label for="raw-chapter-select">Capítulo Disponível</label>
+          <label for="raw-chapter-select">Captulo Disponvel</label>
           <select
             id="raw-chapter-select"
             bind:value={rawChapterId}
@@ -590,12 +590,12 @@
             disabled={rawAvailableChapters.length === 0}
           >
             {#if rawAvailableChapters.length === 0}
-              <option value="">Nenhum capítulo aguardando RAW</option>
+              <option value="">Nenhum captulo aguardando RAW</option>
             {:else}
-              <option value="">Selecione o capítulo...</option>
+              <option value="">Selecione o captulo...</option>
               {#each rawAvailableChapters as ch}
                 <option value={ch.id}>
-                  Capítulo #{ch.chapterNumber} {ch.chapterLabel ? `(${ch.chapterLabel})` : ''}
+                  Captulo #{ch.chapterNumber} {ch.chapterLabel ? `(${ch.chapterLabel})` : ''}
                 </option>
               {/each}
             {/if}
@@ -607,21 +607,21 @@
             {@const canClaimRaw = isOwnerOrAdmin || isUserEligibleForStage(targetRawStageItem.stage)}
             {#if canClaimRaw}
               <form method="POST" action="?/claimStage" use:enhance>
-                <input type="hidden" name="chapter_stage_id" value={targetRawStageItem.id} />
+                <input type="hidden" name="chapter_stageId" value={targetRawStageItem.id} />
                 <button type="submit" class="btn-claim-highlight">
                   <Zap size={14} />
-                  <span>Pegar este capítulo</span>
+                  <span>Pegar este captulo</span>
                 </button>
               </form>
             {:else}
-              <button type="button" class="btn-claim-highlight" disabled title="Você precisa do cargo Raw Provider para assumir esta etapa.">
+              <button type="button" class="btn-claim-highlight" disabled title="Voc precisa do cargo Raw Provider para assumir esta etapa.">
                 <Lock size={14} />
-                <span>Disponível para Raw Provider</span>
+                <span>Disponvel para Raw Provider</span>
               </button>
             {/if}
           {:else}
             <button type="button" class="btn-claim-highlight" disabled>
-              <span>Pegar este capítulo</span>
+              <span>Pegar este captulo</span>
             </button>
           {/if}
         </div>
@@ -631,13 +631,13 @@
 
   <!-- MAIN QUEUE VIEWS -->
   <main class="queue-content-area">
-    <!-- 1. DISPONÍVEIS PARA VOCÊ -->
+    <!-- 1. DISPONVEIS PARA VOC -->
     {#if activeView === 'AVAILABLE'}
       {#if availableItems.length === 0}
         <div class="empty-state-box">
           <CheckCircle2 size={44} class="text-emerald-400" />
-          <h4>Nenhuma etapa disponível para o seu cargo no momento!</h4>
-          <p>Você está em dia. Novas etapas aparecerão assim que os pré-requisitos anteriores forem entregues.</p>
+          <h4>Nenhuma etapa disponvel para o seu cargo no momento!</h4>
+          <p>Voc est em dia. Novas etapas aparecero assim que os pr-requisitos anteriores forem entregues.</p>
         </div>
       {:else}
         <div class="cards-grid">
@@ -659,7 +659,7 @@
                 <div class="work-meta">
                   <span class="work-name">{item.chapter.work?.title}</span>
                   <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapterNumber}
+                    Captulo #{item.chapter.chapterNumber}
                     {#if item.chapter.chapterLabel}
                       <small class="chapter-label-pill">{item.chapter.chapterLabel}</small>
                     {/if}
@@ -676,14 +676,14 @@
 
               <div class="card-dependencies-info">
                 {#if item.stage?.dependencies?.length > 0}
-                  <span class="deps-label">Pré-requisitos concluídos:</span>
+                  <span class="deps-label">Pr-requisitos concludos:</span>
                   <div class="deps-tags">
                     {#each item.stage.dependencies as dep}
                       <span class="dep-done-tag">✓ {dep.toUpperCase()}</span>
                     {/each}
                   </div>
                 {:else}
-                  <span class="deps-label">Etapa de entrada: sem pré-requisitos</span>
+                  <span class="deps-label">Etapa de entrada: sem pr-requisitos</span>
                 {/if}
               </div>
 
@@ -692,14 +692,14 @@
                   type="button"
                   class="btn-timeline-ghost"
                   onclick={() => openChapterTimeline(item.chapter)}
-                  title="Ver linha do tempo do capítulo"
+                  title="Ver linha do tempo do captulo"
                 >
                   <History size={14} />
-                  <span>Histórico</span>
+                  <span>Histrico</span>
                 </button>
 
                 <form method="POST" action="?/claimStage" use:enhance>
-                  <input type="hidden" name="chapter_stage_id" value={item.id} />
+                  <input type="hidden" name="chapter_stageId" value={item.id} />
                   <button type="submit" class="btn-claim-primary">
                     <Zap size={14} />
                     <span>Pegar Tarefa</span>
@@ -716,8 +716,8 @@
       {#if myItems.length === 0}
         <div class="empty-state-box">
           <BookOpen size={44} class="text-blue-400" />
-          <h4>Você não possui tarefas em andamento</h4>
-          <p>Acesse a aba <strong>Disponíveis para Você</strong> para assumir um novo capítulo da equipe.</p>
+          <h4>Voc no possui tarefas em andamento</h4>
+          <p>Acesse a aba <strong>Disponveis para Voc</strong> para assumir um novo captulo da equipe.</p>
         </div>
       {:else}
         <div class="cards-grid">
@@ -726,20 +726,20 @@
               <header class="card-header">
                 <div class="badge-row">
                   <span class="stage-tag" style="background: {item.stage?.color || '#3b82f6'}25; color: {item.stage?.color || '#60a5fa'}; border-color: {item.stage?.color || '#3b82f6'}60;">
-                    {item.stage?.name} · COM VOCÊ
+                    {item.stage?.name} · COM VOC
                   </span>
                   {#if item.status === 'REWORK'}
-                    <span class="rework-tag pulse">CORREÇÃO SOLICITADA</span>
+                    <span class="rework-tag pulse">CORREO SOLICITADA</span>
                   {/if}
                   {#if item.isStale}
-                    <span class="stale-tag">⚠️ Parado há {item.staleDays} dias</span>
+                    <span class="stale-tag">⚠️ Parado h {item.staleDays} dias</span>
                   {/if}
                 </div>
 
                 <div class="work-meta">
                   <span class="work-name">{item.chapter.work?.title}</span>
                   <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapterNumber}
+                    Captulo #{item.chapter.chapterNumber}
                     {#if item.chapter.chapterLabel}
                       <small class="chapter-label-pill">{item.chapter.chapterLabel}</small>
                     {/if}
@@ -751,7 +751,7 @@
                 <div class="card-alert-banner rework-prominent">
                   <AlertCircle size={16} />
                   <div>
-                    <strong>Atenção: Correção Solicitada pelo QC/Revisão</strong>
+                    <strong>Ateno: Correo Solicitada pelo QC/Reviso</strong>
                     <p>{item.rejectionReason}</p>
                   </div>
                 </div>
@@ -762,7 +762,7 @@
                 <section class="card-section-box">
                   <div class="section-title-sm">
                     <Download size={13} />
-                    <span>Materiais de Entrada (Pré-requisitos)</span>
+                    <span>Materiais de Entrada (Pr-requisitos)</span>
                   </div>
                   <div class="download-artifacts-row">
                     {#each item.dependencyFiles as depFile}
@@ -794,13 +794,13 @@
                     <FileText size={15} class="text-emerald-400 flex-shrink-0" />
                     <div class="file-meta">
                       <strong>{item.currentFile.fileName} (v{item.currentFile.version})</strong>
-                      <small>{formatBytes(item.currentFile.byteSize)} · Enviado por {item.currentFile.uploader?.displayName || item.currentFile.uploader?.username || 'Você'}</small>
+                      <small>{formatBytes(item.currentFile.byteSize)} · Enviado por {item.currentFile.uploader?.displayName || item.currentFile.uploader?.username || 'Voc'}</small>
                     </div>
                     <a
                       href="/api/scan/production/files/{item.currentFile.id}?download=1"
                       download={item.currentFile.fileName}
                       class="btn-icon-download"
-                      title="Baixar versão enviada"
+                      title="Baixar verso enviada"
                     >
                       <Download size={14} />
                     </a>
@@ -825,7 +825,7 @@
                     {#if uploadBusyStageId === item.id}
                       <span class="uploading-text">Enviando arquivo... {uploadProgress}%</span>
                     {:else if item.currentFile}
-                      <span>Clique para enviar uma <strong>nova versão (v{(item.currentFile.version || 1) + 1})</strong></span>
+                      <span>Clique para enviar uma <strong>nova verso (v{(item.currentFile.version || 1) + 1})</strong></span>
                     {:else}
                       <span>Clique para selecionar o <strong>arquivo pronto</strong> para esta etapa</span>
                     {/if}
@@ -843,8 +843,8 @@
               <footer class="card-footer actions-grid">
                 <div class="footer-left">
                   <form method="POST" action="?/releaseStage" use:enhance>
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
-                    <button type="submit" class="btn-release-task" title="Liberar tarefa de volta à fila">
+                    <input type="hidden" name="chapter_stageId" value={item.id} />
+                    <button type="submit" class="btn-release-task" title="Liberar tarefa de volta  fila">
                       <RotateCcw size={13} />
                       <span>Liberar</span>
                     </button>
@@ -855,10 +855,10 @@
                       type="button"
                       class="btn-return-rework"
                       onclick={() => openReturnModal(item)}
-                      title="Solicitar correção para uma etapa anterior"
+                      title="Solicitar correo para uma etapa anterior"
                     >
                       <RotateCcw size={13} />
-                      <span>Solicitar Correção</span>
+                      <span>Solicitar Correo</span>
                     </button>
                   {/if}
 
@@ -867,7 +867,7 @@
                       type="button"
                       class="btn-override-sm"
                       onclick={() => openOverrideModal(item)}
-                      title="Ações Administrativas de Líder"
+                      title="Aes Administrativas de Lder"
                     >
                       <span>Override</span>
                     </button>
@@ -876,7 +876,7 @@
 
                 <div class="footer-right">
                   <form method="POST" action="?/completeStageAction" use:enhance>
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
+                    <input type="hidden" name="chapter_stageId" value={item.id} />
                     {#if item.stage?.requiresOutput && !item.currentFile}
                       <button type="button" class="btn-complete-disabled" disabled title="Envie o arquivo antes de concluir">
                         <Lock size={14} />
@@ -901,7 +901,7 @@
       {#if waitingItems.length === 0}
         <div class="empty-state-box">
           <CheckCircle2 size={44} class="text-purple-400" />
-          <h4>Nenhum capítulo aguardando outras etapas no momento</h4>
+          <h4>Nenhum captulo aguardando outras etapas no momento</h4>
         </div>
       {:else}
         <div class="cards-grid">
@@ -915,7 +915,7 @@
                   </span>
                   <span class="waiting-reason-pill">
                     {#if item.status === 'BLOCKED'}
-                      BLOQUEADO POR PRÉ-REQUISITOS
+                      BLOQUEADO POR PR-REQUISITOS
                     {:else if item.assignedTo}
                       EM ANDAMENTO COM {item.assignee?.displayName || item.assignee?.username || 'MEMBRO'}
                     {:else}
@@ -927,7 +927,7 @@
                 <div class="work-meta">
                   <span class="work-name">{item.chapter.work?.title}</span>
                   <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapterNumber}
+                    Captulo #{item.chapter.chapterNumber}
                     {#if item.chapter.chapterLabel}
                       <small class="chapter-label-pill">{item.chapter.chapterLabel}</small>
                     {/if}
@@ -938,18 +938,18 @@
               <div class="waiting-details-box">
                 {#if item.stage?.slug === 'typeset'}
                   <p class="waiting-hint">
-                    O Typeset requer que tanto <strong>Clean/Redraw</strong> quanto <strong>Tradução</strong> estejam concluídos com seus arquivos anexados.
+                    O Typeset requer que tanto <strong>Clean/Redraw</strong> quanto <strong>Traduo</strong> estejam concludos com seus arquivos anexados.
                   </p>
                 {:else if item.stage?.dependencies?.length > 0}
                   <p class="waiting-hint">
-                    Aguardando conclusão de: <strong>{item.stage.dependencies.join(', ').toUpperCase()}</strong>.
+                    Aguardando concluso de: <strong>{item.stage.dependencies.join(', ').toUpperCase()}</strong>.
                   </p>
                 {/if}
 
                 {#if item.isStale && isOwnerOrAdmin}
                   <div class="card-alert-banner warning">
                     <AlertTriangle size={14} />
-                    <span>Membro inativo há {item.staleDays} dias. Você pode reassumir a tarefa.</span>
+                    <span>Membro inativo h {item.staleDays} dias. Voc pode reassumir a tarefa.</span>
                   </div>
                 {/if}
               </div>
@@ -961,7 +961,7 @@
                   onclick={() => openChapterTimeline(item.chapter)}
                 >
                   <History size={14} />
-                  <span>Histórico</span>
+                  <span>Histrico</span>
                 </button>
 
                 {#if isOwnerOrAdmin}
@@ -970,7 +970,7 @@
                     class="btn-override-sm"
                     onclick={() => openOverrideModal(item)}
                   >
-                    <span>Override Líder</span>
+                    <span>Override Lder</span>
                   </button>
                 {/if}
               </footer>
@@ -979,12 +979,12 @@
         </div>
       {/if}
 
-    <!-- 4. CONCLUÍDOS & PRONTO PRA UPAR -->
+    <!-- 4. CONCLUDOS & PRONTO PRA UPAR -->
     {:else if activeView === 'DONE'}
       {#if doneItems.length === 0}
         <div class="empty-state-box">
           <Layers size={44} class="text-slate-400" />
-          <h4>Nenhuma etapa concluída ainda</h4>
+          <h4>Nenhuma etapa concluda ainda</h4>
         </div>
       {:else}
         <div class="cards-grid">
@@ -1009,7 +1009,7 @@
                 <div class="work-meta">
                   <span class="work-name">{item.chapter.work?.title}</span>
                   <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapterNumber}
+                    Captulo #{item.chapter.chapterNumber}
                     {#if item.chapter.chapterLabel}
                       <small class="chapter-label-pill">{item.chapter.chapterLabel}</small>
                     {/if}
@@ -1022,7 +1022,7 @@
                   <FileText size={14} class="text-emerald-400 flex-shrink-0" />
                   <div class="file-meta">
                     <strong>{item.currentFile.fileName} (v{item.currentFile.version})</strong>
-                    <small>{formatBytes(item.currentFile.byteSize)} · Concluído por {item.completer?.displayName || item.completer?.username || 'Membro'}</small>
+                    <small>{formatBytes(item.currentFile.byteSize)} · Concludo por {item.completer?.displayName || item.completer?.username || 'Membro'}</small>
                   </div>
                   <a
                     href="/api/scan/production/files/{item.currentFile.id}?download=1"
@@ -1041,20 +1041,20 @@
                   onclick={() => openChapterTimeline(item.chapter)}
                 >
                   <History size={14} />
-                  <span>Histórico</span>
+                  <span>Histrico</span>
                 </button>
 
                 {#if item.chapter.status === 'READY' && ['OWNER', 'ADMIN', 'UPLOADER'].includes(userRole)}
                   <form method="POST" action="?/publishProductionChapter" use:enhance>
-                    <input type="hidden" name="production_chapter_id" value={item.chapter.id} />
+                    <input type="hidden" name="productionChapterId" value={item.chapter.id} />
                     <button type="submit" class="btn-publish-highlight">
                       <Sparkles size={14} />
-                      <span>Publicar Capítulo</span>
+                      <span>Publicar Captulo</span>
                     </button>
                   </form>
                 {:else if item.chapter.status === 'PUBLISHED' && isOwnerOrAdmin}
                   <form method="POST" action="?/unpublishProductionChapter" use:enhance>
-                    <input type="hidden" name="production_chapter_id" value={item.chapter.id} />
+                    <input type="hidden" name="productionChapterId" value={item.chapter.id} />
                     <button type="submit" class="btn-unpublish-ghost">
                       <span>Despublicar</span>
                     </button>
@@ -1068,14 +1068,14 @@
     {/if}
   </main>
 
-  <!-- MODAL: RETRABALHO / SOLICITAR CORREÇÃO -->
+  <!-- MODAL: RETRABALHO / SOLICITAR CORREO -->
   {#if showReturnModal && returnSourceStage}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card">
         <header class="modal-header">
           <div class="modal-title-wrap">
             <RotateCcw size={18} class="text-rose-400" />
-            <h3>Solicitar Correção / Retrabalho</h3>
+            <h3>Solicitar Correo / Retrabalho</h3>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => (showReturnModal = false)}>
             <X size={16} />
@@ -1090,32 +1090,32 @@
             }
           };
         }}>
-          <input type="hidden" name="source_stage_id" value={returnSourceStage.id} />
+          <input type="hidden" name="source_stageId" value={returnSourceStage.id} />
 
           <div class="modal-body">
             <p class="modal-instruction">
-              O capítulo <strong>#{returnSourceStage.chapter?.chapterNumber}</strong> voltará com status <strong>REWORK</strong> para a etapa selecionada. Após corrigido, retornará diretamente para a sua validação.
+              O captulo <strong>#{returnSourceStage.chapter?.chapterNumber}</strong> voltar com status <strong>REWORK</strong> para a etapa selecionada. Aps corrigido, retornar diretamente para a sua validao.
             </p>
 
             <div class="modal-field">
-              <label for="target-stage-slug">Etapa de Destino para Correção</label>
+              <label for="target-stage-slug">Etapa de Destino para Correo</label>
               <select id="target-stage-slug" name="target_stage_slug" bind:value={returnTargetSlug} class="modal-select">
                 <option value="raw">Raw Provider (Qualidade de Imagem Original)</option>
-                <option value="traducao">Tradução (Sentido ou Ortografia)</option>
-                <option value="clean_redraw">Clean/Redraw (Limpeza ou Reconstrução)</option>
-                <option value="typeset">Typeset (Diagramação / Balões / Fontes)</option>
+                <option value="traducao">Traduo (Sentido ou Ortografia)</option>
+                <option value="clean_redraw">Clean/Redraw (Limpeza ou Reconstruo)</option>
+                <option value="typeset">Typeset (Diagramao / Bales / Fontes)</option>
               </select>
             </div>
 
             <div class="modal-field">
-              <label for="return-reason">Motivo Detalhado da Correção *</label>
+              <label for="return-reason">Motivo Detalhado da Correo *</label>
               <textarea
                 id="return-reason"
                 name="reason"
                 bind:value={returnReason}
                 rows="4"
                 class="modal-textarea"
-                placeholder="Explique exatamente o que precisa ser corrigido (ex: Balão da pág. 4 cortado, fonte incorreta no grito pág. 12)..."
+                placeholder="Explique exatamente o que precisa ser corrigido (ex: Balo da pg. 4 cortado, fonte incorreta no grito pg. 12)..."
                 required
               ></textarea>
             </div>
@@ -1125,7 +1125,7 @@
             <button type="button" class="btn-cancel" onclick={() => (showReturnModal = false)}>Cancelar</button>
             <button type="submit" class="btn-danger-action" disabled={returnReason.trim().length < 3}>
               <RotateCcw size={14} />
-              <span>Enviar para Correção</span>
+              <span>Enviar para Correo</span>
             </button>
           </footer>
         </form>
@@ -1140,7 +1140,7 @@
         <header class="modal-header">
           <div class="modal-title-wrap">
             <ShieldCheck size={18} class="text-amber-400" />
-            <h3>Ação de Liderança (Override)</h3>
+            <h3>Ao de Liderana (Override)</h3>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => (showOverrideModal = false)}>
             <X size={16} />
@@ -1155,23 +1155,23 @@
             }
           };
         }}>
-          <input type="hidden" name="chapter_stage_id" value={overrideTargetStage.id} />
+          <input type="hidden" name="chapter_stageId" value={overrideTargetStage.id} />
 
           <div class="modal-body">
             <div class="modal-field">
-              <label for="override-action-select">Ação de Override</label>
-              <select id="override-action-select" name="override_action" bind:value={overrideAction} class="modal-select">
-                <option value="FORCE_COMPLETE">Forçar Conclusão (Marcar como Feito)</option>
+              <label for="override-action-select">Ao de Override</label>
+              <select id="override-action-select" name="overrideAction" bind:value={overrideAction} class="modal-select">
+                <option value="FORCE_COMPLETE">Forar Concluso (Marcar como Feito)</option>
                 <option value="FORCE_SKIP">Pular Etapa (Autorizar sem arquivo)</option>
-                <option value="REOPEN">Reabrir Etapa (Tornar Disponível)</option>
-                <option value="RECLAIM">Reassumir / Liberar Tarefa (Remover responsável)</option>
+                <option value="REOPEN">Reabrir Etapa (Tornar Disponvel)</option>
+                <option value="RECLAIM">Reassumir / Liberar Tarefa (Remover responsvel)</option>
                 <option value="TRANSFER">Transferir para Outro Membro</option>
               </select>
             </div>
 
             {#if overrideAction === 'TRANSFER'}
               <div class="modal-field">
-                <label for="target-user-select">Novo Membro Responsável</label>
+                <label for="target-user-select">Novo Membro Responsvel</label>
                 <select id="target-user-select" name="target_user_id" bind:value={overrideTargetUserId} class="modal-select" required>
                   <option value="">Selecione um membro...</option>
                   {#each team as m}
@@ -1189,7 +1189,7 @@
                 bind:value={overrideReason}
                 rows="3"
                 class="modal-textarea"
-                placeholder="Informe o motivo desta intervenção administrativa..."
+                placeholder="Informe o motivo desta interveno administrativa..."
                 required
               ></textarea>
             </div>
@@ -1206,14 +1206,14 @@
     </div>
   {/if}
 
-  <!-- MODAL: NOVO CAPÍTULO -->
+  <!-- MODAL: NOVO CAPTULO -->
   {#if showCreateChapterModal}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card">
         <header class="modal-header">
           <div class="modal-title-wrap">
             <Plus size={18} class="text-emerald-400" />
-            <h3>Novo Capítulo em Produção</h3>
+            <h3>Novo Captulo em Produo</h3>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => (showCreateChapterModal = false)}>
             <X size={16} />
@@ -1242,12 +1242,12 @@
 
             <div class="modal-grid-2">
               <div class="modal-field">
-                <label for="new-ch-num">Número do Capítulo *</label>
+                <label for="new-ch-num">Nmero do Captulo *</label>
                 <input id="new-ch-num" type="number" step="0.1" name="chapter_number" placeholder="Ex: 85" class="modal-input" required />
               </div>
               <div class="modal-field">
-                <label for="new-ch-label">Rótulo / Especial (Opcional)</label>
-                <input id="new-ch-label" type="text" name="chapter_label" placeholder="Ex: 12.5, Prólogo, Extra 1" class="modal-input" />
+                <label for="new-ch-label">Rtulo / Especial (Opcional)</label>
+                <input id="new-ch-label" type="text" name="chapter_label" placeholder="Ex: 12.5, Prlogo, Extra 1" class="modal-input" />
               </div>
             </div>
 
@@ -1256,8 +1256,8 @@
                 <label for="new-ch-template">Template Editorial</label>
                 <select id="new-ch-template" name="template" class="modal-select">
                   <option value="MANHWA">Manhwa Completo (9 etapas)</option>
-                  <option value="MANGA">Mangá Japonês</option>
-                  <option value="WEBTOON">Webtoon Rápido</option>
+                  <option value="MANGA">Mang Japons</option>
+                  <option value="WEBTOON">Webtoon Rpido</option>
                   <option value="NOVEL">Novel / Literatura</option>
                 </select>
               </div>
@@ -1282,14 +1282,14 @@
     </div>
   {/if}
 
-  <!-- MODAL: CRIAÇÃO EM LOTE -->
+  <!-- MODAL: CRIAO EM LOTE -->
   {#if showBulkCreateModal}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card">
         <header class="modal-header">
           <div class="modal-title-wrap">
             <Layers size={18} class="text-purple-400" />
-            <h3>Criação de Capítulos em Lote</h3>
+            <h3>Criao de Captulos em Lote</h3>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => (showBulkCreateModal = false)}>
             <X size={16} />
@@ -1318,16 +1318,16 @@
 
             <div class="modal-grid-2">
               <div class="modal-field">
-                <label for="bulk-from">Do Capítulo Número *</label>
+                <label for="bulk-from">Do Captulo Nmero *</label>
                 <input id="bulk-from" type="number" name="from_number" placeholder="Ex: 85" class="modal-input" required />
               </div>
               <div class="modal-field">
-                <label for="bulk-to">Até o Capítulo Número *</label>
+                <label for="bulk-to">At o Captulo Nmero *</label>
                 <input id="bulk-to" type="number" name="to_number" placeholder="Ex: 100" class="modal-input" required />
               </div>
             </div>
 
-            <p class="modal-hint-text">Capítulos que já existirem serão ignorados automaticamente sem gerar duplicatas.</p>
+            <p class="modal-hint-text">Captulos que j existirem sero ignorados automaticamente sem gerar duplicatas.</p>
           </div>
 
           <footer class="modal-footer">
@@ -1339,14 +1339,14 @@
     </div>
   {/if}
 
-  <!-- MODAL: LINHA DO TEMPO & HISTÓRICO DE VERSÕES -->
+  <!-- MODAL: LINHA DO TEMPO & HISTRICO DE VERSES -->
   {#if showTimelineModal && selectedTimelineChapter}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card wide">
         <header class="modal-header">
           <div class="modal-title-wrap">
             <History size={18} class="text-blue-400" />
-            <h3>Histórico: {selectedTimelineChapter.work?.title} #{selectedTimelineChapter.chapterNumber}</h3>
+            <h3>Histrico: {selectedTimelineChapter.work?.title} #{selectedTimelineChapter.chapterNumber}</h3>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => (showTimelineModal = false)}>
             <X size={16} />
@@ -1355,20 +1355,20 @@
 
         <div class="modal-body">
           <section class="modal-sub-block">
-            <h4>Arquivos Staged & Versões</h4>
+            <h4>Arquivos Staged & Verses</h4>
             {#if chapterTimelineFiles.length === 0}
-              <p class="text-muted-sm">Nenhum arquivo enviado para este capítulo ainda.</p>
+              <p class="text-muted-sm">Nenhum arquivo enviado para este captulo ainda.</p>
             {:else}
               <div class="files-table-wrapper">
                 <table class="files-table">
                   <thead>
                     <tr>
-                      <th>Versão</th>
+                      <th>Verso</th>
                       <th>Etapa</th>
                       <th>Nome do Arquivo</th>
                       <th>Tamanho</th>
                       <th>Enviado por</th>
-                      <th>Ação</th>
+                      <th>Ao</th>
                     </tr>
                   </thead>
                   <tbody>

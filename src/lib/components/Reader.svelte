@@ -29,10 +29,10 @@
 
   const REACTION_CONFIG = [
     { id: 'heart', emoji: '❤️', label: 'Amei' },
-    { id: 'fire', emoji: '🔥', label: 'Épico' },
+    { id: 'fire', emoji: '🔥', label: 'pico' },
     { id: 'cry', emoji: '😭', label: 'Emocionante' },
     { id: 'shock', emoji: '😱', label: 'Chocado' },
-    { id: 'laugh', emoji: '😂', label: 'Hilário' }
+    { id: 'laugh', emoji: '😂', label: 'Hilrio' }
   ];
 
   let reactionCounts = $state<Record<string, number>>({});
@@ -93,21 +93,21 @@
   async function handleDownloadChapter() {
     if (downloadingOffline || !data.chapter || !data.pages?.length) return;
     downloadingOffline = true;
-    notice = 'Iniciando download do capítulo...';
+    notice = 'Iniciando download do captulo...';
     try {
       await saveChapterOffline(
         data.chapter,
         data.chapter.works || { title: 'Obra', slug: '' },
         data.pages,
         (loaded, total) => {
-          notice = `Baixando para offline: ${loaded}/${total} páginas...`;
+          notice = `Baixando para offline: ${loaded}/${total} pginas...`;
         }
       );
       isDownloadedOffline = true;
-      notice = '✓ Capítulo salvo com sucesso para leitura offline!';
+      notice = '✓ Captulo salvo com sucesso para leitura offline!';
       setTimeout(() => { notice = ''; }, 4000);
     } catch (err) {
-      notice = (err as Error).message || 'Falha ao salvar capítulo para leitura offline.';
+      notice = (err as Error).message || 'Falha ao salvar captulo para leitura offline.';
     } finally {
       downloadingOffline = false;
     }
@@ -202,11 +202,11 @@
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const res = (await action('member', 'claim_xp', {
-          chapter_id: data.chapter.id
+          chapterId: data.chapter.id
         })) as { awarded?: boolean; reason?: string } | null;
         if (res?.awarded) {
           xpAwardConfirmed = true;
-          xpNotice = '✦ Capítulo Concluído! +25 XP';
+          xpNotice = '✦ Captulo Concludo! +25 XP';
           setTimeout(() => { xpNotice = ''; }, 5000);
           break;
         }
@@ -233,8 +233,8 @@
     chapterCompleted = true;
     try {
       const res = (await action('member', 'read_page', {
-        work_id: data.chapter.workId,
-        chapter_id: data.chapter.id,
+        workId: data.chapter.workId,
+        chapterId: data.chapter.id,
         page: data.pages.length,
         completed: true
       })) as { ok?: boolean; completed?: boolean } | null;
@@ -272,7 +272,7 @@
       if (document.fullscreenElement) await document.exitFullscreen();
       else await document.documentElement.requestFullscreen();
     } catch {
-      notice = 'Tela cheia indisponível neste navegador.';
+      notice = 'Tela cheia indisponvel neste navegador.';
     }
   }
 
@@ -312,9 +312,9 @@
       fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
     }
     if (data.profile && !data.preview)
-      action('member', 'read_start', { work_id: data.chapter.workId, chapter_id: data.chapter.id }).catch(
+      action('member', 'read_start', { workId: data.chapter.workId, chapterId: data.chapter.id }).catch(
         () => {
-          notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
+          notice = 'Sincronizao indisponvel. Tentaremos novamente durante a leitura.';
         }
       );
 
@@ -342,16 +342,16 @@
         sending = true;
         try {
           await action('member', 'read_page', {
-            work_id: data.chapter.workId,
-            chapter_id: data.chapter.id,
+            workId: data.chapter.workId,
+            chapterId: data.chapter.id,
             page: pageToSave,
             completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
           });
           notice = '';
         } catch {
           notice = locallySaved
-            ? 'Sem conexão para sincronizar. O progresso está salvo neste dispositivo.'
-            : 'Não foi possível salvar o progresso. Verifique sua conexão.';
+            ? 'Sem conexo para sincronizar. O progresso est salvo neste dispositivo.'
+            : 'No foi possvel salvar o progresso. Verifique sua conexo.';
         } finally {
           sending = false;
         }
@@ -377,8 +377,8 @@
           scope: 'member',
           action: 'read_page',
           data: {
-            work_id: data.chapter.workId,
-            chapter_id: data.chapter.id,
+            workId: data.chapter.workId,
+            chapterId: data.chapter.id,
             page: pageToSave,
             completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
           }
@@ -458,7 +458,7 @@
 />
 
 <svelte:head>
-  <title>{data.chapter.works?.title} — Capítulo {data.chapter.number} | Project Nox</title>
+  <title>{data.chapter.works?.title} — Captulo {data.chapter.number} | Project Nox</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -475,15 +475,15 @@
     </a>
     <div class="reader-header-meta">
       <strong>{data.chapter.works?.title}</strong>
-      <span>Capítulo {data.chapter.number}{data.preview ? ' · Prévia editorial' : ''}</span>
+      <span>Captulo {data.chapter.number}{data.preview ? ' · Prvia editorial' : ''}</span>
     </div>
     <div class="reader-tools">
       <span class="pages-count">{current}/{data.pages.length}</span>
       {#if data.siblings && data.siblings.length > 1}
         <button
           class="icon-button"
-          aria-label="Lista de capítulos"
-          title="Ver todos os capítulos"
+          aria-label="Lista de captulos"
+          title="Ver todos os captulos"
           onclick={() => {
             showChaptersDrawer = true;
             uiVisible = true;
@@ -495,8 +495,8 @@
       <button
         class="icon-button"
         class:is-downloaded={isDownloadedOffline}
-        aria-label={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
-        title={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
+        aria-label={isDownloadedOffline ? 'Captulo disponvel offline' : 'Baixar captulo para ler offline'}
+        title={isDownloadedOffline ? 'Captulo disponvel offline' : 'Baixar captulo para ler offline'}
         onclick={handleDownloadChapter}
         disabled={downloadingOffline}
       >
@@ -509,7 +509,7 @@
       <button
         class="icon-button"
         aria-label="Reportar problema"
-        title="Reportar problema neste capítulo"
+        title="Reportar problema neste captulo"
         onclick={() => {
           showReportModal = true;
           uiVisible = true;
@@ -542,10 +542,10 @@
         <input type="range" min="400" max="1200" step="50" bind:value={width} />
       </label>
       <label class="small">
-        <input type="checkbox" bind:checked={gap} /> Separar páginas tradicionais
+        <input type="checkbox" bind:checked={gap} /> Separar pginas tradicionais
       </label>
       <label class="field" style="margin-top:14px">
-        Pré-carregamento
+        Pr-carregamento
         <select
           value={preloadMode}
           onchange={(e) => {
@@ -554,12 +554,12 @@
             if (preloadMode === 'full') pumpPreload();
           }}
         >
-          <option value="full">Capítulo inteiro (Padrão)</option>
+          <option value="full">Captulo inteiro (Padro)</option>
           <option value="off">Desativado (Economia de dados/RAM)</option>
         </select>
       </label>
       <label class="field" style="margin-top:14px">
-        Ir para página
+        Ir para pgina
         <select value={current} onchange={(e) => jump(Number(e.currentTarget.value))}>
           {#each data.pages as page (page.position)}
             <option value={page.position}>{page.position}</option>
@@ -591,15 +591,15 @@
   <div class="reader-end" id="chapter-end">
     <div class="celebration-seal">
       <Sparkles size={15} />
-      <span>CAPÍTULO CONCLUÍDO</span>
+      <span>CAPTULO CONCLUDO</span>
     </div>
-    <h2 class="end-heading">Fim do Capítulo {data.chapter.number}</h2>
+    <h2 class="end-heading">Fim do Captulo {data.chapter.number}</h2>
     <p class="end-sub">
       {data.chapter.works?.title}{data.scans && data.scans.length > 0 ? ` · ${data.scans.map((s) => s.name).join(' × ')}` : ''}
     </p>
 
     <div class="chapter-reactions-box">
-      <span class="reactions-title">O que achou deste capítulo?</span>
+      <span class="reactions-title">O que achou deste captulo?</span>
       <div class="chapter-reactions-cluster">
         {#each REACTION_CONFIG as item}
           <button
@@ -625,12 +625,12 @@
         {#if data.previous}
           <a class="btn-nav-prev" href="/ler/{data.previous.id}">
             <ArrowLeft size={16} />
-            <span>Capítulo Anterior</span>
+            <span>Captulo Anterior</span>
           </a>
         {/if}
         {#if data.next}
           <a class="btn-nav-next hero-next" href="/ler/{data.next.id}">
-            <span>Próximo Capítulo</span>
+            <span>Prximo Captulo</span>
             <ArrowRight size={16} />
           </a>
         {/if}
@@ -642,15 +642,15 @@
             type="button"
             class="btn-nav-secondary-action btn-nav-drawer"
             onclick={() => (showChaptersDrawer = true)}
-            aria-label="Ver todos os capítulos"
+            aria-label="Ver todos os captulos"
           >
             <List size={16} />
-            <span>Ver Todos os Capítulos</span>
+            <span>Ver Todos os Captulos</span>
           </button>
         {/if}
         <a class="btn-nav-secondary-action btn-nav-work" href="/obra/{data.chapter.works?.slug}">
           <BookOpen size={16} />
-          <span>Ver Página da Obra</span>
+          <span>Ver Pgina da Obra</span>
         </a>
       </div>
     </div>
@@ -661,7 +661,7 @@
         onclick={() => (showReportModal = true)}
       >
         <Flag size={13} />
-        <span>Reportar problema neste capítulo (páginas quebradas, ordem incorreta)</span>
+        <span>Reportar problema neste captulo (pginas quebradas, ordem incorreta)</span>
       </button>
     </div>
   </div>
@@ -684,8 +684,8 @@
     </button>
     <button
       class="scroll-nav-btn icon-button"
-      aria-label="Ir ao fim do capítulo"
-      title="Ir ao fim do capítulo (↓ ou End)"
+      aria-label="Ir ao fim do captulo"
+      title="Ir ao fim do captulo (↓ ou End)"
       onclick={() => document.getElementById('chapter-end')?.scrollIntoView({ behavior: 'smooth' })}
     >
       <ChevronDown size={20} />
@@ -702,7 +702,7 @@
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
         showReportModal = false;
-        notice = 'Reporte enviado com sucesso para a moderação.';
+        notice = 'Reporte enviado com sucesso para a moderao.';
       }}
     />
   {/if}
@@ -714,20 +714,20 @@
       onkeydown={(e) => { if (e.key === 'Escape') showChaptersDrawer = false; }}
       role="button"
       tabindex="0"
-      aria-label="Fechar lista de capítulos"
+      aria-label="Fechar lista de captulos"
     ></div>
-    <aside class="drawer-panel" aria-label="Navegação de Capítulos">
+    <aside class="drawer-panel" aria-label="Navegao de Captulos">
       <div class="drawer-header">
         <div class="drawer-title-box">
           <BookOpen size={17} class="drawer-header-icon" />
-          <span class="drawer-title">Capítulos</span>
+          <span class="drawer-title">Captulos</span>
           <span class="drawer-count">{data.siblings?.length || 0}</span>
         </div>
         <button
           type="button"
           class="btn-drawer-close"
           onclick={() => (showChaptersDrawer = false)}
-          aria-label="Fechar lista de capítulos"
+          aria-label="Fechar lista de captulos"
         >
           <X size={18} />
         </button>
@@ -745,7 +745,7 @@
             class:current={isCurrent}
             onclick={() => (showChaptersDrawer = false)}
           >
-            <span class="drawer-item-number">Capítulo {sibling.number}</span>
+            <span class="drawer-item-number">Captulo {sibling.number}</span>
             {#if isCurrent}
               <span class="drawer-current-badge">Lendo agora</span>
             {/if}

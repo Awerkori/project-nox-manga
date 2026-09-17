@@ -25,7 +25,7 @@ export async function global_admin_recover_scan_ownership(scanId: string, newOwn
 }
 
 export async function global_admin_hard_delete_scan(scanId: string, reason: string, confirmation: string, adminId: string) {
-  if (confirmation !== 'DELETAR_SCAN') return { error: { message: 'Confirmação inválida.' } };
+  if (confirmation !== 'DELETAR_SCAN') return { error: { message: 'Confirmao invlida.' } };
   const { error } = await safeQuery(db.delete(schema.scans).where(eq(schema.scans.id, scanId)));
   if (!error) {
     await safeQuery(db.insert(schema.scanGlobalAuditLog).values({ id: crypto.randomUUID(), scanId: 'DELETED', adminId, action: 'HARD_DELETE', reason, details: { deleted_scan_id: scanId } as any, createdAt: new Date().toISOString() } as any));
@@ -39,9 +39,9 @@ export async function review_scan_partner_request(requestId: string, action: str
 
   if (action === 'APPROVE') {
     await safeQuery(db.insert(schema.scans).values({ id: crypto.randomUUID(), name: req.scanName, slug: req.scanSlug, isOfficial: 1, status: 'ACTIVE', ownerId: req.userId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), recruitmentStatus: 'OPEN' } as any));
-    await safeQuery(db.update(schema.scanPartnerRequests).set({ status: 'APPROVED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), reviewNotes: reason } as any).where(eq(schema.scanPartnerRequests.id, requestId)));
+    await safeQuery(db.update(schema.scanPartnerRequests).set({ status: 'APPROVED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), rejectionReason: reason } as any).where(eq(schema.scanPartnerRequests.id, requestId)));
   } else {
-    await safeQuery(db.update(schema.scanPartnerRequests).set({ status: 'REJECTED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), reviewNotes: reason } as any).where(eq(schema.scanPartnerRequests.id, requestId)));
+    await safeQuery(db.update(schema.scanPartnerRequests).set({ status: 'REJECTED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), rejectionReason: reason } as any).where(eq(schema.scanPartnerRequests.id, requestId)));
   }
   return { data: { success: true }, error: null };
 }
@@ -51,10 +51,10 @@ export async function review_scan_project_request(requestId: string, action: str
   if (!req) return { error: { message: 'Request not found' } };
 
   if (action === 'APPROVE') {
-    await safeQuery(db.insert(schema.workScans).values({ workId: req.workId, scanId: req.scanId, isPrimary: req.type === 'PRIMARY' ? 1 : 0, translationLanguage: 'pt-BR', status: 'ACTIVE' } as any).onConflictDoNothing());
-    await safeQuery(db.update(schema.scanProjectRequests).set({ status: 'APPROVED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), reviewNotes: reason } as any).where(eq(schema.scanProjectRequests.id, requestId)));
+    await safeQuery(db.insert(schema.workScans).values({ workId: req.workId, scanId: req.scanId, isPrimary: false, translationLanguage: 'pt-BR', status: 'ACTIVE' } as any).onConflictDoNothing());
+    await safeQuery(db.update(schema.scanProjectRequests).set({ status: 'APPROVED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), rejectionReason: reason } as any).where(eq(schema.scanProjectRequests.id, requestId)));
   } else {
-    await safeQuery(db.update(schema.scanProjectRequests).set({ status: 'REJECTED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), reviewNotes: reason } as any).where(eq(schema.scanProjectRequests.id, requestId)));
+    await safeQuery(db.update(schema.scanProjectRequests).set({ status: 'REJECTED' as any, reviewedBy: adminId, reviewedAt: new Date().toISOString(), rejectionReason: reason } as any).where(eq(schema.scanProjectRequests.id, requestId)));
   }
   return { data: { success: true }, error: null };
 }

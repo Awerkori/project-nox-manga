@@ -25,7 +25,7 @@
     const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
     if (list.length === 0) {
       if (work.primary_scan?.name) {
-        return { name: work.primary_scan.name, logo_id: work.primary_scan.logoId, is_official: work.primary_scan.isOfficial, extraCount: 0 };
+        return { name: work.primary_scan.name, logoId: work.primary_scan.logoId, isOfficial: work.primary_scan.isOfficial, extraCount: 0 };
       }
       return null;
     }
@@ -34,8 +34,8 @@
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logoId,
-      is_official: primary.isOfficial,
+      logoId: primary.logoId,
+      isOfficial: primary.isOfficial,
       extraCount
     };
   });
@@ -78,7 +78,7 @@
     />
 
     <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-    <div class="card-views-top-left" title="{work.viewsTotal || 0} visualizações">
+    <div class="card-views-top-left" title="{work.viewsTotal || 0} visualizaes">
       <Eye size={11} />
       <span>{formatViews(work.viewsTotal)}</span>
     </div>
@@ -88,15 +88,15 @@
       {#if work.featured}
         <span class="featured-chip"><Sparkles size={11} /> Destaque</span>
       {/if}
-      <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
+      <span class="kind-chip">{kindLabels[work.kind] || 'Mang'}</span>
     </div>
 
-    <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
+    <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
     {#if isAdult}
       <span class="adult-badge-bottom-left">+18</span>
     {/if}
 
-    <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox, múltiplos compactos) -->
+    <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback de Project Nox, mltiplos compactos) -->
     {#if scanInfo}
       <div class="card-scan-bottom-right" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
         {#if scanInfo.logoId}

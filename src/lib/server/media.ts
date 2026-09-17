@@ -124,6 +124,6 @@ export async function storeImage(input: Request | FormData, userId: string, defa
     if (failure instanceof TelegramStorageError && failure.status === 429) {
       throw new RateLimitError(failure.retryAfter && failure.retryAfter > 0 ? failure.retryAfter : 15);
     }
-    error(502, (failure as Error).message || 'Não foi possível armazenar a imagem. Tente novamente.');
+    error(502, (failure as Error).message || 'No foi possvel armazenar a imagem. Tente novamente.');
   }
 }

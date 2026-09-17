@@ -43,7 +43,7 @@ export const actions: Actions = {
     const forceReplace = form.get('force_replace')?.toString() === 'true';
 
     if (source === 'toonlivre' || source === 'nexus_toons') {
-      return fail(400, { error: 'Esta fonte está permanentemente excluída por diretriz do projeto.'});
+      return fail(400, { error: 'Esta fonte est permanentemente excluda por diretriz do projeto.'});
     }
 
     if (!workId && candidateTitle && sourceWorkId) {
@@ -54,7 +54,7 @@ export const actions: Actions = {
           .from(schema.works)
           .where(eq(schema.works.slug, slug))
       );
-      const existingWork = existingWorkRes.success ? existingWorkRes.data : null;
+      const existingWork = existingWorkRes.data;
 
       if (existingWork?.id) {
         workId = existingWork.id;
@@ -66,14 +66,14 @@ export const actions: Actions = {
             title: candidateTitle,
             slug,
             kind: 'MANHWA',
-            published: 1,
+            published: true,
             description: 'Obra descoberta e sincronizada via Prioridade Absoluta',
-            aliases: '', synopsis: '', author: '', artist: '', status: '', ageRating: 0, featured: 0, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), searchText: '', metadataProvenance: '', contentRating: '', viewsTotal: 0
+            aliases: [], synopsis: '', author: '', artist: '', status: '', ageRating: 0, featured: false, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), searchText: '', metadataProvenance: '', contentRating: '', viewsTotal: 0
           }).returning({ id: schema.works.id })
         );
 
-        if (!newWorkRes.success) {
-          return fail(400, { error: 'Falha ao registrar nova obra: ' + newWorkRes.error.message });
+        if (newWorkRes.error || !newWorkRes.data) {
+          return fail(400, { error: 'Falha ao registrar nova obra: ' + (newWorkRes.error as any).message });
         }
         workId = newWorkRes.data.id;
       }
@@ -121,16 +121,16 @@ export const actions: Actions = {
     const workId = form.get('workId')?.toString();
 
     if (!requestId || !workId) {
-      return fail(400, { error: 'Parâmetros inválidos para reativação.'});
+      return fail(400, { error: 'Parmetros invlidos para reativao.'});
     }
 
-    const failedJobsRes = await safeQuery(
+    const { data: failedJobs } = await safeQuery(
       db.select({ id: schema.importerQueue.id, payload: schema.importerQueue.payload })
         .from(schema.importerQueue)
         .where(eq(schema.importerQueue.status, 'FAILED'))
     );
 
-    const matchingIds = (failedJobsRes.success ? failedJobsRes.data : [])
+    const matchingIds = (failedJobs || [])
       .filter((j: any) => {
         try {
            const p = JSON.parse(j.payload);
@@ -159,7 +159,7 @@ export const actions: Actions = {
         .where(eq(schema.importerStaffRequests.id, requestId))
     );
 
-    return { success: true, message: 'Prioridade reativada! Capítulos reenfileirados com prioridade 100.' };
+    return { success: true, message: 'Prioridade reativada! Captulos reenfileirados com prioridade 100.' };
   },
 
   reconcile: async ({ request, locals }) => {
@@ -183,11 +183,11 @@ export const actions: Actions = {
         .where(eq(schema.importerQueue.id, jobId))
     );
 
-    if (!res.success) {
-      return fail(400, { error: res.error.message });
+    if (res.error) {
+      return fail(400, { error: (res.error as any).message });
     }
 
-    return { success: true, message: 'Job reenfileirado para execução imediata!' };
+    return { success: true, message: 'Job reenfileirado para execuo imediata!' };
   },
 
   retryAll: async ({ request, locals }) => {

@@ -1,5 +1,6 @@
+import { eq, inArray } from "drizzle-orm";
 import { env } from '$env/dynamic/private';
-import { privileged } from '$lib/server/db';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
 import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
 import { RateLimitError } from '$lib/server/media';
@@ -130,7 +131,7 @@ export function normalizeBotReference(rawRef: string | null | undefined): string
 }
 
 export const KNOWN_MANGA_SHARDS: Record<string, { name: string; botRef: string; shardId: string; channelId: string }> = {
-  '0383b872': { name: 'Nox Mangá',                botRef: 'MANGA_STORAGE_01', shardId: '935e146d-de3f-4a8e-b393-692944c716fa', channelId: '-1004353931378' },
+  '0383b872': { name: 'Nox Mang',                botRef: 'MANGA_STORAGE_01', shardId: '935e146d-de3f-4a8e-b393-692944c716fa', channelId: '-1004353931378' },
   'd22770c9': { name: 'Nox Manga Storage 001',    botRef: 'MANGA_STORAGE_01', shardId: '3a4be1a3-f5d2-40c9-9eab-697c2357b183', channelId: '-1003525800137' },
   'dbc29f11': { name: 'Nox Manga Storage 002',    botRef: 'MANGA_STORAGE_01', shardId: 'a3b6a10e-f53a-4873-9f19-d4cc8576de3a', channelId: '-1003686965009' },
   '064ee013': { name: 'Nox Manga Storage 003',    botRef: 'MANGA_STORAGE_01', shardId: '424e8be1-dc8a-4d97-a904-119c7ef1c9b5', channelId: '-1004400799763' },
@@ -234,7 +235,7 @@ export function resolveBotClient(botRef: string, targetChannel?: string) {
   const chat = targetChannel || specificChat || env.TELEGRAM_CHAT_ID;
 
   if (!token || !chat) {
-    throw new Error(`Armazenamento Telegram não configurado para o shard [${botRef}].`);
+    throw new Error(`Armazenamento Telegram no configurado para o shard [${botRef}].`);
   }
 
   return {
@@ -266,7 +267,7 @@ export function resolveBotDownloadClient(botRef: string) {
   const token = getEnvToken(norm) || (norm === 'MANGA_STORAGE_2' ? undefined : env.TELEGRAM_BOT_TOKEN);
 
   if (!token) {
-    throw new Error(`Credenciais de leitura Telegram não encontradas para [${botRef}].`);
+    throw new Error(`Credenciais de leitura Telegram no encontradas para [${botRef}].`);
   }
 
   const client = telegramStorage(token, '');
@@ -308,18 +309,17 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     releaseScanSlot = await acquireScanSlot(scanId);
   }
 
-  const db = privileged();
-
+  
   try {
     // 5. Select optimal shard via control plane RPC
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
+    const { data: shardRows, error: shardErr } = await (db as any).execute('select_optimal_storage_shard', {
       p_pool_key: poolKey,
       p_chapter_id: chapterId || null,
       p_scan_id: scanId || null
     });
 
     if (shardErr || !shardRows?.length) {
-      throw new Error(`Falha ao selecionar shard de armazenamento para o pool [${poolKey}]: ${shardErr?.message || 'Nenhum shard disponível'}`);
+      throw new Error(`Falha ao selecionar shard de armazenamento para o pool [${poolKey}]: ${shardErr?.message || 'Nenhum shard disponvel'}`);
     }
 
     const shard = shardRows[0];
@@ -329,7 +329,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const isOverflow = Boolean(shard.is_overflow);
 
     // 6. Reserve media record (zero artificial hourly limit, clean in-flight debounce)
-    const { error: reserveErr } = await db.rpc('reserve_media', {
+    const { error: reserveErr } = await (db as any).execute('reserve_media', {
       p_id: mediaId,
       p_user: userId,
       p_provider: 'telegram',
@@ -342,31 +342,25 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     });
 
     if (reserveErr) {
-      throw new Error(reserveErr.message);
+      throw new Error((reserveErr as any).message);
     }
 
     // Set router metadata on media record
-    await db
-      .from('media')
-      .update({storagePoolId: shard.poolId,
+    await safeQuery(db.update(schema.media).set({storagePoolId: shard.poolId,
         storageShardId: shardId,
         botReference: botRef,
         accessClass: accessClass,
         scanId: scanId || null,
-        chapterId: chapterId || null})
-      .eq('id', mediaId);
+        chapterId: chapterId || null}).where(eq(schema.media.id, mediaId)));
 
     // 7. Track upload start in control plane
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    await (db as any).execute('record_shard_upload_start', { p_shard_id: shardId });
 
     // 8. Resolve Telegram bot client for this shard
     const botClient = resolveBotClient(botRef, channelId);
 
-    // Sync database shard channel_id only if shard had no channel configured
-    if (!channelId && botClient.chat && !shard.ownerScanId) {await db
-        .from('storage_shards')
-        .update({ channelId: botClient.chat})
-        .eq('id', shardId);
+    // Sync database shard channelId only if shard had no channel configured
+    if (!channelId && botClient.chat && !shard.ownerScanId) {await safeQuery(db.update(schema.storageShards).set({ channelId: botClient.chat}).where(eq(schema.storageShards.id, shardId)));
     }
 
     const startTime = Date.now();
@@ -385,7 +379,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
       const retryAfter = isTg ? uploadErr.retryAfter : undefined;
 
       // Report failure to circuit breaker (marks COOLDOWN if 429)
-      await db.rpc('record_shard_upload_result', {
+      await (db as any).execute('record_shard_upload_result', {
         p_shard_id: shardId,
         p_success: false,
         p_latency_ms: elapsedMs,
@@ -395,7 +389,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
       });
 
       // Cleanup reservation
-      await db.from('media').delete().eq('id', mediaId);
+      await safeQuery(db.delete(schema.media).where(eq(schema.media.id, mediaId)));
 
       if (isTg && statusCode === 429) {
         throw new RateLimitError(retryAfter && retryAfter > 0 ? retryAfter : 15);
@@ -407,7 +401,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const elapsedMs = Date.now() - startTime;
 
     // 9. Record success in circuit breaker & metrics
-    await db.rpc('record_shard_upload_result', {
+    await (db as any).execute('record_shard_upload_result', {
       p_shard_id: shardId,
       p_success: true,
       p_latency_ms: elapsedMs,
@@ -417,7 +411,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     });
 
     // 10. Commit media record & location entry
-    const { error: commitErr } = await db.rpc('commit_media_record', {
+    const { error: commitErr } = await (db as any).execute('commit_media_record', {
       p_id: mediaId,
       p_shard_id: shardId,
       p_provider_key: providerKey,
@@ -426,7 +420,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     });
 
     if (commitErr) {
-      console.warn('commit_media_record_warning:', commitErr.message);
+      console.warn('commit_media_record_warning:', (commitErr as any).message);
     }
 
     return {
@@ -479,7 +473,7 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
   const MAX_PIPELINE_SIZE = 20_971_520; // 20 MB (Telegram Bot API getFile ceiling)
   if (bytes.byteLength > MAX_PIPELINE_SIZE) {
     throw new Error(
-      `Arquivo excede o limite máximo de 20 MB permitido pela API de bots do Telegram (${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB enviado).`
+      `Arquivo excede o limite mximo de 20 MB permitido pela API de bots do Telegram (${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB enviado).`
     );
   }
 
@@ -487,17 +481,16 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
   const sha256 = Array.from(new Uint8Array(hashBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
 
   const releaseScanSlot = await acquireScanSlot(scanId);
-  const db = privileged();
-
+  
   try {
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
+    const { data: shardRows, error: shardErr } = await (db as any).execute('select_optimal_storage_shard', {
       p_pool_key: 'PRODUCTION_STORAGE',
       p_chapter_id: productionChapterId,
       p_scan_id: scanId
     });
 
     if (shardErr || !shardRows?.length) {
-      throw new Error(`Falha ao selecionar shard de produção editorial: ${shardErr?.message || 'Nenhum shard disponível'}`);
+      throw new Error(`Falha ao selecionar shard de produo editorial: ${shardErr?.message || 'Nenhum shard disponvel'}`);
     }
 
     const shard = shardRows[0];
@@ -505,7 +498,7 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     const botRef = shard.botReference || 'PRODUCTION_STORAGE';
     const channelId = shard.channelId;
 
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    await (db as any).execute('record_shard_upload_start', { p_shard_id: shardId });
     const botClient = resolveBotClient(botRef, channelId);
 
     const fileId = crypto.randomUUID();
@@ -524,7 +517,7 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
       const statusCode = isTg ? uploadErr.status : undefined;
       const retryAfter = isTg ? uploadErr.retryAfter : undefined;
 
-      await db.rpc('record_shard_upload_result', {
+      await (db as any).execute('record_shard_upload_result', {
         p_shard_id: shardId,
         p_success: false,
         p_latency_ms: elapsedMs,
@@ -540,7 +533,7 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     }
 
     const elapsedMs = Date.now() - startTime;
-    await db.rpc('record_shard_upload_result', {
+    await (db as any).execute('record_shard_upload_result', {
       p_shard_id: shardId,
       p_success: true,
       p_latency_ms: elapsedMs,

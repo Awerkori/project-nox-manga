@@ -5,7 +5,7 @@ export class TelegramStorageError extends Error {
     readonly status?: number,
     readonly retryAfter?: number
   ) {
-    super('Armazenamento temporariamente indisponível. Tente novamente.');
+    super('Armazenamento temporariamente indisponvel. Tente novamente.');
   }
 }
 const unavailable = () => new TelegramStorageError();
@@ -69,11 +69,11 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       form.append('disable_content_type_detection', 'true');
       form.append('disable_notification', 'true');
       const result = await api('sendDocument', form);
-      const fileId = result.document?.fileId;
+      const fileId = result.document?.file_id;
       if (typeof fileId !== 'string' || !/^[A-Za-z0-9_-]{1,512}$/.test(fileId)) throw unavailable();
       return fileId;
     },
-    async download(fileId: string): Promise<ReadableStream<Uint8Array>> {const result = await api('getFile', JSON.stringify({ fileId: fileId}), {
+    async download(fileId: string): Promise<ReadableStream<Uint8Array>> {const result = await api('getFile', JSON.stringify({ file_id: fileId}), {
         'Content-Type': 'application/json'
       });
       const path = result.file_path;

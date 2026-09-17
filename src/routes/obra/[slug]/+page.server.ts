@@ -10,7 +10,7 @@ export const load = async ({ locals, params, url, cookies }) => {
   const isTargetUuid = isUuid(params.slug);
 
   let condition = and(
-    eq(schema.works.published, 1),
+    eq(schema.works.published, true),
     isTargetUuid ? eq(schema.works.id, params.slug) : eq(schema.works.slug, params.slug)
   );
 
@@ -35,7 +35,7 @@ export const load = async ({ locals, params, url, cookies }) => {
           .where(
             and(
               ilike(schema.works.slug, params.slug),
-              eq(schema.works.published, 1)
+              eq(schema.works.published, true)
             )
           )
       ),
@@ -49,15 +49,15 @@ export const load = async ({ locals, params, url, cookies }) => {
   }
 
   if (!work && result.error === 'TIMEOUT') {
-    error(503, 'A conexão com a obra está temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexo com a obra est temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (!work && result.error) {
-    error(500, 'Instabilidade temporária ao carregar a obra. Tente novamente em instantes.');
+    error(500, 'Instabilidade temporria ao carregar a obra. Tente novamente em instantes.');
   }
 
   if (!work) {
-    error(404, 'Obra não encontrada');
+    error(404, 'Obra no encontrada');
   }
 
   // Redirect to canonical slug if accessed by UUID
@@ -79,7 +79,7 @@ export const load = async ({ locals, params, url, cookies }) => {
       if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
-      error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
+      error(403, 'Contedo restrito: esta obra  destinada exclusivamente a maiores de 18 anos.');
     }
   }
   
@@ -176,7 +176,7 @@ export const load = async ({ locals, params, url, cookies }) => {
           .where(
             and(
               eq(schema.comments.workId, work.id),
-              eq(schema.comments.removed, 0),
+              eq(schema.comments.removed, false),
               isNull(schema.comments.chapterId)
             )
           )

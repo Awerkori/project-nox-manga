@@ -35,7 +35,7 @@ export type OfflineEvent = {
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
-      return reject(new Error('IndexedDB indisponível'));
+      return reject(new Error('IndexedDB indisponvel'));
     }
 
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
@@ -93,7 +93,7 @@ export async function saveChapterOffline(
       });
     } catch (err) {
       // Strict rule: Any page failure aborts the download and prevents saving incomplete chapters
-      throw new Error(`Falha ao baixar a página ${page.position}. Download incompleto não foi salvo.`);
+      throw new Error(`Falha ao baixar a pgina ${page.position}. Download incompleto no foi salvo.`);
     }
 
     completed++;

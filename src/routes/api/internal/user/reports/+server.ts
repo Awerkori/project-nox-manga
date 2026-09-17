@@ -2,14 +2,14 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, schema, safeQuery } from '$lib/server/db';
 import { eq, desc } from 'drizzle-orm';
-import { aliasedTable } from 'drizzle-orm/sqlite-core';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 export const GET: RequestHandler = async ({ locals }) => {
   if (!locals.user) {
-    throw error(401, 'Autenticação necessária.');
+    throw error(401, 'Autenticao necessria.');
   }
 
-  const chapterWorks = aliasedTable(schema.works, 'chapterWorks');
+  const chapterWorks = alias(schema.works, 'chapterWorks');
 
   const { data: rawReports, error: dbError } = await safeQuery(
     db.select({
@@ -42,11 +42,11 @@ export const GET: RequestHandler = async ({ locals }) => {
   );
 
   if (dbError) {
-    throw error(500, 'Erro ao carregar denúncias: ' + dbError.message);
+    throw error(500, 'Erro ao carregar denncias: ' + (dbError as any).message);
   }
 
   const reports = (rawReports || []).map((rep) => {
-    let targetTitle = 'Conteúdo da plataforma';
+    let targetTitle = 'Contedo da plataforma';
     let targetUrl: string | null = null;
 
     if (rep.targetType === 'CHAPTER' && rep.chapterId) {
@@ -56,14 +56,14 @@ export const GET: RequestHandler = async ({ locals }) => {
       targetTitle = rep.workTitle || '';
       targetUrl = `/obra/${rep.workSlug}`;
     } else if (rep.targetType === 'COMMENT' && rep.commentId) {
-      targetTitle = `Comentário: "${rep.commentBody?.slice(0, 35)}..."`;
+      targetTitle = `Comentrio: "${rep.commentBody?.slice(0, 35)}..."`;
     }
 
     const statusMap: Record<string, { label: string; description: string }> = {
-      NOVO: { label: 'Recebida', description: 'Sua denúncia está na fila para análise da moderação.' },
-      EM_ANALISE: { label: 'Em Análise', description: 'Um membro da equipe editorial está revisando o incidente.' },
-      ATRIBUIDO: { label: 'Em Análise', description: 'Um membro da equipe editorial foi designado para este incidente.' },
-      RESOLVIDO: { label: 'Resolvida', description: 'A equipe editorial concluiu a ação corretiva necessária.' },
+      NOVO: { label: 'Recebida', description: 'Sua denncia est na fila para anlise da moderao.' },
+      EM_ANALISE: { label: 'Em Anlise', description: 'Um membro da equipe editorial est revisando o incidente.' },
+      ATRIBUIDO: { label: 'Em Anlise', description: 'Um membro da equipe editorial foi designado para este incidente.' },
+      RESOLVIDO: { label: 'Resolvida', description: 'A equipe editorial concluiu a ao corretiva necessria.' },
       REJEITADO: { label: 'Encerrada', description: 'O item foi revisado e considerado em conformidade com as diretrizes.' }
     };
 

@@ -16,7 +16,7 @@ export const load = async ({ locals, setHeaders }) => {
       safeQuery(
         db.select()
           .from(schema.shopItems)
-          .where(eq(schema.shopItems.isActive, 1))
+          .where(eq(schema.shopItems.isActive, true))
           .orderBy(asc(schema.shopItems.orderIndex))
       ),
       2500,

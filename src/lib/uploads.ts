@@ -1,15 +1,15 @@
 import { Unzip, AsyncUnzipInflate, type UnzipFile } from 'fflate';
 import { inspectImage } from '$lib/media-validation';
 export async function normalizePage(file: File): Promise<Blob> {
-  if (file.size > 19_000_000) throw new Error(`${file.name}: limite de 19 MB por página.`);
+  if (file.size > 19_000_000) throw new Error(`${file.name}: limite de 19 MB por pgina.`);
   // Check dimensions before allocating a decoded bitmap, not only after decoding.
   inspectImage(new Uint8Array(await file.arrayBuffer()));
   const bitmap = await createImageBitmap(file).catch(() => {
-    throw new Error(`${file.name}: imagem corrompida ou formato não suportado.`);
+    throw new Error(`${file.name}: imagem corrompida ou formato no suportado.`);
   });
   if (bitmap.width * bitmap.height > 80_000_000 || bitmap.height > 60000 || bitmap.width > 10000) {
     bitmap.close();
-    throw new Error(`${file.name}: dimensões acima do limite.`);
+    throw new Error(`${file.name}: dimenses acima do limite.`);
   }
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width;
@@ -17,7 +17,7 @@ export async function normalizePage(file: File): Promise<Blob> {
   const context = canvas.getContext('2d');
   if (!context) {
     bitmap.close();
-    throw new Error('Não foi possível processar a imagem.');
+    throw new Error('No foi possvel processar a imagem.');
   }
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
@@ -86,15 +86,15 @@ export async function expandFiles(input: File[]): Promise<File[]> {
     const isArchive = await isZipOrCbzFile(file);
     if (!isArchive) {
       if (!SUPPORTED_IMAGE_REGEX.test(file.name) || file.size > 19_000_000)
-        throw new Error('Selecione páginas PNG, JPEG, WebP ou AVIF de até 19 MB.');
+        throw new Error('Selecione pginas PNG, JPEG, WebP ou AVIF de at 19 MB.');
       result.push(file);
       total += file.size;
       if (result.length > 500 || total > 400_000_000)
-        throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
+        throw new Error('Selecione at 500 pginas e 400 MB por captulo.');
       continue;
     }
 
-    if (file.size > 400_000_000) throw new Error('O arquivo compactado deve ter no máximo 400 MB.');
+    if (file.size > 400_000_000) throw new Error('O arquivo compactado deve ter no mximo 400 MB.');
     const extractedBefore = result.length;
 
     await new Promise<void>((resolve, reject) => {
@@ -131,7 +131,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           entry.name.startsWith('/') ||
           DANGEROUS_EXT_REGEX.test(entry.name)
         ) {
-          abort('O arquivo compactado contém entradas inválidas ou não permitidas.');
+          abort('O arquivo compactado contm entradas invlidas ou no permitidas.');
           return;
         }
 
@@ -141,7 +141,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
         }
 
         if (entry.originalSize !== undefined && entry.originalSize > 19_000_000) {
-          abort('Uma página do arquivo compactado excede 19 MB.');
+          abort('Uma pgina do arquivo compactado excede 19 MB.');
           return;
         }
 
@@ -158,7 +158,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           size += chunk.length;
           total += chunk.length;
           if (size > 19_000_000 || total > 400_000_000 || result.length + pending > 500) {
-            abort('Limite de 500 páginas, 19 MB por página ou 400 MB descompactados excedido.');
+            abort('Limite de 500 pginas, 19 MB por pgina ou 400 MB descompactados excedido.');
             return;
           }
           chunks.push(chunk);
@@ -188,19 +188,19 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           }
           if (failed) await reader.cancel();
         } catch {
-          abort('Não foi possível abrir o arquivo compactado.');
+          abort('No foi possvel abrir o arquivo compactado.');
         }
       })();
     });
 
     if (result.length === extractedBefore) {
-      throw new Error(`Nenhuma página ou imagem válida (.png, .jpg, .webp, .avif) encontrada no arquivo ${file.name}.`);
+      throw new Error(`Nenhuma pgina ou imagem vlida (.png, .jpg, .webp, .avif) encontrada no arquivo ${file.name}.`);
     }
   }
   if (result.length > 500 || total > 400_000_000)
-    throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
+    throw new Error('Selecione at 500 pginas e 400 MB por captulo.');
   if (!result.length)
-    throw new Error('Nenhuma página encontrada. Selecione imagens ou um arquivo ZIP/CBZ com páginas.');
+    throw new Error('Nenhuma pgina encontrada. Selecione imagens ou um arquivo ZIP/CBZ com pginas.');
   return result.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' }));
 }
 
@@ -213,7 +213,7 @@ export interface DetectedChapter {
 
 export function parseChapterNumber(name: string, fallbackIndex = 1): number {
   const clean = name.trim();
-  const match = clean.match(/(?:cap[ií]tulo|cap\.?|c|ch\.?|chapter)?\s*(\d+(?:\.\d+)?)/i);
+  const match = clean.match(/(?:cap[i]tulo|cap\.?|c|ch\.?|chapter)?\s*(\d+(?:\.\d+)?)/i);
   if (match && match[1]) {
     const num = parseFloat(match[1]);
     if (!isNaN(num)) return num;
@@ -307,13 +307,13 @@ export async function extractChaptersFromZip(file: File): Promise<DetectedChapte
         }
         if (failed) await reader.cancel();
       } catch {
-        abort('Não foi possível ler o arquivo compactado.');
+        abort('No foi possvel ler o arquivo compactado.');
       }
     })();
   });
 
   if (!rawEntries.length) {
-    throw new Error('Nenhuma imagem válida (PNG, JPG, WebP, AVIF) encontrada no arquivo compactado.');
+    throw new Error('Nenhuma imagem vlida (PNG, JPG, WebP, AVIF) encontrada no arquivo compactado.');
   }
 
   const pathParts = rawEntries.map((e) => e.path.split('/'));

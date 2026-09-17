@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { privileged } from '$lib/server/db';
+import { db, db as dbClient, schema, safeQuery, safeQuerySingle } from "$lib/server/db";
+import { sql } from 'drizzle-orm';
 import { TelegramStorageError } from '$lib/server/telegram';
 import { resolveBotClient, resolveStoragePoolForPurpose, KNOWN_MANGA_SHARDS } from '$lib/server/storage-router';
 import { inspectImage } from '$lib/media-validation';
@@ -37,26 +38,26 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 function authenticate(request: Request, getClientAddress: () => string, url: URL): void {
   // 1. Enforce HTTPS in production
   if (url.protocol !== 'https:' && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') {
-    error(403, 'Apenas conexões seguras HTTPS são permitidas');
+    error(403, 'Apenas conexes seguras HTTPS so permitidas');
   }
 
   // 2. Rate limit defensive check
   const ip = request.headers.get('cf-connecting-ip') || getClientAddress() || '127.0.0.1';
   if (!checkRateLimit(ip)) {
-    error(429, 'Limite de requisições excedido. Tente novamente em instantes.');
+    error(429, 'Limite de requisies excedido. Tente novamente em instantes.');
   }
 
   // 3. Constant-time token verification against dedicated NOX_STORAGE_BRIDGE_TOKEN
   const authHeader = request.headers.get('authorization') || '';
   if (!authHeader.startsWith('Bearer ')) {
-    error(401, 'Acesso não autorizado');
+    error(401, 'Acesso no autorizado');
   }
 
   const token = authHeader.slice(7).trim();
   const expectedToken = env.NOX_STORAGE_BRIDGE_TOKEN;
 
   if (!expectedToken || !safeTokenCompare(token, expectedToken)) {
-    error(401, 'Acesso não autorizado');
+    error(401, 'Acesso no autorizado');
   }
 }
 
@@ -83,7 +84,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 
   const id = url.searchParams.get('id') || crypto.randomUUID();
   if (!/^[0-9a-f-]{36}$/.test(id)) {
-    error(400, 'Identificador de mídia inválido');
+    error(400, 'Identificador de mdia invlido');
   }
 
   const explicitShard = url.searchParams.get('bot') || url.searchParams.get('shard');
@@ -99,7 +100,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
   }
 
   if (arrayBuffer.byteLength < 24 || arrayBuffer.byteLength > 19_000_000) {
-    error(413, 'Cada página deve ter no máximo 19 MB e no mínimo 24 bytes');
+    error(413, 'Cada pgina deve ter no mximo 19 MB e no mnimo 24 bytes');
   }
 
   const bytes = new Uint8Array(arrayBuffer);
@@ -111,12 +112,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     error(400, (e as Error).message);
   }
 
-  let db: ReturnType<typeof privileged> | null = null;
-  if (env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      db = privileged();
-    } catch {}
-  }
+  
+  
 
   let shardId: string | null = null;
   let botClient;
@@ -136,13 +133,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
           err1: (err1 as Error).message,
           err2: (err2 as Error).message
         });
-        error(503, 'Armazenamento temporariamente indisponível');
+        error(503, 'Armazenamento temporariamente indisponvel');
       }
     }
   } else {
     // Dynamic routing through Storage Supremo control plane
     const poolKey = resolveStoragePoolForPurpose(purpose);
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
+    const { data: shardRows, error: shardErr } = await (db as any).execute('select_optimal_storage_shard', {
       p_pool_key: poolKey,
       p_chapter_id: chapterId || null,
       p_scan_id: scanId || null
@@ -179,7 +176,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
   }
 
   if (shardId && db) {
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    await (db as any).execute('record_shard_upload_start', { p_shard_id: shardId });
   }
 
   const startTime = Date.now();
@@ -194,7 +191,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     const elapsedMs = Date.now() - startTime;
 
     if (shardId && db) {
-      await db.rpc('record_shard_upload_result', {
+      await (db as any).execute('record_shard_upload_result', {
         p_shard_id: shardId,
         p_success: true,
         p_latency_ms: elapsedMs,
@@ -232,7 +229,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     });
 
     if (shardId && db) {
-      await db.rpc('record_shard_upload_result', {
+      await (db as any).execute('record_shard_upload_result', {
         p_shard_id: shardId,
         p_success: false,
         p_latency_ms: elapsedMs,
@@ -256,6 +253,6 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
       );
     }
 
-    error(502, 'Não foi possível armazenar a imagem. Tente novamente.');
+    error(502, 'No foi possvel armazenar a imagem. Tente novamente.');
   }
 };

@@ -48,7 +48,7 @@ export const load = async ({ locals, url, setHeaders }) => {
 
   const needExactCount = !isUnfiltered || !cachedTotalWorksCount || Date.now() - cachedTotalWorksCount.timestamp > COUNT_CACHE_TTL_MS;
 
-  let filters = [eq(schema.works.published, 1)];
+  let filters = [eq(schema.works.published, true)];
   
   if (q) filters.push(ilike(schema.works.searchText, `%${q.replace(/[%_\\]/g, '')}%`));
   if (kind) filters.push(eq(schema.works.kind, kind));

@@ -52,14 +52,14 @@ export const load = async ({ locals, setHeaders }) => {
           number: schema.chapters.number,
           workId: schema.chapters.workId,
           publishedAt: schema.chapters.publishedAt,
-          works: {
-            id: schema.works.id,
-            slug: schema.works.slug,
-            title: schema.works.title,
-            coverId: schema.works.coverId,
-            published: schema.works.published,
-            contentRating: schema.works.contentRating
-          }
+        },
+        works: {
+          id: schema.works.id,
+          slug: schema.works.slug,
+          title: schema.works.title,
+          coverId: schema.works.coverId,
+          published: schema.works.published,
+          contentRating: schema.works.contentRating
         }
       })
       .from(schema.reading)
@@ -68,7 +68,7 @@ export const load = async ({ locals, setHeaders }) => {
       .where(
         and(
           isNotNull(schema.chapters.publishedAt),
-          eq(schema.works.published, 1)
+          eq(schema.works.published, true)
         )
       )
       .orderBy(desc(schema.reading.updatedAt))
@@ -103,9 +103,9 @@ export const load = async ({ locals, setHeaders }) => {
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
-            actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updatedAt
+            progressText: `Prximo: Captulo ${nextCh.number}`,
+            actionLabel: 'Ler prximo ↗',
+            updatedAt: mostRecent.updatedAt as string
           });
         } else {
           continueReading.push({
@@ -119,7 +119,7 @@ export const load = async ({ locals, setHeaders }) => {
             destinationUrl: `/obra/${work.slug}`,
             progressText: `Em dia · Cap. ${currentCh.number}`,
             actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updatedAt
+            updatedAt: mostRecent.updatedAt as string
           });
         }
       }
@@ -142,7 +142,7 @@ export const load = async ({ locals, setHeaders }) => {
   const [worksRes, chaptersRes, readingRes, mostReadRes] = await Promise.all([
     safeQuery(
       db.query.works.findMany({
-        where: eq(schema.works.published, 1),
+        where: eq(schema.works.published, true),
         orderBy: [desc(schema.works.updatedAt)],
         limit: 16,
         with: {
@@ -155,7 +155,7 @@ export const load = async ({ locals, setHeaders }) => {
         }
       })
     ),
-    Promise.resolve({ data: null, error: null, isDegraded: false }),
+    Promise.resolve({ data: null, error: null,  }),
     locals.user
       ? safeQuery(
           db.select({
@@ -168,15 +168,15 @@ export const load = async ({ locals, setHeaders }) => {
               id: schema.chapters.id,
               number: schema.chapters.number,
               workId: schema.chapters.workId,
-              publishedAt: schema.chapters.publishedAt,
-              works: {
-                id: schema.works.id,
-                slug: schema.works.slug,
-                title: schema.works.title,
-                coverId: schema.works.coverId,
-                published: schema.works.published,
-                contentRating: schema.works.contentRating
-              }
+              publishedAt: schema.chapters.publishedAt
+            },
+            works: {
+              id: schema.works.id,
+              slug: schema.works.slug,
+              title: schema.works.title,
+              coverId: schema.works.coverId,
+              published: schema.works.published,
+              contentRating: schema.works.contentRating
             }
           })
           .from(schema.reading)
@@ -185,18 +185,18 @@ export const load = async ({ locals, setHeaders }) => {
           .where(
             and(
               isNotNull(schema.chapters.publishedAt),
-              eq(schema.works.published, 1)
+              eq(schema.works.published, true)
             )
           )
           .orderBy(desc(schema.reading.updatedAt))
           .limit(20)
         )
-      : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false }),
+      : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const,  }),
     hasFreshPublicCache
-      ? Promise.resolve({ data: homePublicCache!.mostReadWorks, error: null, status: 'SUCCESS' as const, isDegraded: false })
+      ? Promise.resolve({ data: homePublicCache!.mostReadWorks, error: null, status: 'SUCCESS' as const,  })
       : safeQuery(
           db.query.works.findMany({
-            where: eq(schema.works.published, 1),
+            where: eq(schema.works.published, true),
             orderBy: [desc(schema.works.viewsTotal)],
             limit: 16,
             with: {
@@ -238,7 +238,7 @@ export const load = async ({ locals, setHeaders }) => {
     const needsNextChapter: Array<{ wid: string; rows: typeof readingRes.data; currentCh: any }> = [];
 
     for (const [wid, rows] of grouped.entries()) {
-      const work = (rows[0].chapters as any).works;
+      const work = (rows[0] as any).works;
       const incomplete = rows.find((r) => !r.completedAt);
       if (incomplete) {
         const ch = incomplete.chapters as any;
@@ -251,9 +251,9 @@ export const load = async ({ locals, setHeaders }) => {
           chapterId: ch.id,
           chapterNumber: ch.number,
           destinationUrl: `/ler/${ch.id}`,
-          progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
+          progressText: `Captulo ${ch.number} · Pg. ${incomplete.page}`,
           actionLabel: 'Retomar leitura ↗',
-          updatedAt: incomplete.updatedAt
+          updatedAt: incomplete.updatedAt as string
         });
       } else {
         needsNextChapter.push({ wid, rows, currentCh: rows[0].chapters as any });
@@ -287,7 +287,7 @@ export const load = async ({ locals, setHeaders }) => {
 
       for (const { wid, rows, currentCh } of needsNextChapter) {
         const nextCh = allNext.find((c: any) => c.workId === wid && c.number > currentCh.number);
-        const work = (rows[0].chapters as any).works;
+        const work = (rows[0] as any).works;
         const mostRecent = rows[0];
         if (nextCh) {
           continueReading.push({
@@ -299,9 +299,9 @@ export const load = async ({ locals, setHeaders }) => {
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
-            actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updatedAt
+            progressText: `Prximo: Captulo ${nextCh.number}`,
+            actionLabel: 'Ler prximo ↗',
+            updatedAt: mostRecent.updatedAt as string
           });
         } else {
           continueReading.push({
@@ -315,7 +315,7 @@ export const load = async ({ locals, setHeaders }) => {
             destinationUrl: `/obra/${work.slug}`,
             progressText: `Em dia · Cap. ${currentCh.number}`,
             actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updatedAt
+            updatedAt: mostRecent.updatedAt as string
           });
         }
       }
@@ -389,7 +389,7 @@ export const load = async ({ locals, setHeaders }) => {
         .from(schema.works)
         .where(
           and(
-            eq(schema.works.published, 1),
+            eq(schema.works.published, true),
             isNotNull(schema.works.latestChapterPublishedAt)
           )
         )
@@ -429,7 +429,7 @@ export const load = async ({ locals, setHeaders }) => {
       const fallbackChapters = fallbackChaptersRes?.data || [];
       const worksById = new Map(fallbackWorks.map((w: any) => [w.id, w]));
       for (const row of fallbackChapters) {
-        const w = worksById.get(row.workId);
+        const w = worksById.get(row.workId) as any;
         if (!w) continue;
         if (!releasesMap.has(w.id)) {
           releasesMap.set(w.id, {
@@ -490,7 +490,7 @@ export const load = async ({ locals, setHeaders }) => {
   }
 
   let isStale = false;
-  let isDegraded = chaptersRes.isDegraded || worksRes.isDegraded;
+  let isDegraded = false;
 
   // Stale-While-Revalidate / Last-Known-Good fallback
   if (works.length > 0 && recentReleases.length > 0 && !isDegraded) {

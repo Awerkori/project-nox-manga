@@ -14,12 +14,12 @@ const work: Work = {
   kind: 'MANGA',
   status: 'ONGOING',
   year: 2026,
-  age_rating: 0,
+  contentRating: 0,
   published: true,
   featured: false,
-  cover_id: null,
-  updated_at: '2026-09-05T00:00:00Z',
-  created_at: '2026-09-01T00:00:00Z'
+  coverId: null,
+  updatedAt: '2026-09-05T00:00:00Z',
+  createdAt: '2026-09-01T00:00:00Z'
 };
 
 describe('public work structured data', () => {
@@ -55,7 +55,7 @@ describe('public work structured data', () => {
 
   it('omits unavailable people and includes a cover only when one exists', () => {
     const entry = workStructuredData(
-      { ...work, author: '', artist: '', cover_id: 'cover' },
+      { ...work, author: '', artist: '', coverId: 'cover' },
       [],
       'https://nox.example'
     )['@graph'][0];

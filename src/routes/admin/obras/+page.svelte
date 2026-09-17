@@ -48,8 +48,8 @@
     try {
       const response = await fetch('/api/staff', { method: 'POST' });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Erro ao sincronizar.');
-      notice = result.message;
+      if (!response.ok) throw new Error((result as any).message || 'Erro ao sincronizar.');
+      notice = (result as any).message;
       noticeType = 'success';
       await invalidateAll();
     } catch (e) {
@@ -68,17 +68,17 @@
 </script>
 
 <svelte:head>
-  <title>Obras do Catálogo — Nox Editorial</title>
+  <title>Obras do Catlogo — Nox Editorial</title>
 </svelte:head>
 
 <div class="works-manager-shell">
   <!-- Header with Actions -->
   <header class="page-header">
     <div class="header-titles">
-      <span class="eyebrow">CATÁLOGO EDITORIAL</span>
+      <span class="eyebrow">CATLOGO EDITORIAL</span>
       <h1 class="page-title">Obras Cadastradas</h1>
       <p class="page-subtitle">
-        Gerencie as histórias, adicione capítulos, defina metadados e publique no catálogo público.
+        Gerencie as histrias, adicione captulos, defina metadados e publique no catlogo pblico.
       </p>
     </div>
 
@@ -125,7 +125,7 @@
       <input
         type="text"
         class="search-input"
-        placeholder="Buscar por título, slug ou autor…"
+        placeholder="Buscar por ttulo, slug ou autor…"
         aria-label="Buscar obras"
         bind:value={search}
       />
@@ -194,7 +194,7 @@
           class:active={selectedKind === 'MANGA'}
           onclick={() => (selectedKind = 'MANGA')}
         >
-          Mangá
+          Mang
         </button>
       </div>
     </div>
@@ -213,11 +213,11 @@
         <thead>
           <tr>
             <th class="th-cover">Capa</th>
-            <th class="th-work">Obra & Endereço</th>
+            <th class="th-work">Obra & Endereo</th>
             <th class="th-kind">Formato</th>
-            <th class="th-status">Situação</th>
+            <th class="th-status">Situao</th>
             <th class="th-date">Atualizada em</th>
-            <th class="th-actions">Ações</th>
+            <th class="th-actions">Aes</th>
           </tr>
         </thead>
         <tbody>
@@ -290,7 +290,7 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="btn-view-site"
-                      title="Ver obra no site público"
+                      title="Ver obra no site pblico"
                     >
                       <ExternalLink size={13} />
                     </a>
@@ -358,7 +358,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn-view-site"
-                  title="Ver no site público"
+                  title="Ver no site pblico"
                 >
                   <ExternalLink size={14} />
                 </a>
@@ -376,12 +376,12 @@
       </div>
       {#if search || selectedKind !== 'ALL' || selectedStatus !== 'ALL'}
         <h3>Nenhuma obra encontrada</h3>
-        <p>Nenhuma história corresponde aos filtros ou busca selecionados.</p>
+        <p>Nenhuma histria corresponde aos filtros ou busca selecionados.</p>
         <button type="button" class="btn-reset-filters" onclick={clearFilters}>
           Limpar filtros de busca
         </button>
       {:else}
-        <h3>Catálogo de obras vazio</h3>
+        <h3>Catlogo de obras vazio</h3>
         <p>Comece adicionando a primeira obra ou importe rascunhos da central.</p>
         <div class="empty-buttons-row">
           <a href="/admin/obras/nova" class="btn-primary-add">

@@ -44,7 +44,7 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
 
   // Split plain text chunks by @mention
   const finalChunks: CommentTextChunk[] = [];
-  const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_À-ÿ-]+)/g;
+  const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_\-]+)/g;
 
   for (const chunk of initialChunks) {
     if (chunk.type === 'spoiler') {

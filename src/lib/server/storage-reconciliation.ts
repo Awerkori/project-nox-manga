@@ -1,4 +1,5 @@
-import { privileged } from '$lib/server/db';
+import { eq, sql, desc, inArray } from "drizzle-orm";
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
 import { normalizeBotReference, KNOWN_MANGA_SHARDS } from '$lib/server/storage-router';
 
 export type ReconciliationStatus =
@@ -96,7 +97,7 @@ export function auditMediaRecord(
           shardId: media.storageShardId,
           botReference: media.botReference,
           providerKey: media.providerKey,
-          remedyRecommendation: `Update media bot_reference to ${normShardBot} to ensure affinity with assigned shard.`,
+          remedyRecommendation: `Update media botReference to ${normShardBot} to ensure affinity with assigned shard.`,
         };
       }
     }
@@ -168,17 +169,16 @@ export function auditMediaRecord(
  */
 export async function runStorageReconciliationAudit(sampleLimitPerPool: number = 50): Promise<ReconciliationReport> {
   const timestamp = new Date().toISOString();
-  const db = privileged();
-
+  
   // 1. Query all pools
-  const { data: pools } = await db.from('storage_pools').select('id, key');
+  const { data: pools } = await safeQuery(db.select({ id: schema.storagePools.id, key: schema.storagePools.key }).from(schema.storagePools));
   const poolsMap = new Map<string, { id: string; key: string }>();
   for (const p of pools || []) {
     poolsMap.set(p.id, p);
   }
 
   // 2. Query all shards
-  const { data: shards } = await db.from('storage_shards').select('id, pool_id, bot_reference, display_name');
+  const { data: shards } = await safeQuery(db.select({ id: schema.storageShards.id, poolId: schema.storageShards.poolId, botReference: schema.storageShards.botReference, displayName: schema.storageShards.displayName }).from(schema.storageShards));
   const shardsMap = new Map<string, ShardLookup>();
   for (const s of shards || []) {
     const pool = poolsMap.get(s.poolId);
@@ -192,11 +192,7 @@ export async function runStorageReconciliationAudit(sampleLimitPerPool: number =
   }
 
   // 3. Sample media records
-  const { data: sampleMedia } = await db
-    .from('media')
-    .select('id, provider, provider_key, purpose, storage_pool_id, storage_shard_id, bot_reference, chapter_id, scan_id')
-    .order('created_at', { ascending: false })
-    .limit(sampleLimitPerPool * 7);
+  const { data: sampleMedia } = await safeQuery(db.select({ id: schema.media.id, provider: schema.media.provider, providerKey: schema.media.providerKey, purpose: schema.media.purpose, storagePoolId: schema.media.storagePoolId, storageShardId: schema.media.storageShardId, botReference: schema.media.botReference, chapterId: schema.media.chapterId, scanId: schema.media.scanId }).from(schema.media).orderBy(desc(schema.media.createdAt)).limit(sampleLimitPerPool * 7));
 
   // 4. Gather chapter IDs from sample for existence check
   const chapterIdsToCheck = (sampleMedia || [])
@@ -205,10 +201,7 @@ export async function runStorageReconciliationAudit(sampleLimitPerPool: number =
 
   let existingChapterIds: Set<string> | undefined;
   if (chapterIdsToCheck.length > 0) {
-    const { data: foundChapters } = await db
-      .from('chapters')
-      .select('id')
-      .in('id', chapterIdsToCheck);
+    const { data: foundChapters } = await safeQuery(db.select({ id: schema.chapters.id }).from(schema.chapters).where(inArray(schema.chapters.id, chapterIdsToCheck)));
     existingChapterIds = new Set((foundChapters || []).map((c) => c.id));
   }
 

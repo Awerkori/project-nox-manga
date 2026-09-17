@@ -38,10 +38,10 @@
 </script>
 
 <svelte:head>
-  <title>Project Nox — Plataforma de Leitura de Mangás e Manhwas</title>
+  <title>Project Nox — Plataforma de Leitura de Mangs e Manhwas</title>
   <meta
     name="description"
-    content="Leia seus mangás e manhwas favoritos no Project Nox com a melhor experiência de leitura, alta densidade e qualidade visual."
+    content="Leia seus mangs e manhwas favoritos no Project Nox com a melhor experincia de leitura, alta densidade e qualidade visual."
   />
 </svelte:head>
 
@@ -56,7 +56,7 @@
         <div class="section-header">
           <div class="title-cluster">
             <h2 class="section-title">CONTINUAR LENDO</h2>
-            <span class="section-subtitle">De onde você parou</span>
+            <span class="section-subtitle">De onde voc parou</span>
           </div>
 
           <div class="header-right-tools">
@@ -80,7 +80,7 @@
             </div>
 
             <a href="/historico" class="view-all-link">
-              <span>Histórico</span>
+              <span>Histrico</span>
               <ArrowRight size={14} />
             </a>
           </div>
@@ -128,13 +128,13 @@
     {#if data.works && data.works.length > 0}
       <WorkShelf
         title="Novas Obras"
-        subtitle="Adicionadas recentemente ao catálogo"
+        subtitle="Adicionadas recentemente ao catlogo"
         works={data.works}
         loadMoreSort="latest"
       />
     {/if}
 
-    <!-- 4. Mais Lidos (Strictly based on real read counts / views_total) -->
+    <!-- 4. Mais Lidos (Strictly based on real read counts / viewsTotal) -->
     {#if data.mostReadWorks && data.mostReadWorks.length >= 2}
       <WorkShelf
         title="Mais Lidos"
@@ -144,7 +144,7 @@
       />
     {/if}
 
-    <!-- 5. Lançamentos (Single Wide Column High-Density Feed) -->
+    <!-- 5. Lanamentos (Single Wide Column High-Density Feed) -->
     <RecentReleases releases={data.recentReleases} loadError={data.loadError} isStale={data.isStale} />
   </div>
 </div>

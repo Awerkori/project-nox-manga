@@ -32,37 +32,37 @@
 
   const REASONS_BY_TYPE = {
     WORK: [
-      'Informações incorretas (título, capa ou sinopse)',
+      'Informaes incorretas (ttulo, capa ou sinopse)',
       'Metadados errados (autor, artista, tipo ou status)',
-      'Gêneros ou tags incorretos',
-      'Conteúdo adulto sem classificação +18',
-      'Capítulos faltando, duplicados ou fora de ordem',
-      'Obra duplicada no catálogo',
-      'Violação das diretrizes da comunidade',
+      'Gneros ou tags incorretos',
+      'Contedo adulto sem classificao +18',
+      'Captulos faltando, duplicados ou fora de ordem',
+      'Obra duplicada no catlogo',
+      'Violao das diretrizes da comunidade',
       'Outro motivo'
     ],
     CHAPTER: [
       'Imagens quebradas ou falha no carregamento',
-      'Páginas faltando ou incompletas',
-      'Páginas fora de ordem',
-      'Capítulo incorreto, arquivo errado ou numeração trocada',
-      'Capítulo duplicado',
-      'Tradução ilegível ou em outro idioma',
+      'Pginas faltando ou incompletas',
+      'Pginas fora de ordem',
+      'Captulo incorreto, arquivo errado ou numerao trocada',
+      'Captulo duplicado',
+      'Traduo ilegvel ou em outro idioma',
       'Outro motivo'
     ],
     COMMENT: [
-      'Spam, divulgação ou link suspeito',
-      'Assédio, ofensas ou discurso de ódio',
-      'Spoiler não marcado',
-      'Conteúdo impróprio ou abusivo',
-      'Impersonação (se passando por outro usuário/staff)',
+      'Spam, divulgao ou link suspeito',
+      'Assdio, ofensas ou discurso de dio',
+      'Spoiler no marcado',
+      'Contedo imprprio ou abusivo',
+      'Impersonao (se passando por outro usurio/staff)',
       'Outro motivo'
     ],
     USER: [
       'Spam ou conta automatizada (bot)',
-      'Assédio, ofensas ou comportamento tóxico',
-      'Foto de perfil, nome ou bio impróprios',
-      'Impersonação de outro usuário ou staff',
+      'Assdio, ofensas ou comportamento txico',
+      'Foto de perfil, nome ou bio imprprios',
+      'Impersonao de outro usurio ou staff',
       'Abuso do sistema ou conduta nociva',
       'Outro motivo'
     ]
@@ -90,8 +90,8 @@
     loading = true;
     errorMessage = '';
 
-    const pagePrefix = pageNumber ? `[Página ${pageNumber}] ` : '';
-    const finalDetails = details.trim() ? `${pagePrefix}${details.trim()}` : (pagePrefix ? `[Página ${pageNumber}]` : '');
+    const pagePrefix = pageNumber ? `[Pgina ${pageNumber}] ` : '';
+    const finalDetails = details.trim() ? `${pagePrefix}${details.trim()}` : (pagePrefix ? `[Pgina ${pageNumber}]` : '');
 
     try {
       const res = await fetch('/api/report', {
@@ -109,7 +109,7 @@
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Erro ao enviar reporte.');
+        throw new Error((data as any).message || 'Erro ao enviar reporte.');
       }
 
       submitted = true;
@@ -118,7 +118,7 @@
         handleClose();
       }, 2000);
     } catch (err: any) {
-      errorMessage = err.message || 'Falha ao processar solicitação.';
+      errorMessage = (err as any).message || 'Falha ao processar solicitao.';
     } finally {
       loading = false;
     }
@@ -134,12 +134,12 @@
             <Flag size={18} />
           </div>
           <div>
-            <h3 class="modal-title">Reportar Conteúdo</h3>
+            <h3 class="modal-title">Reportar Contedo</h3>
             {#if targetTitle}
               <p class="modal-sub">{targetTitle}</p>
             {/if}
             {#if pageNumber}
-              <span class="page-context-chip">Página {pageNumber}</span>
+              <span class="page-context-chip">Pgina {pageNumber}</span>
             {/if}
           </div>
         </div>
@@ -156,7 +156,7 @@
           </div>
           <h4 class="success-heading">Reporte Enviado</h4>
           <p class="success-text">
-            Obrigado por ajudar a manter a comunidade da Project Nox saudável. Nossa equipe editorial irá analisar.
+            Obrigado por ajudar a manter a comunidade da Project Nox saudvel. Nossa equipe editorial ir analisar.
           </p>
         </div>
       {:else}
@@ -195,7 +195,7 @@
                 bind:value={customReason}
                 maxlength="120"
                 class="form-input"
-                placeholder="Ex: tradução confusa / marca d'água de outro grupo..."
+                placeholder="Ex: traduo confusa / marca d'gua de outro grupo..."
                 required
               />
             </div>
@@ -208,7 +208,7 @@
               bind:value={details}
               rows="3"
               class="form-textarea"
-              placeholder="Forneça mais contexto ou indique páginas específicas se aplicável..."
+              placeholder="Fornea mais contexto ou indique pginas especficas se aplicvel..."
               maxlength="2000"
             ></textarea>
           </div>

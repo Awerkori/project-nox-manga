@@ -6,18 +6,18 @@
 </script>
 
 <svelte:head>
-  <title>Classificação Oficial — Project Nox</title>
+  <title>Classificao Oficial — Project Nox</title>
 </svelte:head>
 
 <div class="container ranking-container spacer-bottom">
   <div class="page-top">
     <div class="badge-tag">
       <Sparkles size={12} />
-      <span>CLASSIFICAÇÃO OFICIAL</span>
+      <span>CLASSIFICAO OFICIAL</span>
     </div>
     <h1 class="ranking-title">Mestres da Leitura</h1>
     <p class="ranking-subtitle">
-      Cada capítulo concluído rende 25 XP. Acompanhe a jornada dos maiores leitores da Project Nox.
+      Cada captulo concludo rende 25 XP. Acompanhe a jornada dos maiores leitores da Project Nox.
     </p>
   </div>
 
@@ -61,7 +61,7 @@
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 olympic-gold">
           <div class="gold-crown-tag">
             <Sparkles size={13} />
-            <span>1º LUGAR</span>
+            <span>1 LUGAR</span>
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
@@ -114,7 +114,7 @@
         <a href="/u/{gold.username}" class="podium-card podium-tier-1">
           <div class="gold-crown-tag">
             <Sparkles size={13} />
-            <span>1º LUGAR</span>
+            <span>1 LUGAR</span>
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
@@ -157,7 +157,7 @@
         <a href="/u/{gold.username}" class="podium-card podium-tier-1 single-gold-card">
           <div class="gold-crown-tag">
             <Sparkles size={13} />
-            <span>LÍDER DA NOX</span>
+            <span>LDER DA NOX</span>
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
@@ -182,10 +182,10 @@
       <table class="leaderboard-table">
         <thead>
           <tr>
-            <th style="width: 80px">Posição</th>
+            <th style="width: 80px">Posio</th>
             <th>Leitor</th>
-            <th>Título Honorífico</th>
-            <th style="text-align: center">Nível</th>
+            <th>Ttulo Honorfico</th>
+            <th style="text-align: center">Nvel</th>
             <th style="text-align: right">Total XP</th>
           </tr>
         </thead>
@@ -294,7 +294,7 @@
   {:else}
     <Empty
       title="Toda comunidade tem um primeiro leitor."
-      text="O ranking ganha vida conforme os capítulos são lidos. Sua história na Nox pode começar agora."
+      text="O ranking ganha vida conforme os captulos so lidos. Sua histria na Nox pode comear agora."
       href="/catalogo"
       label="Encontrar uma leitura"
     />

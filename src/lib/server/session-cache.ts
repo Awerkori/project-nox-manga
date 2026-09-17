@@ -63,9 +63,10 @@ export async function resolveSessionData(
       );
 
       const ownedScansRes = await safeQuery(
-        db.select()
-        .from(schema.scans)
-        .where(and(eq(schema.scans.ownerId, userId), eq(schema.scans.status, 'ACTIVE')))
+        db.select({ scan: schema.scans })
+        .from(schema.scanMembers)
+        .innerJoin(schema.scans, eq(schema.scanMembers.scanId, schema.scans.id))
+        .where(and(eq(schema.scanMembers.userId, userId), eq(schema.scanMembers.role, 'LEADER'), eq(schema.scans.status, 'ACTIVE')))
       );
 
       // We do not have count aggregation easily yet without building the exact SQL, just getting all unread ids
@@ -88,12 +89,12 @@ export async function resolveSessionData(
       const scansMap = new Map<string, any>();
 
       if (ownedScansRes.data) {for (const s of ownedScansRes.data) {
-          scansMap.set(s.id, {
-            id: s.id,
-            name: s.name,
-            slug: s.slug,
-            logoId: s.logoId,
-            status: s.status,
+          scansMap.set(s.scan?.id || s.id, {
+            id: s.scan?.id || s.id,
+            name: s.scan?.name || s.name,
+            slug: s.scan?.slug || s.slug,
+            logoId: s.scan?.logoId || s.logoId,
+            status: s.scan?.status || s.status,
             role: 'OWNER'});
         }
       }

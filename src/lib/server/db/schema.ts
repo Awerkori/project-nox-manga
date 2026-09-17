@@ -3,35 +3,35 @@ import { sqliteTable, AnySQLiteColumn, text, integer, real } from "drizzle-orm/s
 
 export const userFollows = sqliteTable("user_follows", {followerId: text("followerId").notNull(),
 	followingId: text("followingId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
 export const userBlocks = sqliteTable("user_blocks", {userId: text("userId").notNull(),
 	blockedId: text("blockedId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
 export const commentMentions = sqliteTable("comment_mentions", {commentId: text("commentId").notNull(),
 	mentionedUserId: text("mentionedUserId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const xpAwards = sqliteTable("xp_awards", {id: text().primaryKey().notNull(),
+export const xpAwards = sqliteTable("xp_awards", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	chapterId: text("chapterId").notNull(),
 	workId: text("workId").notNull(),
 	amount: integer().notNull(),
 	source: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const mihonTokens = sqliteTable("mihon_tokens", {id: text().primaryKey().notNull(),
+export const mihonTokens = sqliteTable("mihon_tokens", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	tokenHash: text("tokenHash").notNull(),
 	tokenType: text("tokenType").notNull(),
 	scopes: text().notNull(),
 	expiresAt: text("expiresAt").notNull(),
-	revoked: integer().notNull(),
+	revoked: integer({ mode: 'boolean' }).notNull(),
 	deviceName: text("deviceName"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const reports = sqliteTable("reports", {id: text().primaryKey().notNull(),
+export const reports = sqliteTable("reports", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	reporterId: text("reporterId").notNull(),
 	targetType: text("targetType").notNull(),
 	workId: text("workId"),
@@ -43,14 +43,14 @@ export const reports = sqliteTable("reports", {id: text().primaryKey().notNull()
 	status: text().notNull(),
 	assignedTo: text("assignedTo"),
 	resolutionNotes: text("resolutionNotes"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const memberAchievements = sqliteTable("member_achievements", {userId: text("userId").notNull(),
 	achievementId: text("achievementId").notNull(),
 	unlockedAt: text("unlockedAt").notNull(),});
 
-export const achievements = sqliteTable("achievements", {id: text().primaryKey().notNull(),
+export const achievements = sqliteTable("achievements", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	title: text().notNull(),
 	description: text().notNull(),
 	category: text().notNull(),
@@ -61,17 +61,17 @@ export const achievements = sqliteTable("achievements", {id: text().primaryKey()
 	conditionValue: integer("conditionValue").notNull(),
 	isSecret: integer("isSecret").notNull(),
 	orderIndex: integer("orderIndex").notNull(),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	rarity: text().notNull(),
 	rewardItemId: text("rewardItemId"),});
 
-export const chapterReactions = sqliteTable("chapter_reactions", {id: text().primaryKey().notNull(),
+export const chapterReactions = sqliteTable("chapter_reactions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	chapterId: text("chapterId").notNull(),
 	visitorId: text("visitorId").notNull(),
 	emoji: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const shopItems = sqliteTable("shop_items", {id: text().primaryKey().notNull(),
+export const shopItems = sqliteTable("shop_items", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	name: text().notNull(),
 	description: text().notNull(),
 	kind: text().notNull(),
@@ -80,9 +80,9 @@ export const shopItems = sqliteTable("shop_items", {id: text().primaryKey().notN
 	assetUrl: text("assetUrl").notNull(),
 	styleData: text("styleData").notNull(),
 	minLevel: integer("minLevel").notNull(),
-	isActive: integer("isActive").notNull(),
+	isActive: integer("isActive", { mode: 'boolean' }).notNull(),
 	orderIndex: integer("orderIndex").notNull(),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	rarity: text().notNull(),
 	status: text().notNull(),
 	thumbnailUrl: text("thumbnailUrl"),});
@@ -92,14 +92,14 @@ export const memberInventory = sqliteTable("member_inventory", {userId: text("us
 	acquiredAt: text("acquiredAt").notNull(),
 	origin: text().notNull(),});
 
-export const importerStaffRequests = sqliteTable("importer_staff_requests", {id: text().primaryKey().notNull(),
+export const importerStaffRequests = sqliteTable("importer_staff_requests", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	workId: text("workId").notNull(),
 	requestedBy: text("requestedBy").notNull(),
 	priorityBoost: integer("priorityBoost").notNull(),
 	reason: text(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	cancelledBy: text("cancelledBy"),
 	cancelledAt: text("cancelledAt"),
 	cancelReason: text("cancelReason"),
@@ -108,7 +108,7 @@ export const importerStaffRequests = sqliteTable("importer_staff_requests", {id:
 	nextAttemptAt: text("nextAttemptAt"),
 	attemptCount: integer("attemptCount").notNull(),});
 
-export const scanInvites = sqliteTable("scan_invites", {id: text().primaryKey().notNull(),
+export const scanInvites = sqliteTable("scan_invites", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	code: text().notNull(),
 	role: text().notNull(),
@@ -116,15 +116,15 @@ export const scanInvites = sqliteTable("scan_invites", {id: text().primaryKey().
 	expiresAt: text("expiresAt").notNull(),
 	usedAt: text("usedAt"),
 	usedBy: text("usedBy"),
-	revoked: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
+	revoked: integer({ mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	invitedUserId: text("invitedUserId"),
 	positionId: text("positionId"),
 	status: text().notNull(),
 	revokedAt: text("revokedAt"),
 	declinedAt: text("declinedAt"),});
 
-export const importerChapterManifest = sqliteTable("importer_chapter_manifest", {id: text().primaryKey().notNull(),
+export const importerChapterManifest = sqliteTable("importer_chapter_manifest", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	workId: text("workId").notNull(),
 	chapterNumber: real("chapterNumber").notNull(),
 	chapterSortKey: integer("chapterSortKey").notNull(),
@@ -146,10 +146,10 @@ export const importerWorkHealth = sqliteTable("importer_work_health", {workId: t
 	unresolvedGaps: text("unresolvedGaps").notNull(),
 	providersSummary: text("providersSummary").notNull(),
 	lastReconciledAt: text("lastReconciledAt").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanProjectRequests = sqliteTable("scan_project_requests", {id: text().primaryKey().notNull(),
+export const scanProjectRequests = sqliteTable("scan_project_requests", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	userId: text("userId").notNull(),
@@ -158,9 +158,9 @@ export const scanProjectRequests = sqliteTable("scan_project_requests", {id: tex
 	reviewedBy: text("reviewedBy"),
 	reviewedAt: text("reviewedAt"),
 	rejectionReason: text("rejectionReason"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanPartnerRequests = sqliteTable("scan_partner_requests", {id: text().primaryKey().notNull(),
+export const scanPartnerRequests = sqliteTable("scan_partner_requests", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	scanName: text("scanName").notNull(),
 	scanSlug: text("scanSlug").notNull(),
@@ -173,9 +173,9 @@ export const scanPartnerRequests = sqliteTable("scan_partner_requests", {id: tex
 	reviewedBy: text("reviewedBy"),
 	reviewedAt: text("reviewedAt"),
 	rejectionReason: text("rejectionReason"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const importerStaffAudit = sqliteTable("importer_staff_audit", {id: text().primaryKey().notNull(),
+export const importerStaffAudit = sqliteTable("importer_staff_audit", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	actorId: text("actorId"),
 	action: text().notNull(),
 	targetType: text("targetType").notNull(),
@@ -184,17 +184,17 @@ export const importerStaffAudit = sqliteTable("importer_staff_audit", {id: text(
 	newState: text("newState"),
 	reason: text(),
 	metadata: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanTransferRequests = sqliteTable("scan_transfer_requests", {id: text().primaryKey().notNull(),
+export const scanTransferRequests = sqliteTable("scan_transfer_requests", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	fromUserId: text("fromUserId").notNull(),
 	toUserId: text("toUserId").notNull(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	respondedAt: text("respondedAt"),});
 
-export const media = sqliteTable("media", {id: text().primaryKey().notNull(),
+export const media = sqliteTable("media", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	provider: text().notNull(),
 	providerKey: text("providerKey").notNull(),
 	mime: text().notNull(),
@@ -203,8 +203,8 @@ export const media = sqliteTable("media", {id: text().primaryKey().notNull(),
 	bytes: integer().notNull(),
 	sha256: text().notNull(),
 	createdBy: text("createdBy").notNull(),
-	createdAt: text("createdAt").notNull(),
-	storageReady: integer("storageReady").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	storageReady: integer("storageReady", { mode: 'boolean' }).notNull(),
 	purpose: text().notNull(),
 	storagePoolId: text("storagePoolId"),
 	storageShardId: text("storageShardId"),
@@ -226,21 +226,21 @@ export const readingSessions = sqliteTable("reading_sessions", {userId: text("us
 	nextPage: integer("nextPage").notNull(),
 	acceptedAt: text("acceptedAt").notNull(),});
 
-export const comments = sqliteTable("comments", {id: text().primaryKey().notNull(),
+export const comments = sqliteTable("comments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	workId: text("workId").notNull(),
 	chapterId: text("chapterId"),
 	parentId: text("parentId"),
 	body: text().notNull(),
-	removed: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	removed: integer({ mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const likes = sqliteTable("likes", {userId: text("userId").notNull(),
 	workId: text("workId").notNull(),});
 
 export const tags = sqliteTable("tags", {
-	id: text().primaryKey().notNull(),
+	id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	name: text().notNull(),
 	slug: text().notNull(),
 	kind: text().notNull(),
@@ -248,21 +248,21 @@ export const tags = sqliteTable("tags", {
 
 export const workTags = sqliteTable("work_tags", {workId: text("workId").notNull(),
 	tagId: text("tagId").notNull(),
-	systemGenerated: integer("systemGenerated").notNull(),});
+	systemGenerated: integer("systemGenerated", { mode: 'boolean' }).notNull(),});
 
 export const commentLikes = sqliteTable("comment_likes", {userId: text("userId").notNull(),
 	commentId: text("commentId").notNull(),});
 
 export const accessRoles = sqliteTable("access_roles", {userId: text("userId").notNull(),
 	role: text().notNull(),
-	suspended: integer().notNull(),});
+	suspended: integer({ mode: 'boolean' }).notNull(),});
 
 export const library = sqliteTable("library", {userId: text("userId").notNull(),
 	workId: text("workId").notNull(),
 	status: text().notNull(),
-	favorite: integer().notNull(),
-	following: integer().notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	favorite: integer({ mode: 'boolean' }).notNull(),
+	following: integer({ mode: 'boolean' }).notNull(),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const reading = sqliteTable("reading", {userId: text("userId").notNull(),
 	chapterId: text("chapterId").notNull(),
@@ -270,13 +270,13 @@ export const reading = sqliteTable("reading", {userId: text("userId").notNull(),
 	maxPage: integer("maxPage").notNull(),
 	completedAt: text("completedAt"),
 	startedAt: text("startedAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const auditLog = sqliteTable("audit_log", {id: integer().primaryKey().notNull(),
 	actorId: text("actorId"),
 	action: text().notNull(),
 	targetId: text("targetId"),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	metadata: text().notNull(),});
 
 export const settings = sqliteTable("settings", {
@@ -286,9 +286,9 @@ export const settings = sqliteTable("settings", {
 
 export const editorInvites = sqliteTable("editor_invites", {email: text().notNull(),
 	createdBy: text("createdBy").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const importerChapterMappings = sqliteTable("importer_chapter_mappings", {id: text().primaryKey().notNull(),
+export const importerChapterMappings = sqliteTable("importer_chapter_mappings", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	source: text().notNull(),
 	sourceChapterId: text("sourceChapterId").notNull(),
 	chapterId: text("chapterId"),
@@ -297,34 +297,34 @@ export const importerChapterMappings = sqliteTable("importer_chapter_mappings", 
 	pageCount: integer("pageCount").notNull(),
 	status: text().notNull(),
 	lastError: text("lastError"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
-	isPageProvider: integer("isPageProvider").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+	isPageProvider: integer("isPageProvider", { mode: 'boolean' }).notNull(),
 	workId: text("workId"),
 	chapterSortKey: real("chapterSortKey"),
-	isGap: integer("isGap").notNull(),});
+	isGap: integer("isGap", { mode: 'boolean' }).notNull(),});
 
 export const workScans = sqliteTable("work_scans", {workId: text("workId").notNull(),
 	scanId: text("scanId").notNull(),
-	isPrimary: integer("isPrimary").notNull(),
-	createdAt: text("createdAt").notNull(),
+	isPrimary: integer("isPrimary", { mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	status: text().notNull(),});
 
 export const chapterScans = sqliteTable("chapter_scans", {chapterId: text("chapterId").notNull(),
 	scanId: text("scanId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const chapters = sqliteTable("chapters", {id: text().primaryKey().notNull(),
+export const chapters = sqliteTable("chapters", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	workId: text("workId").notNull(),
 	number: real().notNull(),
 	title: text().notNull(),
 	publishedAt: text("publishedAt"),
 	sourceId: text("sourceId"),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	origin: text().notNull(),
 	viewsTotal: integer("viewsTotal").notNull(),});
 
-export const importerSources = sqliteTable("importer_sources", {id: text().primaryKey().notNull(),
+export const importerSources = sqliteTable("importer_sources", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	name: text().notNull(),
 	baseUrl: text("baseUrl").notNull(),
 	enabled: integer().notNull(),
@@ -332,15 +332,15 @@ export const importerSources = sqliteTable("importer_sources", {id: text().prima
 	syncIntervalMinutes: integer("syncIntervalMinutes").notNull(),
 	lastSyncAt: text("lastSyncAt"),
 	config: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	status: text().notNull(),
 	cooldownUntil: text("cooldownUntil"),
 	blockedReason: text("blockedReason"),
 	blockedDetails: text("blockedDetails").notNull(),
 	lastHealthCheckAt: text("lastHealthCheckAt"),});
 
-export const importerWorkMappings = sqliteTable("importer_work_mappings", {id: text().primaryKey().notNull(),
+export const importerWorkMappings = sqliteTable("importer_work_mappings", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	source: text().notNull(),
 	sourceWorkId: text("sourceWorkId").notNull(),
 	workId: text("workId"),
@@ -349,19 +349,19 @@ export const importerWorkMappings = sqliteTable("importer_work_mappings", {id: t
 	syncStatus: text("syncStatus").notNull(),
 	metadata: text().notNull(),
 	lastSyncedAt: text("lastSyncedAt"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	confidenceScore: real("confidenceScore"),
-	isPrimary: integer("isPrimary"),
+	isPrimary: integer("isPrimary", { mode: 'boolean' }),
 	matchMethod: text("matchMethod"),
 	frozenBy: text("frozenBy"),
 	frozenAt: text("frozenAt"),
 	freezeReason: text("freezeReason"),});
 
-export const works = sqliteTable("works", {id: text().primaryKey().notNull(),
+export const works = sqliteTable("works", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	slug: text().notNull(),
 	title: text().notNull(),
-	aliases: text().notNull(),
+	aliases: text({ mode: 'json' }).$type<string[]>().notNull(),
 	synopsis: text().notNull(),
 	description: text().notNull(),
 	author: text().notNull(),
@@ -370,19 +370,19 @@ export const works = sqliteTable("works", {id: text().primaryKey().notNull(),
 	status: text().notNull(),
 	year: integer(),
 	ageRating: integer("ageRating").notNull(),
-	published: integer().notNull(),
-	featured: integer().notNull(),
+	published: integer({ mode: 'boolean' }).notNull(),
+	featured: integer({ mode: 'boolean' }).notNull(),
 	coverId: text("coverId"),
 	sourceId: text("sourceId"),
-	updatedAt: text("updatedAt").notNull(),
-	createdAt: text("createdAt").notNull(),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	searchText: text("searchText").notNull(),
 	metadataProvenance: text("metadataProvenance").notNull(),
 	contentRating: text("contentRating").notNull(),
 	viewsTotal: integer("viewsTotal").notNull(),
 	latestChapterPublishedAt: text("latestChapterPublishedAt"),});
 
-export const chapterViews = sqliteTable("chapter_views", {id: text().primaryKey().notNull(),
+export const chapterViews = sqliteTable("chapter_views", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	chapterId: text("chapterId").notNull(),
 	workId: text("workId").notNull(),
 	userId: text("userId"),
@@ -390,7 +390,7 @@ export const chapterViews = sqliteTable("chapter_views", {id: text().primaryKey(
 	origin: text().notNull(),
 	viewedAt: text("viewedAt").notNull(),});
 
-export const importerQueue = sqliteTable("importer_queue", {id: text().primaryKey().notNull(),
+export const importerQueue = sqliteTable("importer_queue", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	taskType: text("taskType").notNull(),
 	source: text().notNull(),
 	priority: integer().notNull(),
@@ -404,8 +404,8 @@ export const importerQueue = sqliteTable("importer_queue", {id: text().primaryKe
 	leaseExpiresAt: text("leaseExpiresAt"),
 	nextRunAt: text("nextRunAt").notNull(),
 	lastError: text("lastError"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	chapterSortKey: real("chapterSortKey"),
 	lastRecoveredError: text("lastRecoveredError"),
 	recoveredAt: text("recoveredAt"),
@@ -414,7 +414,7 @@ export const importerQueue = sqliteTable("importer_queue", {id: text().primaryKe
 	progressCurrent: integer("progressCurrent"),
 	progressTotal: integer("progressTotal"),
 	progressStage: text("progressStage"),
-	cancelRequested: integer("cancelRequested").notNull(),
+	cancelRequested: integer("cancelRequested", { mode: 'boolean' }).notNull(),
 	cancelledBy: text("cancelledBy"),
 	cancelledAt: text("cancelledAt"),
 	cancelReason: text("cancelReason"),
@@ -422,15 +422,15 @@ export const importerQueue = sqliteTable("importer_queue", {id: text().primaryKe
 	pausedAt: text("pausedAt"),
 	pauseReason: text("pauseReason"),});
 
-export const importerCheckpoints = sqliteTable("importer_checkpoints", {id: text().primaryKey().notNull(),
+export const importerCheckpoints = sqliteTable("importer_checkpoints", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	source: text().notNull(),
 	cursorValue: text("cursorValue"),
 	lastCheckedAt: text("lastCheckedAt").notNull(),
 	metadata: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const importerTelemetry = sqliteTable("importer_telemetry", {id: text().primaryKey().notNull(),
+export const importerTelemetry = sqliteTable("importer_telemetry", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	workerId: text("workerId").notNull(),
 	rssMb: integer("rssMb").notNull(),
 	heapUsedMb: integer("heapUsedMb").notNull(),
@@ -442,9 +442,9 @@ export const importerTelemetry = sqliteTable("importer_telemetry", {id: text().p
 	activeJobs: integer("activeJobs").notNull(),
 	cycleAction: text("cycleAction").notNull(),
 	cycleReason: text("cycleReason"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const importerJobMetrics = sqliteTable("importer_job_metrics", {id: text().primaryKey().notNull(),
+export const importerJobMetrics = sqliteTable("importer_job_metrics", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	workerId: text("workerId").notNull(),
 	source: text().notNull(),
 	workId: text("workId"),
@@ -458,55 +458,55 @@ export const importerJobMetrics = sqliteTable("importer_job_metrics", {id: text(
 	dbMs: integer("dbMs").notNull(),
 	status: text().notNull(),
 	errorMessage: text("errorMessage"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const members = sqliteTable("members", {id: text().primaryKey().notNull(),
+export const members = sqliteTable("members", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	username: text().notNull(),
 	displayName: text("displayName").notNull(),
 	bio: text().notNull(),
 	avatarId: text("avatarId"),
 	xp: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
-	isTest: integer("isTest").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	isTest: integer("isTest", { mode: 'boolean' }).notNull(),
 	ageStatus: text("ageStatus").notNull(),
-	blurNsfw: integer("blurNsfw").notNull(),
+	blurNsfw: integer("blurNsfw", { mode: 'boolean' }).notNull(),
 	equippedTitleId: text("equippedTitleId"),
 	equippedBadgeId: text("equippedBadgeId"),
-	manualTitle: integer("manualTitle").notNull(),
-	manualBadge: integer("manualBadge").notNull(),
+	manualTitle: integer("manualTitle", { mode: 'boolean' }).notNull(),
+	manualBadge: integer("manualBadge", { mode: 'boolean' }).notNull(),
 	bannerId: text("bannerId"),
 	bannerPosition: text("bannerPosition").notNull(),
 	avatarFrameId: text("avatarFrameId"),
 	nameColor: text("nameColor"),
 	equippedMedalId: text("equippedMedalId"),
 	equippedCommentBannerId: text("equippedCommentBannerId"),
-	isOnboarded: integer("isOnboarded").notNull(),
+	isOnboarded: integer("isOnboarded", { mode: 'boolean' }).notNull(),
 	equippedBannerId: text("equippedBannerId"),
-	privacyShowAchievements: integer("privacyShowAchievements").notNull(),
-	privacyShowCosmetics: integer("privacyShowCosmetics").notNull(),
+	privacyShowAchievements: integer("privacyShowAchievements", { mode: 'boolean' }).notNull(),
+	privacyShowCosmetics: integer("privacyShowCosmetics", { mode: 'boolean' }).notNull(),
 	featuredAchievementId: text("featuredAchievementId"),
-	privacyShowFavorites: integer("privacyShowFavorites").notNull(),
-	privacyShowReadingHistory: integer("privacyShowReadingHistory").notNull(),
+	privacyShowFavorites: integer("privacyShowFavorites", { mode: 'boolean' }).notNull(),
+	privacyShowReadingHistory: integer("privacyShowReadingHistory", { mode: 'boolean' }).notNull(),
 	avatarCrop: text("avatarCrop"),
 	bannerCrop: text("bannerCrop"),
-	privacyShowScans: integer("privacyShowScans").notNull(),
+	privacyShowScans: integer("privacyShowScans", { mode: 'boolean' }).notNull(),
 	privacyScanMode: text("privacyScanMode").notNull(),
-	adminHideScanBadges: integer("adminHideScanBadges").notNull(),});
+	adminHideScanBadges: integer("adminHideScanBadges", { mode: 'boolean' }).notNull(),});
 
-export const storageShardGroups = sqliteTable("storage_shard_groups", {id: text().primaryKey().notNull(),
+export const storageShardGroups = sqliteTable("storage_shard_groups", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	poolId: text("poolId").notNull(),
 	scopeType: text("scopeType").notNull(),
 	scopeId: text("scopeId").notNull(),
 	strategy: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const storageShardGroupMembers = sqliteTable("storage_shard_group_members", {groupId: text("groupId").notNull(),
 	shardId: text("shardId").notNull(),
 	weight: integer().notNull(),
 	priority: integer().notNull(),});
 
-export const mediaRecords = sqliteTable("media_records", {id: text().primaryKey().notNull(),
+export const mediaRecords = sqliteTable("media_records", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	purpose: text().notNull(),
 	storagePoolId: text("storagePoolId"),
 	storageShardId: text("storageShardId"),
@@ -526,9 +526,9 @@ export const mediaRecords = sqliteTable("media_records", {id: text().primaryKey(
 	accessClass: text("accessClass").notNull(),
 	status: text().notNull(),
 	pendingDeleteAt: text("pendingDeleteAt"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const mediaLocations = sqliteTable("media_locations", {id: text().primaryKey().notNull(),
+export const mediaLocations = sqliteTable("media_locations", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	mediaId: text("mediaId").notNull(),
 	storageShardId: text("storageShardId").notNull(),
 	role: text().notNull(),
@@ -537,7 +537,7 @@ export const mediaLocations = sqliteTable("media_locations", {id: text().primary
 	messageId: text("messageId"),
 	fileId: text("fileId").notNull(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
 export const scanStorageUsage = sqliteTable("scan_storage_usage", {scanId: text("scanId").notNull(),
 	pages: integer().notNull(),
@@ -546,27 +546,27 @@ export const scanStorageUsage = sqliteTable("scan_storage_usage", {scanId: text(
 	failures: integer().notNull(),
 	activeUploads: integer("activeUploads").notNull(),
 	throughput: real().notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const controlPlaneBackups = sqliteTable("control_plane_backups", {id: text().primaryKey().notNull(),
+export const controlPlaneBackups = sqliteTable("control_plane_backups", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	backupId: text("backupId").notNull(),
 	schemaVersion: text("schemaVersion").notNull(),
 	recordCounts: text("recordCounts").notNull(),
 	checksum: text().notNull(),
 	dataPayload: text("dataPayload"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const storagePools = sqliteTable("storage_pools", {id: text().primaryKey().notNull(),
+export const storagePools = sqliteTable("storage_pools", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	key: text().notNull(),
 	displayName: text("displayName").notNull(),
 	purpose: text().notNull(),
 	reserved: integer().notNull(),
 	enabled: integer().notNull(),
-	overflowAllowed: integer("overflowAllowed").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	overflowAllowed: integer("overflowAllowed", { mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const storageShards = sqliteTable("storage_shards", {id: text().primaryKey().notNull(),
+export const storageShards = sqliteTable("storage_shards", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	poolId: text("poolId").notNull(),
 	backend: text().notNull(),
 	botReference: text("botReference").notNull(),
@@ -586,8 +586,8 @@ export const storageShards = sqliteTable("storage_shards", {id: text().primaryKe
 	errorRate: real("errorRate").notNull(),
 	cooldownUntil: text("cooldownUntil"),
 	weight: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	assignedChaptersCount: integer("assignedChaptersCount").notNull(),
 	assignedPagesCount: integer("assignedPagesCount").notNull(),
 	lastSelectedAt: text("lastSelectedAt"),
@@ -598,7 +598,7 @@ export const storageShards = sqliteTable("storage_shards", {id: text().primaryKe
 	lastSuccessAt: text("lastSuccessAt"),
 	lastFailureAt: text("lastFailureAt"),});
 
-export const scanApplications = sqliteTable("scan_applications", {id: text().primaryKey().notNull(),
+export const scanApplications = sqliteTable("scan_applications", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	openingId: text("openingId").notNull(),
 	positionId: text("positionId").notNull(),
@@ -612,35 +612,35 @@ export const scanApplications = sqliteTable("scan_applications", {id: text().pri
 	internalNotes: text("internalNotes"),
 	reviewedBy: text("reviewedBy"),
 	reviewedAt: text("reviewedAt"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanActivity = sqliteTable("scan_activity", {id: text().primaryKey().notNull(),
+export const scanActivity = sqliteTable("scan_activity", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId"),
 	action: text().notNull(),
 	details: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanPositions = sqliteTable("scan_positions", {id: text().primaryKey().notNull(),
+export const scanPositions = sqliteTable("scan_positions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	name: text().notNull(),
 	description: text().notNull(),
 	icon: text(),
 	displayOrder: integer("displayOrder").notNull(),
-	isActive: integer("isActive").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	isActive: integer("isActive", { mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanMemberPositions = sqliteTable("scan_member_positions", {id: text().primaryKey().notNull(),
+export const scanMemberPositions = sqliteTable("scan_member_positions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	positionId: text("positionId").notNull(),
-	isPrimary: integer("isPrimary").notNull(),
-	createdAt: text("createdAt").notNull(),
-	isPublic: integer("isPublic").notNull(),
-	hiddenByAdmin: integer("hiddenByAdmin").notNull(),});
+	isPrimary: integer("isPrimary", { mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	isPublic: integer("isPublic", { mode: 'boolean' }).notNull(),
+	hiddenByAdmin: integer("hiddenByAdmin", { mode: 'boolean' }).notNull(),});
 
-export const scanRecruitmentOpenings = sqliteTable("scan_recruitment_openings", {id: text().primaryKey().notNull(),
+export const scanRecruitmentOpenings = sqliteTable("scan_recruitment_openings", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	positionId: text("positionId").notNull(),
 	title: text().notNull(),
@@ -652,40 +652,40 @@ export const scanRecruitmentOpenings = sqliteTable("scan_recruitment_openings", 
 	slots: integer(),
 	notes: text().notNull(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanStaffNotes = sqliteTable("scan_staff_notes", {id: text().primaryKey().notNull(),
+export const scanStaffNotes = sqliteTable("scan_staff_notes", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	parentId: text("parentId"),
 	body: text().notNull(),
-	isPinned: integer("isPinned").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	isPinned: integer("isPinned", { mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanComments = sqliteTable("scan_comments", {id: text().primaryKey().notNull(),
+export const scanComments = sqliteTable("scan_comments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	parentId: text("parentId"),
 	body: text().notNull(),
-	removed: integer().notNull(),
-	pinned: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	removed: integer({ mode: 'boolean' }).notNull(),
+	pinned: integer({ mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const scanCommentLikes = sqliteTable("scan_comment_likes", {userId: text("userId").notNull(),
 	commentId: text("commentId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanCommentReports = sqliteTable("scan_comment_reports", {id: text().primaryKey().notNull(),
+export const scanCommentReports = sqliteTable("scan_comment_reports", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	commentId: text("commentId").notNull(),
 	userId: text("userId").notNull(),
 	reason: text().notNull(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scans = sqliteTable("scans", {id: text().primaryKey().notNull(),
+export const scans = sqliteTable("scans", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	name: text().notNull(),
 	slug: text().notNull(),
 	description: text().notNull(),
@@ -694,14 +694,14 @@ export const scans = sqliteTable("scans", {id: text().primaryKey().notNull(),
 	website: text().notNull(),
 	discord: text().notNull(),
 	fluxer: text().notNull(),
-	isOfficial: integer("isOfficial").notNull(),
+	isOfficial: integer("isOfficial", { mode: 'boolean' }).notNull(),
 	status: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	displayPreposition: text("displayPreposition").notNull(),
-	pauseUploads: integer("pauseUploads").notNull(),
-	pauseRecruitment: integer("pauseRecruitment").notNull(),
-	emergencyMode: integer("emergencyMode").notNull(),
+	pauseUploads: integer("pauseUploads", { mode: 'boolean' }).notNull(),
+	pauseRecruitment: integer("pauseRecruitment", { mode: 'boolean' }).notNull(),
+	emergencyMode: integer("emergencyMode", { mode: 'boolean' }).notNull(),
 	emergencyReason: text("emergencyReason"),
 	statusReason: text("statusReason"),
 	bio: text(),
@@ -710,51 +710,51 @@ export const scans = sqliteTable("scans", {id: text().primaryKey().notNull(),
 export const scanMembers = sqliteTable("scan_members", {scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	role: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	isPublic: integer("isPublic").notNull(),
-	hiddenByAdmin: integer("hiddenByAdmin").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	isPublic: integer("isPublic", { mode: 'boolean' }).notNull(),
+	hiddenByAdmin: integer("hiddenByAdmin", { mode: 'boolean' }).notNull(),
 	availabilityStatus: text("availabilityStatus").notNull(),
 	availabilityMessage: text("availabilityMessage"),
 	availabilityUpdatedAt: text("availabilityUpdatedAt").notNull(),});
 
-export const scanSlugHistory = sqliteTable("scan_slug_history", {id: text().primaryKey().notNull(),
+export const scanSlugHistory = sqliteTable("scan_slug_history", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	oldSlug: text("oldSlug").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanGlobalAuditLog = sqliteTable("scan_global_audit_log", {id: text().primaryKey().notNull(),
+export const scanGlobalAuditLog = sqliteTable("scan_global_audit_log", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId"),
 	scanName: text("scanName"),
 	adminId: text("adminId"),
 	action: text().notNull(),
 	reason: text(),
 	metadata: text(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanWorkUploaders = sqliteTable("scan_work_uploaders", {id: text().primaryKey().notNull(),
+export const scanWorkUploaders = sqliteTable("scan_work_uploaders", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	userId: text("userId").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanWorkflowStages = sqliteTable("scan_workflow_stages", {id: text().primaryKey().notNull(),
+export const scanWorkflowStages = sqliteTable("scan_workflow_stages", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	name: text().notNull(),
 	slug: text().notNull(),
 	description: text(),
 	color: text(),
 	displayOrder: integer("displayOrder").notNull(),
-	isActive: integer("isActive").notNull(),
-	required: integer().notNull(),
-	createdAt: text("createdAt").notNull(),
+	isActive: integer("isActive", { mode: 'boolean' }).notNull(),
+	required: integer({ mode: 'boolean' }).notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	dependencies: text().notNull(),
 	positionId: text("positionId"),
 	allowedPositionIds: text("allowedPositionIds"),
-	requiresOutput: integer("requiresOutput").notNull(),
+	requiresOutput: integer("requiresOutput", { mode: 'boolean' }).notNull(),
 	outputType: text("outputType").notNull(),
 	dependencyOperator: text("dependencyOperator").notNull(),});
 
-export const scanTasks = sqliteTable("scan_tasks", {id: text().primaryKey().notNull(),
+export const scanTasks = sqliteTable("scan_tasks", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId"),
 	chapterId: text("chapterId"),
@@ -767,62 +767,62 @@ export const scanTasks = sqliteTable("scan_tasks", {id: text().primaryKey().notN
 	status: text().notNull(),
 	dueAt: text("dueAt"),
 	completedAt: text("completedAt"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanTaskComments = sqliteTable("scan_task_comments", {id: text().primaryKey().notNull(),
+export const scanTaskComments = sqliteTable("scan_task_comments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	taskId: text("taskId").notNull(),
 	userId: text("userId").notNull(),
 	content: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanTaskHandoffs = sqliteTable("scan_task_handoffs", {id: text().primaryKey().notNull(),
+export const scanTaskHandoffs = sqliteTable("scan_task_handoffs", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	taskId: text("taskId").notNull(),
 	fromUserId: text("fromUserId"),
 	toUserId: text("toUserId").notNull(),
 	transferredBy: text("transferredBy").notNull(),
 	reason: text(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanRecruitmentQuestions = sqliteTable("scan_recruitment_questions", {id: text().primaryKey().notNull(),
+export const scanRecruitmentQuestions = sqliteTable("scan_recruitment_questions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	openingId: text("openingId").notNull(),
 	question: text().notNull(),
 	questionType: text("questionType").notNull(),
 	options: text(),
-	required: integer().notNull(),
+	required: integer({ mode: 'boolean' }).notNull(),
 	displayOrder: integer("displayOrder").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanApplicationAnswers = sqliteTable("scan_application_answers", {id: text().primaryKey().notNull(),
+export const scanApplicationAnswers = sqliteTable("scan_application_answers", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	applicationId: text("applicationId").notNull(),
 	questionId: text("questionId").notNull(),
 	answer: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanIntegrations = sqliteTable("scan_integrations", {id: text().primaryKey().notNull(),
+export const scanIntegrations = sqliteTable("scan_integrations", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	platform: text().notNull(),
 	webhookUrl: text("webhookUrl").notNull(),
 	name: text().notNull(),
-	isActive: integer("isActive").notNull(),
+	isActive: integer("isActive", { mode: 'boolean' }).notNull(),
 	notifyEvents: text("notifyEvents").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanWikiPages = sqliteTable("scan_wiki_pages", {id: text().primaryKey().notNull(),
+export const scanWikiPages = sqliteTable("scan_wiki_pages", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	title: text().notNull(),
 	slug: text().notNull(),
 	content: text().notNull(),
 	category: text().notNull(),
-	isPinned: integer("isPinned").notNull(),
+	isPinned: integer("isPinned", { mode: 'boolean' }).notNull(),
 	createdBy: text("createdBy"),
 	updatedBy: text("updatedBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const workGlossaryEntries = sqliteTable("work_glossary_entries", {id: text().primaryKey().notNull(),
+export const workGlossaryEntries = sqliteTable("work_glossary_entries", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	sourceTerm: text("sourceTerm").notNull(),
@@ -831,47 +831,47 @@ export const workGlossaryEntries = sqliteTable("work_glossary_entries", {id: tex
 	notes: text(),
 	createdBy: text("createdBy"),
 	updatedBy: text("updatedBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const workReferences = sqliteTable("work_references", {id: text().primaryKey().notNull(),
+export const workReferences = sqliteTable("work_references", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	title: text().notNull(),
 	refType: text("refType").notNull(),
 	content: text().notNull(),
 	createdBy: text("createdBy"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanChecklistConfigs = sqliteTable("scan_checklist_configs", {id: text().primaryKey().notNull(),
+export const scanChecklistConfigs = sqliteTable("scan_checklist_configs", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	name: text().notNull(),
 	code: text().notNull(),
-	required: integer().notNull(),
+	required: integer({ mode: 'boolean' }).notNull(),
 	displayOrder: integer("displayOrder").notNull(),});
 
-export const scanOnboardingTemplates = sqliteTable("scan_onboarding_templates", {id: text().primaryKey().notNull(),
+export const scanOnboardingTemplates = sqliteTable("scan_onboarding_templates", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	title: text().notNull(),
 	positionId: text("positionId"),
 	items: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanMemberOnboarding = sqliteTable("scan_member_onboarding", {id: text().primaryKey().notNull(),
+export const scanMemberOnboarding = sqliteTable("scan_member_onboarding", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	completedItems: text("completedItems").notNull(),
 	status: text().notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanPipelineTemplates = sqliteTable("scan_pipeline_templates", {id: text().primaryKey().notNull(),
+export const scanPipelineTemplates = sqliteTable("scan_pipeline_templates", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	name: text().notNull(),
 	code: text().notNull(),
 	description: text(),
 	stages: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanChapterQcIssues = sqliteTable("scan_chapter_qc_issues", {id: text().primaryKey().notNull(),
+export const scanChapterQcIssues = sqliteTable("scan_chapter_qc_issues", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	productionChapterId: text("productionChapterId"),
 	chapterId: text("chapterId"),
@@ -883,16 +883,16 @@ export const scanChapterQcIssues = sqliteTable("scan_chapter_qc_issues", {id: te
 	resolvedBy: text("resolvedBy"),
 	resolvedAt: text("resolvedAt"),
 	createdBy: text("createdBy").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanQcComments = sqliteTable("scan_qc_comments", {id: text().primaryKey().notNull(),
+export const scanQcComments = sqliteTable("scan_qc_comments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	issueId: text("issueId").notNull(),
 	userId: text("userId").notNull(),
 	content: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanChannels = sqliteTable("scan_channels", {id: text().primaryKey().notNull(),
+export const scanChannels = sqliteTable("scan_channels", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	name: text().notNull(),
 	slug: text().notNull(),
@@ -900,64 +900,64 @@ export const scanChannels = sqliteTable("scan_channels", {id: text().primaryKey(
 	category: text().notNull(),
 	type: text().notNull(),
 	displayOrder: integer("displayOrder").notNull(),
-	isPrivate: integer("isPrivate").notNull(),
+	isPrivate: integer("isPrivate", { mode: 'boolean' }).notNull(),
 	allowedRoles: text("allowedRoles").notNull(),
-	isArchived: integer("isArchived").notNull(),
+	isArchived: integer("isArchived", { mode: 'boolean' }).notNull(),
 	createdBy: text("createdBy"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanMessages = sqliteTable("scan_messages", {id: text().primaryKey().notNull(),
+export const scanMessages = sqliteTable("scan_messages", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	channelId: text("channelId"),
 	productionChapterId: text("productionChapterId"),
 	userId: text("userId").notNull(),
 	content: text().notNull(),
 	mentions: text().notNull(),
-	pinned: integer().notNull(),
+	pinned: integer({ mode: 'boolean' }).notNull(),
 	replyToId: text("replyToId"),
 	threadCount: integer("threadCount").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
-	isEdited: integer("isEdited").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+	isEdited: integer("isEdited", { mode: 'boolean' }).notNull(),
 	editedAt: text("editedAt"),
 	deletedAt: text("deletedAt"),
 	deletedBy: text("deletedBy"),});
 
-export const scanMessageThreads = sqliteTable("scan_message_threads", {id: text().primaryKey().notNull(),
+export const scanMessageThreads = sqliteTable("scan_message_threads", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	parentMessageId: text("parentMessageId").notNull(),
 	userId: text("userId").notNull(),
 	content: text().notNull(),
-	isResolved: integer("isResolved").notNull(),
+	isResolved: integer("isResolved", { mode: 'boolean' }).notNull(),
 	resolvedBy: text("resolvedBy"),
 	resolvedAt: text("resolvedAt"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanMessageReactions = sqliteTable("scan_message_reactions", {id: text().primaryKey().notNull(),
+export const scanMessageReactions = sqliteTable("scan_message_reactions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	messageId: text("messageId").notNull(),
 	userId: text("userId").notNull(),
 	emoji: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanChannelPreferences = sqliteTable("scan_channel_preferences", {id: text().primaryKey().notNull(),
+export const scanChannelPreferences = sqliteTable("scan_channel_preferences", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	channelId: text("channelId").notNull(),
 	userId: text("userId").notNull(),
 	preference: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanNotifications = sqliteTable("scan_notifications", {id: text().primaryKey().notNull(),
+export const scanNotifications = sqliteTable("scan_notifications", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	type: text().notNull(),
 	title: text().notNull(),
 	body: text().notNull(),
 	deepLink: text("deepLink"),
-	isRead: integer("isRead").notNull(),
+	isRead: integer("isRead", { mode: 'boolean' }).notNull(),
 	readAt: text("readAt"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanNotificationPreferences = sqliteTable("scan_notification_preferences", {id: text().primaryKey().notNull(),
+export const scanNotificationPreferences = sqliteTable("scan_notification_preferences", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	directMentions: integer("directMentions").notNull(),
@@ -966,11 +966,11 @@ export const scanNotificationPreferences = sqliteTable("scan_notification_prefer
 	chaptersWaiting: integer("chaptersWaiting").notNull(),
 	comments: integer().notNull(),
 	generalActivity: integer("generalActivity").notNull(),
-	emailEnabled: integer("emailEnabled").notNull(),
+	emailEnabled: integer("emailEnabled", { mode: 'boolean' }).notNull(),
 	emailFrequency: text("emailFrequency").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanEmailOutbox = sqliteTable("scan_email_outbox", {id: text().primaryKey().notNull(),
+export const scanEmailOutbox = sqliteTable("scan_email_outbox", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId"),
 	recipientUserId: text("recipientUserId").notNull(),
 	recipientEmail: text("recipientEmail").notNull(),
@@ -982,7 +982,7 @@ export const scanEmailOutbox = sqliteTable("scan_email_outbox", {id: text().prim
 	idempotencyKey: text("idempotencyKey"),
 	scheduledAt: text("scheduledAt").notNull(),
 	sentAt: text("sentAt"),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	providerMessageId: text("providerMessageId"),
 	deliveryStatus: text("deliveryStatus").notNull(),
 	notificationId: text("notificationId"),
@@ -998,7 +998,7 @@ export const scanEmailOutbox = sqliteTable("scan_email_outbox", {id: text().prim
 	reconciledAt: text("reconciledAt"),
 	reconciliationNotes: text("reconciliationNotes"),});
 
-export const scanWikiVersions = sqliteTable("scan_wiki_versions", {id: text().primaryKey().notNull(),
+export const scanWikiVersions = sqliteTable("scan_wiki_versions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	pageId: text("pageId").notNull(),
 	scanId: text("scanId").notNull(),
 	title: text().notNull(),
@@ -1006,9 +1006,9 @@ export const scanWikiVersions = sqliteTable("scan_wiki_versions", {id: text().pr
 	versionNumber: integer("versionNumber").notNull(),
 	authorId: text("authorId"),
 	changeSummary: text("changeSummary"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanTutorialVersions = sqliteTable("scan_tutorial_versions", {id: text().primaryKey().notNull(),
+export const scanTutorialVersions = sqliteTable("scan_tutorial_versions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	tutorialId: text("tutorialId").notNull(),
 	scanId: text("scanId").notNull(),
 	versionNumber: integer("versionNumber").notNull(),
@@ -1016,31 +1016,31 @@ export const scanTutorialVersions = sqliteTable("scan_tutorial_versions", {id: t
 	content: text().notNull(),
 	updatedBy: text("updatedBy"),
 	changeSummary: text("changeSummary"),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanTutorialReads = sqliteTable("scan_tutorial_reads", {id: text().primaryKey().notNull(),
+export const scanTutorialReads = sqliteTable("scan_tutorial_reads", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	tutorialId: text("tutorialId").notNull(),
 	userId: text("userId").notNull(),
 	scanId: text("scanId").notNull(),
-	isFavorite: integer("isFavorite").notNull(),
+	isFavorite: integer("isFavorite", { mode: 'boolean' }).notNull(),
 	readAt: text("readAt").notNull(),});
 
-export const scanAcademyTutorials = sqliteTable("scan_academy_tutorials", {id: text().primaryKey().notNull(),
+export const scanAcademyTutorials = sqliteTable("scan_academy_tutorials", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	title: text().notNull(),
 	slug: text().notNull(),
 	category: text().notNull(),
 	content: text().notNull(),
-	isPublished: integer("isPublished").notNull(),
+	isPublished: integer("isPublished", { mode: 'boolean' }).notNull(),
 	targetPositionId: text("targetPositionId"),
 	displayOrder: integer("displayOrder").notNull(),
 	createdBy: text("createdBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	status: text().notNull(),
 	mandatoryForRoles: text("mandatoryForRoles"),});
 
-export const scanProductionFiles = sqliteTable("scan_production_files", {id: text().primaryKey().notNull(),
+export const scanProductionFiles = sqliteTable("scan_production_files", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId"),
 	productionChapterId: text("productionChapterId"),
@@ -1052,12 +1052,12 @@ export const scanProductionFiles = sqliteTable("scan_production_files", {id: tex
 	provider: text().notNull(),
 	version: integer().notNull(),
 	uploadedBy: text("uploadedBy"),
-	isCurrent: integer("isCurrent").notNull(),
+	isCurrent: integer("isCurrent", { mode: 'boolean' }).notNull(),
 	note: text(),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	stageSlug: text("stageSlug"),
 	inputFiles: text("inputFiles").notNull(),
-	isStale: integer("isStale").notNull(),
+	isStale: integer("isStale", { mode: 'boolean' }).notNull(),
 	staleReason: text("staleReason"),
 	storagePoolId: text("storagePoolId"),
 	storageShardId: text("storageShardId"),
@@ -1065,36 +1065,36 @@ export const scanProductionFiles = sqliteTable("scan_production_files", {id: tex
 	telegramFileId: text("telegramFileId"),
 	sha256: text(),});
 
-export const scanMuralPosts = sqliteTable("scan_mural_posts", {id: text().primaryKey().notNull(),
+export const scanMuralPosts = sqliteTable("scan_mural_posts", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	authorId: text("authorId").notNull(),
 	title: text().notNull(),
 	content: text().notNull(),
 	postType: text("postType").notNull(),
-	isPinned: integer("isPinned").notNull(),
+	isPinned: integer("isPinned", { mode: 'boolean' }).notNull(),
 	pinnedAt: text("pinnedAt"),
 	pinnedBy: text("pinnedBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanMuralComments = sqliteTable("scan_mural_comments", {id: text().primaryKey().notNull(),
+export const scanMuralComments = sqliteTable("scan_mural_comments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	postId: text("postId").notNull(),
 	scanId: text("scanId").notNull(),
 	authorId: text("authorId").notNull(),
 	parentCommentId: text("parentCommentId"),
 	content: text().notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanMuralReactions = sqliteTable("scan_mural_reactions", {id: text().primaryKey().notNull(),
+export const scanMuralReactions = sqliteTable("scan_mural_reactions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	postId: text("postId"),
 	commentId: text("commentId"),
 	scanId: text("scanId").notNull(),
 	userId: text("userId").notNull(),
 	emoji: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanAttachments = sqliteTable("scan_attachments", {id: text().primaryKey().notNull(),
+export const scanAttachments = sqliteTable("scan_attachments", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	contextType: text("contextType").notNull(),
 	contextId: text("contextId").notNull(),
@@ -1106,9 +1106,9 @@ export const scanAttachments = sqliteTable("scan_attachments", {id: text().prima
 	checksum: text(),
 	storageReference: text("storageReference").notNull(),
 	storageProvider: text("storageProvider").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanProductionChapters = sqliteTable("scan_production_chapters", {id: text().primaryKey().notNull(),
+export const scanProductionChapters = sqliteTable("scan_production_chapters", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	chapterNumber: real("chapterNumber").notNull(),
@@ -1119,8 +1119,8 @@ export const scanProductionChapters = sqliteTable("scan_production_chapters", {i
 	checklistState: text("checklistState").notNull(),
 	currentStageSlug: text("currentStageSlug"),
 	createdBy: text("createdBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	chapterLabel: text("chapterLabel"),
 	chapterType: text("chapterType").notNull(),
 	chapterSortKey: real("chapterSortKey").notNull(),
@@ -1131,7 +1131,7 @@ export const scanProductionChapters = sqliteTable("scan_production_chapters", {i
 	pauseReason: text("pauseReason"),
 	cancelReason: text("cancelReason"),});
 
-export const scanChapterStages = sqliteTable("scan_chapter_stages", {id: text().primaryKey().notNull(),
+export const scanChapterStages = sqliteTable("scan_chapter_stages", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	chapterId: text("chapterId"),
 	stageId: text("stageId").notNull(),
@@ -1141,34 +1141,34 @@ export const scanChapterStages = sqliteTable("scan_chapter_stages", {id: text().
 	notes: text(),
 	completedAt: text("completedAt"),
 	completedBy: text("completedBy"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 	productionChapterId: text("productionChapterId"),
 	claimedAt: text("claimedAt"),
 	lastActivityAt: text("lastActivityAt"),
 	previousAssignedTo: text("previousAssignedTo"),
 	rejectionReason: text("rejectionReason"),
 	returnToStageId: text("returnToStageId"),
-	isOverride: integer("isOverride").notNull(),
+	isOverride: integer("isOverride", { mode: 'boolean' }).notNull(),
 	overrideReason: text("overrideReason"),
 	overrideBy: text("overrideBy"),
 	overrideAction: text("overrideAction"),
 	skipReason: text("skipReason"),
 	skippedBy: text("skippedBy"),
-	notifiedAvailable: integer("notifiedAvailable").notNull(),
+	notifiedAvailable: integer("notifiedAvailable", { mode: 'boolean' }).notNull(),
 	availabilityVersion: integer("availabilityVersion").notNull(),
 	availabilityReason: text("availabilityReason").notNull(),
 	qcAssigneeId: text("qcAssigneeId"),});
 
-export const scanWorkWorkflowOverrides = sqliteTable("scan_work_workflow_overrides", {id: text().primaryKey().notNull(),
+export const scanWorkWorkflowOverrides = sqliteTable("scan_work_workflow_overrides", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	workId: text("workId").notNull(),
 	template: text().notNull(),
 	customStages: text("customStages").notNull(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
-export const scanChapterTimeline = sqliteTable("scan_chapter_timeline", {id: text().primaryKey().notNull(),
+export const scanChapterTimeline = sqliteTable("scan_chapter_timeline", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	productionChapterId: text("productionChapterId").notNull(),
 	stageId: text("stageId"),
@@ -1177,9 +1177,9 @@ export const scanChapterTimeline = sqliteTable("scan_chapter_timeline", {id: tex
 	userId: text("userId"),
 	userName: text("userName"),
 	details: text().notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const chapterCreditSnapshots = sqliteTable("chapter_credit_snapshots", {id: text().primaryKey().notNull(),
+export const chapterCreditSnapshots = sqliteTable("chapter_credit_snapshots", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	chapterId: text("chapterId"),
 	productionChapterId: text("productionChapterId"),
 	publicationVersion: integer("publicationVersion").notNull(),
@@ -1193,17 +1193,17 @@ export const chapterCreditSnapshots = sqliteTable("chapter_credit_snapshots", {i
 	displayNameSnapshot: text("displayNameSnapshot").notNull(),
 	avatarIdSnapshot: text("avatarIdSnapshot"),
 	roleOrder: integer("roleOrder").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanChannelReadStates = sqliteTable("scan_channel_read_states", {id: text().primaryKey().notNull(),
+export const scanChannelReadStates = sqliteTable("scan_channel_read_states", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	scanId: text("scanId").notNull(),
 	channelId: text("channelId").notNull(),
 	userId: text("userId").notNull(),
 	lastReadMessageId: text("lastReadMessageId"),
 	lastReadAt: text("lastReadAt").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const scanPipelineStageSeen = sqliteTable("scan_pipeline_stage_seen", {id: text().primaryKey().notNull(),
+export const scanPipelineStageSeen = sqliteTable("scan_pipeline_stage_seen", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	scanId: text("scanId").notNull(),
 	chapterStageId: text("chapterStageId").notNull(),
@@ -1212,14 +1212,14 @@ export const scanPipelineStageSeen = sqliteTable("scan_pipeline_stage_seen", {id
 	availabilityVersion: integer("availabilityVersion").notNull(),
 	seenAt: text("seenAt").notNull(),});
 
-export const notifications = sqliteTable("notifications", {id: text().primaryKey().notNull(),
+export const notifications = sqliteTable("notifications", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	kind: text().notNull(),
 	body: text().notNull(),
 	href: text().notNull(),
 	dedupeKey: text("dedupeKey").notNull(),
 	readAt: text("readAt"),
-	createdAt: text("createdAt").notNull(),
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 	actorUserId: text("actorUserId"),
 	title: text(),
 	type: text().notNull(),
@@ -1229,15 +1229,15 @@ export const notifications = sqliteTable("notifications", {id: text().primaryKey
 	scanId: text("scanId"),
 	context: text(),});
 
-export const scanMessageMentions = sqliteTable("scan_message_mentions", {id: text().primaryKey().notNull(),
+export const scanMessageMentions = sqliteTable("scan_message_mentions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	messageId: text("messageId").notNull(),
 	mentionType: text("mentionType").notNull(),
 	targetUserId: text("targetUserId"),
 	targetRoleId: text("targetRoleId"),
 	mentionText: text("mentionText").notNull(),
-	createdAt: text("createdAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),});
 
-export const uploadSessions = sqliteTable("upload_sessions", {id: text().primaryKey().notNull(),
+export const uploadSessions = sqliteTable("upload_sessions", {id: text().primaryKey().notNull().$defaultFn(() => crypto.randomUUID()),
 	userId: text("userId").notNull(),
 	scanId: text("scanId"),
 	workId: text("workId").notNull(),
@@ -1251,8 +1251,8 @@ export const uploadSessions = sqliteTable("upload_sessions", {id: text().primary
 	errorMessage: text("errorMessage"),
 	pausedAt: text("pausedAt"),
 	completedAt: text("completedAt"),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt").notNull(),});
+	createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
+	updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),});
 
 export const authUsers = sqliteTable("auth_users", {id: text().primaryKey(),
 	email: text(),
@@ -1267,16 +1267,16 @@ export const user = sqliteTable("user", {
 	email: text('email').notNull().unique(),
 	emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull(),
 	image: text('image'),
-	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
-	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull()
+	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date())
 });
 
 export const session = sqliteTable("session", {
 	id: text("id").primaryKey(),
 	expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
 	token: text('token').notNull().unique(),
-	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
-	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull(),
+	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
 	ipAddress: text('ipAddress'),
 	userAgent: text('userAgent'),
 	userId: text('userId').notNull().references(() => user.id)
@@ -1294,8 +1294,8 @@ export const account = sqliteTable("account", {
 	refreshTokenExpiresAt: integer('refreshTokenExpiresAt', { mode: 'timestamp' }),
 	scope: text('scope'),
 	password: text('password'),
-	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
-	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull()
+	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date())
 });
 
 export const verification = sqliteTable("verification", {
@@ -1303,6 +1303,6 @@ export const verification = sqliteTable("verification", {
 	identifier: text('identifier').notNull(),
 	value: text('value').notNull(),
 	expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
-	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
-	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull()
+	createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+	updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date())
 });

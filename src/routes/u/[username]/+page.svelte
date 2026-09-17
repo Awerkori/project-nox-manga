@@ -116,13 +116,13 @@
       case 'AVATAR_FRAME':
         return 'Moldura';
       case 'TITLE':
-        return 'Título';
+        return 'Ttulo';
       case 'PROFILE_BANNER':
         return 'Banner';
       case 'NAME_COLOR':
         return 'Cor de Nome';
       default:
-        return 'Cosmético';
+        return 'Cosmtico';
     }
   }
 
@@ -162,11 +162,11 @@
   function getRarityBadgeInfo(rarity: string = 'COMUM') {
     switch (rarity.toUpperCase()) {
       case 'MITICA':
-        return { label: 'Mítica', border: '#f43f5e', text: '#fda4af', bg: 'rgba(244, 63, 94, 0.15)', glow: '0 0 16px rgba(244, 63, 94, 0.4)' };
+        return { label: 'Mtica', border: '#f43f5e', text: '#fda4af', bg: 'rgba(244, 63, 94, 0.15)', glow: '0 0 16px rgba(244, 63, 94, 0.4)' };
       case 'LENDARIA':
-        return { label: 'Lendária', border: '#f59e0b', text: '#fde68a', bg: 'rgba(245, 158, 11, 0.15)', glow: '0 0 16px rgba(245, 158, 11, 0.4)' };
+        return { label: 'Lendria', border: '#f59e0b', text: '#fde68a', bg: 'rgba(245, 158, 11, 0.15)', glow: '0 0 16px rgba(245, 158, 11, 0.4)' };
       case 'EPICA':
-        return { label: 'Épica', border: '#a855f7', text: '#e9d5ff', bg: 'rgba(168, 85, 247, 0.15)', glow: '0 0 12px rgba(168, 85, 247, 0.3)' };
+        return { label: 'pica', border: '#a855f7', text: '#e9d5ff', bg: 'rgba(168, 85, 247, 0.15)', glow: '0 0 12px rgba(168, 85, 247, 0.3)' };
       case 'RARA':
         return { label: 'Rara', border: '#38bdf8', text: '#bae6fd', bg: 'rgba(56, 189, 248, 0.15)', glow: '0 0 10px rgba(56, 189, 248, 0.25)' };
       case 'INCOMUM':
@@ -189,7 +189,7 @@
       case 'LEGACY':
         return { label: 'Legado', bg: 'rgba(148, 163, 184, 0.12)', text: '#cbd5e1' };
       default:
-        return { label: 'Coleção', bg: 'rgba(148, 163, 184, 0.12)', text: '#cbd5e1' };
+        return { label: 'Coleo', bg: 'rgba(148, 163, 184, 0.12)', text: '#cbd5e1' };
     }
   }
 </script>
@@ -244,7 +244,7 @@
             {#if data.isSelf}
               <a href="/me" class="btn-profile-action self">
                 <Settings size={16} />
-                <span>Meu Espaço</span>
+                <span>Meu Espao</span>
               </a>
             {:else}
               <button
@@ -356,15 +356,15 @@
         <div class="xp-strip">
           <div class="xp-header-row">
             <div class="xp-rank-badge">
-              <span class="xp-rank-level">Nível {rank.level}</span>
+              <span class="xp-rank-level">Nvel {rank.level}</span>
               <span class="xp-rank-dot">·</span>
               <span class="xp-rank-xp">{data.member.xp.toLocaleString('pt-BR')} XP</span>
             </div>
             <div class="xp-status-text">
               {#if progress.isMaxLevel}
-                <strong>✦ Maestria Máxima</strong>
+                <strong>✦ Maestria Mxima</strong>
               {:else}
-                Faltam <strong>{progress.xpNeededForNext.toLocaleString('pt-BR')} XP</strong> para o Nível {progress.nextLevel}
+                Faltam <strong>{progress.xpNeededForNext.toLocaleString('pt-BR')} XP</strong> para o Nvel {progress.nextLevel}
               {/if}
             </div>
           </div>
@@ -375,13 +375,13 @@
 
         <!-- High-Impact Profile Stats Grid -->
         <div class="stats-grid" id="stats-summary">
-          <!-- 1. Capítulos Lidos (Últimas Leituras) -->
+          <!-- 1. Captulos Lidos (ltimas Leituras) -->
           <button
             type="button"
             class="stat-card stat-card-interactive"
             class:active-card={activeTab === 'reading'}
             onclick={() => switchTab('reading')}
-            title="Clique para ver o histórico recente de leituras"
+            title="Clique para ver o histrico recente de leituras"
           >
             <div class="stat-card-icon">
               <BookOpen size={20} />
@@ -396,7 +396,7 @@
                 <span class="stat-card-num">{data.stats.chapters_read.toLocaleString('pt-BR')}</span>
               {/if}
               <div class="stat-label-wrap">
-                <span class="stat-card-label">Capítulos Lidos</span>
+                <span class="stat-card-label">Captulos Lidos</span>
                 <span class="stat-click-hint">Ver</span>
               </div>
             </div>
@@ -435,7 +435,7 @@
             class="stat-card stat-card-interactive"
             class:active-card={activeTab === 'achievements'}
             onclick={() => switchTab('achievements')}
-            title="Clique para ver a estante pública de conquistas"
+            title="Clique para ver a estante pblica de conquistas"
           >
             <div class="stat-card-icon trophy-icon">
               <Trophy size={20} />
@@ -460,13 +460,13 @@
             </div>
           </button>
 
-          <!-- 4. Cosméticos -->
+          <!-- 4. Cosmticos -->
           <button
             type="button"
             class="stat-card stat-card-interactive"
             class:active-card={activeTab === 'cosmetics'}
             onclick={() => switchTab('cosmetics')}
-            title="Clique para ver a coleção de cosméticos e molduras"
+            title="Clique para ver a coleo de cosmticos e molduras"
           >
             <div class="stat-card-icon sparkles-icon">
               <Sparkles size={20} />
@@ -481,7 +481,7 @@
                 <span class="stat-card-num">{data.stats.cosmetics_count}</span>
               {/if}
               <div class="stat-label-wrap">
-                <span class="stat-card-label">Cosméticos</span>
+                <span class="stat-card-label">Cosmticos</span>
                 <span class="stat-click-hint">Ver</span>
               </div>
             </div>
@@ -570,7 +570,7 @@
             onclick={() => switchTab('reading')}
           >
             <Clock size={17} />
-            <span>Últimas Leituras</span>
+            <span>ltimas Leituras</span>
             <span class="tab-count-pill">
               {#if !data.canViewReadingHistory}
                 <Lock size={11} />
@@ -604,7 +604,7 @@
             onclick={() => switchTab('cosmetics')}
           >
             <Sparkles size={17} />
-            <span>Coleção Cosmética</span>
+            <span>Coleo Cosmtica</span>
             <span class="tab-count-pill">
               {#if !data.canViewCosmetics}
                 <Lock size={11} />
@@ -637,33 +637,33 @@
                   <Lock size={32} />
                 </div>
                 <h3>Favoritos Privados</h3>
-                <p>Este leitor optou por manter suas obras favoritas privadas no seu perfil público.</p>
+                <p>Este leitor optou por manter suas obras favoritas privadas no seu perfil pblico.</p>
               </div>
             {:else}
               {#if data.isSelf && !data.member.privacyShowFavorites}
                 <div class="self-privacy-hint">
                   <Lock size={14} />
-                  <span>Seus favoritos estão configurados como privados e são visíveis apenas para você.</span>
+                  <span>Seus favoritos esto configurados como privados e so visveis apenas para voc.</span>
                 </div>
               {/if}
 
               {#if data.favorites.length > 0}
                 <div class="works-cards-grid">
                   {#each data.favorites as work (work.id)}
-                    <WorkCard {work} />
+                    <WorkCard work={work as any} />
                   {/each}
                 </div>
               {:else}
                 <div class="empty-tab-state">
                   <Heart size={40} class="empty-tab-icon" />
                   <h4>Nenhuma obra favoritada</h4>
-                  <p>As histórias adicionadas aos favoritos serão exibidas aqui.</p>
+                  <p>As histrias adicionadas aos favoritos sero exibidas aqui.</p>
                 </div>
               {/if}
             {/if}
           </section>
 
-        <!-- TAB: ÚLTIMAS LEITURAS -->
+        <!-- TAB: LTIMAS LEITURAS -->
         {:else if activeTab === 'reading'}
           <section class="tab-pane reading-pane">
             {#if !data.canViewReadingHistory}
@@ -671,14 +671,14 @@
                 <div class="privacy-icon-wrap">
                   <Lock size={32} />
                 </div>
-                <h3>Histórico de Leituras Privado</h3>
-                <p>Este leitor optou por manter seu histórico recente de leituras privado.</p>
+                <h3>Histrico de Leituras Privado</h3>
+                <p>Este leitor optou por manter seu histrico recente de leituras privado.</p>
               </div>
             {:else}
               {#if data.isSelf && !data.member.privacyShowReadingHistory}
                 <div class="self-privacy-hint">
                   <Lock size={14} />
-                  <span>Seu histórico de leituras está configurado como privado e é visível apenas para você.</span>
+                  <span>Seu histrico de leituras est configurado como privado e  visvel apenas para voc.</span>
                 </div>
               {/if}
 
@@ -706,11 +706,11 @@
                         <a href="/obra/{r.workSlug}" class="reading-work-title">{r.workTitle}</a>
                         <div class="reading-ch-row">
                           <a href="/ler/{r.chapterId}" class="reading-chapter-badge">
-                            <span>Capítulo {r.chapterNumber}</span>
+                            <span>Captulo {r.chapterNumber}</span>
                             <ExternalLink size={11} />
                           </a>
                           {#if r.page}
-                            <span class="reading-page-info">Pág. {r.page}</span>
+                            <span class="reading-page-info">Pg. {r.page}</span>
                           {/if}
                         </div>
                         <span class="reading-timestamp">
@@ -725,7 +725,7 @@
                 <div class="empty-tab-state">
                   <Clock size={40} class="empty-tab-icon" />
                   <h4>Nenhuma leitura recente</h4>
-                  <p>Os capítulos lidos pelo leitor serão listados aqui cronologicamente.</p>
+                  <p>Os captulos lidos pelo leitor sero listados aqui cronologicamente.</p>
                 </div>
               {/if}
             {/if}
@@ -740,7 +740,7 @@
                   <Lock size={32} />
                 </div>
                 <h3>Conquistas Privadas</h3>
-                <p>Este leitor optou por manter suas conquistas privadas no seu perfil público.</p>
+                <p>Este leitor optou por manter suas conquistas privadas no seu perfil pblico.</p>
               </div>
             {:else}
               <!-- Rarity Breakdown Bar (Micro-resumo de Raridades) -->
@@ -751,17 +751,17 @@
                 <div class="rarity-chips-wrap">
                   {#if data.rarityCounts.MITICA > 0}
                     <span class="rarity-chip mitica">
-                      <strong>{data.rarityCounts.MITICA}</strong> Mítica{data.rarityCounts.MITICA > 1 ? 's' : ''}
+                      <strong>{data.rarityCounts.MITICA}</strong> Mtica{data.rarityCounts.MITICA > 1 ? 's' : ''}
                     </span>
                   {/if}
                   {#if data.rarityCounts.LENDARIA > 0}
                     <span class="rarity-chip lendaria">
-                      <strong>{data.rarityCounts.LENDARIA}</strong> Lendária{data.rarityCounts.LENDARIA > 1 ? 's' : ''}
+                      <strong>{data.rarityCounts.LENDARIA}</strong> Lendria{data.rarityCounts.LENDARIA > 1 ? 's' : ''}
                     </span>
                   {/if}
                   {#if data.rarityCounts.EPICA > 0}
                     <span class="rarity-chip epica">
-                      <strong>{data.rarityCounts.EPICA}</strong> Épica{data.rarityCounts.EPICA > 1 ? 's' : ''}
+                      <strong>{data.rarityCounts.EPICA}</strong> pica{data.rarityCounts.EPICA > 1 ? 's' : ''}
                     </span>
                   {/if}
                   {#if data.rarityCounts.RARA > 0}
@@ -832,13 +832,13 @@
                     <Trophy size={36} />
                   </div>
                   <h3>Jornada Inicial</h3>
-                  <p>Este leitor ainda está desbravando os caminhos da biblioteca e forjando suas conquistas.</p>
+                  <p>Este leitor ainda est desbravando os caminhos da biblioteca e forjando suas conquistas.</p>
                 </div>
               {/if}
             {/if}
           </section>
 
-        <!-- TAB 2: COLEÇÃO COSMÉTICA -->
+        <!-- TAB 2: COLEO COSMTICA -->
         {:else if activeTab === 'cosmetics'}
           <section class="tab-pane cosmetics-pane">
             {#if !data.canViewCosmetics}
@@ -846,8 +846,8 @@
                 <div class="privacy-icon-wrap">
                   <Lock size={32} />
                 </div>
-                <h3>Coleção Privada</h3>
-                <p>Este leitor optou por manter sua coleção de cosméticos privada no perfil público.</p>
+                <h3>Coleo Privada</h3>
+                <p>Este leitor optou por manter sua coleo de cosmticos privada no perfil pblico.</p>
               </div>
             {:else}
               <!-- Cosmetic Filter Pills -->
@@ -877,7 +877,7 @@
                     class:active={cosmeticFilter === 'TITLE'}
                     onclick={() => (cosmeticFilter = 'TITLE')}
                   >
-                    <span>Títulos</span>
+                    <span>Ttulos</span>
                     <span class="filter-count">{cosmeticCounts.titles}</span>
                   </button>
                   <button
@@ -986,8 +986,8 @@
                   <div class="empty-icon-wrap">
                     <Palette size={36} />
                   </div>
-                  <h3>Nenhum Cosmético</h3>
-                  <p>Nenhum cosmético encontrado para esta categoria no acervo do leitor.</p>
+                  <h3>Nenhum Cosmtico</h3>
+                  <p>Nenhum cosmtico encontrado para esta categoria no acervo do leitor.</p>
                 </div>
               {/if}
             {/if}
@@ -1000,7 +1000,7 @@
                   <ShieldCheck size={18} class="text-gold" />
                   <div>
                     <strong class="privacy-box-title">Privacidade das Equipes no Perfil</strong>
-                    <p class="privacy-box-sub">Defina como suas scans e cargos aparecem para os outros leitores no seu perfil público.</p>
+                    <p class="privacy-box-sub">Defina como suas scans e cargos aparecem para os outros leitores no seu perfil pblico.</p>
                   </div>
                 </div>
 
@@ -1034,9 +1034,9 @@
                 <div class="admin-mod-left">
                   <AlertTriangle size={18} class={data.member.adminHideScanBadges ? 'text-red' : 'text-amber'} />
                   <div>
-                    <strong class="admin-mod-title">Moderação Global de Equipes (Admin)</strong>
+                    <strong class="admin-mod-title">Moderao Global de Equipes (Admin)</strong>
                     <p class="admin-mod-sub">
-                      {data.member.adminHideScanBadges ? 'Emblemas de equipe deste leitor estão OCULTOS globalmente por um administrador.' : 'Emblemas de equipe deste leitor estão visíveis normalmente conforme a privacidade do usuário.'}
+                      {data.member.adminHideScanBadges ? 'Emblemas de equipe deste leitor esto OCULTOS globalmente por um administrador.' : 'Emblemas de equipe deste leitor esto visveis normalmente conforme a privacidade do usurio.'}
                     </p>
                   </div>
                 </div>
@@ -1053,7 +1053,7 @@
                     class="btn-admin-mod"
                     class:restore={data.member.adminHideScanBadges}
                   >
-                    {data.member.adminHideScanBadges ? 'Restaurar Emblemas do Usuário' : 'Ocultar Emblemas Globalmente'}
+                    {data.member.adminHideScanBadges ? 'Restaurar Emblemas do Usurio' : 'Ocultar Emblemas Globalmente'}
                   </button>
                 </form>
               </div>
@@ -1124,7 +1124,7 @@
                   <ShieldCheck size={36} />
                 </div>
                 <h3>Nenhuma Equipe</h3>
-                <p>Este leitor ainda não faz parte de nenhuma equipe parceira cadastrada.</p>
+                <p>Este leitor ainda no faz parte de nenhuma equipe parceira cadastrada.</p>
               </div>
             {/if}
           </section>

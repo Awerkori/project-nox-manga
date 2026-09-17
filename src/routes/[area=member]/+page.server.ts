@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { db, schema, safeQuery } from '$lib/server/db';
-import { eq, and, desc, asc, isNull, isNotNull, count } from 'drizzle-orm';
+import { eq, getTableColumns, and, desc, asc, isNull, isNotNull, count } from 'drizzle-orm';
 import { MEMBER_PAGE_SIZE, pageNumber, pageLink } from '$lib/pagination';
 
 export const load = async ({ locals, params, url }) => {
@@ -18,15 +18,15 @@ export const load = async ({ locals, params, url }) => {
   // Library query
   let libWheres = [
     eq(schema.library.userId, locals.user.id),
-    eq(schema.works.published, 1)
+    eq(schema.works.published, true)
   ];
   if (params.area === 'favoritos') libWheres.push(eq(schema.library.favorite, 1));
   if (tab) libWheres.push(eq(schema.library.status, tab));
 
   const libraryQuery = db
     .select({
-      ...schema.library,
-      works: schema.works
+      ...getTableColumns(schema.library),
+      works: getTableColumns(schema.works)
     })
     .from(schema.library)
     .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
@@ -62,20 +62,20 @@ export const load = async ({ locals, params, url }) => {
   const historyWheres = [
     eq(schema.reading.userId, locals.user.id),
     isNotNull(schema.chapters.publishedAt),
-    eq(schema.works.published, 1)
+    eq(schema.works.published, true)
   ];
 
   const historyQuery = db
     .select({
-      ...schema.reading,
+      ...getTableColumns(schema.reading),
       chapters: {
         id: schema.chapters.id,
         number: schema.chapters.number,
-        works: {
-          slug: schema.works.slug,
-          title: schema.works.title,
-          coverId: schema.works.coverId
-        }
+      },
+      works: {
+        slug: schema.works.slug,
+        title: schema.works.title,
+        coverId: schema.works.coverId
       }
     })
     .from(schema.reading)
@@ -142,7 +142,7 @@ export const load = async ({ locals, params, url }) => {
     .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
     .where(and(
       eq(schema.library.userId, locals.user.id),
-      eq(schema.works.published, 1)
+      eq(schema.works.published, true)
     ));
 
   const completedWorksQuery = db
@@ -151,7 +151,7 @@ export const load = async ({ locals, params, url }) => {
     .innerJoin(schema.works, eq(schema.library.workId, schema.works.id))
     .where(and(
       eq(schema.library.userId, locals.user.id),
-      eq(schema.works.published, 1),
+      eq(schema.works.published, true),
       eq(schema.library.status, 'COMPLETED')
     ));
 

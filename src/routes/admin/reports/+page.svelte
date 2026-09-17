@@ -40,9 +40,9 @@
       case 'NOVO':
         return { label: 'Novo', class: 'badge-novo' };
       case 'EM_ANALISE':
-        return { label: 'Em Análise', class: 'badge-analise' };
+        return { label: 'Em Anlise', class: 'badge-analise' };
       case 'ATRIBUIDO':
-        return { label: 'Atribuído', class: 'badge-atribuido' };
+        return { label: 'Atribudo', class: 'badge-atribuido' };
       case 'RESOLVIDO':
         return { label: 'Resolvido', class: 'badge-resolvido' };
       case 'REJEITADO':
@@ -72,11 +72,11 @@
       case 'WORK':
         return 'Obra';
       case 'CHAPTER':
-        return 'Capítulo';
+        return 'Captulo';
       case 'COMMENT':
-        return 'Comentário';
+        return 'Comentrio';
       case 'USER':
-        return 'Usuário';
+        return 'Usurio';
       default:
         return type;
     }
@@ -84,7 +84,7 @@
 </script>
 
 <svelte:head>
-  <title>Central de Denúncias — Painel Editorial Project Nox</title>
+  <title>Central de Denncias — Painel Editorial Project Nox</title>
 </svelte:head>
 
 <div class="reports-workspace">
@@ -92,13 +92,13 @@
   <header class="workspace-header">
     <div class="header-text-block">
       <div class="eyebrow-line">
-        <span class="eyebrow-tag">MODERAÇÃO</span>
+        <span class="eyebrow-tag">MODERAO</span>
         <span class="eyebrow-sep">·</span>
-        <span class="eyebrow-date">CENTRAL DE DENÚNCIAS</span>
+        <span class="eyebrow-date">CENTRAL DE DENNCIAS</span>
       </div>
-      <h1 class="heading">Denúncias da Comunidade</h1>
+      <h1 class="heading">Denncias da Comunidade</h1>
       <p class="subheading">
-        Gerencie e analise denúncias de obras, capítulos, comentários e usuários com fluxo formal de resolução.
+        Gerencie e analise denncias de obras, captulos, comentrios e usurios com fluxo formal de resoluo.
       </p>
     </div>
   </header>
@@ -115,11 +115,11 @@
         <span class="tab-count count-novo">{data.statusCounts.NOVO}</span>
       </a>
       <a href="?status=EM_ANALISE" class="tab-btn" class:active={data.statusFilter === 'EM_ANALISE'}>
-        <span>Em Análise</span>
+        <span>Em Anlise</span>
         <span class="tab-count">{data.statusCounts.EM_ANALISE}</span>
       </a>
       <a href="?status=ATRIBUIDO" class="tab-btn" class:active={data.statusFilter === 'ATRIBUIDO'}>
-        <span>Atribuídas</span>
+        <span>Atribudas</span>
         <span class="tab-count">{data.statusCounts.ATRIBUIDO}</span>
       </a>
       <a href="?status=RESOLVIDO" class="tab-btn" class:active={data.statusFilter === 'RESOLVIDO'}>
@@ -153,21 +153,21 @@
         class="type-pill"
         class:active={data.typeFilter === 'CHAPTER'}
       >
-        Capítulos
+        Captulos
       </a>
       <a
         href="?status={data.statusFilter}&type=COMMENT"
         class="type-pill"
         class:active={data.typeFilter === 'COMMENT'}
       >
-        Comentários
+        Comentrios
       </a>
       <a
         href="?status={data.statusFilter}&type=USER"
         class="type-pill"
         class:active={data.typeFilter === 'USER'}
       >
-        Usuários
+        Usurios
       </a>
     </div>
   </div>
@@ -191,13 +191,13 @@
         onclick={() => (viewMode = 'LIST')}
       >
         <List size={14} />
-        <span>Lista Detalhada ({data.reports.length})</span>
+        <span>Lista Detalhada ({data.reports || [].length})</span>
       </button>
     </div>
     <span class="view-mode-hint">
       {viewMode === 'CLUSTERED'
-        ? 'Denúncias sobre o mesmo alvo são unificadas para resolução rápida em lote.'
-        : 'Exibindo cada registro de denúncia individualmente.'}
+        ? 'Denncias sobre o mesmo alvo so unificadas para resoluo rpida em lote.'
+        : 'Exibindo cada registro de denncia individualmente.'}
     </span>
   </div>
 
@@ -222,14 +222,14 @@
                 </span>
                 {#if cluster.count > 1}
                   <span class="cluster-count-badge" class:has-new={cluster.newCount > 0}>
-                    {cluster.count} denúncias acumuladas
+                    {cluster.count} denncias acumuladas
                   </span>
                 {/if}
               </div>
 
               <span class="report-timestamp">
                 <Clock size={12} />
-                <span>Última {relativeTime(cluster.latestCreatedAt)}</span>
+                <span>ltima {relativeTime(cluster.latestCreatedAt)}</span>
               </span>
             </div>
 
@@ -264,7 +264,7 @@
                     <input type="hidden" name="status" value="EM_ANALISE" />
                     <button type="submit" class="btn-action btn-analise">
                       <Clock size={13} />
-                      <span>Assumir Análise ({cluster.count})</span>
+                      <span>Assumir Anlise ({cluster.count})</span>
                     </button>
                   </form>
                 {/if}
@@ -303,7 +303,7 @@
                 class="btn-expand-cluster"
                 onclick={() => toggleCluster(cluster.clusterKey)}
               >
-                <span>{isExpanded ? 'Ocultar' : 'Inspecionar'} {cluster.count} denúncia{cluster.count > 1 ? 's' : ''}</span>
+                <span>{isExpanded ? 'Ocultar' : 'Inspecionar'} {cluster.count} denncia{cluster.count > 1 ? 's' : ''}</span>
                 {#if isExpanded}
                   <ChevronUp size={14} />
                 {:else}
@@ -330,7 +330,7 @@
                   <input type="hidden" name="status" value={batchAction} />
 
                   <label for="cluster-notes-{cluster.clusterKey}" class="resolve-label">
-                    Parecer da Moderação ({batchAction === 'RESOLVIDO' ? `Resolução das ${cluster.count} denúncias` : 'Motivo da Rejeição'}):
+                    Parecer da Moderao ({batchAction === 'RESOLVIDO' ? `Resoluo das ${cluster.count} denncias` : 'Motivo da Rejeio'}):
                   </label>
                   <textarea
                     id="cluster-notes-{cluster.clusterKey}"
@@ -338,7 +338,7 @@
                     bind:value={batchNotes}
                     class="resolve-textarea"
                     rows="2"
-                    placeholder="Explique sucintamente a medida tomada (ex: imagens reupadas, numeração corrigida)..."
+                    placeholder="Explique sucintamente a medida tomada (ex: imagens reupadas, numerao corrigida)..."
                     required
                   ></textarea>
 
@@ -349,7 +349,7 @@
                       class:btn-resolvido-solid={batchAction === 'RESOLVIDO'}
                       class:btn-rejeitado-solid={batchAction === 'REJEITADO'}
                     >
-                      Confirmar {batchAction === 'RESOLVIDO' ? 'Resolução em Lote' : 'Rejeição em Lote'}
+                      Confirmar {batchAction === 'RESOLVIDO' ? 'Resoluo em Lote' : 'Rejeio em Lote'}
                     </button>
                     <button
                       type="button"
@@ -366,7 +366,7 @@
             <!-- Expanded Drawer with individual report records -->
             {#if isExpanded}
               <div class="cluster-expanded-drawer">
-                <h4 class="drawer-heading">Denúncias registradas para este alvo ({cluster.reports.length})</h4>
+                <h4 class="drawer-heading">Denncias registradas para este alvo ({cluster.reports.length})</h4>
                 <div class="drawer-reports-list">
                   {#each cluster.reports as rep (rep.id)}
                     <div class="drawer-report-row">
@@ -374,7 +374,7 @@
                         <div class="drawer-reporter-meta">
                           <User size={12} />
                           <strong class="drawer-reporter-name">
-                            {rep.reporter?.displayName || rep.reporter?.username || 'Usuário anônimo'}
+                            {rep.reporter?.displayName || rep.reporter?.username || 'Usurio annimo'}
                           </strong>
                           <span class="drawer-dot">·</span>
                           <span class="drawer-time">{relativeTime(rep.createdAt)}</span>
@@ -412,11 +412,11 @@
         <div class="empty-icon-circle">
           <CheckCircle2 size={32} />
         </div>
-        <h3 class="empty-heading">Nenhuma denúncia encontrada</h3>
+        <h3 class="empty-heading">Nenhuma denncia encontrada</h3>
         <p class="empty-paragraph">
           {data.statusFilter !== 'ALL'
-            ? `Não há denúncias com o filtro "${data.statusFilter}".`
-            : 'A comunidade está pacífica e nenhuma infração foi reportada no momento.'}
+            ? `No h denncias com o filtro "${data.statusFilter}".`
+            : 'A comunidade est pacfica e nenhuma infrao foi reportada no momento.'}
         </p>
         {#if data.statusFilter !== 'ALL' || data.typeFilter !== 'ALL'}
           <a href="/admin/reports" class="btn-clear-filters">Limpar filtros</a>
@@ -425,9 +425,9 @@
     {/if}
   {:else}
     <!-- Detailed Flat List View -->
-    {#if data.reports.length > 0}
+    {#if data.reports || [].length > 0}
       <div class="reports-list">
-        {#each data.reports as report (report.id)}
+        {#each data.reports || [] as report (report.id)}
           {@const statusMeta = getStatusBadge(report.status)}
           {@const TargetIcon = getTargetIcon(report.targetType)}
           <div class="report-card" class:card-novo={report.status === 'NOVO'}>
@@ -450,25 +450,25 @@
 
             <!-- Target context -->
             <div class="target-context">
-              {#if report.targetType === 'WORK' && report.work}
+              {#if report.targetType === 'WORK' && (report as any).work}
                 <div class="target-item">
                   <span class="target-label">Obra:</span>
-                  <a href="/admin/obras/{report.work.id}" class="target-link" target="_blank">
-                    <strong>{report.work.title}</strong>
+                  <a href="/admin/obras/{(report as any).work.id}" class="target-link" target="_blank">
+                    <strong>{(report as any).work.title}</strong>
                     <ArrowUpRight size={12} />
                   </a>
                 </div>
-              {:else if report.targetType === 'CHAPTER' && report.chapter}
+              {:else if report.targetType === 'CHAPTER' && (report as any).chapter}
                 <div class="target-item">
-                  <span class="target-label">Capítulo:</span>
+                  <span class="target-label">Captulo:</span>
                   <span class="target-text">
-                    Capítulo {report.chapter.number} {report.chapter.title ? `— ${report.chapter.title}` : ''}
+                    Captulo {(report as any).chapter.number} {(report as any).chapter.title ? `— ${(report as any).chapter.title}` : ''}
                   </span>
                 </div>
-              {:else if report.targetType === 'COMMENT' && report.comment}
+              {:else if report.targetType === 'COMMENT' && (report as any).comment}
                 <div class="target-item comment-preview">
-                  <span class="target-label">Comentário:</span>
-                  <blockquote class="target-quote">"{report.comment.body}"</blockquote>
+                  <span class="target-label">Comentrio:</span>
+                  <blockquote class="target-quote">"{(report as any).comment.body}"</blockquote>
                 </div>
               {/if}
             </div>
@@ -488,12 +488,12 @@
             <div class="report-actors">
               <div class="actor-info">
                 <User size={13} />
-                <span>Denunciado por: <strong>{report.reporter?.displayName || report.reporter?.username || 'Usuário'}</strong></span>
+                <span>Denunciado por: <strong>{(report as any).reporter?.displayName || (report as any).reporter?.username || 'Usurio'}</strong></span>
               </div>
-              {#if report.assigned}
+              {#if (report as any).assigned}
                 <div class="actor-info assigned">
                   <Shield size={13} />
-                  <span>Atribuído a: <strong>{report.assigned.displayName || report.assigned.username}</strong></span>
+                  <span>Atribudo a: <strong>{(report as any).assigned.displayName || (report as any).assigned.username}</strong></span>
                 </div>
               {/if}
             </div>
@@ -501,7 +501,7 @@
             <!-- Resolution notes (if already resolved or rejected) -->
             {#if report.resolutionNotes}
               <div class="resolution-notes-box">
-                <span class="notes-label">Parecer da moderação:</span>
+                <span class="notes-label">Parecer da moderao:</span>
                 <p class="notes-text">{report.resolutionNotes}</p>
               </div>
             {/if}
@@ -514,7 +514,7 @@
                   <input type="hidden" name="status" value="EM_ANALISE" />
                   <button type="submit" class="btn-action btn-analise">
                     <Clock size={13} />
-                    <span>Assumir Análise</span>
+                    <span>Assumir Anlise</span>
                   </button>
                 </form>
               {/if}
@@ -566,7 +566,7 @@
                   <input type="hidden" name="status" value={resolveAction} />
                   
                   <label for="notes-{report.id}" class="resolve-label">
-                    Parecer da Moderação ({resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Motivo da Rejeição'}):
+                    Parecer da Moderao ({resolveAction === 'RESOLVIDO' ? 'Resoluo' : 'Motivo da Rejeio'}):
                   </label>
                   <textarea
                     id="notes-{report.id}"
@@ -585,7 +585,7 @@
                       class:btn-resolvido-solid={resolveAction === 'RESOLVIDO'}
                       class:btn-rejeitado-solid={resolveAction === 'REJEITADO'}
                     >
-                      Confirmar {resolveAction === 'RESOLVIDO' ? 'Resolução' : 'Rejeição'}
+                      Confirmar {resolveAction === 'RESOLVIDO' ? 'Resoluo' : 'Rejeio'}
                     </button>
                     <button
                       type="button"
@@ -606,11 +606,11 @@
         <div class="empty-icon-circle">
           <CheckCircle2 size={32} />
         </div>
-        <h3 class="empty-heading">Nenhuma denúncia encontrada</h3>
+        <h3 class="empty-heading">Nenhuma denncia encontrada</h3>
         <p class="empty-paragraph">
           {data.statusFilter !== 'ALL'
-            ? `Não há denúncias com o filtro "${data.statusFilter}".`
-            : 'A comunidade está pacífica e nenhuma infração foi reportada no momento.'}
+            ? `No h denncias com o filtro "${data.statusFilter}".`
+            : 'A comunidade est pacfica e nenhuma infrao foi reportada no momento.'}
         </p>
         {#if data.statusFilter !== 'ALL' || data.typeFilter !== 'ALL'}
           <a href="/admin/reports" class="btn-clear-filters">Limpar filtros</a>

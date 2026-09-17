@@ -17,7 +17,7 @@
   let currentYear = $state(today.getFullYear());
 
   const MONTH_NAMES = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Janeiro', 'Fevereiro', 'Maro', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
@@ -56,8 +56,8 @@
 <div class="calendar-tab">
   <div class="tab-header">
     <div>
-      <h2 class="title">Calendário & Prazos da Equipe</h2>
-      <p class="subtitle">Acompanhamento de entregas de capítulos, etapas de produção e datas-limite.</p>
+      <h2 class="title">Calendrio & Prazos da Equipe</h2>
+      <p class="subtitle">Acompanhamento de entregas de captulos, etapas de produo e datas-limite.</p>
     </div>
   </div>
 
@@ -67,13 +67,13 @@
       <div class="section-card">
         <div class="card-header">
           <Clock size={18} class="header-icon warning" />
-          <h3>Próximos Prazos de Tarefas ({tasksWithDeadlines.length})</h3>
+          <h3>Prximos Prazos de Tarefas ({tasksWithDeadlines.length})</h3>
         </div>
 
         {#if tasksWithDeadlines.length === 0}
           <div class="empty-box">
             <CheckCircle2 size={36} class="check-empty" />
-            <p>Nenhuma tarefa com prazo pendente para os próximos dias.</p>
+            <p>Nenhuma tarefa com prazo pendente para os prximos dias.</p>
           </div>
         {:else}
           <div class="deadline-list">
@@ -109,7 +109,7 @@
       <div class="section-card mt">
         <div class="card-header">
           <Sparkles size={18} class="header-icon cyan" />
-          <h3>Últimas Publicações Realizadas</h3>
+          <h3>ltimas Publicaes Realizadas</h3>
         </div>
 
         <div class="deadline-list">
@@ -122,8 +122,8 @@
               <div class="item-details">
                 <span class="item-title">{chapter.works?.title} - Cap. #{chapter.number}</span>
                 <div class="item-meta">
-                  <span class="item-subtitle">{chapter.title || 'Lançado no site'}</span>
-                  <span class="views-tag">{chapter.viewsTotal || 0} visualizações</span>
+                  <span class="item-subtitle">{chapter.title || 'Lanado no site'}</span>
+                  <span class="views-tag">{chapter.viewsTotal || 0} visualizaes</span>
                 </div>
               </div>
             </div>
@@ -177,7 +177,7 @@
               <span class="status-label {member.availabilityStatus?.toLowerCase() || 'active'}">
                 {member.availabilityStatus === 'BUSY' ? 'Ocupado' :
                  member.availabilityStatus === 'AWAY' ? 'Ausente' :
-                 member.availabilityStatus === 'HIATUS' ? 'Em Hiato' : 'Disponível'}
+                 member.availabilityStatus === 'HIATUS' ? 'Em Hiato' : 'Disponvel'}
               </span>
             </div>
           {/each}

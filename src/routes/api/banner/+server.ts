@@ -1,9 +1,11 @@
 import { json, error } from '@sveltejs/kit';
-import { member, privileged } from '$lib/server/db';
+import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
+import { eq } from 'drizzle-orm';
 import { storeImage, RateLimitError } from '$lib/server/media';
 
 export const POST = async ({ request, locals }) => {
-  const userId = member(locals);
+  if (!locals.user) throw error(401, 'Unauthorized');
+  const userId = locals.user.id;
   const formData = await request.formData();
   const file = formData.get('file');
   if (!file || !(file instanceof Blob)) error(400, 'Selecione uma imagem.');
@@ -23,7 +25,7 @@ export const POST = async ({ request, locals }) => {
   } catch (err) {
     if (err instanceof RateLimitError) {
       return json(
-        { message: 'Muitas requisições. Aguarde alguns instantes.', retryAfter: err.retryAfter },
+        { message: 'Muitas requisies. Aguarde alguns instantes.', retryAfter: err.retryAfter },
         { status: 429, headers: { 'retry-after': String(err.retryAfter) } }
       );
     }
@@ -31,15 +33,16 @@ export const POST = async ({ request, locals }) => {
     throw err;
   }
 
-  const { error: problem } = await privileged()
-    .from('members')
-    .update({bannerId: image.id, bannerCrop: crop})
-    .eq('id', userId);
+  const { error: problem } = await safeQuery(
+    db.update(schema.members)
+      .set({ bannerId: image.id, bannerCrop: crop as any })
+      .where(eq(schema.members.id, userId))
+  );
 
   if (problem) {
     console.error('API_BANNER_MEMBER_UPDATE_ERROR:', problem);
-    error(500, 'Não foi possível atualizar seu banner.');
+    error(500, 'No foi possvel atualizar seu banner.');
   }
 
-  return json({...image, bannerCrop: crop});
+  return json({ ...image, bannerCrop: crop });
 };

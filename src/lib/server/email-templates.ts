@@ -22,28 +22,28 @@ export function generateEmailHtml({
   const fullUrl = deepLink.startsWith('http') ? deepLink : `${baseUrl.replace(/\/$/, '')}${deepLink.startsWith('/') ? '' : '/'}${deepLink}`;
 
   let badgeColor = '#6366f1'; // Indigo default
-  let badgeText = 'NOTIFICAÇÃO';
+  let badgeText = 'NOTIFICAO';
   let subject = `[Project Nox] ${title}`;
 
   switch (type) {
     case 'MENTION':
     case 'ROLE_MENTION':
       badgeColor = '#818cf8';
-      badgeText = type === 'ROLE_MENTION' ? 'MENÇÃO DE CARGO' : 'MENÇÃO DIRETA';
-      subject = actorName ? `${actorName} mencionou você no Project Nox` : `Você foi mencionado no Project Nox`;
+      badgeText = type === 'ROLE_MENTION' ? 'MENO DE CARGO' : 'MENO DIRETA';
+      subject = actorName ? `${actorName} mencionou voc no Project Nox` : `Voc foi mencionado no Project Nox`;
       break;
 
     case 'REPLY_CHAT':
     case 'REPLY_COMMENT':
       badgeColor = '#38bdf8';
       badgeText = 'RESPOSTA';
-      subject = actorName ? `${actorName} respondeu sua mensagem no Project Nox` : `Nova resposta para você no Project Nox`;
+      subject = actorName ? `${actorName} respondeu sua mensagem no Project Nox` : `Nova resposta para voc no Project Nox`;
       break;
 
     case 'LEVEL_UP':
       badgeColor = '#eab308';
       badgeText = 'LEVEL UP!';
-      subject = `Parabéns! ${title} no Project Nox`;
+      subject = `Parabns! ${title} no Project Nox`;
       break;
 
     case 'ACHIEVEMENT':
@@ -55,8 +55,8 @@ export function generateEmailHtml({
     case 'NEW_CHAPTER':
     case 'CHAPTER_PUBLISHED':
       badgeColor = '#10b981';
-      badgeText = 'NOVO CAPÍTULO';
-      subject = `Novo capítulo disponível: ${context ? context + ' - ' : ''}${title}`;
+      badgeText = 'NOVO CAPTULO';
+      subject = `Novo captulo disponvel: ${context ? context + ' - ' : ''}${title}`;
       break;
 
     case 'TASK_ASSIGNED':
@@ -64,7 +64,7 @@ export function generateEmailHtml({
     case 'QC_ISSUE':
     case 'REWORK':
       badgeColor = type === 'QC_ISSUE' || type === 'REWORK' ? '#ef4444' : '#6366f1';
-      badgeText = type === 'REWORK' ? 'RETRABALHO' : type === 'QC_ISSUE' ? 'QC PENDENTE' : 'PRODUÇÃO';
+      badgeText = type === 'REWORK' ? 'RETRABALHO' : type === 'QC_ISSUE' ? 'QC PENDENTE' : 'PRODUO';
       subject = `[Scan] ${title}`;
       break;
 
@@ -93,7 +93,7 @@ export function generateEmailHtml({
     : type.includes('APPLICATION')
     ? 'Ver candidatura'
     : type.includes('TASK') || type.includes('STAGE') || type.includes('QC') || type.includes('REWORK')
-    ? 'Abrir capítulo no Pipeline'
+    ? 'Abrir captulo no Pipeline'
     : 'Ver na plataforma';
 
   const html = `<!DOCTYPE html>
@@ -129,7 +129,7 @@ export function generateEmailHtml({
           <!-- Main Content -->
           <tr>
             <td style="padding: 32px;">
-              <p style="margin: 0 0 16px 0; font-size: 15px; color: #a1a1aa;">Olá, <strong style="color: #f4f4f5;">${escapeHtml(recipientName)}</strong></p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; color: #a1a1aa;">Ol, <strong style="color: #f4f4f5;">${escapeHtml(recipientName)}</strong></p>
               
               <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #ffffff; line-height: 1.3;">
                 ${escapeHtml(title)}
@@ -161,8 +161,8 @@ export function generateEmailHtml({
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 32px; background-color: #0d0d10; border-top: 1px solid #1f1f23; font-size: 12px; color: #71717a; text-align: center; line-height: 1.5;">
-              <p style="margin: 0 0 4px 0;">Você recebeu este e-mail por ser membro cadastrado no <strong>Project Nox</strong>.</p>
-              <p style="margin: 0;"><a href="${baseUrl}" style="color: #6366f1; text-decoration: none;">project-nox.com</a> &bull; Notificações instantâneas</p>
+              <p style="margin: 0 0 4px 0;">Voc recebeu este e-mail por ser membro cadastrado no <strong>Project Nox</strong>.</p>
+              <p style="margin: 0;"><a href="${baseUrl}" style="color: #6366f1; text-decoration: none;">project-nox.com</a> &bull; Notificaes instantneas</p>
             </td>
           </tr>
         </table>

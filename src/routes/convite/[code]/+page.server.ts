@@ -81,17 +81,17 @@ export const actions: Actions = {
     }
 
     const code = params.code?.trim();
-    if (!code) return fail(400, { message: 'Código de convite inválido.' });
+    if (!code) return fail(400, { message: 'Cdigo de convite invlido.' });
 
     const { data, error: rpcErr } = await safeQuerySingle(
-      db.execute(sql`SELECT * FROM claim_scan_invite(${code})`)
+      (db as any).execute(sql`SELECT * FROM claim_scan_invite(${code})`)
     );
 
     if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
+      return fail(400, { message: (rpcErr as any).message });
     }
 
-    const scanId = (data as any)?.scanId ?? (data as any)?.scan_id;
+    const scanId = (data as any)?.scanId ?? (data as any)?.scanId;
     throw redirect(303, `/scan${scanId ? `?id=${scanId}` : ''}`);
   }
 };

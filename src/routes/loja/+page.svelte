@@ -50,9 +50,9 @@
     COMUM: { label: 'Comum', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.12)', border: 'rgba(148, 163, 184, 0.3)' },
     INCOMUM: { label: 'Incomum', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.35)' },
     RARA: { label: 'Rara', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.12)', border: 'rgba(56, 189, 248, 0.35)' },
-    EPICA: { label: 'Épica', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', border: 'rgba(192, 132, 252, 0.35)' },
-    LENDARIA: { label: 'Lendária', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.35)' },
-    MITICA: { label: 'Mítica', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)', border: 'rgba(244, 63, 94, 0.45)' }
+    EPICA: { label: 'pica', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', border: 'rgba(192, 132, 252, 0.35)' },
+    LENDARIA: { label: 'Lendria', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.35)' },
+    MITICA: { label: 'Mtica', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)', border: 'rgba(244, 63, 94, 0.45)' }
   };
 
   let filteredItems = $derived(
@@ -103,11 +103,11 @@
       return;
     }
     if (currentXp < item.priceXp) {
-      showToast('XP insuficiente para adquirir este cosmético.', 'error');
+      showToast('XP insuficiente para adquirir este cosmtico.', 'error');
       return;
     }
     if (userLevel < item.minLevel) {
-      showToast(`Você precisa atingir o Nível ${item.minLevel} para desbloquear este item.`, 'error');
+      showToast(`Voc precisa atingir o Nvel ${item.minLevel} para desbloquear este item.`, 'error');
       return;
     }
 
@@ -119,12 +119,12 @@
         body: JSON.stringify({ itemId: item.id })
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Falha na compra.');
+      if (!res.ok) throw new Error((result as any).message || 'Falha na compra.');
 
-      showToast(`Você adquiriu "${item.name}" com sucesso!`, 'success');
+      showToast(`Voc adquiriu "${item.name}" com sucesso!`, 'success');
       await invalidateAll();
     } catch (e: any) {
-      showToast(e.message || 'Erro ao processar compra.', 'error');
+      showToast((e as any).message || 'Erro ao processar compra.', 'error');
     } finally {
       busyItemId = null;
     }
@@ -143,12 +143,12 @@
         })
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Falha ao equipar cosmético.');
+      if (!res.ok) throw new Error((result as any).message || 'Falha ao equipar cosmtico.');
 
       showToast(equip ? `"${item.name}" equipado!` : `"${item.name}" desequipado.`, 'success');
       await invalidateAll();
     } catch (e: any) {
-      showToast(e.message || 'Erro ao equipar item.', 'error');
+      showToast((e as any).message || 'Erro ao equipar item.', 'error');
     } finally {
       busyItemId = null;
     }
@@ -164,10 +164,10 @@
 </script>
 
 <svelte:head>
-  <title>Loja Cósmica & Cosméticos | Project Nox</title>
+  <title>Loja Csmica & Cosmticos | Project Nox</title>
   <meta
     name="description"
-    content="Personalize seu perfil no Project Nox com molduras animadas, cores de nome exclusivas, títulos cósmicos e banners de alta definição."
+    content="Personalize seu perfil no Project Nox com molduras animadas, cores de nome exclusivas, ttulos csmicos e banners de alta definio."
   />
 </svelte:head>
 
@@ -192,10 +192,10 @@
           <Sparkles size={14} />
           <span>Economia Unificada Nox</span>
         </div>
-        <h1 class="shop-title">Loja Cósmica</h1>
+        <h1 class="shop-title">Loja Csmica</h1>
         <p class="shop-desc">
           Troque o XP acumulado durante suas leituras por molduras animadas estilo Discord, banners de alta
-          definição, títulos honorários e cores dinâmicas para seu perfil e comentários.
+          definio, ttulos honorrios e cores dinmicas para seu perfil e comentrios.
         </p>
 
         <!-- Balance display -->
@@ -209,10 +209,10 @@
           </div>
           <div class="balance-divider"></div>
           <div class="balance-item">
-            <span class="balance-label">Nível de Leitor</span>
+            <span class="balance-label">Nvel de Leitor</span>
             <div class="lvl-val-wrap">
               <Crown size={18} class="lvl-icon" />
-              <span class="lvl-amount">Nível {userLevel}</span>
+              <span class="lvl-amount">Nvel {userLevel}</span>
             </div>
           </div>
         </div>
@@ -282,7 +282,7 @@
         onclick={() => (activeTab = 'TITLE')}
       >
         <Tag size={16} />
-        <span>Títulos Cósmicos</span>
+        <span>Ttulos Csmicos</span>
       </button>
 
       <button
@@ -332,10 +332,10 @@
           <span>Ordenar:</span>
         </label>
         <select id="sort-select" bind:value={sortBy} class="sort-select">
-          <option value="relevance">Relevância / Padrão</option>
-          <option value="price_asc">Menor Preço</option>
-          <option value="price_desc">Maior Preço</option>
-          <option value="level">Nível Requerido</option>
+          <option value="relevance">Relevncia / Padro</option>
+          <option value="price_asc">Menor Preo</option>
+          <option value="price_desc">Maior Preo</option>
+          <option value="level">Nvel Requerido</option>
         </select>
       </div>
     </section>
@@ -345,7 +345,7 @@
       {#if filteredItems.length === 0}
         <div class="empty-shop">
           <ShoppingBag size={42} class="empty-icon" />
-          <h3 class="empty-title">Nenhum cosmético encontrado</h3>
+          <h3 class="empty-title">Nenhum cosmtico encontrado</h3>
           <p class="empty-desc">Tente alterar os filtros de categoria ou raridade acima.</p>
         </div>
       {:else}
@@ -445,7 +445,7 @@
               <div class="item-meta">
                 <div class="xp-price" class:cant-afford={!isOwned && !canAfford}>
                   <Sparkles size={14} />
-                  <span>{isOwned ? 'No Inventário' : `${formatXp(item.priceXp)} XP`}</span>
+                  <span>{isOwned ? 'No Inventrio' : `${formatXp(item.priceXp)} XP`}</span>
                 </div>
 
                 {#if item.minLevel > 1}
@@ -485,7 +485,7 @@
                   >
                     {#if !meetsLevel}
                       <Lock size={14} />
-                      <span>Nível {item.minLevel} Necessário</span>
+                      <span>Nvel {item.minLevel} Necessrio</span>
                     {:else if !canAfford}
                       <span>Faltam {formatXp(item.priceXp - currentXp)} XP</span>
                     {:else}
@@ -525,7 +525,7 @@
             <!-- Left Stage: Contextual Realistic Visuals -->
             <div class="modal-stage-col">
               <div class="stage-header">
-                <span class="stage-badge">Pré-visualização em Tempo Real</span>
+                <span class="stage-badge">Pr-visualizao em Tempo Real</span>
               </div>
 
               {#if item.kind === 'AVATAR_FRAME'}
@@ -573,7 +573,7 @@
                     <div class="banner-stage-meta">
                       <div class="banner-stage-name-row">
                         <span class="banner-stage-name">{data.profile?.displayName || 'Seu Nome'}</span>
-                        <span class="banner-stage-lvl">Nível {userLevel}</span>
+                        <span class="banner-stage-lvl">Nvel {userLevel}</span>
                       </div>
                       <span class="banner-stage-handle">@{data.profile?.username || 'usuario'}</span>
                     </div>
@@ -587,7 +587,7 @@
                   <div class="context-card comment-context">
                     <div class="context-tag">
                       <MessageSquare size={13} />
-                      <span>Nos Comentários</span>
+                      <span>Nos Comentrios</span>
                     </div>
                     <div class="mock-comment">
                       <UserAvatar
@@ -606,9 +606,9 @@
                           >
                             {data.profile?.displayName || data.profile?.username || 'Seu Nome'}
                           </span>
-                          <span class="mock-comment-time">há 10 minutos</span>
+                          <span class="mock-comment-time">h 10 minutos</span>
                         </div>
-                        <p class="mock-comment-body">Que capítulo incrível! Os traços e o roteiro estão impecáveis.</p>
+                        <p class="mock-comment-body">Que captulo incrvel! Os traos e o roteiro esto impecveis.</p>
                       </div>
                     </div>
                   </div>
@@ -620,7 +620,7 @@
                       <span>No Leitor & Comunidade</span>
                     </div>
                     <div class="mock-reader-bar">
-                      <span class="mock-chapter-title">Céu Distante — Capítulo 01</span>
+                      <span class="mock-chapter-title">Cu Distante — Captulo 01</span>
                       <span
                         class="mock-reader-user"
                         style={style.backgroundImage
@@ -636,13 +636,13 @@
               {:else if item.kind === 'TITLE'}
                 <!-- Title Stage -->
                 <div class="title-stage-box">
-                  <span class="title-stage-label">Exibição Honorária no Perfil</span>
+                  <span class="title-stage-label">Exibio Honorria no Perfil</span>
                   <div class="title-stage-badge-large">
                     <Crown size={22} class="title-stage-crown" />
                     <span class="title-stage-text">{item.name}</span>
                   </div>
                   <p class="title-stage-sub">
-                    Este título aparecerá em destaque abaixo do seu nome nos rankings, comentários e perfil público.
+                    Este ttulo aparecer em destaque abaixo do seu nome nos rankings, comentrios e perfil pblico.
                   </p>
                 </div>
               {/if}
@@ -663,15 +663,15 @@
 
               <!-- Item Requisite -->
               <div class="modal-requisite-row">
-                <span class="req-label">Requisito de Nível:</span>
+                <span class="req-label">Requisito de Nvel:</span>
                 <span class="req-val" class:locked={userLevel < (item.minLevel || 1)}>
-                  {userLevel < (item.minLevel || 1) ? '🔒 ' : '✓ '} Nível {item.minLevel || 1}
+                  {userLevel < (item.minLevel || 1) ? '🔒 ' : '✓ '} Nvel {item.minLevel || 1}
                 </span>
               </div>
 
               <!-- XP Balance Calculator -->
               <div class="xp-calculator-card">
-                <span class="calc-title">Calculadora de Saldo Cósmico</span>
+                <span class="calc-title">Calculadora de Saldo Csmico</span>
 
                 <div class="calc-row">
                   <span class="calc-lbl">Seu Saldo Atual:</span>
@@ -681,7 +681,7 @@
                 <div class="calc-row">
                   <span class="calc-lbl">Custo do Item:</span>
                   <span class="calc-val price">
-                    {isOwned ? '0 XP (Já Adquirido)' : `- ${formatXp(item.priceXp)} XP`}
+                    {isOwned ? '0 XP (J Adquirido)' : `- ${formatXp(item.priceXp)} XP`}
                   </span>
                 </div>
 
@@ -708,7 +708,7 @@
                     disabled={busyItemId === item.id}
                     onclick={() => handleEquip(item, false)}
                   >
-                    {busyItemId === item.id ? 'Salvando...' : 'Desequipar Cosmético'}
+                    {busyItemId === item.id ? 'Salvando...' : 'Desequipar Cosmtico'}
                   </button>
                 {:else if isOwned}
                   <button
@@ -729,7 +729,7 @@
                   >
                     {#if !meetsLevel}
                       <Lock size={16} />
-                      <span>Nível {item.minLevel} Necessário</span>
+                      <span>Nvel {item.minLevel} Necessrio</span>
                     {:else if !canAfford}
                       <span>XP Insuficiente (Faltam {formatXp(item.priceXp - currentXp)} XP)</span>
                     {:else}

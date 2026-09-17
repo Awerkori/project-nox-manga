@@ -32,10 +32,10 @@
   let searchResults = $derived(() => {
     if (!query.trim()) {
       return [
-        { type: 'action', id: 'tab-inbox', label: 'Abrir Inbox da Scan', icon: CheckSquare, cat: 'Navegação Rápida' },
-        { type: 'action', id: 'tab-chat', label: 'Ir para Canais de Chat', icon: Hash, cat: 'Navegação Rápida' },
-        { type: 'action', id: 'tab-pipeline', label: 'Ver Pipeline Editorial', icon: Layers, cat: 'Navegação Rápida' },
-        { type: 'action', id: 'tab-academia', label: 'Consultar Tutoriais da Academia', icon: GraduationCap, cat: 'Navegação Rápida' }
+        { type: 'action', id: 'tab-inbox', label: 'Abrir Inbox da Scan', icon: CheckSquare, cat: 'Navegao Rpida' },
+        { type: 'action', id: 'tab-chat', label: 'Ir para Canais de Chat', icon: Hash, cat: 'Navegao Rpida' },
+        { type: 'action', id: 'tab-pipeline', label: 'Ver Pipeline Editorial', icon: Layers, cat: 'Navegao Rpida' },
+        { type: 'action', id: 'tab-academia', label: 'Consultar Tutoriais da Academia', icon: GraduationCap, cat: 'Navegao Rpida' }
       ];
     }
 
@@ -52,7 +52,7 @@
     // Chapters
     for (const c of chapters) {
       if (String(c.number).includes(q) || (c.title || '').toLowerCase().includes(q)) {
-        results.push({ type: 'chapter', id: c.id, label: `Capítulo #${c.number} ${c.title ? `— ${c.title}` : ''}`, icon: FileText, cat: 'Capítulos' });
+        results.push({ type: 'chapter', id: c.id, label: `Captulo #${c.number} ${c.title ? `— ${c.title}` : ''}`, icon: FileText, cat: 'Captulos' });
       }
     }
 
@@ -121,19 +121,19 @@
 }} />
 
 {#if isOpen}
-  <div class="palette-backdrop" onclick={onClose}>
+  <div class="palette-backdrop" onclick={() => onClose()}>
     <div class="palette-modal-card" onclick={(e) => e.stopPropagation()}>
       <div class="palette-input-bar">
         <Search size={18} class="palette-search-icon" />
         <input
           type="text"
           class="palette-input"
-          placeholder="Buscar obras, capítulos, tarefas, canais ou membros... (Esc para fechar)"
+          placeholder="Buscar obras, captulos, tarefas, canais ou membros... (Esc para fechar)"
           bind:value={query}
           onkeydown={handleKeyDown}
           autofocus
         />
-        <button type="button" class="btn-palette-close" onclick={onClose}>
+        <button type="button" class="btn-palette-close" onclick={() => onClose()}>
           <X size={16} />
         </button>
       </div>

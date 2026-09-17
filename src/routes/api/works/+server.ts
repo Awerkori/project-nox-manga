@@ -22,7 +22,7 @@ export const GET = async ({ url }) => {
   const { data: works, error } = await safeQuery(query.limit(limit).offset(offset));
 
   if (error) {
-    return json({ works: [], error: error.message }, { status: 500 });
+    return json({ works: [], error: (error as any).message }, { status: 500 });
   }
 
   // Fetch relations separately to avoid complex aggregation logic

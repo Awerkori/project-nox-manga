@@ -50,23 +50,23 @@ export const GET = async ({ url, locals }) => {
   const raw = (url.searchParams.get('username') || url.searchParams.get('q') || '').trim().toLowerCase();
 
   if (!raw) {
-    return json({ available: false, reason: 'Informe um nome de usuário.' });
+    return json({ available: false, reason: 'Informe um nome de usurio.' });
   }
 
   if (raw.length < 3) {
-    return json({ available: false, reason: 'Mínimo de 3 caracteres.' });
+    return json({ available: false, reason: 'Mnimo de 3 caracteres.' });
   }
 
   if (raw.length > 30) {
-    return json({ available: false, reason: 'Máximo de 30 caracteres.' });
+    return json({ available: false, reason: 'Mximo de 30 caracteres.' });
   }
 
   if (!/^[a-z0-9_]+$/.test(raw)) {
-    return json({ available: false, reason: 'Use apenas letras minúsculas, números e sublinhados (_).' });
+    return json({ available: false, reason: 'Use apenas letras minsculas, nmeros e sublinhados (_).' });
   }
 
   if (RESERVED_USERNAMES.has(raw)) {
-    return json({ available: false, reason: 'Este nome de usuário é reservado.' });
+    return json({ available: false, reason: 'Este nome de usurio  reservado.' });
   }
 
   if (locals.user) {
@@ -88,7 +88,7 @@ export const GET = async ({ url, locals }) => {
   );
 
   if (collision) {
-    return json({ available: false, reason: 'Este nome de usuário já está em uso.' });
+    return json({ available: false, reason: 'Este nome de usurio j est em uso.' });
   }
 
   return json({ available: true, username: raw });

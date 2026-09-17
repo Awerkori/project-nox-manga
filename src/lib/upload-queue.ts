@@ -43,7 +43,7 @@ export interface FlushOptions {
 export class UploadRateLimitError extends Error {
   constructor(
     readonly retryAfter: number,
-    message = 'Rate limit temporário'
+    message = 'Rate limit temporrio'
   ) {
     super(message);
   }

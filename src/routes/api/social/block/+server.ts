@@ -4,18 +4,18 @@ import { eq, and, or } from 'drizzle-orm';
 
 export const POST = async ({ request, locals }: any) => {
   const currentUserId = locals.user?.id;
-  if (!currentUserId) error(401, 'Não autorizado');
+  if (!currentUserId) error(401, 'No autorizado');
 
   const body = await request.json().catch(() => ({}));
   const targetUserId = String(body.targetUserId || '').trim();
   const unblock = body.action === 'unblock';
 
   if (!targetUserId) {
-    error(400, 'Usuário alvo não informado.');
+    error(400, 'Usurio alvo no informado.');
   }
 
   if (targetUserId === currentUserId) {
-    error(400, 'Você não pode bloquear a si mesmo.');
+    error(400, 'Voc no pode bloquear a si mesmo.');
   }
 
   if (unblock) {
@@ -30,7 +30,7 @@ export const POST = async ({ request, locals }: any) => {
         .returning()
     );
 
-    if (delErr) error(500, delErr.message);
+    if (delErr) error(500, (delErr as any).message);
     return json({ blocked: false });
   } else {
     // Unfollow in both directions when blocking
@@ -62,7 +62,7 @@ export const POST = async ({ request, locals }: any) => {
     );
 
     if (insErr) {
-      error(500, insErr.message);
+      error(500, (insErr as any).message);
     }
     return json({ blocked: true });
   }

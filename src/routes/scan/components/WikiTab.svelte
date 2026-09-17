@@ -73,7 +73,7 @@
   <div class="wiki-header-bar">
     <div class="header-titles">
       <h2 class="tab-title">Wiki & Guias Internos da Equipe</h2>
-      <p class="tab-desc">Centralize regras, convenções ortográficas, guias de edição e tutoriais exclusivos da scan.</p>
+      <p class="tab-desc">Centralize regras, convenes ortogrficas, guias de edio e tutoriais exclusivos da scan.</p>
     </div>
 
     {#if isOwnerOrAdmin}
@@ -204,31 +204,31 @@
 
         <div class="form-row-2">
           <div class="form-group">
-            <label for="wiki-title-in" class="form-label">Título do Artigo *</label>
-            <input id="wiki-title-in" name="title" type="text" required bind:value={pageTitle} placeholder="Ex: Padrão de Letreiramento & Onomatopeias" class="form-input" />
+            <label for="wiki-title-in" class="form-label">Ttulo do Artigo *</label>
+            <input id="wiki-title-in" name="title" type="text" required bind:value={pageTitle} placeholder="Ex: Padro de Letreiramento & Onomatopeias" class="form-input" />
           </div>
 
           <div class="form-group">
             <label for="wiki-cat-in" class="form-label">Categoria</label>
-            <input id="wiki-cat-in" name="category" type="text" bind:value={pageCategory} placeholder="Ex: Guias, Tradução, Edição..." class="form-input" />
+            <input id="wiki-cat-in" name="category" type="text" bind:value={pageCategory} placeholder="Ex: Guias, Traduo, Edio..." class="form-input" />
           </div>
         </div>
 
         <div class="form-group">
-          <label for="wiki-content-in" class="form-label">Conteúdo do Artigo (Markdown) *</label>
+          <label for="wiki-content-in" class="form-label">Contedo do Artigo (Markdown) *</label>
           <textarea id="wiki-content-in" name="content" rows={12} required bind:value={pageContent} placeholder="Escreva as diretrizes, regras, links de fontes..." class="form-textarea font-mono"></textarea>
         </div>
 
         <div class="form-check-group">
           <label class="check-label">
             <input type="checkbox" name="is_pinned" value="true" bind:checked={pagePinned} />
-            <span>Fixar no topo da Wiki para leitura prioritária</span>
+            <span>Fixar no topo da Wiki para leitura prioritria</span>
           </label>
         </div>
 
         <div class="modal-actions">
           <button type="button" class="btn-cancel" onclick={() => (showEditorModal = false)}>Cancelar</button>
-          <button type="submit" class="btn-submit">{editingPage ? 'Salvar Alterações' : 'Publicar Artigo'}</button>
+          <button type="submit" class="btn-submit">{editingPage ? 'Salvar Alteraes' : 'Publicar Artigo'}</button>
         </div>
       </form>
     </div>

@@ -56,7 +56,7 @@
         const currentWorkOffline = offlineList.filter((oc) => oc.workId === data.work.id);
         downloadedChapterIds = new Set(currentWorkOffline.map((oc) => oc.chapterId));
       } catch (err) {
-        console.error('Falha ao carregar capítulos offline:', err);
+        console.error('Falha ao carregar captulos offline:', err);
       }
     }
   });
@@ -68,12 +68,12 @@
     if (downloadingChapterIds[chapter.id] !== undefined) return;
 
     if (downloadedChapterIds.has(chapter.id)) {
-      if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
+      if (confirm(`Remover captulo ${chapter.number} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
         const next = new Set(downloadedChapterIds);
         next.delete(chapter.id);
         downloadedChapterIds = next;
-        notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
+        notice = `Captulo ${chapter.number} removido do armazenamento offline.`;
       }
       return;
     }
@@ -81,13 +81,13 @@
     try {
       downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
       const res = await fetch(`/api/chapters/${chapter.id}/pages`);
-      if (!res.ok) throw new Error('Não foi possível obter páginas do capítulo');
+      if (!res.ok) throw new Error('No foi possvel obter pginas do captulo');
       const payload = await res.json();
-      if (!payload.pages || !payload.pages.length) throw new Error('Capítulo não contém páginas');
+      if (!payload.pages || !payload.pages.length) throw new Error('Captulo no contm pginas');
 
       await saveChapterOffline(
-        { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
-        { title: data.work.title, slug: data.work.slug, cover_id: data.work.coverId },
+        { id: chapter.id, workId: data.work.id, number: chapter.number, title: chapter.title },
+        { title: data.work.title, slug: data.work.slug, coverId: data.work.coverId },
         payload.pages,
         (loaded, total) => {
           const pct = Math.round((loaded / total) * 100);
@@ -98,9 +98,9 @@
       const next = new Set(downloadedChapterIds);
       next.add(chapter.id);
       downloadedChapterIds = next;
-      notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
+      notice = `Captulo ${chapter.number} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
-      notice = `Erro ao baixar capítulo ${chapter.number}: ${err.message}`;
+      notice = `Erro ao baixar captulo ${chapter.number}: ${(err as any).message}`;
     } finally {
       const copy = { ...downloadingChapterIds };
       delete copy[chapter.id];
@@ -110,9 +110,9 @@
 
   async function handleBatchDownload() {
     if (batchDownloading || !data.chapters.length) return;
-    const toDownload = data.chapters.filter((c) => !downloadedChapterIds.has(c.id));
+    const toDownload = data.chapters.filter((c: any) => !downloadedChapterIds.has(c.id));
     if (!toDownload.length) {
-      notice = 'Todos os capítulos já estão disponíveis offline!';
+      notice = 'Todos os captulos j esto disponveis offline!';
       return;
     }
 
@@ -131,8 +131,8 @@
           const payload = await res.json();
           if (payload.pages && payload.pages.length) {
             await saveChapterOffline(
-              { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
-              { title: data.work.title, slug: data.work.slug, cover_id: data.work.coverId },
+              { id: chapter.id, workId: data.work.id, number: chapter.number, title: chapter.title },
+              { title: data.work.title, slug: data.work.slug, coverId: data.work.coverId },
               payload.pages,
               (loaded, total) => {
                 const pct = Math.round((loaded / total) * 100);
@@ -144,16 +144,16 @@
             downloadedChapterIds = next;
           }
         } catch (e: any) {
-          console.error(`Erro ao baixar capítulo ${chapter.number}:`, e);
+          console.error(`Erro ao baixar captulo ${chapter.number}:`, e);
         } finally {
           const copy = { ...downloadingChapterIds };
           delete copy[chapter.id];
           downloadingChapterIds = copy;
         }
       }
-      notice = 'Download dos capítulos concluído!';
+      notice = 'Download dos captulos concludo!';
     } catch (err: any) {
-      notice = `Erro no download em lote: ${err.message}`;
+      notice = `Erro no download em lote: ${(err as any).message}`;
     } finally {
       batchDownloading = false;
     }
@@ -168,7 +168,7 @@
   let effectiveBlur = false;
 
   let chapters = $derived(
-    (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
+    (ascending ? [...data.chapters].reverse() : data.chapters).filter((c: any) => {
       const term = search.trim().toLowerCase();
       if (!term) return true;
       const matchNum = String(c.number).includes(term);
@@ -187,7 +187,7 @@
     busy = true;
     try {
       await action('member', 'library', {
-        work_id: data.work.id,
+        workId: data.work.id,
         status: data.library?.status || 'READING',
         favorite: data.library?.favorite || false,
         following: data.library?.following ?? true,
@@ -210,7 +210,7 @@
     if (busy) return;
     busy = true;
     try {
-      await action('member', 'like', { work_id: data.work.id });
+      await action('member', 'like', { workId: data.work.id });
       await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;
@@ -249,15 +249,15 @@
 
 <div class="container work-page-container spacer-bottom">
   <div class="page-top">
-    <nav class="breadcrumb" aria-label="Navegação estrutural">
-      <a href="/catalogo">Catálogo</a>
+    <nav class="breadcrumb" aria-label="Navegao estrutural">
+      <a href="/catalogo">Catlogo</a>
       <span>/</span>
       <span class="active-crumb">{decodedTitle}</span>
     </nav>
   </div>
 
   <div class="kuro-layout-grid">
-    <!-- LEFT SIDEBAR: Cover + INFORMAÇÕES (Under Cover on Desktop) -->
+    <!-- LEFT SIDEBAR: Cover + INFORMAES (Under Cover on Desktop) -->
     <aside class="kuro-sidebar">
       <div class="work-cover-wrap">
         <img
@@ -282,20 +282,20 @@
         {/if}
       </div>
 
-      <!-- INFORMAÇÕES Card (Under Cover on Desktop) -->
+      <!-- INFORMAES Card (Under Cover on Desktop) -->
       <div class="work-metadata-card sidebar-info desktop-only">
-        <h3 class="metadata-heading">INFORMAÇÕES</h3>
+        <h3 class="metadata-heading">INFORMAES</h3>
         <div class="metadata-grid">
           <div class="meta-item">
             <span class="meta-label">Tipo</span>
-            <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
+            <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mang'}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Status</span>
             <span class="meta-value meta-status">{statusLabels[data.work.status] || data.work.status}</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Capítulos</span>
+            <span class="meta-label">Captulos</span>
             <span class="meta-value">{data.chapters.length}</span>
           </div>
           <div class="meta-item">
@@ -304,18 +304,18 @@
           </div>
           {#if data.work.year}
             <div class="meta-item">
-              <span class="meta-label">Lançamento</span>
+              <span class="meta-label">Lanamento</span>
               <span class="meta-value">{data.work.year}</span>
             </div>
           {/if}
           {#if isAdult}
             <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-              <span class="meta-label">Classificação</span>
+              <span class="meta-label">Classificao</span>
               <span class="meta-value adult-meta-val">+18 Adulto</span>
             </div>
           {:else if data.work.ageRating}
             <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-              <span class="meta-label">Classificação</span>
+              <span class="meta-label">Classificao</span>
               <span class="meta-value">{data.work.ageRating} anos</span>
             </div>
           {/if}
@@ -355,7 +355,7 @@
     <main class="kuro-main">
       <div class="work-header-details">
         <div class="work-type-badges">
-          <span class="badge-kind">{kindLabels[data.work.kind] || 'Mangá'}</span>
+          <span class="badge-kind">{kindLabels[data.work.kind] || 'Mang'}</span>
           <span class="badge-status">{statusLabels[data.work.status] || data.work.status}</span>
           {#if data.work.featured}
             <span class="badge-featured"><Sparkles size={12} /> Destaque</span>
@@ -433,20 +433,20 @@
           </div>
         {/if}
 
-        <!-- INFORMAÇÕES Card (Mobile between Synopsis and Actions) -->
+        <!-- INFORMAES Card (Mobile between Synopsis and Actions) -->
         <div class="work-metadata-card mobile-info mobile-only">
-          <h3 class="metadata-heading">INFORMAÇÕES</h3>
+          <h3 class="metadata-heading">INFORMAES</h3>
           <div class="metadata-grid">
             <div class="meta-item">
               <span class="meta-label">Tipo</span>
-              <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
+              <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mang'}</span>
             </div>
             <div class="meta-item">
               <span class="meta-label">Status</span>
               <span class="meta-value meta-status">{statusLabels[data.work.status] || data.work.status}</span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Capítulos</span>
+              <span class="meta-label">Captulos</span>
               <span class="meta-value">{data.chapters.length}</span>
             </div>
             <div class="meta-item">
@@ -455,18 +455,18 @@
             </div>
             {#if data.work.year}
               <div class="meta-item">
-                <span class="meta-label">Lançamento</span>
+                <span class="meta-label">Lanamento</span>
                 <span class="meta-value">{data.work.year}</span>
               </div>
             {/if}
             {#if isAdult}
               <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-                <span class="meta-label">Classificação</span>
+                <span class="meta-label">Classificao</span>
                 <span class="meta-value adult-meta-val">+18 Adulto</span>
               </div>
             {:else if data.work.ageRating}
               <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-                <span class="meta-label">Classificação</span>
+                <span class="meta-label">Classificao</span>
                 <span class="meta-value">{data.work.ageRating} anos</span>
               </div>
             {/if}
@@ -516,16 +516,16 @@
 
             <button
               class="btn-glass-action btn-like"
-              class:is-active={data.likes.some((l) => l.userId === data.profile?.id)}
+              class:is-active={data.likes.some((l: any) => l.userId === data.profile?.id)}
               onclick={like}
               disabled={busy}
-              aria-label={data.likes.some((l) => l.userId === data.profile?.id)
+              aria-label={data.likes.some((l: any) => l.userId === data.profile?.id)
                 ? 'Remover curtida da obra'
                 : 'Curtir obra'}
             >
               <Heart
                 size={18}
-                fill={data.likes.some((l) => l.userId === data.profile?.id) ? 'currentColor' : 'none'}
+                fill={data.likes.some((l: any) => l.userId === data.profile?.id) ? 'currentColor' : 'none'}
               />
               <span>{data.likes.length}</span>
             </button>
@@ -539,7 +539,7 @@
               <option value="" disabled>Biblioteca…</option>
               <option value="READING">Lendo atualmente</option>
               <option value="PLANNED">Quero ler</option>
-              <option value="COMPLETED">Concluído</option>
+              <option value="COMPLETED">Concludo</option>
             </select>
 
             <button
@@ -556,7 +556,7 @@
           {#if resume}
             <a class="btn-read-hero mobile-only" href="/ler/{resume}">
               <BookOpen size={20} />
-              <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
+              <span>{data.progress.length ? 'Continuar Leitura' : 'Comear a Ler'}</span>
             </a>
           {/if}
 
@@ -567,7 +567,7 @@
                 checked={data.library.following}
                 onchange={(e) => library({ following: e.currentTarget.checked })}
               />
-              <span>Avisar sobre novos capítulos</span>
+              <span>Avisar sobre novos captulos</span>
             </label>
           {/if}
         </div>
@@ -581,14 +581,14 @@
       <section class="chapters-section">
         <div class="chapters-header">
           <div class="chapters-header-info">
-            <span class="badge-mini">CONTEÚDO</span>
-            <h2 class="chapters-heading">Capítulos Disponíveis ({chapters.length})</h2>
+            <span class="badge-mini">CONTEDO</span>
+            <h2 class="chapters-heading">Captulos Disponveis ({chapters.length})</h2>
           </div>
           <div class="chapters-header-right">
             {#if resume}
               <a class="btn-read-chapters-desktop desktop-only" href="/ler/{resume}">
                 <BookOpen size={18} />
-                <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
+                <span>{data.progress.length ? 'Continuar Leitura' : 'Comear a Ler'}</span>
               </a>
             {/if}
             <span class="small muted">Atualizado em {date(data.work.updatedAt)}</span>
@@ -599,8 +599,8 @@
           <input
             class="search-chapters-input"
             bind:value={search}
-            placeholder="Buscar por número ou título…"
-            aria-label="Buscar capítulo"
+            placeholder="Buscar por nmero ou ttulo…"
+            aria-label="Buscar captulo"
           />
           <div class="toolbar-actions">
             <button class="btn-sort" onclick={() => (ascending = !ascending)}>
@@ -612,7 +612,7 @@
               class:is-busy={batchDownloading}
               onclick={handleBatchDownload}
               disabled={batchDownloading || !data.chapters.length}
-              title="Baixar todos os capítulos para leitura offline"
+              title="Baixar todos os captulos para leitura offline"
             >
               {#if batchDownloading}
                 <Loader2 size={15} class="spin" />
@@ -627,7 +627,7 @@
 
         <div class="chapters-list-card">
           {#each chapters as chapter (chapter.id)}
-            {@const isRead = data.progress.some((p) => p.chapterId === chapter.id && p.completedAt)}
+            {@const isRead = data.progress.some((p: any) => p.chapterId === chapter.id && p.completedAt)}
             {@const isNew = chapter.publishedAt && (Date.now() - new Date(chapter.publishedAt).getTime()) < 7 * 24 * 60 * 60 * 1000}
             {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
             {@const isDl = downloadedChapterIds.has(chapter.id)}
@@ -678,7 +678,7 @@
                   class:is-downloaded={isDl}
                   class:is-downloading={dlProgress !== undefined}
                   onclick={(e) => handleToggleDownload(chapter, e)}
-                  title={isDl ? 'Disponível offline (clique para remover)' : 'Baixar capítulo'}
+                  title={isDl ? 'Disponvel offline (clique para remover)' : 'Baixar captulo'}
                 >
                   {#if dlProgress !== undefined}
                     <Loader2 size={13} class="spin" />
@@ -706,9 +706,9 @@
           {#if !chapters.length}
             <div class="empty-chapters">
               {#if search}
-                <p>Nenhum capítulo encontrado para "{search}".</p>
+                <p>Nenhum captulo encontrado para "{search}".</p>
               {:else}
-                <p>Nenhum capítulo disponível no momento.</p>
+                <p>Nenhum captulo disponvel no momento.</p>
               {/if}
             </div>
           {/if}
@@ -727,7 +727,7 @@
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
         showReportModal = false;
-        notice = 'Denúncia enviada com sucesso para a moderação.';
+        notice = 'Denncia enviada com sucesso para a moderao.';
       }}
     />
   {/if}
@@ -1194,7 +1194,7 @@
     display: none;
   }
 
-  /* Metadata Card (INFORMAÇÕES) */
+  /* Metadata Card (INFORMAES) */
   .work-metadata-card {
     padding: 18px 22px;
     border-radius: 14px;
