@@ -21,7 +21,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
     
-    if (!env.TELEGRAM_BOT_TOKEN) {
+    if (!privateEnv.TELEGRAM_BOT_TOKEN) {
       // MOCK for E2E testing without Telegram Token
       const transparentPng = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,11,73,68,65,84,8,153,99,96,0,2,0,0,5,0,1,233,224,196,24,0,0,0,0,73,69,78,68,174,66,96,130]);
       return new Response(transparentPng, {
@@ -49,7 +49,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
 
   
   const { data: media } = await safeQuerySingle(
-    db.select().from(schema.media).where(eq(schema.media.id, params.id))
+    db.select().from(schema.media).where(eq(schema.media!.id, params.id))
   );
 
   if (!media || media.storageReady === false || media.status === 'DELETED') {
@@ -105,7 +105,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
 
   let body: BodyInit;
   if (media.provider === 'supabase') {
-    if (!media.providerKey) {
+    if (!media!.providerKey) {
       return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
         status: 502,
         headers: {
@@ -128,7 +128,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
-    const { data, error: problem } = await supabase.storage.from('nox-media').download(media.providerKey);
+    const { data, error: problem } = await supabase.storage.from('nox-media').download(media!.providerKey);
     if (problem || !data) {
       return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
         status: 502,
@@ -158,8 +158,8 @@ export const GET = async ({ params, request, platform, locals }: any) => {
 
     // 2. If botRef is still primary or null, deduce from file_id channel signature
     if (!botRef || botRef === 'primary') {
-      if (media.providerKey) {
-        const deduced = deduceMangaShardFromFileId(media.providerKey);
+      if (media!.providerKey) {
+        const deduced = deduceMangaShardFromFileId(media!.providerKey);
         if (deduced) {
           botRef = deduced.botRef;
           shardId = shardId || deduced.shardId;
@@ -170,9 +170,9 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     botRef = normalizeBotReference(botRef);
 
     try {
-      if (!media.providerKey) throw new Error('Missing provider key');
+      if (!media!.providerKey) throw new Error('Missing provider key');
       
-      if (true) {
+      if (!privateEnv.TELEGRAM_BOT_TOKEN) {
         const transparentPng = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,11,73,68,65,84,8,153,99,96,0,2,0,0,5,0,1,233,224,196,24,0,0,0,0,73,69,78,68,174,66,96,130]);
         return new Response(transparentPng, {
           headers: {
@@ -181,28 +181,28 @@ export const GET = async ({ params, request, platform, locals }: any) => {
           }
         });
       }
-      const client = resolveBotDownloadClient(botRef);
+      const client = resolveBotDownloadClient(botRef as string);
 
-      const stream = await client.download(media.providerKey);
+      const stream = await client.download(media!.providerKey as string);
       body = stream;
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
-      if (isTg400 && media.providerKey) {
+      if (isTg400 && media?.providerKey) {
         // Bot mismatch (wrong fileId) - attempt alternative bot
         const altBotRef = botRef === 'MANGA_STORAGE_2' ? 'MANGA_STORAGE_01' : 'MANGA_STORAGE_2';
         try {
           const altClient = resolveBotDownloadClient(altBotRef);
-          const stream = await altClient.download(media.providerKey);
+          const stream = await altClient.download(media!.providerKey as string);
           body = stream;
           botRef = altBotRef;
           // Self-heal DB mapping in background
           const healingUpdate = { botReference: altBotRef };
           if ((platform as any)?.context?.waitUntil) {
             (platform as any).context.waitUntil(
-              safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id)))
+              safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)))
             );
           } else {
-            safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media.id, media.id)));
+            safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)));
           }
         } catch {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {

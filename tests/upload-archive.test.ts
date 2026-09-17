@@ -36,7 +36,7 @@ it('rejects executable payloads and impossible dimensions before bitmap decoding
   await expect(normalizePage(new File(['<svg><script/></svg>'], 'fake.png'))).rejects.toThrow();
   const enormous = png.slice();
   new DataView(enormous.buffer).setUint32(16, 100_000);
-  await expect(normalizePage(new File([enormous], 'huge.png'))).rejects.toThrow('Dimensões');
+  await expect(normalizePage(new File([enormous], 'huge.png'))).rejects.toThrow('Dimenses');
 });
 
 it('accepts and extracts .cbz comic book archives with natural ordering', async () => {

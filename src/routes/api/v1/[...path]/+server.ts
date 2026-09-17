@@ -74,13 +74,13 @@ export const GET = async ({ locals, params, url }) => {
         website: schema.scans.website,
         discord: schema.scans.discord,
         fluxer: schema.scans.fluxer,
-        isOfficial: schema.scans.is_official,
+        isOfficial: schema.scans.isOfficial,
         status: schema.scans.status,
         createdAt: schema.scans.createdAt
       })
       .from(schema.scans)
       .where(eq(schema.scans.status, 'ACTIVE'))
-      .orderBy(desc(schema.scans.is_official))
+      .orderBy(desc(schema.scans.isOfficial))
       .limit(limit)
       .offset((page - 1) * limit)
     );
@@ -105,7 +105,7 @@ export const GET = async ({ locals, params, url }) => {
         website: schema.scans.website,
         discord: schema.scans.discord,
         fluxer: schema.scans.fluxer,
-        isOfficial: schema.scans.is_official,
+        isOfficial: schema.scans.isOfficial,
         status: schema.scans.status,
         createdAt: schema.scans.createdAt
       })
@@ -125,7 +125,7 @@ export const GET = async ({ locals, params, url }) => {
     return json({
       data: {
         ...scan,
-        works: (works || []).map((ws: any) => typeof ws.works === 'string' ? JSON.parse(ws.works) : ws.works).filter((w: any) => w && works.published)
+        works: (works || []).map((ws: any) => typeof ws.works === 'string' ? JSON.parse(ws.works) : ws.works).filter((w: any) => w && w.published)
       }
     }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   } else if (parts[0] === 'library') {

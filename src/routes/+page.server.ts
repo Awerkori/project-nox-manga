@@ -41,7 +41,7 @@ async function fetchRecentReleases(db: any) {
         .limit(16)
     );
 
-    const fallbackWorks = fallbackWorksRes?.data || [];
+    const fallbackWorks = (fallbackWorksRes?.data as any[]) || [];
     if (fallbackWorks.length === 0) return { data: [] };
 
     const workIds = fallbackWorks.map((w: any) => w.id);
@@ -455,7 +455,7 @@ export const load = async ({ locals, setHeaders }) => {
       'home_chapters_fallback_works'
     );
 
-    const fallbackWorks = fallbackWorksRes?.data || [];
+    const fallbackWorks = (fallbackWorksRes?.data as any[]) || [];
     if (fallbackWorks.length > 0) {const workIds = fallbackWorks.map((w: any) => w.id);
       const fallbackChaptersRes = await withTimeout(
         safeQuery(

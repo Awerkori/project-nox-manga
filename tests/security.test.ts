@@ -92,7 +92,8 @@ describe('RBAC Security - Negative Tests', () => {
       request: { formData: async () => new URLSearchParams('scan_id=forged-id') }
     } as any;
     if (scanActions.leaveScan) {
-      await expect(scanActions.leaveScan(event)).rejects.toThrow(/REDIRECT 303/);
+      const res = await scanActions.leaveScan(event);
+      expect(res.status).toBeGreaterThanOrEqual(400);
       
       expect(executedQueries.length).toBeGreaterThan(0);
       const sqlStr = executedQueries.join(' ');

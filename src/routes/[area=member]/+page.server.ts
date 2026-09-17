@@ -20,7 +20,7 @@ export const load = async ({ locals, params, url }) => {
     eq(schema.library.userId, locals.user.id),
     eq(schema.works.published, true)
   ];
-  if (params.area === 'favoritos') libWheres.push(eq(schema.library.favorite, 1));
+  if (params.area === 'favoritos') libWheres.push(eq(schema.library.favorite, true));
   if (tab) libWheres.push(eq(schema.library.status, tab));
 
   const libraryQuery = db

@@ -7,7 +7,7 @@ export const GET = async ({ locals }) => {
   if (!locals.user) throw error(401, 'Unauthorized');
   const userId = locals.user.id;
 
-  const { data, error } = await safeQuery(
+  const { data, error: qError } = await safeQuery(
     db.select({id: schema.mihonTokens.id,
       deviceName: schema.mihonTokens.deviceName,
       createdAt: schema.mihonTokens.createdAt,
@@ -17,7 +17,7 @@ export const GET = async ({ locals }) => {
     .orderBy(desc(schema.mihonTokens.createdAt))
   );
 
-  if (error) {
+  if (qError) {
     return json({ error: 'Erro ao carregar tokens' }, { status: 500 });
   }
 
@@ -62,13 +62,13 @@ export const DELETE = async ({ request, locals }) => {
     return json({ error: 'ID do token  obrigatrio' }, { status: 400 });
   }
 
-  const { error } = await safeQuery(
+  const { error: delError } = await safeQuery(
     db.update(schema.mihonTokens)
       .set({ revoked: true })
       .where(and(eq(schema.mihonTokens.id, tokenId), eq(schema.mihonTokens.userId, userId)))
   );
 
-  if (error) {
+  if (delError) {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });
   }
 

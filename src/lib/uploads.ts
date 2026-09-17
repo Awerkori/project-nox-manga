@@ -90,7 +90,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
       result.push(file);
       total += file.size;
       if (result.length > 500 || total > 400_000_000)
-        throw new Error('Selecione at 500 pginas e 400 MB por captulo.');
+        throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
       continue;
     }
 
@@ -131,7 +131,7 @@ export async function expandFiles(input: File[]): Promise<File[]> {
           entry.name.startsWith('/') ||
           DANGEROUS_EXT_REGEX.test(entry.name)
         ) {
-          abort('O arquivo compactado contm entradas invlidas ou no permitidas.');
+          abort('O arquivo compactado contm entradas inválidas ou no permitidas.');
           return;
         }
 
@@ -194,13 +194,13 @@ export async function expandFiles(input: File[]): Promise<File[]> {
     });
 
     if (result.length === extractedBefore) {
-      throw new Error(`Nenhuma pgina ou imagem vlida (.png, .jpg, .webp, .avif) encontrada no arquivo ${file.name}.`);
+      throw new Error(`Nenhuma página ou imagem válida (.png, .jpg, .webp, .avif) encontrada no arquivo ${file.name}.`);
     }
   }
   if (result.length > 500 || total > 400_000_000)
-    throw new Error('Selecione at 500 pginas e 400 MB por captulo.');
+    throw new Error('Selecione até 500 páginas e 400 MB por capítulo.');
   if (!result.length)
-    throw new Error('Nenhuma pgina encontrada. Selecione imagens ou um arquivo ZIP/CBZ com pginas.');
+    throw new Error('Nenhuma página encontrada. Selecione imagens ou um arquivo ZIP/CBZ com pginas.');
   return result.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' }));
 }
 
@@ -313,7 +313,7 @@ export async function extractChaptersFromZip(file: File): Promise<DetectedChapte
   });
 
   if (!rawEntries.length) {
-    throw new Error('Nenhuma imagem vlida (PNG, JPG, WebP, AVIF) encontrada no arquivo compactado.');
+    throw new Error('Nenhuma imagem válida (PNG, JPG, WebP, AVIF) encontrada no arquivo compactado.');
   }
 
   const pathParts = rawEntries.map((e) => e.path.split('/'));

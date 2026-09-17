@@ -58,8 +58,8 @@ describe('public chapter visibility', () => {
     const anonSql = anonChaptersCall[0].toSQL().sql;
     const staffSql = staffChaptersCall[0].toSQL().sql;
 
-    expect(anonSql).toContain('"chapters"."publishedAt" is not null');
-    expect(staffSql).toContain('"chapters"."publishedAt" is not null');
+    expect(anonSql).toContain('"chapters"."published_at" is not null');
+    expect(staffSql).toContain('"chapters"."published_at" is not null');
     expect(anonSql).toEqual(staffSql);
   });
 
@@ -81,7 +81,7 @@ describe('public chapter visibility', () => {
     const anonPreviewSql = anonPreviewCall[0].toSQL().sql;
     const staffPreviewSql = staffPreviewCall[0].toSQL().sql;
 
-    expect(anonPreviewSql).toContain('"chapters"."publishedAt" is not null');
-    expect(staffPreviewSql).not.toContain('"chapters"."publishedAt" is not null');
+    expect(anonPreviewSql).toContain('"chapters"."published_at" is not null');
+    expect(staffPreviewSql).not.toContain('"chapters"."published_at" is not null');
   });
 });

@@ -46,7 +46,7 @@ export const load = async ({ locals, url, cookies }) => {
     );
     profile =
       profileRes?.data ||
-      (locals.authState !== 'ANONYMOUS'
+      (locals.user
         ? ({id: locals.user!.id,
             displayName: locals.user.email ? locals.user.email.split('@')[0] : 'Leitor',
             username: locals.user.email ? locals.user.email.split('@')[0] : 'leitor',
@@ -119,7 +119,7 @@ export const load = async ({ locals, url, cookies }) => {
     user: locals.user ? { id: locals.user!.id, email: locals.user.email } : null,
     profile,
     role: effectiveRole,
-    authState: locals.authState,
+    authState: locals.user ? 'AUTHENTICATED' : 'ANONYMOUS',
     unread,
     config,
     ageStatus,

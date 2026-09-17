@@ -81,7 +81,7 @@ describe('member pagination', () => {
   it('combines the unread filter with owner isolation', async () => {
     const { event, executed } = fixture('notificacoes', '?filtro=nao-lidas');
     expect((await load(event)).filter).toBe('nao-lidas');
-    const q = executed().find(q => !q.sql.toLowerCase().includes('count(')); expect(q.sql).toContain('"readAt" is null');
+    const q = executed().find(q => !q.sql.toLowerCase().includes('count(')); expect(q.sql).toContain('"read_at" is null');
   });
   it('ignores unsupported library statuses', async () => {
     const { event, executed } = fixture('biblioteca', '?status=ADMIN');

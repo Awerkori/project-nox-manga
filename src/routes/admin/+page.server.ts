@@ -67,10 +67,10 @@ const loadSnapshot = async (locals: App.Locals) => {
     safeQuery(db.select({ count: count() }).from(schema.accessRoles).where(and(inArray(schema.accessRoles.role, ['ADMIN', 'STAFF_SITE', 'EDITOR']), eq(schema.accessRoles.suspended, false)))),
     safeQuery(db.select({ count: count() }).from(schema.importerQueue).where(and(eq(schema.importerQueue.status, 'FAILED'), gte(schema.importerQueue.updatedAt, twentyFourHoursAgo)))),
     safeQuery(db.select({ count: count() }).from(schema.importerChapterMappings).where(inArray(schema.importerChapterMappings.status, ['FAILED', 'VERIFICATION_FAILED'])))
-  ].map(async (query) => {
+  ].map(async (query: any) => {
     try { return await withTimeout(query, 3500, { error: true as any, data: null }, 'admin_metric'); }
     catch { return { error: true as any, data: null }; }
-  }));
+  })) as any;
 
   const metricsUnavailable = [works, publishedChapters, draftsCountRes, tags, drafts,
     recentPublished, recentWorks, importerQueue, pendingReports, staffCountRes,

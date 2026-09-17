@@ -33,7 +33,7 @@ export const load = async ({ locals, url }) => {
     REJEITADO: allReports.filter((r: any) => r.status === 'REJEITADO').length
   };
 
-  const rawReports = reportsRes.success ? reportsRes.data : [];
+  const rawReports = reportsRes.data || [];
 
   const clustersMap = new Map<string, any>();
 

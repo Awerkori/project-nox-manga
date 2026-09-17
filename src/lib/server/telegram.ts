@@ -5,7 +5,7 @@ export class TelegramStorageError extends Error {
     readonly status?: number,
     readonly retryAfter?: number
   ) {
-    super('Armazenamento temporariamente indisponvel. Tente novamente.');
+    super('Armazenamento temporariamente indisponível. Tente novamente.');
   }
 }
 const unavailable = () => new TelegramStorageError();

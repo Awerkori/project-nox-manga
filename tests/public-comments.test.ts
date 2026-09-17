@@ -90,7 +90,7 @@ describe('moderated comments on public pages', () => {
 
   it('hides removed work comments even from the owner outside moderation', async () => {
     await workLoad(event());
-    const query = commentQueries.find(q => q.sql.includes('"chapterId" is null'));
+    const query = commentQueries.find(q => q.sql.includes('"chapter_id" is null'));
     expect(query).toBeDefined();
     
     expect(query.sql).toContain('"comments"."removed" = ?');
@@ -100,7 +100,7 @@ describe('moderated comments on public pages', () => {
 
   it('hides removed chapter comments even from the owner outside moderation', async () => {
     await readerLoad(event());
-    const query = commentQueries.find(q => q.sql.includes('"chapterId" = ?'));
+    const query = commentQueries.find(q => q.sql.includes('"chapter_id" = ?'));
     expect(query).toBeDefined();
     
     expect(query.sql).toContain('"comments"."removed" = ?');

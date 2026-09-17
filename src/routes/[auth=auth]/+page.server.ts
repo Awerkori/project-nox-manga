@@ -94,7 +94,7 @@ export const actions = {
     if (mode === 'recuperar') {
       let error = null;
       try {
-        await auth.api.forgetPassword({
+        await (auth.api as any).forgetPassword({
           body: {
             email,
             redirectTo: `${url.origin}/auth/confirm?next=/redefinir`
@@ -117,9 +117,7 @@ export const actions = {
     let updateError = null;
     try {
       await auth.api.changePassword({
-        body: {
-          newPassword: password
-        },
+        body: { newPassword: password } as any,
         headers: request.headers
       });
     } catch (err: any) {

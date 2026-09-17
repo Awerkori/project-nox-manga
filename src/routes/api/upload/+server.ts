@@ -26,7 +26,7 @@ export const POST = async ({ request, locals, url }) => {
             .from(schema.scanMembers)
             .where(and(eq(schema.scanMembers.scanId, scanId), eq(schema.scanMembers.userId, locals.user!.id)))
         );
-        const member = members?.[0];
+        const member = members;
 
         if (!member || !['OWNER', 'ADMIN'].includes(member.role)) {
           throw kitError(403, 'Apenas o Dono ou Administrador da Scan podem alterar mdias institucionais.');
