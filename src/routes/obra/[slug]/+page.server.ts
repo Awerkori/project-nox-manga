@@ -1,13 +1,132 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
-import { eq, ilike, desc, and, isNotNull, isNull, inArray } from 'drizzle-orm';
+import { eq, ilike, desc, and, isNotNull, isNull, inArray, exists } from 'drizzle-orm';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { withTimeout } from '$lib/server/resilience';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-export const load = async ({ locals, params, url, cookies }) => {
+interface ObraCacheEntry {
+  timestamp: number;
+  work: any;
+  chapters: any[];
+  tags: any[];
+  scans: any[];
+  likes: any[];
+}
+
+const obraCache = new Map<string, ObraCacheEntry>();
+const OBRA_CACHE_TTL_MS = 300_000; // 5 minutes fresh memory cache
+
+declare global {
+  var __nox_invalidate_obra: ((workId?: string, workSlug?: string) => void) | undefined;
+}
+
+globalThis.__nox_invalidate_obra = (workId?: string, workSlug?: string) => {
+  if (workId) obraCache.delete(workId);
+  if (workSlug) obraCache.delete(workSlug);
+  if (!workId && !workSlug) obraCache.clear();
+};
+
+export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const isTargetUuid = isUuid(params.slug);
+  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
+  const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
+
+  // Instant in-memory cache lookup for public obra view
+  if (!preview && obraCache.has(params.slug)) {
+    const cached = obraCache.get(params.slug)!;
+    if (Date.now() - cached.timestamp < OBRA_CACHE_TTL_MS) {
+      const work = cached.work;
+
+      if ((work as any).contentRating === 'ADULT_18') {
+        const rawAgeCookie = cookies.get('nox-age-status');
+        let ageStatus = rawAgeCookie;
+        if (locals.sessionCache?.profile?.ageStatus) {
+          ageStatus = locals.sessionCache.profile.ageStatus;
+        } else if (locals.user) {
+          const p = await safeQuerySingle(
+            db.select({ ageStatus: schema.members.ageStatus })
+              .from(schema.members)
+              .where(eq(schema.members.id, locals.user.id))
+          );
+          if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
+        }
+        if (ageStatus === 'MINOR') {
+          error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
+        }
+      }
+
+      if (isTargetUuid && work.slug && work.slug !== params.slug) {
+        redirect(301, `/obra/${work.slug}`);
+      }
+
+      let libraryData = null;
+      let progressData: any[] = [];
+      if (locals.user) {
+        const [libRes, progRes] = await Promise.all([
+          safeQuerySingle(
+            db.select()
+              .from(schema.library)
+              .where(
+                and(
+                  eq(schema.library.userId, locals.user.id),
+                  eq(schema.library.workId, work.id)
+                )
+              )
+          ),
+          safeQuery(
+            db.select({
+              chapterId: schema.reading.chapterId,
+              page: schema.reading.page,
+              completedAt: schema.reading.completedAt,
+              chapters: {
+                workId: schema.chapters.workId
+              }
+            })
+            .from(schema.reading)
+            .innerJoin(schema.chapters, eq(schema.reading.chapterId, schema.chapters.id))
+            .where(eq(schema.chapters.workId, work.id))
+            .orderBy(desc(schema.reading.updatedAt))
+          )
+        ]);
+        libraryData = libRes.data;
+        progressData = progRes.data || [];
+      } else {
+        setHeaders({
+          'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+        });
+      }
+
+      const coverUrl = work.coverId
+        ? work.coverId.startsWith('/') || work.coverId.startsWith('http')
+          ? work.coverId.startsWith('http') ? work.coverId : `${url.origin}${work.coverId}`
+          : `${url.origin}/media/${work.coverId}`
+        : null;
+
+      const isAdult = (work as any).contentRating === 'ADULT_18';
+      const metaImage = isAdult
+        ? `${url.origin}/brand/nox-symbol-256.webp`
+        : coverUrl || `${url.origin}/brand/nox-symbol-256.webp`;
+
+      return {
+        work,
+        chapters: cached.chapters,
+        tags: cached.tags,
+        scans: cached.scans,
+        structuredData: structuredDataScript(workStructuredData(work, cached.tags, url.origin)),
+        comments: [],
+        library: libraryData,
+        likes: cached.likes || [],
+        progress: progressData,
+        metrics: null,
+        canonical: `${url.origin}/obra/${work.slug}`,
+        coverUrl,
+        metaImage,
+        hasCustomMetaImage: true
+      };
+    }
+  }
 
   let condition = and(
     eq(schema.works.published, true),
@@ -49,15 +168,15 @@ export const load = async ({ locals, params, url, cookies }) => {
   }
 
   if (!work && result.error === 'TIMEOUT') {
-    error(503, 'A conexo com a obra est temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexão com a obra está temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (!work && result.error) {
-    error(500, 'Instabilidade temporria ao carregar a obra. Tente novamente em instantes.');
+    error(500, 'Instabilidade temporária ao carregar a obra. Tente novamente em instantes.');
   }
 
   if (!work) {
-    error(404, 'Obra no encontrada');
+    error(404, 'Obra não encontrada');
   }
 
   // Redirect to canonical slug if accessed by UUID
@@ -79,16 +198,21 @@ export const load = async ({ locals, params, url, cookies }) => {
       if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
-      error(403, 'Contedo restrito: esta obra  destinada exclusivamente a maiores de 18 anos.');
+      error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
-  
-  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
-  
+
   let chaptersCondition: any = eq(schema.chapters.workId, work.id);
-  const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
   if (!preview) {
-    chaptersCondition = and(chaptersCondition, isNotNull(schema.chapters.publishedAt));
+    chaptersCondition = and(
+      chaptersCondition, 
+      isNotNull(schema.chapters.publishedAt),
+      exists(
+        db.select({ pos: schema.pages.position })
+          .from(schema.pages)
+          .where(eq(schema.pages.chapterId, schema.chapters.id))
+      )
+    );
   }
 
   const chaptersPromise = withTimeout(
@@ -153,57 +277,7 @@ export const load = async ({ locals, params, url, cookies }) => {
         .leftJoin(schema.tags, eq(schema.workTags.tagId, schema.tags.id))
         .where(eq(schema.workTags.workId, work.id))
       ),
-      (async () => {
-        const commentsRes = await safeQuery(
-          db.select({
-            id: schema.comments.id,
-            userId: schema.comments.userId,
-            body: schema.comments.body,
-            createdAt: schema.comments.createdAt,
-            parentId: schema.comments.parentId,
-            members: {
-              username: schema.members.username,
-              displayName: schema.members.displayName,
-              avatarId: schema.members.avatarId,
-              nameColor: schema.members.nameColor,
-              avatarFrameId: schema.members.avatarFrameId,
-              equippedCommentBannerId: schema.members.equippedCommentBannerId,
-              equippedTitleId: schema.members.equippedTitleId
-            }
-          })
-          .from(schema.comments)
-          .leftJoin(schema.members, eq(schema.comments.userId, schema.members.id))
-          .where(
-            and(
-              eq(schema.comments.workId, work.id),
-              eq(schema.comments.removed, false),
-              isNull(schema.comments.chapterId)
-            )
-          )
-          .orderBy(desc(schema.comments.createdAt))
-          .limit(100)
-        );
-
-        if (!commentsRes.data || commentsRes.data.length === 0) return { data: [] };
-        
-        const commentIds = commentsRes.data.map(c => c.id);
-        const likesRes = await safeQuery(
-          db.select({
-            commentId: schema.commentLikes.commentId,
-            userId: schema.commentLikes.userId
-          })
-          .from(schema.commentLikes)
-          .where(inArray(schema.commentLikes.commentId, commentIds))
-        );
-        
-        const likesData = likesRes.data || [];
-        return {
-          data: commentsRes.data.map(c => ({
-            ...c,
-            commentLikes: likesData.filter(l => l.commentId === c.id).map(l => ({ userId: l.userId }))
-          }))
-        };
-      })(),
+      Promise.resolve({ data: [] }),
       locals.user
         ? safeQuerySingle(
             db.select()
@@ -283,13 +357,38 @@ export const load = async ({ locals, params, url, cookies }) => {
 
   let chaptersList = chapters.data || [];
 
+  if (!preview && work) {
+    if (obraCache.size >= 500) {
+      const oldestKey = obraCache.keys().next().value;
+      if (oldestKey) obraCache.delete(oldestKey);
+    }
+    const cacheEntry: ObraCacheEntry = {
+      timestamp: Date.now(),
+      work,
+      chapters: chaptersList,
+      tags: publicTags,
+      scans: scansList,
+      likes: likes.data || []
+    };
+    obraCache.set(work.id, cacheEntry);
+    if (work.slug) {
+      obraCache.set(work.slug, cacheEntry);
+    }
+  }
+
+  if (!locals.user && !preview) {
+    setHeaders({
+      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+    });
+  }
+
   return {
     work,
     chapters: chaptersList,
     tags: publicTags,
     scans: scansList,
     structuredData: structuredDataScript(workStructuredData(work, publicTags, url.origin)),
-    comments: comments.data || [],
+    comments: [],
     library: library.data,
     likes: likes.data || [],
     progress: progress.data || [],

@@ -1,13 +1,43 @@
-import { json } from '@sveltejs/kit';
 import { db, safeQuery } from '$lib/server/db';
 import { sql } from 'drizzle-orm';
 
-export const GET = async ({ url, setHeaders }) => {
-  const cursorTime = url.searchParams.get('cursorTime') || null;
-  const cursorId = url.searchParams.get('cursorId') || null;
+interface ReleasesCacheEntry {
+  timestamp: number;
+  releases: any[];
+  hasMore: boolean;
+  nextCursorTime: string | null;
+  nextCursorId: string | null;
+}
+
+const releasesPageCache = new Map<string, ReleasesCacheEntry>();
+const CACHE_TTL_MS = 30_000; // 30 seconds fresh memory cache
+
+declare global {
+  var __nox_invalidate_releases: (() => void) | undefined;
+}
+
+globalThis.__nox_invalidate_releases = () => {
+  releasesPageCache.clear();
+};
+
+export const load = async ({ url, setHeaders }) => {
   const rawKind = url.searchParams.get('kind');
   const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
-  const limit = Math.min(48, Math.max(3, parseInt(url.searchParams.get('limit') || '24', 10)));
+  const cacheKey = kind || 'ALL';
+
+  const cached = releasesPageCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    setHeaders({
+      'cache-control': 'public, max-age=15, stale-while-revalidate=60'
+    });
+    return {
+      releases: cached.releases,
+      hasMore: cached.hasMore,
+      nextCursorTime: cached.nextCursorTime,
+      nextCursorId: cached.nextCursorId,
+      selectedKind: kind || 'ALL'
+    };
+  }
 
   const querySql = sql`
     WITH top_works AS (
@@ -16,13 +46,8 @@ export const GET = async ({ url, setHeaders }) => {
       WHERE published = true
         AND latest_chapter_published_at IS NOT NULL
         AND (${kind}::text IS NULL OR kind = ${kind}::text)
-        AND (
-          ${cursorTime}::timestamptz IS NULL 
-          OR latest_chapter_published_at < ${cursorTime}::timestamptz 
-          OR (latest_chapter_published_at = ${cursorTime}::timestamptz AND id < ${cursorId}::uuid)
-        )
       ORDER BY latest_chapter_published_at DESC, id DESC
-      LIMIT ${limit}::int
+      LIMIT 24
     ),
     ranked_chapters AS (
       SELECT ch.id, ch.number, ch.title, ch.published_at, ch.work_id,
@@ -44,12 +69,19 @@ export const GET = async ({ url, setHeaders }) => {
   const { data: rows, error: qErr } = await safeQuery(db.execute(querySql));
 
   if (qErr || !rows) {
-    console.error('[API RELEASES ERROR]:', qErr);
-    return json({ releases: [], error: qErr?.message || 'Database error' }, { status: 500 });
+    console.error('[LANCAMENTOS LOAD ERROR]:', qErr);
+    return {
+      releases: [],
+      hasMore: false,
+      nextCursorTime: null,
+      nextCursorId: null,
+      selectedKind: kind || 'ALL',
+      loadError: true
+    };
   }
 
   const releasesMap = new Map<string, any>();
-  const rawList = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  const rawList = Array.isArray(rows) ? rows : [rows];
 
   for (const r of rawList) {
     const workId = r.actual_work_id || r.work_id;
@@ -77,17 +109,30 @@ export const GET = async ({ url, setHeaders }) => {
     }
   }
 
-  const releases = Array.from(releasesMap.values());
+  const releases = Array.from(releasesMap.values()).slice(0, 24);
   const lastItem = releases.length > 0 ? releases[releases.length - 1] : null;
+  const hasMore = releases.length === 24;
+  const nextCursorTime = lastItem ? lastItem.latestPublishedAt : null;
+  const nextCursorId = lastItem ? lastItem.workId : null;
+
+  releasesPageCache.set(cacheKey, {
+    timestamp: Date.now(),
+    releases,
+    hasMore,
+    nextCursorTime,
+    nextCursorId
+  });
 
   setHeaders({
     'cache-control': 'public, max-age=15, stale-while-revalidate=60'
   });
 
-  return json({
+  return {
     releases,
-    hasMore: releases.length === limit,
-    nextCursorTime: lastItem ? lastItem.latestPublishedAt : null,
-    nextCursorId: lastItem ? lastItem.workId : null
-  });
+    hasMore,
+    nextCursorTime,
+    nextCursorId,
+    selectedKind: kind || 'ALL',
+    loadError: false
+  };
 };

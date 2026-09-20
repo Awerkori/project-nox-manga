@@ -31,54 +31,13 @@
   let { releases = [], loadError = false, isStale = false }: Props = $props();
 
   let currentReleases = $state<ReleaseItem[]>(releases);
-  let loadingMore = $state(false);
-  let hasMore = $state(releases.length >= 16);
 
   $effect(() => {
-    // Keep it in sync if props change externally
     const current = untrack(() => currentReleases);
     if (releases && releases.length > 0 && releases[0] !== current[0]) {
       currentReleases = [...releases];
     }
   });
-
-  async function handleLoadMore() {
-    if (loadingMore || !hasMore) return;
-    loadingMore = true;
-    try {
-      const lastItem = currentReleases[currentReleases.length - 1];
-      const cursorTime = lastItem ? lastItem.latestPublishedAt : '';
-      const cursorId = lastItem ? lastItem.workId : '';
-      const res = await fetch(`/api/releases?cursorTime=${encodeURIComponent(cursorTime)}&cursorId=${encodeURIComponent(cursorId)}&limit=16`);
-      if (!res.ok) throw new Error('Falha ao carregar');
-      const data = await res.json();
-      const newItems: ReleaseItem[] = data.releases || [];
-      
-      if (newItems.length === 0) {
-        hasMore = false;
-      } else {
-        const existingIds = new Set(currentReleases.map(r => r.workId));
-        const uniqueItems = newItems.filter(r => !existingIds.has(r.workId));
-        currentReleases = [...currentReleases, ...uniqueItems];
-        if (uniqueItems.length === 0 || !data.hasMore || currentReleases.length >= 64) {
-          hasMore = false;
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      loadingMore = false;
-    }
-  }
-
-  function handleShowLess() {
-    currentReleases = [...releases];
-    hasMore = releases.length >= 16;
-    const section = document.getElementById('lancamentos');
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-    }
-  }
 </script>
 
 <section id="lancamentos" class="releases-section">
@@ -89,25 +48,10 @@
     </div>
 
     <div class="header-right-tools">
-      {#if currentReleases.length > releases.length}
-        <button type="button" class="view-all-link" onclick={handleShowLess}>
-          <span>Mostrar menos</span>
-          <ArrowUp size={14} />
-        </button>
-      {/if}
-      {#if hasMore}
-        <button type="button" class="view-all-link" onclick={handleLoadMore} disabled={loadingMore}>
-          {#if loadingMore}
-            <RefreshCw size={14} class="spin" />
-            <span>Carregando...</span>
-          {:else}
-            <span>Ver mais lançamentos</span>
-            <ArrowRight size={14} />
-          {/if}
-        </button>
-      {:else if currentReleases.length >= 16}
-        <span class="view-all-link" style="opacity: 0.5; cursor: default;">Não há mais lançamentos</span>
-      {/if}
+      <a href="/lancamentos" class="view-all-link">
+        <span>Ver mais lançamentos</span>
+        <ArrowRight size={14} />
+      </a>
     </div>
   </div>
 
@@ -129,6 +73,7 @@
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
+                loading="lazy"
                 decoding="async"
               />
               {#if isAdult}
@@ -261,12 +206,18 @@
     cursor: not-allowed;
   }
 
-  /* Grid Feed */
+  /* Grid Feed - 3 columns on desktop, 2 on tablet, 1 on mobile */
   .releases-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
     width: 100%;
+  }
+
+  @media (max-width: 1024px) {
+    .releases-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   .release-row-card {
