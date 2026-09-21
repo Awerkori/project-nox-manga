@@ -1,5 +1,6 @@
 import { db, safeQuery } from '$lib/server/db';
 import { sql } from 'drizzle-orm';
+import { getSharedCache, setSharedCache, SHARED_CACHE_KEYS } from '$lib/server/shared-cache';
 
 interface ReleasesCacheEntry {
   timestamp: number;
@@ -10,7 +11,6 @@ interface ReleasesCacheEntry {
 }
 
 const releasesPageCache = new Map<string, ReleasesCacheEntry>();
-const CACHE_TTL_MS = 30_000; // 30 seconds fresh memory cache
 
 declare global {
   var __nox_invalidate_releases: (() => void) | undefined;
@@ -21,24 +21,44 @@ globalThis.__nox_invalidate_releases = () => {
 };
 
 export const load = async ({ url, setHeaders }) => {
+  // Enforce private no-cache on HTML documents so edge wrapper delegates caching to shared-cache
+  setHeaders({
+    'cache-control': 'private, no-cache, no-store, must-revalidate'
+  });
+
   const rawKind = url.searchParams.get('kind');
   const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
   const cacheKey = kind || 'ALL';
+  const sharedKey = `${SHARED_CACHE_KEYS.LANCAMENTOS_PREFIX}${cacheKey}`;
 
-  const cached = releasesPageCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    setHeaders({
-      'cache-control': 'public, max-age=15, stale-while-revalidate=60'
-    });
+  // 1. Cross-isolate shared Cloudflare edge cache lookup (0 Hyperdrive queries, ~0.3ms latency)
+  const shared = await getSharedCache<ReleasesCacheEntry>(sharedKey);
+  if (shared && shared.releases) {
+    releasesPageCache.set(cacheKey, shared);
     return {
-      releases: cached.releases,
-      hasMore: cached.hasMore,
-      nextCursorTime: cached.nextCursorTime,
-      nextCursorId: cached.nextCursorId,
-      selectedKind: kind || 'ALL'
+      releases: shared.releases,
+      hasMore: shared.hasMore,
+      nextCursorTime: shared.nextCursorTime,
+      nextCursorId: shared.nextCursorId,
+      selectedKind: kind || 'ALL',
+      loadError: false
     };
   }
 
+  // 2. Micro-cache in local isolate memory for ultra-fast fallback
+  const localCached = releasesPageCache.get(cacheKey);
+  if (localCached && Date.now() - localCached.timestamp < 3000) {
+    return {
+      releases: localCached.releases,
+      hasMore: localCached.hasMore,
+      nextCursorTime: localCached.nextCursorTime,
+      nextCursorId: localCached.nextCursorId,
+      selectedKind: kind || 'ALL',
+      loadError: false
+    };
+  }
+
+  // 3. Cache miss / eviction: execute single consolidated CTE query
   const querySql = sql`
     WITH top_works AS (
       SELECT id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at
@@ -51,7 +71,7 @@ export const load = async ({ url, setHeaders }) => {
     ),
     ranked_chapters AS (
       SELECT ch.id, ch.number, ch.title, ch.published_at, ch.work_id,
-             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC) as rn
+             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC, ch.number DESC) as rn
       FROM chapters ch
       JOIN top_works tw ON tw.id = ch.work_id
       WHERE ch.published_at IS NOT NULL
@@ -62,8 +82,8 @@ export const load = async ({ url, setHeaders }) => {
            tw.kind as work_kind, tw.content_rating as work_content_rating,
            tw.latest_chapter_published_at as latest_published_at
     FROM top_works tw
-    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 3
-    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST;
+    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 50
+    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST, rc.number DESC NULLS LAST;
   `;
 
   const { data: rows, error: qErr } = await safeQuery(db.execute(querySql));
@@ -99,7 +119,7 @@ export const load = async ({ url, setHeaders }) => {
       });
     }
     const group = releasesMap.get(workId)!;
-    if (r.id && group.chapters.length < 3) {
+    if (r.id && !group.chapters.some((c: any) => c.id === r.id || c.number === Number(r.number))) {
       group.chapters.push({
         id: r.id,
         number: Number(r.number),
@@ -115,17 +135,18 @@ export const load = async ({ url, setHeaders }) => {
   const nextCursorTime = lastItem ? lastItem.latestPublishedAt : null;
   const nextCursorId = lastItem ? lastItem.workId : null;
 
-  releasesPageCache.set(cacheKey, {
+  const entry: ReleasesCacheEntry = {
     timestamp: Date.now(),
     releases,
     hasMore,
     nextCursorTime,
     nextCursorId
-  });
+  };
 
-  setHeaders({
-    'cache-control': 'public, max-age=15, stale-while-revalidate=60'
-  });
+  releasesPageCache.set(cacheKey, entry);
+
+  // Broadcast to Cloudflare shared edge cache so all isolates share it with 0 Hyperdrive queries
+  setSharedCache(sharedKey, entry, 20).catch(() => {});
 
   return {
     releases,

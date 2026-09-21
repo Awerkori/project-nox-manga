@@ -26,7 +26,7 @@ export const GET = async ({ url, setHeaders }) => {
     ),
     ranked_chapters AS (
       SELECT ch.id, ch.number, ch.title, ch.published_at, ch.work_id,
-             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC) as rn
+             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC, ch.number DESC) as rn
       FROM chapters ch
       JOIN top_works tw ON tw.id = ch.work_id
       WHERE ch.published_at IS NOT NULL
@@ -37,8 +37,8 @@ export const GET = async ({ url, setHeaders }) => {
            tw.kind as work_kind, tw.content_rating as work_content_rating,
            tw.latest_chapter_published_at as latest_published_at
     FROM top_works tw
-    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 3
-    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST;
+    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 50
+    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST, rc.number DESC NULLS LAST;
   `;
 
   const { data: rows, error: qErr } = await safeQuery(db.execute(querySql));
@@ -67,7 +67,7 @@ export const GET = async ({ url, setHeaders }) => {
       });
     }
     const group = releasesMap.get(workId)!;
-    if (r.id && group.chapters.length < 3) {
+    if (r.id && !group.chapters.some((c: any) => c.id === r.id || c.number === Number(r.number))) {
       group.chapters.push({
         id: r.id,
         number: Number(r.number),

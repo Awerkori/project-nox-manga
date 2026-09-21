@@ -1,6 +1,7 @@
 import { withTimeout } from '$lib/server/resilience';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
 import { eq, desc, asc, isNotNull, and, inArray } from 'drizzle-orm';
+import { getSharedCache, setSharedCache, SHARED_CACHE_KEYS } from '$lib/server/shared-cache';
 
 type HomeCachePayload = {
   timestamp: number;
@@ -23,10 +24,7 @@ declare global {
 }
 
 globalThis.__nox_invalidate_home = () => {
-  if (homePublicCache) {
-    homePublicCache.timestamp = 0;
-    homePublicCache.isStale = true;
-  }
+  homePublicCache = null;
 };
 
 type ReleaseGroup = {
@@ -62,7 +60,7 @@ async function fetchRecentReleases(dbInstance: any) {
     ),
     ranked_chapters AS (
       SELECT ch.id, ch.number, ch.title, ch.published_at, ch.work_id,
-             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC) as rn
+             ROW_NUMBER() OVER (PARTITION BY ch.work_id ORDER BY ch.published_at DESC, ch.number DESC) as rn
       FROM chapters ch
       JOIN top_works tw ON tw.id = ch.work_id
       WHERE ch.published_at IS NOT NULL
@@ -72,8 +70,8 @@ async function fetchRecentReleases(dbInstance: any) {
            tw.kind as work_kind, tw.content_rating as work_content_rating,
            tw.latest_chapter_published_at as latest_published_at
     FROM top_works tw
-    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 3
-    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST;
+    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 50
+    ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST, rc.number DESC NULLS LAST;
   `;
   const res = await safeQuery(dbInstance.execute(sql));
   const rows = res?.data || [];
@@ -145,7 +143,10 @@ async function refreshHomePublicCache(dbInstance: any): Promise<HomeCachePayload
             });
           }
           const group = releasesMap.get(workId)!;
-          if ((row as any).id && group.chapters.length < 3) {
+          if (
+            (row as any).id &&
+            !group.chapters.some((c) => c.id === (row as any).id || c.number === Number((row as any).number))
+          ) {
             group.chapters.push({
               id: (row as any).id,
               number: Number((row as any).number),
@@ -188,6 +189,8 @@ async function refreshHomePublicCache(dbInstance: any): Promise<HomeCachePayload
 
       if (works.length > 0 || recentReleases.length > 0) {
         homePublicCache = payload;
+        // Broadcast to Cloudflare shared edge cache so all isolates share it with 0 Hyperdrive queries
+        setSharedCache(SHARED_CACHE_KEYS.HOME_PUBLIC, payload, 20).catch(() => {});
       }
 
       return payload;
@@ -217,27 +220,24 @@ async function refreshHomePublicCache(dbInstance: any): Promise<HomeCachePayload
 }
 
 /**
- * Fast SWR (Stale-While-Revalidate) accessor for public home contents
+ * Multi-isolate coherent accessor for public home contents.
+ * Reads from Cloudflare Cache API (caches.default) to guarantee that any isolate
+ * immediately sees cache evictions triggered by chapter publications, with 0 Hyperdrive queries.
  */
 async function getOrRefreshHomePublic(dbInstance: any): Promise<HomeCachePayload> {
-  const now = Date.now();
-  const cacheAge = homePublicCache ? now - homePublicCache.timestamp : Infinity;
+  // 1. Cross-isolate shared Cloudflare edge cache lookup (0 Hyperdrive queries, ~0.3ms latency)
+  const shared = await getSharedCache<HomeCachePayload>(SHARED_CACHE_KEYS.HOME_PUBLIC);
+  if (shared && (!shared.loadError || (shared.recentReleases && shared.recentReleases.length > 0))) {
+    homePublicCache = shared;
+    return shared;
+  }
 
-  // 1. Fresh cache: instantaneous return (0ms DB delay)
-  if (homePublicCache && cacheAge < FRESH_CACHE_TTL_MS) {
+  // 2. Short micro-cache fallback for local isolate memory (e.g. non-CF dev environment)
+  if (homePublicCache && Date.now() - homePublicCache.timestamp < 3000 && !homePublicCache.isStale) {
     return homePublicCache;
   }
 
-  // 2. Stale cache: return stale immediately, revalidate in background (0ms DB delay for caller)
-  if (homePublicCache && cacheAge < STALE_CACHE_MAX_AGE_MS) {
-    refreshHomePublicCache(dbInstance).catch(() => {});
-    return {
-      ...homePublicCache,
-      isStale: true
-    };
-  }
-
-  // 3. Cold start: single-flight await (coalesced across all concurrent requests)
+  // 3. Cache miss / eviction: coalesced single-flight refresh across concurrent requests
   return await refreshHomePublicCache(dbInstance);
 }
 

@@ -30,6 +30,11 @@
   let nextCursorTime = $state<string | null>(data.nextCursorTime);
   let nextCursorId = $state<string | null>(data.nextCursorId);
   let loadingMore = $state<boolean>(false);
+  let expandedCards = $state<Record<string, boolean>>({});
+
+  function toggleCardExpand(workId: string) {
+    expandedCards[workId] = !expandedCards[workId];
+  }
 
   // Sync state when page data updates (e.g. filter change via navigation)
   $effect(() => {
@@ -127,6 +132,9 @@
           {@const isAdult = rel.contentRating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
           {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
+          {@const isExpanded = Boolean(expandedCards[rel.workId])}
+          {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
+          {@const remainingCount = sortedChapters.length - 3}
           {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId)}
           <article class="release-row-card">
             <!-- Mini Cover Thumbnail -->
@@ -169,16 +177,26 @@
 
               <!-- Clickable Chapter Pills List (Newest to Oldest) -->
               <div class="chapter-pills-list">
-                {#each sortedChapters as ch, i}
+                {#each visibleChapters as ch, idx}
                   <a
                     href="/ler/{ch.id}"
                     class="chapter-pill"
-                    class:latest-pill={i === 0}
+                    class:latest-pill={idx === 0}
                     title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
                   >
                     <span class="ch-text">Cap. {ch.number}</span>
                   </a>
                 {/each}
+                {#if sortedChapters.length > 3}
+                  <button
+                    type="button"
+                    class="chapter-pill expand-pill"
+                    onclick={(e) => { e.preventDefault(); toggleCardExpand(rel.workId); }}
+                    title={isExpanded ? "Mostrar menos capítulos" : `Ver mais ${remainingCount} capítulos lançados`}
+                  >
+                    <span class="ch-text">{isExpanded ? "Menos" : `+${remainingCount} caps`}</span>
+                  </button>
+                {/if}
               </div>
             </div>
           </article>
@@ -493,6 +511,20 @@
     border-color: rgba(223, 194, 141, 0.35);
     color: #dfc28d;
     transform: translateY(-1px);
+  }
+
+  .chapter-pill.expand-pill {
+    cursor: pointer;
+    background: rgba(223, 194, 141, 0.1);
+    border-color: rgba(223, 194, 141, 0.3);
+    color: #dfc28d;
+    font-size: 0.74rem;
+  }
+
+  .chapter-pill.expand-pill:hover {
+    background: rgba(223, 194, 141, 0.22);
+    border-color: rgba(223, 194, 141, 0.5);
+    color: #fff;
   }
 
   .chapter-pill.latest-pill {
