@@ -13,11 +13,9 @@ type HomeCachePayload = {
   isStale: boolean;
 };
 
-// In-memory single-flight & stale-while-revalidate public cache
+// In-memory public micro-cache
 let homePublicCache: HomeCachePayload | null = null;
-let inFlightRefreshPromise: Promise<HomeCachePayload> | null = null;
-const FRESH_CACHE_TTL_MS = 60_000;      // 60 seconds fresh window
-const STALE_CACHE_MAX_AGE_MS = 600_000; // 10 minutes stale window
+const FRESH_CACHE_TTL_MS = 20_000;      // 20 seconds fresh window
 
 declare global {
   var __nox_invalidate_home: (() => void) | undefined;
@@ -47,10 +45,10 @@ type ReleaseGroup = {
  * Consolidated single-query releases fetcher:
  * Replaces multiple sequential queries and eliminates redundant scanning of the 'pages' table.
  * Uses index idx_works_latest_pub + idx_chapters_work_pub to retrieve top 15 works
- * (5 complete rows of 3 columns on desktop) and their 3 latest chapters in ~5ms.
+ * and their 3-4 latest chapters in ~50ms.
  */
 async function fetchRecentReleases(dbInstance: any) {
-  const sql = `
+  const sqlQuery = `
     WITH top_works AS (
       SELECT id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at
       FROM works
@@ -70,153 +68,143 @@ async function fetchRecentReleases(dbInstance: any) {
            tw.kind as work_kind, tw.content_rating as work_content_rating,
            tw.latest_chapter_published_at as latest_published_at
     FROM top_works tw
-    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 50
+    LEFT JOIN ranked_chapters rc ON rc.work_id = tw.id AND rc.rn <= 4
     ORDER BY tw.latest_chapter_published_at DESC, tw.id DESC, rc.published_at DESC NULLS LAST, rc.number DESC NULLS LAST;
   `;
-  const res = await safeQuery(dbInstance.execute(sql));
+  const res = await safeQuery(dbInstance.execute(sqlQuery));
   const rows = res?.data || [];
   return { data: Array.isArray(rows) ? rows : (rows ? [rows] : []) };
 }
 
 /**
- * Single-flight coalesced public cache refresher.
- * Guarantees that at most 1 database query is in flight for public home content.
+ * Public cache refresher:
+ * Fetches fresh home content from DB and broadcasts to Cloudflare shared edge cache.
  */
 async function refreshHomePublicCache(dbInstance: any): Promise<HomeCachePayload> {
-  if (inFlightRefreshPromise) {
-    return inFlightRefreshPromise;
-  }
-
-  inFlightRefreshPromise = (async () => {
-    try {
-      const [worksRes, chaptersRes, mostReadRes] = await Promise.all([
-        safeQuery(
-          dbInstance.query.works.findMany({
-            where: eq(schema.works.published, true),
-            orderBy: [desc(schema.works.updatedAt)],
-            limit: 16,
-            with: {
-              workScans: {
-                columns: { isPrimary: true, status: true },
-                with: {
-                  scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
-                }
+  try {
+    const [worksRes, chaptersRes, mostReadRes] = await Promise.all([
+      safeQuery(
+        dbInstance.query.works.findMany({
+          where: eq(schema.works.published, true),
+          orderBy: [desc(schema.works.updatedAt)],
+          limit: 16,
+          with: {
+            workScans: {
+              columns: { isPrimary: true, status: true },
+              with: {
+                scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
               }
             }
-          })
-        ),
-        withTimeout(fetchRecentReleases(dbInstance), 3500, { data: [] } as any, 'home_chapters'),
-        safeQuery(
-          dbInstance.query.works.findMany({
-            where: eq(schema.works.published, true),
-            orderBy: [desc(schema.works.viewsTotal)],
-            limit: 16,
-            with: {
-              workScans: {
-                columns: { isPrimary: true, status: true },
-                with: {
-                  scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
-                }
+          }
+        })
+      ),
+      withTimeout(fetchRecentReleases(dbInstance), 3500, { data: [] } as any, 'home_chapters'),
+      safeQuery(
+        dbInstance.query.works.findMany({
+          where: eq(schema.works.published, true),
+          orderBy: [desc(schema.works.viewsTotal)],
+          limit: 16,
+          with: {
+            workScans: {
+              columns: { isPrimary: true, status: true },
+              with: {
+                scans: { columns: { id: true, name: true, slug: true, logoId: true, isOfficial: true } }
               }
             }
-          })
-        )
-      ]);
-
-      let works = (worksRes?.data || []) as any[];
-
-      const releasesMap = new Map<string, ReleaseGroup>();
-      if (chaptersRes?.data && Array.isArray(chaptersRes.data)) {
-        for (const row of chaptersRes.data) {
-          const workId = (row as any).work_id || (row as any).workId;
-          if (!workId) continue;
-          if (!releasesMap.has(workId)) {
-            releasesMap.set(workId, {
-              workId,
-              workSlug: (row as any).work_slug || '',
-              workTitle: (row as any).work_title || '',
-              coverId: (row as any).work_cover_id || null,
-              kind: (row as any).work_kind || 'UNKNOWN',
-              contentRating: (row as any).work_content_rating || null,
-              latestPublishedAt: (row as any).latest_published_at || (row as any).published_at || '',
-              chapters: []
-            });
           }
-          const group = releasesMap.get(workId)!;
-          if (
-            (row as any).id &&
-            !group.chapters.some((c) => c.id === (row as any).id || c.number === Number((row as any).number))
-          ) {
-            group.chapters.push({
-              id: (row as any).id,
-              number: Number((row as any).number),
-              title: (row as any).title,
-              publishedAt: (row as any).published_at || ''
-            });
-          }
+        })
+      )
+    ]);
+
+    let works = (worksRes?.data || []) as any[];
+
+    const releasesMap = new Map<string, ReleaseGroup>();
+    if (chaptersRes?.data && Array.isArray(chaptersRes.data)) {
+      for (const row of chaptersRes.data) {
+        const workId = (row as any).work_id || (row as any).workId;
+        if (!workId) continue;
+        if (!releasesMap.has(workId)) {
+          releasesMap.set(workId, {
+            workId,
+            workSlug: (row as any).work_slug || '',
+            workTitle: (row as any).work_title || '',
+            coverId: (row as any).work_cover_id || null,
+            kind: (row as any).work_kind || 'UNKNOWN',
+            contentRating: (row as any).work_content_rating || null,
+            latestPublishedAt: (row as any).latest_published_at || (row as any).published_at || '',
+            chapters: []
+          });
+        }
+        const group = releasesMap.get(workId)!;
+        if (
+          (row as any).id &&
+          !group.chapters.some((c) => c.id === (row as any).id || c.number === Number((row as any).number))
+        ) {
+          group.chapters.push({
+            id: (row as any).id,
+            number: Number((row as any).number),
+            title: (row as any).title,
+            publishedAt: (row as any).published_at || ''
+          });
         }
       }
+    }
 
-      let recentReleases = Array.from(releasesMap.values()).slice(0, 15);
+    let recentReleases = Array.from(releasesMap.values()).slice(0, 15);
 
-      // Fallback derivation if works query was empty but releases succeeded
-      if (works.length === 0 && recentReleases.length > 0) {
-        works = recentReleases.map(r => ({
-          id: r.workId,
-          slug: r.workSlug,
-          title: r.workTitle,
-          coverId: r.coverId,
-          kind: r.kind,
-          contentRating: r.contentRating,
-          published: true,
-          updatedAt: r.latestPublishedAt
-        }));
-      }
+    // Fallback derivation if works query was empty but releases succeeded
+    if (works.length === 0 && recentReleases.length > 0) {
+      works = recentReleases.map(r => ({
+        id: r.workId,
+        slug: r.workSlug,
+        title: r.workTitle,
+        coverId: r.coverId,
+        kind: r.kind,
+        contentRating: r.contentRating,
+        published: true,
+        updatedAt: r.latestPublishedAt
+      }));
+    }
 
-      const featuredCandidates = works.filter((w) => w.featured);
-      const featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
-      const mostReadWorks = (mostReadRes?.data && mostReadRes.data.length > 0) ? mostReadRes.data : works.slice(0, 16);
+    const featuredCandidates = works.filter((w) => w.featured);
+    const featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
+    const mostReadWorks = (mostReadRes?.data && mostReadRes.data.length > 0) ? mostReadRes.data : works.slice(0, 16);
 
-      const payload: HomeCachePayload = {
-        timestamp: Date.now(),
-        works,
-        featuredList,
-        recentReleases,
-        mostReadWorks,
-        loadError: recentReleases.length === 0,
-        isStale: false
-      };
+    const payload: HomeCachePayload = {
+      timestamp: Date.now(),
+      works,
+      featuredList,
+      recentReleases,
+      mostReadWorks,
+      loadError: recentReleases.length === 0,
+      isStale: false
+    };
 
-      if (works.length > 0 || recentReleases.length > 0) {
-        homePublicCache = payload;
-        // Broadcast to Cloudflare shared edge cache so all isolates share it with 0 Hyperdrive queries
-        setSharedCache(SHARED_CACHE_KEYS.HOME_PUBLIC, payload, 20).catch(() => {});
-      }
+    if (works.length > 0 || recentReleases.length > 0) {
+      homePublicCache = payload;
+      // Broadcast to Cloudflare shared edge cache so all isolates share it with 0 Hyperdrive queries
+      setSharedCache(SHARED_CACHE_KEYS.HOME_PUBLIC, payload, 20).catch(() => {});
+    }
 
-      return payload;
-    } catch (err) {
-      console.warn('[HOME CACHE REFRESH ERROR]', err);
-      if (homePublicCache) {
-        return {
-          ...homePublicCache,
-          isStale: true
-        };
-      }
+    return payload;
+  } catch (err) {
+    console.warn('[HOME CACHE REFRESH ERROR]', err);
+    if (homePublicCache) {
       return {
-        timestamp: Date.now(),
-        works: [],
-        featuredList: [],
-        recentReleases: [],
-        mostReadWorks: [],
-        loadError: true,
+        ...homePublicCache,
         isStale: true
       };
-    } finally {
-      inFlightRefreshPromise = null;
     }
-  })();
-
-  return inFlightRefreshPromise;
+    return {
+      timestamp: Date.now(),
+      works: [],
+      featuredList: [],
+      recentReleases: [],
+      mostReadWorks: [],
+      loadError: true,
+      isStale: true
+    };
+  }
 }
 
 /**
@@ -237,21 +225,19 @@ async function getOrRefreshHomePublic(dbInstance: any): Promise<HomeCachePayload
     return homePublicCache;
   }
 
-  // 3. Cache miss / eviction: coalesced single-flight refresh across concurrent requests
+  // 3. Cache miss / eviction: execute fresh query for this request scope
   return await refreshHomePublicCache(dbInstance);
 }
 
 export const load = async ({ locals, setHeaders }) => {
-  // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
-  setHeaders({
-    'cache-control': 'private, no-cache, no-store, must-revalidate'
-  });
-
   // Fast single-flight / SWR public content retrieval
   const publicData = await getOrRefreshHomePublic(db);
 
-  // If user is anonymous, return directly without hitting DB for personal reading records
+  // If user is anonymous, enable short edge caching and return directly without hitting DB for personal reading records
   if (!locals.user) {
+    setHeaders({
+      'cache-control': 'public, max-age=15, stale-while-revalidate=45'
+    });
     return {
       works: publicData.works,
       featuredList: publicData.featuredList,
@@ -262,6 +248,11 @@ export const load = async ({ locals, setHeaders }) => {
       isStale: publicData.isStale
     };
   }
+
+  // Authenticated user: enforce private no-cache so personal reading state is never edge-cached
+  setHeaders({
+    'cache-control': 'private, no-cache, no-store, must-revalidate'
+  });
 
   // Authenticated user: fetch personal reading progress
   let continueReading: any[] = [];
