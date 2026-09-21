@@ -1,8 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
-import { eq, ilike, desc, and, isNotNull, isNull, inArray, exists } from 'drizzle-orm';
+import { eq, ilike, desc, and, isNotNull, isNull, inArray, exists, sql } from 'drizzle-orm';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { withTimeout } from '$lib/server/resilience';
+import { getSharedCache, setSharedCache, SHARED_CACHE_KEYS } from '$lib/server/shared-cache';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -16,7 +17,6 @@ interface ObraCacheEntry {
 }
 
 const obraCache = new Map<string, ObraCacheEntry>();
-const OBRA_CACHE_TTL_MS = 300_000; // 5 minutes fresh memory cache
 
 declare global {
   var __nox_invalidate_obra: ((workId?: string, workSlug?: string) => void) | undefined;
@@ -33,11 +33,20 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
 
-  // Instant in-memory cache lookup for public obra view
-  if (!preview && obraCache.has(params.slug)) {
-    const cached = obraCache.get(params.slug)!;
-    if (Date.now() - cached.timestamp < OBRA_CACHE_TTL_MS) {
-      const work = cached.work;
+  // Cross-isolate shared Cloudflare edge cache lookup for public obra view
+  let cached: ObraCacheEntry | null = null;
+  if (!preview) {
+    cached = await getSharedCache<ObraCacheEntry>(`${SHARED_CACHE_KEYS.OBRA_PREFIX}${params.slug}`);
+    if (!cached && obraCache.has(params.slug)) {
+      const mem = obraCache.get(params.slug)!;
+      if (Date.now() - mem.timestamp < 3000) {
+        cached = mem;
+      }
+    }
+  }
+
+  if (cached) {
+    const work = cached.work;
 
       if ((work as any).contentRating === 'ADULT_18') {
         const rawAgeCookie = cookies.get('nox-age-status');
@@ -126,7 +135,6 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         hasCustomMetaImage: true
       };
     }
-  }
 
   let condition = and(
     eq(schema.works.published, true),
@@ -164,6 +172,31 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     );
     if (fallbackRes.data) {
       redirect(301, `/obra/${fallbackRes.data.slug}`);
+    }
+
+    // Explicit 301 redirect for consolidated alias: Imperador Demoníaco -> Imperador Mágico
+    if (params.slug?.toLowerCase() === 'imperador-demoniaco') {
+      redirect(301, '/obra/imperador-magico');
+    }
+
+    // Dynamic alias fallback lookup
+    const aliasRes = await withTimeout(
+      safeQuerySingle(
+        db.select({ slug: schema.works.slug })
+          .from(schema.works)
+          .where(
+            and(
+              eq(schema.works.published, true),
+              sql`${params.slug} = ANY(${schema.works.aliases}) OR ${params.slug.replace(/-/g, ' ')} ILIKE ANY(${schema.works.aliases})`
+            )
+          )
+      ),
+      1500,
+      { data: null },
+      'obra_alias_fallback'
+    );
+    if (aliasRes?.data?.slug) {
+      redirect(301, `/obra/${aliasRes.data.slug}`);
     }
   }
 
@@ -373,6 +406,11 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     obraCache.set(work.id, cacheEntry);
     if (work.slug) {
       obraCache.set(work.slug, cacheEntry);
+    }
+    // Broadcast to Cloudflare shared edge cache
+    setSharedCache(`${SHARED_CACHE_KEYS.OBRA_PREFIX}${work.id}`, cacheEntry, 60).catch(() => {});
+    if (work.slug) {
+      setSharedCache(`${SHARED_CACHE_KEYS.OBRA_PREFIX}${work.slug}`, cacheEntry, 60).catch(() => {});
     }
   }
 

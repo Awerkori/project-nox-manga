@@ -2,6 +2,8 @@ import { error } from '@sveltejs/kit';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
 import { eq, and, desc, asc, isNull, isNotNull, count, inArray, notIlike, ilike } from 'drizzle-orm';
+import { primeMediaMetadata } from '$lib/server/media-cache';
+import { getSharedCache, setSharedCache, SHARED_CACHE_KEYS } from '$lib/server/shared-cache';
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -12,14 +14,29 @@ type ReaderCacheEntry = {
 };
 
 const readerCache = new Map<string, ReaderCacheEntry>();
-const READER_CACHE_TTL_MS = 60_000;
+const READER_CACHE_TTL_MS = 300_000; // 5 minutes fresh memory cache
 
 export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
   const canAccessUnpublished = isStaff && isPreviewRequested;
 
-  // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
+  // 1. Cross-isolate shared Cloudflare edge cache lookup for anonymous readers (~0.3ms, 0 Hyperdrive queries)
+  if (!isPreviewRequested && !locals.user) {
+    const edgeCached = await getSharedCache<any>(`${SHARED_CACHE_KEYS.READER_PREFIX}${params.id}`);
+    if (edgeCached) {
+      setHeaders({
+        'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      });
+      return {
+        ...edgeCached,
+        progress: null,
+        preview: false
+      };
+    }
+  }
+
+  // 2. Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
   if (!isPreviewRequested && readerCache.has(params.id)) {
     const cached = readerCache.get(params.id)!;
     if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS) {
@@ -173,7 +190,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         chapter = {
           id: prodChapter.id,
           number: prodChapter.chapterNumber,
-          title: prodChapter.chapterLabel || prodChapter.chapterTitle || `Captulo ${prodChapter.chapterNumber}`,
+          title: prodChapter.chapterLabel || prodChapter.chapterTitle || `Capítulo ${prodChapter.chapterNumber}`,
           workId: prodChapter.workId,
           publishedAt: null,
           works: workData
@@ -183,15 +200,15 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   }
 
   if (!chapter && chapterRes.status === 'TIMEOUT') {
-    error(503, 'A conexo com o leitor est temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexão com o leitor está temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (!chapter && chapterRes.status === 'ERROR') {
-    error(500, 'Instabilidade temporria ao carregar o captulo. Tente novamente em instantes.');
+    error(500, 'Instabilidade temporária ao carregar o capítulo. Tente novamente em instantes.');
   }
 
-  if (!chapter) error(404, 'Captulo indisponvel');
-  if (!canAccessUnpublished && !chapter.works?.published) error(404, 'Obra ainda no publicada');
+  if (!chapter) error(404, 'Capítulo indisponível');
+  if (!canAccessUnpublished && !chapter.works?.published) error(404, 'Obra ainda não publicada');
 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.publishedAt || (isPreviewRequested && isStaff);
@@ -210,20 +227,33 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       if (p.data?.ageStatus) ageStatus = p.data.ageStatus;
     }
     if (ageStatus === 'MINOR') {
-      error(403, 'Contedo restrito: este captulo  destinado exclusivamente a maiores de 18 anos.');
+      error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
     }
   }
 
-  // 1. Fetch core chapter pages with dedicated timeout and resilience
+  // 1. Fetch core chapter pages and join media metadata
   const pagesPromise = safeDbQuery(
     safeQuery(
       db.select({
         position: schema.pages.position,
         mediaId: schema.pages.mediaId,
         width: schema.pages.width,
-        height: schema.pages.height
+        height: schema.pages.height,
+        mediaProvider: schema.media.provider,
+        mediaProviderKey: schema.media.providerKey,
+        mediaMime: schema.media.mime,
+        mediaBytes: schema.media.bytes,
+        mediaSha256: schema.media.sha256,
+        mediaBotReference: schema.media.botReference,
+        mediaStorageShardId: schema.media.storageShardId,
+        mediaAccessClass: schema.media.accessClass,
+        mediaPurpose: schema.media.purpose,
+        mediaCreatedBy: schema.media.createdBy,
+        mediaStatus: schema.media.status,
+        mediaStorageReady: schema.media.storageReady
       })
       .from(schema.pages)
+      .leftJoin(schema.media, eq(schema.pages.mediaId, schema.media.id))
       .where(eq(schema.pages.chapterId, chapter.id))
       .orderBy(asc(schema.pages.position))
     ),
@@ -246,7 +276,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     'reader_siblings'
   );
 
-  // 3. Auxiliary metadata (comments, scans, reading progress) with resilient fallback
+  // 3. Auxiliary metadata (reading progress and scans) with resilient fallback
   const auxPromise = withTimeout(
     Promise.all([
       locals.user
@@ -259,57 +289,6 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
             .where(and(eq(schema.reading.userId, locals.user.id), eq(schema.reading.chapterId, chapter.id)))
           )
         : Promise.resolve({ data: null }),
-      
-      safeQuery(
-        db.select({
-          id: schema.comments.id,
-          userId: schema.comments.userId,
-          body: schema.comments.body,
-          createdAt: schema.comments.createdAt,
-          parentId: schema.comments.parentId,
-          members: {
-            username: schema.members.username,
-            displayName: schema.members.displayName,
-            avatarId: schema.members.avatarId,
-            nameColor: schema.members.nameColor,
-            avatarFrameId: schema.members.avatarFrameId,
-            equippedCommentBannerId: schema.members.equippedCommentBannerId,
-            equippedTitleId: schema.members.equippedTitleId
-          }
-        })
-        .from(schema.comments)
-        .leftJoin(schema.members, eq(schema.comments.userId, schema.members.id))
-        .where(and(eq(schema.comments.chapterId, chapter.id), eq(schema.comments.removed, false)))
-        .orderBy(desc(schema.comments.createdAt))
-        .limit(100)
-      ).then(async (res) => {
-        if (!res.data || res.data.length === 0) return { data: [] };
-        
-        const commentIds = res.data.map((c: any) => c.id);
-        const likesRes = await safeQuery(
-          db.select({
-            commentId: schema.commentLikes.commentId,
-            userId: schema.commentLikes.userId
-          })
-          .from(schema.commentLikes)
-          .where(inArray(schema.commentLikes.commentId, commentIds))
-        );
-        
-        const likesMap = new Map<string, { userId: string }[]>();
-        if (likesRes.data) {
-          for (const like of likesRes.data) {
-            if (!likesMap.has(like.commentId)) likesMap.set(like.commentId, []);
-            likesMap.get(like.commentId)!.push({ userId: like.userId });
-          }
-        }
-        
-        return {
-          data: res.data.map((c: any) => ({
-            ...c,
-            commentLikes: likesMap.get(c.id) || []
-          }))
-        };
-      }),
 
       safeQuery(
         db.select({
@@ -337,31 +316,59 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         .where(eq(schema.workScans.workId, chapter.workId))
       )
     ]),
-    3000,
-    [{ data: null }, { data: [] }, { data: [] }, { data: [] }] as any,
+    2500,
+    [{ data: null }, { data: [] }, { data: [] }] as any,
     'reader_aux_metadata'
   );
 
-  const [pagesRes, siblingsRes, [progress, comments, chapterScansRes, workScansRes]] = await Promise.all([
+  const [pagesRes, siblingsRes, [progress, chapterScansRes, workScansRes]] = await Promise.all([
     pagesPromise,
     siblingsPromise,
     auxPromise
   ]);
 
   if (pagesRes.status === 'TIMEOUT') {
-    error(503, 'A conexo com as pginas est temporariamente lenta. Tente recarregar em instantes.');
+    error(503, 'A conexão com as páginas está temporariamente lenta. Tente recarregar em instantes.');
   }
 
   if (pagesRes.status === 'ERROR') {
-    error(500, 'Instabilidade ao carregar as pginas do captulo.');
+    error(500, 'Instabilidade ao carregar as páginas do capítulo.');
   }
 
-  const pagesData = (pagesRes.data || []) as any[];
+  const rawPages = (pagesRes.data || []) as any[];
 
   // If chapter is published but has 0 pages returned, throw 503 so it re-attempts rather than showing an empty black box
-  if (!preview && pagesData.length === 0) {
-    error(503, 'Captulo em processamento ou temporariamente indisponvel. Tente novamente em instantes.');
+  if (!preview && rawPages.length === 0) {
+    error(503, 'Capítulo em processamento ou temporariamente indisponível. Tente novamente em instantes.');
   }
+
+  // Prime worker isolate in-memory cache for media files
+  if (rawPages.length > 0) {
+    primeMediaMetadata(
+      rawPages.map((p) => ({
+        id: p.mediaId,
+        provider: p.mediaProvider,
+        providerKey: p.mediaProviderKey,
+        mime: p.mediaMime,
+        bytes: p.mediaBytes,
+        sha256: p.mediaSha256,
+        botReference: p.mediaBotReference,
+        storageShardId: p.mediaStorageShardId,
+        accessClass: p.mediaAccessClass,
+        purpose: p.mediaPurpose,
+        createdBy: p.mediaCreatedBy,
+        status: p.mediaStatus,
+        storageReady: p.mediaStorageReady
+      }))
+    );
+  }
+
+  const pagesData = rawPages.map((p) => ({
+    position: p.position,
+    mediaId: p.mediaId,
+    width: p.width,
+    height: p.height
+  }));
 
   let scans = (((chapterScansRes && chapterScansRes.data) || []) as any[])
     .map((cs) => cs.scans)
@@ -379,7 +386,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const index = all.findIndex((c: any) => c.id === chapter.id);
 
   if (!preview && chapter && pagesData.length > 0) {
-    if (readerCache.size >= 100) {
+    if (readerCache.size >= 500) {
       const oldestKey = readerCache.keys().next().value;
       if (oldestKey) readerCache.delete(oldestKey);
     }
@@ -390,6 +397,18 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       siblings: all,
       scans
     });
+
+    const sharedPayload = {
+      chapter,
+      pages: pagesData,
+      previous: all[index - 1] || null,
+      next: all[index + 1] || null,
+      siblings: all,
+      comments: [],
+      scans,
+      preview: false
+    };
+    setSharedCache(`${SHARED_CACHE_KEYS.READER_PREFIX}${chapter.id}`, sharedPayload, 180).catch(() => {});
   }
 
   if (!locals.user && !preview) {
@@ -405,7 +424,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     next: all[index + 1] || null,
     siblings: all,
     progress: progress?.data || null,
-    comments: comments?.data || [],
+    comments: [],
     scans,
     preview
   };
