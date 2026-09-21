@@ -62,7 +62,7 @@
 <section id="lancamentos" class="releases-section">
   <div class="releases-header">
     <div class="title-cluster">
-      <h2 class="releases-title">LANÇAMENTOS</h2>
+      <h2 class="releases-title">Lançamentos</h2>
       <span class="releases-subtitle">Capítulos recém-publicados</span>
     </div>
 

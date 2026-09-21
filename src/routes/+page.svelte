@@ -38,10 +38,10 @@
 </script>
 
 <svelte:head>
-  <title>Project Nox — Plataforma de Leitura de Mangs e Manhwas</title>
+  <title>Project Nox — Plataforma de Leitura de Mangás e Manhwas</title>
   <meta
     name="description"
-    content="Leia seus mangs e manhwas favoritos no Project Nox com a melhor experincia de leitura, alta densidade e qualidade visual."
+    content="Leia seus mangás e manhwas favoritos no Project Nox com a melhor experiência de leitura, alta densidade e qualidade visual."
   />
 </svelte:head>
 
@@ -55,8 +55,8 @@
       <section class="section-block continue-section">
         <div class="section-header">
           <div class="title-cluster">
-            <h2 class="section-title">CONTINUAR LENDO</h2>
-            <span class="section-subtitle">De onde voc parou</span>
+            <h2 class="section-title">Continuar Lendo</h2>
+            <span class="section-subtitle">De onde você parou</span>
           </div>
 
           <div class="header-right-tools">
@@ -80,7 +80,7 @@
             </div>
 
             <a href="/historico" class="view-all-link">
-              <span>Histrico</span>
+              <span>Histórico</span>
               <ArrowRight size={14} />
             </a>
           </div>
@@ -104,6 +104,7 @@
                     height="90"
                     class="thumb-img"
                     class:blurred-cover={effectiveBlur}
+                    loading="lazy"
                     decoding="async"
                   />
                 {:else}
@@ -128,7 +129,7 @@
     {#if data.works && data.works.length > 0}
       <WorkShelf
         title="Novas Obras"
-        subtitle="Adicionadas recentemente ao catlogo"
+        subtitle="Adicionadas recentemente ao catálogo"
         works={data.works}
         loadMoreSort="latest"
       />
@@ -144,7 +145,7 @@
       />
     {/if}
 
-    <!-- 5. Lanamentos (Single Wide Column High-Density Feed) -->
+    <!-- 5. Lançamentos (Single Wide Column High-Density Feed) -->
     <RecentReleases releases={data.recentReleases} loadError={data.loadError} isStale={data.isStale} />
   </div>
 </div>
