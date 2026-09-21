@@ -16,7 +16,7 @@
 
   let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [] }: Props = $props();
 
-  let currentWorks = $state<Work[]>([]);
+  let currentWorks = $state<Work[]>(works);
   let isExpanded = $state(false);
   let loadingMore = $state(false);
   let hasMore = $state(true);
@@ -118,6 +118,20 @@
       isExpanded = false;
     }
   }
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
+  }
 </script>
 
 {#if currentWorks.length > 0}
@@ -140,7 +154,7 @@
             class="expand-inline-btn"
             onclick={toggleExpand}
             disabled={loadingMore}
-            aria-label={isExpanded ? 'Recolher estante' : 'Carregar mais obras nesta seo'}
+            aria-label={isExpanded ? 'Recolher estante' : 'Carregar mais obras nesta seção'}
           >
             {#if loadingMore}
               <Loader2 size={13} class="spin" />
@@ -156,7 +170,7 @@
 
         {#if viewAllUrl && !isExpanded}
           <a href={viewAllUrl} class="view-all-link">
-            <span>Ver catlogo</span>
+            <span>Ver catálogo</span>
             <ArrowRight size={14} />
           </a>
         {/if}
@@ -191,7 +205,7 @@
       use:bindScroll
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
-        {#each currentWorks as work (work.id)}
+        {#each currentWorks as work, i (work.id)}
           {@const isAdult = work.contentRating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
           {@const shelfCover = resolveCoverUrl(work.coverId, work.slug, work.id)}
@@ -199,24 +213,27 @@
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               <img
+                use:fallbackCover
                 src={shelfCover}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}
                 width="200"
                 height="285"
+                loading={i < 4 ? "eager" : "lazy"}
+                fetchpriority={i < 2 ? "high" : "auto"}
                 decoding="async"
               />
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-              <div class="card-views-badge" title="{work.viewsTotal || 0} visualizaes">
+              <div class="card-views-badge" title="{work.viewsTotal || 0} visualizações">
                 <Eye size={10} />
                 <span>{formatViews(work.viewsTotal)}</span>
               </div>
 
               <!-- 2. Type: Superior Direito (Top-Right) -->
-              <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mang'}</span>
+              <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
 
               <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
               {#if isAdult}
@@ -227,7 +244,7 @@
               {#if scanInfo}
                 <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
                   {#if scanInfo.logoId}
-                    <img src="/media/{scanInfo.logoId}" alt="" class="scan-badge-logo" />
+                    <img src="/media/{scanInfo.logoId}" alt="" class="scan-badge-logo" loading="lazy" decoding="async" />
                   {:else if scanInfo.isOfficial}
                     <ShieldCheck size={10} />
                   {/if}
@@ -296,7 +313,7 @@
             {/if}
           </button>
         {:else}
-          <span class="all-loaded-text">Todas as obras desta seo foram carregadas.</span>
+          <span class="all-loaded-text">Todas as obras desta seção foram carregadas.</span>
         {/if}
         <button
           type="button"
@@ -526,6 +543,7 @@
     position: relative;
     width: 200px;
     height: 285px;
+    aspect-ratio: 200 / 285;
     border-radius: 12px;
     overflow: hidden;
     background: #11131c;

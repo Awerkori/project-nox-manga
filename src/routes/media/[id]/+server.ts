@@ -10,6 +10,7 @@ import {
   deduceMangaShardFromFileId
 } from '$lib/server/storage-router';
 import { TelegramStorageError } from '$lib/server/telegram';
+import { getMediaMetadata, setMediaMetadata } from '$lib/server/media-cache';
 export const GET = async ({ params, request, platform, locals }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
@@ -40,7 +41,9 @@ export const GET = async ({ params, request, platform, locals }: any) => {
         if (etag && request.headers.get('if-none-match') === etag) {
           return new Response(null, { status: 304, headers: cached.headers });
         }
-        return new Response(cached.body, cached);
+        const hitHeaders = new Headers(cached.headers);
+        hitHeaders.set('X-Media-Cache', 'HIT');
+        return new Response(cached.body, { status: 200, headers: hitHeaders });
       }
     } catch {
       // Fall through to standard retrieval on cache check failure
@@ -48,12 +51,19 @@ export const GET = async ({ params, request, platform, locals }: any) => {
   }
 
   
-  const { data: media } = await safeQuerySingle(
-    db.select().from(schema.media).where(eq(schema.media!.id, params.id))
-  );
+  let media: any = getMediaMetadata(params.id);
+  if (!media) {
+    const { data: dbMedia } = await safeQuerySingle(
+      db.select().from(schema.media).where(eq(schema.media!.id, params.id))
+    );
+    media = dbMedia;
+    if (media) {
+      setMediaMetadata(params.id, media);
+    }
+  }
 
   if (!media || media.storageReady === false || media.status === 'DELETED') {
-    return new Response(JSON.stringify({ error: 'Mdia no encontrada' }), {
+    return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +89,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     const isOwner = Boolean(verifiedSession?.user?.id && media.createdBy === verifiedSession.user.id);
     const isAuthenticatedAllowed = media.accessClass === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
     if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
-      return new Response(JSON.stringify({ error: 'Acesso no autorizado' }), {
+      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +106,8 @@ export const GET = async ({ params, request, platform, locals }: any) => {
       ? 'public, max-age=31536000, s-maxage=31536000, immutable'
       : 'private, no-cache',
     'ETag': `"${media.sha256}"`,
-    'Content-Security-Policy': "default-src 'none'; sandbox"
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'X-Media-Cache': 'MISS'
   };
 
   if (request.headers.get('if-none-match') === headers.ETag) {
@@ -106,7 +117,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
   let body: BodyInit;
   if (media.provider === 'supabase') {
     if (!media!.providerKey) {
-      return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
+      return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
         status: 502,
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +128,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     const supabaseUrl = env.PUBLIC_SUPABASE_URL;
     const supabaseKey = privateEnv.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !supabaseKey) {
-      return new Response(JSON.stringify({ error: 'Armazenamento temporariamente indisponvel' }), {
+      return new Response(JSON.stringify({ error: 'Armazenamento temporariamente indisponível' }), {
         status: 503,
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +141,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     });
     const { data, error: problem } = await supabase.storage.from('nox-media').download(media!.providerKey);
     if (problem || !data) {
-      return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
+      return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
         status: 502,
         headers: {
           'Content-Type': 'application/json',
@@ -188,23 +199,40 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
       if (isTg400 && media?.providerKey) {
-        // Bot mismatch (wrong fileId) - attempt alternative bot
-        const altBotRef = botRef === 'MANGA_STORAGE_2' ? 'MANGA_STORAGE_01' : 'MANGA_STORAGE_2';
-        try {
-          const altClient = resolveBotDownloadClient(altBotRef);
-          const stream = await altClient.download(media!.providerKey as string);
-          body = stream;
-          botRef = altBotRef;
-          // Self-heal DB mapping in background
-          const healingUpdate = { botReference: altBotRef };
-          if ((platform as any)?.context?.waitUntil) {
-            (platform as any).context.waitUntil(
-              safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)))
-            );
-          } else {
-            safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)));
+        // Bot mismatch (wrong fileId) - attempt alternative bots across all 6 storage bots
+        const candidateBots = [
+          'MANGA_STORAGE_01',
+          'MANGA_STORAGE_2',
+          'MANGA_STORAGE_03',
+          'MANGA_STORAGE_04',
+          'MANGA_STORAGE_05',
+          'MANGA_STORAGE_06'
+        ].filter((b) => b !== botRef);
+
+        let recovered = false;
+        for (const altBotRef of candidateBots) {
+          try {
+            const altClient = resolveBotDownloadClient(altBotRef);
+            const stream = await altClient.download(media!.providerKey as string);
+            body = stream;
+            botRef = altBotRef;
+            recovered = true;
+            // Self-heal DB mapping in background
+            const healingUpdate = { botReference: altBotRef };
+            if ((platform as any)?.context?.waitUntil) {
+              (platform as any).context.waitUntil(
+                safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)))
+              );
+            } else {
+              safeQuery(db.update(schema.media).set(healingUpdate).where(eq(schema.media!.id, media!.id)));
+            }
+            break;
+          } catch {
+            // Continue trying other candidate bots
           }
-        } catch {
+        }
+
+        if (!recovered) {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {
             id: params.id,
             botRef,
@@ -212,7 +240,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
             stage: firstErr instanceof TelegramStorageError ? firstErr.stage : 'unknown',
             status: firstErr instanceof TelegramStorageError ? firstErr.status : undefined
           });
-          return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
+          return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
             status: 502,
             headers: {
               'Content-Type': 'application/json',
@@ -228,7 +256,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
           stage: firstErr instanceof TelegramStorageError ? firstErr.stage : 'unknown',
           status: firstErr instanceof TelegramStorageError ? firstErr.status : undefined
         });
-        return new Response(JSON.stringify({ error: 'Pgina temporariamente indisponvel' }), {
+        return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
           status: 502,
           headers: {
             'Content-Type': 'application/json',
@@ -239,7 +267,9 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     }
   }
 
-  if (body instanceof ArrayBuffer) {
+  if (media.bytes && Number(media.bytes) > 0) {
+    headers['Content-Length'] = String(media.bytes);
+  } else if (body instanceof ArrayBuffer) {
     headers['Content-Length'] = String(body.byteLength);
   } else if (body instanceof Blob) {
     headers['Content-Length'] = String(body.size);

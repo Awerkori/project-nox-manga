@@ -38,6 +38,20 @@
       currentReleases = [...releases];
     }
   });
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
+  }
 </script>
 
 <section id="lancamentos" class="releases-section">
@@ -57,7 +71,7 @@
 
   {#if releases.length > 0}
     <div class="releases-grid">
-      {#each currentReleases as rel (rel.workId)}
+      {#each currentReleases as rel, i (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
@@ -67,13 +81,15 @@
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             <div class="thumb-wrap">
               <img
+                use:fallbackCover
                 src={thumbCover}
                 alt={rel.workTitle}
                 class="thumb-img"
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
-                loading="lazy"
+                loading={i < 3 ? "eager" : "lazy"}
+                fetchpriority={i < 3 ? "high" : "auto"}
                 decoding="async"
               />
               {#if isAdult}
@@ -264,6 +280,7 @@
     position: relative;
     width: 64px;
     height: 88px;
+    aspect-ratio: 64 / 88;
     border-radius: 8px;
     overflow: hidden;
     background: #11131c;
