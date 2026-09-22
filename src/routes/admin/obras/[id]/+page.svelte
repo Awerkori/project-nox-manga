@@ -3,7 +3,6 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, slugify } from '$lib/types';
-  import DeleteContent from '$lib/components/DeleteContent.svelte';
   import BatchChapterModal from '$lib/components/BatchChapterModal.svelte';
   import {
     ArrowLeft,
@@ -21,7 +20,9 @@
     Flame,
     Users,
     Zap,
-    Shield
+    Shield,
+    Trash2,
+    AlertTriangle
   } from '@lucide/svelte';
 
   let { data } = $props();
@@ -46,14 +47,61 @@
   let applyToExistingChapters = $state(false);
   let applyingScans = $state(false);
 
+  // Danger zone & deletion state (Admin only)
+  let showDeleteModal = $state(false);
+  let deleteConfirmationText = $state('');
+  let preventRecreateWork = $state(Boolean(initial.importerMapping));
+  let isDeleting = $state(false);
+  let deleteError = $state('');
+
+  function openDeleteModal() {
+    deleteConfirmationText = '';
+    deleteError = '';
+    preventRecreateWork = Boolean(data.importerMapping);
+    showDeleteModal = true;
+  }
+
+  function closeDeleteModal() {
+    if (isDeleting) return;
+    showDeleteModal = false;
+    deleteConfirmationText = '';
+    deleteError = '';
+  }
+
+  async function handleDeleteWork() {
+    if (!data.work?.id || deleteConfirmationText !== 'EXCLUIR' || isDeleting) return;
+    isDeleting = true;
+    deleteError = '';
+    try {
+      const res = await fetch(`/api/admin/works/${data.work.id}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation: deleteConfirmationText,
+          preventRecreate: preventRecreateWork
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || 'Falha ao processar exclusão da obra.');
+      }
+      showDeleteModal = false;
+      await goto('/admin/obras?deleted=1', { invalidateAll: true });
+    } catch (err: any) {
+      deleteError = err.message || 'Erro ao processar exclusão.';
+    } finally {
+      isDeleting = false;
+    }
+  }
+
   async function applyScansToChapters() {
     if (!data.work?.id) return;
     if (!selectedScanIds.length) {
-      alert('Selecione pelo menos uma scan antes de aplicar aos captulos.');
+      alert('Selecione pelo menos uma scan antes de aplicar aos capítulos.');
       return;
     }
     const ok = confirm(
-      'Deseja replicar as scans selecionadas para TODOS os captulos existentes desta obra?'
+      'Deseja replicar as scans selecionadas para TODOS os capítulos existentes desta obra?'
     );
     if (!ok) return;
 
@@ -74,10 +122,10 @@
       });
       await invalidateAll();
       noticeType = 'success';
-      notice = 'Scans aplicadas com sucesso a todos os captulos da obra!';
+      notice = 'Scans aplicadas com sucesso a todos os capítulos da obra!';
     } catch (e: any) {
       noticeType = 'error';
-      notice = (e as any).message || 'Erro ao replicar scans aos captulos.';
+      notice = (e as any).message || 'Erro ao replicar scans aos capítulos.';
     } finally {
       applyingScans = false;
     }
@@ -98,7 +146,7 @@
       const result = await res.json();
       if (!res.ok) throw new Error((result as any).message || 'Erro ao priorizar obra.');
       noticeType = 'success';
-      notice = 'Obra priorizada no Importer com sucesso! O worker processar seus captulos prioritariamente.';
+      notice = 'Obra priorizada no Importer com sucesso! O worker processar seus capítulos prioritariamente.';
     } catch (e) {
       noticeType = 'error';
       notice = (e as Error).message;
@@ -150,11 +198,15 @@
           .filter(Boolean),
         tags: selected,
         coverId: cover,
+        cover_id: cover,
         scans: selectedScanIds.map((sid) => ({
           scanId: sid,
-          isPrimary: sid === primaryScanId
+          scan_id: sid,
+          isPrimary: sid === primaryScanId,
+          is_primary: sid === primaryScanId
         })),
-        apply_to_chapters: applyToExistingChapters
+        apply_to_chapters: applyToExistingChapters,
+        applyToChapters: applyToExistingChapters
       });
 
       if (!data.work) {
@@ -178,7 +230,7 @@
   }
 
   async function archive() {
-    if (!confirm('Deseja realmente arquivar esta obra? Ela deixar de aparecer publicamente no catlogo.')) return;
+    if (!confirm('Deseja realmente arquivar esta obra? Ela deixará de aparecerá publicamente no catálogo.')) return;
     busy = true;
     notice = '';
     try {
@@ -201,7 +253,7 @@
 
 <div class="work-editor-shell">
   <!-- Breadcrumb Navigation -->
-  <nav class="breadcrumb-bar" aria-label="Navegao">
+  <nav class="breadcrumb-bar" aria-label="Navegação">
     <a href="/admin/obras" class="breadcrumb-link">
       <ArrowLeft size={14} />
       <span>Voltar para Obras</span>
@@ -227,7 +279,7 @@
           class="btn-prioritize-importer"
           disabled={busy || prioritizing}
           onclick={prioritizeWork}
-          title="Solicitar priorizao no worker do Importer"
+          title="Solicitar priorização no worker do Importer"
         >
           <Flame size={14} />
           <span>{prioritizing ? 'Priorizando…' : 'Priorizar no Importer'}</span>
@@ -240,7 +292,7 @@
             rel="noopener noreferrer"
             class="btn-view-public"
           >
-            <span>Ver no site pblico</span>
+            <span>Ver no site público</span>
             <ExternalLink size={14} />
           </a>
         {/if}
@@ -271,7 +323,7 @@
     <div class="cover-studio-row">
       <div class="cover-preview-box">
         {#if cover}
-          <img src="/media/{cover}" alt="Prvia da capa" width="140" height="198" class="cover-image" />
+          <img src="/media/{cover}" alt="Prévia da capa" width="140" height="198" class="cover-image" />
         {:else}
           <div class="cover-empty-box">
             <BookOpen size={28} />
@@ -283,7 +335,7 @@
       <div class="cover-actions-col">
         <h3 class="cover-heading">Capa Oficial</h3>
         <p class="cover-hint">
-          Selecione uma imagem vertical de alta resoluo (proporo aproximada 1:1.4). Formatos suportados: WebP, PNG, JPEG ou GIF animado.
+          Selecione uma imagem vertical de alta resolução (proporção aproximada 1:1.4). Formatos suportados: WebP, PNG, JPEG ou GIF animado.
         </p>
 
         <label class="btn-select-cover" class:disabled={uploading}>
@@ -304,7 +356,7 @@
     <div class="fields-grid">
       <!-- Title -->
       <label class="field-wrap col-full">
-        <span class="field-label">Ttulo da Obra <strong class="req">*</strong></span>
+        <span class="field-label">Título da Obra <strong class="req">*</strong></span>
         <input
           name="title"
           class="field-input"
@@ -320,7 +372,7 @@
 
       <!-- Slug -->
       <label class="field-wrap col-full">
-        <span class="field-label">Endereo pblico (Slug) <strong class="req">*</strong></span>
+        <span class="field-label">Endereço público (Slug) <strong class="req">*</strong></span>
         <input
           name="slug"
           class="field-input monospace-input"
@@ -329,12 +381,12 @@
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           placeholder="ex: distante-ceu"
         />
-        <small class="field-hint">Endereo permanente da obra: <code>/obra/{slug || 'slug-da-obra'}</code></small>
+        <small class="field-hint">Endereço permanente da obra: <code>/obra/{slug || 'slug-da-obra'}</code></small>
       </label>
 
       <!-- Aliases -->
       <label class="field-wrap col-full">
-        <span class="field-label">Ttulos Alternativos</span>
+        <span class="field-label">Títulos Alternativos</span>
         <textarea
           name="aliases"
           class="field-textarea"
@@ -353,19 +405,19 @@
           rows="4"
           maxlength="5000"
           required
-          placeholder="Apresentao inicial para os leitores..."
+          placeholder="Apresentação inicial para os leitores..."
         >{data.work?.synopsis || ''}</textarea>
       </label>
 
       <!-- Additional Description -->
       <label class="field-wrap col-full">
-        <span class="field-label">Descrio Adicional ou Notas</span>
+        <span class="field-label">Descrição Adicional ou Notas</span>
         <textarea
           name="description"
           class="field-textarea"
           rows="3"
           maxlength="10000"
-          placeholder="Crditos de traduo, informaes contextuais ou avisos..."
+          placeholder="Créditos de tradução, informações contextuais ou avisos..."
         >{data.work?.description || ''}</textarea>
       </label>
 
@@ -405,7 +457,7 @@
 
       <!-- Status -->
       <label class="field-wrap">
-        <span class="field-label">Status da Publicao</span>
+        <span class="field-label">Status da Publicação</span>
         <select name="status" class="field-select" value={data.work?.status || 'ONGOING'}>
           {#each ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'] as val (val)}
             <option value={val}>{statusLabels[val]}</option>
@@ -415,7 +467,7 @@
 
       <!-- Year -->
       <label class="field-wrap">
-        <span class="field-label">Ano de Lanamento</span>
+        <span class="field-label">Ano de Lançamento</span>
         <input
           name="year"
           type="number"
@@ -429,7 +481,7 @@
 
       <!-- Age Rating -->
       <label class="field-wrap">
-        <span class="field-label">Classificao Indicativa</span>
+        <span class="field-label">Classificação Indicativa</span>
         <select name="age_rating" class="field-select" value={data.work?.ageRating ?? 12}>
           {#each [0, 10, 12, 14, 16, 18] as val (val)}
             <option value={val}>{val === 0 ? 'Livre' : `${val} anos`}</option>
@@ -439,18 +491,18 @@
 
       <!-- Content Rating (+18) -->
       <label class="field-wrap col-full">
-        <span class="field-label">Classificao Editorial de Contedo (+18)</span>
+        <span class="field-label">Classificação Editorial de Conteúdo (+18)</span>
         <select name="content_rating" class="field-select" value={(data.work as any)?.contentRating || 'GENERAL'}>
           <option value="GENERAL">Geral — Recomendado para todos os leitores</option>
-          <option value="ADULT_18">Adulto (+18) — Contedo adulto/explcito (aplica tags automticas e blur)</option>
+          <option value="ADULT_18">Adulto (+18) — Conteúdo adulto/explícito (aplica tags automáticas e blur)</option>
         </select>
-        <small class="field-hint">Obras marcadas como Adulto (+18) recebem a tag "Adulto (+18)" (e "Pornhwa" se for Manhwa) e tm capas borradas por padro para proteo de menores.</small>
+        <small class="field-hint">Obras marcadas como Adulto (+18) recebem a tag "Adulto (+18)" (e "Pornhwa" se for Manhwa) e tm capas borradas por padrão para proteção de menores.</small>
       </label>
     </div>
 
-    <!-- Tags & Gneros Selector -->
+    <!-- Tags & Gêneros Selector -->
     <fieldset class="tags-fieldset">
-      <legend class="tags-legend">Gneros e Categorias Associadas</legend>
+      <legend class="tags-legend">Gêneros e Categorias Associadas</legend>
       <div class="tag-chips-wrap">
         {#each data.tags as tag (tag?.id)}
           <label class="tag-chip-label" class:active={selected.includes(tag.id)}>
@@ -462,13 +514,13 @@
       </div>
     </fieldset>
 
-    <!-- Scans / Traduo Selector -->
+    <!-- Scans / Tradução Selector -->
     <fieldset class="scans-fieldset">
       <div class="scans-fieldset-header">
         <div>
           <legend class="scans-legend">
             <Users size={15} />
-            <span>Scans / Traduo & Crditos</span>
+            <span>Scans / Tradução & Créditos</span>
           </legend>
           <p class="scans-subtext">
             Associe as scans parceiras ou a scan oficial Project Nox a esta obra. Obras sem scan selecionada no exibiro scan falsa publicamente.
@@ -481,10 +533,10 @@
             class="btn-apply-chapters"
             onclick={applyScansToChapters}
             disabled={busy || applyingScans || !selectedScanIds.length}
-            title="Replicar imediatamente estas scans para todos os captulos desta obra"
+            title="Replicar imediatamente estas scans para todos os capítulos desta obra"
           >
             <Zap size={14} />
-            <span>{applyingScans ? 'Replicando…' : 'Replicar nos Captulos'}</span>
+            <span>{applyingScans ? 'Replicando…' : 'Replicar nos Capítulos'}</span>
           </button>
         {/if}
       </div>
@@ -514,7 +566,7 @@
         {/each}
 
         {#if !data.allScans?.length}
-          <p class="no-scans-text">Nenhuma scan cadastrada no sistema. Cadastre na <a href="/admin/scans">Gesto de Scans</a>.</p>
+          <p class="no-scans-text">Nenhuma scan cadastrada no sistema. Cadastre na <a href="/admin/scans">Gestão de Scans</a>.</p>
         {/if}
       </div>
 
@@ -533,7 +585,7 @@
         <div class="scans-options-row">
           <label class="checkbox-option">
             <input type="checkbox" bind:checked={applyToExistingChapters} />
-            <span>Replicar estas scans para todos os captulos existentes ao salvar esta obra</span>
+            <span>Replicar estas scans para todos os capítulos existentes ao salvar esta obra</span>
           </label>
         </div>
       {/if}
@@ -549,7 +601,7 @@
           <span>Obra Salva!</span>
         {:else}
           <Save size={16} />
-          <span>{data.work ? 'Salvar Alteraes' : 'Cadastrar Obra'}</span>
+          <span>{data.work ? 'Salvar Alterações' : 'Cadastrar Obra'}</span>
         {/if}
       </button>
 
@@ -559,7 +611,7 @@
           class="btn-archive-work"
           onclick={archive}
           disabled={busy}
-          title="Arquivar obra e ocultar do catlogo pblico"
+          title="Arquivar obra e ocultar do catálogo público"
         >
           <Archive size={15} />
           <span>Arquivar Obra</span>
@@ -568,23 +620,16 @@
     </div>
   </form>
 
-  <!-- Delete Safety Component (Admin Only) -->
-  {#if data.role === 'ADMIN' && data.work}
-    <div class="admin-danger-zone">
-      <DeleteContent id={data.work.id} label={data.work.title} kind="work" destination="/admin/obras" />
-    </div>
-  {/if}
-
   <!-- Chapters Section -->
   {#if data.work}
     <section class="chapters-section">
       <div class="chapters-header">
         <div class="chapters-title-cluster">
           <div class="chapters-title-row">
-            <h2 class="chapters-title">Captulos</h2>
+            <h2 class="chapters-title">Capítulos</h2>
             <span class="chapters-count-pill">{data.chapters.length}</span>
           </div>
-          <span class="chapters-subtitle">Acompanhe pginas, rascunhos e publicao da obra</span>
+          <span class="chapters-subtitle">Acompanhe páginas, rascunhos e publicação da obra</span>
         </div>
 
         <div class="chapters-action-buttons">
@@ -601,7 +646,7 @@
             class="btn-add-chapter"
           >
             <Plus size={15} />
-            <span>Adicionar Captulo</span>
+            <span>Adicionar Capítulo</span>
           </a>
         </div>
       </div>
@@ -611,7 +656,7 @@
           <table class="chapters-table">
             <thead>
               <tr>
-                <th>Captulo</th>
+                <th>Capítulo</th>
                 <th>Status</th>
                 <th>Data</th>
                 <th class="th-action">Ao</th>
@@ -621,7 +666,7 @@
               {#each data.chapters as ch (ch.id)}
                 <tr class="chapter-row">
                   <td class="td-ch-title">
-                    <strong class="ch-num">Captulo {ch.number}</strong>
+                    <strong class="ch-num">Capítulo {ch.number}</strong>
                     {#if ch.title}
                       <span class="ch-desc">— {ch.title}</span>
                     {/if}
@@ -659,8 +704,8 @@
       {:else}
         <div class="empty-chapters-card">
           <BookOpen size={30} class="empty-ch-icon" />
-          <h3>Nenhum captulo cadastrado ainda</h3>
-          <p>Adicione o primeiro captulo para iniciar a leitura desta obra.</p>
+          <h3>Nenhum capítulo cadastrado ainda</h3>
+          <p>Adicione o primeiro capítulo para iniciar a leitura desta obra.</p>
           <div class="empty-action-row">
             <button
               type="button"
@@ -675,12 +720,155 @@
               class="btn-primary-add-first"
             >
               <Plus size={15} />
-              <span>Cadastrar Captulo 1</span>
+              <span>Cadastrar Capítulo 1</span>
             </a>
           </div>
         </div>
       {/if}
     </section>
+  {/if}
+
+  <!-- ZONA DE PERIGO (Somente Administrador) -->
+  {#if data.role === 'ADMIN' && data.work}
+    <section class="danger-zone-section" aria-labelledby="danger-zone-heading">
+      <div class="danger-zone-header">
+        <span class="danger-zone-badge">ZONA DE PERIGO</span>
+      </div>
+      <div class="danger-zone-card">
+        <div class="danger-zone-copy">
+          <h3 id="danger-zone-heading" class="danger-zone-title">Excluir obra</h3>
+          <p class="danger-zone-desc">
+            Esta ação removerá permanentemente esta obra e os dados diretamente associados a ela.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="btn-trigger-delete"
+          onclick={openDeleteModal}
+        >
+          <Trash2 size={15} />
+          <span>Excluir Obra</span>
+        </button>
+      </div>
+    </section>
+  {/if}
+
+  <!-- MODAL DE CONFIRMAÇÃO DESTRUTIVA -->
+  {#if showDeleteModal && data.work}
+    <div class="modal-backdrop-danger" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <div class="modal-card-danger">
+        <div class="modal-header-danger">
+          <div class="modal-icon-alert">
+            <AlertTriangle size={24} />
+          </div>
+          <div class="modal-title-wrap">
+            <span class="modal-eyebrow-alert">AÇÃO DESTRUTIVA IRREVERSÍVEL</span>
+            <h2 id="delete-modal-title" class="modal-heading-danger">Excluir obra permanentemente?</h2>
+          </div>
+        </div>
+
+        <div class="modal-body-danger">
+          <p class="modal-intro-text">
+            Esta ação removerá permanentemente esta obra e os dados diretamente associados a ela do banco de dados.
+          </p>
+
+          <!-- Resumo do impacto real da exclusão -->
+          <div class="impact-summary-box">
+            <div class="impact-summary-title">Resumo do impacto real da exclusão:</div>
+            <div class="impact-summary-grid">
+              <div class="impact-item">
+                <span class="impact-item-label">Nome da obra</span>
+                <span class="impact-item-val font-semibold">{data.work.title}</span>
+              </div>
+              <div class="impact-item">
+                <span class="impact-item-label">Slug público</span>
+                <span class="impact-item-val monospace-val">/obra/{data.work.slug}</span>
+              </div>
+              <div class="impact-item">
+                <span class="impact-item-label">Capítulos que serão apagados</span>
+                <span class="impact-item-val text-crimson font-bold">{data.chapterCount} capítulo(s)</span>
+              </div>
+              <div class="impact-item">
+                <span class="impact-item-label">Páginas que serão apagadas</span>
+                <span class="impact-item-val text-crimson font-bold">{data.pageCount} página(s)</span>
+              </div>
+              <div class="impact-item col-full">
+                <span class="impact-item-label">Fonte do Importer</span>
+                {#if data.importerMapping}
+                  <span class="importer-mapping-pill">
+                    Fonte: <strong>{data.importerMapping.source}</strong> &bull; ID Externo: <code>{data.importerMapping.sourceWorkId}</code>
+                  </span>
+                {:else}
+                  <span class="importer-none-pill">Nenhum vínculo do Importer detectado</span>
+                {/if}
+              </div>
+            </div>
+          </div>
+
+          <!-- Checkbox de proteção contra o Importer (CRÍTICO) -->
+          <label class="importer-protect-container">
+            <input
+              type="checkbox"
+              bind:checked={preventRecreateWork}
+              class="importer-checkbox"
+            />
+            <div class="importer-protect-text">
+              <span class="importer-protect-headline">Impedir que o Importer recrie esta obra</span>
+              <span class="importer-protect-caption">
+                Gera um tombstone no Importer (status IGNORED / congelado por exclusão manual). Evita que a obra seja reimportada em sincronizações futuras.
+              </span>
+            </div>
+          </label>
+
+          <!-- Confirmação digitada obrigatória -->
+          <div class="typed-confirm-container">
+            <label for="delete-confirmation-input" class="typed-confirm-label">
+              Para confirmar, digite exatamente <strong class="code-word">EXCLUIR</strong>:
+            </label>
+            <input
+              id="delete-confirmation-input"
+              type="text"
+              class="typed-confirm-input"
+              bind:value={deleteConfirmationText}
+              placeholder="EXCLUIR"
+              autocomplete="off"
+              disabled={isDeleting}
+            />
+          </div>
+
+          {#if deleteError}
+            <div class="delete-error-alert" role="alert">
+              <AlertCircle size={16} />
+              <span>{deleteError}</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="modal-footer-danger">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            onclick={closeDeleteModal}
+            disabled={isDeleting}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn-modal-delete-submit"
+            disabled={deleteConfirmationText !== 'EXCLUIR' || isDeleting}
+            onclick={handleDeleteWork}
+          >
+            {#if isDeleting}
+              <span>Excluindo obra e dados…</span>
+            {:else}
+              <Trash2 size={15} />
+              <span>Sim, excluir obra e dados</span>
+            {/if}
+          </button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if showBatchModal && data.work}
@@ -1686,6 +1874,439 @@
 
     .btn-batch-zip,
     .btn-add-chapter {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+  }
+
+  /* ==========================================================================
+     ZONA DE PERIGO & MODAL DESTRUTIVO (Somente Administrador)
+     ========================================================================== */
+  .danger-zone-section {
+    margin-top: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .danger-zone-header {
+    display: flex;
+    align-items: center;
+  }
+
+  .danger-zone-badge {
+    font-size: 11px;
+    font-weight: 800;
+    color: #f87171;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .danger-zone-card {
+    background: rgba(239, 68, 68, 0.03);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .danger-zone-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .danger-zone-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fca5a5;
+  }
+
+  .danger-zone-desc {
+    margin: 0;
+    font-size: 13.5px;
+    color: #9ca3af;
+    line-height: 1.4;
+  }
+
+  .btn-trigger-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .btn-trigger-delete:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.6);
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+  }
+
+  /* Modal Backdrop & Card */
+  .modal-backdrop-danger {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .modal-card-danger {
+    width: 100%;
+    max-width: 560px;
+    background: #12141a;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(239, 68, 68, 0.15);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes modalPopIn {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .modal-header-danger {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px 24px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  .modal-icon-alert {
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    flex-shrink: 0;
+  }
+
+  .modal-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .modal-eyebrow-alert {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #f87171;
+    letter-spacing: 0.1em;
+  }
+
+  .modal-heading-danger {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  .modal-body-danger {
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    box-sizing: border-box;
+  }
+
+  .modal-intro-text {
+    margin: 0;
+    font-size: 13.5px;
+    color: #d1d5db;
+    line-height: 1.5;
+  }
+
+  .impact-summary-box {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .impact-summary-title {
+    font-size: 11.5px;
+    font-weight: 750;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .impact-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .impact-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .impact-item.col-full {
+    grid-column: 1 / -1;
+  }
+
+  .impact-item-label {
+    font-size: 11px;
+    color: #6b7280;
+  }
+
+  .impact-item-val {
+    font-size: 13.5px;
+    color: #e5e7eb;
+  }
+
+  .text-crimson {
+    color: #f87171;
+  }
+
+  .font-semibold {
+    font-weight: 600;
+  }
+
+  .font-bold {
+    font-weight: 700;
+  }
+
+  .monospace-val {
+    font-family: monospace;
+    font-size: 12.5px;
+  }
+
+  .importer-mapping-pill {
+    font-size: 12px;
+    color: #d1d5db;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: inline-block;
+  }
+
+  .importer-none-pill {
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  .importer-protect-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .importer-protect-container:hover {
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  .importer-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: #ef4444;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .importer-protect-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .importer-protect-headline {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fca5a5;
+  }
+
+  .importer-protect-caption {
+    font-size: 11.5px;
+    color: #9ca3af;
+    line-height: 1.4;
+  }
+
+  .typed-confirm-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .typed-confirm-label {
+    font-size: 13px;
+    color: #d1d5db;
+  }
+
+  .code-word {
+    color: #f87171;
+    font-family: monospace;
+    font-size: 13.5px;
+    background: rgba(239, 68, 68, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .typed-confirm-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #ffffff;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  .typed-confirm-input:focus {
+    outline: none;
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+  }
+
+  .delete-error-alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    font-size: 13px;
+  }
+
+  .modal-footer-danger {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .btn-modal-cancel {
+    padding: 9px 16px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #d1d5db;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-modal-cancel:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .btn-modal-delete-submit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    background: #dc2626;
+    border: 1px solid #ef4444;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+  }
+
+  .btn-modal-delete-submit:hover:not(:disabled) {
+    background: #b91c1c;
+    border-color: #dc2626;
+    box-shadow: 0 4px 18px rgba(220, 38, 38, 0.5);
+  }
+
+  .btn-modal-delete-submit:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  @media (max-width: 640px) {
+    .danger-zone-card {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .btn-trigger-delete {
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .impact-summary-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .modal-footer-danger {
+      flex-direction: column-reverse;
+      gap: 8px;
+    }
+
+    .btn-modal-cancel,
+    .btn-modal-delete-submit {
       width: 100%;
       justify-content: center;
       box-sizing: border-box;
