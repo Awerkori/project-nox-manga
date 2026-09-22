@@ -1,4 +1,4 @@
-import { getSharedCache, setSharedCache } from './shared-cache';
+import { getSharedCache, setSharedCache, deleteSharedCache } from './shared-cache';
 
 // Provider credentials and Telegram URLs never leave this server-only module.
 export class TelegramStorageError extends Error {
@@ -79,71 +79,92 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       return fileId;
     },
     async download(fileId: string): Promise<ReadableStream<Uint8Array>> {
-      let path: string;
-      let fileSize: number;
-
-      const cached = filePathCache.get(fileId);
-      if (cached) {
-        path = cached.path;
-        fileSize = cached.fileSize;
-      } else {
-        const shared = await getSharedCache<{ path: string; fileSize: number }>(`tg_fp_${fileId}`);
-        if (shared && shared.path && shared.fileSize) {
-          path = shared.path;
-          fileSize = shared.fileSize;
-          filePathCache.set(fileId, { path, fileSize });
-        } else {
-          const result = await api('getFile', JSON.stringify({ file_id: fileId }), {
-            'Content-Type': 'application/json'
-          });
-          path = result.file_path;
-          if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
-            throw unavailable();
-          if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
-            throw unavailable();
-          fileSize = result.file_size;
-
-          if (filePathCache.size >= MAX_FILE_PATH_CACHE) {
-            const oldest = filePathCache.keys().next().value;
-            if (oldest) filePathCache.delete(oldest);
+      async function resolveFilePath(bypassCache = false): Promise<{ path: string; fileSize: number }> {
+        if (!bypassCache) {
+          const cached = filePathCache.get(fileId);
+          if (cached) return cached;
+          const shared = await getSharedCache<{ path: string; fileSize: number }>(`tg_fp_${fileId}`);
+          if (shared && shared.path && shared.fileSize) {
+            filePathCache.set(fileId, shared);
+            return shared;
           }
-          filePathCache.set(fileId, { path, fileSize });
-          void setSharedCache(`tg_fp_${fileId}`, { path, fileSize }, 86400);
         }
+
+        const result = await api('getFile', JSON.stringify({ file_id: fileId }), {
+          'Content-Type': 'application/json'
+        });
+        const path = result.file_path;
+        if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
+          throw unavailable();
+        if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
+          throw unavailable();
+        const fileSize = result.file_size;
+
+        if (filePathCache.size >= MAX_FILE_PATH_CACHE) {
+          const oldest = filePathCache.keys().next().value;
+          if (oldest) filePathCache.delete(oldest);
+        }
+        const meta = { path, fileSize };
+        filePathCache.set(fileId, meta);
+        void setSharedCache(`tg_fp_${fileId}`, meta, 86400);
+        return meta;
       }
+
+      let meta = await resolveFilePath(false);
+      let response: Response;
       try {
-        const response = await transport(`https://api.telegram.org/file/bot${token}/${path}`, {
+        response = await transport(`https://api.telegram.org/file/bot${token}/${meta.path}`, {
           redirect: 'manual',
           signal: AbortSignal.timeout(60_000)
         });
-        if (!response.ok || !response.body) throw unavailable();
-        // Bound the stream and sanitize failures after the response headers too.
-        const reader = response.body.getReader();
-        let size = 0;
-        return new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            try {
-              const { done, value } = await reader.read();
-              if (done) {
-                if (size !== fileSize) throw unavailable();
-                controller.close();
-                return;
-              }
-              size += value.byteLength;
-              if (size > fileSize) throw unavailable();
-              controller.enqueue(value);
-            } catch {
-              await reader.cancel().catch(() => {});
-              controller.error(unavailable());
-            }
-          },
-          async cancel() {
-            await reader.cancel().catch(() => {});
-          }
-        });
       } catch {
-        throw unavailable();
+        // If initial transport request threw, bypass cache and retry once
+        filePathCache.delete(fileId);
+        void deleteSharedCache(`tg_fp_${fileId}`);
+        meta = await resolveFilePath(true);
+        response = await transport(`https://api.telegram.org/file/bot${token}/${meta.path}`, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(60_000)
+        });
       }
+
+      // If Telegram returned 404, 400, or any non-OK status (e.g. expired path), invalidate cache, re-fetch getFile and retry once
+      if (!response.ok) {
+        filePathCache.delete(fileId);
+        void deleteSharedCache(`tg_fp_${fileId}`);
+        meta = await resolveFilePath(true);
+        response = await transport(`https://api.telegram.org/file/bot${token}/${meta.path}`, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(60_000)
+        });
+      }
+
+      if (!response.ok || !response.body) throw unavailable();
+
+      const fileSize = meta.fileSize;
+      const reader = response.body.getReader();
+      let size = 0;
+      return new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (size !== fileSize) throw unavailable();
+              controller.close();
+              return;
+            }
+            size += value.byteLength;
+            if (size > fileSize) throw unavailable();
+            controller.enqueue(value);
+          } catch {
+            await reader.cancel().catch(() => {});
+            controller.error(unavailable());
+          }
+        },
+        async cancel() {
+          await reader.cancel().catch(() => {});
+        }
+      });
     }
   };
 }

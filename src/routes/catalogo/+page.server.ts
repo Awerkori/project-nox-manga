@@ -9,11 +9,9 @@ let cachedTotalWorksCount: { timestamp: number; count: number } | null = null;
 const COUNT_CACHE_TTL_MS = 600_000;
 
 let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; tags: any[] } | null = null;
-const CATALOGO_FRESH_TTL_MS = 60_000;
-const CATALOGO_STALE_TTL_MS = 300_000;
-let inFlightCatalogPromise: Promise<any> | null = null;
+const CATALOGO_CACHE_TTL_MS = 60_000;
 
-export const load = async ({ locals, url, setHeaders, platform }: any) => {
+export const load = async ({ locals, url, setHeaders }: any) => {
   const q = (url.searchParams.get('q') || '').slice(0, 100),
     tag = url.searchParams.get('tag') || '',
     kind = url.searchParams.get('tipo') || '',
@@ -29,61 +27,19 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     });
   }
 
-  // SWR & Fast-path for unfiltered default catalog view (zero DB wait when cached or stale)
-  if (isUnfiltered && cachedUnfilteredPage1) {
-    const age = Date.now() - cachedUnfilteredPage1.timestamp;
-    if (age < CATALOGO_FRESH_TTL_MS) {
-      return {
-        works: cachedUnfilteredPage1.works,
-        count: cachedUnfilteredPage1.count,
-        tags: cachedUnfilteredPage1.tags,
-        q,
-        tag,
-        kind,
-        status,
-        sort,
-        page
-      };
-    }
-    // Stale-While-Revalidate: return stale data immediately and trigger background refresh
-    if (age < CATALOGO_STALE_TTL_MS) {
-      if (!inFlightCatalogPromise) {
-        inFlightCatalogPromise = (async () => {
-          try {
-            const freshWorks = await safeQuery(
-              db.select().from(schema.works).where(eq(schema.works.published, true))
-                .orderBy(desc(schema.works.updatedAt))
-                .limit(20)
-            );
-            if (freshWorks?.data && freshWorks.data.length > 0) {
-              cachedUnfilteredPage1 = {
-                timestamp: Date.now(),
-                works: freshWorks.data,
-                count: cachedTotalWorksCount?.count || cachedUnfilteredPage1!.count,
-                tags: cachedTags?.data || cachedUnfilteredPage1!.tags
-              };
-            }
-          } catch {}
-          finally {
-            inFlightCatalogPromise = null;
-          }
-        })();
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(inFlightCatalogPromise);
-        }
-      }
-      return {
-        works: cachedUnfilteredPage1.works,
-        count: cachedUnfilteredPage1.count,
-        tags: cachedUnfilteredPage1.tags,
-        q,
-        tag,
-        kind,
-        status,
-        sort,
-        page
-      };
-    }
+  // Fast-path for unfiltered default catalog view (zero DB wait when cached in isolate)
+  if (isUnfiltered && cachedUnfilteredPage1 && Date.now() - cachedUnfilteredPage1.timestamp < CATALOGO_CACHE_TTL_MS) {
+    return {
+      works: cachedUnfilteredPage1.works,
+      count: cachedUnfilteredPage1.count,
+      tags: cachedUnfilteredPage1.tags,
+      q,
+      tag,
+      kind,
+      status,
+      sort,
+      page
+    };
   }
 
   // Execute tags and works query in parallel when not filtering by tag

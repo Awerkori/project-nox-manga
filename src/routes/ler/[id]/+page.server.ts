@@ -444,7 +444,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       scans,
       preview: false
     };
-    setSharedCache(`${SHARED_CACHE_KEYS.READER_PREFIX}${chapter.id}`, sharedPayload, 86400).catch(() => {});
+    setSharedCache(`${SHARED_CACHE_KEYS.READER_PREFIX}${chapter.id}`, sharedPayload, 300).catch(() => {});
   }
 
   if (!locals.user && !preview) {
