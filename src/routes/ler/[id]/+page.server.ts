@@ -14,7 +14,7 @@ type ReaderCacheEntry = {
 };
 
 const readerCache = new Map<string, ReaderCacheEntry>();
-const READER_CACHE_TTL_MS = 300_000; // 5 minutes fresh memory cache
+const READER_CACHE_TTL_MS = 600_000; // 10 minutes fresh memory cache
 
 type WorkSiblingsCacheEntry = {
   timestamp: number;
@@ -34,7 +34,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     const edgeCached = await getSharedCache<any>(`${SHARED_CACHE_KEYS.READER_PREFIX}${params.id}`);
     if (edgeCached) {
       setHeaders({
-        'cache-control': 'private, no-cache'
+        'cache-control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
       });
       return {
         ...edgeCached,
@@ -71,7 +71,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         userProgress = pRes?.data || null;
       } else {
         setHeaders({
-          'cache-control': 'private, no-cache'
+          'cache-control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
         });
       }
 
@@ -444,12 +444,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       scans,
       preview: false
     };
-    setSharedCache(`${SHARED_CACHE_KEYS.READER_PREFIX}${chapter.id}`, sharedPayload, 180).catch(() => {});
+    setSharedCache(`${SHARED_CACHE_KEYS.READER_PREFIX}${chapter.id}`, sharedPayload, 86400).catch(() => {});
   }
 
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'private, no-cache'
+      'cache-control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
     });
   }
 

@@ -1,3 +1,5 @@
+import { getSharedCache, setSharedCache } from './shared-cache';
+
 // Provider credentials and Telegram URLs never leave this server-only module.
 export class TelegramStorageError extends Error {
   constructor(
@@ -85,21 +87,29 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
         path = cached.path;
         fileSize = cached.fileSize;
       } else {
-        const result = await api('getFile', JSON.stringify({ file_id: fileId }), {
-          'Content-Type': 'application/json'
-        });
-        path = result.file_path;
-        if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
-          throw unavailable();
-        if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
-          throw unavailable();
-        fileSize = result.file_size;
+        const shared = await getSharedCache<{ path: string; fileSize: number }>(`tg_fp_${fileId}`);
+        if (shared && shared.path && shared.fileSize) {
+          path = shared.path;
+          fileSize = shared.fileSize;
+          filePathCache.set(fileId, { path, fileSize });
+        } else {
+          const result = await api('getFile', JSON.stringify({ file_id: fileId }), {
+            'Content-Type': 'application/json'
+          });
+          path = result.file_path;
+          if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
+            throw unavailable();
+          if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
+            throw unavailable();
+          fileSize = result.file_size;
 
-        if (filePathCache.size >= MAX_FILE_PATH_CACHE) {
-          const oldest = filePathCache.keys().next().value;
-          if (oldest) filePathCache.delete(oldest);
+          if (filePathCache.size >= MAX_FILE_PATH_CACHE) {
+            const oldest = filePathCache.keys().next().value;
+            if (oldest) filePathCache.delete(oldest);
+          }
+          filePathCache.set(fileId, { path, fileSize });
+          void setSharedCache(`tg_fp_${fileId}`, { path, fileSize }, 86400);
         }
-        filePathCache.set(fileId, { path, fileSize });
       }
       try {
         const response = await transport(`https://api.telegram.org/file/bot${token}/${path}`, {
