@@ -3,7 +3,6 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, slugify } from '$lib/types';
-  import BatchChapterModal from '$lib/components/BatchChapterModal.svelte';
   import {
     ArrowLeft,
     ExternalLink,
@@ -35,7 +34,6 @@
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let busy = $state(false);
   let uploading = $state(false);
-  let showBatchModal = $state(false);
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let selected = $state<string[]>(initial.selected);
   let prioritizing = $state(false);
@@ -633,20 +631,13 @@
         </div>
 
         <div class="chapters-action-buttons">
-          <button
-            type="button"
-            class="btn-batch-zip"
-            onclick={() => (showBatchModal = true)}
-          >
-            <FolderArchive size={15} />
-            <span>Importar Lote (ZIP)</span>
-          </button>
           <a
-            href="/admin/obras/{data.work.id}/capitulos/novo"
-            class="btn-add-chapter"
+            href="/admin/obras/upload?workId={data.work.id}"
+            class="btn-upload-session"
+            title="Enviar capítulos em lote (ZIP/CBZ) ou individuais"
           >
-            <Plus size={15} />
-            <span>Adicionar Capítulo</span>
+            <UploadCloud size={16} />
+            <span>Enviar Capítulos</span>
           </a>
         </div>
       </div>
@@ -707,20 +698,12 @@
           <h3>Nenhum capítulo cadastrado ainda</h3>
           <p>Adicione o primeiro capítulo para iniciar a leitura desta obra.</p>
           <div class="empty-action-row">
-            <button
-              type="button"
-              class="btn-batch-zip"
-              onclick={() => (showBatchModal = true)}
-            >
-              <FolderArchive size={15} />
-              <span>Importar Lote (ZIP)</span>
-            </button>
             <a
-              href="/admin/obras/{data.work.id}/capitulos/novo"
-              class="btn-primary-add-first"
+              href="/admin/obras/upload?workId={data.work.id}"
+              class="btn-upload-session"
             >
-              <Plus size={15} />
-              <span>Cadastrar Capítulo 1</span>
+              <UploadCloud size={16} />
+              <span>Enviar Capítulos</span>
             </a>
           </div>
         </div>
@@ -869,18 +852,6 @@
         </div>
       </div>
     </div>
-  {/if}
-
-  {#if showBatchModal && data.work}
-    <BatchChapterModal
-      work={data.work}
-      existingChapters={data.chapters}
-      onClose={() => (showBatchModal = false)}
-      onSuccess={async () => {
-        showBatchModal = false;
-        await invalidateAll();
-      }}
-    />
   {/if}
 </div>
 
@@ -1564,6 +1535,29 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  .btn-upload-session {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-upload-session:hover {
+    background: rgba(56, 189, 248, 0.24);
+    border-color: rgba(56, 189, 248, 0.55);
+    color: #ffffff;
+    transform: translateY(-1px);
   }
 
   .btn-batch-zip {

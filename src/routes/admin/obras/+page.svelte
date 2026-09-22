@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
+  import { invalidateAll, goto } from '$app/navigation';
+  import { page } from '$app/state';
   import {
     Plus,
     Search,
@@ -8,39 +9,114 @@
     ExternalLink,
     ArrowRight,
     BookOpen,
-    Clock,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    UploadCloud
   } from '@lucide/svelte';
   import { kindLabels, date } from '$lib/types';
+  import { onDestroy } from 'svelte';
 
   let { data } = $props();
 
-  let search = $state('');
-  let selectedKind = $state('ALL');
-  let selectedStatus = $state('ALL');
-  let notice = $state('');
-  let noticeType = $state<'info' | 'success' | 'error'>('info');
+  let search = $state(data.q || '');
+  let selectedKind = $state(data.kind || 'ALL');
+  let selectedStatus = $state(data.status || 'ALL');
+  let notice = $state(page.url.searchParams.get('deleted') ? 'Obra excluída com sucesso.' : '');
+  let noticeType = $state<'info' | 'success' | 'error'>(page.url.searchParams.get('deleted') ? 'success' : 'info');
   let syncing = $state(false);
 
-  let filteredWorks = $derived(
-    data.works.filter((w: any) => {
-      const matchesSearch =
-        !search ||
-        w.title.toLowerCase().includes(search.toLowerCase()) ||
-        w.slug.toLowerCase().includes(search.toLowerCase()) ||
-        (w.author && w.author.toLowerCase().includes(search.toLowerCase()));
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-      const matchesKind = selectedKind === 'ALL' || w.kind === selectedKind;
+  // Sync state if navigation occurs (e.g. browser back/forward)
+  $effect(() => {
+    search = data.q || '';
+    selectedKind = data.kind || 'ALL';
+    selectedStatus = data.status || 'ALL';
+    if (page.url.searchParams.get('deleted')) {
+      notice = 'Obra excluída com sucesso.';
+      noticeType = 'success';
+    }
+  });
 
-      const matchesStatus =
-        selectedStatus === 'ALL' ||
-        (selectedStatus === 'PUBLISHED' && w.published) ||
-        (selectedStatus === 'DRAFT' && !w.published);
+  onDestroy(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+  });
 
-      return matchesSearch && matchesKind && matchesStatus;
-    })
-  );
+  function updateParams(newParams: { q?: string; status?: string; kind?: string; page?: number }) {
+    const url = new URL(page.url);
+    const qVal = newParams.q !== undefined ? newParams.q : search;
+    const statusVal = newParams.status !== undefined ? newParams.status : selectedStatus;
+    const kindVal = newParams.kind !== undefined ? newParams.kind : selectedKind;
+    const pageVal = newParams.page !== undefined ? newParams.page : 1;
+
+    if (qVal && qVal.trim()) {
+      url.searchParams.set('q', qVal.trim());
+    } else {
+      url.searchParams.delete('q');
+    }
+
+    if (statusVal && statusVal !== 'ALL') {
+      url.searchParams.set('status', statusVal);
+    } else {
+      url.searchParams.delete('status');
+    }
+
+    if (kindVal && kindVal !== 'ALL') {
+      url.searchParams.set('kind', kindVal);
+    } else {
+      url.searchParams.delete('kind');
+    }
+
+    if (pageVal > 1) {
+      url.searchParams.set('page', String(pageVal));
+    } else {
+      url.searchParams.delete('page');
+    }
+
+    goto(url.pathname + url.search, { keepFocus: true, noScroll: true });
+  }
+
+  function onSearchInput(e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    search = val;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      updateParams({ q: val, page: 1 });
+    }, 300);
+  }
+
+  function onSearchClear() {
+    search = '';
+    if (debounceTimer) clearTimeout(debounceTimer);
+    updateParams({ q: '', page: 1 });
+  }
+
+  function setStatus(s: string) {
+    selectedStatus = s;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    updateParams({ status: s, page: 1 });
+  }
+
+  function setKind(k: string) {
+    selectedKind = k;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    updateParams({ kind: k, page: 1 });
+  }
+
+  function clearFilters() {
+    search = '';
+    selectedKind = 'ALL';
+    selectedStatus = 'ALL';
+    if (debounceTimer) clearTimeout(debounceTimer);
+    updateParams({ q: '', status: 'ALL', kind: 'ALL', page: 1 });
+  }
+
+  function goToPage(p: number) {
+    if (p < 1 || p > data.totalPages) return;
+    updateParams({ page: p });
+  }
 
   async function sync() {
     syncing = true;
@@ -59,26 +135,20 @@
       syncing = false;
     }
   }
-
-  function clearFilters() {
-    search = '';
-    selectedKind = 'ALL';
-    selectedStatus = 'ALL';
-  }
 </script>
 
 <svelte:head>
-  <title>Obras do Catlogo — Nox Editorial</title>
+  <title>Obras do Catálogo — Nox Editorial</title>
 </svelte:head>
 
 <div class="works-manager-shell">
   <!-- Header with Actions -->
   <header class="page-header">
     <div class="header-titles">
-      <span class="eyebrow">CATLOGO EDITORIAL</span>
+      <span class="eyebrow">CATÁLOGO EDITORIAL</span>
       <h1 class="page-title">Obras Cadastradas</h1>
       <p class="page-subtitle">
-        Gerencie as histrias, adicione captulos, defina metadados e publique no catlogo pblico.
+        Gerencie as histórias, adicione capítulos, defina metadados e publique no catálogo público.
       </p>
     </div>
 
@@ -94,6 +164,11 @@
         <RefreshCw size={15} class={syncing ? 'spin-icon' : ''} />
         <span>{syncing ? 'Importando…' : 'Importar da Central'}</span>
       </button>
+
+      <a href="/admin/obras/upload" class="btn-secondary-upload" title="Enviar capítulos em lote (ZIP/CBZ) ou individuais">
+        <UploadCloud size={15} />
+        <span>Enviar Capítulos</span>
+      </a>
 
       <a href="/admin/obras/nova" class="btn-primary-add">
         <Plus size={16} />
@@ -125,12 +200,13 @@
       <input
         type="text"
         class="search-input"
-        placeholder="Buscar por ttulo, slug ou autor…"
+        placeholder="Buscar por título, slug ou autor…"
         aria-label="Buscar obras"
-        bind:value={search}
+        value={search}
+        oninput={onSearchInput}
       />
       {#if search}
-        <button type="button" class="search-clear" onclick={() => (search = '')} aria-label="Limpar busca">
+        <button type="button" class="search-clear" onclick={onSearchClear} aria-label="Limpar busca">
           <X size={14} />
         </button>
       {/if}
@@ -145,7 +221,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'ALL'}
-          onclick={() => (selectedStatus = 'ALL')}
+          onclick={() => setStatus('ALL')}
         >
           Todas
         </button>
@@ -153,7 +229,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'PUBLISHED'}
-          onclick={() => (selectedStatus = 'PUBLISHED')}
+          onclick={() => setStatus('PUBLISHED')}
         >
           <span class="dot-pub"></span>
           No ar
@@ -162,7 +238,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'DRAFT'}
-          onclick={() => (selectedStatus = 'DRAFT')}
+          onclick={() => setStatus('DRAFT')}
         >
           <span class="dot-draft"></span>
           Rascunho
@@ -176,7 +252,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'ALL'}
-          onclick={() => (selectedKind = 'ALL')}
+          onclick={() => setKind('ALL')}
         >
           Todos
         </button>
@@ -184,7 +260,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'MANHWA'}
-          onclick={() => (selectedKind = 'MANHWA')}
+          onclick={() => setKind('MANHWA')}
         >
           Manhwa
         </button>
@@ -192,36 +268,60 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'MANGA'}
-          onclick={() => (selectedKind = 'MANGA')}
+          onclick={() => setKind('MANGA')}
         >
-          Mang
+          Mangá
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          class:active={selectedKind === 'WEBTOON'}
+          onclick={() => setKind('WEBTOON')}
+        >
+          Webtoon
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          class:active={selectedKind === 'MANHUA'}
+          onclick={() => setKind('MANHUA')}
+        >
+          Manhua
         </button>
       </div>
     </div>
 
     <!-- Results Count -->
     <div class="results-count">
-      <span>Mostrando <strong>{filteredWorks.length}</strong> de {data.works.length} obras</span>
+      {#if data.totalCount === 0}
+        <span>Nenhuma obra encontrada</span>
+      {:else if data.totalCount === 1}
+        <span>Mostrando <strong>1</strong> resultado</span>
+      {:else}
+        {@const from = (data.page - 1) * data.limit + 1}
+        {@const to = Math.min(data.page * data.limit, data.totalCount)}
+        <span>Mostrando <strong>{from}–{to}</strong> de <strong>{data.totalCount.toLocaleString('pt-BR')}</strong> obras</span>
+      {/if}
     </div>
   </div>
 
   <!-- Works Container -->
-  {#if filteredWorks.length > 0}
+  {#if data.works.length > 0}
     <!-- 1. Desktop Rich Table -->
     <div class="desktop-table-card">
       <table class="works-table">
         <thead>
           <tr>
             <th class="th-cover">Capa</th>
-            <th class="th-work">Obra & Endereo</th>
+            <th class="th-work">Obra & Endereço</th>
             <th class="th-kind">Formato</th>
-            <th class="th-status">Situao</th>
+            <th class="th-status">Situação</th>
             <th class="th-date">Atualizada em</th>
-            <th class="th-actions">Aes</th>
+            <th class="th-actions">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {#each filteredWorks as work (work.id)}
+          {#each data.works as work (work.id)}
             <tr class="work-table-row">
               <!-- Cover Column -->
               <td class="td-cover">
@@ -290,7 +390,7 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="btn-view-site"
-                      title="Ver obra no site pblico"
+                      title="Ver obra no site público"
                     >
                       <ExternalLink size={13} />
                     </a>
@@ -305,7 +405,7 @@
 
     <!-- 2. Mobile Responsive Cards (< 820px) -->
     <div class="mobile-cards-feed">
-      {#each filteredWorks as work (work.id)}
+      {#each data.works as work (work.id)}
         <div class="mobile-work-card">
           <!-- Mini Cover -->
           <a href="/admin/obras/{work.id}" class="mobile-cover-wrap" tabindex="-1">
@@ -358,7 +458,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn-view-site"
-                  title="Ver no site pblico"
+                  title="Ver no site público"
                 >
                   <ExternalLink size={14} />
                 </a>
@@ -368,20 +468,51 @@
         </div>
       {/each}
     </div>
+
+    <!-- Pagination Bar -->
+    {#if data.totalPages > 1}
+      <nav class="pagination-bar" aria-label="Paginação de obras">
+        <button
+          type="button"
+          class="page-nav-btn"
+          disabled={data.page <= 1}
+          onclick={() => goToPage(data.page - 1)}
+          aria-label="Página anterior"
+        >
+          <ChevronLeft size={15} />
+          <span>Anterior</span>
+        </button>
+
+        <div class="page-indicators">
+          <span>Página <strong>{data.page}</strong> de <strong>{data.totalPages.toLocaleString('pt-BR')}</strong></span>
+        </div>
+
+        <button
+          type="button"
+          class="page-nav-btn"
+          disabled={data.page >= data.totalPages}
+          onclick={() => goToPage(data.page + 1)}
+          aria-label="Próxima página"
+        >
+          <span>Próxima</span>
+          <ChevronRight size={15} />
+        </button>
+      </nav>
+    {/if}
   {:else}
     <!-- Empty State -->
     <div class="empty-catalog-card">
       <div class="empty-icon-circle">
         <BookOpen size={34} />
       </div>
-      {#if search || selectedKind !== 'ALL' || selectedStatus !== 'ALL'}
+      {#if data.q || data.kind !== 'ALL' || data.status !== 'ALL'}
         <h3>Nenhuma obra encontrada</h3>
-        <p>Nenhuma histria corresponde aos filtros ou busca selecionados.</p>
+        <p>Nenhuma história corresponde aos filtros ou busca selecionados.</p>
         <button type="button" class="btn-reset-filters" onclick={clearFilters}>
           Limpar filtros de busca
         </button>
       {:else}
-        <h3>Catlogo de obras vazio</h3>
+        <h3>Catálogo de obras vazio</h3>
         <p>Comece adicionando a primeira obra ou importe rascunhos da central.</p>
         <div class="empty-buttons-row">
           <a href="/admin/obras/nova" class="btn-primary-add">
@@ -497,6 +628,30 @@
   .btn-secondary-sync:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .btn-secondary-upload {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 16px;
+    border-radius: 9px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    color: #38bdf8;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-secondary-upload:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.5);
+    color: #ffffff;
+    transform: translateY(-1px);
   }
 
   :global(.spin-icon) {
@@ -995,6 +1150,55 @@
     justify-content: center;
   }
 
+  /* Pagination Bar */
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    background: rgba(13, 16, 26, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    margin-top: 4px;
+  }
+
+  .page-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .page-nav-btn:hover:not(:disabled) {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+  }
+
+  .page-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .page-indicators {
+    font-size: 12.5px;
+    color: #8c93a8;
+  }
+
+  .page-indicators strong {
+    color: #dfc28d;
+  }
+
   /* Empty Catalog Card */
   .empty-catalog-card {
     padding: 50px 20px;
@@ -1069,6 +1273,19 @@
       flex: 1;
       justify-content: center;
     }
+
+    .filters-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .search-box {
+      max-width: 100%;
+    }
+
+    .results-count {
+      text-align: right;
+    }
   }
 
   @media (max-width: 540px) {
@@ -1080,6 +1297,16 @@
     .btn-secondary-sync {
       width: 100%;
       box-sizing: border-box;
+    }
+
+    .pagination-bar {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .page-nav-btn {
+      width: 100%;
+      justify-content: center;
     }
   }
 </style>
