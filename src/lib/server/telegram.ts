@@ -10,6 +10,9 @@ export class TelegramStorageError extends Error {
 }
 const unavailable = () => new TelegramStorageError();
 
+const filePathCache = new Map<string, { path: string; fileSize: number }>();
+const MAX_FILE_PATH_CACHE = 10_000;
+
 export function telegramStorage(token: string, chatId: string, transport: typeof fetch = fetch) {
   async function api(method: 'sendDocument' | 'getFile', body: BodyInit, headers?: HeadersInit) {
     try {
@@ -73,14 +76,31 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       if (typeof fileId !== 'string' || !/^[A-Za-z0-9_-]{1,512}$/.test(fileId)) throw unavailable();
       return fileId;
     },
-    async download(fileId: string): Promise<ReadableStream<Uint8Array>> {const result = await api('getFile', JSON.stringify({ file_id: fileId}), {
-        'Content-Type': 'application/json'
-      });
-      const path = result.file_path;
-      if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
-        throw unavailable();
-      if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
-        throw unavailable();
+    async download(fileId: string): Promise<ReadableStream<Uint8Array>> {
+      let path: string;
+      let fileSize: number;
+
+      const cached = filePathCache.get(fileId);
+      if (cached) {
+        path = cached.path;
+        fileSize = cached.fileSize;
+      } else {
+        const result = await api('getFile', JSON.stringify({ file_id: fileId }), {
+          'Content-Type': 'application/json'
+        });
+        path = result.file_path;
+        if (typeof path !== 'string' || !/^(documents|photos|thumbnails)\/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9]+)?$/.test(path))
+          throw unavailable();
+        if (typeof result.file_size !== 'number' || result.file_size <= 0 || result.file_size > 20_971_520)
+          throw unavailable();
+        fileSize = result.file_size;
+
+        if (filePathCache.size >= MAX_FILE_PATH_CACHE) {
+          const oldest = filePathCache.keys().next().value;
+          if (oldest) filePathCache.delete(oldest);
+        }
+        filePathCache.set(fileId, { path, fileSize });
+      }
       try {
         const response = await transport(`https://api.telegram.org/file/bot${token}/${path}`, {
           redirect: 'manual',
@@ -95,12 +115,12 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
             try {
               const { done, value } = await reader.read();
               if (done) {
-                if (size !== result.file_size) throw unavailable();
+                if (size !== fileSize) throw unavailable();
                 controller.close();
                 return;
               }
               size += value.byteLength;
-              if (size > result.file_size) throw unavailable();
+              if (size > fileSize) throw unavailable();
               controller.enqueue(value);
             } catch {
               await reader.cancel().catch(() => {});

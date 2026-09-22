@@ -16,6 +16,14 @@ type ReaderCacheEntry = {
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 300_000; // 5 minutes fresh memory cache
 
+type WorkSiblingsCacheEntry = {
+  timestamp: number;
+  siblings: any[];
+  workScans: any[];
+};
+const workSiblingsCache = new Map<string, WorkSiblingsCacheEntry>();
+const WORK_SIBLINGS_CACHE_TTL_MS = 300_000; // 5 minutes fresh work siblings cache
+
 export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
@@ -26,7 +34,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     const edgeCached = await getSharedCache<any>(`${SHARED_CACHE_KEYS.READER_PREFIX}${params.id}`);
     if (edgeCached) {
       setHeaders({
-        'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+        'cache-control': 'private, no-cache'
       });
       return {
         ...edgeCached,
@@ -63,7 +71,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         userProgress = pRes?.data || null;
       } else {
         setHeaders({
-          'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+          'cache-control': 'private, no-cache'
         });
       }
 
@@ -108,7 +116,68 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     .leftJoin(schema.works, eq(schema.chapters.workId, schema.works.id))
     .where(and(...chapterConditions));
 
-  const chapterRes = await safeDbQuery(safeQuerySingle(query), 4500, 'reader_chapter');
+  // PARALLEL DISPATCH: Launch chapter metadata, pages, chapter-scans, and user progress concurrently
+  const chapterPromise = safeDbQuery(safeQuerySingle(query), 4500, 'reader_chapter');
+
+  const pagesPromise = safeDbQuery(
+    safeQuery(
+      db.select({
+        position: schema.pages.position,
+        mediaId: schema.pages.mediaId,
+        width: schema.pages.width,
+        height: schema.pages.height,
+        mediaProvider: schema.media.provider,
+        mediaProviderKey: schema.media.providerKey,
+        mediaMime: schema.media.mime,
+        mediaBytes: schema.media.bytes,
+        mediaSha256: schema.media.sha256,
+        mediaBotReference: schema.media.botReference,
+        mediaStorageShardId: schema.media.storageShardId,
+        mediaAccessClass: schema.media.accessClass,
+        mediaPurpose: schema.media.purpose,
+        mediaCreatedBy: schema.media.createdBy,
+        mediaStatus: schema.media.status,
+        mediaStorageReady: schema.media.storageReady
+      })
+      .from(schema.pages)
+      .leftJoin(schema.media, eq(schema.pages.mediaId, schema.media.id))
+      .where(eq(schema.pages.chapterId, params.id))
+      .orderBy(asc(schema.pages.position))
+    ),
+    6000,
+    'reader_pages'
+  );
+
+  const chapterScansPromise = safeQuery(
+    db.select({
+      scans: {
+        id: schema.scans.id,
+        name: schema.scans.name,
+        slug: schema.scans.slug
+      }
+    })
+    .from(schema.chapterScans)
+    .innerJoin(schema.scans, eq(schema.chapterScans.scanId, schema.scans.id))
+    .where(eq(schema.chapterScans.chapterId, params.id))
+  );
+
+  const progressPromise = locals.user
+    ? withTimeout(
+        safeQuerySingle(
+          db.select({
+            page: schema.reading.page,
+            completedAt: schema.reading.completedAt
+          })
+          .from(schema.reading)
+          .where(and(eq(schema.reading.userId, locals.user.id), eq(schema.reading.chapterId, params.id)))
+        ),
+        1500,
+        { data: null } as any,
+        'reader_progress'
+      )
+    : Promise.resolve({ data: null });
+
+  const chapterRes = await chapterPromise;
   let chapter: any = chapterRes.data || null;
 
   // If not found directly in chapters and staff is accessing, check scan_production_chapters
@@ -231,79 +300,37 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     }
   }
 
-  // 1. Fetch core chapter pages and join media metadata
-  const pagesPromise = safeDbQuery(
-    safeQuery(
-      db.select({
-        position: schema.pages.position,
-        mediaId: schema.pages.mediaId,
-        width: schema.pages.width,
-        height: schema.pages.height,
-        mediaProvider: schema.media.provider,
-        mediaProviderKey: schema.media.providerKey,
-        mediaMime: schema.media.mime,
-        mediaBytes: schema.media.bytes,
-        mediaSha256: schema.media.sha256,
-        mediaBotReference: schema.media.botReference,
-        mediaStorageShardId: schema.media.storageShardId,
-        mediaAccessClass: schema.media.accessClass,
-        mediaPurpose: schema.media.purpose,
-        mediaCreatedBy: schema.media.createdBy,
-        mediaStatus: schema.media.status,
-        mediaStorageReady: schema.media.storageReady
-      })
-      .from(schema.pages)
-      .leftJoin(schema.media, eq(schema.pages.mediaId, schema.media.id))
-      .where(eq(schema.pages.chapterId, chapter.id))
-      .orderBy(asc(schema.pages.position))
-    ),
-    6000,
-    'reader_pages'
-  );
+  const workId = chapter.workId;
 
-  // 2. Fetch sibling chapters for navigation
-  const siblingsPromise = safeDbQuery(
-    safeQuery(
-      db.select({
-        id: schema.chapters.id,
-        number: schema.chapters.number
-      })
-      .from(schema.chapters)
-      .where(and(eq(schema.chapters.workId, chapter.workId), isNotNull(schema.chapters.publishedAt)))
-      .orderBy(asc(schema.chapters.number))
-    ),
-    5000,
-    'reader_siblings'
-  );
+  // Retrieve sibling chapters from memory cache or query in parallel
+  let siblingsData: any[] | null = null;
+  let workScansData: any[] | null = null;
 
-  // 3. Auxiliary metadata (reading progress and scans) with resilient fallback
-  const auxPromise = withTimeout(
-    Promise.all([
-      locals.user
-        ? safeQuerySingle(
-            db.select({
-              page: schema.reading.page,
-              completedAt: schema.reading.completedAt
-            })
-            .from(schema.reading)
-            .where(and(eq(schema.reading.userId, locals.user.id), eq(schema.reading.chapterId, chapter.id)))
-          )
-        : Promise.resolve({ data: null }),
+  const cachedWork = workSiblingsCache.get(workId);
+  if (cachedWork && Date.now() - cachedWork.timestamp < WORK_SIBLINGS_CACHE_TTL_MS) {
+    siblingsData = cachedWork.siblings;
+    workScansData = cachedWork.workScans;
+  }
 
-      safeQuery(
-        db.select({
-          scans: {
-            id: schema.scans.id,
-            name: schema.scans.name,
-            slug: schema.scans.slug
-          }
-        })
-        .from(schema.chapterScans)
-        .innerJoin(schema.scans, eq(schema.chapterScans.scanId, schema.scans.id))
-        .where(eq(schema.chapterScans.chapterId, chapter.id))
-      ),
+  const siblingsPromise = siblingsData
+    ? Promise.resolve({ data: siblingsData, status: 'SUCCESS' })
+    : safeDbQuery(
+        safeQuery(
+          db.select({
+            id: schema.chapters.id,
+            number: schema.chapters.number
+          })
+          .from(schema.chapters)
+          .where(and(eq(schema.chapters.workId, workId), isNotNull(schema.chapters.publishedAt)))
+          .orderBy(asc(schema.chapters.number))
+        ),
+        5000,
+        'reader_siblings'
+      );
 
-      safeQuery(
+  const workScansPromise = workScansData
+    ? Promise.resolve({ data: workScansData, status: 'SUCCESS' })
+    : safeQuery(
         db.select({
           scans: {
             id: schema.scans.id,
@@ -313,19 +340,28 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         })
         .from(schema.workScans)
         .innerJoin(schema.scans, eq(schema.workScans.scanId, schema.scans.id))
-        .where(eq(schema.workScans.workId, chapter.workId))
-      )
-    ]),
-    2500,
-    [{ data: null }, { data: [] }, { data: [] }] as any,
-    'reader_aux_metadata'
-  );
+        .where(eq(schema.workScans.workId, workId))
+      );
 
-  const [pagesRes, siblingsRes, [progress, chapterScansRes, workScansRes]] = await Promise.all([
+  const [pagesRes, siblingsRes, chapterScansRes, workScansRes, progress] = await Promise.all([
     pagesPromise,
     siblingsPromise,
-    auxPromise
+    chapterScansPromise,
+    workScansPromise,
+    progressPromise
   ]);
+
+  if (!siblingsData && siblingsRes.data) {
+    if (workSiblingsCache.size >= 200) {
+      const oldestKey = workSiblingsCache.keys().next().value;
+      if (oldestKey) workSiblingsCache.delete(oldestKey);
+    }
+    workSiblingsCache.set(workId, {
+      timestamp: Date.now(),
+      siblings: (siblingsRes.data || []) as any[],
+      workScans: (workScansRes.data || []) as any[]
+    });
+  }
 
   if (pagesRes.status === 'TIMEOUT') {
     error(503, 'A conexão com as páginas está temporariamente lenta. Tente recarregar em instantes.');
@@ -413,7 +449,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
 
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'private, no-cache'
     });
   }
 

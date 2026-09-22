@@ -16,7 +16,7 @@ declare module 'drizzle-orm/libsql' {
 export const POST = async ({ request, locals, platform }: any) => {
   
   const text = await request.text();
-  if (text.length > 60_000) error(413, 'Solicitao muito grande');
+  if (text.length > 60_000) error(413, 'Solicitação muito grande');
   let body;
   try {
     body = z
@@ -27,8 +27,49 @@ export const POST = async ({ request, locals, platform }: any) => {
       })
       .parse(JSON.parse(text));
   } catch {
-    error(400, 'Solicitao invlida');
+    error(400, 'Solicitação inválida');
   }
+
+  // Direct TypeScript handler for member reading progress
+  if (body.scope === 'member' && (body.action === 'read_start' || body.action === 'read_page')) {
+    const userId = locals.user?.id;
+    const chapterId = body.data.chapterId ? String(body.data.chapterId) : null;
+    const pageNum = Math.max(1, Number(body.data.page) || 1);
+    const completed = Boolean(body.data.completed);
+
+    if (userId && chapterId) {
+      const nowIso = new Date().toISOString();
+      try {
+        await safeQuery(
+          db.insert(schema.reading)
+            .values({
+              userId,
+              chapterId,
+              page: pageNum,
+              maxPage: pageNum,
+              startedAt: nowIso,
+              updatedAt: nowIso,
+              completedAt: completed ? nowIso : null
+            })
+            .onConflictDoUpdate({
+              target: [schema.reading.userId, schema.reading.chapterId],
+              set: {
+                page: pageNum,
+                maxPage: sql`GREATEST(${schema.reading.maxPage}, ${pageNum})`,
+                updatedAt: nowIso,
+                completedAt: completed
+                  ? sql`COALESCE(${schema.reading.completedAt}, ${nowIso}::timestamptz)`
+                  : schema.reading.completedAt
+              }
+            })
+        );
+      } catch (err) {
+        console.error('[ACTION] read_page sync error:', err);
+      }
+    }
+    return json({ ok: true });
+  }
+
   const { data: rpcData, error: problem } = await safeQuery(
     db.execute(sql`SELECT ${sql.raw(body.scope + '_action')}(${body.action}, ${JSON.stringify(body.data)}) as result`)
   );
@@ -109,8 +150,8 @@ export const POST = async ({ request, locals, platform }: any) => {
             actorUserId: locals.user!.id,
             type: 'REPLY_COMMENT',
             title: chapterId
-              ? `${authorName} respondeu ao seu comentrio no captulo${chapterNumber}`
-              : `${authorName} respondeu ao seu comentrio em ${workTitle}`,
+              ? `${authorName} respondeu ao seu comentário no capítulo${chapterNumber}`
+              : `${authorName} respondeu ao seu comentário em ${workTitle}`,
             body: commentBody,
             deepLink: replyDeepLink,
             context: workTitle,
@@ -136,8 +177,8 @@ export const POST = async ({ request, locals, platform }: any) => {
         text: commentBody,
         authorId: locals.user!.id,
         title: chapterId
-          ? `${authorName} mencionou voc no captulo${chapterNumber} de ${workTitle}`
-          : `${authorName} mencionou voc em ${workTitle}`,
+          ? `${authorName} mencionou você no capítulo${chapterNumber} de ${workTitle}`
+          : `${authorName} mencionou você em ${workTitle}`,
         deepLink,
         contextType: 'COMMENT',
         workId,
