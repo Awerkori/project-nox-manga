@@ -1,10 +1,19 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, error } from '@sveltejs/kit';
 import { withTimeout } from '$lib/server/resilience';
 import { db, schema, safeQuery } from '$lib/server/db';
 import { count, inArray } from 'drizzle-orm';
+import { isStaffMember, normalizeRole } from '$lib/rbac';
 
 export const load = async ({ locals }) => {
-  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user) {
+    if (locals.authTimeout) {
+      throw error(503, 'Instabilidade temporária na autenticação. Por favor, recarregue a página em instantes.');
+    }
+    throw redirect(303, '/entrar?redirect=/admin');
+  }
+
+  const role = normalizeRole(locals.role);
+  if (!isStaffMember(role)) {
     throw redirect(303, '/entrar?redirect=/admin');
   }
 
@@ -16,6 +25,10 @@ export const load = async ({ locals }) => {
   );
 
   return {
-    pendingReportsCount: reportsRes?.data?.[0]?.count || 0
+    pendingReportsCount: reportsRes?.data?.[0]?.count || 0,
+    role,
+    user: locals.user,
+    profile: locals.profile,
+    userScans: locals.userScans || []
   };
 };

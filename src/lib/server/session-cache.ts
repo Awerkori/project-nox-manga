@@ -15,22 +15,24 @@ export interface CachedSession {
 
 const sessionCache = new Map<string, CachedSession>();
 const activeFlights = new Map<string, Promise<CachedSession>>();
-const SESSION_CACHE_TTL_MS = 60 * 1000;
+const SESSION_CACHE_TTL_MS = 10 * 1000;
 
 export async function resolveSessionData(
   sessionObject: any
 ): Promise<CachedSession> {
-  const cacheKey = sessionObject.id;
+  const cacheKey = (sessionObject?.session?.id || sessionObject?.user?.id)?.toString();
   const now = Date.now();
 
-  const cached = sessionCache.get(cacheKey);
-  if (cached && now - cached.cachedAt < SESSION_CACHE_TTL_MS) {
-    return cached;
-  }
+  if (cacheKey) {
+    const cached = sessionCache.get(cacheKey);
+    if (cached && now - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+      return cached;
+    }
 
-  const existingFlight = activeFlights.get(cacheKey);
-  if (existingFlight) {
-    return existingFlight;
+    const existingFlight = activeFlights.get(cacheKey);
+    if (existingFlight) {
+      return existingFlight;
+    }
   }
 
   const flightPromise = (async () => {
@@ -142,17 +144,20 @@ export async function resolveSessionData(
         tokenExp: sessionObject.session.expiresAt.getTime() / 1000
       };
 
-      sessionCache.set(cacheKey, result);
+      if (cacheKey) {
+        sessionCache.set(cacheKey, result);
 
-      if (sessionCache.size > 500) {
-        const earliest = now - SESSION_CACHE_TTL_MS;
-        for (const [k, v] of sessionCache.entries()) {
-          if (v.cachedAt < earliest) sessionCache.delete(k);
+        if (sessionCache.size > 500) {
+          const earliest = now - SESSION_CACHE_TTL_MS;
+          for (const [k, v] of sessionCache.entries()) {
+            if (v.cachedAt < earliest) sessionCache.delete(k);
+          }
         }
       }
 
       return result;
-    } catch (error) {const userId = sessionObject.user.id;
+    } catch (error) {
+      const userId = sessionObject.user.id;
       return {
         user: sessionObject.user,
         role: null,
@@ -160,25 +165,111 @@ export async function resolveSessionData(
           id: userId,
           displayName: sessionObject.user.name || 'Leitor',
           username: sessionObject.user.email ? sessionObject.user.email.split('@')[0] : 'leitor',
-          role: 'LEITOR'},
+          role: 'LEITOR'
+        },
         userScans: [],
         unread: 0,
         cachedAt: now,
-        tokenExp: sessionObject.session.expiresAt.getTime() / 1000
+        tokenExp: sessionObject.session?.expiresAt ? sessionObject.session.expiresAt.getTime() / 1000 : 0
       };
     } finally {
-      activeFlights.delete(cacheKey);
+      if (cacheKey) {
+        activeFlights.delete(cacheKey);
+      }
     }
   })();
 
-  activeFlights.set(cacheKey, flightPromise);
+  if (cacheKey) {
+    activeFlights.set(cacheKey, flightPromise);
+  }
   return flightPromise;
 }
 
 export function invalidateUserSession(userId: string) {
   for (const [k, session] of sessionCache.entries()) {
-    if (session.user.id === userId) {
+    if (session.user?.id === userId || k === userId) {
       sessionCache.delete(k);
     }
   }
+  // Also remove from token cache if user matches
+  for (const [token, entry] of authSessionByToken.entries()) {
+    if (entry.session?.user?.id === userId) {
+      authSessionByToken.delete(token);
+    }
+  }
+}
+
+export function clearSessionCache() {
+  sessionCache.clear();
+  activeFlights.clear();
+  authSessionByToken.clear();
+}
+
+export interface CachedAuthSession {
+  session: any; // { session: any, user: any }
+  cachedAt: number;
+}
+
+const authSessionByToken = new Map<string, CachedAuthSession>();
+const AUTH_TOKEN_CACHE_TTL_MS = 60 * 1000; // 60s hot cache
+const AUTH_TOKEN_STALE_GRACE_MS = 5 * 60 * 1000; // 5 min fallback grace for timeouts
+
+export function extractSessionToken(headers: Headers): string | null {
+  const authHdr = headers.get('authorization') || '';
+  if (authHdr.toLowerCase().startsWith('bearer ')) {
+    return authHdr.slice(7).trim();
+  }
+  const cookies = headers.get('cookie') || '';
+  const match = cookies.match(/(?:better-auth\.session_token|__Secure-better-auth\.session_token)=([^;]+)/);
+  if (match) {
+    return decodeURIComponent(match[1]);
+  }
+  return null;
+}
+
+export function getCachedAuthSession(token: string): { session: any; isStale: boolean } | null {
+  const entry = authSessionByToken.get(token);
+  if (!entry) return null;
+  const now = Date.now();
+  const age = now - entry.cachedAt;
+
+  // Check if session token itself is expired according to DB expiresAt
+  const expiresAt = entry.session?.session?.expiresAt;
+  if (expiresAt) {
+    const expTime = typeof expiresAt === 'string' ? Date.parse(expiresAt) : new Date(expiresAt).getTime();
+    if (!isNaN(expTime) && expTime <= now) {
+      authSessionByToken.delete(token);
+      return null;
+    }
+  }
+
+  if (age < AUTH_TOKEN_CACHE_TTL_MS) {
+    return { session: entry.session, isStale: false };
+  }
+
+  if (age < AUTH_TOKEN_STALE_GRACE_MS) {
+    return { session: entry.session, isStale: true };
+  }
+
+  authSessionByToken.delete(token);
+  return null;
+}
+
+export function setCachedAuthSession(token: string, session: any): void {
+  if (!token || !session?.user) return;
+  authSessionByToken.set(token, {
+    session,
+    cachedAt: Date.now()
+  });
+
+  if (authSessionByToken.size > 1000) {
+    const cutoff = Date.now() - AUTH_TOKEN_CACHE_TTL_MS;
+    for (const [k, v] of authSessionByToken.entries()) {
+      if (v.cachedAt < cutoff) authSessionByToken.delete(k);
+    }
+  }
+}
+
+export function invalidateAuthSession(token: string): void {
+  authSessionByToken.delete(token);
 }

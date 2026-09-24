@@ -1,22 +1,26 @@
-import { redirect, fail } from '@sveltejs/kit';
+import { redirect, fail, error } from '@sveltejs/kit';
 import { db, schema, safeQuery, safeQuerySingle } from '$lib/server/db';
 import { eq, and, desc, asc, isNull } from 'drizzle-orm';
 import { withTimeout } from '$lib/server/resilience';
+import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) {
+    if (locals.authTimeout) {
+      throw error(503, 'Instabilidade temporária na autenticação. Por favor, recarregue a página em instantes.');
+    }
     redirect(303, '/entrar');
   }
 
   const [
-    { data: memberRes },
-    { data: libraryRes },
+    memberRes,
+    libraryRes,
     historyRes,
-    { data: notificationsRes },
+    notificationsRes,
     allAchievementsRes,
     memberAchievementsRes,
-    { data: inventoryRes }
+    inventoryRes
   ] = await withTimeout(
     Promise.all([
       safeQuerySingle(
@@ -95,11 +99,11 @@ export const load: PageServerLoad = async ({ locals }) => {
       )
     ]),
     4000,
-    [{ data: locals.sessionCache?.profile || null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }] as any,
+    [{ data: locals.profile || locals.sessionCache?.profile || null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }] as any,
     'me_load_batch'
   );
 
-  const m = memberRes?.data;
+  const m = memberRes?.data || locals.profile || locals.sessionCache?.profile;
   const rawMember =
     (m ? {id: m.id,
       username: m.username,
@@ -126,6 +130,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       avatarCrop: m.avatarCrop,
       bannerCrop: m.bannerCrop,
       createdAt: m.createdAt} : null) ||
+    locals.profile ||
     locals.sessionCache?.profile ||
     ({id: locals.user!.id,
       username: locals.user.email ? locals.user.email.split('@')[0] : 'leitor',
@@ -170,7 +175,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     unlocked: unlockedMap.has(ach.id),
     unlockedAt: unlockedMap.get(ach.id) || null}));
 
-  const inventory = ({ data: inventoryRes }.data || []).map((inv: any) => ({acquiredAt: inv.inventory.acquiredAt,
+  const inventory = (inventoryRes?.data || []).map((inv: any) => ({acquiredAt: inv.inventory.acquiredAt,
     ...inv.shopItems,
     price_coins: inv.shopItems.priceCoins,
     content_id: inv.shopItems.contentId,
@@ -232,17 +237,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   updateProfile: async ({ request, locals }) => {
-    if (!locals.user) return fail(401, { message: 'No autenticado' });
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const displayName = (formData.get('display_name') as string)?.trim();
     const bio = (formData.get('bio') as string)?.trim() ?? '';
 
     if (!displayName || displayName.length < 2 || displayName.length > 50) {
-      return fail(400, { message: 'O nome de exibio deve ter entre 2 e 50 caracteres.' });
+      return fail(400, { message: 'O nome de exibição deve ter entre 2 e 50 caracteres.' });
     }
 
     if (bio.length > 500) {
-      return fail(400, { message: 'A biografia no pode exceder 500 caracteres.' });
+      return fail(400, { message: 'A biografia não pode exceder 500 caracteres.' });
     }
 
     const { error } = await safeQuerySingle(
@@ -256,6 +261,7 @@ export const actions: Actions = {
     );
 
     if (error) return fail(400, { message: (error as any).message });
+    invalidateUserSession(locals.user!.id);
     return { success: true, action: 'profile' };
   },
 
@@ -296,7 +302,7 @@ export const actions: Actions = {
 
     if (achievementId) {
        const { data: hasAchiev } = await safeQuerySingle(db.select().from(schema.memberAchievements).where(and(eq(schema.memberAchievements.userId, locals.user!.id), eq(schema.memberAchievements.achievementId, achievementId))));
-       if (!hasAchiev) return fail(400, { message: 'Voc no possui esta conquista.' });
+       if (!hasAchiev) return fail(400, { message: 'Você não possui esta conquista.' });
     }
 
     const { error } = await safeQuerySingle(
@@ -367,6 +373,7 @@ export const actions: Actions = {
     );
 
     if (error) return fail(400, { message: (error as any).message });
+    invalidateUserSession(locals.user!.id);
     return {success: true, action: 'avatarCrop', crop};
   },
 
@@ -390,6 +397,7 @@ export const actions: Actions = {
     );
 
     if (error) return fail(400, { message: (error as any).message });
+    invalidateUserSession(locals.user!.id);
     return {success: true, action: 'bannerCrop', crop};
   }
 };

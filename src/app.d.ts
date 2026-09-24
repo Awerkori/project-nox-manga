@@ -10,6 +10,7 @@ declare global {
       userScans: any[];
       unread: number;
       sessionCache?: any;
+      authTimeout?: boolean;
     }
     // interface Error {}
     // interface PageData {}
