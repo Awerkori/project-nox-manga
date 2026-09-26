@@ -127,7 +127,27 @@
       }
     };
   }
+
+  function imageLoaded(node: HTMLImageElement) {
+    if (node.complete && node.naturalWidth > 0) {
+      node.classList.add('loaded');
+    } else {
+      const onLoaded = () => node.classList.add('loaded');
+      node.addEventListener('load', onLoaded, { once: true });
+      return {
+        destroy() {
+          node.removeEventListener('load', onLoaded);
+        }
+      };
+    }
+  }
 </script>
+
+<svelte:head>
+  {#if currentWork && heroCover}
+    <link rel="preload" as="image" href={heroCover} fetchpriority="high" />
+  {/if}
+</svelte:head>
 
 {#if currentWork}
   <section
@@ -143,6 +163,7 @@
         class="backdrop-img"
         class:blurred-cover={effectiveBlur}
         loading="eager"
+        fetchpriority="low"
         decoding="async"
       />
       <div class="backdrop-gradient-v"></div>
@@ -157,6 +178,7 @@
           <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
             <div class="cover-3d-card">
               <img
+                use:imageLoaded
                 src={heroCover}
                 alt={currentWork.title}
                 class="cover-img"
@@ -164,6 +186,7 @@
                 width="330"
                 height="470"
                 loading="eager"
+                fetchpriority="high"
                 decoding="async"
               />
               {#if isAdult}
@@ -173,7 +196,7 @@
                 <div class="nsfw-overlay-hero">
                   <div class="nsfw-tag-hero">
                     <AlertTriangle size={15} />
-                    <span>CONTEDO +18</span>
+                    <span>CONTEÚDO +18</span>
                   </div>
                 </div>
               {/if}
@@ -234,7 +257,7 @@
             {:else}
               <a href="/obra/{currentWork.slug}" class="btn-primary-hero">
                 <BookOpen size={18} />
-                <span>Comear a Ler</span>
+                <span>Começar a Ler</span>
               </a>
             {/if}
 
@@ -257,7 +280,7 @@
             <ChevronLeft size={20} />
           </button>
 
-          <div class="indicators-track" role="tablist" aria-label="Navegao dos destaques">
+          <div class="indicators-track" role="tablist" aria-label="Navegação dos destaques">
             {#each works as _, idx}
               <button
                 class="indicator-pill"
@@ -273,7 +296,7 @@
           <button
             class="arrow-btn arrow-next"
             onclick={nextSlide}
-            aria-label="Prxima obra em destaque"
+            aria-label="Próxima obra em destaque"
           >
             <ChevronRight size={20} />
           </button>
@@ -358,7 +381,7 @@
     padding: 0 2rem;
   }
 
-  /* Desktop Layout: Cover on LEFT, Info on RIGHT (Kuro Mangs Layout) */
+  /* Desktop Layout: Cover on LEFT, Info on RIGHT (Kuro Mangás Layout) */
   .hero-editorial-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -387,6 +410,9 @@
     height: 460px;
     border-radius: 16px;
     overflow: hidden;
+    background: linear-gradient(135deg, #131726 0%, #1c2237 50%, #131726 100%);
+    background-size: 200% 200%;
+    animation: heroCoverShimmer 3s ease-in-out infinite;
     transform: rotateY(4deg) rotateX(1deg);
     transform-style: preserve-3d;
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
@@ -394,6 +420,12 @@
       -14px 20px 48px -6px rgba(0, 0, 0, 0.9),
       0 0 32px -4px rgba(181, 154, 245, 0.22),
       0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  @keyframes heroCoverShimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   .cover-perspective-frame:hover .cover-3d-card {
@@ -409,6 +441,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .cover-img:global(.loaded) {
+    opacity: 1;
   }
 
   .cover-placeholder {

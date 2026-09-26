@@ -132,6 +132,20 @@
       }
     };
   }
+
+  function imageLoaded(node: HTMLImageElement) {
+    if (node.complete && node.naturalWidth > 0) {
+      node.classList.add('loaded');
+    } else {
+      const onLoaded = () => node.classList.add('loaded');
+      node.addEventListener('load', onLoaded, { once: true });
+      return {
+        destroy() {
+          node.removeEventListener('load', onLoaded);
+        }
+      };
+    }
+  }
 </script>
 
 {#if currentWorks.length > 0}
@@ -214,6 +228,7 @@
             <div class="card-cover-box">
               <img
                 use:fallbackCover
+                use:imageLoaded
                 src={shelfCover}
                 alt={work.title}
                 class="card-img"
@@ -546,10 +561,18 @@
     aspect-ratio: 200 / 285;
     border-radius: 12px;
     overflow: hidden;
-    background: #11131c;
+    background: linear-gradient(135deg, #111420 0%, #1a1e30 50%, #111420 100%);
+    background-size: 200% 200%;
+    animation: shelfShimmer 3s ease-in-out infinite;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  @keyframes shelfShimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   .shelf-card:hover .card-cover-box {
@@ -562,6 +585,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+  }
+
+  .card-img:global(.loaded) {
+    opacity: 1;
   }
 
   .card-placeholder {

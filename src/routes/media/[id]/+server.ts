@@ -20,10 +20,9 @@ export const GET = async ({ params, request, platform, locals }: any) => {
   const canonicalUrl = `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
+
   if (cache) {
-    
     if (!privateEnv.TELEGRAM_BOT_TOKEN) {
-      // MOCK for E2E testing without Telegram Token
       const transparentPng = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,11,73,68,65,84,8,153,99,96,0,2,0,0,5,0,1,233,224,196,24,0,0,0,0,73,69,78,68,174,66,96,130]);
       return new Response(transparentPng, {
         headers: {
@@ -34,7 +33,6 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     }
 
     try {
-
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
         const etag = cached.headers.get('ETag');
@@ -46,11 +44,11 @@ export const GET = async ({ params, request, platform, locals }: any) => {
         return new Response(cached.body, { status: 200, headers: hitHeaders });
       }
     } catch {
-      // Fall through to standard retrieval on cache check failure
+      // Fall through on cache match failure
     }
   }
 
-  
+  // 2. Cache miss: resolve media metadata (fast in-memory cache, then DB)
   let media: any = getMediaMetadata(params.id);
   if (!media) {
     const { data: dbMedia } = await safeQuerySingle(
@@ -72,6 +70,17 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     });
   }
 
+  // 3. Check ETag for instantaneous 304 response before downloading body
+  if (request.headers.get('if-none-match') === `"${media.sha256}"`) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'ETag': `"${media.sha256}"`,
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable'
+      }
+    });
+  }
+
   
   // Public media includes all editorial assets, covers, avatars, banners, and any media marked PUBLIC
   const isPublic =
@@ -81,6 +90,8 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     media.purpose === 'banner' ||
     media.purpose === 'scan_logo' ||
     media.purpose === 'scan_banner' ||
+    media.purpose === 'staff_manual' ||
+    media.purpose === 'staff_chapter' ||
     !media.accessClass;
 
   if (!isPublic) {
@@ -114,7 +125,7 @@ export const GET = async ({ params, request, platform, locals }: any) => {
     return new Response(null, { status: 304, headers });
   }
 
-  let body: BodyInit;
+  let body: BodyInit = new Uint8Array(0);
   if (media.provider === 'supabase') {
     if (!media!.providerKey) {
       return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
@@ -125,8 +136,8 @@ export const GET = async ({ params, request, platform, locals }: any) => {
         }
       });
     }
-    const supabaseUrl = env.PUBLIC_SUPABASE_URL;
-    const supabaseKey = privateEnv.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = env.PUBLIC_SUPABASE_URL || privateEnv.STAFF_SUPABASE_URL;
+    const supabaseKey = privateEnv.SUPABASE_SERVICE_ROLE_KEY || privateEnv.STAFF_SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !supabaseKey) {
       return new Response(JSON.stringify({ error: 'Armazenamento temporariamente indisponível' }), {
         status: 503,
@@ -277,8 +288,9 @@ export const GET = async ({ params, request, platform, locals }: any) => {
 
   const response = new Response(body, { status: 200, headers });
 
-  // Only cache valid HTTP 200 public responses in Cloudflare edge cache
-  if (cache && isPublic) {
+  // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
+  const isCachableAtEdge = Boolean(media.bytes && Number(media.bytes) <= 10_485_760);
+  if (cache && isPublic && isCachableAtEdge) {
     try {
       const cacheResponse = response.clone();
       if ((platform as any)?.context?.waitUntil) {

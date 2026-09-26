@@ -57,6 +57,20 @@
       }
     };
   }
+
+  function imageLoaded(node: HTMLImageElement) {
+    if (node.complete && node.naturalWidth > 0) {
+      node.classList.add('loaded');
+    } else {
+      const onLoaded = () => node.classList.add('loaded');
+      node.addEventListener('load', onLoaded, { once: true });
+      return {
+        destroy() {
+          node.removeEventListener('load', onLoaded);
+        }
+      };
+    }
+  }
 </script>
 
 <section id="lancamentos" class="releases-section">
@@ -90,6 +104,7 @@
             <div class="thumb-wrap">
               <img
                 use:fallbackCover
+                use:imageLoaded
                 src={thumbCover}
                 alt={rel.workTitle}
                 class="thumb-img"
@@ -301,8 +316,16 @@
     aspect-ratio: 64 / 88;
     border-radius: 8px;
     overflow: hidden;
-    background: #11131c;
+    background: linear-gradient(135deg, #111420 0%, #1a1e30 50%, #111420 100%);
+    background-size: 200% 200%;
+    animation: thumbShimmer 3s ease-in-out infinite;
     border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  @keyframes thumbShimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   .thumb-img {
@@ -310,7 +333,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.2s ease;
+    opacity: 0;
+    transition: opacity 0.2s ease-out, transform 0.2s ease;
+  }
+
+  .thumb-img:global(.loaded) {
+    opacity: 1;
   }
 
   .blurred-cover {

@@ -9,17 +9,38 @@
   let {
     work,
     index = 0,
-    blurNsfw
+    blurNsfw,
+    eager,
+    priority
   }: {
     work: Work & { work_scans?: any[]; primary_scan?: any };
     index?: number;
     blurNsfw?: boolean;
+    eager?: boolean;
+    priority?: 'high' | 'auto' | 'low';
   } = $props();
 
   let isAdult = $derived(work.contentRating === 'ADULT_18');
   let effectiveBlur = $derived(
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
+
+  let isEager = $derived(eager !== undefined ? eager : index < 4);
+  let fetchPriority = $derived(priority || (index < 2 ? 'high' : 'auto'));
+
+  function imageLoaded(node: HTMLImageElement) {
+    if (node.complete && node.naturalWidth > 0) {
+      node.classList.add('loaded');
+    } else {
+      const onLoaded = () => node.classList.add('loaded');
+      node.addEventListener('load', onLoaded, { once: true });
+      return {
+        destroy() {
+          node.removeEventListener('load', onLoaded);
+        }
+      };
+    }
+  }
 
   let scanInfo = $derived.by(() => {
     const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
@@ -68,9 +89,12 @@
   <div class="card-media">
     <img
       use:fallbackCover
+      use:imageLoaded
       src={coverSrc}
       alt="Capa de {decodeHtmlEntities(work.title)}"
-      loading="lazy"
+      loading={isEager ? "eager" : "lazy"}
+      fetchpriority={fetchPriority}
+      decoding="async"
       width="300"
       height="400"
       class="card-img"
@@ -78,7 +102,7 @@
     />
 
     <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-    <div class="card-views-top-left" title="{work.viewsTotal || 0} visualizaes">
+    <div class="card-views-top-left" title="{work.viewsTotal || 0} visualizações">
       <Eye size={11} />
       <span>{formatViews(work.viewsTotal)}</span>
     </div>
@@ -88,7 +112,7 @@
       {#if work.featured}
         <span class="featured-chip"><Sparkles size={11} /> Destaque</span>
       {/if}
-      <span class="kind-chip">{kindLabels[work.kind] || 'Mang'}</span>
+      <span class="kind-chip">{kindLabels[work.kind] || 'Mangá'}</span>
     </div>
 
     <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
@@ -168,7 +192,15 @@
     width: 100%;
     aspect-ratio: 3 / 4;
     overflow: hidden;
-    background: #090a12;
+    background: linear-gradient(135deg, #0e111d 0%, #171b2d 50%, #0e111d 100%);
+    background-size: 200% 200%;
+    animation: skeletonShimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes skeletonShimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
   }
 
   .card-img {
@@ -176,7 +208,12 @@
     height: 100%;
     object-fit: cover;
     object-position: center;
-    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transition: opacity 0.25s ease-out, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card-img:global(.loaded) {
+    opacity: 1;
   }
 
   .editorial-card:hover .card-img {
