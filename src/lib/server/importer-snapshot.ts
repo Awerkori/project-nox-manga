@@ -134,7 +134,7 @@ export async function loadSnapshot({ locals }: any) {
     locals.db
       .from('importer_rate_buckets')
       .select('*')
-      .gte('bucket_minute', new Date(Date.now() - 35 * 60 * 1000).toISOString())
+      .gte('bucket_minute', new Date(Date.now() - 65 * 60 * 1000).toISOString())
       .order('bucket_minute', { ascending: false })
       .abortSignal(AbortSignal.timeout(5000))
       .then((r: any) => r)
@@ -352,6 +352,7 @@ export async function loadSnapshot({ locals }: any) {
   return {
     telemetry: telemetryRes.data || null,
     rateTelemetry,
+    rateBuckets: bucketRows,
     adaptiveCapacity,
     activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
     counts: {

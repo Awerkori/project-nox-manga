@@ -328,7 +328,31 @@
       rss_mb: 185,
       event_loop_lag_ms: 4,
       created_at: new Date().toISOString()
-    }
+    },
+    rateTelemetry: {
+      rate5m: 1.4,
+      rate30m: 1.5,
+      fresh5m: 7,
+      fresh30m: 45,
+      completedRate5m: 1.4,
+      completedRate30m: 1.5,
+      completed5m: 7,
+      completed30m: 45
+    },
+    adaptiveCapacity: {
+      concurrency: 1,
+      maxConcurrency: 8,
+      state: 'RUNNING_STABLE',
+      pressureScore: 0,
+      siteHealth: 'GREEN',
+      reason: 'Operação contínua Always-On',
+      manualStopActive: false
+    },
+    rateBuckets: Array.from({ length: 60 }, (_, i) => ({
+      bucket_minute: new Date(Date.now() - (59 - i) * 60 * 1000).toISOString(),
+      fresh_visible: i % 3 === 0 ? 2 : (i % 2 === 0 ? 1 : 0),
+      completed_jobs: i % 2 === 0 ? 2 : 1
+    }))
   });
 
   let staffData = $derived({

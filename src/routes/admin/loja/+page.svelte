@@ -1,4 +1,5 @@
 <script lang="ts">
+  /* eslint-disable */
   import { invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import {
@@ -25,16 +26,32 @@
     Award,
     Layers
   } from '@lucide/svelte';
+  import { page } from '$app/state';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data } = $props();
 
+  let currentTab = $derived(page.url.searchParams.get('tab') || '');
   let search = $state('');
   let kindFilter = $state<string>('ALL');
   let statusFilter = $state<'ALL' | 'ACTIVE' | 'ARCHIVED'>('ALL');
   let notice = $state('');
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let busy = $state(false);
+
+  $effect(() => {
+    if (currentTab === 'cores') {
+      kindFilter = 'NAME_COLOR';
+    } else if (currentTab === 'titulos') {
+      kindFilter = 'TITLE';
+    } else if (currentTab === 'molduras') {
+      kindFilter = 'AVATAR_FRAME';
+    } else if (currentTab === 'banners') {
+      kindFilter = 'COMMENT_BANNER';
+    } else if (!currentTab || currentTab === 'resumo' || currentTab === 'todos') {
+      kindFilter = 'ALL';
+    }
+  });
 
   // Modal state
   let showModal = $state(false);
@@ -356,6 +373,30 @@
       </button>
     </div>
   </header>
+
+  <!-- Category Navigation Tabs -->
+  <nav class="loja-tabs-nav" aria-label="Abas da Loja">
+    <a href="/admin/loja" class="loja-tab-link" class:active={!currentTab || currentTab === 'resumo'}>
+      <ShoppingBag size={15} />
+      <span>Resumo</span>
+    </a>
+    <a href="/admin/loja?tab=cores" class="loja-tab-link" class:active={currentTab === 'cores'}>
+      <Palette size={15} />
+      <span>Cores</span>
+    </a>
+    <a href="/admin/loja?tab=titulos" class="loja-tab-link" class:active={currentTab === 'titulos'}>
+      <Tag size={15} />
+      <span>Títulos</span>
+    </a>
+    <a href="/admin/loja?tab=molduras" class="loja-tab-link" class:active={currentTab === 'molduras'}>
+      <Crown size={15} />
+      <span>Molduras</span>
+    </a>
+    <a href="/admin/loja?tab=banners" class="loja-tab-link" class:active={currentTab === 'banners'}>
+      <ImageIcon size={15} />
+      <span>Banners</span>
+    </a>
+  </nav>
 
   {#if notice}
     <div class="notice-banner" class:success={noticeType === 'success'} class:error={noticeType === 'error'}>
@@ -918,6 +959,43 @@
     align-items: flex-start;
     gap: 16px;
     flex-wrap: wrap;
+  }
+
+  .loja-tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .loja-tab-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .loja-tab-link:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .loja-tab-link.active {
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border-color: rgba(223, 194, 141, 0.3);
   }
 
   .badge-mini {
