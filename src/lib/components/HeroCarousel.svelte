@@ -38,6 +38,30 @@
       : null
   );
 
+  let coverLoaded = $state(false);
+
+  $effect(() => {
+    if (heroCover) {
+      coverLoaded = false;
+    }
+  });
+
+  function onCoverLoad(node: HTMLImageElement) {
+    const check = () => {
+      if (node.complete && node.naturalWidth > 0) {
+        coverLoaded = true;
+      }
+    };
+    check();
+    const onLoad = () => { coverLoaded = true; };
+    node.addEventListener('load', onLoad);
+    return {
+      destroy() {
+        node.removeEventListener('load', onLoad);
+      }
+    };
+  }
+
   function nextSlide() {
     if (works.length <= 1) return;
     currentIndex = (currentIndex + 1) % works.length;
@@ -129,6 +153,12 @@
   }
 </script>
 
+<svelte:head>
+  {#if heroCover}
+    <link rel="preload" as="image" href={heroCover} fetchpriority="high" />
+  {/if}
+</svelte:head>
+
 {#if currentWork}
   <section
     class="hero-carousel"
@@ -143,6 +173,7 @@
         class="backdrop-img"
         class:blurred-cover={effectiveBlur}
         loading="eager"
+        fetchpriority="low"
         decoding="async"
       />
       <div class="backdrop-gradient-v"></div>
@@ -155,16 +186,19 @@
         <!-- LEFT: Large Dominant Protagonist Cover (Kuro Standard) -->
         <div class="hero-cover-col">
           <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
-            <div class="cover-3d-card">
+            <div class="cover-3d-card" class:loaded={coverLoaded}>
               <img
                 src={heroCover}
                 alt={currentWork.title}
                 class="cover-img"
                 class:blurred-cover={effectiveBlur}
+                class:loaded={coverLoaded}
                 width="330"
                 height="470"
                 loading="eager"
+                fetchpriority="high"
                 decoding="async"
+                use:onCoverLoad
               />
               {#if isAdult}
                 <span class="adult-badge-hero">+18</span>
@@ -258,7 +292,7 @@
           </button>
 
           <div class="indicators-track" role="tablist" aria-label="Navegação dos destaques">
-            {#each works as _, idx}
+            {#each works as item, idx (item?.id || idx)}
               <button
                 class="indicator-pill"
                 class:active={idx === currentIndex}
@@ -396,6 +430,39 @@
       0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
+  .cover-3d-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: heroShimmer 1.8s infinite;
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 16px;
+  }
+
+  .cover-3d-card.loaded::before {
+    display: none;
+  }
+
+  @keyframes heroShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cover-3d-card::before {
+      animation: none;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+
   .cover-perspective-frame:hover .cover-3d-card {
     transform: rotateY(1deg) rotateX(0deg) translateY(-4px);
     box-shadow:
@@ -409,6 +476,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .cover-img.loaded {
+    opacity: 1;
   }
 
   .cover-placeholder {

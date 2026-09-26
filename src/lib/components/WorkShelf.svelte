@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle, Eye, ShieldCheck, Loader2 } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ArrowRight, Eye, ShieldCheck, Loader2 } from '@lucide/svelte';
   import type { Work } from '$lib/types';
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
@@ -12,18 +12,35 @@
     viewAllUrl?: string;
     loadMoreSort?: 'latest' | 'most_read';
     works: Work[];
+    shelfIndex?: number;
   };
 
-  let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [] }: Props = $props();
+  let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [], shelfIndex = 1 }: Props = $props();
 
-  let currentWorks = $state<Work[]>([]);
+  let extraWorks = $state<Work[]>([]);
+  let currentWorks = $derived([...works, ...extraWorks]);
   let isExpanded = $state(false);
   let loadingMore = $state(false);
   let hasMore = $state(true);
 
-  $effect(() => {
-    currentWorks = [...works];
-  });
+  function setupShelfImage(node: HTMLImageElement) {
+    const markLoaded = () => {
+      node.classList.add('loaded');
+      node.parentElement?.classList.add('loaded');
+    };
+    if (node.complete && node.naturalWidth > 0) {
+      markLoaded();
+    } else {
+      node.addEventListener('load', markLoaded, { once: true });
+      node.addEventListener('error', markLoaded, { once: true });
+      return {
+        destroy() {
+          node.removeEventListener('load', markLoaded);
+          node.removeEventListener('error', markLoaded);
+        }
+      };
+    }
+  }
 
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
@@ -102,7 +119,7 @@
         if (uniqueItems.length === 0 || !data.hasMore) {
           hasMore = false;
         }
-        currentWorks = [...currentWorks, ...uniqueItems];
+        extraWorks = [...extraWorks, ...uniqueItems];
       }
     } catch (err) {
       console.error(err);
@@ -191,20 +208,25 @@
       use:bindScroll
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
-        {#each currentWorks as work (work.id)}
+        {#each currentWorks as work, idx (work.id)}
           {@const isAdult = work.content_rating === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id)}
+          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id, { size: 'thumb' })}
           {@const scanInfo = getScanInfo(work)}
+          {@const isEager = shelfIndex === 0 && idx < 4}
+          {@const priority = shelfIndex === 0 && idx < 2 ? 'high' : 'auto'}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               <img
+                use:setupShelfImage
                 src={shelfCover}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}
                 width="200"
                 height="285"
+                loading={isEager ? 'eager' : 'lazy'}
+                fetchpriority={priority}
                 decoding="async"
               />
               <div class="card-glow"></div>
@@ -534,6 +556,39 @@
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
   }
 
+  .card-cover-box::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shelfShimmer 1.8s infinite;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 12px;
+  }
+
+  .card-cover-box.loaded::before {
+    display: none;
+  }
+
+  @keyframes shelfShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card-cover-box::before {
+      animation: none;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+
   .shelf-card:hover .card-cover-box {
     border-color: rgba(223, 194, 141, 0.4);
     box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.85), 0 0 20px -2px rgba(223, 194, 141, 0.22);
@@ -544,6 +599,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .card-img.loaded {
+    opacity: 1;
   }
 
   .card-placeholder {

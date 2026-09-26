@@ -14,7 +14,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
-  const canonicalUrl = `${url.origin}/media/${params.id}`;
+  const sizeParam = url.searchParams.get('size');
+  const canonicalUrl = sizeParam ? `${url.origin}/media/${params.id}?size=${sizeParam}` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
@@ -23,9 +24,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       if (cached && cached.status === 200) {
         const etag = cached.headers.get('ETag');
         if (etag && request.headers.get('if-none-match') === etag) {
-          return new Response(null, { status: 304, headers: cached.headers });
+          const res = new Response(null, { status: 304, headers: cached.headers });
+          res.headers.set('X-Media-Cache', 'HIT');
+          return res;
         }
-        return new Response(cached.body, cached);
+        const res = new Response(cached.body, cached);
+        res.headers.set('X-Media-Cache', 'HIT');
+        return res;
       }
     } catch {
       // Fall through to standard retrieval on cache check failure
@@ -44,16 +49,17 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  
-  // Public media includes all editorial assets, covers, avatars, banners, and any media marked PUBLIC
+  // Security: staff_manual and staff_chapter must NEVER be treated as public!
+  const isStaffPurpose = media.purpose === 'staff_manual' || media.purpose === 'staff_chapter';
   const isPublic =
-    media.access_class === 'PUBLIC' ||
-    media.purpose === 'editorial' ||
-    media.purpose === 'avatar' ||
-    media.purpose === 'banner' ||
-    media.purpose === 'scan_logo' ||
-    media.purpose === 'scan_banner' ||
-    !media.access_class;
+    !isStaffPurpose &&
+    (media.access_class === 'PUBLIC' ||
+      media.purpose === 'editorial' ||
+      media.purpose === 'avatar' ||
+      media.purpose === 'banner' ||
+      media.purpose === 'scan_logo' ||
+      media.purpose === 'scan_banner' ||
+      !media.access_class);
 
   if (!isPublic) {
     let verifiedSession = null;
@@ -61,7 +67,11 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     if (raw) {
       const { jwt, accessToken } = decodeSessionJwt(raw);
       if (jwt) {
-        try { verifiedSession = await resolveSessionData(locals.db, jwt, accessToken); } catch {}
+        try {
+          verifiedSession = await resolveSessionData(locals.db, jwt, accessToken);
+        } catch {
+          // ignore session resolution failure for anonymous fallback
+        }
       }
     }
     const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
@@ -85,7 +95,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       ? 'public, max-age=31536000, s-maxage=31536000, immutable'
       : 'private, no-cache',
     'ETag': `"${media.sha256}"`,
-    'Content-Security-Policy': "default-src 'none'; sandbox"
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'X-Media-Cache': 'MISS'
   };
 
   if (request.headers.get('if-none-match') === headers.ETag) {
@@ -191,7 +202,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  if (body instanceof ArrayBuffer) {
+  if (media.bytes && Number(media.bytes) > 0) {
+    headers['Content-Length'] = String(media.bytes);
+  } else if (body instanceof ArrayBuffer) {
     headers['Content-Length'] = String(body.byteLength);
   } else if (body instanceof Blob) {
     headers['Content-Length'] = String(body.size);
@@ -199,8 +212,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const response = new Response(body, { status: 200, headers });
 
-  // Only cache valid HTTP 200 public responses in Cloudflare edge cache
-  if (cache && isPublic) {
+  // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
+  const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
+  if (cache && isPublic && isCachableAtEdge) {
     try {
       const cacheResponse = response.clone();
       if (platform?.context?.waitUntil) {

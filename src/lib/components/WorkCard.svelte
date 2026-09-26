@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Work } from '$lib/types';
   import { kindLabels, statusLabels } from '$lib/types';
-  import { BookOpen, Sparkles, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
+  import { BookOpen, Sparkles, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
@@ -9,12 +9,18 @@
   let {
     work,
     index = 0,
-    blurNsfw
+    blurNsfw,
+    eager = false,
+    priority = 'auto'
   }: {
     work: Work & { work_scans?: any[]; primary_scan?: any };
     index?: number;
     blurNsfw?: boolean;
+    eager?: boolean;
+    priority?: 'high' | 'auto' | 'low';
   } = $props();
+
+  let isLoaded = $state(false);
 
   let isAdult = $derived(work.content_rating === 'ADULT_18');
   let effectiveBlur = $derived(
@@ -47,17 +53,29 @@
     return String(n);
   }
 
-  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id));
+  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id, { size: 'thumb' }));
 
-  function fallbackCover(node: HTMLImageElement) {
+  function setupImage(node: HTMLImageElement) {
+    const check = () => {
+      if (node.complete && node.naturalWidth > 0) {
+        isLoaded = true;
+      }
+    };
+    check();
+    const onLoad = () => {
+      isLoaded = true;
+    };
     const onError = () => {
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
         node.src = '/brand/nox-symbol.webp';
       }
+      isLoaded = true;
     };
+    node.addEventListener('load', onLoad);
     node.addEventListener('error', onError);
     return {
       destroy() {
+        node.removeEventListener('load', onLoad);
         node.removeEventListener('error', onError);
       }
     };
@@ -65,15 +83,18 @@
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
-  <div class="card-media">
+  <div class="card-media" class:loaded={isLoaded}>
     <img
-      use:fallbackCover
+      use:setupImage
       src={coverSrc}
       alt="Capa de {decodeHtmlEntities(work.title)}"
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
+      fetchpriority={priority}
+      decoding="async"
       width="300"
       height="400"
       class="card-img"
+      class:loaded={isLoaded}
       class:blurred-cover={effectiveBlur}
     />
 
@@ -171,12 +192,49 @@
     background: #090a12;
   }
 
+  .card-media::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: cardShimmer 1.8s infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .card-media.loaded::before {
+    display: none;
+  }
+
+  @keyframes cardShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card-media::before {
+      animation: none;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+
   .card-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center;
-    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card-img.loaded {
+    opacity: 1;
   }
 
   .editorial-card:hover .card-img {
