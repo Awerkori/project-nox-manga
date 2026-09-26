@@ -25,8 +25,8 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
-  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id, currentWork.slug, currentWork.id) : '');
-  let isAdult = $derived(currentWork?.content_rating === 'ADULT_18');
+  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id || currentWork.coverId, currentWork.slug, currentWork.id) : '');
+  let isAdult = $derived(((currentWork?.content_rating || currentWork?.contentRating) === 'ADULT_18'));
   let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 
   // Check if current featured work has reading progress
@@ -38,26 +38,16 @@
       : null
   );
 
-  let coverLoaded = $state(false);
-
-  $effect(() => {
-    if (heroCover) {
-      coverLoaded = false;
-    }
-  });
-
-  function onCoverLoad(node: HTMLImageElement) {
-    const check = () => {
-      if (node.complete && node.naturalWidth > 0) {
-        coverLoaded = true;
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
       }
     };
-    check();
-    const onLoad = () => { coverLoaded = true; };
-    node.addEventListener('load', onLoad);
+    node.addEventListener('error', onError);
     return {
       destroy() {
-        node.removeEventListener('load', onLoad);
+        node.removeEventListener('error', onError);
       }
     };
   }
@@ -175,6 +165,7 @@
         loading="eager"
         fetchpriority="low"
         decoding="async"
+        use:fallbackCover
       />
       <div class="backdrop-gradient-v"></div>
       <div class="backdrop-gradient-h"></div>
@@ -186,19 +177,18 @@
         <!-- LEFT: Large Dominant Protagonist Cover (Kuro Standard) -->
         <div class="hero-cover-col">
           <a href="/obra/{currentWork.slug}" class="cover-perspective-frame" tabindex="-1">
-            <div class="cover-3d-card" class:loaded={coverLoaded}>
+            <div class="cover-3d-card">
               <img
                 src={heroCover}
                 alt={currentWork.title}
                 class="cover-img"
                 class:blurred-cover={effectiveBlur}
-                class:loaded={coverLoaded}
                 width="330"
                 height="470"
                 loading="eager"
                 fetchpriority="high"
                 decoding="async"
-                use:onCoverLoad
+                use:fallbackCover
               />
               {#if isAdult}
                 <span class="adult-badge-hero">+18</span>
@@ -430,39 +420,6 @@
       0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
-  .cover-3d-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.02) 0%,
-      rgba(255, 255, 255, 0.08) 50%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
-    background-size: 200% 100%;
-    animation: heroShimmer 1.8s infinite;
-    pointer-events: none;
-    z-index: 1;
-    border-radius: 16px;
-  }
-
-  .cover-3d-card.loaded::before {
-    display: none;
-  }
-
-  @keyframes heroShimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .cover-3d-card::before {
-      animation: none;
-      background: rgba(255, 255, 255, 0.04);
-    }
-  }
-
   .cover-perspective-frame:hover .cover-3d-card {
     transform: rotateY(1deg) rotateX(0deg) translateY(-4px);
     box-shadow:
@@ -476,12 +433,6 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .cover-img.loaded {
-    opacity: 1;
   }
 
   .cover-placeholder {

@@ -241,22 +241,28 @@ export async function fetchMostReadFromYugabyte(platformEnv?: any): Promise<Yuga
  * Fetch recent releases with their latest chapters.
  */
 export async function fetchRecentReleasesFromYugabyte(
-  limit = 16,
-  chaptersPerWork = 3,
+  limit = 15,
+  chaptersPerWork = 4,
   cursorTime?: string | null,
   cursorId?: string | null,
-  platformEnv?: any
+  platformEnv?: any,
+  kind?: string | null
 ): Promise<YugabyteReleaseRow[]> {
-  const opKey = `recent_releases_${limit}_${chaptersPerWork}_${cursorTime || 'top'}_${cursorId || 'top'}`;
+  const opKey = `recent_releases_${limit}_${chaptersPerWork}_${cursorTime || 'top'}_${cursorId || 'top'}_${kind || 'all'}`;
   return withYugabyteLkg(
     opKey,
     async () => {
       // Direct CTE query that is 100% portable and fast on Yugabyte
       let cursorClause = '';
+      let kindClause = '';
       const params: any[] = [limit, chaptersPerWork];
       if (cursorTime && cursorId) {
-        cursorClause = 'AND (c.published_at, w.id) < ($3, $4)';
         params.push(cursorTime, cursorId);
+        cursorClause = `AND (c.published_at, w.id) < ($${params.length - 1}, $${params.length})`;
+      }
+      if (kind && kind.toUpperCase() !== 'ALL') {
+        params.push(kind.toUpperCase());
+        kindClause = `AND UPPER(w.kind) = $${params.length}`;
       }
 
       const sql = `
@@ -267,6 +273,7 @@ export async function fetchRecentReleasesFromYugabyte(
           FROM chapters c
           JOIN works w ON c.work_id = w.id
           WHERE c.published_at IS NOT NULL AND w.published = true
+            ${kindClause}
             ${cursorClause}
           GROUP BY w.id, w.slug, w.title, w.cover_id, w.kind, w.content_rating
           ORDER BY latest_published_at DESC

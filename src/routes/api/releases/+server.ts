@@ -1,17 +1,20 @@
 import { json } from '@sveltejs/kit';
 import { fetchRecentReleasesFromYugabyte } from '$lib/server/yugabyte';
 
-export const GET = async ({ url, platform }: any) => {
+export const GET = async ({ url, platform, setHeaders }: any) => {
   const cursorTime = url.searchParams.get('cursorTime') || null;
   const cursorId = url.searchParams.get('cursorId') || null;
-  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '16', 10)));
+  const rawKind = url.searchParams.get('kind');
+  const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
+  const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get('limit') || '15', 10)));
 
   const chaptersData = await fetchRecentReleasesFromYugabyte(
     limit,
-    3,
+    4,
     cursorTime,
     cursorId,
-    platform?.env
+    platform?.env,
+    kind
   );
 
   const releasesMap = new Map();
@@ -31,7 +34,7 @@ export const GET = async ({ url, platform }: any) => {
       });
     }
     const group = releasesMap.get(workId);
-    if (group.chapters.length < 3) {
+    if (group.chapters.length < 4) {
       group.chapters.push({
         id: (row as any).chapter_id,
         number: (row as any).chapter_number,
@@ -42,6 +45,12 @@ export const GET = async ({ url, platform }: any) => {
   }
 
   const releases = Array.from(releasesMap.values());
+
+  if (setHeaders) {
+    setHeaders({
+      'cache-control': 'public, max-age=15, stale-while-revalidate=60'
+    });
+  }
 
   return json({
     releases,

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ArrowRight, ArrowUp, BookOpen, Clock, ChevronDown, AlertTriangle, RefreshCw } from '@lucide/svelte';
+  import { untrack } from "svelte";
+  import { ArrowRight, BookOpen, Clock, AlertTriangle, RefreshCw } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
@@ -30,103 +31,84 @@
   let { releases = [], loadError = false, isStale = false }: Props = $props();
 
   let currentReleases = $state<ReleaseItem[]>(releases);
-  let loadingMore = $state(false);
-  let hasMore = $state(releases.length >= 16);
+  let expandedCards = $state<Record<string, boolean>>({});
+
+  function toggleCardExpand(workId: string) {
+    expandedCards[workId] = !expandedCards[workId];
+  }
 
   $effect(() => {
-    // Keep it in sync if props change externally
-    if (releases !== currentReleases) {
+    const current = untrack(() => currentReleases);
+    if (releases && releases.length > 0 && releases[0] !== current[0]) {
       currentReleases = [...releases];
     }
   });
 
-  async function handleLoadMore() {
-    if (loadingMore || !hasMore) return;
-    loadingMore = true;
-    try {
-      const lastItem = currentReleases[currentReleases.length - 1];
-      const cursorTime = lastItem ? lastItem.latestPublishedAt : '';
-      const cursorId = lastItem ? lastItem.workId : '';
-      const res = await fetch(`/api/releases?cursorTime=${encodeURIComponent(cursorTime)}&cursorId=${encodeURIComponent(cursorId)}&limit=16`);
-      if (!res.ok) throw new Error('Falha ao carregar');
-      const data = await res.json();
-      const newItems: ReleaseItem[] = data.releases || [];
-      
-      if (newItems.length === 0) {
-        hasMore = false;
-      } else {
-        const existingIds = new Set(currentReleases.map(r => r.workId));
-        const uniqueItems = newItems.filter(r => !existingIds.has(r.workId));
-        currentReleases = [...currentReleases, ...uniqueItems];
-        if (uniqueItems.length === 0 || !data.hasMore || currentReleases.length >= 64) {
-          hasMore = false;
-        }
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (node.src.includes('?size=thumb')) {
+        node.src = node.src.replace('?size=thumb', '');
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      loadingMore = false;
-    }
-  }
-
-  function handleShowLess() {
-    currentReleases = [...releases];
-    hasMore = releases.length >= 16;
-    const section = document.getElementById('lancamentos');
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-    }
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
   }
 </script>
 
 <section id="lancamentos" class="releases-section">
   <div class="releases-header">
     <div class="title-cluster">
-      <h2 class="releases-title">LANÇAMENTOS</h2>
+      <h2 class="releases-title">Lançamentos</h2>
       <span class="releases-subtitle">Capítulos recém-publicados</span>
     </div>
 
     <div class="header-right-tools">
-      {#if currentReleases.length > releases.length}
-        <button type="button" class="view-all-link" onclick={handleShowLess}>
-          <span>Mostrar menos</span>
-          <ArrowUp size={14} />
-        </button>
-      {/if}
-      {#if hasMore}
-        <button type="button" class="view-all-link" onclick={handleLoadMore} disabled={loadingMore}>
-          {#if loadingMore}
-            <RefreshCw size={14} class="spin" />
-            <span>Carregando...</span>
-          {:else}
-            <span>Ver mais lançamentos</span>
-            <ArrowRight size={14} />
-          {/if}
-        </button>
-      {:else if currentReleases.length >= 16}
-        <span class="view-all-link" style="opacity: 0.5; cursor: default;">Não há mais lançamentos</span>
-      {/if}
+      <a href="/lancamentos" class="view-all-link">
+        <span>Ver mais lançamentos</span>
+        <ArrowRight size={14} />
+      </a>
     </div>
   </div>
 
+  {#if isStale}
+    <div class="stale-notice">
+      <RefreshCw size={14} />
+      <span>Exibindo lançamentos em cache temporário. Atualizando dados...</span>
+    </div>
+  {/if}
+
   {#if releases.length > 0}
     <div class="releases-grid">
-      {#each currentReleases as rel (rel.workId)}
+      {#each currentReleases as rel, i (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
-        {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId)}
+        {@const isExpanded = Boolean(expandedCards[rel.workId])}
+        {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
+        {@const remainingCount = sortedChapters.length - 3}
+        {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             <div class="thumb-wrap">
               <img
+                use:fallbackCover
                 src={thumbCover}
                 alt={rel.workTitle}
                 class="thumb-img"
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
+                loading={i < 3 ? "eager" : "lazy"}
+                fetchpriority={i < 3 ? "high" : "auto"}
                 decoding="async"
               />
               {#if isAdult}
@@ -156,16 +138,26 @@
 
             <!-- Clickable Chapter Pills List (Newest to Oldest) -->
             <div class="chapter-pills-list">
-              {#each sortedChapters as ch, i}
+              {#each visibleChapters as ch, idx (ch.id)}
                 <a
                   href="/ler/{ch.id}"
                   class="chapter-pill"
-                  class:latest-pill={i === 0}
+                  class:latest-pill={idx === 0}
                   title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
                 >
                   <span class="ch-text">Cap. {ch.number}</span>
                 </a>
               {/each}
+              {#if sortedChapters.length > 3}
+                <button
+                  type="button"
+                  class="chapter-pill expand-pill"
+                  onclick={(e) => { e.preventDefault(); toggleCardExpand(rel.workId); }}
+                  title={isExpanded ? "Mostrar menos capítulos" : `Ver mais ${remainingCount} capítulos lançados`}
+                >
+                  <span class="ch-text">{isExpanded ? "Menos" : `+${remainingCount} caps`}</span>
+                </button>
+              {/if}
             </div>
           </div>
         </article>
@@ -259,12 +251,18 @@
     cursor: not-allowed;
   }
 
-  /* Grid Feed */
+  /* Grid Feed - 3 columns on desktop, 2 on tablet, 1 on mobile */
   .releases-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
     width: 100%;
+  }
+
+  @media (max-width: 1024px) {
+    .releases-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   .release-row-card {
@@ -311,6 +309,7 @@
     position: relative;
     width: 64px;
     height: 88px;
+    aspect-ratio: 64 / 88;
     border-radius: 8px;
     overflow: hidden;
     background: #11131c;
@@ -448,6 +447,20 @@
     border-color: rgba(223, 194, 141, 0.3);
     color: #dfc28d;
     transform: translateY(-1px);
+  }
+
+  .chapter-pill.expand-pill {
+    cursor: pointer;
+    background: rgba(223, 194, 141, 0.1);
+    border-color: rgba(223, 194, 141, 0.3);
+    color: #dfc28d;
+    font-size: 0.74rem;
+  }
+
+  .chapter-pill.expand-pill:hover {
+    background: rgba(223, 194, 141, 0.22);
+    border-color: rgba(223, 194, 141, 0.5);
+    color: #fff;
   }
 
   .chapter-pill.latest-pill {

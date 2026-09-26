@@ -20,9 +20,7 @@
     priority?: 'high' | 'auto' | 'low';
   } = $props();
 
-  let isLoaded = $state(false);
-
-  let isAdult = $derived(work.content_rating === 'ADULT_18');
+  let isAdult = $derived(((work.content_rating || work.contentRating) === 'ADULT_18'));
   let effectiveBlur = $derived(
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
@@ -31,17 +29,22 @@
     const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
     if (list.length === 0) {
       if (work.primary_scan?.name) {
-        return { name: work.primary_scan.name, logo_id: work.primary_scan.logo_id, is_official: work.primary_scan.is_official, extraCount: 0 };
+        return {
+          name: work.primary_scan.name,
+          logo_id: work.primary_scan.logo_id || work.primary_scan.logoId,
+          is_official: work.primary_scan.is_official || work.primary_scan.isOfficial,
+          extraCount: 0
+        };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.is_primary || ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logo_id: primary.logo_id || primary.logoId,
+      is_official: primary.is_official || primary.isOfficial,
       extraCount
     };
   });
@@ -53,29 +56,21 @@
     return String(n);
   }
 
-  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id, { size: 'thumb' }));
+  let coverSrc = $derived(resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' }));
 
-  function setupImage(node: HTMLImageElement) {
-    const check = () => {
-      if (node.complete && node.naturalWidth > 0) {
-        isLoaded = true;
-      }
-    };
-    check();
-    const onLoad = () => {
-      isLoaded = true;
-    };
+  function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
+      if (node.src.includes('?size=thumb')) {
+        node.src = node.src.replace('?size=thumb', '');
+        return;
+      }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
         node.src = '/brand/nox-symbol.webp';
       }
-      isLoaded = true;
     };
-    node.addEventListener('load', onLoad);
     node.addEventListener('error', onError);
     return {
       destroy() {
-        node.removeEventListener('load', onLoad);
         node.removeEventListener('error', onError);
       }
     };
@@ -83,9 +78,9 @@
 </script>
 
 <a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
-  <div class="card-media" class:loaded={isLoaded}>
+  <div class="card-media">
     <img
-      use:setupImage
+      use:fallbackCover
       src={coverSrc}
       alt="Capa de {decodeHtmlEntities(work.title)}"
       loading={eager ? 'eager' : 'lazy'}
@@ -94,7 +89,6 @@
       width="300"
       height="400"
       class="card-img"
-      class:loaded={isLoaded}
       class:blurred-cover={effectiveBlur}
     />
 
@@ -192,49 +186,12 @@
     background: #090a12;
   }
 
-  .card-media::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.02) 0%,
-      rgba(255, 255, 255, 0.08) 50%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
-    background-size: 200% 100%;
-    animation: cardShimmer 1.8s infinite;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .card-media.loaded::before {
-    display: none;
-  }
-
-  @keyframes cardShimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .card-media::before {
-      animation: none;
-      background: rgba(255, 255, 255, 0.04);
-    }
-  }
-
   .card-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center;
-    opacity: 0;
-    transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .card-img.loaded {
-    opacity: 1;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .editorial-card:hover .card-img {

@@ -122,7 +122,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
   // Cold cache: fetch public data from authoritative Yugabyte and reading from Supabase
   const [worksData, chaptersData, readingRes, mostReadData] = await Promise.all([
     fetchHomeWorksFromYugabyte(platform?.env),
-    fetchRecentReleasesFromYugabyte(16, 3, null, null, platform?.env),
+    fetchRecentReleasesFromYugabyte(15, 4, null, null, platform?.env),
     locals.user
       ? safeDbQuery(
           locals.db
@@ -291,7 +291,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
         });
       }
       const group = releasesMap.get(workId)!;
-      if (group.chapters.length < 3) {
+      if (group.chapters.length < 4) {
         group.chapters.push({
           id: (row as any).chapter_id,
           number: (row as any).chapter_number,
@@ -303,69 +303,6 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
   }
 
   let recentReleases = Array.from(releasesMap.values());
-
-  // Resilient secondary fallback: if RPC timed out, do it manually with two queries
-  if (recentReleases.length === 0) {
-    const fallbackWorksRes = await withTimeout(
-      locals.db
-        .from('works')
-        .select('id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at')
-        .eq('published', true)
-        .not('latest_chapter_published_at', 'is', null)
-        .order('latest_chapter_published_at', { ascending: false })
-        .limit(16),
-      1500,
-      { data: [] } as any,
-      'home_chapters_fallback_works'
-    );
-
-    const fallbackWorks = fallbackWorksRes?.data || [];
-    if (fallbackWorks.length > 0) {
-      const workIds = fallbackWorks.map((w: any) => w.id);
-      const fallbackChaptersRes = await withTimeout(
-        locals.db
-          .from('chapters')
-          .select('id,number,title,published_at,work_id')
-          .in('work_id', workIds)
-          .not('published_at', 'is', null)
-          .order('published_at', { ascending: false }),
-        1500,
-        { data: [] } as any,
-        'home_chapters_fallback_chapters'
-      );
-
-      const fallbackChapters = fallbackChaptersRes?.data || [];
-      const worksById = new Map(fallbackWorks.map((w: any) => [w.id, w]));
-      for (const row of fallbackChapters) {
-        const w = worksById.get(row.work_id);
-        if (!w) continue;
-        if (!releasesMap.has(w.id)) {
-          releasesMap.set(w.id, {
-            workId: w.id,
-            workSlug: w.slug,
-            workTitle: w.title,
-            coverId: w.cover_id,
-            kind: w.kind,
-            contentRating: w.content_rating,
-            latestPublishedAt: w.latest_chapter_published_at || '',
-            chapters: []
-          });
-        }
-        const group = releasesMap.get(w.id)!;
-        if (group.chapters.length < 3) {
-          group.chapters.push({
-            id: row.id,
-            number: row.number,
-            title: row.title,
-            publishedAt: row.published_at || ''
-          });
-        }
-      }
-      recentReleases = Array.from(releasesMap.values());
-      // Sort to guarantee correct order
-      recentReleases.sort((a, b) => new Date(b.latestPublishedAt).getTime() - new Date(a.latestPublishedAt).getTime());
-    }
-  }
 
   // Derive works from RPC data if works query timed out but chapters succeeded
   if (works.length === 0 && chaptersRes.data && chaptersRes.data.length > 0) {

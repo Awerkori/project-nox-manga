@@ -55,7 +55,7 @@
       <section class="section-block continue-section">
         <div class="section-header">
           <div class="title-cluster">
-            <h2 class="section-title">CONTINUAR LENDO</h2>
+            <h2 class="section-title">Continuar Lendo</h2>
             <span class="section-subtitle">De onde você parou</span>
           </div>
 

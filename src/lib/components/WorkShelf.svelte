@@ -23,25 +23,6 @@
   let loadingMore = $state(false);
   let hasMore = $state(true);
 
-  function setupShelfImage(node: HTMLImageElement) {
-    const markLoaded = () => {
-      node.classList.add('loaded');
-      node.parentElement?.classList.add('loaded');
-    };
-    if (node.complete && node.naturalWidth > 0) {
-      markLoaded();
-    } else {
-      node.addEventListener('load', markLoaded, { once: true });
-      node.addEventListener('error', markLoaded, { once: true });
-      return {
-        destroy() {
-          node.removeEventListener('load', markLoaded);
-          node.removeEventListener('error', markLoaded);
-        }
-      };
-    }
-  }
-
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
   let canScrollRight = $state(true);
@@ -59,20 +40,20 @@
       if (work.primary_scan?.name) {
         return {
           name: work.primary_scan.name,
-          logo_id: work.primary_scan.logo_id,
-          is_official: work.primary_scan.is_official,
+          logoId: work.primary_scan.logo_id || work.primary_scan.logoId,
+          isOfficial: work.primary_scan.is_official || work.primary_scan.isOfficial,
           extraCount: 0
         };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.is_primary || ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logoId: primary.logo_id || primary.logoId,
+      isOfficial: primary.is_official || primary.isOfficial,
       extraCount
     };
   }
@@ -133,7 +114,26 @@
       handleLoadMore();
     } else {
       isExpanded = false;
+      extraWorks = [];
     }
+  }
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (node.src.includes('?size=thumb')) {
+        node.src = node.src.replace('?size=thumb', '');
+        return;
+      }
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
   }
 </script>
 
@@ -208,49 +208,49 @@
       use:bindScroll
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
-        {#each currentWorks as work, idx (work.id)}
-          {@const isAdult = work.content_rating === 'ADULT_18'}
+        {#each currentWorks as work, i (work.id)}
+          {@const isAdult = (work.content_rating || work.contentRating) === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id, { size: 'thumb' })}
+          {@const shelfCover = resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' })}
           {@const scanInfo = getScanInfo(work)}
-          {@const isEager = shelfIndex === 0 && idx < 4}
-          {@const priority = shelfIndex === 0 && idx < 2 ? 'high' : 'auto'}
+          {@const isEager = shelfIndex === 0 && i < 4}
+          {@const priority = shelfIndex === 0 && i < 2 ? 'high' : 'auto'}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               <img
-                use:setupShelfImage
+                use:fallbackCover
                 src={shelfCover}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}
                 width="200"
                 height="285"
-                loading={isEager ? 'eager' : 'lazy'}
+                loading={isEager ? "eager" : "lazy"}
                 fetchpriority={priority}
                 decoding="async"
               />
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-              <div class="card-views-badge" title="{work.views_total || 0} visualizações">
+              <div class="card-views-badge" title="{(work.views_total || work.viewsTotal || 0)} visualizações">
                 <Eye size={10} />
-                <span>{formatViews(work.views_total)}</span>
+                <span>{formatViews(work.views_total || work.viewsTotal)}</span>
               </div>
 
               <!-- 2. Type: Superior Direito (Top-Right) -->
               <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
 
-              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
+              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
               {#if isAdult}
                 <span class="adult-badge-bottom-left">+18</span>
               {/if}
 
-              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, múltiplos compactos) -->
+              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, mltiplos compactos) -->
               {#if scanInfo}
                 <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
-                  {#if scanInfo.logo_id}
-                    <img src="/media/{scanInfo.logo_id}" alt="" class="scan-badge-logo" />
-                  {:else if scanInfo.is_official}
+                  {#if scanInfo.logoId}
+                    <img src="/media/{scanInfo.logoId}" alt="" class="scan-badge-logo" loading="lazy" decoding="async" />
+                  {:else if scanInfo.isOfficial}
                     <ShieldCheck size={10} />
                   {/if}
                   <span class="scan-badge-name">
@@ -548,45 +548,13 @@
     position: relative;
     width: 200px;
     height: 285px;
+    aspect-ratio: 200 / 285;
     border-radius: 12px;
     overflow: hidden;
     background: #11131c;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
-  }
-
-  .card-cover-box::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.02) 0%,
-      rgba(255, 255, 255, 0.08) 50%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
-    background-size: 200% 100%;
-    animation: shelfShimmer 1.8s infinite;
-    pointer-events: none;
-    z-index: 0;
-    border-radius: 12px;
-  }
-
-  .card-cover-box.loaded::before {
-    display: none;
-  }
-
-  @keyframes shelfShimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .card-cover-box::before {
-      animation: none;
-      background: rgba(255, 255, 255, 0.04);
-    }
   }
 
   .shelf-card:hover .card-cover-box {
@@ -599,12 +567,6 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .card-img.loaded {
-    opacity: 1;
   }
 
   .card-placeholder {
