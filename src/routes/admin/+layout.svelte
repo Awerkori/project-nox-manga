@@ -15,7 +15,6 @@
     UserCheck,
     ShoppingBag
   } from '@lucide/svelte';
-
   import { page } from '$app/state';
 
   let { data, children } = $props();
@@ -151,45 +150,19 @@
         </a>
       </div>
 
-      <!-- Group: PAINEL DA SCAN (Mini-backoffice da própria Scan) -->
-      {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
-        <div class="nav-group">
-          <span class="group-label">PAINEL DA SCAN</span>
-          {#if data.userScans && data.userScans.length === 1}
-            <a
-              href="/scan?id={data.userScans[0].id}"
-              class="nav-link"
-              class:active={isActive('/scan')}
-              onclick={closeMobile}
-            >
-              <LayoutDashboard size={17} class="nav-icon" />
-              <span>Minha Scan</span>
-            </a>
-          {:else if data.userScans && data.userScans.length > 1}
-            {#each data.userScans as scan}
-              <a
-                href="/scan?id={scan.id}"
-                class="nav-link"
-                class:active={currentPath.startsWith('/scan') && currentPath.includes(scan.id)}
-                onclick={closeMobile}
-              >
-                <LayoutDashboard size={17} class="nav-icon" />
-                <span class="truncate">{scan.name}</span>
-              </a>
-            {/each}
-          {:else if data.role === 'ADMIN'}
-            <a
-              href="/scan"
-              class="nav-link"
-              class:active={isActive('/scan')}
-              onclick={closeMobile}
-            >
-              <LayoutDashboard size={17} class="nav-icon" />
-              <span>Workspaces de Scan</span>
-            </a>
-          {/if}
-        </div>
-      {/if}
+      <!-- Group: PARCEIROS -->
+      <div class="nav-group">
+        <span class="group-label">PARCEIROS</span>
+        <a
+          href="/admin/scans"
+          class="nav-link"
+          class:active={isActive('/admin/scans')}
+          onclick={closeMobile}
+        >
+          <Users size={17} class="nav-icon" />
+          <span>Gestão de Scans</span>
+        </a>
+      </div>
 
       <!-- Group: OPERAÇÕES -->
       <div class="nav-group">
@@ -227,15 +200,6 @@
         <span class="group-label">ADMINISTRAÇÃO</span>
         {#if data.role === 'ADMIN'}
           <a
-            href="/admin/health"
-            class="nav-link"
-            class:active={isActive('/admin/health')}
-            onclick={closeMobile}
-          >
-            <Activity size={17} class="nav-icon" />
-            <span>Saúde do Sistema</span>
-          </a>
-          <a
             href="/admin/staff"
             class="nav-link"
             class:active={isActive('/admin/staff')}
@@ -264,15 +228,6 @@
           <span>Gestão da Loja</span>
         </a>
         {#if data.role === 'ADMIN'}
-          <a
-            href="/admin/scans"
-            class="nav-link"
-            class:active={isActive('/admin/scans')}
-            onclick={closeMobile}
-          >
-            <Users size={17} class="nav-icon" />
-            <span>Gestão Global de Scans</span>
-          </a>
           <a
             href="/admin/gestao/configuracoes"
             class="nav-link"
@@ -305,7 +260,7 @@
         onclick={() => (mobileDrawerOpen = true)}
         aria-label="Expandir painel de controle"
       >
-        <Menu size={17} />
+        <Menu size={18} />
         <span>Expandir painel de controle</span>
       </button>
     </div>
@@ -315,10 +270,11 @@
 </div>
 
 <style>
+  /* Obsidian/Void Black Theme Variables for Admin Shell */
   .admin-shell {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
-    max-width: 1480px;
+    width: 100%;
     margin: 0 auto;
     min-height: calc(100vh - 78px);
     position: relative;
