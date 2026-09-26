@@ -1,32 +1,5 @@
-import { unzlibSync } from 'fflate';
 import jpeg from 'jpeg-js';
-import { decode as decodePng } from 'fast-png';
-import encodeWebp, { init as initWebp } from '@jsquash/webp/encode.js';
-import { WEBP_ENC_WASM_BASE64 } from './webp-wasm.js';
-
-let webpInitialized = false;
-let webpInitPromise: Promise<void> | null = null;
-
-async function ensureWebpInitialized(): Promise<void> {
-  if (webpInitialized) return;
-  if (webpInitPromise) return webpInitPromise;
-
-  webpInitPromise = (async () => {
-    try {
-      const decompressed = unzlibSync(Buffer.from(WEBP_ENC_WASM_BASE64, 'base64'));
-      const wasmModule = new WebAssembly.Module(decompressed);
-      await initWebp(wasmModule);
-      webpInitialized = true;
-    } catch (err) {
-      console.error('Failed to initialize WebP WASM encoder:', err);
-      throw err;
-    } finally {
-      webpInitPromise = null;
-    }
-  })();
-
-  return webpInitPromise;
-}
+import { decode as decodePng, encode as encodePng } from 'fast-png';
 
 export function isGif(bytes: Uint8Array): boolean {
   if (bytes.length < 6) return false;
@@ -65,8 +38,8 @@ export function resizeRgba(
   h1: number,
   w2: number,
   h2: number
-): Uint8ClampedArray {
-  const dst = new Uint8ClampedArray(w2 * h2 * 4);
+): Uint8Array {
+  const dst = new Uint8Array(w2 * h2 * 4);
   const xRatio = (w1 - 1) / Math.max(1, w2 - 1);
   const yRatio = (h1 - 1) / Math.max(1, h2 - 1);
 
@@ -144,7 +117,7 @@ export async function generateThumbnail(
     }
 
     if (!rawRgba || width === 0 || height === 0) {
-      // Format not decodable via fast decoder, fallback to original
+      // Format not decodable via fast pure-JS decoders, fallback to original
       return {
         data: sourceBytes,
         mime: sourceMime || 'image/jpeg',
@@ -155,36 +128,62 @@ export async function generateThumbnail(
     const MAX_WIDTH = 360;
     const MAX_HEIGHT = 480;
 
-    let targetWidth = width;
-    let targetHeight = height;
-
-    if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-      const widthRatio = MAX_WIDTH / width;
-      const heightRatio = MAX_HEIGHT / height;
-      const scale = Math.min(widthRatio, heightRatio);
-
-      targetWidth = Math.max(1, Math.round(width * scale));
-      targetHeight = Math.max(1, Math.round(height * scale));
+    // Rule: if image is already smaller or equal to target, serve original
+    if (width <= MAX_WIDTH && height <= MAX_HEIGHT) {
+      return {
+        data: sourceBytes,
+        mime: sourceMime || (isJpeg(sourceBytes) ? 'image/jpeg' : isPng(sourceBytes) ? 'image/png' : 'image/jpeg'),
+        resized: false
+      };
     }
 
-    let finalRgba = rawRgba;
-    if (targetWidth !== width || targetHeight !== height) {
-      finalRgba = resizeRgba(rawRgba, width, height, targetWidth, targetHeight);
+    const widthRatio = MAX_WIDTH / width;
+    const heightRatio = MAX_HEIGHT / height;
+    const scale = Math.min(widthRatio, heightRatio);
+
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+
+    const finalRgba = resizeRgba(rawRgba, width, height, targetWidth, targetHeight);
+
+    // If source is PNG with alpha transparency, preserve PNG
+    if (mime === 'image/png' || isPng(sourceBytes)) {
+      let hasAlpha = false;
+      for (let i = 3; i < finalRgba.length; i += 4) {
+        if (finalRgba[i] < 250) {
+          hasAlpha = true;
+          break;
+        }
+      }
+      if (hasAlpha) {
+        const pngEncoded = encodePng({
+          width: targetWidth,
+          height: targetHeight,
+          data: finalRgba
+        });
+        return {
+          data: pngEncoded,
+          mime: 'image/png',
+          width: targetWidth,
+          height: targetHeight,
+          resized: true
+        };
+      }
     }
 
-    await ensureWebpInitialized();
-    const webpBuffer = await encodeWebp(
+    // JPEG encoding at 78% quality: universal compatibility, fast, 80-90% byte reduction
+    const jpegEncoded = jpeg.encode(
       {
-        data: finalRgba instanceof Uint8ClampedArray ? finalRgba : new Uint8ClampedArray(finalRgba.buffer, finalRgba.byteOffset, finalRgba.byteLength),
+        data: finalRgba,
         width: targetWidth,
         height: targetHeight
       },
-      { quality: 80 }
+      78
     );
 
     return {
-      data: new Uint8Array(webpBuffer),
-      mime: 'image/webp',
+      data: jpegEncoded.data,
+      mime: 'image/jpeg',
       width: targetWidth,
       height: targetHeight,
       resized: true

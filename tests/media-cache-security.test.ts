@@ -174,7 +174,7 @@ describe('Media Security and Cache Guard', () => {
     expect(data.error).toBe('Página temporariamente indisponível');
   });
 
-  it('generates real WebP thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
+  it('generates real thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
     const jpeg = (await import('jpeg-js')).default;
     const w = 1000, h = 1500;
     const rawRgba = new Uint8Array(w * h * 4);
@@ -212,15 +212,15 @@ describe('Media Security and Cache Guard', () => {
     });
 
     expect(thumbRes.status).toBe(200);
-    expect(thumbRes.headers.get('Content-Type')).toBe('image/webp');
+    expect(thumbRes.headers.get('Content-Type')).toBe('image/jpeg');
     expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb"');
 
     const thumbBytes = new Uint8Array(await thumbRes.arrayBuffer());
-    // Must be significantly fewer bytes than the 1000x1500 JPEG fixture
+    // Must be significantly fewer bytes than the 1000x1500 JPEG fixture (>50% reduction)
     expect(thumbBytes.length).toBeLessThan(fixtureJpeg.length / 2);
-    // Must be valid WebP (starts with RIFF....WEBP)
-    const headerStr = Buffer.from(thumbBytes.slice(0, 12)).toString('ascii');
-    expect(headerStr.startsWith('RIFF') && headerStr.includes('WEBP')).toBe(true);
+    // Must be valid JPEG (starts with FF D8)
+    expect(thumbBytes[0]).toBe(0xff);
+    expect(thumbBytes[1]).toBe(0xd8);
 
     // 2. Request original full-size: /media/{id}
     const originalRes = await GET({
