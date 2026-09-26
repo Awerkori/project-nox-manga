@@ -11,9 +11,7 @@
     Shield,
     Sparkles,
     Activity,
-    Flag,
-    UserCheck,
-    ShoppingBag
+    Flag
   } from '@lucide/svelte';
   import { page } from '$app/state';
 
@@ -38,6 +36,38 @@
 </svelte:head>
 
 <div class="admin-shell">
+  <!-- Mobile Admin Top Bar (< 950px) -->
+  <header class="admin-mobile-bar">
+    <div class="mobile-bar-brand">
+      <img
+        src="/brand/nox-symbol-64.webp"
+        alt="Nox"
+        width="30"
+        height="30"
+        class="mobile-bar-symbol"
+      />
+      <div class="mobile-bar-titles">
+        <span class="mobile-brand-name">NOX EDITORIAL</span>
+        <span class="mobile-role-badge" class:badge-admin={data.role === 'ADMIN'}>
+          {data.role === 'ADMIN' ? 'Admin' : 'Editor'}
+        </span>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="mobile-menu-btn"
+      aria-label={mobileDrawerOpen ? 'Fechar menu' : 'Abrir menu de navegação'}
+      onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
+    >
+      {#if mobileDrawerOpen}
+        <X size={20} />
+      {:else}
+        <Menu size={20} />
+      {/if}
+    </button>
+  </header>
+
   <!-- Mobile Backdrop Overlay -->
   {#if mobileDrawerOpen}
     <div
@@ -60,8 +90,8 @@
           class="sidebar-symbol"
         />
         <div class="brand-text">
-          <span class="brand-editorial">PROJECT NOX</span>
-          <span class="brand-sub">Painel de Controle</span>
+          <span class="brand-editorial">NOX EDITORIAL</span>
+          <span class="brand-sub">Central de Conteúdo</span>
         </div>
       </div>
 
@@ -111,7 +141,7 @@
       </div>
     </div>
 
-    <!-- Grouped Admin Navigation -->
+    <!-- Grouped Editorial Navigation -->
     <nav class="sidebar-nav" aria-label="Navegação administrativa">
       <!-- Group: GERAL -->
       <div class="nav-group">
@@ -150,21 +180,7 @@
         </a>
       </div>
 
-      <!-- Group: PARCEIROS -->
-      <div class="nav-group">
-        <span class="group-label">PARCEIROS</span>
-        <a
-          href="/admin/scans"
-          class="nav-link"
-          class:active={isActive('/admin/scans')}
-          onclick={closeMobile}
-        >
-          <Users size={17} class="nav-icon" />
-          <span>Gestão de Scans</span>
-        </a>
-      </div>
-
-      <!-- Group: OPERAÇÕES -->
+      <!-- Group: OPERAÇÕES (Importer) -->
       <div class="nav-group">
         <span class="group-label">OPERAÇÕES</span>
         <a
@@ -178,9 +194,9 @@
         </a>
       </div>
 
-      <!-- Group: STAFF -->
+      <!-- Group: MODERAÇÃO -->
       <div class="nav-group">
-        <span class="group-label">STAFF</span>
+        <span class="group-label">MODERAÇÃO</span>
         <a
           href="/admin/reports"
           class="nav-link"
@@ -188,26 +204,17 @@
           onclick={closeMobile}
         >
           <Flag size={17} class="nav-icon" />
-          <span>Denúncias & Moderação</span>
+          <span>Denúncias</span>
           {#if (data.pendingReportsCount ?? 0) > 0}
             <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
           {/if}
         </a>
       </div>
 
-      <!-- Group: ADMINISTRAÇÃO -->
-      <div class="nav-group">
-        <span class="group-label">ADMINISTRAÇÃO</span>
-        {#if data.role === 'ADMIN'}
-          <a
-            href="/admin/staff"
-            class="nav-link"
-            class:active={isActive('/admin/staff')}
-            onclick={closeMobile}
-          >
-            <UserCheck size={17} class="nav-icon" />
-            <span>Gestão da Staff</span>
-          </a>
+      <!-- Group: GESTÃO DO SISTEMA (Restrito ao ADMIN) -->
+      {#if data.role === 'ADMIN'}
+        <div class="nav-group">
+          <span class="group-label">GESTÃO DO SISTEMA</span>
           <a
             href="/admin/gestao"
             class="nav-link"
@@ -217,17 +224,6 @@
             <Users size={17} class="nav-icon" />
             <span>Membros & Leitores</span>
           </a>
-        {/if}
-        <a
-          href="/admin/loja"
-          class="nav-link"
-          class:active={isActive('/admin/loja')}
-          onclick={closeMobile}
-        >
-          <ShoppingBag size={17} class="nav-icon" />
-          <span>Gestão da Loja</span>
-        </a>
-        {#if data.role === 'ADMIN'}
           <a
             href="/admin/gestao/configuracoes"
             class="nav-link"
@@ -237,8 +233,8 @@
             <Settings size={17} class="nav-icon" />
             <span>Configurações</span>
           </a>
-        {/if}
-      </div>
+        </div>
+      {/if}
 
       <!-- Group: ATALHOS EXTERNOS -->
       <div class="nav-group nav-group-bottom">
@@ -252,82 +248,108 @@
 
   <!-- Main Content Workspace -->
   <main class="admin-content">
-    <!-- Mobile Header Trigger -->
-    <div class="mobile-admin-header">
-      <button
-        type="button"
-        class="mobile-expand-btn"
-        onclick={() => (mobileDrawerOpen = true)}
-        aria-label="Expandir painel de controle"
-      >
-        <Menu size={18} />
-        <span>Expandir painel de controle</span>
-      </button>
-    </div>
-
     {@render children()}
   </main>
 </div>
 
 <style>
-  /* Obsidian/Void Black Theme Variables for Admin Shell */
   .admin-shell {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
-    width: 100%;
+    max-width: 1480px;
     margin: 0 auto;
     min-height: calc(100vh - 78px);
     position: relative;
   }
 
-  /* Mobile Admin Top Header (< 950px) */
-  .mobile-admin-header {
+  /* Mobile Top Bar (< 950px) */
+  .admin-mobile-bar {
     display: none;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: rgba(10, 12, 20, 0.95);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: sticky;
+    top: 78px;
+    z-index: 35;
+    backdrop-filter: blur(14px);
   }
 
-  .mobile-expand-btn {
-    display: inline-flex;
+  .mobile-bar-brand {
+    display: flex;
     align-items: center;
-    gap: 8px;
-    width: 100%;
-    justify-content: center;
-    padding: 11px 16px;
-    border-radius: 10px;
-    background: rgba(18, 22, 34, 0.85);
-    border: 1px solid rgba(223, 194, 141, 0.35);
+    gap: 10px;
+  }
+
+  .mobile-bar-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mobile-brand-name {
+    font-family: var(--font-heading, 'Manrope', sans-serif);
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.06em;
+  }
+
+  .mobile-role-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(223, 194, 141, 0.12);
     color: #dfc28d;
-    font-weight: 750;
-    font-size: 13.5px;
+    border: 1px solid rgba(223, 194, 141, 0.3);
+    width: fit-content;
+  }
+
+  .mobile-role-badge.badge-admin {
+    background: rgba(181, 154, 245, 0.15);
+    color: #cbb4ff;
+    border-color: rgba(181, 154, 245, 0.35);
+  }
+
+  .mobile-menu-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e5e0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     transition: all 0.2s ease;
   }
 
-  .mobile-expand-btn:hover {
-    background: rgba(223, 194, 141, 0.12);
-    border-color: #dfc28d;
+  .mobile-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
   }
 
   .drawer-close-btn {
     display: none;
+    align-self: flex-end;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #a0aec0;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #d1cde0;
     cursor: pointer;
-    transition: all 0.15s ease;
   }
 
   .drawer-close-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
     color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .mobile-backdrop {
@@ -523,23 +545,6 @@
     border-color: rgba(255, 255, 255, 0.05);
   }
 
-  .nav-badge {
-    margin-left: auto;
-    font-size: 10px;
-    font-weight: 750;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #cbd5e1;
-    line-height: 1.4;
-  }
-
-  .nav-badge.alert {
-    background: rgba(239, 68, 68, 0.18);
-    color: #fca5a5;
-    border: 1px solid rgba(239, 68, 68, 0.35);
-  }
-
   .nav-link.active {
     color: #ffffff;
     font-weight: 700;
@@ -576,6 +581,23 @@
     color: #b59af5;
   }
 
+  .nav-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 750;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    line-height: 1.4;
+  }
+
+  .nav-badge.alert {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
   .nav-group-bottom {
     margin-top: auto;
     padding-top: 14px;
@@ -605,23 +627,16 @@
       grid-template-columns: 1fr;
     }
 
-    .mobile-admin-header {
-      display: block;
-    }
-
-    .drawer-close-btn {
+    .admin-mobile-bar {
       display: flex;
-      position: absolute;
-      top: 0;
-      right: 0;
-    }
-
-    .sidebar-header {
-      position: relative;
     }
 
     .mobile-backdrop {
       display: block;
+    }
+
+    .drawer-close-btn {
+      display: inline-flex;
     }
 
     .admin-sidebar {

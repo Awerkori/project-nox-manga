@@ -132,13 +132,48 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Strict fail-closed security for administrative areas
   if (event.url.pathname.startsWith('/admin')) {
     if (event.locals.authState === 'AUTH_PENDING' || event.locals.authState === 'AUTH_ERROR') {
-      error(503, 'A verificação da equipe está temporariamente em recuperação. Tente novamente em instantes.');
+      return new Response(JSON.stringify({ message: 'A verificação da equipe está temporariamente em recuperação. Tente novamente em instantes.' }), {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+    }
+    if (!event.locals.user) {
+      return new Response(null, {
+        status: 303,
+        headers: {
+          'Location': `/entrar?redirect=${encodeURIComponent(event.url.pathname + event.url.search)}`,
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
     }
     if (!['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(event.locals.role || '')) {
-      error(403, 'Esta área é exclusiva da equipe editorial.');
+      return new Response(JSON.stringify({ message: 'Esta área é exclusiva da equipe editorial.' }), {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
     }
     if (event.url.pathname.startsWith('/admin/gestao') && event.locals.role !== 'ADMIN') {
-      error(403, 'Esta área é exclusiva dos administradores.');
+      return new Response(JSON.stringify({ message: 'Esta área é exclusiva dos administradores.' }), {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
     }
   }
 
@@ -169,8 +204,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (isHtml || user || hasAuthCookie || event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/auth') || event.url.pathname.startsWith('/me') || event.url.pathname.startsWith('/scan')) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Cookie, Accept');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
     } else if (response.status >= 400) {
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
     }
   }
   if (
