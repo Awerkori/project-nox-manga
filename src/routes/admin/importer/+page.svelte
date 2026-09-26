@@ -1,6 +1,8 @@
 <script lang="ts">
   /* eslint-disable */
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   import {
     Activity,
@@ -27,11 +29,56 @@
     Play,
     Ban,
     Snowflake,
-    Info
+    Info,
+    Gauge,
+    Radio,
+    Compass,
+    ListOrdered
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
 
   let { data, form } = $props();
+
+  let currentTab = $derived(page.url.searchParams.get('tab') || 'resumo');
+
+  // Chart computation for Cap/min view
+  const chartBuckets = $derived.by(() => {
+    const bucketsMap = new Map<string, { fresh: number; completed: number }>();
+    for (const b of (data.rateBuckets || [])) {
+      if (b.bucket_minute) {
+        const minKey = new Date(b.bucket_minute).toISOString().slice(0, 16);
+        bucketsMap.set(minKey, {
+          fresh: Number(b.fresh_visible || 0),
+          completed: Number(b.completed_jobs || 0)
+        });
+      }
+    }
+
+    const result = [];
+    const now = Date.now();
+    for (let i = 59; i >= 0; i--) {
+      const t = new Date(now - i * 60 * 1000);
+      const key = t.toISOString().slice(0, 16);
+      const timeLabel = t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const val = bucketsMap.get(key) || { fresh: 0, completed: 0 };
+      result.push({
+        time: timeLabel,
+        fresh: val.fresh,
+        completed: val.completed
+      });
+    }
+    const maxVal = Math.max(1, ...result.map((r) => Math.max(r.fresh, r.completed)));
+    const totalFresh60m = result.reduce((acc, r) => acc + r.fresh, 0);
+    const totalCompleted60m = result.reduce((acc, r) => acc + r.completed, 0);
+    return { buckets: result, maxVal, totalFresh60m, totalCompleted60m };
+  });
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      invalidateAll();
+    }, 20000);
+    return () => clearInterval(interval);
+  });
 
   // Catalog Health & Manifest state
   let healthSearchQuery = $state('');
@@ -418,6 +465,59 @@
     </div>
   </header>
 
+  <!-- Horizontal Subtabs Navigation -->
+  <nav class="importer-tabs-nav" aria-label="Abas do Importer">
+    <a href="/admin/importer" class="importer-tab-link" class:active={currentTab === 'resumo' || currentTab === ''}>
+      <Activity size={15} />
+      <span>Resumo</span>
+    </a>
+    <a href="/admin/importer?tab=fontes" class="importer-tab-link" class:active={currentTab === 'fontes'}>
+      <Radio size={15} />
+      <span>Fontes</span>
+    </a>
+    <a href="/admin/importer?tab=atividade" class="importer-tab-link" class:active={currentTab === 'atividade'}>
+      <Compass size={15} />
+      <span>Atividade</span>
+    </a>
+    <a href="/admin/importer?tab=erros" class="importer-tab-link" class:active={currentTab === 'erros'}>
+      <AlertOctagon size={15} />
+      <span>Erros</span>
+      {#if (data.counts?.retry ?? 0) + (data.counts?.failed ?? 0) > 0}
+        <span class="tab-badge warning">{(data.counts?.retry ?? 0) + (data.counts?.failed ?? 0)}</span>
+      {/if}
+    </a>
+    <a href="/admin/importer?tab=cap-min" class="importer-tab-link" class:active={currentTab === 'cap-min'}>
+      <Gauge size={15} />
+      <span>Cap/min</span>
+      <span class="tab-badge rate">{data.rateTelemetry?.rate5m ?? 0}/m</span>
+    </a>
+    <a href="/admin/importer?tab=prioridades" class="importer-tab-link" class:active={currentTab === 'prioridades'}>
+      <Flame size={15} />
+      <span>Prioridades</span>
+      {#if (data.staffRequests || []).length > 0}
+        <span class="tab-badge gold">{(data.staffRequests || []).length}</span>
+      {/if}
+    </a>
+    <a href="/admin/importer?tab=proximas-obras" class="importer-tab-link" class:active={currentTab === 'proximas-obras'}>
+      <Layers size={15} />
+      <span>Próximas Obras</span>
+    </a>
+    <a href="/admin/importer?tab=proximos-capitulos" class="importer-tab-link" class:active={currentTab === 'proximos-capitulos'}>
+      <ListOrdered size={15} />
+      <span>Próximos Capítulos</span>
+      {#if (data.counts?.queued ?? 0) > 0}
+        <span class="tab-badge neutral">{(data.counts?.queued ?? 0).toLocaleString('pt-BR')}</span>
+      {/if}
+    </a>
+    <a href="/admin/importer?tab=capitulos-faltando" class="importer-tab-link" class:active={currentTab === 'capitulos-faltando'}>
+      <AlertTriangle size={15} />
+      <span>Capítulos Faltando</span>
+      {#if (data.healthMetrics?.incompleteCount ?? 0) > 0}
+        <span class="tab-badge alert">{data.healthMetrics?.incompleteCount}</span>
+      {/if}
+    </a>
+  </nav>
+
   <!-- Notification Banner -->
   {#if form?.error}
     <div class="alert-banner error">
@@ -449,7 +549,164 @@
     </div>
   {/if}
 
+  <!-- DEDICATED CAP/MIN VIEW -->
+  {#if currentTab === 'cap-min'}
+    <div class="cap-min-view">
+      <!-- 4 Primary KPI Cards -->
+      <div class="cap-kpis-grid">
+        <div class="cap-kpi-card highlight-rate">
+          <div class="cap-kpi-header">
+            <span class="cap-kpi-label">VAZÃO AGORA (5 MIN)</span>
+            <span class="pulse-indicator">
+              <span class="pulse-dot green"></span>
+              LIVE
+            </span>
+          </div>
+          <div class="cap-kpi-val-row">
+            <span class="cap-kpi-number">{data.rateTelemetry?.rate5m ?? 0}</span>
+            <span class="cap-kpi-unit">cap/min</span>
+          </div>
+          <div class="cap-kpi-details">
+            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh5m ?? 0}</strong> inéditos visíveis</span>
+            <span class="detail-sep">·</span>
+            <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate5m ?? 0}/min</span>
+          </div>
+        </div>
+
+        <div class="cap-kpi-card">
+          <div class="cap-kpi-header">
+            <span class="cap-kpi-label">MÉDIA MÓVEL (30 MIN)</span>
+            <Clock size={15} class="text-zinc-400" />
+          </div>
+          <div class="cap-kpi-val-row">
+            <span class="cap-kpi-number">{data.rateTelemetry?.rate30m ?? 0}</span>
+            <span class="cap-kpi-unit">cap/min</span>
+          </div>
+          <div class="cap-kpi-details">
+            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh30m ?? 0}</strong> inéditos visíveis</span>
+            <span class="detail-sep">·</span>
+            <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate30m ?? 0}/min</span>
+          </div>
+        </div>
+
+        <div class="cap-kpi-card">
+          <div class="cap-kpi-header">
+            <span class="cap-kpi-label">CAPACIDADE ADAPTATIVA</span>
+            <Zap size={15} class="text-amber-400" />
+          </div>
+          <div class="cap-kpi-val-row">
+            <span class="cap-kpi-number">{data.adaptiveCapacity?.concurrency ?? 1}</span>
+            <span class="cap-kpi-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+          </div>
+          <div class="cap-kpi-details">
+            <span class="capacity-status-pill status-{(data.adaptiveCapacity?.state || 'RUNNING_STABLE').toLowerCase()}">
+              {data.adaptiveCapacity?.state ?? 'RUNNING_STABLE'}
+            </span>
+          </div>
+        </div>
+
+        <div class="cap-kpi-card">
+          <div class="cap-kpi-header">
+            <span class="cap-kpi-label">SAÚDE & PRESSÃO</span>
+            <Shield size={15} class="text-green" />
+          </div>
+          <div class="cap-kpi-val-row">
+            <span class="cap-kpi-number text-site-health health-{(data.adaptiveCapacity?.siteHealth || 'GREEN').toLowerCase()}">
+              Site {data.adaptiveCapacity?.siteHealth ?? 'GREEN'}
+            </span>
+          </div>
+          <div class="cap-kpi-details">
+            <span class="detail-reason" title={data.adaptiveCapacity?.reason || 'Operação contínua Always-On'}>
+              {data.adaptiveCapacity?.reason || 'Operação contínua Always-On'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 60-Minute Throughput Histogram Chart -->
+      <section class="chart-section-card">
+        <div class="chart-header">
+          <div>
+            <h3 class="chart-title">Vazão Minuto a Minuto (Últimos 60 Minutos)</h3>
+            <p class="chart-sub">Volume de novos capítulos entregues no site vs execuções do pipeline em tempo real</p>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-color-box color-fresh"></span>
+              <span>Fresh Visível (Site)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color-box color-completed"></span>
+              <span>Pipeline Concluído</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-bars-wrap">
+          <div class="chart-bars-container">
+            {#each chartBuckets.buckets as b}
+              {@const freshPct = Math.min(100, Math.round((b.fresh / chartBuckets.maxVal) * 100))}
+              {@const compPct = Math.min(100, Math.round((b.completed / chartBuckets.maxVal) * 100))}
+              <div class="bar-col" title="{b.time} — Fresh: {b.fresh} cap | Pipeline: {b.completed} jobs">
+                <div class="bar-track">
+                  {#if b.completed > 0}
+                    <div class="bar-fill comp-fill" style="height: {compPct}%;"></div>
+                  {/if}
+                  {#if b.fresh > 0}
+                    <div class="bar-fill fresh-fill" style="height: {freshPct}%;"></div>
+                  {/if}
+                </div>
+                <span class="bar-time-tick">{b.time.slice(3)}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div class="chart-footer-metrics">
+          <div class="footer-metric">
+            <span class="f-label">Acumulado 60m (Fresh):</span>
+            <span class="f-val text-gold">{chartBuckets.totalFresh60m} capítulos</span>
+          </div>
+          <div class="footer-metric">
+            <span class="f-label">Acumulado 60m (Pipeline):</span>
+            <span class="f-val text-purple">{chartBuckets.totalCompleted60m} jobs</span>
+          </div>
+          <div class="footer-metric">
+            <span class="f-label">Pico de Vazão:</span>
+            <span class="f-val font-mono">{chartBuckets.maxVal} cap/min</span>
+          </div>
+          <div class="footer-metric">
+            <span class="f-label">Intervalo de Atualização:</span>
+            <span class="f-val">20s (Always-On SWR)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture Governance Summary -->
+      <section class="governance-card">
+        <div class="gov-icon-box">
+          <Info size={22} class="text-gold" />
+        </div>
+        <div class="gov-text">
+          <h4 class="gov-title">Princípios da Arquitetura Always-On</h4>
+          <div class="gov-bullets">
+            <div class="gov-bullet">
+              <strong>Sem Meta Fixa:</strong> Não forçamos taxas artificiais (10, 20 ou 30 cap/min). A vazão é resultado da capacidade real e da integridade da plataforma.
+            </div>
+            <div class="gov-bullet">
+              <strong>Nunca Stop Automático:</strong> Sob picos de RAM, lentidão no site ou event-loop lag, a concorrência reduz progressivamente até 1 permit mínimo. O sistema nunca desliga sozinho.
+            </div>
+            <div class="gov-bullet">
+              <strong>Fresh Visible vs Pipeline:</strong> "Fresh Visible" contabiliza apenas novos capítulos liberados para os leitores. "Pipeline" inclui re-sincronizações periódicas de acervo e retries.
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  {/if}
+
   <!-- Always-On Adaptive Capacity & Rate Telemetry Overview -->
+  {#if currentTab === 'resumo' || currentTab === ''}
   <section class="adaptive-capacity-section" aria-label="Capacidade Adaptativa e Vazão">
     <div class="adaptive-cards-grid">
       <!-- Card 1: Throughput / Rate Telemetry -->
@@ -546,7 +803,9 @@
       </div>
     </div>
   </section>
+  {/if}
 
+  {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'prioridades'}
   <!-- Hero: Prioridade Absoluta Ativa (Modo Foco) -->
   {#if data.activeFocus}
     <section class="priority-hero-card" aria-label="Prioridade Absoluta Ativa">
@@ -868,7 +1127,9 @@
       </div>
     {/if}
   </section>
+  {/if}
 
+  {#if currentTab === 'resumo' || currentTab === ''}
   <!-- Metric Summary Pills -->
   <section class="counts-pills-bar" aria-label="Métricas da Fila">
     <div class="count-pill">
@@ -926,8 +1187,10 @@
       {/if}
     </div>
   </section>
+  {/if}
 
   <!-- 3. Saúde do Catálogo & Reconciliação Multi-Fonte -->
+  {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'capitulos-faltando'}
   <section class="catalog-health-panel" aria-label="Saúde do Catálogo & Reconciliação Multi-Fonte">
     <div class="health-header">
       <div class="health-title-group">
@@ -1247,12 +1510,51 @@
       </div>
     {/if}
   </section>
+  {/if}
 
+  {#if currentTab === 'proximas-obras'}
+    <section class="panel-card" style="margin-top: 16px;">
+      <div class="panel-header">
+        <div>
+          <div class="title-with-badge">
+            <h2 class="panel-title">Próximas Obras · Pipeline de Ingestão</h2>
+            <span class="badge-accent">{(data.catalogWorks || []).length} catalogadas</span>
+          </div>
+          <p class="panel-sub">Obras descobertas pelas fontes upstream aguardando admissão ou processamento de novos capítulos</p>
+        </div>
+      </div>
+
+      <div class="proximas-obras-grid">
+        {#each (data.catalogWorks || []) as work (work.id)}
+          <div class="work-pipeline-card">
+            <div class="work-pipeline-thumb">
+              {#if work.cover_id}
+                <img src="/media/{work.cover_id}" alt={work.title} class="work-pipe-img" />
+              {:else}
+                <div class="thumb-placeholder">NOX</div>
+              {/if}
+            </div>
+            <div class="work-pipeline-info">
+              <strong class="work-pipe-title" title={work.title}>{work.title}</strong>
+              <span class="work-pipe-slug">{work.slug}</span>
+              <a href="/obra/{work.slug}" class="work-pipe-link" target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={12} />
+                <span>Ver Obra</span>
+              </a>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'fontes' || currentTab === 'atividade' || currentTab === 'erros' || currentTab === 'prioridades' || currentTab === 'proximos-capitulos'}
   <!-- Main Grid Layout -->
-  <div class="importer-grid">
+  <div class="importer-grid" class:single-col={currentTab !== 'resumo' && currentTab !== ''}>
     <!-- Left Column: Active Jobs, Staff Priorities, STAGED Blockers -->
     <div class="grid-primary-col">
       <!-- 1. Importando Agora (Apenas jobs status === 'IMPORTING') -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'atividade'}
       <section class="panel-card" id="sec-importing-now">
         <div class="panel-header">
           <div>
@@ -1453,8 +1755,10 @@
           </div>
         {/if}
       </section>
+      {/if}
 
       <!-- 1b. Área Dedicada: Erros & Retries -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'erros'}
       <section class="panel-card" style="margin-top: 24px;" id="sec-retries">
         <div class="panel-header">
           <div>
@@ -1688,9 +1992,10 @@
           </div>
         {/if}
       </section>
+      {/if}
 
       <!-- Jobs Pausados pela Staff -->
-      {#if (data.pausedJobs || []).length > 0}
+      {#if (currentTab === 'resumo' || currentTab === '') && (data.pausedJobs || []).length > 0}
         <section class="panel-card" style="margin-top: 24px; border-color: rgba(245, 158, 11, 0.3);">
           <div class="panel-header">
             <div>
@@ -1795,6 +2100,7 @@
       {/if}
 
       <!-- 2. Prioridades da Staff -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'prioridades'}
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
@@ -1858,8 +2164,10 @@
           </div>
         {/if}
       </section>
+      {/if}
 
       <!-- 3. STAGED / Barreira Canônica -->
+      {#if currentTab === 'resumo' || currentTab === ''}
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
@@ -1897,11 +2205,13 @@
           </div>
         {/if}
       </section>
+      {/if}
     </div>
 
     <!-- Right Column: Próximos na Fila & Saúde das Fontes -->
     <div class="grid-secondary-col">
       <!-- 1. Próximos da Fila -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'proximos-capitulos'}
       <section class="panel-card">
         <div class="panel-header">
           <div>
@@ -1934,8 +2244,10 @@
           <p class="empty-simple-text">Fila de jobs vazia no momento.</p>
         {/if}
       </section>
+      {/if}
 
       <!-- 2. Saúde das Fontes -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'fontes'}
       <section class="panel-card" style="margin-top: 24px;">
         <div class="panel-header">
           <div>
@@ -2061,8 +2373,10 @@
           </div>
         {/if}
       </section>
+      {/if}
 
       <!-- 3. Diagnóstico Avançado & Falhas Recentes -->
+      {#if currentTab === 'resumo' || currentTab === '' || currentTab === 'atividade' || currentTab === 'erros'}
       <section class="panel-card" style="margin-top: 24px;">
         <details class="diagnosis-accordion">
           <summary class="diagnosis-summary">
@@ -2146,8 +2460,10 @@
           </div>
         </details>
       </section>
+      {/if}
     </div>
   </div>
+  {/if}
 </div>
 
 <!-- Modal: Detalhes e Diagnóstico do Job -->
@@ -2732,6 +3048,449 @@
 {/if}
 
 <style>
+  /* Importer Subtabs Navigation */
+  .importer-tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .importer-tab-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .importer-tab-link:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .importer-tab-link.active {
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border-color: rgba(223, 194, 141, 0.35);
+    font-weight: 700;
+  }
+
+  .tab-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .tab-badge.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .tab-badge.rate { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-family: monospace; }
+  .tab-badge.gold { background: rgba(223, 194, 141, 0.2); color: #dfc28d; border: 1px solid rgba(223, 194, 141, 0.35); }
+  .tab-badge.neutral { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+  .tab-badge.alert { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+
+  /* Single Column Mode for Focused Tabs */
+  .importer-grid.single-col {
+    grid-template-columns: 1fr;
+  }
+  .importer-grid.single-col .grid-primary-col,
+  .importer-grid.single-col .grid-secondary-col {
+    display: contents;
+  }
+
+  /* Dedicated Cap/min View */
+  .cap-min-view {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  .cap-kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  @media (max-width: 1024px) {
+    .cap-kpis-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .cap-kpis-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .cap-kpi-card {
+    padding: 18px;
+    border-radius: 12px;
+    background: rgba(18, 22, 34, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cap-kpi-card.highlight-rate {
+    border-color: rgba(56, 189, 248, 0.35);
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(18, 22, 34, 0.8) 100%);
+  }
+
+  .cap-kpi-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .cap-kpi-label {
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+  }
+
+  .cap-kpi-val-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .cap-kpi-number {
+    font-size: 2rem;
+    font-weight: 850;
+    color: #ffffff;
+    line-height: 1;
+    font-family: monospace;
+  }
+
+  .cap-kpi-unit {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  .cap-kpi-details {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: #cbd5e1;
+    flex-wrap: wrap;
+  }
+
+  .detail-fresh {
+    color: #dfc28d;
+  }
+  .detail-pipeline {
+    color: #a78bfa;
+  }
+  .detail-sep {
+    color: #475569;
+  }
+  .detail-reason {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .capacity-status-pill {
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 750;
+    font-family: monospace;
+  }
+  .capacity-status-pill.status-running_stable { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+  .capacity-status-pill.status-recovery { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+  .capacity-status-pill.status-throttled { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .capacity-status-pill.status-survival { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+  .capacity-status-pill.status-manual_stop { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .text-site-health.health-green { color: #4ade80; }
+  .text-site-health.health-yellow { color: #fbbf24; }
+  .text-site-health.health-red { color: #f87171; }
+
+  .pulse-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 750;
+    color: #22c55e;
+  }
+
+  /* 60m Histogram Chart */
+  .chart-section-card {
+    padding: 24px;
+    border-radius: 14px;
+    background: rgba(18, 22, 34, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .chart-title {
+    font-size: 16px;
+    font-weight: 750;
+    color: #f1f5f9;
+    margin: 0;
+  }
+
+  .chart-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 4px 0 0 0;
+  }
+
+  .chart-legend {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: #cbd5e1;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-color-box {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .color-fresh { background: #dfc28d; }
+  .color-completed { background: #a78bfa; }
+
+  .chart-bars-wrap {
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .chart-bars-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 160px;
+    min-width: 640px;
+    padding-top: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .bar-track {
+    flex: 1;
+    width: 100%;
+    max-width: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 3px 3px 0 0;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bar-col:hover .bar-track {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .bar-fill {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.3s ease;
+  }
+  .fresh-fill {
+    background: #dfc28d;
+    box-shadow: 0 0 6px rgba(223, 194, 141, 0.4);
+    z-index: 2;
+  }
+  .comp-fill {
+    background: rgba(167, 139, 250, 0.45);
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+  }
+
+  .bar-time-tick {
+    font-size: 9px;
+    color: #64748b;
+    margin-top: 6px;
+    font-family: monospace;
+  }
+
+  .chart-footer-metrics {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .footer-metric {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .f-label { color: #94a3b8; }
+  .f-val { font-weight: 700; color: #f1f5f9; }
+
+  /* Governance Card */
+  .governance-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 18px 20px;
+    border-radius: 12px;
+    background: rgba(223, 194, 141, 0.05);
+    border: 1px solid rgba(223, 194, 141, 0.2);
+  }
+
+  .gov-icon-box {
+    margin-top: 2px;
+  }
+
+  .gov-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .gov-title {
+    font-size: 13.5px;
+    font-weight: 750;
+    color: #dfc28d;
+    margin: 0;
+  }
+
+  .gov-bullets {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.5;
+  }
+
+  /* Próximas Obras Grid */
+  .proximas-obras-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .work-pipeline-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.15s ease;
+  }
+
+  .work-pipeline-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(223, 194, 141, 0.25);
+  }
+
+  .work-pipeline-thumb {
+    width: 38px;
+    height: 52px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #111420;
+    flex-shrink: 0;
+  }
+
+  .work-pipe-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .work-pipeline-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .work-pipe-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .work-pipe-slug {
+    font-size: 10.5px;
+    color: #7b8396;
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .work-pipe-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #dfc28d;
+    font-weight: 600;
+    text-decoration: none;
+    margin-top: 2px;
+  }
+  .work-pipe-link:hover {
+    text-decoration: underline;
+  }
+
   /* Hero Priority Card */
   .priority-hero-card {
     position: relative;
