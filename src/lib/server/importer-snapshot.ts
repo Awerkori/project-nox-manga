@@ -129,6 +129,93 @@ export async function loadSnapshot({ locals }: any) {
   const cancelledCount = { count: queueCounts.cancelled }, completedCount = { count: queueCounts.completed };
   const failedCount = { count: queueCounts.failed }, failed1hRes = { count: queueCounts.failed1h }, failed24hRes = { count: queueCounts.failed24h };
 
+  // Fetch Rate Buckets & Heartbeat for Always-On Adaptive Capacity
+  const [rateBucketsRes, heartbeatRes] = await Promise.all([
+    locals.db
+      .from('importer_rate_buckets')
+      .select('*')
+      .gte('bucket_minute', new Date(Date.now() - 35 * 60 * 1000).toISOString())
+      .order('bucket_minute', { ascending: false })
+      .abortSignal(AbortSignal.timeout(5000))
+      .then((r: any) => r)
+      .catch((err: any) => {
+        console.warn('[RATE_BUCKETS_FETCH_WARN]', err?.message);
+        return { data: [] };
+      }),
+    locals.db
+      .from('settings')
+      .select('value')
+      .eq('key', 'importer_heartbeat')
+      .maybeSingle()
+      .abortSignal(AbortSignal.timeout(5000))
+      .then((r: any) => r)
+      .catch((err: any) => {
+        console.warn('[HEARTBEAT_FETCH_WARN]', err?.message);
+        return { data: null };
+      })
+  ]);
+
+  const bucketRows = rateBucketsRes?.data || [];
+  const nowMs = Date.now();
+  const fiveMinAgo = nowMs - 5 * 60 * 1000;
+  const thirtyMinAgo = nowMs - 30 * 60 * 1000;
+
+  let fresh5m = 0;
+  let completed5m = 0;
+  let fresh30m = 0;
+  let completed30m = 0;
+
+  for (const b of bucketRows) {
+    const t = new Date(b.bucket_minute).getTime();
+    if (t >= fiveMinAgo) {
+      fresh5m += b.fresh_visible || 0;
+      completed5m += b.completed_jobs || 0;
+    }
+    if (t >= thirtyMinAgo) {
+      fresh30m += b.fresh_visible || 0;
+      completed30m += b.completed_jobs || 0;
+    }
+  }
+
+  let heartbeatData: any = null;
+  if (heartbeatRes?.data?.value) {
+    try {
+      heartbeatData = typeof heartbeatRes.data.value === 'string'
+        ? JSON.parse(heartbeatRes.data.value)
+        : heartbeatRes.data.value;
+    } catch {
+      // Ignore heartbeat parse error and fallback to rate buckets
+    }
+  }
+
+  const rate5m = heartbeatData?.rate5m ?? (Math.round((fresh5m / 5.0) * 10) / 10);
+  const rate30m = heartbeatData?.rate30m ?? (Math.round((fresh30m / 30.0) * 10) / 10);
+  const completedRate5m = heartbeatData?.completedRate5m ?? (Math.round((completed5m / 5.0) * 10) / 10);
+  const completedRate30m = heartbeatData?.completedRate30m ?? (Math.round((completed30m / 30.0) * 10) / 10);
+
+  const rateTelemetry = {
+    rate5m,
+    rate30m,
+    fresh5m: heartbeatData?.fresh5m ?? fresh5m,
+    fresh30m: heartbeatData?.fresh30m ?? fresh30m,
+    completedRate5m,
+    completedRate30m,
+    completed5m: heartbeatData?.completed5m ?? completed5m,
+    completed30m: heartbeatData?.completed30m ?? completed30m,
+  };
+
+  const telemetry = telemetryRes.data || null;
+  const adaptiveCapacity = {
+    concurrency: heartbeatData?.capacity?.concurrency ?? telemetry?.concurrency ?? 1,
+    maxConcurrency: heartbeatData?.capacity?.maxConcurrency ?? 8,
+    state: heartbeatData?.capacity?.state ?? (telemetry?.protective_stop ? 'MANUAL_STOP' : 'RUNNING_STABLE'),
+    pressureScore: heartbeatData?.capacity?.pressureScore ?? 0,
+    siteHealth: heartbeatData?.capacity?.siteHealth ?? 'GREEN',
+    reason: heartbeatData?.capacity?.pressureReason || telemetry?.cycle_reason || 'Operação contínua Always-On',
+    noProgressReason: heartbeatData?.noProgressReason ?? null,
+    manualStopActive: Boolean(telemetry?.protective_stop),
+  };
+
   const importingJobs = importingJobsRes.data || [];
   const retryJobs = retryJobsRes.data || [];
   const pausedJobs = pausedJobsRes.data || [];
@@ -264,6 +351,8 @@ export async function loadSnapshot({ locals }: any) {
 
   return {
     telemetry: telemetryRes.data || null,
+    rateTelemetry,
+    adaptiveCapacity,
     activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
     counts: {
       queued: queuedCount.count || 0,
