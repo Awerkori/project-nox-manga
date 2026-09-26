@@ -2,51 +2,46 @@ import { error, redirect } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-
+import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte } from '$lib/server/yugabyte';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-export const load = async ({ locals, params, url, cookies }) => {
+export const load = async ({ locals, params, url, cookies, platform }: any) => {
   const isTargetUuid = isUuid(params.slug);
 
-  let workQuery = locals.db
-    .from('works')
-    .select(WORK_FIELDS)
-    .eq('published', true);
+  // 1. Authoritative lookup in YugabyteDB
+  let work: any = await fetchWorkFromYugabyte(params.slug, platform?.env);
 
-  if (isTargetUuid) {
-    workQuery = workQuery.eq('id', params.slug);
-  } else {
-    workQuery = workQuery.eq('slug', params.slug);
-  }
+  // 2. Resilient fallback to Supabase if not found in Yugabyte
+  if (!work) {
+    let workQuery = locals.db
+      .from('works')
+      .select(WORK_FIELDS)
+      .eq('published', true);
 
-  const result = await safeDbQuery(
-    workQuery.maybeSingle(),
-    6000,
-    'obra_work'
-  );
-
-  let work: any = result.data;
-
-
-  // If not found by exact slug, attempt case-insensitive or ID lookup fallback in DB
-  if (!work && result.status === 'SUCCESS_EMPTY' && !isTargetUuid) {
-    const fallbackRes = await safeDbQuery(
-      locals.db.from('works').select(WORK_FIELDS).ilike('slug', params.slug).eq('published', true).maybeSingle(),
-      2000,
-      'obra_slug_fallback'
-    );
-    if (fallbackRes.data) {
-      redirect(301, `/obra/${fallbackRes.data.slug}`);
+    if (isTargetUuid) {
+      workQuery = workQuery.eq('id', params.slug);
+    } else {
+      workQuery = workQuery.eq('slug', params.slug);
     }
-  }
 
-  if (!work && result.status === 'TIMEOUT') {
-    error(503, 'A conexão com a obra está temporariamente lenta. Tente recarregar em instantes.');
-  }
+    const result = await safeDbQuery(
+      workQuery.maybeSingle(),
+      4000,
+      'obra_work'
+    );
+    work = result.data;
 
-  if (!work && result.status === 'ERROR') {
-    error(500, 'Instabilidade temporária ao carregar a obra. Tente novamente em instantes.');
+    if (!work && result.status === 'SUCCESS_EMPTY' && !isTargetUuid) {
+      const fallbackRes = await safeDbQuery(
+        locals.db.from('works').select(WORK_FIELDS).ilike('slug', params.slug).eq('published', true).maybeSingle(),
+        2000,
+        'obra_slug_fallback'
+      );
+      if (fallbackRes.data) {
+        redirect(301, `/obra/${fallbackRes.data.slug}`);
+      }
+    }
   }
 
   if (!work) {
@@ -72,23 +67,33 @@ export const load = async ({ locals, params, url, cookies }) => {
     }
   }
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
-  let chaptersQuery = locals.db
-    .from('chapters')
-    .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
-    .eq('work_id', work.id)
-    .order('number', { ascending: false });
-
   const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
-  if (!preview) {
-    chaptersQuery = chaptersQuery.not('published_at', 'is', null);
+
+  // Fetch canonical live chapters from YugabyteDB
+  let chaptersList: any[] = await fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env);
+
+  // Fallback to Supabase if Yugabyte returned empty
+  if (!chaptersList || chaptersList.length === 0) {
+    let chaptersQuery = locals.db
+      .from('chapters')
+      .select('id,number,title,published_at,views_total')
+      .eq('work_id', work.id)
+      .order('number', { ascending: false });
+
+    if (!preview) {
+      chaptersQuery = chaptersQuery.not('published_at', 'is', null);
+    }
+
+    const chaptersRes = await withTimeout(
+      chaptersQuery,
+      4000,
+      { data: [] } as any,
+      'obra_chapters'
+    );
+    chaptersList = chaptersRes?.data || [];
   }
 
-  const chaptersPromise = withTimeout(
-    chaptersQuery,
-    6000,
-    { data: [] } as any,
-    'obra_chapters'
-  );
+  const chaptersPromise = Promise.resolve({ data: chaptersList });
 
   const auxPromise = withTimeout(
     Promise.all([
@@ -147,7 +152,7 @@ export const load = async ({ locals, params, url, cookies }) => {
     ? `${url.origin}/brand/nox-symbol-256.webp`
     : coverUrl || `${url.origin}/brand/nox-symbol-256.webp`;
 
-  let chaptersList = chapters.data || [];
+  chaptersList = chapters.data || [];
 
 
   return {

@@ -1,8 +1,10 @@
-import { WORK_FIELDS } from '$lib/server/db';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 
-
-const HOME_WORK_FIELDS = `${WORK_FIELDS}, work_scans(is_primary, status, scans(id, name, slug, logo_id, is_official))`;
+import {
+  fetchHomeWorksFromYugabyte,
+  fetchMostReadFromYugabyte,
+  fetchRecentReleasesFromYugabyte
+} from '$lib/server/yugabyte';
 
 type HomeCachePayload = {
   timestamp: number;
@@ -16,7 +18,7 @@ type HomeCachePayload = {
 let homePublicCache: HomeCachePayload | null = null;
 const HOME_CACHE_TTL_MS = 30_000;
 
-export const load = async ({ locals, setHeaders, url }) => {
+export const load = async ({ locals, setHeaders, url, platform }: any) => {
   // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
   setHeaders({
     'cache-control': 'private, no-cache, no-store, must-revalidate'
@@ -117,24 +119,10 @@ export const load = async ({ locals, setHeaders, url }) => {
     };
   }
 
-  // Cold cache: execute reading query and public queries concurrently
-  const [worksRes, chaptersRes, readingRes, mostReadRes] = await Promise.all([
-    safeDbQuery(
-      locals.db
-        .from('works')
-        .select(HOME_WORK_FIELDS)
-        .eq('published', true)
-        .order('updated_at', { ascending: false })
-        .limit(16),
-      3000,
-      'home_works'
-    ),
-    safeDbQuery(
-      locals.db
-        .rpc('get_recent_releases', { p_limit: 16, p_chapters_per_work: 3 }),
-      4500,
-      'home_chapters'
-    ),
+  // Cold cache: fetch public data from authoritative Yugabyte and reading from Supabase
+  const [worksData, chaptersData, readingRes, mostReadData] = await Promise.all([
+    fetchHomeWorksFromYugabyte(platform?.env),
+    fetchRecentReleasesFromYugabyte(16, 3, null, null, platform?.env),
     locals.user
       ? safeDbQuery(
           locals.db
@@ -151,18 +139,13 @@ export const load = async ({ locals, setHeaders, url }) => {
         )
       : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false }),
     hasFreshPublicCache
-      ? Promise.resolve({ data: homePublicCache!.mostReadWorks, error: null, status: 'SUCCESS' as const, isDegraded: false })
-      : safeDbQuery(
-          locals.db
-            .from('works')
-            .select(HOME_WORK_FIELDS)
-            .eq('published', true)
-            .order('views_total', { ascending: false })
-            .limit(16),
-          3000,
-          'home_most_read'
-        )
+      ? Promise.resolve(homePublicCache!.mostReadWorks)
+      : fetchMostReadFromYugabyte(platform?.env)
   ]);
+
+  const worksRes = { data: worksData, isDegraded: !worksData || worksData.length === 0 };
+  const chaptersRes = { data: chaptersData, isDegraded: !chaptersData || chaptersData.length === 0 };
+  const mostReadRes = { data: mostReadData, isDegraded: !mostReadData || mostReadData.length === 0 };
 
 
   let continueReading: Array<{

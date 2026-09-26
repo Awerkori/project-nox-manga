@@ -8,6 +8,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
+import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
 
 async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
@@ -66,8 +67,12 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  const db = privileged(platform?.env);
-  const { data: media } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
+  const db = privileged();
+  let media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
+  if (!media) {
+    const { data: supaMedia } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
+    media = supaMedia;
+  }
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,

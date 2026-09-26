@@ -7,7 +7,6 @@ import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
-import { createYugabyteClient } from '$lib/server/yugabyte';
 
 let lastOpportunisticSweep = 0;
 
@@ -46,19 +45,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   });
 
-  const ybClient = createYugabyteClient(event.platform?.env);
-
-  event.locals.db = new Proxy(ybClient as any, {
-    get(target, prop, _receiver) {
-      if (prop === 'auth' || prop === 'storage') {
-        return (supaClient as any)[prop];
-      }
-      if (prop in target) {
-        return (target as any)[prop];
-      }
-      return (supaClient as any)[prop];
-    }
-  });
+  // Restore authoritative Supabase client for all session, auth, storage, and application tables
+  event.locals.db = supaClient;
 
   const allCookies = event.cookies.getAll();
   const rawAuthCookie = extractFullAuthCookie(allCookies);
