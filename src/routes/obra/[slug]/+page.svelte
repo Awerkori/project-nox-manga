@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     BookOpen,
     Heart,
@@ -10,7 +11,6 @@
     CheckCircle2,
     ChevronDown,
     ChevronUp,
-    AlertTriangle,
     Flag,
     Eye,
     Users,
@@ -19,7 +19,6 @@
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import { goto } from '$app/navigation';
-  import { page } from '$app/state';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
@@ -44,7 +43,7 @@
     synopsisExpanded = $state(false),
     showReportModal = $state(false);
 
-  let downloadedChapterIds = $state<Set<string>>(new Set());
+  let downloadedChapterIds = new SvelteSet<string>();
   let downloadingChapterIds = $state<Record<string, number>>({});
   let batchDownloading = $state(false);
   let batchProgress = $state({ current: 0, total: 0 });
@@ -54,7 +53,7 @@
       try {
         const offlineList = await getOfflineChapters();
         const currentWorkOffline = offlineList.filter((oc) => oc.workId === data.work.id);
-        downloadedChapterIds = new Set(currentWorkOffline.map((oc) => oc.chapterId));
+        downloadedChapterIds = new SvelteSet(currentWorkOffline.map((oc) => oc.chapterId));
       } catch (err) {
         console.error('Falha ao carregar capítulos offline:', err);
       }
@@ -70,7 +69,7 @@
     if (downloadedChapterIds.has(chapter.id)) {
       if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
-        const next = new Set(downloadedChapterIds);
+        const next = new SvelteSet(downloadedChapterIds);
         next.delete(chapter.id);
         downloadedChapterIds = next;
         notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
@@ -95,7 +94,7 @@
         }
       );
 
-      const next = new Set(downloadedChapterIds);
+      const next = new SvelteSet(downloadedChapterIds);
       next.add(chapter.id);
       downloadedChapterIds = next;
       notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
@@ -139,7 +138,7 @@
                 downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
               }
             );
-            const next = new Set(downloadedChapterIds);
+            const next = new SvelteSet(downloadedChapterIds);
             next.add(chapter.id);
             downloadedChapterIds = next;
           }
@@ -283,7 +282,7 @@
         {#if data.scans && data.scans.length > 0}
           <div class="cover-scan-seal">
             <Users size={12} />
-            {#each data.scans as scan, i}
+            {#each data.scans as scan, i (scan.id || scan.slug || i)}
               {#if i > 0}<span class="seal-sep">×</span>{/if}
               <a href="/scans/{scan.slug}" class="seal-link" title="Ver perfil de {scan.name}">{scan.name}</a>
             {/each}
@@ -344,7 +343,7 @@
             <div class="meta-item full-width row-style">
               <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
               <div class="meta-scans-val">
-                {#each data.scans as scan, i}
+                {#each data.scans as scan, i (scan.id || scan.slug || i)}
                   {#if i > 0}<span class="scan-comma">·</span>{/if}
                   <a href="/scans/{scan.slug}" class="meta-scan-link">
                     {#if scan.logo_id}
@@ -373,7 +372,7 @@
             <span class="badge-adult">+18 Adulto</span>
           {/if}
           {#if data.scans && data.scans.length > 0}
-            {#each data.scans as scan}
+            {#each data.scans as scan (scan.id || scan.slug)}
               <a
                 href="/scans/{scan.slug}"
                 class="badge-scan-partner"
@@ -495,7 +494,7 @@
               <div class="meta-item full-width row-style">
                 <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
                 <div class="meta-scans-val">
-                  {#each data.scans as scan, i}
+                  {#each data.scans as scan, i (scan.id || scan.slug || i)}
                     {#if i > 0}<span class="scan-comma">·</span>{/if}
                     <a href="/scans/{scan.slug}" class="meta-scan-link">
                       {#if scan.logo_id}
