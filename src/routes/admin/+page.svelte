@@ -1,19 +1,18 @@
 <script lang="ts">
   import {
     BookOpen,
+    Sparkles,
     FileEdit,
     Tags,
     ArrowRight,
+    ArrowUpRight,
     Plus,
     Clock,
     CheckCircle2,
-    Activity,
-    Layers,
-    Flag,
     Users,
-    ShieldAlert,
-    Settings,
-    LayoutDashboard
+    Layers,
+    Activity,
+    HeartPulse
   } from '@lucide/svelte';
   import { relativeTime, kindLabels } from '$lib/types';
 
@@ -30,257 +29,311 @@
     month: 'long'
   }).format(new Date());
   const capitalizedToday = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
-
-  let hasAttentionItems = $derived(
-    data.metricsUnavailable || data.pendingReportsCount > 0 || data.draftsCount > 0
-  );
 </script>
 
 <svelte:head>
-  <title>Visão Geral — Painel de Controle Project Nox</title>
+  <title>Visão Geral — Painel Editorial Project Nox</title>
 </svelte:head>
 
-<div class="editorial-workspace">
-  <!-- 1. Header: Greeting, Date & Main Actions -->
-  <header class="workspace-header">
-    <div class="header-text-block">
-      <div class="eyebrow-line">
-        <span class="eyebrow-tag">PAINEL DE CONTROLE</span>
-        <span class="eyebrow-sep">·</span>
-        <span class="eyebrow-date">{capitalizedToday}</span>
+<div class="dashboard-shell">
+  <!-- Dashboard Welcome Header -->
+  <header class="dash-header">
+    <div class="header-intro">
+      <div class="eyebrow-row">
+        <span class="eyebrow">CENTRAL EDITORIAL NOX</span>
+        <span class="header-date">· {capitalizedToday}</span>
       </div>
-      <h1 class="greeting-heading">Olá, {firstName}</h1>
-      <p class="greeting-sub">
-        Central de operações: acompanhe a mesa de edição, modere denúncias, gerencie a equipe e monitore o fluxo de importação.
+      <h1 class="dash-title">Olá, {firstName}</h1>
+      <p class="dash-subtitle">
+        Acompanhe a mesa de edição, publique novos capítulos e gerencie o catálogo da Project Nox.
       </p>
     </div>
 
-    <!-- Quick High-Level Actions -->
-    <div class="header-action-group">
-      <a href="/admin/obras/nova" class="btn-primary-action">
+    <div class="header-actions">
+      <a href="/admin/obras/nova" class="btn-primary-admin">
         <Plus size={16} />
-        <span>Nova Obra</span>
-      </a>
-      <a href="/admin/importer" class="btn-secondary-action">
-        <Activity size={15} />
-        <span>Central do Importer</span>
-      </a>
-      <a href="/admin/reports" class="btn-secondary-action" class:has-reports-alert={data.pendingReportsCount > 0}>
-        <Flag size={15} />
-        <span>Denúncias</span>
-        {#if data.pendingReportsCount > 0}
-          <span class="reports-header-badge">{data.pendingReportsCount}</span>
-        {/if}
-      </a>
-      <a href="/admin/staff" class="btn-secondary-action">
-        <Users size={15} />
-        <span>Gestão da Staff</span>
+        <span>Cadastrar Nova Obra</span>
       </a>
     </div>
   </header>
 
-  <!-- 2. "Precisa de Atenção" Triage Section -->
-  <section class="triage-section" aria-label="Itens que precisam de atenção">
-    <div class="triage-header">
-      <div class="triage-title-group">
-        <span class="triage-indicator" class:alert={hasAttentionItems} class:green={!hasAttentionItems}></span>
-        <h2 class="triage-title">Precisa de Atenção</h2>
+  <!-- 1. Real Metrics Stat Cards (4 Columns) -->
+  <section class="stat-grid" aria-label="Métricas do catálogo">
+    <!-- Stat 1: Obras -->
+    <a href="/admin/obras" class="stat-card">
+      <div class="stat-icon-box icon-gold">
+        <BookOpen size={20} />
       </div>
-      {#if hasAttentionItems}
-        <span class="triage-counter-tag">Ações prioritárias pendentes</span>
-      {/if}
+      <div class="stat-meta">
+        <span class="stat-label">Obras Cadastradas</span>
+        <strong class="stat-value">{data.works ?? 0}</strong>
+        <span class="stat-hint">No catálogo público</span>
+      </div>
+      <ArrowRight size={14} class="stat-corner-arrow" />
+    </a>
+
+    <!-- Stat 2: Capítulos Publicados -->
+    <div class="stat-card stat-card-static">
+      <div class="stat-icon-box icon-purple">
+        <Sparkles size={20} />
+      </div>
+      <div class="stat-meta">
+        <span class="stat-label">Capítulos Publicados</span>
+        <strong class="stat-value">{data.chapters ?? 0}</strong>
+        <span class="stat-hint">Disponíveis para leitura</span>
+      </div>
     </div>
 
-    {#if data.metricsUnavailable}
-      <p role="status">Algumas informações estão indisponíveis. Atualize para tentar novamente; “—” indica uma contagem não confirmada.</p>
-    {/if}
-    {#if hasAttentionItems}
-      <div class="triage-grid">
-        {#if data.pendingReportsCount > 0}
-          <a href="/admin/reports" class="triage-card triage-crimson">
-            <div class="triage-card-icon crimson">
-              <ShieldAlert size={20} />
-            </div>
-            <div class="triage-card-body">
-              <div class="triage-card-top">
-                <span class="triage-card-badge crimson">Moderação</span>
-                <span class="triage-card-count">{data.pendingReportsCount}</span>
-              </div>
-              <strong class="triage-card-title">
-                {data.pendingReportsCount} denúncia{data.pendingReportsCount > 1 ? 's' : ''} pendente{data.pendingReportsCount > 1 ? 's' : ''}
-              </strong>
-              <p class="triage-card-desc">
-                Conteúdos e comentários sinalizados pela comunidade aguardando revisão.
-              </p>
-            </div>
-            <div class="triage-card-action crimson">
-              <span>Moderar</span>
-              <ArrowRight size={13} />
-            </div>
-          </a>
-        {/if}
+    <!-- Stat 3: Mesa de Edição / Rascunhos -->
+    <a href="#mesa-de-edicao" class="stat-card" class:stat-alert={(data.draftsCount ?? 0) > 0}>
+      <div class="stat-icon-box icon-amber">
+        <FileEdit size={20} />
+      </div>
+      <div class="stat-meta">
+        <span class="stat-label">Mesa de Edição</span>
+        <div class="stat-value-row">
+          <strong class="stat-value">{data.draftsCount ?? 0}</strong>
+          {#if (data.draftsCount ?? 0) > 0}
+            <span class="stat-badge-pulse">Pendente</span>
+          {/if}
+        </div>
+        <span class="stat-hint">{(data.draftsCount ?? 0) === 1 ? '1 rascunho em preparo' : `${data.draftsCount ?? 0} rascunhos em preparo`}</span>
+      </div>
+      <ArrowRight size={14} class="stat-corner-arrow" />
+    </a>
 
-        {#if data.draftsCount > 0}
-          <a href="#mesa-de-edicao" class="triage-card triage-amber">
-            <div class="triage-card-icon amber">
-              <FileEdit size={20} />
-            </div>
-            <div class="triage-card-body">
-              <div class="triage-card-top">
-                <span class="triage-card-badge amber">Editorial</span>
-                <span class="triage-card-count">{data.draftsCount}</span>
-              </div>
-              <strong class="triage-card-title">
-                {data.draftsCount} capítulo{data.draftsCount > 1 ? 's' : ''} em rascunho
-              </strong>
-              <p class="triage-card-desc">
-                Capítulos criados na mesa de edição aguardando upload final e publicação.
-              </p>
-            </div>
-            <div class="triage-card-action amber">
-              <span>Ver Mesa</span>
-              <ArrowRight size={13} />
-            </div>
-          </a>
-        {/if}
+    <!-- Stat 4: Gêneros e Tags -->
+    <a href="/admin/tags" class="stat-card">
+      <div class="stat-icon-box icon-blue">
+        <Tags size={20} />
       </div>
-    {:else}
-      <!-- All Clear State -->
-      <div class="triage-all-clear">
-        <div class="clear-icon-wrap">
-          <CheckCircle2 size={22} />
-        </div>
-        <div class="clear-text">
-          <strong class="clear-title">Tudo em ordem na plataforma</strong>
-          <p class="clear-desc">
-            Nenhuma denúncia pendente e nenhum rascunho travado na mesa editorial.
-          </p>
-        </div>
+      <div class="stat-meta">
+        <span class="stat-label">Gêneros e Tags</span>
+        <strong class="stat-value">{data.tagsCount ?? 0}</strong>
+        <span class="stat-hint">Taxonomia ativa</span>
       </div>
-    {/if}
+      <ArrowRight size={14} class="stat-corner-arrow" />
+    </a>
   </section>
 
-  <!-- 3. Primary Focused Workspace Grid -->
-  <div class="workspace-layout">
-    <!-- Left / Primary: Mesa de Edição -->
-    <main class="primary-editorial-col">
-      <section id="mesa-de-edicao" class="workspace-section">
-        <div class="section-title-bar">
-          <div>
-            <div class="section-title-row">
-              <h2 class="section-heading">Mesa de Edição</h2>
-              {#if data.draftsCount > 0}
-                <span class="drafts-count-tag">{data.draftsCount} em preparo</span>
-              {/if}
-            </div>
-            <p class="section-subheading">Capítulos em rascunho aguardando revisão e publicação</p>
-          </div>
+  <!-- 2. Hub de Ações Rápidas (Tactile Action Pills) -->
+  <section class="quick-actions-bar" aria-label="Ações Rápidas">
+    <span class="section-label">AÇÕES RÁPIDAS</span>
+    <div class="actions-grid">
+      <a href="/admin/obras/nova" class="action-btn">
+        <div class="action-btn-icon icon-add">
+          <Plus size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Adicionar Obra</strong>
+          <span>Nova série</span>
+        </div>
+      </a>
 
-          <a href="/admin/obras" class="section-corner-link">
-            <span>Ver todas as obras</span>
-            <ArrowRight size={13} />
-          </a>
+      <a href="/admin/obras" class="action-btn">
+        <div class="action-btn-icon icon-works">
+          <Layers size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Gerenciar Obras</strong>
+          <span>Ver catálogo completo</span>
+        </div>
+      </a>
+
+      <a href="/admin/tags" class="action-btn">
+        <div class="action-btn-icon icon-tags">
+          <Tags size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Gêneros & Tags</strong>
+          <span>Organizar categorias</span>
+        </div>
+      </a>
+
+      {#if data.role === 'ADMIN'}
+        <a href="/admin/gestao" class="action-btn">
+          <div class="action-btn-icon icon-users">
+            <Users size={16} />
+          </div>
+          <div class="action-btn-text">
+            <strong>Membros & Cargos</strong>
+            <span>Equipe e permissões</span>
+          </div>
+        </a>
+      {/if}
+
+      <!-- Preserved Features: Central do Importer, Saúde do Sistema, Scan Workspaces -->
+      <a href="/admin/importer" class="action-btn">
+        <div class="action-btn-icon icon-importer">
+          <Activity size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Central do Importer</strong>
+          <span>Vazão & capacidade</span>
+        </div>
+      </a>
+
+      <a href="/admin/health" class="action-btn">
+        <div class="action-btn-icon icon-health">
+          <HeartPulse size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Saúde do Sistema</strong>
+          <span>Telemetria & status</span>
+        </div>
+      </a>
+
+      <a href="/scan" class="action-btn">
+        <div class="action-btn-icon icon-scan">
+          <Users size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Workspaces Scan</strong>
+          <span>Painel dos parceiros</span>
+        </div>
+      </a>
+
+      <a href="/" target="_blank" rel="noopener noreferrer" class="action-btn action-btn-ext">
+        <div class="action-btn-icon icon-site">
+          <ArrowUpRight size={16} />
+        </div>
+        <div class="action-btn-text">
+          <strong>Site Público</strong>
+          <span>Visão dos leitores</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- 3. Split Main Workspace (Mesa de Edição + Atividade Recente) -->
+  <div class="workspace-grid">
+    <!-- Left Column: Na Mesa de Edição (Rascunhos em Preparo) -->
+    <section id="mesa-de-edicao" class="panel-section drafts-panel">
+      <div class="panel-header">
+        <div class="panel-title-cluster">
+          <div class="panel-title-row">
+            <h2 class="panel-title">Na Mesa de Edição</h2>
+            {#if (data.draftsCount ?? 0) > 0}
+              <span class="count-pill amber-pill">{data.draftsCount}</span>
+            {/if}
+          </div>
+          <span class="panel-subtitle">Capítulos em preparação aguardando revisão e publicação final</span>
         </div>
 
-        {#if data.drafts.length > 0}
-          <div class="clean-drafts-list">
-            {#each data.drafts as draft (draft.id)}
-              <div class="draft-list-row">
-                <!-- Cover thumbnail -->
-                <a
-                  href="/admin/obras/{draft.works?.id}/capitulos/{draft.id}"
-                  class="draft-cover-thumb"
-                  tabindex="-1"
-                >
-                  {#if draft.works?.cover_id}
-                    <img
-                      src="/media/{draft.works.cover_id}"
-                      alt=""
-                      width="42"
-                      height="58"
-                      class="thumb-img"
-                    />
-                  {:else}
-                    <div class="thumb-empty">NOX</div>
-                  {/if}
-                </a>
+        <a href="/admin/obras" class="panel-link">
+          <span>Todas as obras</span>
+          <ArrowRight size={13} />
+        </a>
+      </div>
 
-                <!-- Meta Details -->
-                <div class="draft-row-meta">
-                  <div class="draft-title-line">
-                    <a href="/admin/obras/{draft.works?.id}" class="draft-work-name">
-                      {draft.works?.title || 'Obra sem título'}
-                    </a>
-                    <span class="status-chip-draft">Rascunho</span>
-                  </div>
-                  <div class="draft-ch-line">
-                    <span class="draft-ch-number">Capítulo {draft.number}</span>
-                    {#if draft.title}
-                      <span class="draft-ch-subtitle">— {draft.title}</span>
-                    {/if}
-                  </div>
-                  {#if draft.created_at}
-                    <div class="draft-timestamp">
-                      <Clock size={11} />
-                      <span>Criado {relativeTime(draft.created_at)}</span>
-                    </div>
+      {#if data.drafts && data.drafts.length > 0}
+        <div class="drafts-stack">
+          {#each data.drafts as draft (draft.id)}
+            <div class="draft-row-card">
+              <!-- Mini cover or fallback -->
+              <a
+                href="/admin/obras/{draft.works?.id}/capitulos/{draft.id}"
+                class="draft-thumb-link"
+                tabindex="-1"
+              >
+                {#if draft.works?.cover_id}
+                  <img
+                    src="/media/{draft.works.cover_id}"
+                    alt=""
+                    width="44"
+                    height="62"
+                    class="draft-thumb-img"
+                  />
+                {:else}
+                  <div class="draft-thumb-placeholder">NOX</div>
+                {/if}
+              </a>
+
+              <!-- Chapter Info -->
+              <div class="draft-info">
+                <div class="draft-top">
+                  <a href="/admin/obras/{draft.works?.id}" class="draft-work-title">
+                    {draft.works?.title || 'Obra'}
+                  </a>
+                  <span class="status-chip draft-chip">Rascunho</span>
+                </div>
+                <div class="draft-detail">
+                  <span class="draft-ch-number">Capítulo {draft.number}</span>
+                  {#if draft.title}
+                    <span class="draft-ch-title">— {draft.title}</span>
                   {/if}
                 </div>
-
-                <!-- Action Button -->
-                <a
-                  href="/admin/obras/{draft.works?.id}/capitulos/{draft.id}"
-                  class="btn-edit-action"
-                >
-                  <span>Editar</span>
-                  <ArrowRight size={13} />
-                </a>
+                {#if draft.created_at}
+                  <div class="draft-time">
+                    <Clock size={11} />
+                    <span>Iniciado {relativeTime(draft.created_at)}</span>
+                  </div>
+                {/if}
               </div>
-            {/each}
-          </div>
-        {:else}
-          <!-- Elegant Clean Empty State -->
-          <div class="mesa-clean-empty">
-            <div class="empty-icon-circle">
-              <CheckCircle2 size={28} />
+
+              <!-- Action Link -->
+              <a
+                href="/admin/obras/{draft.works?.id}/capitulos/{draft.id}"
+                class="btn-edit-draft"
+              >
+                <span>Editar</span>
+                <ArrowRight size={13} />
+              </a>
             </div>
-            <h3 class="empty-heading">Mesa de edição limpa</h3>
-            <p class="empty-paragraph">
-              Não há capítulos pendentes de revisão ou rascunhos abertos no momento.
-            </p>
-            <a href="/admin/obras" class="btn-empty-action">
+          {/each}
+        </div>
+      {:else}
+        <!-- Elegant, Instructive Empty State -->
+        <div class="editorial-empty-state">
+          <div class="empty-icon-box">
+            <CheckCircle2 size={32} />
+          </div>
+          <h3 class="empty-title">Mesa de edição em dia</h3>
+          <p class="empty-desc">
+            Nenhum capítulo pendente em rascunho. Todas as páginas cadastradas já foram publicadas ou não há novos uploads em andamento.
+          </p>
+          <div class="empty-actions">
+            <a href="/admin/obras" class="btn-empty-primary">
               <BookOpen size={14} />
-              <span>Explorar Obras para Novo Capítulo</span>
+              <span>Ver Obras para Novo Capítulo</span>
             </a>
           </div>
-        {/if}
-      </section>
+        </div>
+      {/if}
+    </section>
 
-      <!-- Section: Últimas Publicações -->
-      <section class="workspace-section" style="margin-top: 12px;">
-        <div class="section-title-bar">
-          <div>
-            <h2 class="section-heading">Últimas Publicações</h2>
-            <p class="section-subheading">Capítulos recém-lançados no ar</p>
+    <!-- Right Column: Últimos Capítulos Publicados & Obras Recentes -->
+    <div class="sidebar-activity-col">
+      <!-- Recent Published Chapters -->
+      <section class="panel-section published-panel">
+        <div class="panel-header">
+          <div class="panel-title-cluster">
+            <h2 class="panel-title">Últimas Publicações</h2>
+            <span class="panel-subtitle">Capítulos recém-disponibilizados no ar</span>
           </div>
         </div>
 
-        {#if data.recentPublished.length > 0}
-          <div class="clean-published-list">
+        {#if data.recentPublished && data.recentPublished.length > 0}
+          <div class="published-list">
             {#each data.recentPublished as pub (pub.id)}
-              <div class="pub-row">
-                <div class="pub-main-info">
-                  <span class="pub-work">{pub.works?.title}</span>
-                  <span class="pub-ch">Capítulo {pub.number}</span>
+              <div class="published-item">
+                <div class="pub-info">
+                  <div class="pub-line-1">
+                    <strong class="pub-work-title">{pub.works?.title}</strong>
+                    <span class="pub-ch-num">Cap. {pub.number}</span>
+                  </div>
                   {#if pub.published_at}
-                    <span class="pub-time">{relativeTime(pub.published_at)}</span>
+                    <div class="pub-time">
+                      <Clock size={11} />
+                      <span>{relativeTime(pub.published_at)}</span>
+                    </div>
                   {/if}
                 </div>
 
                 <a
                   href="/admin/obras/{pub.works?.id}/capitulos/{pub.id}"
-                  class="btn-review-pub"
-                  title="Revisar capítulo publicado"
+                  class="pub-action-btn"
+                  title="Revisar capítulo"
                 >
                   <span>Revisar</span>
                 </a>
@@ -288,990 +341,380 @@
             {/each}
           </div>
         {:else}
-          <p class="empty-state-hint">Nenhum capítulo publicado recentemente.</p>
+          <p class="empty-simple-text">Nenhum capítulo publicado recentemente.</p>
         {/if}
       </section>
-    </main>
 
-    <!-- Right / Secondary Column: Resumo Operacional, Radar & Atalhos -->
-    <aside class="secondary-editorial-col">
-      <!-- Section: Resumo Operacional (4 Stat Tiles) -->
-      <section class="workspace-section">
-        <div class="section-title-bar">
-          <div>
-            <h2 class="section-heading">Resumo Operacional</h2>
-            <p class="section-subheading">Métricas chave da plataforma</p>
+      <!-- Recent Updated Works -->
+      <section class="panel-section works-recent-panel">
+        <div class="panel-header">
+          <div class="panel-title-cluster">
+            <h2 class="panel-title">Obras no Radar</h2>
+            <span class="panel-subtitle">Títulos com atividade recente</span>
           </div>
-        </div>
-
-        <div class="stats-matrix">
-          <a href="/admin/obras" class="stat-card">
-            <div class="stat-card-header">
-              <span class="stat-icon-wrap gold">
-                <BookOpen size={16} />
-              </span>
-              <span class="stat-trend">Catálogo</span>
-            </div>
-            <strong class="stat-value">{data.works ?? '—'}</strong>
-            <span class="stat-label">Obras Registradas</span>
-          </a>
-
-          <div class="stat-card">
-            <div class="stat-card-header">
-              <span class="stat-icon-wrap purple">
-                <Layers size={16} />
-              </span>
-              <span class="stat-trend">Público</span>
-            </div>
-            <strong class="stat-value">{data.chapters ?? '—'}</strong>
-            <span class="stat-label">Capítulos Publicados</span>
-          </div>
-
-          <a href="/admin/staff" class="stat-card">
-            <div class="stat-card-header">
-              <span class="stat-icon-wrap amber">
-                <Users size={16} />
-              </span>
-              <span class="stat-trend">Equipe</span>
-            </div>
-            <strong class="stat-value">{data.staffCount ?? '—'}</strong>
-            <span class="stat-label">Membros Staff</span>
-          </a>
-
-          <a href="/admin/importer" class="stat-card">
-            <div class="stat-card-header">
-              <span class="stat-icon-wrap green">
-                <Activity size={16} />
-              </span>
-              <span class="stat-trend" class:active-pulse={data.importerActiveCount > 0}>
-                {data.importerActiveCount == null ? 'Sem dados' : data.importerActiveCount > 0 ? 'Com pendências' : 'Fila vazia'}
-              </span>
-            </div>
-            <strong class="stat-value">{data.importerActiveCount ?? '—'}</strong>
-            <span class="stat-label">Em Fila Importer</span>
+          <a href="/admin/obras" class="panel-link">
+            <span>Ver todas</span>
+            <ArrowRight size={13} />
           </a>
         </div>
-      </section>
 
-      <!-- Section: Obras no Radar -->
-      {#if data.recentWorks.length > 0}
-        <section class="workspace-section" style="margin-top: 12px;">
-          <div class="section-title-bar">
-            <div>
-              <h2 class="section-heading">Obras no Radar</h2>
-              <p class="section-subheading">Atualizadas recentemente</p>
-            </div>
-            <a href="/admin/obras" class="section-corner-link">
-              <span>Todas</span>
-              <ArrowRight size={12} />
-            </a>
-          </div>
-
-          <div class="radar-works-list">
+        {#if data.recentWorks && data.recentWorks.length > 0}
+          <div class="mini-works-list">
             {#each data.recentWorks as work (work.id)}
-              <a href="/admin/obras/{work.id}" class="radar-work-row">
-                <div class="radar-thumb">
+              <a href="/admin/obras/{work.id}" class="mini-work-card">
+                <div class="mini-work-thumb">
                   {#if work.cover_id}
-                    <img src="/media/{work.cover_id}" alt="" width="32" height="44" class="radar-img" />
+                    <img src="/media/{work.cover_id}" alt="" width="36" height="50" class="mini-work-img" />
                   {:else}
-                    <div class="radar-placeholder">NOX</div>
+                    <div class="mini-work-placeholder">NOX</div>
                   {/if}
                 </div>
-                <div class="radar-meta">
-                  <strong class="radar-title">{work.title}</strong>
-                  <div class="radar-tags">
-                    <span class="radar-kind">{kindLabels[work.kind] || work.kind}</span>
-                    <span class="radar-status" class:is-published={work.published}>
+                <div class="mini-work-meta">
+                  <strong class="mini-title">{work.title}</strong>
+                  <div class="mini-badges">
+                    <span class="mini-kind-tag">{kindLabels[work.kind] || work.kind}</span>
+                    <span class="mini-status-tag" class:published={work.published}>
                       {work.published ? 'No ar' : 'Rascunho'}
                     </span>
                   </div>
                 </div>
-                <span class="radar-arrow">
-                  <ArrowRight size={13} />
-                </span>
+                <ArrowRight size={13} class="mini-work-arrow" />
               </a>
             {/each}
           </div>
-        </section>
-      {/if}
-
-      <!-- Section: Atalhos Rápidos -->
-      <section class="workspace-section" style="margin-top: 12px;">
-        <div class="section-title-bar">
-          <div>
-            <h2 class="section-heading">Atalhos do Sistema</h2>
-            <p class="section-subheading">Acesso rápido aos módulos administrativos</p>
-          </div>
-        </div>
-
-        <div class="quick-links-list">
-          <a href="/admin/tags" class="quick-shortcut-row">
-            <div class="shortcut-icon">
-              <Tags size={15} />
-            </div>
-            <div class="shortcut-info">
-              <span class="shortcut-name">Gêneros e Tags</span>
-              <span class="shortcut-desc">Gerencie taxonomia e classificações</span>
-            </div>
-            <span class="shortcut-arrow">
-              <ArrowRight size={14} />
-            </span>
-          </a>
-
-          <a href="/admin/gestao" class="quick-shortcut-row">
-            <div class="shortcut-icon">
-              <Users size={15} />
-            </div>
-            <div class="shortcut-info">
-              <span class="shortcut-name">Membros & Leitores</span>
-              <span class="shortcut-desc">Diretório de usuários e suspensões</span>
-            </div>
-            <span class="shortcut-arrow">
-              <ArrowRight size={14} />
-            </span>
-          </a>
-
-          <a href="/admin/gestao/configuracoes" class="quick-shortcut-row">
-            <div class="shortcut-icon">
-              <Settings size={15} />
-            </div>
-            <div class="shortcut-info">
-              <span class="shortcut-name">Configurações Gerais</span>
-              <span class="shortcut-desc">Regras de negócio e manutenções</span>
-            </div>
-            <span class="shortcut-arrow">
-              <ArrowRight size={14} />
-            </span>
-          </a>
-
-          {#if data.role === 'ADMIN'}
-            <a href="/admin/health" class="quick-shortcut-row">
-              <div class="shortcut-icon">
-                <Activity size={15} />
-              </div>
-              <div class="shortcut-info">
-                <span class="shortcut-name">Saúde do Sistema</span>
-                <span class="shortcut-desc">Telemetria, banco de dados e componentes</span>
-              </div>
-              <span class="shortcut-arrow">
-                <ArrowRight size={14} />
-              </span>
-            </a>
-          {/if}
-
-          {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
-            <a href="/scan" class="quick-shortcut-row">
-              <div class="shortcut-icon">
-                <LayoutDashboard size={15} />
-              </div>
-              <div class="shortcut-info">
-                <span class="shortcut-name">Workspaces de Scan</span>
-                <span class="shortcut-desc">Pipeline de produção editorial e equipes</span>
-              </div>
-              <span class="shortcut-arrow">
-                <ArrowRight size={14} />
-              </span>
-            </a>
-          {/if}
-        </div>
+        {/if}
       </section>
-    </aside>
+    </div>
   </div>
 </div>
 
 <style>
-  .editorial-workspace {
+  .dashboard-shell {
     display: flex;
     flex-direction: column;
     gap: 28px;
     width: 100%;
-    max-width: 1360px;
-    margin: 0 auto;
+    max-width: 1280px;
     min-width: 0;
-    box-sizing: border-box;
   }
 
-  /* 1. Header */
-  .workspace-header {
+  /* Header Section */
+  .dash-header {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 24px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
+    gap: 20px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .header-text-block {
+  .header-intro {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
   }
 
-  .eyebrow-line {
+  .eyebrow-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+  }
+
+  .eyebrow {
     font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
+    font-weight: 750;
     color: #dfc28d;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
-  .eyebrow-sep {
-    color: #4b5266;
-  }
-
-  .eyebrow-date {
+  .header-date {
+    font-size: 11px;
     color: #7b8396;
     font-weight: 500;
-    text-transform: none;
-    letter-spacing: normal;
   }
 
-  .greeting-heading {
+  .dash-title {
     margin: 0;
     font-family: var(--font-heading, 'Manrope', sans-serif);
-    font-size: clamp(1.8rem, 3vw, 2.3rem);
+    font-size: clamp(1.8rem, 3.2vw, 2.3rem);
     font-weight: 800;
     color: #ffffff;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.02em;
     line-height: 1.15;
   }
 
-  .greeting-sub {
+  .dash-subtitle {
     margin: 0;
     color: #8c93a8;
     font-size: 0.92rem;
-    max-width: 620px;
-    line-height: 1.5;
+    max-width: 600px;
   }
 
-  .header-action-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .btn-primary-action {
+  .btn-primary-admin {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
     border-radius: 9px;
     background: linear-gradient(135deg, #dfc28d 0%, #c49c5e 100%);
-    color: #0c0d14;
+    color: #0d0c14;
     font-size: 13px;
     font-weight: 750;
     text-decoration: none;
-    box-shadow: 0 4px 18px rgba(223, 194, 141, 0.25);
+    box-shadow: 0 4px 18px rgba(223, 194, 141, 0.35);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     white-space: nowrap;
   }
 
-  .btn-primary-action:hover {
+  .btn-primary-admin:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(223, 194, 141, 0.4);
+    box-shadow: 0 6px 24px rgba(223, 194, 141, 0.5);
   }
 
-  .btn-secondary-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 10px 15px;
-    border-radius: 9px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 650;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    position: relative;
-  }
-
-  .btn-secondary-action:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.16);
-    transform: translateY(-1px);
-  }
-
-  .btn-secondary-action.has-reports-alert {
-    border-color: rgba(244, 63, 94, 0.3);
-    background: rgba(244, 63, 94, 0.08);
-  }
-
-  .reports-header-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 800;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: #f43f5e;
-    color: #ffffff;
-    line-height: 1.2;
-  }
-
-  /* 2. Precisa de Atenção (Triage) Section */
-  .triage-section {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 18px 20px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.015);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    box-sizing: border-box;
-  }
-
-  .triage-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .triage-title-group {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-  }
-
-  .triage-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
-  .triage-indicator.alert {
-    background: #f59e0b;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
-    animation: triagePulse 2s infinite ease-in-out;
-  }
-
-  .triage-indicator.green {
-    background: #10b981;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-  }
-
-  @keyframes triagePulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.25); }
-  }
-
-  .triage-title {
-    font-size: 14px;
-    font-weight: 750;
-    color: #ffffff;
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
-
-  .triage-counter-tag {
-    font-size: 11px;
-    font-weight: 600;
-    color: #dfc28d;
-    background: rgba(223, 194, 141, 0.1);
-    padding: 2px 8px;
-    border-radius: 6px;
-  }
-
-  .triage-grid {
+  /* Metric Stat Grid */
+  .stat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 14px;
-  }
-
-  .triage-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
-    border-radius: 12px;
-    text-decoration: none;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    box-sizing: border-box;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .triage-card:hover {
-    transform: translateY(-2px);
-  }
-
-  /* Crimson: Reports */
-  .triage-crimson {
-    background: linear-gradient(145deg, rgba(244, 63, 94, 0.08) 0%, rgba(244, 63, 94, 0.02) 100%);
-    border: 1px solid rgba(244, 63, 94, 0.22);
-  }
-  .triage-crimson:hover {
-    border-color: rgba(244, 63, 94, 0.45);
-    box-shadow: 0 6px 20px rgba(244, 63, 94, 0.15);
-  }
-
-  /* Amber: Drafts */
-  .triage-amber {
-    background: linear-gradient(145deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%);
-    border: 1px solid rgba(245, 158, 11, 0.22);
-  }
-  .triage-amber:hover {
-    border-color: rgba(245, 158, 11, 0.45);
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.15);
-  }
-
-  /* Rose: Failed Jobs */
-  .triage-rose {
-    background: linear-gradient(145deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%);
-    border: 1px solid rgba(239, 68, 68, 0.22);
-  }
-  .triage-rose:hover {
-    border-color: rgba(239, 68, 68, 0.45);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
-  }
-
-  .triage-card-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-  }
-  .triage-card-icon.crimson {
-    background: rgba(244, 63, 94, 0.15);
-    color: #f43f5e;
-  }
-  .triage-card-icon.amber {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-  }
-  .triage-card-icon.rose {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-  }
-
-  .triage-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .triage-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 2px;
-  }
-
-  .triage-card-badge {
-    font-size: 10px;
-    font-weight: 750;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 2px 7px;
-    border-radius: 4px;
-  }
-  .triage-card-badge.crimson {
-    background: rgba(244, 63, 94, 0.16);
-    color: #fb7185;
-  }
-  .triage-card-badge.amber {
-    background: rgba(245, 158, 11, 0.16);
-    color: #fcd34d;
-  }
-  .triage-card-badge.rose {
-    background: rgba(239, 68, 68, 0.16);
-    color: #fca5a5;
-  }
-
-  .triage-card-count {
-    font-size: 16px;
-    font-weight: 800;
-    color: #ffffff;
-  }
-
-  .triage-card-title {
-    font-size: 13.5px;
-    font-weight: 750;
-    color: #ffffff;
-    line-height: 1.3;
-  }
-
-  .triage-card-desc {
-    font-size: 11.5px;
-    color: #8c93a8;
-    margin: 0;
-    line-height: 1.4;
-  }
-
-  .triage-card-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11.5px;
-    font-weight: 700;
-    margin-top: 4px;
-    transition: transform 0.15s ease;
-  }
-  .triage-card:hover .triage-card-action {
-    transform: translateX(3px);
-  }
-  .triage-card-action.crimson { color: #fb7185; }
-  .triage-card-action.amber { color: #fcd34d; }
-  .triage-card-action.rose { color: #fca5a5; }
-
-  /* Triage All Clear */
-  .triage-all-clear {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
-    border-radius: 10px;
-    background: rgba(16, 185, 129, 0.05);
-    border: 1px solid rgba(16, 185, 129, 0.18);
-  }
-
-  .clear-icon-wrap {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(16, 185, 129, 0.12);
-    color: #10b981;
-    flex-shrink: 0;
-  }
-
-  .clear-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .clear-title {
-    font-size: 13px;
-    font-weight: 750;
-    color: #ffffff;
-  }
-
-  .clear-desc {
-    font-size: 12px;
-    color: #8c93a8;
-    margin: 0;
-  }
-
-  /* 3. Primary Workspace Grid */
-  .workspace-layout {
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    gap: 28px;
-    align-items: flex-start;
-    min-width: 0;
-    width: 100%;
-  }
-
-  @media (max-width: 1024px) {
-    .workspace-layout {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .primary-editorial-col,
-  .secondary-editorial-col {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .workspace-section {
-    display: flex;
-    flex-direction: column;
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
-    min-width: 0;
-    width: 100%;
   }
 
-  .section-title-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
-    min-width: 0;
-    width: 100%;
-  }
-
-  .section-title-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .section-heading {
-    font-size: 1.15rem;
-    font-weight: 750;
-    color: #ffffff;
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
-
-  .drafts-count-tag {
-    font-size: 11px;
-    font-weight: 750;
-    padding: 2px 9px;
-    border-radius: 999px;
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-  }
-
-  .section-subheading {
-    font-size: 0.82rem;
-    color: #7b8396;
-    margin: 3px 0 0;
-  }
-
-  .section-corner-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: #dfc28d;
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.15s ease;
-  }
-
-  .section-corner-link:hover {
-    color: #ffffff;
-  }
-
-  /* Mesa de Edição: Clean List */
-  .clean-drafts-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .draft-list-row {
+  .stat-card {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 16px;
+    padding: 18px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    min-width: 0;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .draft-list-row:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(223, 194, 141, 0.25);
-    transform: translateX(2px);
-  }
-
-  .draft-cover-thumb {
-    width: 42px;
-    height: 58px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #111420;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .thumb-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .thumb-empty {
-    font-size: 10px;
-    font-weight: 800;
-    color: #4c5366;
-  }
-
-  .draft-row-meta {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    text-decoration: none;
+    position: relative;
+    backdrop-filter: blur(12px);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     min-width: 0;
   }
 
-  .draft-title-line {
+  .stat-card:hover {
+    background: rgba(20, 24, 38, 0.85);
+    border-color: rgba(223, 194, 141, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  }
+
+  .stat-card-static {
+    cursor: default;
+  }
+
+  .stat-card-static:hover {
+    border-color: rgba(255, 255, 255, 0.07);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .stat-card.stat-alert {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(26, 20, 14, 0.7);
+  }
+
+  .stat-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
-  .draft-work-name {
-    font-size: 13.5px;
-    font-weight: 700;
-    color: #ffffff;
-    text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .draft-work-name:hover {
+  .icon-gold {
+    background: rgba(223, 194, 141, 0.12);
     color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.25);
   }
 
-  .status-chip-draft {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 7px;
-    border-radius: 999px;
+  .icon-purple {
+    background: rgba(181, 154, 245, 0.12);
+    color: #b59af5;
+    border: 1px solid rgba(181, 154, 245, 0.25);
+  }
+
+  .icon-amber {
     background: rgba(245, 158, 11, 0.12);
-    color: #fbbf24;
+    color: #f59e0b;
     border: 1px solid rgba(245, 158, 11, 0.25);
   }
 
-  .draft-ch-line {
-    font-size: 12.5px;
-    color: #c9cddb;
+  .icon-blue {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+  }
+
+  .stat-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #7b8396;
+    letter-spacing: 0.02em;
+  }
+
+  .stat-value-row {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--font-heading, 'Manrope', sans-serif);
+    font-size: 24px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.1;
+  }
+
+  .stat-badge-pulse {
+    font-size: 9px;
+    font-weight: 750;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-hint {
+    font-size: 10.5px;
+    color: #555c6e;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .draft-ch-number {
-    font-weight: 650;
+  :global(.stat-corner-arrow) {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    color: #4b5263;
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover :global(.stat-corner-arrow) {
     color: #dfc28d;
+    transform: translateX(2px);
   }
 
-  .draft-ch-subtitle {
-    color: #8c93a8;
-  }
-
-  .draft-timestamp {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: #656d82;
-    margin-top: 1px;
-  }
-
-  .btn-edit-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border-radius: 8px;
-    background: rgba(223, 194, 141, 0.12);
-    border: 1px solid rgba(223, 194, 141, 0.3);
-    color: #dfc28d;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .btn-edit-action:hover {
-    background: #dfc28d;
-    color: #0c0d14;
-  }
-
-  /* Mesa Clean Empty State */
-  .mesa-clean-empty {
+  /* Quick Actions Bar */
+  .quick-actions-bar {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 42px 24px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.015);
-    border: 1px dashed rgba(255, 255, 255, 0.08);
+    gap: 10px;
+    min-width: 0;
   }
 
-  .empty-icon-circle {
-    display: grid;
-    place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: rgba(16, 185, 129, 0.1);
-    color: #10b981;
-    margin-bottom: 14px;
-  }
-
-  .empty-heading {
-    font-size: 15px;
+  .section-label {
+    font-size: 10.5px;
     font-weight: 750;
-    color: #ffffff;
-    margin: 0 0 6px;
+    color: #646b80;
+    letter-spacing: 0.08em;
   }
 
-  .empty-paragraph {
-    font-size: 12.5px;
-    color: #7b8396;
-    max-width: 380px;
-    margin: 0 0 18px;
-    line-height: 1.5;
-  }
-
-  .btn-empty-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 650;
-    text-decoration: none;
-    transition: all 0.15s ease;
-  }
-
-  .btn-empty-action:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  /* Right Column: Clean Published List */
-  .clean-published-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .pub-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 12px;
   }
 
-  .pub-main-info {
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(14, 18, 28, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    min-width: 0;
+  }
+
+  .action-btn:hover {
+    background: rgba(22, 28, 44, 0.8);
+    border-color: rgba(223, 194, 141, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .action-btn-ext {
+    border-style: dashed;
+  }
+
+  .action-btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .icon-add {
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+  }
+
+  .icon-works {
+    background: rgba(181, 154, 245, 0.15);
+    color: #b59af5;
+  }
+
+  .icon-tags {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+  }
+
+  .icon-users {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+  }
+
+  .icon-importer {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+
+  .icon-health {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+  }
+
+  .icon-scan {
+    background: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+  }
+
+  .icon-site {
+    background: rgba(255, 255, 255, 0.06);
+    color: #9ba3b8;
+  }
+
+  .action-btn-text {
     display: flex;
     flex-direction: column;
     gap: 1px;
     min-width: 0;
   }
 
-  .pub-work {
-    font-size: 13px;
-    font-weight: 700;
-    color: #ffffff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .pub-ch {
+  .action-btn-text strong {
     font-size: 12px;
-    color: #dfc28d;
-    font-weight: 600;
-  }
-
-  .pub-time {
-    font-size: 10.5px;
-    color: #656d82;
-  }
-
-  .btn-review-pub {
-    padding: 5px 11px;
-    border-radius: 6px;
-    font-size: 11.5px;
-    font-weight: 650;
-    color: #c9cddb;
-    text-decoration: none;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    transition: all 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .btn-review-pub:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-  }
-
-  /* Radar Works List */
-  .radar-works-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .radar-work-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-radius: 9px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    text-decoration: none;
-    transition: all 0.15s ease;
-  }
-
-  .radar-work-row:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .radar-thumb {
-    width: 32px;
-    height: 44px;
-    border-radius: 5px;
-    overflow: hidden;
-    background: #111420;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-  }
-
-  .radar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .radar-placeholder {
-    font-size: 9px;
-    font-weight: 800;
-    color: #4b5266;
-  }
-
-  .radar-meta {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .radar-title {
-    font-size: 12.5px;
     color: #ffffff;
     font-weight: 700;
     white-space: nowrap;
@@ -1279,245 +722,546 @@
     text-overflow: ellipsis;
   }
 
-  .radar-tags {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-
-  .radar-kind {
+  .action-btn-text span {
     font-size: 10px;
-    color: #8c93a8;
-  }
-
-  .radar-status {
-    font-size: 9.5px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    color: #8c93a8;
-  }
-
-  .radar-status.is-published {
-    background: rgba(16, 185, 129, 0.12);
-    color: #10b981;
-  }
-
-  .radar-arrow {
-    color: #4b5266;
-    transition: color 0.15s ease;
-  }
-
-  .radar-work-row:hover .radar-arrow {
-    color: #dfc28d;
-  }
-
-  /* Stats Matrix: 4 Tiles */
-  .stats-matrix {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-
-  .stat-card {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 14px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    text-decoration: none;
-    transition: all 0.2s ease;
-  }
-
-  .stat-card:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .stat-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .stat-icon-wrap {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-  }
-  .stat-icon-wrap.gold { background: rgba(223, 194, 141, 0.12); color: #dfc28d; }
-  .stat-icon-wrap.purple { background: rgba(167, 139, 250, 0.12); color: #a78bfa; }
-  .stat-icon-wrap.amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
-  .stat-icon-wrap.green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
-
-  .stat-trend {
-    font-size: 10px;
-    font-weight: 700;
-    color: #656d82;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .stat-trend.active-pulse {
-    color: #10b981;
-  }
-
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: #ffffff;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-  }
-
-  .stat-label {
-    font-size: 11px;
-    color: #8c93a8;
-    font-weight: 500;
-  }
-
-  /* Quick Shortcuts */
-  .quick-links-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .quick-shortcut-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    text-decoration: none;
-    transition: all 0.15s ease;
-  }
-
-  .quick-shortcut-row:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(223, 194, 141, 0.2);
-    transform: translateX(2px);
-  }
-
-  .shortcut-icon {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #dfc28d;
-    flex-shrink: 0;
-  }
-
-  .shortcut-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .shortcut-name {
-    font-size: 13px;
-    font-weight: 700;
-    color: #ffffff;
-  }
-
-  .shortcut-desc {
-    font-size: 11px;
     color: #7b8396;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .shortcut-arrow {
-    color: #4b5266;
-    transition: all 0.15s ease;
+  /* Main Workspace Split (2 Columns) */
+  .workspace-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 24px;
+    align-items: flex-start;
+    min-width: 0;
   }
 
-  .quick-shortcut-row:hover .shortcut-arrow {
+  .panel-section {
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    padding: 22px;
+    backdrop-filter: blur(14px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+  }
+
+  .panel-title-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .panel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .panel-title {
+    margin: 0;
+    font-family: var(--font-heading, 'Manrope', sans-serif);
+    font-size: 16.5px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  .panel-subtitle {
+    font-size: 11.5px;
+    color: #7b8396;
+    font-weight: 500;
+  }
+
+  .count-pill {
+    font-size: 11px;
+    font-weight: 750;
+    padding: 2px 7px;
+    border-radius: 999px;
+  }
+
+  .count-pill.amber-pill {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+
+  .panel-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #8c93a8;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+  }
+
+  .panel-link:hover {
+    color: #dfc28d;
+  }
+
+  /* Drafts Stack */
+  .drafts-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .draft-row-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(18, 22, 34, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    min-width: 0;
+  }
+
+  .draft-row-card:hover {
+    background: rgba(24, 30, 48, 0.8);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+
+  .draft-thumb-link {
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+
+  .draft-thumb-img {
+    width: 44px;
+    height: 62px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .draft-thumb-placeholder {
+    width: 44px;
+    height: 62px;
+    border-radius: 6px;
+    background: #171926;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #dfc28d;
+  }
+
+  .draft-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .draft-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .draft-work-title {
+    font-size: 13px;
+    font-weight: 750;
+    color: #ffffff;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .draft-work-title:hover {
+    color: #dfc28d;
+  }
+
+  .status-chip {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .status-chip.draft-chip {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .draft-detail {
+    font-size: 12px;
+    color: #c5cbd8;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .draft-ch-number {
+    color: #dfc28d;
+  }
+
+  .draft-ch-title {
+    color: #8c93a8;
+    font-weight: 400;
+  }
+
+  .draft-time {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    color: #646b80;
+  }
+
+  .btn-edit-draft {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    border-radius: 7px;
+    background: rgba(223, 194, 141, 0.1);
+    border: 1px solid rgba(223, 194, 141, 0.28);
+    color: #dfc28d;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .btn-edit-draft:hover {
+    background: rgba(223, 194, 141, 0.2);
+    border-color: rgba(223, 194, 141, 0.5);
+    transform: translateX(2px);
+  }
+
+  /* Empty State */
+  .editorial-empty-state {
+    padding: 36px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    border-radius: 10px;
+    background: rgba(18, 22, 34, 0.3);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+
+  .empty-icon-box {
+    color: #10b981;
+    margin-bottom: 2px;
+  }
+
+  .empty-title {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 750;
+    color: #ffffff;
+  }
+
+  .empty-desc {
+    margin: 0;
+    font-size: 12px;
+    color: #7b8396;
+    max-width: 440px;
+    line-height: 1.5;
+  }
+
+  .empty-actions {
+    margin-top: 6px;
+  }
+
+  .btn-empty-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-empty-primary:hover {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+  }
+
+  /* Right Column: Activity Sidebar */
+  .sidebar-activity-col {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+
+  .published-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .published-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(18, 22, 34, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    min-width: 0;
+  }
+
+  .pub-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .pub-line-1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    min-width: 0;
+  }
+
+  .pub-work-title {
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pub-ch-num {
+    color: #b59af5;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .pub-time {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: #646b80;
+  }
+
+  .pub-action-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8c93a8;
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .pub-action-btn:hover {
+    color: #dfc28d;
+    border-color: rgba(223, 194, 141, 0.3);
+  }
+
+  /* Mini Works List */
+  .mini-works-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .mini-work-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(18, 22, 34, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    min-width: 0;
+  }
+
+  .mini-work-card:hover {
+    background: rgba(24, 30, 48, 0.7);
+    border-color: rgba(223, 194, 141, 0.25);
+  }
+
+  .mini-work-thumb {
+    flex-shrink: 0;
+  }
+
+  .mini-work-img {
+    width: 34px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .mini-work-placeholder {
+    width: 34px;
+    height: 48px;
+    border-radius: 4px;
+    background: #161826;
+    font-size: 9px;
+    font-weight: 800;
+    color: #dfc28d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mini-work-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mini-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e5e0f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mini-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .mini-kind-tag {
+    font-size: 9px;
+    font-weight: 600;
+    color: #9ba3b8;
+    text-transform: uppercase;
+  }
+
+  .mini-status-tag {
+    font-size: 9px;
+    font-weight: 600;
+    color: #fbbf24;
+  }
+
+  .mini-status-tag.published {
+    color: #10b981;
+  }
+
+  :global(.mini-work-arrow) {
+    color: #4b5263;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .mini-work-card:hover :global(.mini-work-arrow) {
     color: #dfc28d;
     transform: translateX(2px);
   }
 
-  .empty-state-hint {
+  .empty-simple-text {
+    margin: 0;
     font-size: 12px;
-    color: #656d82;
-    margin: 8px 0;
+    color: #646b80;
+    text-align: center;
+    padding: 14px 0;
+  }
+
+  /* Responsive Rules */
+  @media (max-width: 1120px) {
+    .stat-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .workspace-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 640px) {
-    .workspace-header {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 16px;
-    }
-
-    .header-action-group {
-      display: grid;
-      grid-template-columns: 1fr;
-      width: 100%;
-      gap: 8px;
-    }
-
-    .btn-primary-action,
-    .btn-secondary-action {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-
-    .triage-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .stats-matrix {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .section-title-bar {
+    .dash-header {
       flex-direction: column;
       align-items: flex-start;
-      gap: 10px;
+      gap: 14px;
     }
 
-    .section-corner-link {
-      align-self: flex-start;
-    }
-
-    .draft-list-row {
-      display: grid;
-      grid-template-columns: 42px 1fr;
-      grid-template-areas:
-        "thumb meta"
-        "action action";
-      gap: 12px;
-      padding: 12px;
-    }
-
-    .draft-cover-thumb {
-      grid-area: thumb;
-    }
-
-    .draft-row-meta {
-      grid-area: meta;
-    }
-
-    .btn-edit-action {
-      grid-area: action;
-      justify-content: center;
+    .btn-primary-admin {
       width: 100%;
-      box-sizing: border-box;
+      justify-content: center;
+    }
+
+    .stat-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .actions-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .draft-row-card {
+      flex-wrap: wrap;
+    }
+
+    .btn-edit-draft {
+      width: 100%;
+      justify-content: center;
+      margin-top: 4px;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .actions-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
