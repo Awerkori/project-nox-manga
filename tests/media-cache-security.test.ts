@@ -173,4 +173,103 @@ describe('Media Security and Cache Guard', () => {
     const data = await res.json();
     expect(data.error).toBe('Página temporariamente indisponível');
   });
+
+  it('generates real WebP thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
+    const jpeg = (await import('jpeg-js')).default;
+    const w = 1000, h = 1500;
+    const rawRgba = new Uint8Array(w * h * 4);
+    for (let i = 0; i < rawRgba.length; i += 4) {
+      rawRgba[i] = (i / 4) % 256;
+      rawRgba[i + 1] = 120;
+      rawRgba[i + 2] = 200;
+      rawRgba[i + 3] = 255;
+    }
+    const fixtureJpeg = jpeg.encode({ data: rawRgba, width: w, height: h }, 85).data;
+    expect(fixtureJpeg.length).toBeGreaterThan(100_000);
+
+    const mediaId = '66666666-6666-4666-8666-666666666666';
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'fixture_original_sha256',
+      provider_key: 'fixture_key',
+      bytes: fixtureJpeg.length
+    };
+    mocks.download.mockResolvedValue(fixtureJpeg);
+
+    // 1. Request thumbnail derivative: ?size=thumb
+    const thumbRes = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(thumbRes.status).toBe(200);
+    expect(thumbRes.headers.get('Content-Type')).toBe('image/webp');
+    expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb"');
+
+    const thumbBytes = new Uint8Array(await thumbRes.arrayBuffer());
+    // Must be significantly fewer bytes than the 1000x1500 JPEG fixture
+    expect(thumbBytes.length).toBeLessThan(fixtureJpeg.length / 2);
+    // Must be valid WebP (starts with RIFF....WEBP)
+    const headerStr = Buffer.from(thumbBytes.slice(0, 12)).toString('ascii');
+    expect(headerStr.startsWith('RIFF') && headerStr.includes('WEBP')).toBe(true);
+
+    // 2. Request original full-size: /media/{id}
+    const originalRes = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(originalRes.status).toBe(200);
+    expect(originalRes.headers.get('Content-Type')).toBe('image/jpeg');
+    expect(originalRes.headers.get('ETag')).toBe('"fixture_original_sha256"');
+
+    const originalBytes = new Uint8Array(await originalRes.arrayBuffer());
+    // Must be byte-identical to the original fixture
+    expect(originalBytes.length).toBe(fixtureJpeg.length);
+    expect(Buffer.from(originalBytes).equals(Buffer.from(fixtureJpeg))).toBe(true);
+  });
+
+  it('preserves animated GIFs intact on ?size=thumb without converting to static image', async () => {
+    // Valid GIF89a header + minimal screen descriptor
+    const gifBytes = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x0a, 0x00, 0x0a, 0x00, 0x80, 0x00, 0x00]);
+    const mediaId = '77777777-7777-4777-8777-777777777777';
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/gif',
+      sha256: 'gif_sha256',
+      provider_key: 'gif_key',
+      bytes: gifBytes.length
+    };
+    mocks.download.mockResolvedValue(gifBytes);
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/gif');
+    const returnedBytes = new Uint8Array(await res.arrayBuffer());
+    expect(returnedBytes.length).toBe(gifBytes.length);
+    expect(Buffer.from(returnedBytes).equals(Buffer.from(gifBytes))).toBe(true);
+  });
 });

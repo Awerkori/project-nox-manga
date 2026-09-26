@@ -102,15 +102,25 @@ export const load = async ({ locals }) => {
       storage.status = 'BOM';
       storage.statusLabel = 'Ativo';
 
-      // Web/Reader (Mocked from Vercel/CF Analytics if we had it, but using 'BOM' for now since baseline is fast)
-      const web = component('web', 'Web & Desktop', 'Globe', { 'Latência p95 (Simulada/Cloudflare)': '106ms', 'Taxa de Erro 5xx': '0%' });
-      web.status = 'BOM'; web.statusLabel = 'Otimizado'; web.summary = 'Baseline coletada atesta alta velocidade no momento.';
-
+      const web = component('web', 'Web & Desktop', 'Globe');
       const reader = component('reader', 'Reader (Páginas)', 'BookOpen', { 'Latência Média': '66ms', 'Load Errors': '0' });
       reader.status = 'BOM'; reader.statusLabel = 'Rápido';
 
+      const allComponents = [database, importer, publication, storage, web, reader];
+      const hasCritical = allComponents.some((c) => c.status === 'CRITICO');
+      const hasWarningOrMissing = allComponents.some((c) => c.status === 'ATENCAO' || c.status === 'SEM_DADOS' || c.status === 'RUIM');
+      const overallStatus: HealthSeverity = hasCritical ? 'CRITICO' : hasWarningOrMissing ? 'ATENCAO' : 'BOM';
+
       const payload = {
-        overall: { status: 'BOM', statusLabel: 'SAUDÁVEL', message: 'Sistema operando com métricas reais em baseline estável.', criticalIssues: [], attentionIssues: [], trend24h: 'Positivo', trend7d: 'Positivo' },
+        overall: {
+          status: overallStatus,
+          statusLabel: overallStatus === 'CRITICO' ? 'CRÍTICA' : overallStatus === 'ATENCAO' ? 'VERIFICAÇÃO PARCIAL' : 'SAUDÁVEL',
+          message: hasCritical ? 'Falha crítica detectada.' : hasWarningOrMissing ? 'Componentes sem dados ou requerem atenção.' : 'Sistema operando com métricas reais em baseline estável.',
+          criticalIssues: allComponents.filter(c => c.status === 'CRITICO').map(c => `${c.title}: ${c.summary}`),
+          attentionIssues: allComponents.filter(c => c.status === 'ATENCAO').map(c => `${c.title}: ${c.summary}`),
+          trend24h: 'Estável',
+          trend7d: 'Estável'
+        },
         components: { database, importer, publication, storage, web, reader },
         slowQueries: raw?.slow_queries || [], incidents: [], fetchedAt: new Date().toISOString()
       };

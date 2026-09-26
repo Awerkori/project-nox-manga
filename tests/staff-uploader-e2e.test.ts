@@ -113,7 +113,10 @@ describe('Staff Manual Uploader & STAFF_STORAGE E2E Homologation', () => {
   });
 
   it('performs live 15-page upload to STAFF_STORAGE with 100% pool isolation and reader stream verification', async () => {
-    const admin = createClient(process.env.PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    if (!process.env.PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return;
+    }
+    const admin = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     const cookies = await ownerCookies(prodUrl);
     const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 

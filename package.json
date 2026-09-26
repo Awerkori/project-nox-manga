@@ -22,10 +22,13 @@
     "prebuild": "node scripts/retain-client-assets.mjs save"
   },
   "dependencies": {
+    "@jsquash/webp": "^1.5.0",
     "@lucide/svelte": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "fast-png": "^8.0.0",
     "fflate": "latest",
+    "jpeg-js": "^0.4.4",
     "zod": "latest"
   },
   "devDependencies": {

@@ -7,6 +7,35 @@ import {
 } from '$lib/server/storage-router';
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
+import { generateThumbnail } from '$lib/server/thumbnail';
+
+async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
+  if (body instanceof Uint8Array) return body;
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
+  if (typeof body === 'string') return new TextEncoder().encode(body);
+  if (body && typeof (body as any).getReader === 'function') {
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        total += value.length;
+      }
+    }
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+  return new Uint8Array();
+}
 
 export const GET = async ({ locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
@@ -202,12 +231,23 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  if (media.bytes && Number(media.bytes) > 0) {
-    headers['Content-Length'] = String(media.bytes);
-  } else if (body instanceof ArrayBuffer) {
-    headers['Content-Length'] = String(body.byteLength);
-  } else if (body instanceof Blob) {
-    headers['Content-Length'] = String(body.size);
+  if (sizeParam === 'thumb') {
+    const rawBytes = await toUint8Array(body);
+    const thumb = await generateThumbnail(rawBytes, media.mime);
+    body = thumb.data;
+    headers['Content-Type'] = thumb.mime;
+    headers['Content-Length'] = String(thumb.data.length);
+    if (thumb.resized) {
+      headers['ETag'] = `"${media.sha256}-thumb"`;
+    }
+  } else {
+    if (media.bytes && Number(media.bytes) > 0) {
+      headers['Content-Length'] = String(media.bytes);
+    } else if (body instanceof ArrayBuffer) {
+      headers['Content-Length'] = String(body.byteLength);
+    } else if (body instanceof Blob) {
+      headers['Content-Length'] = String(body.size);
+    }
   }
 
   const response = new Response(body, { status: 200, headers });

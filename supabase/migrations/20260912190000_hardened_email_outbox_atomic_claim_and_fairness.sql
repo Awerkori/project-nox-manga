@@ -121,6 +121,10 @@ BEGIN
     v_cta_label := 'Ver candidatura';
   END IF;
 
+  IF v_subject IS NULL THEN
+    RETURN NEW;
+  END IF;
+
   v_url := 'https://manga.project-nox-awerkori.workers.dev' || COALESCE(NEW.href, '/notificacoes');
 
   -- E. Gerar HTML do e-mail
