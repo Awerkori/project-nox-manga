@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-process.loadEnvFile('.env');
+import { existsSync } from 'node:fs';
+if (existsSync('.env')) process.loadEnvFile('.env');
 function buildSyntheticOwnerCookie(origin) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({
