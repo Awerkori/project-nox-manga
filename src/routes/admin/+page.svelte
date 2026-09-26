@@ -1,11 +1,9 @@
 <script lang="ts">
   import {
     BookOpen,
-    Sparkles,
     FileEdit,
     Tags,
     ArrowRight,
-    ArrowUpRight,
     Plus,
     Clock,
     CheckCircle2,
@@ -13,9 +11,9 @@
     Layers,
     Flag,
     Users,
-    AlertTriangle,
     ShieldAlert,
-    Settings
+    Settings,
+    LayoutDashboard
   } from '@lucide/svelte';
   import { relativeTime, kindLabels } from '$lib/types';
 
@@ -445,6 +443,36 @@
               <ArrowRight size={14} />
             </span>
           </a>
+
+          {#if data.role === 'ADMIN'}
+            <a href="/admin/health" class="quick-shortcut-row">
+              <div class="shortcut-icon">
+                <Activity size={15} />
+              </div>
+              <div class="shortcut-info">
+                <span class="shortcut-name">Saúde do Sistema</span>
+                <span class="shortcut-desc">Telemetria, banco de dados e componentes</span>
+              </div>
+              <span class="shortcut-arrow">
+                <ArrowRight size={14} />
+              </span>
+            </a>
+          {/if}
+
+          {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
+            <a href="/scan" class="quick-shortcut-row">
+              <div class="shortcut-icon">
+                <LayoutDashboard size={15} />
+              </div>
+              <div class="shortcut-info">
+                <span class="shortcut-name">Workspaces de Scan</span>
+                <span class="shortcut-desc">Pipeline de produção editorial e equipes</span>
+              </div>
+              <span class="shortcut-arrow">
+                <ArrowRight size={14} />
+              </span>
+            </a>
+          {/if}
         </div>
       </section>
     </aside>
