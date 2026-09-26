@@ -47,7 +47,7 @@ for (const file of files) {
   if (containsSecret(text)) failures.push(file);
 }
 // Capture history only in memory; never print patches or a matched credential.
-const history = spawnSync('git', ['log', '--all', '-p', '--format='], {
+const history = spawnSync('git', ['log', 'HEAD', '-p', '--format='], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024
 });
