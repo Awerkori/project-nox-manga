@@ -214,6 +214,14 @@ export async function loadSnapshot({ locals }: any) {
     reason: heartbeatData?.capacity?.pressureReason || telemetry?.cycle_reason || 'Operação contínua Always-On',
     noProgressReason: heartbeatData?.noProgressReason ?? null,
     manualStopActive: Boolean(telemetry?.protective_stop),
+    targetFloor: heartbeatData?.capacity?.targetFloor ?? 5,
+    optimalLow: heartbeatData?.capacity?.optimalLow ?? 7,
+    optimalHigh: heartbeatData?.capacity?.optimalHigh ?? 9,
+    preferredHigh: heartbeatData?.capacity?.preferredHigh ?? 10,
+    ceiling: heartbeatData?.capacity?.ceiling ?? 12,
+    limitingFactor: heartbeatData?.capacity?.limitingFactor ?? heartbeatData?.throughput?.limitingFactor ?? null,
+    throughputStatus: heartbeatData?.capacity?.throughputStatus ?? heartbeatData?.throughput?.status ?? null,
+    autoEmergencyPause: heartbeatData?.autoEmergencyPause ?? null,
   };
 
   const importingJobs = importingJobsRes.data || [];

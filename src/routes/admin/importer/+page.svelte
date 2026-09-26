@@ -552,6 +552,19 @@
   <!-- DEDICATED CAP/MIN VIEW -->
   {#if currentTab === 'cap-min'}
     <div class="cap-min-view">
+      <!-- Catastrophic Auto-Emergency Pause Banner (if active) -->
+      {#if data.adaptiveCapacity?.autoEmergencyPause?.active}
+        <div class="emergency-pause-alert">
+          <AlertOctagon size={20} class="text-rose-400" />
+          <div class="emergency-pause-content">
+            <span class="emergency-pause-title">🚨 AUTO-EMERGENCY PAUSE ATIVO (GATE DE NOVOS CAPÍTULOS)</span>
+            <p class="emergency-pause-desc">
+              {data.adaptiveCapacity.autoEmergencyPause.reason || 'Latência severa do site detectada. Claims de novos capítulos pausadas sem derrubar processo. Retomada automática garantida quando latência retornar a níveis saudáveis (< 1500ms por 2 minutos).'}
+            </p>
+          </div>
+        </div>
+      {/if}
+
       <!-- 4 Primary KPI Cards -->
       <div class="cap-kpis-grid">
         <div class="cap-kpi-card highlight-rate">
@@ -565,11 +578,28 @@
           <div class="cap-kpi-val-row">
             <span class="cap-kpi-number">{data.rateTelemetry?.rate5m ?? 0}</span>
             <span class="cap-kpi-unit">cap/min</span>
+            {#if (data.rateTelemetry?.rate5m ?? 0) >= 12}
+              <span class="status-pill status-ceiling">TETO 12</span>
+            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 10}
+              <span class="status-pill status-preferred">PREFERIDO 10</span>
+            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 7}
+              <span class="status-pill status-optimal">IDEAL 7–9</span>
+            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 5}
+              <span class="status-pill status-floor">PISO 5</span>
+            {:else}
+              <span class="status-pill status-subfloor">SUB-PISO &lt;5</span>
+            {/if}
           </div>
           <div class="cap-kpi-details">
             <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh5m ?? 0}</strong> inéditos visíveis</span>
             <span class="detail-sep">·</span>
             <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate5m ?? 0}/min</span>
+          </div>
+          <div class="cap-kpi-targets">
+            <span class="target-tick">Piso: 5</span>
+            <span class="target-tick">Ideal: 7-9</span>
+            <span class="target-tick">Preferido: 10</span>
+            <span class="target-tick">Teto: 12</span>
           </div>
         </div>
 
@@ -587,6 +617,12 @@
             <span class="detail-sep">·</span>
             <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate30m ?? 0}/min</span>
           </div>
+          {#if data.adaptiveCapacity?.limitingFactor && (data.rateTelemetry?.rate5m ?? 0) < 5}
+            <div class="limiting-factor-row" title={data.adaptiveCapacity.limitingFactor}>
+              <AlertTriangle size={12} class="text-amber-400 shrink-0" />
+              <span class="limiting-factor-text">Gargalo: {data.adaptiveCapacity.limitingFactor}</span>
+            </div>
+          {/if}
         </div>
 
         <div class="cap-kpi-card">
@@ -691,13 +727,13 @@
           <h4 class="gov-title">Princípios da Arquitetura Always-On</h4>
           <div class="gov-bullets">
             <div class="gov-bullet">
-              <strong>Sem Meta Fixa:</strong> Não forçamos taxas artificiais (10, 20 ou 30 cap/min). A vazão é resultado da capacidade real e da integridade da plataforma.
+              <strong>Faixas Operacionais de Vazão:</strong> Piso operacional de <strong>5 cap/min</strong>, faixa de cruzeiro ideal entre <strong>7–9 cap/min</strong>, throughput preferido de <strong>10 cap/min</strong> e teto máximo de segurança de <strong>12 cap/min</strong> (proteção do Yugabyte e site).
             </div>
             <div class="gov-bullet">
-              <strong>Nunca Stop Automático:</strong> Sob picos de RAM, lentidão no site ou event-loop lag, a concorrência reduz progressivamente até 1 permit mínimo. O sistema nunca desliga sozinho.
+              <strong>Throughput Governor (AIMD):</strong> A concorrência escala se a vazão estiver abaixo do piso e a infraestrutura estiver verde. Se houver gargalo de memória, lag ou fila, o status expõe <code>THROUGHPUT_CONSTRAINED</code> com o fator limitante.
             </div>
             <div class="gov-bullet">
-              <strong>Fresh Visible vs Pipeline:</strong> "Fresh Visible" contabiliza apenas novos capítulos liberados para os leitores. "Pipeline" inclui re-sincronizações periódicas de acervo e retries.
+              <strong>Auto-Emergency Pause & Auto-Resume:</strong> Sob latência catastrófica sustentada do site (P95 &ge; 10s por &ge;3 ciclos), novos claims são pausados sem derrubar o processo. A retomada ocorre automaticamente quando o site estabilizar (&lt;1500ms por 2 min).
             </div>
           </div>
         </div>
@@ -3223,6 +3259,82 @@
   .capacity-status-pill.status-throttled { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
   .capacity-status-pill.status-survival { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
   .capacity-status-pill.status-manual_stop { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .capacity-status-pill.status-auto_emergency_pause { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); }
+  .capacity-status-pill.status-ceiling_reached { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+  .capacity-status-pill.status-throughput_constrained { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+  /* Auto-Emergency Pause Alert Banner */
+  .emergency-pause-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    border-radius: 12px;
+    margin-bottom: 4px;
+  }
+  .emergency-pause-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .emergency-pause-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #fb7185;
+    letter-spacing: 0.02em;
+  }
+  .emergency-pause-desc {
+    font-size: 12px;
+    color: #e2e8f0;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .cap-kpi-targets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .target-tick {
+    font-size: 9.5px;
+    font-family: monospace;
+    font-weight: 600;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .status-pill.status-ceiling { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+  .status-pill.status-preferred { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+  .status-pill.status-optimal { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+  .status-pill.status-floor { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-pill.status-subfloor { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+  .limiting-factor-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+  .limiting-factor-text {
+    font-size: 11px;
+    color: #fbbf24;
+    font-family: monospace;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+  }
 
   .text-site-health.health-green { color: #4ade80; }
   .text-site-health.health-yellow { color: #fbbf24; }
