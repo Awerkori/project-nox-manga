@@ -26,9 +26,11 @@
     "@lucide/svelte": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "@types/pg": "^8.23.1",
     "fast-png": "^8.0.0",
     "fflate": "latest",
     "jpeg-js": "^0.4.4",
+    "pg": "^8.23.0",
     "zod": "latest"
   },
   "devDependencies": {

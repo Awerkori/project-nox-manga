@@ -19,5 +19,11 @@
   },
   "placement": {
     "region": "aws:sa-east-1"
-  }
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "83726ad935554261813c4bb12094c7f3"
+    }
+  ]
 }

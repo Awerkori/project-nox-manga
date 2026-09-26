@@ -66,7 +66,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  const db = privileged();
+  const db = privileged(platform?.env);
   const { data: media } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
@@ -232,13 +232,20 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   if (sizeParam === 'thumb') {
-    const rawBytes = await toUint8Array(body);
-    const thumb = await generateThumbnail(rawBytes, media.mime);
-    body = thumb.data;
-    headers['Content-Type'] = thumb.mime;
-    headers['Content-Length'] = String(thumb.data.length);
-    if (thumb.resized) {
-      headers['ETag'] = `"${media.sha256}-thumb"`;
+    try {
+      const rawBytes = await toUint8Array(body);
+      const thumb = await generateThumbnail(rawBytes, media.mime);
+      body = thumb.data;
+      headers['Content-Type'] = thumb.mime;
+      headers['Content-Length'] = String(thumb.data.length);
+      if (thumb.resized) {
+        headers['ETag'] = `"${media.sha256}-thumb"`;
+      }
+    } catch (thumbErr) {
+      console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
+      if (media.bytes && Number(media.bytes) > 0) {
+        headers['Content-Length'] = String(media.bytes);
+      }
     }
   } else {
     if (media.bytes && Number(media.bytes) > 0) {

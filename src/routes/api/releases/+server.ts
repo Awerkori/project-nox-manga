@@ -2,8 +2,8 @@ import { json } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
 
-export const GET = async ({ url, locals }) => {
-  const db = locals.db || privileged();
+export const GET = async ({ url, locals, platform }: any) => {
+  const db = locals.db || privileged(platform?.env);
   
   const cursorTime = url.searchParams.get('cursorTime') || null;
   const cursorId = url.searchParams.get('cursorId') || null;

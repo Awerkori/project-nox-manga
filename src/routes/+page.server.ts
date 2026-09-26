@@ -14,15 +14,16 @@ type HomeCachePayload = {
 
 // Public content cache (updated dynamically from live database queries)
 let homePublicCache: HomeCachePayload | null = null;
-const HOME_CACHE_TTL_MS = 60_000;
+const HOME_CACHE_TTL_MS = 30_000;
 
-export const load = async ({ locals, setHeaders }) => {
+export const load = async ({ locals, setHeaders, url }) => {
   // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
   setHeaders({
     'cache-control': 'private, no-cache, no-store, must-revalidate'
   });
 
-  const hasFreshPublicCache = Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
+  const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');
+  const hasFreshPublicCache = !forceFresh && Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
 
   // If public content cache is fresh and user is anonymous, return directly without hitting DB
   if (!locals.user && hasFreshPublicCache && homePublicCache) {
@@ -408,15 +409,16 @@ export const load = async ({ locals, setHeaders }) => {
   let featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
 
   // Most Read works (from concurrent batch or derived from works)
-  let mostReadWorks: typeof works = [];
+  let mostReadWorks: typeof works;
   if (mostReadRes?.data && mostReadRes.data.length > 0) {
     mostReadWorks = mostReadRes.data;
   } else {
+    console.warn('[MAIS_LIDOS_FALLBACK] mostReadRes empty or error, falling back to works slice:', mostReadRes?.error);
     mostReadWorks = works.slice(0, 16);
   }
 
   let isStale = false;
-  let isDegraded = chaptersRes.isDegraded || worksRes.isDegraded;
+  const isDegraded = chaptersRes.isDegraded || worksRes.isDegraded;
 
   // Stale-While-Revalidate / Last-Known-Good fallback
   if (works.length > 0 && recentReleases.length > 0 && !isDegraded) {
