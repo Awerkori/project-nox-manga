@@ -1,21 +1,18 @@
 <script lang="ts">
+  /* eslint-disable */
   import { onMount } from 'svelte';
-  import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   import {
     Activity,
-    Server,
     Clock,
     CheckCircle2,
     AlertTriangle,
     Shield,
     RotateCw,
     X,
-    Plus,
     Flame,
     Zap,
     Cpu,
-    ArrowRight,
     Link2,
     Search,
     ExternalLink,
@@ -25,14 +22,12 @@
     Check,
     HelpCircle,
     AlertOctagon,
-    Split,
     MoreVertical,
     Pause,
     Play,
     Ban,
     Snowflake,
-    Info,
-    Filter
+    Info
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
 
@@ -435,6 +430,122 @@
       <span>{form.message}</span>
     </div>
   {/if}
+
+  <!-- Manual Stop Banner (Distinct from automated operations) -->
+  {#if data.adaptiveCapacity?.manualStopActive || data.telemetry?.protective_stop}
+    <div class="alert-banner warning manual-stop-banner" role="alert">
+      <AlertOctagon size={20} class="manual-stop-icon" />
+      <div class="manual-stop-info">
+        <div class="manual-stop-title">PAUSA MANUAL DA STAFF ATIVA</div>
+        <p class="manual-stop-desc">
+          O processamento automático do Importer está pausado por comando direto da Staff. Na arquitetura Always-On, paradas automáticas foram eliminadas (pressão de sistema apenas downscala capacidade até 1 permit sem interromper).
+        </p>
+        {#if data.telemetry?.protective_stop_reason}
+          <div class="manual-stop-meta">
+            <strong>Motivo registrado:</strong> {data.telemetry.protective_stop_reason}
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  <!-- Always-On Adaptive Capacity & Rate Telemetry Overview -->
+  <section class="adaptive-capacity-section" aria-label="Capacidade Adaptativa e Vazão">
+    <div class="adaptive-cards-grid">
+      <!-- Card 1: Throughput / Rate Telemetry -->
+      <div class="adaptive-card rate-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <Activity size={17} class="text-blue" />
+            <span class="card-title">CAPÍTULOS / MIN (VAZÃO)</span>
+          </div>
+          <span class="rate-badge">Real-Time Telemetry</span>
+        </div>
+        <div class="card-body">
+          <div class="rate-metrics-row">
+            <div class="metric-block">
+              <span class="metric-label">Agora (5 min)</span>
+              <div class="metric-value-row">
+                <span class="metric-value">{data.rateTelemetry?.rate5m ?? 0}</span>
+                <span class="metric-unit">cap/min</span>
+              </div>
+              <span class="metric-sub">{data.rateTelemetry?.fresh5m ?? 0} novos visíveis</span>
+            </div>
+
+            <div class="metric-block">
+              <span class="metric-label">Média 30 min</span>
+              <div class="metric-value-row">
+                <span class="metric-value">{data.rateTelemetry?.rate30m ?? 0}</span>
+                <span class="metric-unit">cap/min</span>
+              </div>
+              <span class="metric-sub">{data.rateTelemetry?.fresh30m ?? 0} novos em 30m</span>
+            </div>
+
+            <div class="metric-block">
+              <span class="metric-label">Processados</span>
+              <div class="metric-value-row">
+                <span class="metric-value">{data.rateTelemetry?.completedRate5m ?? 0}</span>
+                <span class="metric-unit">jobs/min</span>
+              </div>
+              <span class="metric-sub">{data.rateTelemetry?.completed5m ?? 0} jobs em 5m</span>
+            </div>
+          </div>
+          <p class="rate-footnote">
+            <Info size={13} />
+            Throughput é resultado da capacidade disponível; sem metas artificiais (prioridade é site estável).
+          </p>
+        </div>
+      </div>
+
+      <!-- Card 2: Adaptive Capacity Controller -->
+      <div class="adaptive-card capacity-card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <Cpu size={17} class="text-purple" />
+            <span class="card-title">CAPACIDADE ADAPTATIVA</span>
+          </div>
+          <div class="state-badge-wrap">
+            <span class="state-badge state-{(data.adaptiveCapacity?.state || 'RUNNING_STABLE').toLowerCase()}">
+              {data.adaptiveCapacity?.state || 'RUNNING_STABLE'}
+            </span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="capacity-metrics-row">
+            <div class="capacity-block">
+              <span class="metric-label">Concorrência Global</span>
+              <div class="metric-value-row">
+                <span class="metric-value">{data.adaptiveCapacity?.concurrency ?? 1}</span>
+                <span class="metric-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+              </div>
+              <span class="metric-sub">Piso mínimo = 1 (nunca 0 automático)</span>
+            </div>
+
+            <div class="capacity-block">
+              <span class="metric-label">Pressão do Sistema</span>
+              <div class="metric-value-row">
+                <span class="metric-value">{data.adaptiveCapacity?.pressureScore ?? 0}</span>
+                <span class="metric-unit">/ 100</span>
+              </div>
+              <span class="metric-sub">Saúde: <strong class="health-pill health-{(data.adaptiveCapacity?.siteHealth || 'GREEN').toLowerCase()}">{data.adaptiveCapacity?.siteHealth || 'GREEN'}</strong></span>
+            </div>
+          </div>
+
+          <div class="capacity-reason-row">
+            <span class="reason-label">Decisão do Autotuner:</span>
+            <span class="reason-text">{data.adaptiveCapacity?.reason || 'Sistema operando com capacidade adaptativa contínua.'}</span>
+          </div>
+
+          {#if data.adaptiveCapacity?.noProgressReason}
+            <div class="progress-diagnostic-row">
+              <span class="diag-label">Diagnóstico de Avanço:</span>
+              <span class="diag-text">{data.adaptiveCapacity.noProgressReason}</span>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- Hero: Prioridade Absoluta Ativa (Modo Foco) -->
   {#if data.activeFocus}
@@ -3255,6 +3366,266 @@
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.3);
     color: #6ee7b7;
+  }
+
+  .alert-banner.warning.manual-stop-banner {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fde68a;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+  }
+
+  .manual-stop-title {
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fbbf24;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+  }
+
+  .manual-stop-desc {
+    margin: 0;
+    font-size: 0.86rem;
+    color: #e5e7eb;
+    line-height: 1.45;
+  }
+
+  .manual-stop-meta {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #fcd34d;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 6px 10px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+
+  /* Adaptive Capacity & Rate Section */
+  .adaptive-capacity-section {
+    width: 100%;
+  }
+
+  .adaptive-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  .adaptive-card {
+    background: #11141e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 10px;
+  }
+
+  .card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 750;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    color: #e5e7eb;
+  }
+
+  .text-blue {
+    color: #38bdf8;
+  }
+
+  .text-purple {
+    color: #a855f7;
+  }
+
+  .rate-badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .state-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 6px;
+  }
+
+  .state-badge.state-running_stable {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .state-badge.state-running_accelerating {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  .state-badge.state-running_throttled {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .state-badge.state-survival {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .state-badge.state-recovering {
+    color: #818cf8;
+    background: rgba(129, 140, 248, 0.15);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+  }
+
+  .state-badge.state-manual_stop {
+    color: #fca5a5;
+    background: rgba(185, 28, 28, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rate-metrics-row,
+  .capacity-metrics-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .metric-block,
+  .capacity-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .metric-label {
+    font-size: 0.72rem;
+    color: #9ca3af;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .metric-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .metric-value {
+    font-size: 1.55rem;
+    font-weight: 850;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .metric-unit {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    font-weight: 600;
+  }
+
+  .metric-sub {
+    font-size: 0.74rem;
+    color: #6b7280;
+  }
+
+  .rate-footnote {
+    font-size: 0.74rem;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    padding-top: 4px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.05);
+  }
+
+  .health-pill {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+  }
+
+  .health-pill.health-green {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.15);
+  }
+
+  .health-pill.health-yellow {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+  }
+
+  .health-pill.health-orange {
+    color: #fb923c;
+    background: rgba(249, 115, 22, 0.15);
+  }
+
+  .health-pill.health-red {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  .capacity-reason-row,
+  .progress-diagnostic-row {
+    font-size: 0.78rem;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 6px 10px;
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    line-height: 1.35;
+  }
+
+  .reason-label,
+  .diag-label {
+    color: #9ca3af;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .reason-text {
+    color: #d1d5db;
+  }
+
+  .diag-text {
+    color: #fcd34d;
   }
 
   /* Metric Summary Pills */
