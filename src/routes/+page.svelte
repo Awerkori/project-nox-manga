@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, Clock, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { ArrowRight, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
@@ -55,7 +55,7 @@
       <section class="section-block continue-section">
         <div class="section-header">
           <div class="title-cluster">
-            <h2 class="section-title">CONTINUAR LENDO</h2>
+            <h2 class="section-title">Continuar Lendo</h2>
             <span class="section-subtitle">De onde você parou</span>
           </div>
 
@@ -98,12 +98,13 @@
               <div class="continue-thumb">
                 {#if item.coverId}
                   <img
-                    src="/media/{item.coverId}"
+                    src="/media/{item.coverId}?size=thumb"
                     alt={item.workTitle}
                     width="64"
                     height="90"
                     class="thumb-img"
                     class:blurred-cover={effectiveBlur}
+                    loading="lazy"
                     decoding="async"
                   />
                 {:else}
@@ -131,6 +132,7 @@
         subtitle="Adicionadas recentemente ao catálogo"
         works={data.works}
         loadMoreSort="latest"
+        shelfIndex={0}
       />
     {/if}
 
@@ -141,6 +143,7 @@
         subtitle="Obras mais populares e acessadas pelos leitores"
         works={data.mostReadWorks}
         loadMoreSort="most_read"
+        shelfIndex={1}
       />
     {/if}
 

@@ -33,11 +33,13 @@ export const kindLabels: Record<string, string> = {
   MANHUA: 'Manhua',
   WEBTOON: 'Webtoon'
 };
+const defaultDateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+
 export const date = (value?: string | null) => {
   if (!value) return 'Data indefinida';
   const d = new Date(value);
   if (isNaN(d.getTime())) return 'Data indefinida';
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+  return defaultDateFormatter.format(d);
 };
 
 export function relativeTime(value?: string | null): string {

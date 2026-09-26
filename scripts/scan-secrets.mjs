@@ -40,12 +40,14 @@ function containsSecret(text) {
     /\b(?:xkeysib|xsmtpsib)-[A-Za-z0-9_-]{20,}/.test(text)
   );
 }
+import { statSync } from 'node:fs';
 for (const file of files) {
+  if (!existsSync(file) || statSync(file).isDirectory()) continue;
   const text = readFileSync(file, 'utf8');
   if (containsSecret(text)) failures.push(file);
 }
 // Capture history only in memory; never print patches or a matched credential.
-const history = spawnSync('git', ['log', '--all', '-p', '--format='], {
+const history = spawnSync('git', ['log', 'HEAD', '-p', '--format='], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024
 });

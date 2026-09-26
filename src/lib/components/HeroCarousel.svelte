@@ -25,8 +25,8 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
-  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id, currentWork.slug, currentWork.id) : '');
-  let isAdult = $derived(currentWork?.content_rating === 'ADULT_18');
+  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id || currentWork.coverId, currentWork.slug, currentWork.id) : '');
+  let isAdult = $derived(((currentWork?.content_rating || currentWork?.contentRating) === 'ADULT_18'));
   let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 
   // Check if current featured work has reading progress
@@ -37,6 +37,20 @@
         )
       : null
   );
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
+  }
 
   function nextSlide() {
     if (works.length <= 1) return;
@@ -129,6 +143,12 @@
   }
 </script>
 
+<svelte:head>
+  {#if heroCover}
+    <link rel="preload" as="image" href={heroCover} fetchpriority="high" />
+  {/if}
+</svelte:head>
+
 {#if currentWork}
   <section
     class="hero-carousel"
@@ -143,7 +163,9 @@
         class="backdrop-img"
         class:blurred-cover={effectiveBlur}
         loading="eager"
+        fetchpriority="low"
         decoding="async"
+        use:fallbackCover
       />
       <div class="backdrop-gradient-v"></div>
       <div class="backdrop-gradient-h"></div>
@@ -164,7 +186,9 @@
                 width="330"
                 height="470"
                 loading="eager"
+                fetchpriority="high"
                 decoding="async"
+                use:fallbackCover
               />
               {#if isAdult}
                 <span class="adult-badge-hero">+18</span>
@@ -258,7 +282,7 @@
           </button>
 
           <div class="indicators-track" role="tablist" aria-label="Navegação dos destaques">
-            {#each works as _, idx}
+            {#each works as item, idx (item?.id || idx)}
               <button
                 class="indicator-pill"
                 class:active={idx === currentIndex}

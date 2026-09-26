@@ -14,7 +14,8 @@ function event() {
       { id: 'removed', work_id: 'work', chapter_id: null, removed: true },
       { id: 'chapter-visible', work_id: 'work', chapter_id: 'chapter', removed: false },
       { id: 'chapter-removed', work_id: 'work', chapter_id: 'chapter', removed: true }
-    ]
+    ],
+    pages: [{ id: 'p1', chapter_id: 'chapter', page_number: 1, media_id: 'm1' }]
   };
   // An administrator can read moderated rows for the moderation panel.
   // Public page loaders must explicitly exclude those rows for every role.
@@ -48,7 +49,8 @@ function event() {
   return {
     locals: { db, user: null, role: 'ADMIN' },
     params: { slug: 'story', id: 'chapter' },
-    url: new URL('https://nox.invalid')
+    url: new URL('https://nox.invalid'),
+    setHeaders: () => {}
   } as any;
 }
 

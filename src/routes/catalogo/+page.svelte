@@ -86,7 +86,12 @@
   {#if data.works.length}
     <div class="catalog-grid">
       {#each data.works as work, index (work.id)}
-        <WorkCard {work} {index} />
+        <WorkCard
+          {work}
+          {index}
+          eager={index < 6}
+          priority={index < 2 ? 'high' : 'auto'}
+        />
       {/each}
     </div>
   {:else}

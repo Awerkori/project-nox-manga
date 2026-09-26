@@ -29,7 +29,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (Number(event.request.headers.get('content-length') || 0) > max)
       error(413, 'Arquivo ou solicitação acima do limite');
   }
-  event.locals.db = createServerClient<Database>(env.PUBLIC_SUPABASE_URL, env.PUBLIC_SUPABASE_ANON_KEY, {
+  const supaClient = createServerClient<Database>(env.PUBLIC_SUPABASE_URL, env.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => event.cookies.getAll(),
       setAll: (cookies) =>
@@ -45,6 +45,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   });
 
+  // Restore authoritative Supabase client for all session, auth, storage, and application tables
+  event.locals.db = supaClient;
+
   const allCookies = event.cookies.getAll();
   const rawAuthCookie = extractFullAuthCookie(allCookies);
   const hasAuthCookie = Boolean(rawAuthCookie);
@@ -52,7 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   let user: any = null;
   let role: string | null = null;
   let authState: 'ANONYMOUS' | 'AUTH_PENDING' | 'AUTHENTICATED' | 'AUTH_ERROR' = 'ANONYMOUS';
-  let sessionData: any = null;
+  let sessionData: any;
   const authStart = performance.now();
 
   const isMedia = event.url.pathname.startsWith('/media/');

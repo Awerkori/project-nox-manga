@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     BookOpen,
     Heart,
@@ -10,7 +11,6 @@
     CheckCircle2,
     ChevronDown,
     ChevronUp,
-    AlertTriangle,
     Flag,
     Eye,
     Users,
@@ -19,7 +19,6 @@
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import { goto } from '$app/navigation';
-  import { page } from '$app/state';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
@@ -44,7 +43,7 @@
     synopsisExpanded = $state(false),
     showReportModal = $state(false);
 
-  let downloadedChapterIds = $state<Set<string>>(new Set());
+  let downloadedChapterIds = new SvelteSet<string>();
   let downloadingChapterIds = $state<Record<string, number>>({});
   let batchDownloading = $state(false);
   let batchProgress = $state({ current: 0, total: 0 });
@@ -54,7 +53,7 @@
       try {
         const offlineList = await getOfflineChapters();
         const currentWorkOffline = offlineList.filter((oc) => oc.workId === data.work.id);
-        downloadedChapterIds = new Set(currentWorkOffline.map((oc) => oc.chapterId));
+        downloadedChapterIds = new SvelteSet(currentWorkOffline.map((oc) => oc.chapterId));
       } catch (err) {
         console.error('Falha ao carregar capítulos offline:', err);
       }
@@ -70,7 +69,7 @@
     if (downloadedChapterIds.has(chapter.id)) {
       if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
-        const next = new Set(downloadedChapterIds);
+        const next = new SvelteSet(downloadedChapterIds);
         next.delete(chapter.id);
         downloadedChapterIds = next;
         notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
@@ -95,7 +94,7 @@
         }
       );
 
-      const next = new Set(downloadedChapterIds);
+      const next = new SvelteSet(downloadedChapterIds);
       next.add(chapter.id);
       downloadedChapterIds = next;
       notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
@@ -139,7 +138,7 @@
                 downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
               }
             );
-            const next = new Set(downloadedChapterIds);
+            const next = new SvelteSet(downloadedChapterIds);
             next.add(chapter.id);
             downloadedChapterIds = next;
           }
@@ -175,6 +174,15 @@
       const matchTitle = (c.title || '').toLowerCase().includes(term);
       return matchNum || matchTitle;
     })
+  );
+
+  let visibleLimit = $state(150);
+  let visibleChapters = $derived(
+    search.trim() ? chapters : chapters.slice(0, visibleLimit)
+  );
+
+  let readChapterIds = $derived(
+    new Set((data.progress || []).filter((p: any) => p?.completed_at).map((p: any) => p?.chapter_id))
   );
 
   let resume = $derived(data.progress[0]?.chapter_id || data.chapters.at(-1)?.id);
@@ -274,7 +282,7 @@
         {#if data.scans && data.scans.length > 0}
           <div class="cover-scan-seal">
             <Users size={12} />
-            {#each data.scans as scan, i}
+            {#each data.scans as scan, i (scan.id || scan.slug || i)}
               {#if i > 0}<span class="seal-sep">×</span>{/if}
               <a href="/scans/{scan.slug}" class="seal-link" title="Ver perfil de {scan.name}">{scan.name}</a>
             {/each}
@@ -335,7 +343,7 @@
             <div class="meta-item full-width row-style">
               <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
               <div class="meta-scans-val">
-                {#each data.scans as scan, i}
+                {#each data.scans as scan, i (scan.id || scan.slug || i)}
                   {#if i > 0}<span class="scan-comma">·</span>{/if}
                   <a href="/scans/{scan.slug}" class="meta-scan-link">
                     {#if scan.logo_id}
@@ -364,7 +372,7 @@
             <span class="badge-adult">+18 Adulto</span>
           {/if}
           {#if data.scans && data.scans.length > 0}
-            {#each data.scans as scan}
+            {#each data.scans as scan (scan.id || scan.slug)}
               <a
                 href="/scans/{scan.slug}"
                 class="badge-scan-partner"
@@ -486,7 +494,7 @@
               <div class="meta-item full-width row-style">
                 <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
                 <div class="meta-scans-val">
-                  {#each data.scans as scan, i}
+                  {#each data.scans as scan, i (scan.id || scan.slug || i)}
                     {#if i > 0}<span class="scan-comma">·</span>{/if}
                     <a href="/scans/{scan.slug}" class="meta-scan-link">
                       {#if scan.logo_id}
@@ -626,8 +634,8 @@
         </div>
 
         <div class="chapters-list-card">
-          {#each chapters as chapter (chapter.id)}
-            {@const isRead = data.progress.some((p) => p.chapter_id === chapter.id && p.completed_at)}
+          {#each visibleChapters as chapter (chapter.id)}
+            {@const isRead = readChapterIds.has(chapter.id)}
             {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
             {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
             {@const isDl = downloadedChapterIds.has(chapter.id)}
@@ -702,6 +710,25 @@
               </div>
             </a>
           {/each}
+
+          {#if !search.trim() && chapters.length > visibleLimit}
+            <div class="chapters-load-more-bar">
+              <button
+                type="button"
+                class="btn-load-more"
+                onclick={() => (visibleLimit += 150)}
+              >
+                Carregar mais capítulos ({chapters.length - visibleLimit} restantes)
+              </button>
+              <button
+                type="button"
+                class="btn-load-all"
+                onclick={() => (visibleLimit = chapters.length)}
+              >
+                Mostrar todos ({chapters.length})
+              </button>
+            </div>
+          {/if}
 
           {#if !chapters.length}
             <div class="empty-chapters">
@@ -1644,6 +1671,51 @@
     border: 1px solid rgba(201, 170, 115, 0.35);
     padding: 2px 6px;
     border-radius: 4px;
+  }
+
+  .chapters-load-more-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .btn-load-more,
+  .btn-load-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+
+  .btn-load-more {
+    background: #a855f7;
+    color: #ffffff;
+  }
+
+  .btn-load-more:hover {
+    background: #9333ea;
+  }
+
+  .btn-load-all {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-load-all:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
   }
 
   .empty-chapters {

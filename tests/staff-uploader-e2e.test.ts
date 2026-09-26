@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { zipSync } from 'fflate';
 import fs from 'fs';
 import { expandFiles } from '../src/lib/uploads';
 import { flushUploads, UploadRateLimitError, _resetAdaptiveStateForTesting } from '../src/lib/upload-queue';
-import { ownerCookies } from '../scripts/owner-session.mjs';
 
 const prodUrl = 'https://manga.project-nox-awerkori.workers.dev';
 const STAFF_POOL_ID = '20c12e59-99ea-4fba-8d0e-29b445773d05';
@@ -113,7 +112,11 @@ describe('Staff Manual Uploader & STAFF_STORAGE E2E Homologation', () => {
   });
 
   it('performs live 15-page upload to STAFF_STORAGE with 100% pool isolation and reader stream verification', async () => {
-    const admin = createClient(process.env.PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    if (!process.env.PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return;
+    }
+    const { ownerCookies } = await import('../scripts/owner-session.mjs');
+    const admin = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     const cookies = await ownerCookies(prodUrl);
     const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, ArrowRight, AlertTriangle, Eye, ShieldCheck, Loader2 } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ArrowRight, Eye, ShieldCheck, Loader2 } from '@lucide/svelte';
   import type { Work } from '$lib/types';
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
@@ -12,18 +12,16 @@
     viewAllUrl?: string;
     loadMoreSort?: 'latest' | 'most_read';
     works: Work[];
+    shelfIndex?: number;
   };
 
-  let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [] }: Props = $props();
+  let { title, subtitle, badge, viewAllUrl, loadMoreSort, works = [], shelfIndex = 1 }: Props = $props();
 
-  let currentWorks = $state<Work[]>([]);
+  let extraWorks = $state<Work[]>([]);
+  let currentWorks = $derived([...works, ...extraWorks]);
   let isExpanded = $state(false);
   let loadingMore = $state(false);
   let hasMore = $state(true);
-
-  $effect(() => {
-    currentWorks = [...works];
-  });
 
   let scrollContainer: HTMLDivElement | null = $state(null);
   let canScrollLeft = $state(false);
@@ -42,20 +40,20 @@
       if (work.primary_scan?.name) {
         return {
           name: work.primary_scan.name,
-          logo_id: work.primary_scan.logo_id,
-          is_official: work.primary_scan.is_official,
+          logoId: work.primary_scan.logo_id || work.primary_scan.logoId,
+          isOfficial: work.primary_scan.is_official || work.primary_scan.isOfficial,
           extraCount: 0
         };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.is_primary || ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logoId: primary.logo_id || primary.logoId,
+      isOfficial: primary.is_official || primary.isOfficial,
       extraCount
     };
   }
@@ -102,7 +100,7 @@
         if (uniqueItems.length === 0 || !data.hasMore) {
           hasMore = false;
         }
-        currentWorks = [...currentWorks, ...uniqueItems];
+        extraWorks = [...extraWorks, ...uniqueItems];
       }
     } catch (err) {
       console.error(err);
@@ -116,7 +114,26 @@
       handleLoadMore();
     } else {
       isExpanded = false;
+      extraWorks = [];
     }
+  }
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (node.src.includes('?size=thumb')) {
+        node.src = node.src.replace('?size=thumb', '');
+        return;
+      }
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return {
+      destroy() {
+        node.removeEventListener('error', onError);
+      }
+    };
   }
 </script>
 
@@ -191,44 +208,49 @@
       use:bindScroll
     >
       <div class="shelf-track" class:is-expanded={isExpanded}>
-        {#each currentWorks as work (work.id)}
-          {@const isAdult = work.content_rating === 'ADULT_18'}
+        {#each currentWorks as work, i (work.id)}
+          {@const isAdult = (work.content_rating || work.contentRating) === 'ADULT_18'}
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-          {@const shelfCover = resolveCoverUrl(work.cover_id, work.slug, work.id)}
+          {@const shelfCover = resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' })}
           {@const scanInfo = getScanInfo(work)}
+          {@const isEager = shelfIndex === 0 && i < 4}
+          {@const priority = shelfIndex === 0 && i < 2 ? 'high' : 'auto'}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               <img
+                use:fallbackCover
                 src={shelfCover}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}
                 width="200"
                 height="285"
+                loading={isEager ? "eager" : "lazy"}
+                fetchpriority={priority}
                 decoding="async"
               />
               <div class="card-glow"></div>
 
               <!-- 1. Views: Superior Esquerdo (Top-Left) -->
-              <div class="card-views-badge" title="{work.views_total || 0} visualizações">
+              <div class="card-views-badge" title="{(work.views_total || work.viewsTotal || 0)} visualizações">
                 <Eye size={10} />
-                <span>{formatViews(work.views_total)}</span>
+                <span>{formatViews(work.views_total || work.viewsTotal)}</span>
               </div>
 
               <!-- 2. Type: Superior Direito (Top-Right) -->
               <span class="card-kind-badge">{kindLabels[work.kind] || work.kind || 'Mangá'}</span>
 
-              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - Único indicador de +18 -->
+              <!-- 3. +18: Inferior Esquerdo (Bottom-Left) - nico indicador de +18 -->
               {#if isAdult}
                 <span class="adult-badge-bottom-left">+18</span>
               {/if}
 
-              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, múltiplos compactos) -->
+              <!-- 4. Scan: Inferior Direito (Bottom-Right - sem fallback, mltiplos compactos) -->
               {#if scanInfo}
                 <div class="card-scan-badge" title="Traduzido por {scanInfo.name}{scanInfo.extraCount > 0 ? ` (+${scanInfo.extraCount} scans)` : ''}">
-                  {#if scanInfo.logo_id}
-                    <img src="/media/{scanInfo.logo_id}" alt="" class="scan-badge-logo" />
-                  {:else if scanInfo.is_official}
+                  {#if scanInfo.logoId}
+                    <img src="/media/{scanInfo.logoId}" alt="" class="scan-badge-logo" loading="lazy" decoding="async" />
+                  {:else if scanInfo.isOfficial}
                     <ShieldCheck size={10} />
                   {/if}
                   <span class="scan-badge-name">
@@ -526,6 +548,7 @@
     position: relative;
     width: 200px;
     height: 285px;
+    aspect-ratio: 200 / 285;
     border-radius: 12px;
     overflow: hidden;
     background: #11131c;

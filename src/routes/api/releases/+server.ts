@@ -1,29 +1,21 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
-import { withTimeout } from '$lib/server/resilience';
+import { fetchRecentReleasesFromYugabyte } from '$lib/server/yugabyte';
 
-export const GET = async ({ url, locals }) => {
-  const db = locals.db || privileged();
-  
+export const GET = async ({ url, platform, setHeaders }: any) => {
   const cursorTime = url.searchParams.get('cursorTime') || null;
   const cursorId = url.searchParams.get('cursorId') || null;
-  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '16', 10)));
+  const rawKind = url.searchParams.get('kind');
+  const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
+  const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get('limit') || '15', 10)));
 
-  const { data: chaptersData, error: chaptersError } = await withTimeout(
-    db.rpc('get_recent_releases', {
-      p_limit: limit,
-      p_chapters_per_work: 3,
-      p_cursor_time: cursorTime,
-      p_cursor_id: cursorId
-    }),
-    4500,
-    { data: null, error: null } as any,
-    'api_recent_releases'
+  const chaptersData = await fetchRecentReleasesFromYugabyte(
+    limit,
+    4,
+    cursorTime,
+    cursorId,
+    platform?.env,
+    kind
   );
-
-  if (chaptersError || !chaptersData) {
-    return json({ releases: [], error: chaptersError?.message || 'Timeout' }, { status: 500 });
-  }
 
   const releasesMap = new Map();
   for (const row of chaptersData) {
@@ -42,7 +34,7 @@ export const GET = async ({ url, locals }) => {
       });
     }
     const group = releasesMap.get(workId);
-    if (group.chapters.length < 3) {
+    if (group.chapters.length < 4) {
       group.chapters.push({
         id: (row as any).chapter_id,
         number: (row as any).chapter_number,
@@ -53,6 +45,12 @@ export const GET = async ({ url, locals }) => {
   }
 
   const releases = Array.from(releasesMap.values());
+
+  if (setHeaders) {
+    setHeaders({
+      'cache-control': 'public, max-age=15, stale-while-revalidate=60'
+    });
+  }
 
   return json({
     releases,

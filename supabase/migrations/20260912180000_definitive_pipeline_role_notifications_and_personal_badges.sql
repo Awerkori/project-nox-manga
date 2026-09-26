@@ -1023,7 +1023,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_caller uuid := auth.uid();
-  v_caller_role public.scan_member_role;
+  v_caller_role text;
   v_caller_name text;
   v_chapter_id uuid;
   v_sort_key numeric;

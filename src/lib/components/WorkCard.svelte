@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Work } from '$lib/types';
   import { kindLabels, statusLabels } from '$lib/types';
-  import { BookOpen, Sparkles, AlertTriangle, Eye, ShieldCheck } from '@lucide/svelte';
+  import { BookOpen, Sparkles, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
@@ -9,14 +9,18 @@
   let {
     work,
     index = 0,
-    blurNsfw
+    blurNsfw,
+    eager = false,
+    priority = 'auto'
   }: {
     work: Work & { work_scans?: any[]; primary_scan?: any };
     index?: number;
     blurNsfw?: boolean;
+    eager?: boolean;
+    priority?: 'high' | 'auto' | 'low';
   } = $props();
 
-  let isAdult = $derived(work.content_rating === 'ADULT_18');
+  let isAdult = $derived(((work.content_rating || work.contentRating) === 'ADULT_18'));
   let effectiveBlur = $derived(
     isAdult && (blurNsfw !== undefined ? blurNsfw : (page.data?.blurNsfw ?? true))
   );
@@ -25,17 +29,22 @@
     const list = (work.work_scans || []).filter((ws: any) => ws.scans && ws.scans.name);
     if (list.length === 0) {
       if (work.primary_scan?.name) {
-        return { name: work.primary_scan.name, logo_id: work.primary_scan.logo_id, is_official: work.primary_scan.is_official, extraCount: 0 };
+        return {
+          name: work.primary_scan.name,
+          logo_id: work.primary_scan.logo_id || work.primary_scan.logoId,
+          is_official: work.primary_scan.is_official || work.primary_scan.isOfficial,
+          extraCount: 0
+        };
       }
       return null;
     }
-    const primaryRow = list.find((ws: any) => ws.is_primary) || list[0];
+    const primaryRow = list.find((ws: any) => ws.is_primary || ws.isPrimary) || list[0];
     const primary = primaryRow.scans;
     const extraCount = list.length - 1;
     return {
       name: primary.name,
-      logo_id: primary.logo_id,
-      is_official: primary.is_official,
+      logo_id: primary.logo_id || primary.logoId,
+      is_official: primary.is_official || primary.isOfficial,
       extraCount
     };
   });
@@ -47,10 +56,14 @@
     return String(n);
   }
 
-  let coverSrc = $derived(resolveCoverUrl(work.cover_id, work.slug, work.id));
+  let coverSrc = $derived(resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' }));
 
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
+      if (node.src.includes('?size=thumb')) {
+        node.src = node.src.replace('?size=thumb', '');
+        return;
+      }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
         node.src = '/brand/nox-symbol.webp';
       }
@@ -70,7 +83,9 @@
       use:fallbackCover
       src={coverSrc}
       alt="Capa de {decodeHtmlEntities(work.title)}"
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
+      fetchpriority={priority}
+      decoding="async"
       width="300"
       height="400"
       class="card-img"

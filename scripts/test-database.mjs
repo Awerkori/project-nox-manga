@@ -14,10 +14,9 @@ try {
   for (const file of readdirSync('supabase/migrations')
     .filter((f) => f.endsWith('.sql'))
     .sort()) {
-    const migration = readFileSync(`supabase/migrations/${file}`, 'utf8').replace(
-      'create extension if not exists pgcrypto;',
-      ''
-    );
+    const migration = readFileSync(`supabase/migrations/${file}`, 'utf8')
+      .replace(/create extension if not exists pgcrypto;/gi, '')
+      .replace(/concurrently/gi, '');
     await db.exec(migration);
   }
   const results = await db.exec(readFileSync('tests/rls.sql', 'utf8'));

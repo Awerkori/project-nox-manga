@@ -1,3 +1,5 @@
+ALTER TABLE public.works ADD COLUMN IF NOT EXISTS latest_chapter_published_at timestamptz;
+
 CREATE OR REPLACE FUNCTION public.update_work_latest_chapter()
 RETURNS TRIGGER
 LANGUAGE plpgsql

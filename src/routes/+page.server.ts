@@ -1,8 +1,10 @@
-import { WORK_FIELDS } from '$lib/server/db';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 
-
-const HOME_WORK_FIELDS = `${WORK_FIELDS}, work_scans(is_primary, status, scans(id, name, slug, logo_id, is_official))`;
+import {
+  fetchHomeWorksFromYugabyte,
+  fetchMostReadFromYugabyte,
+  fetchRecentReleasesFromYugabyte
+} from '$lib/server/yugabyte';
 
 type HomeCachePayload = {
   timestamp: number;
@@ -14,15 +16,16 @@ type HomeCachePayload = {
 
 // Public content cache (updated dynamically from live database queries)
 let homePublicCache: HomeCachePayload | null = null;
-const HOME_CACHE_TTL_MS = 60_000;
+const HOME_CACHE_TTL_MS = 30_000;
 
-export const load = async ({ locals, setHeaders }) => {
+export const load = async ({ locals, setHeaders, url, platform }: any) => {
   // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
   setHeaders({
     'cache-control': 'private, no-cache, no-store, must-revalidate'
   });
 
-  const hasFreshPublicCache = Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
+  const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');
+  const hasFreshPublicCache = !forceFresh && Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
 
   // If public content cache is fresh and user is anonymous, return directly without hitting DB
   if (!locals.user && hasFreshPublicCache && homePublicCache) {
@@ -116,24 +119,10 @@ export const load = async ({ locals, setHeaders }) => {
     };
   }
 
-  // Cold cache: execute reading query and public queries concurrently
-  const [worksRes, chaptersRes, readingRes, mostReadRes] = await Promise.all([
-    safeDbQuery(
-      locals.db
-        .from('works')
-        .select(HOME_WORK_FIELDS)
-        .eq('published', true)
-        .order('updated_at', { ascending: false })
-        .limit(16),
-      3000,
-      'home_works'
-    ),
-    safeDbQuery(
-      locals.db
-        .rpc('get_recent_releases', { p_limit: 16, p_chapters_per_work: 3 }),
-      4500,
-      'home_chapters'
-    ),
+  // Cold cache: fetch public data from authoritative Yugabyte and reading from Supabase
+  const [worksData, chaptersData, readingRes, mostReadData] = await Promise.all([
+    fetchHomeWorksFromYugabyte(platform?.env),
+    fetchRecentReleasesFromYugabyte(15, 4, null, null, platform?.env),
     locals.user
       ? safeDbQuery(
           locals.db
@@ -150,18 +139,13 @@ export const load = async ({ locals, setHeaders }) => {
         )
       : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false }),
     hasFreshPublicCache
-      ? Promise.resolve({ data: homePublicCache!.mostReadWorks, error: null, status: 'SUCCESS' as const, isDegraded: false })
-      : safeDbQuery(
-          locals.db
-            .from('works')
-            .select(HOME_WORK_FIELDS)
-            .eq('published', true)
-            .order('views_total', { ascending: false })
-            .limit(16),
-          3000,
-          'home_most_read'
-        )
+      ? Promise.resolve(homePublicCache!.mostReadWorks)
+      : fetchMostReadFromYugabyte(platform?.env)
   ]);
+
+  const worksRes = { data: worksData, isDegraded: !worksData || worksData.length === 0 };
+  const chaptersRes = { data: chaptersData, isDegraded: !chaptersData || chaptersData.length === 0 };
+  const mostReadRes = { data: mostReadData, isDegraded: !mostReadData || mostReadData.length === 0 };
 
 
   let continueReading: Array<{
@@ -307,7 +291,7 @@ export const load = async ({ locals, setHeaders }) => {
         });
       }
       const group = releasesMap.get(workId)!;
-      if (group.chapters.length < 3) {
+      if (group.chapters.length < 4) {
         group.chapters.push({
           id: (row as any).chapter_id,
           number: (row as any).chapter_number,
@@ -319,69 +303,6 @@ export const load = async ({ locals, setHeaders }) => {
   }
 
   let recentReleases = Array.from(releasesMap.values());
-
-  // Resilient secondary fallback: if RPC timed out, do it manually with two queries
-  if (recentReleases.length === 0) {
-    const fallbackWorksRes = await withTimeout(
-      locals.db
-        .from('works')
-        .select('id, slug, title, cover_id, kind, content_rating, latest_chapter_published_at')
-        .eq('published', true)
-        .not('latest_chapter_published_at', 'is', null)
-        .order('latest_chapter_published_at', { ascending: false })
-        .limit(16),
-      1500,
-      { data: [] } as any,
-      'home_chapters_fallback_works'
-    );
-
-    const fallbackWorks = fallbackWorksRes?.data || [];
-    if (fallbackWorks.length > 0) {
-      const workIds = fallbackWorks.map((w: any) => w.id);
-      const fallbackChaptersRes = await withTimeout(
-        locals.db
-          .from('chapters')
-          .select('id,number,title,published_at,work_id')
-          .in('work_id', workIds)
-          .not('published_at', 'is', null)
-          .order('published_at', { ascending: false }),
-        1500,
-        { data: [] } as any,
-        'home_chapters_fallback_chapters'
-      );
-
-      const fallbackChapters = fallbackChaptersRes?.data || [];
-      const worksById = new Map(fallbackWorks.map((w: any) => [w.id, w]));
-      for (const row of fallbackChapters) {
-        const w = worksById.get(row.work_id);
-        if (!w) continue;
-        if (!releasesMap.has(w.id)) {
-          releasesMap.set(w.id, {
-            workId: w.id,
-            workSlug: w.slug,
-            workTitle: w.title,
-            coverId: w.cover_id,
-            kind: w.kind,
-            contentRating: w.content_rating,
-            latestPublishedAt: w.latest_chapter_published_at || '',
-            chapters: []
-          });
-        }
-        const group = releasesMap.get(w.id)!;
-        if (group.chapters.length < 3) {
-          group.chapters.push({
-            id: row.id,
-            number: row.number,
-            title: row.title,
-            publishedAt: row.published_at || ''
-          });
-        }
-      }
-      recentReleases = Array.from(releasesMap.values());
-      // Sort to guarantee correct order
-      recentReleases.sort((a, b) => new Date(b.latestPublishedAt).getTime() - new Date(a.latestPublishedAt).getTime());
-    }
-  }
 
   // Derive works from RPC data if works query timed out but chapters succeeded
   if (works.length === 0 && chaptersRes.data && chaptersRes.data.length > 0) {
@@ -408,15 +329,16 @@ export const load = async ({ locals, setHeaders }) => {
   let featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
 
   // Most Read works (from concurrent batch or derived from works)
-  let mostReadWorks: typeof works = [];
+  let mostReadWorks: typeof works;
   if (mostReadRes?.data && mostReadRes.data.length > 0) {
     mostReadWorks = mostReadRes.data;
   } else {
+    console.warn('[MAIS_LIDOS_FALLBACK] mostReadRes empty or error, falling back to works slice:', mostReadRes?.error);
     mostReadWorks = works.slice(0, 16);
   }
 
   let isStale = false;
-  let isDegraded = chaptersRes.isDegraded || worksRes.isDegraded;
+  const isDegraded = chaptersRes.isDegraded || worksRes.isDegraded;
 
   // Stale-While-Revalidate / Last-Known-Good fallback
   if (works.length > 0 && recentReleases.length > 0 && !isDegraded) {
