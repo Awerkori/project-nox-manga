@@ -177,6 +177,15 @@
     })
   );
 
+  let visibleLimit = $state(150);
+  let visibleChapters = $derived(
+    search.trim() ? chapters : chapters.slice(0, visibleLimit)
+  );
+
+  let readChapterIds = $derived(
+    new Set((data.progress || []).filter((p: any) => p?.completed_at).map((p: any) => p?.chapter_id))
+  );
+
   let resume = $derived(data.progress[0]?.chapter_id || data.chapters.at(-1)?.id);
 
   async function library(update: Record<string, unknown>) {
@@ -626,8 +635,8 @@
         </div>
 
         <div class="chapters-list-card">
-          {#each chapters as chapter (chapter.id)}
-            {@const isRead = data.progress.some((p) => p.chapter_id === chapter.id && p.completed_at)}
+          {#each visibleChapters as chapter (chapter.id)}
+            {@const isRead = readChapterIds.has(chapter.id)}
             {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
             {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
             {@const isDl = downloadedChapterIds.has(chapter.id)}
@@ -702,6 +711,25 @@
               </div>
             </a>
           {/each}
+
+          {#if !search.trim() && chapters.length > visibleLimit}
+            <div class="chapters-load-more-bar">
+              <button
+                type="button"
+                class="btn-load-more"
+                onclick={() => (visibleLimit += 150)}
+              >
+                Carregar mais capítulos ({chapters.length - visibleLimit} restantes)
+              </button>
+              <button
+                type="button"
+                class="btn-load-all"
+                onclick={() => (visibleLimit = chapters.length)}
+              >
+                Mostrar todos ({chapters.length})
+              </button>
+            </div>
+          {/if}
 
           {#if !chapters.length}
             <div class="empty-chapters">
@@ -1644,6 +1672,51 @@
     border: 1px solid rgba(201, 170, 115, 0.35);
     padding: 2px 6px;
     border-radius: 4px;
+  }
+
+  .chapters-load-more-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .btn-load-more,
+  .btn-load-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+
+  .btn-load-more {
+    background: #a855f7;
+    color: #ffffff;
+  }
+
+  .btn-load-more:hover {
+    background: #9333ea;
+  }
+
+  .btn-load-all {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-load-all:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
   }
 
   .empty-chapters {
