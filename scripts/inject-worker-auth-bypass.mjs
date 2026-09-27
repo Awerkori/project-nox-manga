@@ -47,13 +47,51 @@ if (fs.existsSync(target)) {
   }
 }
 
-// Ensure scheduled handler is exported to prevent workerd uncaught exception during crons
+// Ensure functional scheduled handler is exported to process email outbox during crons
 if (fs.existsSync(target)) {
   let content = fs.readFileSync(target, "utf8");
-  if (!content.includes("async scheduled(")) {
-    content = content.replace("var worker_default = {", "var worker_default = {\n  async scheduled(event, env, ctx) {},\n");
+  const scheduledHandler = `  async scheduled(event, env2, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        await initialized;
+        const targetUrl = (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/email-processor?limit=25";
+        const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || "";
+        const req = new Request(targetUrl, {
+          method: "GET",
+          headers: {
+            "authorization": token ? \`Bearer \${token}\` : "",
+            "x-internal-cron": "true"
+          }
+        });
+        const res = await server.respond(req, {
+          platform: {
+            env: env2,
+            ctx,
+            context: ctx,
+            caches,
+            cf: {}
+          },
+          getClientAddress() {
+            return "127.0.0.1";
+          }
+        });
+        const body = await res.text().catch(() => "");
+        console.log(\`[CRON_EMAIL_PROCESSOR] Status \${res.status}: \${body}\`);
+      } catch (err) {
+        console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
+      }
+    })());
+  },`;
+
+  if (content.includes("async scheduled(event, env, ctx) {}")) {
+    content = content.replace("async scheduled(event, env, ctx) {},", scheduledHandler);
     fs.writeFileSync(target, content, "utf8");
-    console.log("[inject-worker-auth-bypass] Injected scheduled cron handler into src/worker-wrapper.js");
+    console.log("[inject-worker-auth-bypass] Replaced empty scheduled handler with functional outbox cron in src/worker-wrapper.js");
+  } else if (!content.includes("async scheduled(")) {
+    content = content.replace("var worker_default = {", `var worker_default = {\n${scheduledHandler}\n`);
+    fs.writeFileSync(target, content, "utf8");
+    console.log("[inject-worker-auth-bypass] Injected functional scheduled cron handler into src/worker-wrapper.js");
   }
 }
+
 

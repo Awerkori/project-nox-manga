@@ -69,7 +69,38 @@ function hasAuth(req) {
 }
 
 var worker_default = {
-  async scheduled(event, env, ctx) {},
+  async scheduled(event, env2, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        await initialized;
+        const targetUrl = (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/email-processor?limit=25";
+        const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || "";
+        const req = new Request(targetUrl, {
+          method: "GET",
+          headers: {
+            "authorization": token ? `Bearer ${token}` : "",
+            "x-internal-cron": "true"
+          }
+        });
+        const res = await server.respond(req, {
+          platform: {
+            env: env2,
+            ctx,
+            context: ctx,
+            caches,
+            cf: {}
+          },
+          getClientAddress() {
+            return "127.0.0.1";
+          }
+        });
+        const body = await res.text().catch(() => "");
+        console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}: ${body}`);
+      } catch (err) {
+        console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
+      }
+    })());
+  },
 
   /**
    * @param {Request} req
