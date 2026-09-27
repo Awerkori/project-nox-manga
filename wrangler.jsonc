@@ -18,7 +18,7 @@
     "enabled": true
   },
   "placement": {
-    "region": "aws:sa-east-1"
+    "mode": "off"
   },
   "hyperdrive": [
     {

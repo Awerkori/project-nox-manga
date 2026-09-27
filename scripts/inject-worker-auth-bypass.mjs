@@ -46,3 +46,14 @@ if (fs.existsSync(target)) {
       }`));
   }
 }
+
+// Ensure scheduled handler is exported to prevent workerd uncaught exception during crons
+if (fs.existsSync(target)) {
+  let content = fs.readFileSync(target, "utf8");
+  if (!content.includes("async scheduled(")) {
+    content = content.replace("var worker_default = {", "var worker_default = {\n  async scheduled(event, env, ctx) {},\n");
+    fs.writeFileSync(target, content, "utf8");
+    console.log("[inject-worker-auth-bypass] Injected scheduled cron handler into src/worker-wrapper.js");
+  }
+}
+
