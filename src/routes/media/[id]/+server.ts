@@ -45,7 +45,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
-  const canonicalUrl = sizeParam ? `${url.origin}/media/${params.id}?size=${sizeParam}` : `${url.origin}/media/${params.id}`;
+  // Do not reuse immutable v1 thumbnails corrupted by the old RGB/RGBA conversion.
+  const canonicalUrl = sizeParam === 'thumb' ? `${url.origin}/media/${params.id}?size=thumb&v=2` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
@@ -244,7 +245,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       headers['Content-Type'] = thumb.mime;
       headers['Content-Length'] = String(thumb.data.length);
       if (thumb.resized) {
-        headers['ETag'] = `"${media.sha256}-thumb"`;
+        headers['ETag'] = `"${media.sha256}-thumb-v2"`;
       }
     } catch (thumbErr) {
       console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
