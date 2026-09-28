@@ -13,6 +13,15 @@ type ReaderCacheEntry = {
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
 
+function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
+  const links = pages
+    .slice(0, 2)
+    .map((page) => page.media_id)
+    .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
+    .map((mediaId) => `</media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
+  return links.length ? links.join(', ') : undefined;
+}
+
 export const load = async ({ locals, params, url, cookies, setHeaders, platform }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
@@ -37,8 +46,10 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         );
         userProgress = pRes?.data || null;
       } else {
+        const link = firstPagePreloadHeader(cached.pages);
         setHeaders({
-          'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+          'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+          ...(link ? { link } : {})
         });
       }
 
@@ -211,10 +222,14 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     });
   }
 
+  const link = firstPagePreloadHeader(pagesData);
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+      ...(link ? { link } : {})
     });
+  } else if (link) {
+    setHeaders({ link });
   }
 
   return {
