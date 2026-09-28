@@ -36,7 +36,7 @@
   ];
 
   let reactionCounts = $state<Record<string, number>>({});
-  let userReactions = $state(new Set<string>());
+  let userReactions = new SvelteSet<string>();
   let reactionsLoading = $state(false);
 
   async function loadReactions(chapterId: string) {
@@ -46,7 +46,7 @@
       if (res.ok) {
         const d = await res.json();
         reactionCounts = d.counts || {};
-        userReactions = new Set(d.userReactions || []);
+        userReactions = new SvelteSet(d.userReactions || []);
       }
     } catch {
       // silent fallback
@@ -57,7 +57,7 @@
     if (!data.chapter?.id || reactionsLoading || typeof window === 'undefined') return;
     reactionsLoading = true;
     const had = userReactions.has(emoji);
-    const newSet = new Set(userReactions);
+    const newSet = new SvelteSet(userReactions);
     const newCounts = { ...reactionCounts };
     if (had) {
       newSet.delete(emoji);
@@ -78,7 +78,7 @@
       if (res.ok) {
         const d = await res.json();
         reactionCounts = d.counts || {};
-        userReactions = new Set(d.userReactions || []);
+        userReactions = new SvelteSet(d.userReactions || []);
       }
     } catch {
       // Keep optimistic state
@@ -118,21 +118,39 @@
   let previousChapterId = $state('');
   let readerSessionGen = 0;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
-  const preloadedMedia = new Set<string>();
-  const inFlightPreloads = new Set<string>();
-  const MAX_CONCURRENT_PRELOADS = 3;
+  const preloadedMedia = new SvelteSet<string>();
+  const inFlightPreloads = new SvelteSet<string>();
+
+  function preloadBudget() {
+    // Desktop can keep a wider window warm. On constrained/mobile connections,
+    // avoid competing with the visible page for bandwidth and decoded-image RAM.
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') {
+      return { concurrent: 1, lookahead: 2 };
+    }
+    if (matchMedia('(max-width: 767px)').matches || connection?.effectiveType === '3g') {
+      return { concurrent: 2, lookahead: 3 };
+    }
+    return { concurrent: 3, lookahead: 5 };
+  }
 
   function pumpPreload() {
     if (preloadMode !== 'full' || typeof window === 'undefined' || !data.pages?.length) return;
-    if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) return;
+    const budget = preloadBudget();
+    if (inFlightPreloads.size >= budget.concurrent) return;
 
     const currentGen = readerSessionGen;
-    const startIdx = Math.max(0, current - 1);
-    // Bound downloads to a lookahead near the current page.
-    const ordered = data.pages.slice(startIdx, startIdx + 5);
+    // Pages 1 and 2 are rendered eager below. Starting at page 1 here used two
+    // of the three prefetch permits on duplicate browser requests, leaving only
+    // one useful request ahead of the reader. The window starts after the
+    // current page, while the seeded eager pages remain owned by their <img>s.
+    const startIdx = Math.max(0, current);
+    const ordered = data.pages.slice(startIdx, startIdx + budget.lookahead);
 
     for (const page of ordered) {
-      if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) break;
+      if (inFlightPreloads.size >= budget.concurrent) break;
       const id = page.media_id;
       if (!id || preloadedMedia.has(id) || inFlightPreloads.has(id)) continue;
 
@@ -178,6 +196,12 @@
       visible.clear();
       preloadedMedia.clear();
       inFlightPreloads.clear();
+      // The first two page elements are explicitly eager/high-priority. Do not
+      // spend prefetch permits duplicating them; the browser coalesces the URL,
+      // but the local scheduler previously did not.
+      for (const page of data.pages.slice(0, 2)) {
+        if (page.media_id) preloadedMedia.add(page.media_id);
+      }
       loadReactions(data.chapter.id);
       const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
       current = saved;
@@ -601,7 +625,7 @@
     <div class="chapter-reactions-box">
       <span class="reactions-title">O que achou deste capítulo?</span>
       <div class="chapter-reactions-cluster">
-        {#each REACTION_CONFIG as item}
+        {#each REACTION_CONFIG as item (item.id)}
           <button
             type="button"
             class="reaction-btn"
@@ -737,7 +761,7 @@
         <strong>{data.chapter.works?.title}</strong>
       </div>
       <div class="drawer-list">
-        {#each (data.siblings || []) as sibling}
+        {#each (data.siblings || []) as sibling (sibling.id)}
           {@const isCurrent = sibling.id === data.chapter.id}
           <a
             href="/ler/{sibling.id}"
