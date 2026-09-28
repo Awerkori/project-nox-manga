@@ -213,7 +213,7 @@ describe('Media Security and Cache Guard', () => {
 
     expect(thumbRes.status).toBe(200);
     expect(thumbRes.headers.get('Content-Type')).toBe('image/jpeg');
-    expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb-v2"');
+    expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb-v3"');
 
     const thumbBytes = new Uint8Array(await thumbRes.arrayBuffer());
     // Must be significantly fewer bytes than the 1000x1500 JPEG fixture (>50% reduction)
