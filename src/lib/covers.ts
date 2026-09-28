@@ -13,7 +13,7 @@ export function resolveCoverUrl(
     const trimmed = coverId.trim();
     if (trimmed.startsWith('/') || trimmed.startsWith('http')) return trimmed;
     const size = typeof options === 'string' ? options : options?.size;
-    const query = size === 'thumb' ? '?size=thumb&v=2' : '';
+    const query = size === 'thumb' ? '?size=thumb&v=3' : '';
     return `/media/${trimmed}${query}`;
   }
   return '/brand/nox-symbol.webp';

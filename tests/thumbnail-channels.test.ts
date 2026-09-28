@@ -21,7 +21,7 @@ describe('thumbnail channel integrity',()=>{
     expect(result.mime).toBe('image/png');const d=decode(result.data);expect(d.data[3]).toBe(80);expect(d.data[0]).toBe(255);
   });
   it('versions thumbnail requests without changing full-size editorial media',()=>{
-    expect(resolveCoverUrl('id',null,null,'thumb')).toBe('/media/id?size=thumb&v=2');
+    expect(resolveCoverUrl('id',null,null,'thumb')).toBe('/media/id?size=thumb&v=3');
     expect(resolveCoverUrl('id')).toBe('/media/id');
   });
 });

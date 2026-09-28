@@ -45,8 +45,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
-  // Do not reuse immutable v1 thumbnails corrupted by the old RGB/RGBA conversion.
-  const canonicalUrl = sizeParam === 'thumb' ? `${url.origin}/media/${params.id}?size=thumb&v=2` : `${url.origin}/media/${params.id}`;
+  // Do not reuse immutable v1/v2 thumbnails. v3 also avoids the old cold path
+  // that buffered a complete small original merely to make a thumbnail.
+  const canonicalUrl = sizeParam === 'thumb' ? `${url.origin}/media/${params.id}?size=thumb&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
@@ -238,19 +239,34 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   if (sizeParam === 'thumb') {
-    try {
-      const rawBytes = await toUint8Array(body);
-      const thumb = await generateThumbnail(rawBytes, media.mime);
-      body = thumb.data;
-      headers['Content-Type'] = thumb.mime;
-      headers['Content-Length'] = String(thumb.data.length);
-      if (thumb.resized) {
-        headers['ETag'] = `"${media.sha256}-thumb-v2"`;
-      }
-    } catch (thumbErr) {
-      console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
-      if (media.bytes && Number(media.bytes) > 0) {
-        headers['Content-Length'] = String(media.bytes);
+    const bytes = Number(media.bytes) || 0;
+    const mime = String(media.mime || '').toLowerCase();
+    const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
+    const canResize = mime === 'image/jpeg' || mime === 'image/png';
+    // A cold thumbnail used to wait for Telegram, then buffer and run a pure-JS
+    // decode/resize/encode. For normal covers this added seconds of blank UI.
+    // Small originals are cheaper to transfer once than to hold the request open;
+    // unsupported formats must also remain streamed rather than buffered only to
+    // fall back to the original. The immutable v3 URL is cached at the edge.
+    const streamOriginal = !canResize || (bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
+    if (streamOriginal) {
+      headers['X-Thumbnail-Strategy'] = 'stream-original';
+      if (bytes > 0) headers['Content-Length'] = String(bytes);
+    } else {
+      try {
+        const rawBytes = await toUint8Array(body);
+        const thumb = await generateThumbnail(rawBytes, media.mime);
+        body = thumb.data;
+        headers['Content-Type'] = thumb.mime;
+        headers['Content-Length'] = String(thumb.data.length);
+        if (thumb.resized) {
+          headers['ETag'] = `"${media.sha256}-thumb-v3"`;
+        }
+        headers['X-Thumbnail-Strategy'] = 'resized';
+      } catch (thumbErr) {
+        console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
+        headers['X-Thumbnail-Strategy'] = 'fallback-original';
+        if (bytes > 0) headers['Content-Length'] = String(bytes);
       }
     }
   } else {
