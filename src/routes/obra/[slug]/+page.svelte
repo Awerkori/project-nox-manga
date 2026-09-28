@@ -23,6 +23,7 @@
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
+  import { formatChapterNumber } from '$lib/chapter-number';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import {
@@ -67,12 +68,12 @@
     if (downloadingChapterIds[chapter.id] !== undefined) return;
 
     if (downloadedChapterIds.has(chapter.id)) {
-      if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
+      if (confirm(`Remover capítulo ${formatChapterNumber(chapter.number)} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
         const next = new SvelteSet(downloadedChapterIds);
         next.delete(chapter.id);
         downloadedChapterIds = next;
-        notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
+        notice = `Capítulo ${formatChapterNumber(chapter.number)} removido do armazenamento offline.`;
       }
       return;
     }
@@ -97,9 +98,9 @@
       const next = new SvelteSet(downloadedChapterIds);
       next.add(chapter.id);
       downloadedChapterIds = next;
-      notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
+      notice = `Capítulo ${formatChapterNumber(chapter.number)} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
-      notice = `Erro ao baixar capítulo ${chapter.number}: ${err.message}`;
+      notice = `Erro ao baixar capítulo ${formatChapterNumber(chapter.number)}: ${err.message}`;
     } finally {
       const copy = { ...downloadingChapterIds };
       delete copy[chapter.id];
@@ -643,7 +644,7 @@
             <a href="/ler/{chapter.id}" class="chapter-item" class:is-read={isRead}>
               <div class="chapter-left">
                 <div class="chapter-primary-row">
-                  <span class="chapter-num">Cap. {chapter.number}</span>
+                  <span class="chapter-num">Cap. {formatChapterNumber(chapter.number)}</span>
                   {#if isNew}
                     <span class="chapter-badge-new">NOVO</span>
                   {/if}
