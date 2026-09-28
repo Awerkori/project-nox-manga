@@ -390,7 +390,8 @@ export async function fetchMediaMetadataFromYugabyte(
     async () => {
       const sql = `
         SELECT id, provider, provider_key, bot_reference, storage_shard_id,
-               mime, sha256, access_class, purpose, storage_ready, status, created_by
+               mime, width, height, bytes, sha256, access_class, purpose,
+               storage_ready, status, created_by
         FROM media
         WHERE id = $1
         LIMIT 1;
