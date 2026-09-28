@@ -25,5 +25,11 @@
       "binding": "HYPERDRIVE",
       "id": "83726ad935554261813c4bb12094c7f3"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "COVER_THUMBNAILS",
+      "id": "cfcadf7da6f446dd851786d833a2f4ec"
+    }
   ]
 }

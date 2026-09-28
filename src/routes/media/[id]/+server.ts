@@ -9,6 +9,7 @@ import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
 import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
+import { readCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
 
 async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
@@ -67,6 +68,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     } catch {
       // Fall through to standard retrieval on cache check failure
     }
+  }
+
+  // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
+  // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
+  // on another region/device. Never use it for full pages or private media.
+  if (sizeParam === 'thumb') {
+    const prewarmed = await readCoverThumbnail(
+      platform?.env?.COVER_THUMBNAILS,
+      params.id,
+      request.headers.get('if-none-match')
+    );
+    if (prewarmed) return prewarmed;
   }
 
   const db = privileged();

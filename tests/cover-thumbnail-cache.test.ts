@@ -1,0 +1,56 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  coverThumbnailKey,
+  readCoverThumbnail,
+  warmCoverThumbnail
+} from '../src/lib/server/cover-thumbnail-cache';
+
+const mediaId = '11111111-1111-4111-8111-111111111111';
+
+function memoryKv() {
+  const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string> }>();
+  return {
+    records,
+    getWithMetadata: vi.fn(async (key: string) => records.get(key) || null),
+    put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string> }) => {
+      records.set(key, { value, metadata: options.metadata });
+    })
+  };
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('cover thumbnail KV', () => {
+  it('serves an immutable image without reaching Yugabyte or Telegram', async () => {
+    const kv = memoryKv();
+    await kv.put(coverThumbnailKey(mediaId), new Uint8Array([1, 2, 3]).buffer, {
+      metadata: { contentType: 'image/webp', contentLength: '3', etag: '"cover"' }
+    });
+
+    const response = await readCoverThumbnail(kv, mediaId, null);
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('X-Media-Cache')).toBe('COVER_THUMBNAIL_KV');
+    expect(response?.headers.get('Cache-Control')).toContain('immutable');
+    expect(new Uint8Array(await response!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('warms one bounded image and retains its response metadata', async () => {
+    const kv = memoryKv();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([9, 8, 7]), {
+      headers: { 'Content-Type': 'image/jpeg', 'ETag': '"thumb"', 'Content-Length': '3' }
+    })));
+
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId)).resolves.toBe('warmed');
+    expect(kv.records.get(coverThumbnailKey(mediaId))?.metadata.contentType).toBe('image/jpeg');
+  });
+
+  it('does not cache oversized thumbnail responses', async () => {
+    const kv = memoryKv();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), {
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(3 * 1024 * 1024) }
+    })));
+
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId)).resolves.toBe('skipped');
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+});
