@@ -252,13 +252,14 @@ export async function fetchRecentReleasesFromYugabyte(
   return withYugabyteLkg(
     opKey,
     async () => {
-      // Direct CTE query that is 100% portable and fast on Yugabyte
+      // The publication transaction maintains this frontier. Use existing
+      // works/latest and chapters/work/published indexes, not a catalogue-wide GROUP BY.
       let cursorClause = '';
       let kindClause = '';
       const params: any[] = [limit, chaptersPerWork];
       if (cursorTime && cursorId) {
         params.push(cursorTime, cursorId);
-        cursorClause = `AND (c.published_at, w.id) < ($${params.length - 1}, $${params.length})`;
+        cursorClause = `AND (w.latest_chapter_published_at, w.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`;
       }
       if (kind && kind.toUpperCase() !== 'ALL') {
         params.push(kind.toUpperCase());
@@ -266,32 +267,31 @@ export async function fetchRecentReleasesFromYugabyte(
       }
 
       const sql = `
-        WITH latest_works AS (
+        WITH latest_works AS MATERIALIZED (
           SELECT w.id as work_id, w.slug as work_slug, w.title as work_title, w.cover_id as work_cover_id,
                  w.kind as work_kind, w.content_rating as work_content_rating,
-                 MAX(c.published_at) as latest_published_at
-          FROM chapters c
-          JOIN works w ON c.work_id = w.id
-          WHERE c.published_at IS NOT NULL AND w.published = true
+                 w.latest_chapter_published_at as latest_published_at
+          FROM works w
+          WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
             ${kindClause}
             ${cursorClause}
-          GROUP BY w.id, w.slug, w.title, w.cover_id, w.kind, w.content_rating
-          ORDER BY latest_published_at DESC
+          ORDER BY w.latest_chapter_published_at DESC, w.id DESC
           LIMIT $1
         ),
         ranked_chapters AS (
           SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating, lw.latest_published_at,
-                 c.id as chapter_id, c.number as chapter_number, c.title as chapter_title, c.published_at as chapter_published_at,
-                 ROW_NUMBER() OVER (PARTITION BY lw.work_id ORDER BY c.published_at DESC, c.number::numeric DESC) as rn
+                 c.id as chapter_id, c.number as chapter_number, c.title as chapter_title, c.published_at as chapter_published_at
           FROM latest_works lw
-          JOIN chapters c ON c.work_id = lw.work_id
-          WHERE c.published_at IS NOT NULL
+          CROSS JOIN LATERAL (
+            SELECT id,number,title,published_at FROM chapters
+            WHERE work_id = lw.work_id AND published_at IS NOT NULL
+            ORDER BY published_at DESC, number DESC LIMIT $2
+          ) c
         )
         SELECT work_id, work_slug, work_title, work_cover_id, work_kind, work_content_rating, latest_published_at,
                chapter_id, chapter_number, chapter_title, chapter_published_at
         FROM ranked_chapters
-        WHERE rn <= $2
-        ORDER BY latest_published_at DESC, chapter_number::numeric DESC;
+        ORDER BY latest_published_at DESC, work_id DESC, chapter_number::numeric DESC;
       `;
 
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
