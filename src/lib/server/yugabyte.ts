@@ -175,6 +175,13 @@ export interface YugabyteChapter {
   work_id?: string;
 }
 
+export interface YugabyteTag {
+  id: string;
+  name: string;
+  slug: string;
+  kind: string;
+}
+
 export interface YugabyteReleaseRow {
   work_id: string;
   work_slug: string;
@@ -339,6 +346,32 @@ export async function fetchWorkChaptersFromYugabyte(
         : `SELECT id, number, title, published_at, views_total, work_id FROM chapters WHERE work_id = $1 AND published_at IS NOT NULL ORDER BY number::numeric DESC;`;
 
       const res = await executeYugabyteSql<YugabyteChapter>(sql, [workId], platformEnv);
+      return res.rows;
+    },
+    []
+  );
+}
+
+/**
+ * Fetch the editorial taxonomy from the same authoritative data plane as the
+ * work and its chapters. Tags must never silently fall back to the legacy
+ * Supabase copy: imports persist work_tags in Yugabyte.
+ */
+export async function fetchWorkTagsFromYugabyte(
+  workId: string,
+  platformEnv?: any
+): Promise<YugabyteTag[]> {
+  return withYugabyteLkg(
+    `work_tags_${workId}`,
+    async () => {
+      const sql = `
+        SELECT t.id, t.name, t.slug, t.kind
+        FROM work_tags wt
+        INNER JOIN tags t ON t.id = wt.tag_id
+        WHERE wt.work_id = $1
+        ORDER BY t.kind ASC, t.name ASC;
+      `;
+      const res = await executeYugabyteSql<YugabyteTag>(sql, [workId], platformEnv);
       return res.rows;
     },
     []
