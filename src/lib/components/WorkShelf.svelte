@@ -4,6 +4,7 @@
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
+  import { deferImage } from '$lib/actions/defer-image';
 
   type Props = {
     title: string;
@@ -121,7 +122,7 @@
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
       if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace('?size=thumb', '');
+        node.src = node.src.replace(/\?size=thumb(?:&[^#]*)?$/, '');
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
@@ -219,7 +220,8 @@
             <div class="card-cover-box">
               <img
                 use:fallbackCover
-                src={shelfCover}
+                use:deferImage={{ src: isEager ? null : shelfCover, rootMargin: '0px 450px' }}
+                src={isEager ? shelfCover : undefined}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}

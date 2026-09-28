@@ -9,6 +9,7 @@
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
   import { saveChapterOffline, getOfflineChapter } from '$lib/offline-storage';
+  import { formatChapterNumber } from '$lib/chapter-number';
   import type { PageData } from '../../routes/ler/[id]/$types';
   let { data }: { data: PageData } = $props();
   let current = $state(1),
@@ -483,7 +484,7 @@
 />
 
 <svelte:head>
-  <title>{data.chapter.works?.title} — Capítulo {data.chapter.number} | Project Nox</title>
+  <title>{data.chapter.works?.title} — Capítulo {formatChapterNumber(data.chapter.number)} | Project Nox</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -500,7 +501,7 @@
     </a>
     <div class="reader-header-meta">
       <strong>{data.chapter.works?.title}</strong>
-      <span>Capítulo {data.chapter.number}{data.preview ? ' · Prévia editorial' : ''}</span>
+      <span>Capítulo {formatChapterNumber(data.chapter.number)}{data.preview ? ' · Prévia editorial' : ''}</span>
     </div>
     <div class="reader-tools">
       <span class="pages-count">{current}/{data.pages.length}</span>
@@ -618,7 +619,7 @@
       <Sparkles size={15} />
       <span>CAPÍTULO CONCLUÍDO</span>
     </div>
-    <h2 class="end-heading">Fim do Capítulo {data.chapter.number}</h2>
+    <h2 class="end-heading">Fim do Capítulo {formatChapterNumber(data.chapter.number)}</h2>
     <p class="end-sub">
       {data.chapter.works?.title}{data.scans && data.scans.length > 0 ? ` · ${data.scans.map((s) => s.name).join(' × ')}` : ''}
     </p>
@@ -722,7 +723,7 @@
     <ReportModal
       targetType="CHAPTER"
       chapterId={data.chapter.id}
-      targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${data.chapter.number}`}
+      targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${formatChapterNumber(data.chapter.number)}`}
       pageNumber={current}
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
@@ -770,7 +771,7 @@
             class:current={isCurrent}
             onclick={() => (showChaptersDrawer = false)}
           >
-            <span class="drawer-item-number">Capítulo {sibling.number}</span>
+            <span class="drawer-item-number">Capítulo {formatChapterNumber(sibling.number)}</span>
             {#if isCurrent}
               <span class="drawer-current-badge">Lendo agora</span>
             {/if}

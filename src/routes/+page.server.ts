@@ -1,4 +1,5 @@
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
+import { formatChapterNumber } from '$lib/chapter-number';
 
 import {
   fetchHomeWorksFromYugabyte,
@@ -84,7 +85,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
+            progressText: `Próximo: Capítulo ${formatChapterNumber(nextCh.number)}`,
             actionLabel: 'Ler próximo ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -98,7 +99,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             chapterId: currentCh.id,
             chapterNumber: currentCh.number,
             destinationUrl: `/obra/${work.slug}`,
-            progressText: `Em dia · Cap. ${currentCh.number}`,
+            progressText: `Em dia · Cap. ${formatChapterNumber(currentCh.number)}`,
             actionLabel: 'Ver obra ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -187,7 +188,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
           chapterId: ch.id,
           chapterNumber: ch.number,
           destinationUrl: `/ler/${ch.id}`,
-          progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
+          progressText: `Capítulo ${formatChapterNumber(ch.number)} · Pág. ${incomplete.page}`,
           actionLabel: 'Retomar leitura ↗',
           updatedAt: incomplete.updated_at
         });
@@ -227,7 +228,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             chapterId: nextCh.id,
             chapterNumber: nextCh.number,
             destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
+            progressText: `Próximo: Capítulo ${formatChapterNumber(nextCh.number)}`,
             actionLabel: 'Ler próximo ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -241,7 +242,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             chapterId: currentCh.id,
             chapterNumber: currentCh.number,
             destinationUrl: `/obra/${work.slug}`,
-            progressText: `Em dia · Cap. ${currentCh.number}`,
+            progressText: `Em dia · Cap. ${formatChapterNumber(currentCh.number)}`,
             actionLabel: 'Ver obra ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -372,4 +373,3 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
     isStale
   };
 };
-
