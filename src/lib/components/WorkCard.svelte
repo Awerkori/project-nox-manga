@@ -61,7 +61,10 @@
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
       if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace('?size=thumb', '');
+        const original = new URL(node.src);
+        original.searchParams.delete('size');
+        original.searchParams.delete('v');
+        node.src = original.href;
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
