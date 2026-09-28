@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */
 // src/worker.js
 import { Server } from "./../.svelte-kit/output/server/index.js";
 import { manifest, prerendered, base_path } from "./../.svelte-kit/cloudflare-tmp/manifest.js";
