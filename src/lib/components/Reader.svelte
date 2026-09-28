@@ -144,9 +144,10 @@
     const currentGen = readerSessionGen;
     // Pages 1 and 2 are rendered eager below. Starting at page 1 here used two
     // of the three prefetch permits on duplicate browser requests, leaving only
-    // one useful request ahead of the reader. The window starts after the
-    // current page, while the seeded eager pages remain owned by their <img>s.
-    const startIdx = Math.max(0, current);
+    // one useful request ahead of the reader. On a fresh chapter start after
+    // those eager pages; on a restored reading position still include its
+    // current page so a deep link never relies solely on IntersectionObserver.
+    const startIdx = current <= 2 ? current : Math.max(0, current - 1);
     const ordered = data.pages.slice(startIdx, startIdx + budget.lookahead);
 
     for (const page of ordered) {
