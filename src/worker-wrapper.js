@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */
+// Generated Cloudflare adapter wrapper; kept versioned because it carries the
+// authenticated cron bridge below.
 // src/worker.js
 import { Server } from "./../.svelte-kit/output/server/index.js";
 import { manifest, prerendered, base_path } from "./../.svelte-kit/cloudflare-tmp/manifest.js";
@@ -96,6 +99,24 @@ var worker_default = {
         });
         const body = await res.text().catch(() => "");
         console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}: ${body}`);
+        // Keep cache maintenance strictly after the email task. This warms one
+        // missing public cover only, so scheduled work cannot stampede YSQL or
+        // Telegram while users are reading.
+        const warmerReq = new Request(
+          (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/cache/warm-recent-covers?limit=8",
+          {
+            method: "GET",
+            headers: {
+              "authorization": token ? `Bearer ${token}` : "",
+              "x-internal-cron": "true"
+            }
+          }
+        );
+        const warmerRes = await server.respond(warmerReq, {
+          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          getClientAddress() { return "127.0.0.1"; }
+        });
+        if (!warmerRes.ok) console.warn(`[CRON_COVER_WARMER] Status ${warmerRes.status}`);
       } catch (err) {
         console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
       }

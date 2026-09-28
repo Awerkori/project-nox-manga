@@ -77,6 +77,24 @@ if (fs.existsSync(target)) {
         });
         const body = await res.text().catch(() => "");
         console.log(\`[CRON_EMAIL_PROCESSOR] Status \${res.status}: \${body}\`);
+        // Keep cache maintenance strictly after the email task. This warms one
+        // missing public cover only, so scheduled work cannot stampede YSQL or
+        // Telegram while users are reading.
+        const warmerReq = new Request(
+          (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/cache/warm-recent-covers?limit=8",
+          {
+            method: "GET",
+            headers: {
+              "authorization": token ? \`Bearer \${token}\` : "",
+              "x-internal-cron": "true"
+            }
+          }
+        );
+        const warmerRes = await server.respond(warmerReq, {
+          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          getClientAddress() { return "127.0.0.1"; }
+        });
+        if (!warmerRes.ok) console.warn(\`[CRON_COVER_WARMER] Status \${warmerRes.status}\`);
       } catch (err) {
         console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
       }
@@ -93,5 +111,4 @@ if (fs.existsSync(target)) {
     console.log("[inject-worker-auth-bypass] Injected functional scheduled cron handler into src/worker-wrapper.js");
   }
 }
-
 
