@@ -240,6 +240,38 @@ describe('Media Security and Cache Guard', () => {
     expect(Buffer.from(originalBytes).equals(Buffer.from(fixtureJpeg))).toBe(true);
   });
 
+  it('streams a compact, high-pixel cover instead of holding the cold request for JS resizing', async () => {
+    const mediaId = '67666666-6666-4666-8666-666666666666';
+    const original = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'compact_high_pixel_cover',
+      provider_key: 'compact_high_pixel_cover_key',
+      bytes: original.length,
+      width: 1440,
+      height: 2048
+    };
+    mocks.download.mockResolvedValue(original);
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Thumbnail-Strategy')).toBe('stream-original');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(original);
+  });
+
   it('preserves animated GIFs intact on ?size=thumb without converting to static image', async () => {
     // Valid GIF89a header + minimal screen descriptor
     const gifBytes = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x0a, 0x00, 0x0a, 0x00, 0x80, 0x00, 0x00]);
