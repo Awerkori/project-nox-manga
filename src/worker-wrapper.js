@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */
-// Generated Cloudflare adapter wrapper; kept versioned because it carries the
-// authenticated cron bridge below.
 // src/worker.js
 import { Server } from "./../.svelte-kit/output/server/index.js";
 import { manifest, prerendered, base_path } from "./../.svelte-kit/cloudflare-tmp/manifest.js";
@@ -113,7 +110,7 @@ var worker_default = {
           }
         );
         const warmerRes = await server.respond(warmerReq, {
-          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          platform: { env: env2, ctx, context: ctx, caches, cf: {}, scheduledInvocation: true },
           getClientAddress() { return "127.0.0.1"; }
         });
         if (!warmerRes.ok) console.warn(`[CRON_COVER_WARMER] Status ${warmerRes.status}`);

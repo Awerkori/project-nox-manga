@@ -17,7 +17,12 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 export const GET: RequestHandler = async ({ request, url, platform }) => {
   const expected = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN || env.NOX_STORAGE_BRIDGE_TOKEN;
   const auth = request.headers.get('authorization') || '';
-  if (!expected || !auth.startsWith('Bearer ') || !safeTokenCompare(auth.slice(7).trim(), expected)) {
+  // The scheduled handler invokes SvelteKit directly with this private platform
+  // marker; it is not representable by an external HTTP request. Normal HTTP
+  // access remains protected by the bridge token.
+  const scheduledInvocation = (platform as any)?.scheduledInvocation === true;
+  const tokenValid = Boolean(expected && auth.startsWith('Bearer ') && safeTokenCompare(auth.slice(7).trim(), expected));
+  if (!scheduledInvocation && !tokenValid) {
     error(401, 'Unauthorized');
   }
 

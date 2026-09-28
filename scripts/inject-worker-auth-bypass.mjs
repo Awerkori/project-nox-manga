@@ -91,7 +91,7 @@ if (fs.existsSync(target)) {
           }
         );
         const warmerRes = await server.respond(warmerReq, {
-          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          platform: { env: env2, ctx, context: ctx, caches, cf: {}, scheduledInvocation: true },
           getClientAddress() { return "127.0.0.1"; }
         });
         if (!warmerRes.ok) console.warn(\`[CRON_COVER_WARMER] Status \${warmerRes.status}\`);
@@ -111,4 +111,3 @@ if (fs.existsSync(target)) {
     console.log("[inject-worker-auth-bypass] Injected functional scheduled cron handler into src/worker-wrapper.js");
   }
 }
-
