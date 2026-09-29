@@ -80,9 +80,15 @@ export interface ThumbnailResult {
   resized: boolean;
 }
 
+export interface ThumbnailBounds {
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
 export async function generateThumbnail(
   sourceBytes: Uint8Array,
-  sourceMime?: string | null
+  sourceMime?: string | null,
+  bounds: ThumbnailBounds = {}
 ): Promise<ThumbnailResult> {
   const mime = (sourceMime || '').toLowerCase();
 
@@ -142,11 +148,11 @@ export async function generateThumbnail(
       };
     }
 
-    const MAX_WIDTH = 480;
-    const MAX_HEIGHT = 680;
+    const maxWidth = bounds.maxWidth ?? 480;
+    const maxHeight = bounds.maxHeight ?? 680;
 
     // Rule: if image is already smaller or equal to target, serve original
-    if (width <= MAX_WIDTH && height <= MAX_HEIGHT) {
+    if (width <= maxWidth && height <= maxHeight) {
       return {
         data: sourceBytes,
         mime: sourceMime || (isJpeg(sourceBytes) ? 'image/jpeg' : isPng(sourceBytes) ? 'image/png' : 'image/jpeg'),
@@ -154,8 +160,8 @@ export async function generateThumbnail(
       };
     }
 
-    const widthRatio = MAX_WIDTH / width;
-    const heightRatio = MAX_HEIGHT / height;
+    const widthRatio = maxWidth / width;
+    const heightRatio = maxHeight / height;
     const scale = Math.min(widthRatio, heightRatio);
 
     const targetWidth = Math.max(1, Math.round(width * scale));

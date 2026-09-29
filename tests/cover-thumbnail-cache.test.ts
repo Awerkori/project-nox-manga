@@ -44,6 +44,17 @@ describe('cover thumbnail KV', () => {
     expect(kv.records.get(coverThumbnailKey(mediaId))?.metadata.contentType).toBe('image/jpeg');
   });
 
+  it('keeps the hero derivative separate from a card thumbnail', async () => {
+    const kv = memoryKv();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([7, 2, 0]), {
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '3' }
+    })));
+
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'hero')).resolves.toBe('warmed');
+    expect(kv.records.has(coverThumbnailKey(mediaId, 'hero'))).toBe(true);
+    expect(kv.records.has(coverThumbnailKey(mediaId, 'thumb'))).toBe(false);
+  });
+
   it('does not cache oversized thumbnail responses', async () => {
     const kv = memoryKv();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), {

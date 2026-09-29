@@ -6,6 +6,8 @@ type ThumbnailMetadata = {
   contentLength?: string;
 };
 
+export type CoverVariant = 'thumb' | 'hero';
+
 type ThumbnailKv = {
   getWithMetadata(key: string, options: { type: 'arrayBuffer' }): Promise<{
     value: ArrayBuffer | null;
@@ -14,25 +16,26 @@ type ThumbnailKv = {
   put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata }): Promise<void>;
 };
 
-export const coverThumbnailKey = (mediaId: string) => `cover-thumb:v1:${mediaId}`;
+export const coverThumbnailKey = (mediaId: string, variant: CoverVariant = 'thumb') => `cover-${variant}:v1:${mediaId}`;
 
 export function isMediaId(value: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(value);
 }
 
-export async function hasCoverThumbnail(kv: ThumbnailKv | null | undefined, mediaId: string): Promise<boolean> {
+export async function hasCoverThumbnail(kv: ThumbnailKv | null | undefined, mediaId: string, variant: CoverVariant = 'thumb'): Promise<boolean> {
   if (!kv || !isMediaId(mediaId)) return false;
-  const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId), { type: 'arrayBuffer' }).catch(() => null);
+  const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
   return Boolean(cached?.value);
 }
 
 export async function readCoverThumbnail(
   kv: ThumbnailKv | null | undefined,
   mediaId: string,
-  ifNoneMatch: string | null
+  ifNoneMatch: string | null,
+  variant: CoverVariant = 'thumb'
 ): Promise<Response | null> {
   if (!kv || !isMediaId(mediaId)) return null;
-  const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId), { type: 'arrayBuffer' }).catch(() => null);
+  const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
   if (!cached?.value) return null;
 
   const metadata = cached.metadata || {};
@@ -42,7 +45,8 @@ export async function readCoverThumbnail(
     'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
     'X-Content-Type-Options': 'nosniff',
     'X-Media-Cache': 'COVER_THUMBNAIL_KV',
-    'X-Thumbnail-Strategy': 'prewarmed'
+    'X-Thumbnail-Strategy': 'prewarmed',
+    'X-Cover-Variant': variant
   });
   if (metadata.etag) headers.set('ETag', metadata.etag);
   if (metadata.etag && ifNoneMatch === metadata.etag) return new Response(null, { status: 304, headers });
@@ -52,14 +56,15 @@ export async function readCoverThumbnail(
 export async function warmCoverThumbnail(
   kv: ThumbnailKv | null | undefined,
   origin: string,
-  mediaId: string
+  mediaId: string,
+  variant: CoverVariant = 'thumb'
 ): Promise<'warmed' | 'already_warm' | 'skipped' | 'failed'> {
   if (!kv || !isMediaId(mediaId)) return 'skipped';
-  const key = coverThumbnailKey(mediaId);
+  const key = coverThumbnailKey(mediaId, variant);
   const existing = await kv.getWithMetadata(key, { type: 'arrayBuffer' }).catch(() => null);
   if (existing?.value) return 'already_warm';
 
-  const response = await fetch(`${origin.replace(/\/$/, '')}/media/${mediaId}?size=thumb&v=3`, {
+  const response = await fetch(`${origin.replace(/\/$/, '')}/media/${mediaId}?size=${variant}&v=3`, {
     signal: AbortSignal.timeout(12_000)
   }).catch(() => null);
   if (!response?.ok || !response.body) return 'failed';

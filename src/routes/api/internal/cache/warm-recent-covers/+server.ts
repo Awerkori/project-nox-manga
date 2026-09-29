@@ -41,11 +41,18 @@ export const GET: RequestHandler = async ({ request, url, platform }) => {
     [limit],
     platform?.env
   );
-  const candidate = (await Promise.all(rows.rows.map(async ({ cover_id }) =>
-    (await hasCoverThumbnail(kv, cover_id)) ? null : cover_id
-  ))).find(Boolean);
+  let candidate: string | null = null;
+  for (const { cover_id } of rows.rows) {
+    if (!await hasCoverThumbnail(kv, cover_id, 'thumb') || !await hasCoverThumbnail(kv, cover_id, 'hero')) {
+      candidate = cover_id;
+      break;
+    }
+  }
   if (!candidate) return json({ ok: true, result: 'already_warm' });
 
-  const result = await warmCoverThumbnail(kv, url.origin, candidate);
-  return json({ ok: true, result });
+  // One cover at a time and sequential variants: cache maintenance remains
+  // strictly below interactive YSQL/Telegram traffic.
+  const thumb = await warmCoverThumbnail(kv, url.origin, candidate, 'thumb');
+  const hero = await warmCoverThumbnail(kv, url.origin, candidate, 'hero');
+  return json({ ok: true, result: { thumb, hero } });
 };
