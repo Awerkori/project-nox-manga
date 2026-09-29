@@ -16,6 +16,12 @@ type ThumbnailKv = {
   put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata }): Promise<void>;
 };
 
+// Publication can be retried or observed by more than one request in the same
+// Worker isolate. Coalesce only the explicit event-driven warm operation; this
+// is not a distributed lock and deliberately does not turn every cover read
+// into KV coordination.
+const inFlightWarms = new Map<string, Promise<'warmed' | 'already_warm' | 'skipped' | 'failed'>>();
+
 export const coverThumbnailKey = (mediaId: string, variant: CoverVariant = 'thumb') => `cover-${variant}:v1:${mediaId}`;
 
 export function isMediaId(value: string): boolean {
@@ -80,12 +86,6 @@ export async function readBoundedCoverResponse(response: Response): Promise<Arra
   }
 }
 
-export async function hasCoverThumbnail(kv: ThumbnailKv | null | undefined, mediaId: string, variant: CoverVariant = 'thumb'): Promise<boolean> {
-  if (!kv || !isMediaId(mediaId)) return false;
-  const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
-  return Boolean(cached?.value);
-}
-
 export async function readCoverThumbnail(
   kv: ThumbnailKv | null | undefined,
   mediaId: string,
@@ -115,32 +115,43 @@ export async function warmCoverThumbnail(
   kv: ThumbnailKv | null | undefined,
   origin: string,
   mediaId: string,
-  variant: CoverVariant = 'thumb'
+  variant: CoverVariant = 'thumb',
+  internalToken?: string
 ): Promise<'warmed' | 'already_warm' | 'skipped' | 'failed'> {
-  if (!kv || !isMediaId(mediaId)) return 'skipped';
-  const key = coverThumbnailKey(mediaId, variant);
-  const existing = await kv.getWithMetadata(key, { type: 'arrayBuffer' }).catch(() => null);
-  if (existing?.value) return 'already_warm';
+  if (!kv || !isMediaId(mediaId) || !internalToken) return 'skipped';
 
-  const response = await fetch(`${origin.replace(/\/$/, '')}/media/${mediaId}?size=${variant}&v=3`, {
-    signal: AbortSignal.timeout(12_000)
-  }).catch(() => null);
-  if (!response?.ok || !response.body) return 'failed';
+  const key = `${coverThumbnailKey(mediaId, variant)}:warm`;
+  const existing = inFlightWarms.get(key);
+  if (existing) return existing;
 
-  const contentType = response.headers.get('content-type') || '';
-  const declaredLength = Number(response.headers.get('content-length') || 0);
-  if (!contentType.startsWith('image/') || (declaredLength > MAX_COVER_THUMBNAIL_BYTES && declaredLength > 0)) {
-    return 'skipped';
-  }
+  const warm = (async (): Promise<'warmed' | 'already_warm' | 'skipped' | 'failed'> => {
+    // /media is the *only* owner of thumbnail persistence. Its authenticated
+    // warm path makes one KV read and, on a miss, exactly one KV write. The
+    // former helper also read and wrote KV here, creating a double-write.
+    const response = await fetch(`${origin.replace(/\/$/, '')}/media/${mediaId}?size=${variant}&v=3`, {
+      headers: { Authorization: `Bearer ${internalToken}` },
+      signal: AbortSignal.timeout(12_000)
+    }).catch(() => null);
+    if (!response?.ok || !response.body) return 'failed';
 
-  const bytes = await response.arrayBuffer().catch(() => null);
-  if (!bytes || bytes.byteLength === 0 || bytes.byteLength > MAX_COVER_THUMBNAIL_BYTES) return 'skipped';
-  await kv.put(key, bytes, {
-    metadata: {
-      contentType,
-      contentLength: String(bytes.byteLength),
-      etag: response.headers.get('etag') || undefined
+    const contentType = response.headers.get('content-type') || '';
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (!contentType.startsWith('image/') || (declaredLength > MAX_COVER_THUMBNAIL_BYTES && declaredLength > 0)) {
+      return 'skipped';
     }
-  });
-  return 'warmed';
+
+    // Persistence has completed before the authenticated /media response is
+    // returned. Cancel only this client branch; it avoids retaining cover
+    // bytes in the warmer while the canonical route owns the cache entry.
+    await response.body.cancel().catch(() => {});
+    return response.headers.get('X-Media-Cache') === 'COVER_THUMBNAIL_KV'
+      ? 'already_warm'
+      : response.headers.get('X-Cover-Warm') === 'skipped' ? 'skipped' : 'warmed';
+  })();
+  inFlightWarms.set(key, warm);
+  try {
+    return await warm;
+  } finally {
+    inFlightWarms.delete(key);
+  }
 }

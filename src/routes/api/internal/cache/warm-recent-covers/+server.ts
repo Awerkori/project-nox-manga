@@ -1,7 +1,6 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { hasCoverThumbnail, isMediaId, warmCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
+import { isMediaId, warmCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -29,39 +28,18 @@ export const GET: RequestHandler = async ({ request, url, platform }) => {
   const kv = platform?.env?.COVER_THUMBNAILS;
   if (!kv) return json({ ok: true, result: 'disabled' });
 
-  // The importer may name the just-published cover using its existing bridge
-  // token. The warming then runs inside the Worker/KV context instead of
-  // depending on a second Discloud-to-Worker media round-trip.
+  // Warming is event-driven: the importer names the just-published cover
+  // using its existing bridge token. Never poll Yugabyte/KV looking for one.
   const requestedCoverId = url.searchParams.get('coverId');
-  let candidate: string | null = tokenValid && requestedCoverId && isMediaId(requestedCoverId)
+  const candidate: string | null = tokenValid && requestedCoverId && isMediaId(requestedCoverId)
     ? requestedCoverId
     : null;
 
-  if (!candidate) {
-    // One missing cover per cron cycle: this is a cache warmer, never a second
-    // importer. It keeps YSQL/Telegram maintenance below interactive traffic.
-    const limit = Math.min(12, Math.max(1, Number(url.searchParams.get('limit') || 8)));
-    const rows = await executeYugabyteSql<{ cover_id: string }>(
-      `SELECT cover_id
-         FROM works
-        WHERE published = true AND cover_id IS NOT NULL
-        ORDER BY latest_chapter_published_at DESC NULLS LAST
-        LIMIT $1`,
-      [limit],
-      platform?.env
-    );
-    for (const { cover_id } of rows.rows) {
-      if (!await hasCoverThumbnail(kv, cover_id, 'thumb') || !await hasCoverThumbnail(kv, cover_id, 'hero')) {
-        candidate = cover_id;
-        break;
-      }
-    }
-  }
-  if (!candidate) return json({ ok: true, result: 'already_warm' });
+  if (!candidate) return json({ ok: true, result: 'event_required' });
 
   // One cover at a time and sequential variants: cache maintenance remains
   // strictly below interactive YSQL/Telegram traffic.
-  const thumb = await warmCoverThumbnail(kv, url.origin, candidate, 'thumb');
-  const hero = await warmCoverThumbnail(kv, url.origin, candidate, 'hero');
+  const thumb = await warmCoverThumbnail(kv, url.origin, candidate, 'thumb', expected);
+  const hero = await warmCoverThumbnail(kv, url.origin, candidate, 'hero', expected);
   return json({ ok: true, result: { thumb, hero } });
 };
