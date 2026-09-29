@@ -4,6 +4,14 @@ import path from "node:path";
 const target = path.resolve("src/worker-wrapper.js");
 if (fs.existsSync(target)) {
   let content = fs.readFileSync(target, "utf8");
+  const generatedLintDisable = "/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */\n";
+  // The adapter emits minified generated glue which deliberately uses all
+  // three patterns. Reapply this file-level marker on every build, rather
+  // than allowing generated code to make the focused CI lint nondeterministic.
+  if (!content.startsWith(generatedLintDisable)) {
+    content = generatedLintDisable + content;
+    fs.writeFileSync(target, content, "utf8");
+  }
   if (!content.includes("AUTH_COOKIE_REGEX")) {
     const searchTarget = "var worker_default = {";
     const authLogic = `const AUTH_COOKIE_REGEX = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
@@ -91,7 +99,7 @@ if (fs.existsSync(target)) {
           }
         );
         const warmerRes = await server.respond(warmerReq, {
-          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          platform: { env: env2, ctx, context: ctx, caches, cf: {}, scheduledInvocation: true },
           getClientAddress() { return "127.0.0.1"; }
         });
         if (!warmerRes.ok) console.warn(\`[CRON_COVER_WARMER] Status \${warmerRes.status}\`);
@@ -111,4 +119,3 @@ if (fs.existsSync(target)) {
     console.log("[inject-worker-auth-bypass] Injected functional scheduled cron handler into src/worker-wrapper.js");
   }
 }
-

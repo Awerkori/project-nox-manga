@@ -46,9 +46,10 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
+  const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
   // Do not reuse immutable v1/v2 thumbnails. v3 also avoids the old cold path
   // that buffered a complete small original merely to make a thumbnail.
-  const canonicalUrl = sizeParam === 'thumb' ? `${url.origin}/media/${params.id}?size=thumb&v=3` : `${url.origin}/media/${params.id}`;
+  const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
@@ -73,11 +74,12 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
   // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
   // on another region/device. Never use it for full pages or private media.
-  if (sizeParam === 'thumb') {
+  if (coverVariant) {
     const prewarmed = await readCoverThumbnail(
       platform?.env?.COVER_THUMBNAILS,
       params.id,
-      request.headers.get('if-none-match')
+      request.headers.get('if-none-match'),
+      coverVariant
     );
     if (prewarmed) return prewarmed;
   }
@@ -251,7 +253,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  if (sizeParam === 'thumb') {
+  if (coverVariant) {
     const bytes = Number(media.bytes) || 0;
     const mime = String(media.mime || '').toLowerCase();
     const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
@@ -261,14 +263,15 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     // Small originals are cheaper to transfer once than to hold the request open;
     // unsupported formats must also remain streamed rather than buffered only to
     // fall back to the original. The immutable v3 URL is cached at the edge.
-    const streamOriginal = !canResize || (bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
+    const streamOriginal = !canResize || (coverVariant === 'thumb' && bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
     if (streamOriginal) {
       headers['X-Thumbnail-Strategy'] = 'stream-original';
       if (bytes > 0) headers['Content-Length'] = String(bytes);
     } else {
       try {
         const rawBytes = await toUint8Array(body);
-        const thumb = await generateThumbnail(rawBytes, media.mime);
+        const thumb = await generateThumbnail(rawBytes, media.mime,
+          coverVariant === 'hero' ? { maxWidth: 720, maxHeight: 1020 } : undefined);
         body = thumb.data;
         headers['Content-Type'] = thumb.mime;
         headers['Content-Length'] = String(thumb.data.length);
