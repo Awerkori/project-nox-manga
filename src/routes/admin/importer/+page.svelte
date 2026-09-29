@@ -569,14 +569,14 @@
       <div class="cap-kpis-grid">
         <div class="cap-kpi-card highlight-rate">
           <div class="cap-kpi-header">
-            <span class="cap-kpi-label">VAZÃO AGORA (5 MIN)</span>
+            <span class="cap-kpi-label">VAZÃO AGORA (1 MIN)</span>
             <span class="pulse-indicator">
               <span class="pulse-dot green"></span>
               LIVE
             </span>
           </div>
           <div class="cap-kpi-val-row">
-            <span class="cap-kpi-number">{data.rateTelemetry?.rate5m ?? 0}</span>
+            <span class="cap-kpi-number">{data.rateTelemetry?.rate1m ?? 0}</span>
             <span class="cap-kpi-unit">cap/min</span>
             {#if (data.rateTelemetry?.rate5m ?? 0) >= 12}
               <span class="status-pill status-ceiling">TETO 12</span>
@@ -591,7 +591,13 @@
             {/if}
           </div>
           <div class="cap-kpi-details">
-            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh5m ?? 0}</strong> inéditos visíveis</span>
+            <span><strong>{data.rateTelemetry?.rate5m ?? 0}</strong> / 5 min</span>
+            <span class="detail-sep">·</span>
+            <span><strong>{data.rateTelemetry?.rate10m ?? 0}</strong> / 10 min</span>
+            <span class="detail-sep">·</span>
+            <span><strong>{data.rateTelemetry?.rate30m ?? 0}</strong> / 30 min</span>
+            <span class="detail-sep">·</span>
+            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh5m ?? 0}</strong> inéditos / 5 min</span>
             <span class="detail-sep">·</span>
             <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate5m ?? 0}/min</span>
           </div>
@@ -605,17 +611,17 @@
 
         <div class="cap-kpi-card">
           <div class="cap-kpi-header">
-            <span class="cap-kpi-label">MÉDIA MÓVEL (30 MIN)</span>
+            <span class="cap-kpi-label">TENDÊNCIA (5 MIN)</span>
             <Clock size={15} class="text-zinc-400" />
           </div>
           <div class="cap-kpi-val-row">
-            <span class="cap-kpi-number">{data.rateTelemetry?.rate30m ?? 0}</span>
+            <span class="cap-kpi-number">{data.rateTelemetry?.rate5m ?? 0}</span>
             <span class="cap-kpi-unit">cap/min</span>
           </div>
           <div class="cap-kpi-details">
-            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh30m ?? 0}</strong> inéditos visíveis</span>
+            <span><strong>{data.rateTelemetry?.rate10m ?? 0}</strong> cap/min em 10 min</span>
             <span class="detail-sep">·</span>
-            <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate30m ?? 0}/min</span>
+            <span><strong>{data.rateTelemetry?.rate30m ?? 0}</strong> cap/min em 30 min</span>
           </div>
           {#if data.adaptiveCapacity?.limitingFactor && (data.rateTelemetry?.rate5m ?? 0) < 5}
             <div class="limiting-factor-row" title={data.adaptiveCapacity.limitingFactor}>
@@ -757,21 +763,21 @@
         <div class="card-body">
           <div class="rate-metrics-row">
             <div class="metric-block">
-              <span class="metric-label">Agora (5 min)</span>
+              <span class="metric-label">Agora (1 min)</span>
               <div class="metric-value-row">
-                <span class="metric-value">{data.rateTelemetry?.rate5m ?? 0}</span>
+                <span class="metric-value">{data.rateTelemetry?.rate1m ?? 0}</span>
                 <span class="metric-unit">cap/min</span>
               </div>
-              <span class="metric-sub">{data.rateTelemetry?.fresh5m ?? 0} novos visíveis</span>
+              <span class="metric-sub">{data.rateTelemetry?.rate5m ?? 0}/min em 5 min</span>
             </div>
 
             <div class="metric-block">
-              <span class="metric-label">Média 30 min</span>
+              <span class="metric-label">Tendência 10 min</span>
               <div class="metric-value-row">
-                <span class="metric-value">{data.rateTelemetry?.rate30m ?? 0}</span>
+                <span class="metric-value">{data.rateTelemetry?.rate10m ?? 0}</span>
                 <span class="metric-unit">cap/min</span>
               </div>
-              <span class="metric-sub">{data.rateTelemetry?.fresh30m ?? 0} novos em 30m</span>
+              <span class="metric-sub">{data.rateTelemetry?.rate30m ?? 0}/min em 30 min</span>
             </div>
 
             <div class="metric-block">
