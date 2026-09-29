@@ -634,12 +634,20 @@
           </div>
           <div class="cap-kpi-val-row">
             <span class="cap-kpi-number">{data.adaptiveCapacity?.concurrency ?? 1}</span>
-            <span class="cap-kpi-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+            <span class="cap-kpi-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? data.telemetry?.concurrency ?? 1} permits</span>
           </div>
           <div class="cap-kpi-details">
             <span class="capacity-status-pill status-{(data.adaptiveCapacity?.state || 'RUNNING_STABLE').toLowerCase()}">
               {data.adaptiveCapacity?.state ?? 'RUNNING_STABLE'}
             </span>
+            {#if data.pipelineCapacity?.slots}
+              <span class="detail-sep">·</span>
+              <span class="detail-pipeline">Úteis: {data.pipelineCapacity.slots.productiveSlots}/{data.pipelineCapacity.slots.effectiveSlots ?? data.pipelineCapacity.slots.configuredSlots} efetivos</span>
+            {/if}
+            {#if data.eligibleBacklog > 0}
+              <span class="detail-sep">·</span>
+              <span class="detail-pipeline">Elegíveis: {data.eligibleBacklog.toLocaleString('pt-BR')}</span>
+            {/if}
           </div>
         </div>
 
@@ -811,7 +819,7 @@
               <span class="metric-label">Concorrência Global</span>
               <div class="metric-value-row">
                 <span class="metric-value">{data.adaptiveCapacity?.concurrency ?? 1}</span>
-                <span class="metric-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+                <span class="metric-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? data.telemetry?.concurrency ?? 1} permits</span>
               </div>
               <span class="metric-sub">Piso mínimo = 1 (nunca 0 automático)</span>
             </div>
@@ -830,6 +838,18 @@
             <span class="reason-label">Decisão do Autotuner:</span>
             <span class="reason-text">{data.adaptiveCapacity?.reason || 'Sistema operando com capacidade adaptativa contínua.'}</span>
           </div>
+
+          {#if data.pipelineCapacity}
+            <div class="capacity-reason-row">
+              <span class="reason-label">Pipeline:</span>
+              <span class="reason-text">
+                Slots úteis {data.pipelineCapacity.slots?.productiveSlots ?? 0}/{data.pipelineCapacity.slots?.effectiveSlots ?? data.pipelineCapacity.slots?.configuredSlots ?? 0} efetivos
+                · mídia {data.pipelineCapacity.media?.active ?? 0}/{data.pipelineCapacity.media?.configuredCapacity ?? 0}
+                · download {data.pipelineCapacity.downloads?.active ?? 0}/{data.pipelineCapacity.downloads?.configuredCapacity ?? 0}
+                · backlog elegível {data.eligibleBacklog.toLocaleString('pt-BR')}
+              </span>
+            </div>
+          {/if}
 
           {#if data.adaptiveCapacity?.noProgressReason}
             <div class="progress-diagnostic-row">
