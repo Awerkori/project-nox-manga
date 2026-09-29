@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   extractFullAuthCookie: vi.fn(),
   decodeSessionJwt: vi.fn(),
   dbFrom: vi.fn(),
+  fetchMediaMetadataFromYugabyte: vi.fn(),
   mediaRecord: null as any
 }));
 
@@ -34,11 +35,16 @@ vi.mock('$lib/server/session-cache', () => ({
   resolveSessionData: mocks.resolveSessionData
 }));
 
+vi.mock('$lib/server/yugabyte', () => ({
+  fetchMediaMetadataFromYugabyte: mocks.fetchMediaMetadataFromYugabyte
+}));
+
 import { GET } from '../src/routes/media/[id]/+server';
 
 describe('Media Security and Cache Guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchMediaMetadataFromYugabyte.mockResolvedValue(null);
     // Default mock DB behavior
     mocks.dbFrom.mockReturnValue({
       select: () => ({
@@ -47,6 +53,61 @@ describe('Media Security and Cache Guard', () => {
         })
       })
     });
+  });
+
+  it('writes a cold cover once only for an authenticated publication warm', async () => {
+    const mediaId = '88888888-8888-4888-8888-888888888888';
+    const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string> }>();
+    const kv = {
+      getWithMetadata: vi.fn(async (key: string) => records.get(key) || null),
+      put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string> }) => {
+        records.set(key, { value, metadata: options.metadata });
+      })
+    };
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'warm_hash', provider_key: 'warm_key', bytes: 4,
+      width: 1440, height: 2048
+    };
+    mocks.download.mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    const res = await GET({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`, {
+        headers: { Authorization: 'Bearer internal-token' }
+      }),
+      platform: { env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: 'internal-token' } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Cover-Warm')).toBe('stored');
+    expect(kv.getWithMetadata).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an unauthenticated cold cover view create a KV write', async () => {
+    const mediaId = '99999999-9999-4999-8999-999999999999';
+    const kv = { getWithMetadata: vi.fn(async () => null), put: vi.fn() };
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'public_hash', provider_key: 'public_key', bytes: 4,
+      width: 1440, height: 2048
+    };
+    mocks.download.mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    const res = await GET({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      platform: { env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: 'internal-token' } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(kv.getWithMetadata).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('rejects anonymous access to staff_manual media (MUST NOT be public)', async () => {

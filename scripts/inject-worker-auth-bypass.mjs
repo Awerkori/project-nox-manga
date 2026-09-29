@@ -85,24 +85,8 @@ if (fs.existsSync(target)) {
         });
         const body = await res.text().catch(() => "");
         console.log(\`[CRON_EMAIL_PROCESSOR] Status \${res.status}: \${body}\`);
-        // Keep cache maintenance strictly after the email task. This warms one
-        // missing public cover only, so scheduled work cannot stampede YSQL or
-        // Telegram while users are reading.
-        const warmerReq = new Request(
-          (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/cache/warm-recent-covers?limit=8",
-          {
-            method: "GET",
-            headers: {
-              "authorization": token ? \`Bearer \${token}\` : "",
-              "x-internal-cron": "true"
-            }
-          }
-        );
-        const warmerRes = await server.respond(warmerReq, {
-          platform: { env: env2, ctx, context: ctx, caches, cf: {}, scheduledInvocation: true },
-          getClientAddress() { return "127.0.0.1"; }
-        });
-        if (!warmerRes.ok) console.warn(\`[CRON_COVER_WARMER] Status \${warmerRes.status}\`);
+        // Cover warming is event-driven at publication time. Do not poll KV,
+        // Yugabyte, or Telegram from this frequent email cron.
       } catch (err) {
         console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
       }

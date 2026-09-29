@@ -36,25 +36,29 @@ describe('cover thumbnail KV', () => {
     expect(new Uint8Array(await response!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   });
 
-  it('warms one bounded image and retains its response metadata', async () => {
+  it('delegates a cold warm to /media without a second KV read or write', async () => {
     const kv = memoryKv();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([9, 8, 7]), {
-      headers: { 'Content-Type': 'image/jpeg', 'ETag': '"thumb"', 'Content-Length': '3' }
+      headers: { 'Content-Type': 'image/jpeg', 'ETag': '"thumb"', 'Content-Length': '3', 'X-Media-Cache': 'MISS' }
     })));
 
-    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId)).resolves.toBe('warmed');
-    expect(kv.records.get(coverThumbnailKey(mediaId))?.metadata.contentType).toBe('image/jpeg');
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'thumb', 'internal-token')).resolves.toBe('warmed');
+    expect(kv.getWithMetadata).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/media/${mediaId}?size=thumb&v=3`),
+      expect.objectContaining({ headers: { Authorization: 'Bearer internal-token' } })
+    );
   });
 
   it('keeps the hero derivative separate from a card thumbnail', async () => {
     const kv = memoryKv();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([7, 2, 0]), {
-      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '3' }
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '3', 'X-Media-Cache': 'MISS' }
     })));
 
-    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'hero')).resolves.toBe('warmed');
-    expect(kv.records.has(coverThumbnailKey(mediaId, 'hero'))).toBe(true);
-    expect(kv.records.has(coverThumbnailKey(mediaId, 'thumb'))).toBe(false);
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'hero', 'internal-token')).resolves.toBe('warmed');
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('persists an already-produced valid cover without another fetch', async () => {
@@ -76,7 +80,21 @@ describe('cover thumbnail KV', () => {
       headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(3 * 1024 * 1024) }
     })));
 
-    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId)).resolves.toBe('skipped');
+    await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'thumb', 'internal-token')).resolves.toBe('skipped');
     expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it('coalesces concurrent warm requests for the same cover variant', async () => {
+    const kv = memoryKv();
+    let resolveFetch: ((response: Response) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; })));
+
+    const first = warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'thumb', 'internal-token');
+    const second = warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'thumb', 'internal-token');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    resolveFetch?.(new Response(new Uint8Array([1]), {
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '1', 'X-Media-Cache': 'MISS' }
+    }));
+    await expect(Promise.all([first, second])).resolves.toEqual(['warmed', 'warmed']);
   });
 });

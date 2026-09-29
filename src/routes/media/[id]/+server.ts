@@ -16,6 +16,17 @@ import {
   readCoverThumbnail
 } from '$lib/server/cover-thumbnail-cache';
 
+function safeTokenCompare(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const encoder = new TextEncoder();
+  const a = encoder.encode(provided);
+  const b = encoder.encode(expected);
+  if (a.byteLength !== b.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < a.byteLength; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
@@ -52,12 +63,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
   const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
+  const expectedWarmToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN;
+  const auth = request.headers.get('authorization') || '';
+  const internalCoverWarm = Boolean(
+    coverVariant && expectedWarmToken && auth.startsWith('Bearer ') &&
+    safeTokenCompare(auth.slice(7).trim(), expectedWarmToken)
+  );
   // Do not reuse immutable v1/v2 thumbnails. v3 also avoids the old cold path
   // that buffered a complete small original merely to make a thumbnail.
   const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
-  if (cache) {
+  if (cache && !internalCoverWarm) {
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
@@ -302,12 +319,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const response = new Response(body, { status: 200, headers });
 
-  // A publication warmer already consumes this response.  Save only its small,
-  // valid cover derivative globally so a reader in another colo does not pay a
-  // second Telegram fetch.  Large/full reader pages never enter this path.
+  // Only the authenticated publication event may create a global KV entry.
+  // Interactive requests still read a hot entry, but never write one: that
+  // prevents a cold edge or concurrent browser views from exhausting the KV
+  // free-tier write budget. Large/full reader pages never enter this path.
   const kv = platform?.env?.COVER_THUMBNAILS;
   const responseBytes = Number(headers['Content-Length'] || 0);
-  if (coverVariant && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
+  if (internalCoverWarm && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
     const persist = readBoundedCoverResponse(response.clone())
       .then((bytes) => bytes && persistCoverThumbnail(kv, params.id, bytes, {
         contentType: headers['Content-Type'],
@@ -315,8 +333,10 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         contentLength: headers['Content-Length']
       }, coverVariant))
       .catch(() => 'skipped');
-    if (platform?.context?.waitUntil) platform.context.waitUntil(persist);
-    else void persist;
+    // The event endpoint observes a completed warm only after this single KV
+    // write is done; user-facing media never waits for it.
+    const persisted = await persist;
+    response.headers.set('X-Cover-Warm', persisted === 'stored' ? 'stored' : 'skipped');
   }
 
   // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
