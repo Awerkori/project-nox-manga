@@ -9,7 +9,12 @@ import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
 import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
-import { persistCoverThumbnail, readCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
+import {
+  MAX_COVER_THUMBNAIL_BYTES,
+  persistCoverThumbnail,
+  readBoundedCoverResponse,
+  readCoverThumbnail
+} from '$lib/server/cover-thumbnail-cache';
 
 async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
@@ -302,9 +307,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // second Telegram fetch.  Large/full reader pages never enter this path.
   const kv = platform?.env?.COVER_THUMBNAILS;
   const responseBytes = Number(headers['Content-Length'] || 0);
-  if (coverVariant && isPublic && kv && responseBytes > 0 && responseBytes <= 2 * 1024 * 1024) {
-    const persist = response.clone().arrayBuffer()
-      .then((bytes) => persistCoverThumbnail(kv, params.id, bytes, {
+  if (coverVariant && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
+    const persist = readBoundedCoverResponse(response.clone())
+      .then((bytes) => bytes && persistCoverThumbnail(kv, params.id, bytes, {
         contentType: headers['Content-Type'],
         etag: headers['ETag'],
         contentLength: headers['Content-Length']
