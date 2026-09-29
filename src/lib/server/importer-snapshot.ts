@@ -157,23 +157,44 @@ export async function loadSnapshot({ locals }: any) {
 
   const bucketRows = rateBucketsRes?.data || [];
   const nowMs = Date.now();
+  const oneMinAgo = nowMs - 1 * 60 * 1000;
   const fiveMinAgo = nowMs - 5 * 60 * 1000;
+  const tenMinAgo = nowMs - 10 * 60 * 1000;
   const thirtyMinAgo = nowMs - 30 * 60 * 1000;
 
+  let visible1m = 0;
+  let visible5m = 0;
+  let visible10m = 0;
+  let visible30m = 0;
+  let fresh1m = 0;
   let fresh5m = 0;
+  let fresh10m = 0;
   let completed5m = 0;
   let fresh30m = 0;
   let completed30m = 0;
 
   for (const b of bucketRows) {
     const t = new Date(b.bucket_minute).getTime();
+    const visible = b.visible_published || 0;
+    const fresh = b.fresh_visible || 0;
+    const completed = b.completed_jobs || 0;
+    if (t >= oneMinAgo) {
+      visible1m += visible;
+      fresh1m += fresh;
+    }
     if (t >= fiveMinAgo) {
-      fresh5m += b.fresh_visible || 0;
-      completed5m += b.completed_jobs || 0;
+      visible5m += visible;
+      fresh5m += fresh;
+      completed5m += completed;
+    }
+    if (t >= tenMinAgo) {
+      visible10m += visible;
+      fresh10m += fresh;
     }
     if (t >= thirtyMinAgo) {
-      fresh30m += b.fresh_visible || 0;
-      completed30m += b.completed_jobs || 0;
+      visible30m += visible;
+      fresh30m += fresh;
+      completed30m += completed;
     }
   }
 
@@ -188,15 +209,27 @@ export async function loadSnapshot({ locals }: any) {
     }
   }
 
-  const rate5m = heartbeatData?.rate5m ?? (Math.round((fresh5m / 5.0) * 10) / 10);
-  const rate30m = heartbeatData?.rate30m ?? (Math.round((fresh30m / 30.0) * 10) / 10);
+  // Canonical visible publications are the only Cap/min definition. The
+  // fallback intentionally uses visible_published, never fresh or completed.
+  const rate1m = heartbeatData?.rate1m ?? visible1m;
+  const rate5m = heartbeatData?.rate5m ?? (Math.round((visible5m / 5.0) * 10) / 10);
+  const rate10m = heartbeatData?.rate10m ?? (Math.round((visible10m / 10.0) * 10) / 10);
+  const rate30m = heartbeatData?.rate30m ?? (Math.round((visible30m / 30.0) * 10) / 10);
   const completedRate5m = heartbeatData?.completedRate5m ?? (Math.round((completed5m / 5.0) * 10) / 10);
   const completedRate30m = heartbeatData?.completedRate30m ?? (Math.round((completed30m / 30.0) * 10) / 10);
 
   const rateTelemetry = {
+    rate1m,
     rate5m,
+    rate10m,
     rate30m,
+    visible1m,
+    visible5m,
+    visible10m,
+    visible30m,
+    fresh1m,
     fresh5m: heartbeatData?.fresh5m ?? fresh5m,
+    fresh10m,
     fresh30m: heartbeatData?.fresh30m ?? fresh30m,
     completedRate5m,
     completedRate30m,
