@@ -9,7 +9,7 @@ import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
 import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
-import { readCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
+import { persistCoverThumbnail, readCoverThumbnail } from '$lib/server/cover-thumbnail-cache';
 
 async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
@@ -296,6 +296,23 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   const response = new Response(body, { status: 200, headers });
+
+  // A publication warmer already consumes this response.  Save only its small,
+  // valid cover derivative globally so a reader in another colo does not pay a
+  // second Telegram fetch.  Large/full reader pages never enter this path.
+  const kv = platform?.env?.COVER_THUMBNAILS;
+  const responseBytes = Number(headers['Content-Length'] || 0);
+  if (coverVariant && isPublic && kv && responseBytes > 0 && responseBytes <= 2 * 1024 * 1024) {
+    const persist = response.clone().arrayBuffer()
+      .then((bytes) => persistCoverThumbnail(kv, params.id, bytes, {
+        contentType: headers['Content-Type'],
+        etag: headers['ETag'],
+        contentLength: headers['Content-Length']
+      }, coverVariant))
+      .catch(() => 'skipped');
+    if (platform?.context?.waitUntil) platform.context.waitUntil(persist);
+    else void persist;
+  }
 
   // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
   const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);

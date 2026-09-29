@@ -22,6 +22,32 @@ export function isMediaId(value: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(value);
 }
 
+/**
+ * Persist a response already produced by /media.  This deliberately has no
+ * fetch of its own: publication warming and a real reader share the same
+ * bounded response, preventing a second Telegram round-trip for a new cover.
+ */
+export async function persistCoverThumbnail(
+  kv: ThumbnailKv | null | undefined,
+  mediaId: string,
+  bytes: ArrayBuffer,
+  metadata: ThumbnailMetadata,
+  variant: CoverVariant = 'thumb'
+): Promise<'stored' | 'skipped'> {
+  if (!kv || !isMediaId(mediaId) || bytes.byteLength === 0 || bytes.byteLength > MAX_COVER_THUMBNAIL_BYTES) {
+    return 'skipped';
+  }
+  if (!metadata.contentType?.startsWith('image/')) return 'skipped';
+  await kv.put(coverThumbnailKey(mediaId, variant), bytes, {
+    metadata: {
+      contentType: metadata.contentType,
+      contentLength: String(bytes.byteLength),
+      etag: metadata.etag
+    }
+  });
+  return 'stored';
+}
+
 export async function hasCoverThumbnail(kv: ThumbnailKv | null | undefined, mediaId: string, variant: CoverVariant = 'thumb'): Promise<boolean> {
   if (!kv || !isMediaId(mediaId)) return false;
   const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
