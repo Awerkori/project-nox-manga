@@ -1,4 +1,4 @@
-const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
+export const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
 
 type ThumbnailMetadata = {
   contentType?: string;
@@ -46,6 +46,38 @@ export async function persistCoverThumbnail(
     }
   });
   return 'stored';
+}
+
+/** Read an un-sized image stream without retaining more than the cover budget. */
+export async function readBoundedCoverResponse(response: Response): Promise<ArrayBuffer | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_COVER_THUMBNAIL_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    if (total === 0) return null;
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes.buffer;
+  } catch {
+    await reader.cancel().catch(() => {});
+    return null;
+  }
 }
 
 export async function hasCoverThumbnail(kv: ThumbnailKv | null | undefined, mediaId: string, variant: CoverVariant = 'thumb'): Promise<boolean> {

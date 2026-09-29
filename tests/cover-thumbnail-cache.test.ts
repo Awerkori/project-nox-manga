@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   coverThumbnailKey,
   persistCoverThumbnail,
+  readBoundedCoverResponse,
   readCoverThumbnail,
   warmCoverThumbnail
 } from '../src/lib/server/cover-thumbnail-cache';
@@ -62,6 +63,11 @@ describe('cover thumbnail KV', () => {
       contentType: 'image/jpeg', etag: '"hero"'
     }, 'hero')).resolves.toBe('stored');
     expect(kv.records.get(coverThumbnailKey(mediaId, 'hero'))?.metadata.contentLength).toBe('3');
+  });
+
+  it('does not retain an unknown-length image beyond the cover budget', async () => {
+    const tooLarge = new Uint8Array(2 * 1024 * 1024 + 1);
+    await expect(readBoundedCoverResponse(new Response(tooLarge))).resolves.toBeNull();
   });
 
   it('does not cache oversized thumbnail responses', async () => {
