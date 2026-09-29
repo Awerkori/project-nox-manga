@@ -642,7 +642,7 @@
             </span>
             {#if data.pipelineCapacity?.slots}
               <span class="detail-sep">·</span>
-              <span class="detail-pipeline">Úteis: {data.pipelineCapacity.slots.productiveSlots}/{data.pipelineCapacity.slots.configuredSlots}</span>
+              <span class="detail-pipeline">Úteis: {data.pipelineCapacity.slots.productiveSlots}/{data.pipelineCapacity.slots.effectiveSlots ?? data.pipelineCapacity.slots.configuredSlots} efetivos</span>
             {/if}
             {#if data.eligibleBacklog > 0}
               <span class="detail-sep">·</span>
@@ -843,7 +843,7 @@
             <div class="capacity-reason-row">
               <span class="reason-label">Pipeline:</span>
               <span class="reason-text">
-                Slots úteis {data.pipelineCapacity.slots?.productiveSlots ?? 0}/{data.pipelineCapacity.slots?.configuredSlots ?? 0}
+                Slots úteis {data.pipelineCapacity.slots?.productiveSlots ?? 0}/{data.pipelineCapacity.slots?.effectiveSlots ?? data.pipelineCapacity.slots?.configuredSlots ?? 0} efetivos
                 · mídia {data.pipelineCapacity.media?.active ?? 0}/{data.pipelineCapacity.media?.configuredCapacity ?? 0}
                 · download {data.pipelineCapacity.downloads?.active ?? 0}/{data.pipelineCapacity.downloads?.configuredCapacity ?? 0}
                 · backlog elegível {data.eligibleBacklog.toLocaleString('pt-BR')}
