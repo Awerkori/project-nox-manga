@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   coverThumbnailKey,
+  persistCoverThumbnail,
   readCoverThumbnail,
   warmCoverThumbnail
 } from '../src/lib/server/cover-thumbnail-cache';
@@ -53,6 +54,14 @@ describe('cover thumbnail KV', () => {
     await expect(warmCoverThumbnail(kv, 'https://nox.test', mediaId, 'hero')).resolves.toBe('warmed');
     expect(kv.records.has(coverThumbnailKey(mediaId, 'hero'))).toBe(true);
     expect(kv.records.has(coverThumbnailKey(mediaId, 'thumb'))).toBe(false);
+  });
+
+  it('persists an already-produced valid cover without another fetch', async () => {
+    const kv = memoryKv();
+    await expect(persistCoverThumbnail(kv, mediaId, new Uint8Array([3, 2, 1]).buffer, {
+      contentType: 'image/jpeg', etag: '"hero"'
+    }, 'hero')).resolves.toBe('stored');
+    expect(kv.records.get(coverThumbnailKey(mediaId, 'hero'))?.metadata.contentLength).toBe('3');
   });
 
   it('does not cache oversized thumbnail responses', async () => {
