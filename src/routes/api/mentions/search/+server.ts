@@ -16,6 +16,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     username?: string;
     display_name?: string;
     avatar_id?: string | null;
+    avatar_crop?: unknown;
     label: string;
     sub: string;
   }> = [];
@@ -54,9 +55,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
 
     // Membros da Scan
-    let membersQuery = locals.db
+    const membersQuery = locals.db
       .from('scan_members')
-      .select('user_id, role, members!scan_members_user_id_fkey(id, username, display_name, avatar_id)')
+      .select('user_id, role, members!scan_members_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)')
       .eq('scan_id', scanId);
 
     const { data: scanMems } = await membersQuery.limit(20);
@@ -74,6 +75,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             username: m.username,
             display_name: m.display_name,
             avatar_id: m.avatar_id,
+            avatar_crop: m.avatar_crop,
             label: '@' + m.username,
             sub: m.display_name || sm.role || 'Membro'
           });
@@ -93,7 +95,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   // 2. Public Platform Context (Comentários de Obras, Capítulos, etc.)
   let query = locals.db
     .from('members')
-    .select('id, username, display_name, avatar_id')
+    .select('id, username, display_name, avatar_id, avatar_crop')
     .order('xp', { ascending: false })
     .limit(8);
 
@@ -113,6 +115,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       username: m.username,
       display_name: m.display_name,
       avatar_id: m.avatar_id,
+      avatar_crop: m.avatar_crop,
       label: '@' + m.username,
       sub: m.display_name || 'Leitor'
     });

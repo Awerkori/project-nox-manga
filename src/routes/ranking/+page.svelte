@@ -2,6 +2,7 @@
   import Empty from '$lib/components/Empty.svelte';
   import { memberRank } from '$lib/types';
   import { Sparkles } from '@lucide/svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   let { data } = $props();
 </script>
 
@@ -39,11 +40,7 @@
         <a href="/u/{silver.username}" class="podium-card podium-tier-2 olympic-silver">
           <div class="podium-medal">🥈</div>
           <div class="podium-avatar-wrap">
-            {#if silver.avatar_id}
-              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={silver.avatar_id} crop={silver.avatar_crop} displayName={silver.display_name} size={64} />
           </div>
           <strong class="podium-user-name">{silver.display_name}</strong>
           <span class="podium-user-handle">@{silver.username}</span>
@@ -65,11 +62,7 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="76" height="76" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={gold.avatar_id} crop={gold.avatar_crop} displayName={gold.display_name} size={68} />
           </div>
           <strong class="podium-user-name gold-name">{gold.display_name}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
@@ -87,11 +80,7 @@
         <a href="/u/{bronze.username}" class="podium-card podium-tier-3 olympic-bronze">
           <div class="podium-medal">🥉</div>
           <div class="podium-avatar-wrap">
-            {#if bronze.avatar_id}
-              <img src="/media/{bronze.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback">{(bronze.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={bronze.avatar_id} crop={bronze.avatar_crop} displayName={bronze.display_name} size={64} />
           </div>
           <strong class="podium-user-name">{bronze.display_name}</strong>
           <span class="podium-user-handle">@{bronze.username}</span>
@@ -118,11 +107,7 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="72" height="72" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={gold.avatar_id} crop={gold.avatar_crop} displayName={gold.display_name} size={68} />
           </div>
           <strong class="podium-user-name">{gold.display_name}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
@@ -135,11 +120,7 @@
         <a href="/u/{silver.username}" class="podium-card podium-tier-2">
           <div class="podium-medal">🥈</div>
           <div class="podium-avatar-wrap">
-            {#if silver.avatar_id}
-              <img src="/media/{silver.avatar_id}" alt="" width="64" height="64" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback">{(silver.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={silver.avatar_id} crop={silver.avatar_crop} displayName={silver.display_name} size={64} />
           </div>
           <strong class="podium-user-name">{silver.display_name}</strong>
           <span class="podium-user-handle">@{silver.username}</span>
@@ -161,11 +142,7 @@
           </div>
           <div class="podium-medal">🥇</div>
           <div class="podium-avatar-wrap gold-avatar-halo">
-            {#if gold.avatar_id}
-              <img src="/media/{gold.avatar_id}" alt="" width="80" height="80" class="podium-avatar-img" />
-            {:else}
-              <span class="podium-avatar-fallback gold-fallback">{(gold.display_name[0] || 'N').toUpperCase()}</span>
-            {/if}
+            <UserAvatar avatarId={gold.avatar_id} crop={gold.avatar_crop} displayName={gold.display_name} size={68} />
           </div>
           <strong class="podium-user-name gold-name">{gold.display_name}</strong>
           <span class="podium-user-handle">@{gold.username}</span>
@@ -206,17 +183,7 @@
               </td>
               <td>
                 <div class="user-cell">
-                  {#if member.avatar_id}
-                    <img
-                      src="/media/{member.avatar_id}"
-                      alt=""
-                      width="38"
-                      height="38"
-                      class="row-avatar-img"
-                    />
-                  {:else}
-                    <span class="row-avatar-fallback">{member.display_name[0] || 'N'}</span>
-                  {/if}
+                  <UserAvatar avatarId={member.avatar_id} crop={member.avatar_crop} displayName={member.display_name} size={38} />
                   <div class="user-titles">
                     <a href="/u/{member.username}" class="user-link">
                       <strong>{member.display_name}</strong>
@@ -259,17 +226,7 @@
           </div>
 
           <div class="ranking-mobile-avatar">
-            {#if member.avatar_id}
-              <img
-                src="/media/{member.avatar_id}"
-                alt=""
-                width="42"
-                height="42"
-                class="row-avatar-img"
-              />
-            {:else}
-              <span class="row-avatar-fallback">{member.display_name[0] || 'N'}</span>
-            {/if}
+            <UserAvatar avatarId={member.avatar_id} crop={member.avatar_crop} displayName={member.display_name} size={42} />
           </div>
 
           <div class="ranking-mobile-info">
@@ -474,26 +431,6 @@
     place-items: center;
   }
 
-  .podium-avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .podium-avatar-fallback {
-    width: 100%;
-    height: 100%;
-    display: grid;
-    place-items: center;
-    background: #191c32;
-    color: #b59af5;
-    font-size: 26px;
-    font-weight: 800;
-    line-height: 1;
-    text-transform: uppercase;
-    user-select: none;
-  }
-
   .podium-user-name {
     font-size: 17px;
     font-weight: 700;
@@ -598,31 +535,6 @@
     display: flex;
     align-items: center;
     gap: 12px;
-  }
-
-  .row-avatar-img {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  .row-avatar-fallback {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: #191c32;
-    color: #b59af5;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 14px;
-    line-height: 1;
-    text-transform: uppercase;
-    user-select: none;
-    flex-shrink: 0;
-    border: 1px solid rgba(181, 154, 245, 0.25);
   }
 
   .user-titles {
