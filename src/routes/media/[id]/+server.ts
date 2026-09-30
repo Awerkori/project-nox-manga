@@ -27,7 +27,9 @@ function safeTokenCompare(provided: string, expected: string): boolean {
   return diff === 0;
 }
 
-async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
+const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
+
+async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
   if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
@@ -36,13 +38,27 @@ async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
     const reader = (body as ReadableStream<Uint8Array>).getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        total += value.length;
+    try {
+      while (true) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const next = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('cover body timed out')), idleTimeoutMs);
+          })
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+        });
+        const { done, value } = next;
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          total += value.length;
+        }
       }
+    } catch (failure) {
+      void reader.cancel().catch(() => {});
+      throw failure;
     }
     const result = new Uint8Array(total);
     let offset = 0;
@@ -302,9 +318,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         }
         headers['X-Thumbnail-Strategy'] = 'resized';
       } catch (thumbErr) {
-        console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
-        headers['X-Thumbnail-Strategy'] = 'fallback-original';
-        if (bytes > 0) headers['Content-Length'] = String(bytes);
+        // `body` is a one-shot Telegram stream.  Reusing it after a failed
+        // read/resize can yield a partial or locked response (a blank cover
+        // with HTTP 200). Return a controlled error instead; the card action
+        // retries the untouched original URL once with a fresh stream.
+        console.warn('[THUMBNAIL_GENERATION_FAILED]', { id: params.id, reason: (thumbErr as Error)?.message });
+        return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
+          status: 502,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
+        });
       }
     }
   } else {

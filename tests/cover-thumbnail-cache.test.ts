@@ -74,6 +74,16 @@ describe('cover thumbnail KV', () => {
     await expect(readBoundedCoverResponse(new Response(tooLarge))).resolves.toBeNull();
   });
 
+  it('bounds a response whose body stops after headers', async () => {
+    const response = new Response(new ReadableStream<Uint8Array>({
+      pull() {
+        // Deliberately never enqueue or close.
+      }
+    }));
+
+    await expect(readBoundedCoverResponse(response, 5)).resolves.toBeNull();
+  });
+
   it('does not cache oversized thumbnail responses', async () => {
     const kv = memoryKv();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), {

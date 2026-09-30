@@ -214,7 +214,14 @@
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
           {@const shelfCover = resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' })}
           {@const scanInfo = getScanInfo(work)}
-          {@const isEager = shelfIndex === 0 && i < 4}
+          <!--
+            The shelf is directly below the hero and can expose more than four
+            cards on common desktop widths.  These are the first-view covers:
+            render a bounded initial batch with a real src so they do not wait
+            for client hydration + IntersectionObserver before starting.
+            Everything after this small batch remains deferred.
+          -->
+          {@const isEager = shelfIndex === 0 && i < 8}
           {@const priority = shelfIndex === 0 && i < 2 ? 'high' : 'auto'}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
