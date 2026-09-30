@@ -1,4 +1,5 @@
 export const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
+const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 
 type ThumbnailMetadata = {
   contentType?: string;
@@ -55,14 +56,26 @@ export async function persistCoverThumbnail(
 }
 
 /** Read an un-sized image stream without retaining more than the cover budget. */
-export async function readBoundedCoverResponse(response: Response): Promise<ArrayBuffer | null> {
+export async function readBoundedCoverResponse(
+  response: Response,
+  idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS
+): Promise<ArrayBuffer | null> {
   const reader = response.body?.getReader();
   if (!reader) return null;
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const next = await Promise.race([
+        reader.read(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('cover body timed out')), idleTimeoutMs);
+        })
+      ]).finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+      const { done, value } = next;
       if (done) break;
       if (!value) continue;
       total += value.byteLength;
@@ -81,7 +94,9 @@ export async function readBoundedCoverResponse(response: Response): Promise<Arra
     }
     return bytes.buffer;
   } catch {
-    await reader.cancel().catch(() => {});
+    // Do not let a peer that stopped sending its body hold the publication
+    // warmer forever. Cancellation is best-effort and must not delay recovery.
+    void reader.cancel().catch(() => {});
     return null;
   }
 }

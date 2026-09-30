@@ -235,6 +235,40 @@ describe('Media Security and Cache Guard', () => {
     expect(data.error).toBe('Página temporariamente indisponível');
   });
 
+  it('returns controlled 502 instead of reusing a consumed stream after thumbnail processing fails', async () => {
+    const mediaId = '56565656-5656-4656-8656-565656565656';
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'broken_thumbnail_source',
+      provider_key: 'broken_thumbnail_source_key',
+      bytes: 128,
+      width: 1000,
+      height: 1500
+    };
+    mocks.download.mockResolvedValue(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error('source stream failed'));
+      }
+    }));
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(502);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+  });
+
   it('generates real thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
     const jpeg = (await import('jpeg-js')).default;
     const w = 1000, h = 1500;
