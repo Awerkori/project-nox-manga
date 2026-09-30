@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import {
     LayoutDashboard,
     BookOpen,
@@ -167,19 +168,13 @@
       <!-- Operator Identity Card -->
       <div class="operator-card">
         <div class="operator-avatar">
-          {#if data.profile?.avatar_id || data.profile?.avatarId}
-            <img
-              src="/media/{data.profile?.avatar_id || data.profile?.avatarId}"
-              alt=""
-              width="36"
-              height="36"
-              class="avatar-img"
-            />
-          {:else}
-            <span class="avatar-fallback">
-              {(data.profile?.display_name || data.profile?.displayName || role || 'O').slice(0, 1).toUpperCase()}
-            </span>
-          {/if}
+          <UserAvatar
+            avatarId={data.profile?.avatar_id || data.profile?.avatarId}
+            crop={data.profile?.avatar_crop || data.profile?.avatarCrop}
+            displayName={data.profile?.display_name || data.profile?.displayName || role || 'Operador'}
+            size={36}
+            class="avatar-img"
+          />
           <span class="operator-status-dot"></span>
         </div>
 

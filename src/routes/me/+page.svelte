@@ -384,6 +384,7 @@
           crop={data.member.avatar_crop}
           displayName={data.member.display_name || data.member.username}
           size={72}
+          loading="eager"
         />
       </div>
 

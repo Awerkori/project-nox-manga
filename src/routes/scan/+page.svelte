@@ -1192,6 +1192,7 @@
                 <div class="member-card-header">
                   <UserAvatar
                     avatarId={member.avatar_id}
+                    crop={member.avatar_crop}
                     displayName={member.display_name || member.username}
                     size={46}
                   />
@@ -1542,6 +1543,7 @@
                     <div class="applicant-profile-row">
                       <UserAvatar
                         avatarId={app.members?.avatar_id}
+                        crop={app.members?.avatar_crop}
                         displayName={app.members?.display_name || app.members?.username}
                         size={42}
                       />
@@ -1806,6 +1808,7 @@
                     <div class="note-author-group">
                       <UserAvatar
                         avatarId={note.author?.avatar_id}
+                        crop={note.author?.avatar_crop}
                         displayName={note.author?.display_name || note.author?.username || 'Membro'}
                         frameId={note.author?.avatar_frame_id}
                         size={36}
@@ -2545,6 +2548,7 @@
           <div class="review-candidate-profile">
             <UserAvatar
               avatarId={reviewingApp.members?.avatar_id}
+              crop={reviewingApp.members?.avatar_crop}
               displayName={reviewingApp.members?.display_name || reviewingApp.members?.username}
               size={44}
             />
@@ -2774,6 +2778,7 @@
           <div class="modal-header-profile">
             <UserAvatar
               avatarId={editingMember.avatar_id}
+              crop={editingMember.avatar_crop}
               displayName={editingMember.display_name || editingMember.username}
               size={42}
             />

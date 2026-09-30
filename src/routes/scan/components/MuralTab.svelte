@@ -202,6 +202,7 @@
             <div class="author-lockup">
               <UserAvatar
                 avatarId={post.author?.avatar_id}
+                crop={post.author?.avatar_crop}
                 displayName={post.author?.display_name}
                 size={36}
               />
@@ -371,6 +372,7 @@
                     <div class="comment-bubble">
                       <UserAvatar
                         avatarId={c.author?.avatar_id}
+                        crop={c.author?.avatar_crop}
                         displayName={c.author?.display_name}
                         size={24}
                       />

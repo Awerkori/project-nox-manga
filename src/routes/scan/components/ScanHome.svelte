@@ -413,6 +413,7 @@
                   <div class="author-meta">
                     <UserAvatar
                       avatarId={post.author?.avatar_id}
+                      crop={post.author?.avatar_crop}
                       displayName={post.author?.display_name}
                       size={20}
                     />

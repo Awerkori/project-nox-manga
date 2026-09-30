@@ -167,6 +167,7 @@
                   <UserAvatar
                     displayName={issue.assignee.display_name || issue.assignee.username}
                     avatarId={issue.assignee.avatar_id}
+                    crop={issue.assignee.avatar_crop}
                     size={20}
                   />
                   <span class="assignee-txt">{issue.assignee.display_name || issue.assignee.username}</span>

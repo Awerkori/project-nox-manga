@@ -548,9 +548,10 @@
         <div class="request-card status-{req.status.toLowerCase()}">
           <div class="request-header">
             <div class="request-user">
-              <UserAvatar
-                avatarId={req.members?.avatar_id}
-                displayName={req.members?.display_name || req.members?.username || 'Usuário'}
+                <UserAvatar
+                  avatarId={req.members?.avatar_id}
+                  crop={req.members?.avatar_crop}
+                  displayName={req.members?.display_name || req.members?.username || 'Usuário'}
                 size={40}
               />
               <div class="request-user-meta">

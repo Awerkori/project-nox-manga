@@ -44,7 +44,7 @@ export const load = async ({ locals, setHeaders }) => {
           ? Promise.resolve({ data: profile })
           : locals.db
               .from('members')
-              .select('id, username, display_name, avatar_id, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
+              .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
               .eq('id', locals.user.id)
               .maybeSingle()
       ]),
@@ -61,6 +61,7 @@ export const load = async ({ locals, setHeaders }) => {
         username: p.username,
         display_name: p.display_name,
         avatar_id: p.avatar_id,
+        avatar_crop: p.avatar_crop,
         banner_id: p.banner_id,
         equipped_banner_id: p.equipped_banner_id,
         xp: p.xp,

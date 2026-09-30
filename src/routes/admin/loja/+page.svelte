@@ -606,6 +606,7 @@
               <div class="avatar-preview-box">
                 <UserAvatar
                   avatarId={data.profile?.avatar_id}
+                  crop={data.profile?.avatar_crop}
                   frameId={formAssetUrl ? null : formId}
                   frameUrl={formAssetUrl || null}
                   displayName={formName || 'ProjetoNox'}
@@ -627,6 +628,7 @@
                 <div class="comment-preview-glass">
                   <UserAvatar
                     avatarId={data.profile?.avatar_id}
+                    crop={data.profile?.avatar_crop}
                     displayName="LeitorNox"
                     size={36}
                   />

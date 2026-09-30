@@ -111,6 +111,7 @@
             <UserAvatar
               displayName={member.displayName}
               avatarId={member.avatarId}
+              crop={member.avatar_crop ?? member.avatarCrop}
               size={42}
             />
             <span class="avail-dot" style="background: {meta.color}" title={meta.label}></span>

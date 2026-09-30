@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
   const { data: members, error: dbError } = await locals.db
     .from('members')
-    .select('id, username, display_name, avatar_id, created_at, xp, access_roles(role, suspended)')
+    .select('id, username, display_name, avatar_id, avatar_crop, created_at, xp, access_roles(role, suspended)')
     .or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`)
     .order('created_at', { ascending: false })
     .limit(15);
@@ -30,6 +30,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       username: m.username,
       display_name: m.display_name,
       avatar_id: m.avatar_id,
+      avatar_crop: m.avatar_crop,
       xp: m.xp || 0,
       role,
       isStaff: role === 'ADMIN' || role === 'STAFF_SITE' || role === 'EDITOR',

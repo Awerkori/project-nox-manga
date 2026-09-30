@@ -33,13 +33,13 @@ export const load: PageServerLoad = async ({ locals }) => {
     db.from('scan_recruitment_openings').select('scan_id').eq('status', 'OPEN'),
     db
       .from('scan_members')
-      .select('scan_id, role, members!inner(id, username, display_name, avatar_id)')
+      .select('scan_id, role, members!inner(id, username, display_name, avatar_id, avatar_crop)')
       .eq('role', 'OWNER'),
     db
       .from('scan_partner_requests')
       .select(`
         *,
-        members!user_id(id, username, display_name, avatar_id)
+        members!user_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .order('created_at', { ascending: false }),
     db
@@ -55,13 +55,13 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from('scan_global_audit_log')
       .select(`
         *,
-        admin:members!admin_id(id, username, display_name, avatar_id)
+        admin:members!admin_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .order('created_at', { ascending: false })
       .limit(50),
     db
       .from('members')
-      .select('id, username, display_name, avatar_id')
+      .select('id, username, display_name, avatar_id, avatar_crop')
       .order('username')
       .limit(100)
   ]);

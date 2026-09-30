@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import Empty from '$lib/components/Empty.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import { pageLink } from '$lib/pagination';
@@ -105,33 +106,14 @@
     previewAvatar = localUrl;
 
     try {
-      if (file.size > 5_000_000) throw new Error('Selecione uma imagem de até 5 MB.');
-      const bitmap = await createImageBitmap(file);
-      const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 256;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Não foi possível processar a imagem.');
-      const size = Math.min(bitmap.width, bitmap.height);
-      ctx.drawImage(
-        bitmap,
-        (bitmap.width - size) / 2,
-        (bitmap.height - size) / 2,
-        size,
-        size,
-        0,
-        0,
-        256,
-        256
-      );
-      bitmap.close();
-      const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Imagem inválida.'))), 'image/webp', 0.85)
-      );
+      if (file.size > 50_000_000) throw new Error('Selecione uma imagem de até 50 MB.');
+      // Never route avatars through canvas: it freezes/re-encodes GIFs and
+      // makes the stored bytes differ from the file selected by the member.
+      const fd = new FormData();
+      fd.append('file', file, file.name);
       const response = await fetch('/api/avatar', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type },
-        body: blob
+        body: fd
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
@@ -323,9 +305,12 @@
                 class="avatar-large-img"
               />
             {:else if data.profile.avatar_id}
-              <img
-                src="/media/{data.profile.avatar_id}"
-                alt="Seu avatar"
+              <UserAvatar
+                avatarId={data.profile.avatar_id}
+                crop={data.profile.avatar_crop}
+                displayName={data.profile.display_name}
+                size={112}
+                loading="eager"
                 class="avatar-large-img"
               />
             {:else}
@@ -341,7 +326,7 @@
             <span>{busy ? 'Enviando…' : 'Alterar foto'}</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
               disabled={busy}
               onchange={avatar}
               class="hidden-file-input"

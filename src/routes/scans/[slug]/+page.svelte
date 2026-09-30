@@ -421,6 +421,7 @@
                     <div class="member-card is-owner">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={56}
                         frameId={member.frame_id}
@@ -465,6 +466,7 @@
                     <div class="member-card is-admin">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={52}
                         frameId={member.frame_id}
@@ -506,6 +508,7 @@
                     <div class="member-card">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={48}
                         frameId={member.frame_id}
@@ -709,7 +712,7 @@
             >
               <input type="hidden" name="scan_id" value={data.scan.id} />
               <div class="composer-top">
-                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} size={38} />
+                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} crop={data.viewer.avatarCrop} size={38} />
                 <div class="composer-input-wrap">
                   <textarea
                     name="body"
@@ -758,6 +761,7 @@
                       <UserAvatar
                         displayName={comment.author?.display_name || comment.author?.username || 'Usuário'}
                         avatarId={comment.author?.avatar_id}
+                        crop={comment.author?.avatar_crop}
                         frameId={comment.author?.avatar_frame_id}
                         size={38}
                       />
@@ -915,6 +919,7 @@
                                 <UserAvatar
                                   displayName={reply.author?.display_name || reply.author?.username || 'Usuário'}
                                   avatarId={reply.author?.avatar_id}
+                                  crop={reply.author?.avatar_crop}
                                   frameId={reply.author?.avatar_frame_id}
                                   size={28}
                                 />

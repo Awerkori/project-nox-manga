@@ -4,6 +4,10 @@ import { MEMBER_PAGE_SIZE, pageNumber, pageLink } from '$lib/pagination';
 export const load = async ({ locals, params, url }) => {
   if (!locals.user) redirect(303, '/entrar');
   const area = params.area;
+  // `/me` is the canonical profile editor. Keeping `/perfil` as a second
+  // uploader previously allowed an obsolete canvas/WebP path to destroy GIFs.
+  // Preserve old bookmarks while routing them to the non-destructive editor.
+  if (area === 'perfil') redirect(303, '/me');
   const rawTab = url.searchParams.get('status') || '';
   const tab = area === 'biblioteca' && ['READING', 'PLANNED', 'COMPLETED'].includes(rawTab) ? rawTab : '';
   const filter = area === 'notificacoes' && url.searchParams.get('filtro') === 'nao-lidas' ? 'nao-lidas' : '';

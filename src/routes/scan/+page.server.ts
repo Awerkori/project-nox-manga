@@ -226,6 +226,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           username,
           display_name,
           avatar_id,
+          avatar_crop,
           xp
         )
       `)
@@ -290,7 +291,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         *,
         scan_positions(id, name, description, icon, display_order),
         scan_recruitment_openings(id, title),
-        members:user_id(id, username, display_name, avatar_id)
+        members:user_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
@@ -298,7 +299,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .from('scan_activity')
       .select(`
         *,
-        members:user_id(id, username, display_name, avatar_id)
+        members:user_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false })
@@ -330,6 +331,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           username,
           display_name,
           avatar_id,
+          avatar_crop,
           avatar_frame_id,
           name_color
         )
@@ -347,8 +349,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .select(`
         *,
         stage:stage_id(id, name, slug, color, display_order, dependencies, dependency_operator, requires_output),
-        assignee:assigned_to(id, username, display_name, avatar_id),
-        completer:completed_by(id, username, display_name, avatar_id)
+        assignee:assigned_to(id, username, display_name, avatar_id, avatar_crop),
+        completer:completed_by(id, username, display_name, avatar_id, avatar_crop)
       `)
       .eq('scan_id', currentScan.id),
     locals.db
@@ -360,7 +362,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           task_id,
           content,
           created_at,
-          members:user_id(id, username, display_name, avatar_id)
+          members:user_id(id, username, display_name, avatar_id, avatar_crop)
         )
       `)
       .eq('scan_id', currentScan.id)
@@ -408,7 +410,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .from('scan_messages')
       .select(`
         *,
-        user:user_id(id, username, display_name, avatar_id),
+        user:user_id(id, username, display_name, avatar_id, avatar_crop),
         reply_to:reply_to_id(id, content, deleted_at, user:user_id(id, username, display_name)),
         reactions:scan_message_reactions(id, emoji, user_id)
       `)
@@ -435,7 +437,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .order('display_order', { ascending: true }),
     locals.db
       .from('scan_chapter_qc_issues')
-      .select('*, assignee:assigned_to(id, username, display_name, avatar_id), creator:created_by(id, username, display_name)')
+      .select('*, assignee:assigned_to(id, username, display_name, avatar_id, avatar_crop), creator:created_by(id, username, display_name, avatar_id, avatar_crop)')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
     locals.db
@@ -448,13 +450,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .select('*'),
     locals.db
       .from('scan_mural_posts')
-      .select('*, author:author_id(id, username, display_name, avatar_id)')
+      .select('*, author:author_id(id, username, display_name, avatar_id, avatar_crop)')
       .eq('scan_id', currentScan.id)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false }),
     locals.db
       .from('scan_mural_comments')
-      .select('*, author:author_id(id, username, display_name, avatar_id)')
+      .select('*, author:author_id(id, username, display_name, avatar_id, avatar_crop)')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: true }),
     locals.db
@@ -468,7 +470,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .order('created_at', { ascending: true }),
     locals.db
       .from('scan_production_files')
-      .select('*, uploader:uploaded_by(id, username, display_name, avatar_id), stage:stage_id(id, name, slug)')
+      .select('*, uploader:uploaded_by(id, username, display_name, avatar_id, avatar_crop), stage:stage_id(id, name, slug)')
       .eq('scan_id', currentScan.id)
       .order('version', { ascending: false }),
     locals.db

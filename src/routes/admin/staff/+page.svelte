@@ -16,6 +16,7 @@
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { relativeTime } from '$lib/types';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data, form } = $props();
 
@@ -227,13 +228,7 @@
         <div class="staff-card" class:role-admin={member.role === 'ADMIN'}>
           <div class="card-top">
             <div class="avatar-wrap" class:admin-glow={member.role === 'ADMIN'}>
-              {#if member.avatarId}
-                <img src="/media/{member.avatarId}" alt="" class="avatar-img" />
-              {:else}
-                <div class="avatar-initial">
-                  {member.displayName.charAt(0).toUpperCase()}
-                </div>
-              {/if}
+              <UserAvatar avatarId={member.avatarId} crop={member.avatarCrop} displayName={member.displayName} size={46} class="avatar-img" />
             </div>
 
             <div class="member-meta">
@@ -366,11 +361,7 @@
                 }}
               >
                 <div class="user-result-avatar">
-                  {#if user.avatar_id}
-                    <img src="/media/{user.avatar_id}" alt="" class="avatar-img" />
-                  {:else}
-                    <span>{user.display_name.charAt(0).toUpperCase()}</span>
-                  {/if}
+                  <UserAvatar avatarId={user.avatar_id} crop={user.avatar_crop} displayName={user.display_name} size={32} class="avatar-img" />
                 </div>
                 <div class="user-result-meta">
                   <strong class="user-result-name">{user.display_name}</strong>
@@ -394,11 +385,7 @@
         {#if selectedUser}
           <div class="selected-user-card">
             <div class="selected-user-avatar">
-              {#if selectedUser.avatar_id}
-                <img src="/media/{selectedUser.avatar_id}" alt="" class="avatar-img" />
-              {:else}
-                <span>{selectedUser.display_name.charAt(0).toUpperCase()}</span>
-              {/if}
+              <UserAvatar avatarId={selectedUser.avatar_id} crop={selectedUser.avatar_crop} displayName={selectedUser.display_name} size={38} class="avatar-img" />
             </div>
             <div class="selected-user-info">
               <strong class="selected-name">{selectedUser.display_name}</strong>

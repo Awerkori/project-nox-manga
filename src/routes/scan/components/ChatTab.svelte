@@ -819,6 +819,7 @@
                   <UserAvatar
                     displayName={msg.user?.display_name || msg.user?.username || 'Membro'}
                     avatarId={msg.user?.avatar_id}
+                    crop={msg.user?.avatar_crop}
                     size={36}
                   />
                 </div>
@@ -1066,6 +1067,7 @@
                 {#if cand.type === 'user'}
                   <UserAvatar
                     avatarId={cand.avatar_id}
+                    crop={cand.avatar_crop}
                     displayName={cand.display_name || cand.label.replace(/^@/, '')}
                     size={28}
                   />
@@ -1266,6 +1268,7 @@
         <UserAvatar
           displayName={activeThreadMessage.user?.display_name || 'Membro'}
           avatarId={activeThreadMessage.user?.avatar_id}
+          crop={activeThreadMessage.user?.avatar_crop}
           size={30}
         />
         <div class="thread-parent-body">

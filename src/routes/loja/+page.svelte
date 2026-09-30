@@ -224,6 +224,7 @@
         <div class="preview-avatar-wrap">
           <UserAvatar
             avatarId={data.profile?.avatar_id}
+            crop={data.profile?.avatar_crop}
             frameId={previewFrame || equippedFrame}
             displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
             size={88}
@@ -384,7 +385,8 @@
                 {#if item.kind === 'AVATAR_FRAME'}
                   <div class="frame-demo-wrap">
                     <UserAvatar
-                      avatarId={data.profile?.avatar_id}
+                    avatarId={data.profile?.avatar_id}
+                    crop={data.profile?.avatar_crop}
                       frameId={item.id}
                       displayName={item.name}
                       size={72}
@@ -534,6 +536,7 @@
                   <div class="stage-avatar-holder">
                     <UserAvatar
                       avatarId={data.profile?.avatar_id}
+                      crop={data.profile?.avatar_crop}
                       frameId={item.id}
                       displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
                       size={110}
@@ -565,6 +568,7 @@
                     <div class="banner-stage-avatar">
                       <UserAvatar
                         avatarId={data.profile?.avatar_id}
+                        crop={data.profile?.avatar_crop}
                         frameId={equippedFrame}
                         displayName={data.profile?.display_name || 'Leitor'}
                         size={64}
@@ -592,6 +596,7 @@
                     <div class="mock-comment">
                       <UserAvatar
                         avatarId={data.profile?.avatar_id}
+                        crop={data.profile?.avatar_crop}
                         frameId={equippedFrame}
                         displayName={data.profile?.display_name || 'Leitor'}
                         size={38}
@@ -1880,4 +1885,3 @@
     }
   }
 </style>
-

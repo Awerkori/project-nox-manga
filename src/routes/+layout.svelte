@@ -255,7 +255,9 @@
                 avatarId={data.profile.avatar_id}
                 displayName={data.profile.display_name}
                 frameId={data.profile.avatar_frame_id}
+                crop={data.profile.avatar_crop}
                 size={34}
+                loading="eager"
               />
             </button>
 
@@ -266,6 +268,7 @@
                     avatarId={data.profile.avatar_id}
                     displayName={data.profile.display_name}
                     frameId={data.profile.avatar_frame_id}
+                    crop={data.profile.avatar_crop}
                     size={42}
                   />
                   <div class="dropdown-user-meta">
@@ -912,26 +915,6 @@
     box-shadow: 0 0 16px rgba(181, 154, 245, 0.45);
   }
 
-  .avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .avatar-fallback {
-    width: 100%;
-    height: 100%;
-    display: grid;
-    place-items: center;
-    background: #191c30;
-    color: #b59af5;
-    font-weight: 800;
-    font-size: 14px;
-    line-height: 1;
-    text-transform: uppercase;
-    user-select: none;
-  }
-
   /* Kuro-Style User Dropdown */
   .user-dropdown {
     position: absolute;
@@ -975,31 +958,6 @@
   .dropdown-header-link:hover {
     background: rgba(181, 154, 245, 0.08);
     border-color: rgba(181, 154, 245, 0.2);
-  }
-
-  .dropdown-avatar-img {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1.5px solid rgba(181, 154, 245, 0.4);
-    flex-shrink: 0;
-  }
-
-  .dropdown-avatar-fallback {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: #191c30;
-    color: #b59af5;
-    font-weight: 800;
-    font-size: 16px;
-    line-height: 1;
-    text-transform: uppercase;
-    border: 1.5px solid rgba(181, 154, 245, 0.4);
-    flex-shrink: 0;
   }
 
   .dropdown-user-meta {

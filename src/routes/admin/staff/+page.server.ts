@@ -21,6 +21,7 @@ export const load: PageServerLoad = async ({ locals }) => {
           username,
           display_name,
           avatar_id,
+          avatar_crop,
           xp,
           created_at
         )
@@ -39,6 +40,7 @@ export const load: PageServerLoad = async ({ locals }) => {
           username: m?.username || 'desconhecido',
           displayName: m?.display_name || m?.username || 'Membro',
           avatarId: m?.avatar_id || null,
+          avatarCrop: m?.avatar_crop || null,
           xp: m?.xp || 0,
           createdAt: m?.created_at || null
         };
@@ -54,7 +56,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         const userIds = rawRoles.map((r: any) => r.user_id);
         const { data: memberRows } = await locals.db
           .from('members')
-          .select('id, username, display_name, avatar_id, xp, created_at')
+          .select('id, username, display_name, avatar_id, avatar_crop, xp, created_at')
           .in('id', userIds);
 
         const memberMap = new Map((memberRows || []).map((m: any) => [m.id, m]));
@@ -68,7 +70,8 @@ export const load: PageServerLoad = async ({ locals }) => {
             updatedAt: m?.created_at || null,
             username: m?.username || 'desconhecido',
             displayName: m?.display_name || m?.username || 'Membro',
-            avatarId: m?.avatar_id || null,
+          avatarId: m?.avatar_id || null,
+          avatarCrop: m?.avatar_crop || null,
             xp: m?.xp || 0,
             createdAt: m?.created_at || null
           };

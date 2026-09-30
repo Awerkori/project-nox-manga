@@ -167,6 +167,7 @@
           {#if cand.type === 'user'}
             <UserAvatar
               avatarId={cand.avatar_id}
+              crop={cand.avatar_crop}
               displayName={cand.display_name || cand.username || cand.label}
               size={30}
             />

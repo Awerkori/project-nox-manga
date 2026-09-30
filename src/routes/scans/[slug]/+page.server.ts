@@ -62,6 +62,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
           username,
           display_name,
           avatar_id,
+          avatar_crop,
           xp,
           avatar_frame_id,
           name_color
@@ -81,7 +82,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       .order("created_at", { ascending: false }),
     locals.db
       .from("scan_activity")
-      .select("*, user:members(id, username, display_name, avatar_id)")
+      .select("*, user:members(id, username, display_name, avatar_id, avatar_crop)")
       .eq("scan_id", scan.id)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -109,6 +110,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
           username,
           display_name,
           avatar_id,
+          avatar_crop,
           avatar_frame_id,
           name_color
         ),
@@ -222,6 +224,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
           username: (locals.user as any).username || "",
           displayName: (locals.user as any).display_name || "",
           avatarId: (locals.user as any).avatar_id || null,
+          avatarCrop: (locals.user as any).avatar_crop || null,
           role: locals.role || null
         }
       : null
