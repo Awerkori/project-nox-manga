@@ -2259,12 +2259,12 @@
     }
 
     .profile-banner-wrap {
-      height: 132px;
+      height: 118px;
     }
 
     .identity-row {
       align-items: center;
-      margin-top: -46px;
+      margin-top: -42px;
       margin-bottom: 1.15rem;
       gap: 0.75rem;
     }
@@ -2285,6 +2285,20 @@
       padding: 0.6rem 0.85rem;
       font-size: 0.82rem;
       white-space: nowrap;
+    }
+
+    .profile-tabs-header {
+      gap: 0.25rem;
+      margin-inline: -0.25rem;
+      padding-inline: 0.25rem;
+      scroll-snap-type: x proximity;
+    }
+
+    .profile-tab-btn {
+      min-height: 44px;
+      padding: 0.7rem 0.85rem;
+      font-size: 0.86rem;
+      scroll-snap-align: start;
     }
 
     .info-block {
