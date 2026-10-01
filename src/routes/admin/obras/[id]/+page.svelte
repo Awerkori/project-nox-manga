@@ -46,6 +46,12 @@
   let applyToExistingChapters = $state(false);
   let applyingScans = $state(false);
 
+  function formatAuditDate(value: string | null | undefined) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR');
+  }
+
   async function applyScansToChapters() {
     if (!data.work?.id) return;
     if (!selectedScanIds.length) {
@@ -263,6 +269,80 @@
       {/if}
       <span>{notice}</span>
     </div>
+  {/if}
+
+  {#if data.work && data.provenance}
+    <section class="provenance-panel" aria-labelledby="metadata-provenance-title">
+      <div class="provenance-heading">
+        <div>
+          <span class="eyebrow">AUDITORIA INTERNA</span>
+          <h2 id="metadata-provenance-title">Origem dos metadados</h2>
+        </div>
+        {#if data.provenance.primaryMapping}
+          <span class="source-badge" title={data.provenance.primaryMapping.isPrimary ? 'Mapping primário da obra' : 'Mapping sincronizado mais recente'}>
+            {data.provenance.primaryMapping.name}
+          </span>
+        {:else}
+          <span class="source-badge source-badge-muted">Sem mapping do importer</span>
+        {/if}
+      </div>
+
+      {#if data.provenance.primaryMapping}
+        <div class="provenance-primary-grid">
+          <div class="provenance-item">
+            <span>{data.provenance.primaryMapping.isPrimary ? 'Fonte primária / mapping' : 'Fonte do mapping mais recente'}</span>
+            <strong>{data.provenance.primaryMapping.name}</strong>
+          </div>
+          <div class="provenance-item">
+            <span>Source Work ID</span>
+            <code>{data.provenance.primaryMapping.sourceWorkId}</code>
+          </div>
+          <div class="provenance-item">
+            <span>Última sincronização</span>
+            <strong>{formatAuditDate(data.provenance.primaryMapping.lastSyncedAt)}</strong>
+          </div>
+          <div class="provenance-item">
+            <span>Status</span>
+            <strong>{data.provenance.primaryMapping.syncStatus}</strong>
+          </div>
+          {#if data.provenance.primaryMapping.sourceUrl}
+            <a
+              class="source-external-link"
+              href={data.provenance.primaryMapping.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Abrir obra na fonte
+              <ExternalLink size={13} />
+            </a>
+          {:else if data.provenance.primaryMapping.baseUrl}
+            <a
+              class="source-external-link"
+              href={data.provenance.primaryMapping.baseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Abrir fonte
+              <ExternalLink size={13} />
+            </a>
+          {/if}
+        </div>
+      {/if}
+
+      {#if data.provenance.fields.length > 0}
+        <div class="metadata-field-provenance" aria-label="Proveniência por campo">
+          {#each data.provenance.fields as field (field.field)}
+            <div class="metadata-field-source">
+              <span>{field.label}</span>
+              <strong>{field.source.name}</strong>
+              <small>{formatAuditDate(field.updatedAt)}</small>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="provenance-empty">Esta obra não possui proveniência de metadados registrada.</p>
+      {/if}
+    </section>
   {/if}
 
   <!-- Main Work Form -->
@@ -612,6 +692,7 @@
             <thead>
               <tr>
                 <th>Capítulo</th>
+                <th>Fonte</th>
                 <th>Status</th>
                 <th>Data</th>
                 <th class="th-action">Ação</th>
@@ -624,6 +705,59 @@
                     <strong class="ch-num">Capítulo {ch.number}</strong>
                     {#if ch.title}
                       <span class="ch-desc">— {ch.title}</span>
+                    {/if}
+                  </td>
+                  <td class="td-ch-source">
+                    {#if data.chapterProvenance[ch.id]}
+                      {@const provenance = data.chapterProvenance[ch.id]}
+                      <details class="chapter-provenance-details">
+                        <summary>
+                          <span class="source-badge">{provenance.name}</span>
+                        </summary>
+                        <div class="chapter-provenance-card">
+                          <dl>
+                            <div>
+                              <dt>Fonte</dt>
+                              <dd>{provenance.name} <code>{provenance.id}</code></dd>
+                            </div>
+                            <div>
+                              <dt>Source Chapter ID</dt>
+                              <dd><code>{provenance.sourceChapterId}</code></dd>
+                            </div>
+                            <div>
+                              <dt>Capítulo canônico</dt>
+                              <dd><code>{provenance.canonicalChapterId}</code></dd>
+                            </div>
+                            <div>
+                              <dt>Work ID</dt>
+                              <dd><code>{provenance.workId}</code></dd>
+                            </div>
+                            <div>
+                              <dt>Importado em</dt>
+                              <dd>{formatAuditDate(provenance.importedAt)}</dd>
+                            </div>
+                            <div>
+                              <dt>Mapping</dt>
+                              <dd>{provenance.status}{provenance.pageProvider ? ' · provedor de páginas' : ''}</dd>
+                            </div>
+                          </dl>
+                          {#if provenance.sourceUrl}
+                            <a class="source-detail-link" href={provenance.sourceUrl} target="_blank" rel="noopener noreferrer">
+                              Abrir capítulo na fonte <ExternalLink size={12} />
+                            </a>
+                          {/if}
+                          {#if provenance.alternatives.length > 0}
+                            <div class="source-alternatives">
+                              <span>Outras fontes registradas:</span>
+                              {#each provenance.alternatives as alternative (alternative.mappingId)}
+                                <span class="source-badge source-badge-muted">{alternative.name}</span>
+                              {/each}
+                            </div>
+                          {/if}
+                        </div>
+                      </details>
+                    {:else}
+                      <span class="source-unavailable">Não registrado</span>
                     {/if}
                   </td>
                   <td class="td-ch-status">
@@ -1428,12 +1562,153 @@
     justify-content: center;
   }
 
+  /* Internal provenance — rendered only by the staff-only /admin route. */
+  .provenance-panel {
+    padding: 18px;
+    border: 1px solid rgba(223, 194, 141, 0.2);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(223, 194, 141, 0.075), rgba(13, 16, 26, 0.72));
+  }
+
+  .provenance-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .provenance-heading h2 {
+    margin: 3px 0 0;
+    color: #f7f8fc;
+    font-size: 16px;
+  }
+
+  .provenance-primary-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    align-items: end;
+    margin-top: 16px;
+  }
+
+  .provenance-item {
+    display: grid;
+    gap: 3px;
+    min-width: 135px;
+  }
+
+  .provenance-item > span,
+  .metadata-field-source > span,
+  .chapter-provenance-card dt {
+    color: #8c93a8;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .provenance-item strong {
+    color: #dce2ee;
+    font-size: 12px;
+  }
+
+  .provenance-item code,
+  .chapter-provenance-card code {
+    max-width: 260px;
+    overflow-wrap: anywhere;
+    color: #b6bfd2;
+    font-size: 11px;
+  }
+
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 7px;
+    border: 1px solid rgba(223, 194, 141, 0.32);
+    border-radius: 999px;
+    color: #f1d59d;
+    background: rgba(223, 194, 141, 0.11);
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+
+  .source-badge-muted {
+    border-color: rgba(151, 163, 184, 0.3);
+    color: #b4bdcd;
+    background: rgba(151, 163, 184, 0.09);
+  }
+
+  .source-external-link,
+  .source-detail-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: fit-content;
+    color: #dfc28d;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .source-external-link:hover,
+  .source-detail-link:hover {
+    color: #fff0c8;
+    text-decoration: underline;
+  }
+
+  .metadata-field-provenance {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 8px;
+    margin-top: 15px;
+  }
+
+  .metadata-field-source {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: rgba(5, 8, 16, 0.3);
+  }
+
+  .metadata-field-source strong {
+    overflow: hidden;
+    color: #e4e8f1;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .metadata-field-source small {
+    overflow: hidden;
+    color: #798397;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .provenance-empty,
+  .source-unavailable {
+    color: #8891a4;
+    font-size: 11px;
+  }
+
+  .provenance-empty {
+    margin: 13px 0 0;
+  }
+
   /* Chapters Table */
   .chapters-table-card {
     background: rgba(13, 16, 26, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     backdrop-filter: blur(14px);
   }
 
@@ -1473,6 +1748,76 @@
 
   .td-ch-title {
     color: #ffffff;
+  }
+
+  .td-ch-source {
+    min-width: 112px;
+  }
+
+  .chapter-provenance-details {
+    position: relative;
+  }
+
+  .chapter-provenance-details summary {
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .chapter-provenance-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chapter-provenance-details[open] .source-badge {
+    border-color: rgba(255, 240, 200, 0.6);
+    background: rgba(223, 194, 141, 0.2);
+  }
+
+  .chapter-provenance-card {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(340px, calc(100vw - 80px));
+    padding: 12px;
+    border: 1px solid rgba(223, 194, 141, 0.28);
+    border-radius: 9px;
+    background: #141a28;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.38);
+  }
+
+  .chapter-provenance-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .chapter-provenance-card dl > div {
+    display: grid;
+    grid-template-columns: 115px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .chapter-provenance-card dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #d9dfeb;
+    font-size: 11px;
+  }
+
+  .source-detail-link {
+    margin-top: 10px;
+  }
+
+  .source-alternatives {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    color: #99a3b7;
+    font-size: 10px;
   }
 
   .ch-num {
@@ -1585,6 +1930,38 @@
   }
 
   @media (max-width: 768px) {
+    .provenance-panel {
+      padding: 14px;
+    }
+
+    .provenance-heading {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .provenance-primary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+    }
+
+    .provenance-item {
+      min-width: 0;
+    }
+
+    .metadata-field-provenance {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chapters-table-card {
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .chapters-table {
+      min-width: 690px;
+    }
+
     .page-header {
       flex-direction: column;
       align-items: flex-start;

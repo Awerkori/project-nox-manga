@@ -6,20 +6,13 @@
   import { flushUploads, UploadRateLimitError } from '$lib/upload-queue';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
   import {
-    ArrowLeft,
-    Save,
-    Send,
-    Eye,
-    UploadCloud,
     CheckCircle2,
     AlertCircle,
     Loader2,
-    Trash2,
     Layers,
     FileText,
     Clock,
     Shield,
-    Users,
     RefreshCw
   } from '@lucide/svelte';
 
@@ -40,8 +33,6 @@
     pauseRequested = $state(false),
     uploading = $state(false);
   let uploadSpeedMBs = $state(0),
-    inCooldown = $state(false),
-    cooldownSeconds = $state(0),
     isRateLimited = $state(false),
     rateLimitSeconds = $state(0),
     isRetryingTransient = $state(false),
@@ -50,6 +41,12 @@
     lastProgressTime = $state(Date.now());
   let batchTotal = $state(0),
     savedNavigation = false;
+
+  function formatAuditDate(value: string | null | undefined) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR');
+  }
   let savedVersion = $state(
     JSON.stringify({
       number: initial.chapter?.number ?? 1,
@@ -178,8 +175,6 @@
           rateLimitSeconds = 0;
           isRetryingTransient = false;
           transientRetrySeconds = 0;
-          inCooldown = false;
-          cooldownSeconds = 0;
         },
         () => pauseRequested,
         {
@@ -191,8 +186,6 @@
             if (isRateLimit) {
               isRateLimited = waitSeconds > 0;
               rateLimitSeconds = waitSeconds;
-              inCooldown = waitSeconds > 0;
-              cooldownSeconds = waitSeconds;
               isRetryingTransient = false;
               transientRetrySeconds = 0;
               notice = waitSeconds > 0
@@ -201,8 +194,6 @@
             } else {
               isRateLimited = false;
               rateLimitSeconds = 0;
-              inCooldown = false;
-              cooldownSeconds = 0;
               isRetryingTransient = waitSeconds > 0;
               transientRetrySeconds = waitSeconds;
               transientAttempt = attempt;
@@ -219,8 +210,6 @@
             isRetryingTransient = stats.isRetryingTransient;
             transientRetrySeconds = stats.transientRetrySecondsRemaining ?? 0;
             transientAttempt = stats.transientAttempt ?? 0;
-            inCooldown = stats.isRateLimited;
-            cooldownSeconds = stats.rateLimitSecondsRemaining ?? 0;
           }
         }
       );
@@ -230,7 +219,6 @@
     } catch (e) {
       isRateLimited = false;
       isRetryingTransient = false;
-      inCooldown = false;
       notice = `${(e as Error).message} As páginas já enviadas foram preservadas. Tente novamente para continuar.`;
     } finally {
       busy = uploading = false;
@@ -355,6 +343,34 @@
 
   {#if notice}
     <div class="notice" role="status">{notice}</div>
+  {/if}
+
+  {#if data.chapterProvenance}
+    <details class="chapter-origin-panel">
+      <summary>
+        <span>Origem do capítulo</span>
+        <strong>{data.chapterProvenance.name}</strong>
+      </summary>
+      <div class="chapter-origin-content">
+        <dl>
+          <div><dt>Fonte</dt><dd>{data.chapterProvenance.name} <code>{data.chapterProvenance.id}</code></dd></div>
+          <div><dt>Source Chapter ID</dt><dd><code>{data.chapterProvenance.sourceChapterId}</code></dd></div>
+          <div><dt>Capítulo canônico</dt><dd><code>{data.chapterProvenance.canonicalChapterId}</code></dd></div>
+          <div><dt>Work ID</dt><dd><code>{data.chapterProvenance.workId}</code></dd></div>
+          <div><dt>Importado em</dt><dd>{formatAuditDate(data.chapterProvenance.importedAt)}</dd></div>
+          <div><dt>Mapping</dt><dd>{data.chapterProvenance.status}{data.chapterProvenance.pageProvider ? ' · provedor de páginas' : ''}</dd></div>
+        </dl>
+        {#if data.chapterProvenance.sourceUrl}
+          <a href={data.chapterProvenance.sourceUrl} target="_blank" rel="noopener noreferrer">Abrir capítulo na fonte</a>
+        {/if}
+        {#if data.chapterProvenance.alternatives.length > 0}
+          <p>
+            Outras fontes registradas:
+            {data.chapterProvenance.alternatives.map((alternative) => alternative.name).join(', ')}
+          </p>
+        {/if}
+      </div>
+    </details>
   {/if}
 
   <!-- Main Workspace -->
@@ -1126,6 +1142,81 @@
     height: 100%;
     background: linear-gradient(90deg, #9333ea, #c084fc);
     transition: width 0.2s ease;
+  }
+
+  .chapter-origin-panel {
+    border: 1px solid rgba(223, 194, 141, 0.24);
+    border-radius: 10px;
+    background: rgba(223, 194, 141, 0.06);
+  }
+
+  .chapter-origin-panel summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 14px;
+    cursor: pointer;
+    color: #dce2ee;
+    font-size: 12px;
+  }
+
+  .chapter-origin-panel summary strong {
+    color: #f1d59d;
+  }
+
+  .chapter-origin-content {
+    padding: 0 14px 13px;
+    color: #c5ccda;
+    font-size: 12px;
+  }
+
+  .chapter-origin-content dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    margin: 0;
+  }
+
+  .chapter-origin-content dl > div {
+    min-width: 0;
+  }
+
+  .chapter-origin-content dt {
+    color: #8490a5;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .chapter-origin-content dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  .chapter-origin-content code {
+    color: #b6bfd2;
+    font-size: 11px;
+  }
+
+  .chapter-origin-content a {
+    display: inline-flex;
+    margin-top: 11px;
+    color: #dfc28d;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .chapter-origin-content p {
+    margin: 10px 0 0;
+    color: #98a2b8;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-origin-content dl {
+      grid-template-columns: 1fr;
+    }
   }
 
   /* Pages gallery */
