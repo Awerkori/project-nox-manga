@@ -5,7 +5,6 @@
   import { enhance } from '$app/forms';
   import {
     Sparkles,
-    User,
     BookOpen,
     Bookmark,
     Clock,
@@ -42,8 +41,6 @@
     Library,
     Move,
     ZoomIn,
-    RotateCcw,
-    Sliders,
     X,
     ExternalLink
   } from '@lucide/svelte';
@@ -195,12 +192,8 @@
   });
 
   // Notifications State & Realtime
-  let notifsList = $state<any[]>(data.notifications || []);
+  let notifsList = $derived<any[]>(data.notifications || []);
   let notifFilter = $state<'ALL' | 'UNREAD'>('ALL');
-
-  $effect(() => {
-    notifsList = data.notifications || [];
-  });
 
   $effect(() => {
     if (!data.member?.id) return;
@@ -787,7 +780,7 @@
 
               <div class="ach-category-select-wrap">
                 <select class="ach-category-select" bind:value={achCategoryFilter}>
-                  {#each Object.entries(categoryLabels) as [catKey, catLabel]}
+                  {#each Object.entries(categoryLabels) as [catKey, catLabel] (catKey)}
                     <option value={catKey}>{catLabel}</option>
                   {/each}
                 </select>
