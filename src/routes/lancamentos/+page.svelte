@@ -274,6 +274,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+    min-width: 0;
     min-height: 100vh;
   }
 
@@ -282,6 +283,7 @@
     margin: 0 auto;
     padding: 2rem 2rem 5rem;
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
   }
 
@@ -364,6 +366,7 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
     width: 100%;
+    min-width: 0;
   }
 
   @media (max-width: 1024px) {
@@ -390,6 +393,7 @@
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     min-height: 102px;
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
   }
 
@@ -457,6 +461,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.5rem;
+    min-width: 0;
   }
 
   .work-title-group {
@@ -475,6 +480,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
     transition: color 0.15s ease;
   }
 
@@ -513,6 +520,7 @@
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
+    min-width: 0;
   }
 
   .chapter-pill {
@@ -554,6 +562,112 @@
     background: rgba(223, 194, 141, 0.08);
     border-color: rgba(223, 194, 141, 0.22);
     color: #f1f5f9;
+  }
+
+  /* A release row is intentionally dense on desktop. On a phone it becomes a
+     compact two-column card so a long title or chapter label can never widen
+     the page itself. */
+  @media (max-width: 640px) {
+    .lancamentos-container {
+      padding: 1.25rem 1rem calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    .page-header {
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.65rem;
+    }
+
+    .filter-bar {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      padding-bottom: 0.2rem;
+    }
+
+    .filter-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-pill {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding-inline: 0.9rem;
+    }
+
+    .release-row-card {
+      align-items: flex-start;
+      gap: 0.75rem;
+      min-height: 0;
+      padding: 0.8rem;
+      border-radius: 14px;
+    }
+
+    .thumb-wrap {
+      width: 56px;
+      height: 78px;
+      border-radius: 7px;
+    }
+
+    .release-main {
+      min-width: 0;
+      padding-top: 0.05rem;
+    }
+
+    .release-top-row {
+      display: block;
+    }
+
+    .work-title-group {
+      align-items: flex-start;
+      gap: 0.35rem;
+    }
+
+    .work-link {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      white-space: normal;
+      line-height: 1.25;
+    }
+
+    .kind-tag {
+      margin-top: 0.1rem;
+    }
+
+    .timestamp-box {
+      margin-top: 0.35rem;
+    }
+
+    .chapter-pills-list {
+      gap: 0.35rem;
+    }
+
+    .chapter-pill {
+      min-height: 32px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.73rem;
+    }
+
+    .chapter-pill.expand-pill {
+      font-size: 0.71rem;
+    }
+
+    .load-more-container {
+      margin-top: 2rem;
+    }
+
+    .btn-load-more {
+      width: 100%;
+      justify-content: center;
+      min-height: 46px;
+    }
   }
 
   /* Load More Section */

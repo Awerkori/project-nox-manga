@@ -346,6 +346,9 @@
     position: relative;
     margin-bottom: 3.5rem;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   .shelf-header {
@@ -498,6 +501,8 @@
     -ms-overflow-style: none;
     margin: 0 -0.5rem;
     padding: 0.5rem;
+    max-width: calc(100% + 1rem);
+    overscroll-behavior-x: contain;
   }
 
   .shelf-scroll-container::-webkit-scrollbar {
@@ -768,6 +773,32 @@
   }
 
   @media (max-width: 640px) {
+    .shelf-section {
+      margin-bottom: 2.75rem;
+    }
+
+    .shelf-header {
+      align-items: flex-start;
+      margin-bottom: 0.85rem;
+    }
+
+    .shelf-actions {
+      gap: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .view-all-link span {
+      display: none;
+    }
+
+    .shelf-scroll-container {
+      /* Keep the intentional horizontal shelf scroll local to the shelf. */
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding-inline: 0;
+    }
+
     .shelf-card {
       width: 145px;
     }
