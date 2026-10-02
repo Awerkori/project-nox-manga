@@ -202,6 +202,18 @@ const WORK_SELECT_COLUMNS = `
   updated_at, created_at, content_rating, views_total
 `;
 
+// Home SSR serializes these rows into the document. Keep this deliberately
+// small: detail-only fields such as aliases and description can otherwise add
+// substantial CPU and response size to every cold public Home render.
+const HOME_WORK_SELECT_COLUMNS = `
+  id, slug, title, LEFT(COALESCE(synopsis, ''), 1200) AS synopsis,
+  author, artist, kind, status, featured, cover_id, content_rating, views_total
+`;
+
+const HOME_MOST_READ_SELECT_COLUMNS = `
+  id, slug, title, author, kind, status, featured, cover_id, content_rating, views_total
+`;
+
 /**
  * Fetch top published works ordered by updated_at (Novas Obras).
  */
@@ -210,7 +222,7 @@ export async function fetchHomeWorksFromYugabyte(platformEnv?: any): Promise<Yug
     'home_works',
     async () => {
       const sql = `
-        SELECT ${WORK_SELECT_COLUMNS}
+        SELECT ${HOME_WORK_SELECT_COLUMNS}
         FROM works
         WHERE published = true
         ORDER BY updated_at DESC
@@ -231,7 +243,7 @@ export async function fetchMostReadFromYugabyte(platformEnv?: any): Promise<Yuga
     'home_most_read',
     async () => {
       const sql = `
-        SELECT ${WORK_SELECT_COLUMNS}
+        SELECT ${HOME_MOST_READ_SELECT_COLUMNS}
         FROM works
         WHERE published = true
         ORDER BY views_total DESC
