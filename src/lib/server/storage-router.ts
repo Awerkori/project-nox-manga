@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
 import { RateLimitError } from '$lib/server/media';
@@ -148,7 +149,9 @@ export function deduceMangaShardFromFileId(fileId: string) {
     for (const [chanHex, info] of Object.entries(KNOWN_MANGA_SHARDS)) {
       if (hex.includes(chanHex)) return info;
     }
-  } catch {}
+  } catch {
+    // Invalid opaque provider IDs simply cannot be attributed to a shard.
+  }
   return null;
 }
 
@@ -476,8 +479,11 @@ export interface PipelineFileStoredRecord {
  * Enforces Telegram Bot API 20 MB download limit, scan concurrency fair sharing,
  * routes strictly to PRODUCTION_STORAGE pool, and tracks shard metrics.
  */
-export async function uploadPipelineFileToStorage(options: PipelineFileUploadOptions): Promise<PipelineFileStoredRecord> {
-  const { bytes, fileName, mime, userId, scanId, productionChapterId, stageId } = options;
+export async function uploadPipelineFileToStorage(
+  options: PipelineFileUploadOptions,
+  platformEnv?: any
+): Promise<PipelineFileStoredRecord> {
+  const { bytes, mime, scanId } = options;
 
   const MAX_PIPELINE_SIZE = 20_971_520; // 20 MB (Telegram Bot API getFile ceiling)
   if (bytes.byteLength > MAX_PIPELINE_SIZE) {
@@ -490,25 +496,45 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
   const sha256 = Array.from(new Uint8Array(hashBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
 
   const releaseScanSlot = await acquireScanSlot(scanId);
-  const db = privileged();
-
   try {
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
-      p_pool_key: 'PRODUCTION_STORAGE',
-      p_chapter_id: productionChapterId,
-      p_scan_id: scanId
-    });
+    // Pipeline metadata is authoritative in Yugabyte/YSQL. Selection is
+    // deliberately bounded and deterministic; it does not depend on the
+    // retired Supabase RPC control plane.
+    const shardRows = await executeYugabyteSql<{
+      shard_id: string;
+      pool_id: string;
+      bot_reference: string;
+      channel_id: string;
+    }>(`
+      SELECT shard.id AS shard_id, shard.pool_id, shard.bot_reference, shard.channel_id
+      FROM public.storage_pools pool
+      JOIN public.storage_shards shard ON shard.pool_id = pool.id
+      WHERE pool.key = $1
+        AND pool.enabled = true
+        AND shard.enabled = true
+        AND shard.write_status IN ('HEALTHY', 'DEGRADED')
+        AND (shard.cooldown_until IS NULL OR shard.cooldown_until <= now())
+      ORDER BY shard.active_uploads ASC, shard.queue_depth ASC,
+               shard.recent_failures ASC, shard.last_selected_at ASC NULLS FIRST, shard.id ASC
+      LIMIT 1
+    `, ['PRODUCTION_STORAGE'], platformEnv);
 
-    if (shardErr || !shardRows?.length) {
-      throw new Error(`Falha ao selecionar shard de produção editorial: ${shardErr?.message || 'Nenhum shard disponível'}`);
+    const shard = shardRows.rows[0];
+    if (!shard) {
+      throw new Error('Falha ao selecionar shard de produção editorial: nenhum shard disponível');
     }
-
-    const shard = shardRows[0];
     const shardId = shard.shard_id;
     const botRef = shard.bot_reference || 'PRODUCTION_STORAGE';
     const channelId = shard.channel_id;
 
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    await executeYugabyteSql(`
+      UPDATE public.storage_shards
+      SET active_uploads = active_uploads + 1,
+          queue_depth = queue_depth + 1,
+          last_selected_at = now(),
+          updated_at = now()
+      WHERE id = $1
+    `, [shardId], platformEnv);
     const botClient = resolveBotClient(botRef, channelId);
 
     const fileId = crypto.randomUUID();
@@ -527,14 +553,18 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
       const statusCode = isTg ? uploadErr.status : undefined;
       const retryAfter = isTg ? uploadErr.retryAfter : undefined;
 
-      await db.rpc('record_shard_upload_result', {
-        p_shard_id: shardId,
-        p_success: false,
-        p_latency_ms: elapsedMs,
-        p_bytes: 0,
-        p_error_code: statusCode || null,
-        p_retry_after: retryAfter || null
-      });
+      await executeYugabyteSql(`
+        UPDATE public.storage_shards
+        SET active_uploads = GREATEST(active_uploads - 1, 0),
+            queue_depth = GREATEST(queue_depth - 1, 0),
+            recent_failures = recent_failures + 1,
+            latency_ms = $2,
+            last_failure_at = now(),
+            cooldown_until = CASE WHEN $3::int = 429 AND $4::int > 0
+              THEN now() + ($4::text || ' seconds')::interval ELSE cooldown_until END,
+            updated_at = now()
+        WHERE id = $1
+      `, [shardId, elapsedMs, statusCode || 0, retryAfter || 0], platformEnv);
 
       if (isTg && statusCode === 429) {
         throw new RateLimitError(retryAfter && retryAfter > 0 ? retryAfter : 15);
@@ -543,14 +573,20 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     }
 
     const elapsedMs = Date.now() - startTime;
-    await db.rpc('record_shard_upload_result', {
-      p_shard_id: shardId,
-      p_success: true,
-      p_latency_ms: elapsedMs,
-      p_bytes: bytes.byteLength,
-      p_error_code: null,
-      p_retry_after: null
-    });
+    await executeYugabyteSql(`
+      UPDATE public.storage_shards
+      SET active_uploads = GREATEST(active_uploads - 1, 0),
+          queue_depth = GREATEST(queue_depth - 1, 0),
+          recent_successes = recent_successes + 1,
+          recent_bytes = COALESCE(recent_bytes, 0) + $3::bigint,
+          recent_writes = COALESCE(recent_writes, 0) + 1,
+          latency_ms = $2,
+          last_success_at = now(),
+          last_write_at = now(),
+          cooldown_until = NULL,
+          updated_at = now()
+      WHERE id = $1
+    `, [shardId, elapsedMs, bytes.byteLength], platformEnv);
 
     return {
       telegramFileId,
@@ -564,4 +600,3 @@ export async function uploadPipelineFileToStorage(options: PipelineFileUploadOpt
     releaseScanSlot();
   }
 }
-

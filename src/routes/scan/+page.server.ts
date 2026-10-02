@@ -3,9 +3,10 @@ import { WORK_FIELDS } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, platform }) => {
   if (!locals.user) {
     return {
       authenticated: false,
@@ -611,6 +612,32 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     };
   });
 
+  // Pipeline delivery state is authoritative in Yugabyte/YSQL. Keep the rest
+  // of this incremental Scan workspace migration intact while ensuring a new
+  // multi-file upload is visible immediately after invalidation.
+  let productionFiles = productionFilesRes.data || [];
+  try {
+    const ysqlFiles = await withTimeout(
+      executeYugabyteSql<any>(`
+        SELECT file.*,
+          jsonb_build_object('id', member.id, 'username', member.username,
+            'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
+          jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
+        FROM public.scan_production_files file
+        LEFT JOIN public.members member ON member.id = file.uploaded_by
+        LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
+        WHERE file.scan_id = $1
+        ORDER BY file.version DESC, file.created_at DESC
+      `, [currentScan.id], platform?.env),
+      2_000,
+      { rows: [], rowCount: 0 },
+      'scan_pipeline_files_ysql'
+    );
+    productionFiles = ysqlFiles.rows;
+  } catch (error: any) {
+    console.warn('scan_pipeline_files_ysql_fallback', { message: String(error?.message || 'unknown').slice(0, 240) });
+  }
+
   return {
     authenticated: true,
     isMember: true,
@@ -655,7 +682,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     pipelineTemplates: pipelineTemplatesRes.data || [],
     muralPosts,
     attachments: attachmentsRes.data || [],
-    productionFiles: productionFilesRes.data || [],
+    productionFiles,
     chapterTimeline: chapterTimelineRes.data || [],
     workOverrides: workOverridesRes.data || [],
     creditSnapshots: creditSnapshotsRes.data || [],
