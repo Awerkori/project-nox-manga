@@ -19,13 +19,18 @@ type HomeCachePayload = {
 let homePublicCache: HomeCachePayload | null = null;
 const HOME_CACHE_TTL_MS = 30_000;
 
-export const load = async ({ locals, setHeaders, url, platform }: any) => {
-  // Always enforce private no-cache on HTML documents so edge proxies never serve anonymous HTML to authenticated users
+export const load = async ({ locals, setHeaders, url, platform, cookies }: any) => {
+  const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');
+  // Age and blur preferences affect the server-rendered page. Only the default,
+  // truly anonymous Home response is safe to share at the edge.
+  const hasHomePreference = Boolean(cookies.get('nox-age-status') || cookies.get('nox-blur-nsfw'));
+  const canSharePublicHome = !locals.user && !forceFresh && !hasHomePreference;
   setHeaders({
-    'cache-control': 'private, no-cache, no-store, must-revalidate'
+    'cache-control': canSharePublicHome
+      ? 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
+      : 'private, no-cache, no-store, must-revalidate'
   });
 
-  const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');
   const hasFreshPublicCache = !forceFresh && Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);
 
   // If public content cache is fresh and user is anonymous, return directly without hitting DB
