@@ -61,9 +61,11 @@ var initialized = server.init({
   }
 });
 const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
-function isAuthenticatedRequest(req) {
-  return AUTHENTICATED_SESSION_COOKIE.test(req.headers.get('cookie') || '') || req.headers.has('authorization');
+function shouldBypassSharedCache(req) {
+  const cookie = req.headers.get('cookie') || '';
+  return AUTHENTICATED_SESSION_COOKIE.test(cookie) || PERSONALIZED_HOME_COOKIE.test(cookie) || req.headers.has('authorization');
 }
 
 var worker_default = {
@@ -100,8 +102,8 @@ var worker_default = {
     }
     await initialized;
     let pragma = req.headers.get("cache-control") || "";
-    const authenticatedRequest = isAuthenticatedRequest(req);
-    let res = !authenticatedRequest && !pragma.includes("no-cache") && await r2(req);
+    const cacheBypassRequest = shouldBypassSharedCache(req);
+    let res = !cacheBypassRequest && !pragma.includes("no-cache") && await r2(req);
     if (res) return res;
     let { pathname, search } = new URL(req.url);
     try {
@@ -151,7 +153,7 @@ var worker_default = {
       });
     }
     pragma = res.headers.get("cache-control") || "";
-    return !authenticatedRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;
+    return !cacheBypassRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;
   }
 };
 export {

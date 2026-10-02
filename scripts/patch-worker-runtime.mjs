@@ -10,25 +10,28 @@ function patchGeneratedWorker() {
   const generatedLintDisable = '/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */\n';
   if (!content.startsWith(generatedLintDisable)) content = generatedLintDisable + content;
 
-  // Authenticated responses must never be served from Cloudflare's shared
-  // cache. This is cache exclusion only; SvelteKit still performs all auth.
-  if (!content.includes('AUTHENTICATED_SESSION_COOKIE')) {
+  // Authenticated and personalized responses must never be served from
+  // Cloudflare's shared cache. This is cache exclusion only; SvelteKit still
+  // performs all auth and personalization.
+  if (!content.includes('PERSONALIZED_HOME_COOKIE')) {
     const workerMarker = 'var worker_default = {';
     const authCacheExclusion = `const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|;\\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
-function isAuthenticatedRequest(req) {
-  return AUTHENTICATED_SESSION_COOKIE.test(req.headers.get('cookie') || '') || req.headers.has('authorization');
+function shouldBypassSharedCache(req) {
+  const cookie = req.headers.get('cookie') || '';
+  return AUTHENTICATED_SESSION_COOKIE.test(cookie) || PERSONALIZED_HOME_COOKIE.test(cookie) || req.headers.has('authorization');
 }
 
 var worker_default = {`;
     content = content.replace(workerMarker, authCacheExclusion);
     content = content.replace(
       'let res = !pragma.includes("no-cache") && await r2(req);',
-      'const authenticatedRequest = isAuthenticatedRequest(req);\n    let res = !authenticatedRequest && !pragma.includes("no-cache") && await r2(req);'
+      'const cacheBypassRequest = shouldBypassSharedCache(req);\n    let res = !cacheBypassRequest && !pragma.includes("no-cache") && await r2(req);'
     );
     content = content.replace(
       'return pragma && res.status < 400 ? c(req, res, ctx) : res;',
-      'return !authenticatedRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;'
+      'return !cacheBypassRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;'
     );
   }
 
