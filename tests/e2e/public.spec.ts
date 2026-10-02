@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context }, testInfo) => {
+  const origin = new URL(testInfo.project.use.baseURL as string).origin;
   await context.addCookies([
     {
       name: 'nox-age-status',
       value: 'ADULT',
-      url: 'http://127.0.0.1:5173'
+      url: origin
     },
     {
       name: 'nox-blur-nsfw',
       value: 'false',
-      url: 'http://127.0.0.1:5173'
+      url: origin
     }
   ]);
 });
