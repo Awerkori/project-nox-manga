@@ -4,6 +4,14 @@ import path from "node:path";
 const target = path.resolve("src/worker-wrapper.js");
 if (fs.existsSync(target)) {
   let content = fs.readFileSync(target, "utf8");
+  const generatedLintDisable = "/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */\n";
+  // The adapter emits minified generated glue which deliberately uses all
+  // three patterns. Reapply this file-level marker on every build, rather
+  // than allowing generated code to make the focused CI lint nondeterministic.
+  if (!content.startsWith(generatedLintDisable)) {
+    content = generatedLintDisable + content;
+    fs.writeFileSync(target, content, "utf8");
+  }
   if (!content.includes("AUTH_COOKIE_REGEX")) {
     const searchTarget = "var worker_default = {";
     const authLogic = `const AUTH_COOKIE_REGEX = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
@@ -77,6 +85,8 @@ if (fs.existsSync(target)) {
         });
         const body = await res.text().catch(() => "");
         console.log(\`[CRON_EMAIL_PROCESSOR] Status \${res.status}: \${body}\`);
+        // Cover warming is event-driven at publication time. Do not poll KV,
+        // Yugabyte, or Telegram from this frequent email cron.
       } catch (err) {
         console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
       }
@@ -93,5 +103,3 @@ if (fs.existsSync(target)) {
     console.log("[inject-worker-auth-bypass] Injected functional scheduled cron handler into src/worker-wrapper.js");
   }
 }
-
-

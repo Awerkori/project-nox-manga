@@ -5,6 +5,8 @@
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
+  import { formatChapterNumber } from '$lib/chapter-number';
+  import { deferImage } from '$lib/actions/defer-image';
 
   type ReleaseItem = {
     workId: string;
@@ -47,7 +49,7 @@
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
       if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace('?size=thumb', '');
+        node.src = node.src.replace(/\?size=thumb(?:&[^#]*)?$/, '');
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
@@ -95,20 +97,22 @@
         {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
         {@const remainingCount = sortedChapters.length - 3}
         {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
+        {@const isEager = i < 3}
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             <div class="thumb-wrap">
               <img
                 use:fallbackCover
-                src={thumbCover}
+                use:deferImage={{ src: isEager ? null : thumbCover }}
+                src={isEager ? thumbCover : undefined}
                 alt={rel.workTitle}
                 class="thumb-img"
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
-                loading={i < 3 ? "eager" : "lazy"}
-                fetchpriority={i < 3 ? "high" : "auto"}
+                loading={isEager ? "eager" : "lazy"}
+                fetchpriority={isEager ? "high" : "auto"}
                 decoding="async"
               />
               {#if isAdult}
@@ -143,9 +147,9 @@
                   href="/ler/{ch.id}"
                   class="chapter-pill"
                   class:latest-pill={idx === 0}
-                  title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
+                  title={`Ler Capítulo ${formatChapterNumber(ch.number)}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
                 >
-                  <span class="ch-text">Cap. {ch.number}</span>
+                  <span class="ch-text">Cap. {formatChapterNumber(ch.number)}</span>
                 </a>
               {/each}
               {#if sortedChapters.length > 3}

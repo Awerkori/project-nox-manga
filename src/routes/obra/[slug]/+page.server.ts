@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte } from '$lib/server/yugabyte';
+import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -94,14 +94,17 @@ export const load = async ({ locals, params, url, cookies, platform }: any) => {
   }
 
   const chaptersPromise = Promise.resolve({ data: chaptersList });
+  // Editorial tags live in Yugabyte with the work itself. Keeping this out of
+  // locals.db prevents an empty legacy Supabase relation from erasing imported
+  // source genres in the SSR response.
+  const tagsPromise = fetchWorkTagsFromYugabyte(work.id, platform?.env);
 
   const auxPromise = withTimeout(
     Promise.all([
-      locals.db.from('work_tags').select('tags(id,name,slug,kind)').eq('work_id', work.id),
       locals.db
         .from('comments')
         .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
+          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
         )
         .eq('work_id', work.id)
         .eq('removed', false)
@@ -131,15 +134,16 @@ export const load = async ({ locals, params, url, cookies, platform }: any) => {
         .eq('work_id', work.id)
     ]),
     4000,
-    [{ data: [] }, { data: [] }, { data: null }, { data: [] }, { data: [] }, { data: null }, { data: [] }] as any,
+    [{ data: [] }, { data: null }, { data: [] }, { data: [] }, { data: null }, { data: [] }] as any,
     'obra_aux_details'
   );
 
-  const [chapters, [tags, comments, library, likes, progress, metrics, workScans]] = await Promise.all([
+  const [chapters, tags, [comments, library, likes, progress, metrics, workScans]] = await Promise.all([
     chaptersPromise,
+    tagsPromise,
     auxPromise
   ]);
-  const publicTags = (tags.data || []).flatMap((entry) => (entry.tags ? [entry.tags] : []));
+  const publicTags = tags || [];
   const scansList = (workScans.data || []).map((ws: any) => ws.scans).filter(Boolean);
   const isAdult = (work as any).content_rating === 'ADULT_18';
   const coverUrl = work.cover_id

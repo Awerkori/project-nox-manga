@@ -7,20 +7,17 @@
   import {
     Sparkles,
     BookOpen,
-    BookMarked,
     Trophy,
     UserPlus,
     UserCheck,
     Settings,
     Crown,
     Calendar,
-    Award,
     Lock,
     Users,
     Star,
     Palette,
     CheckCircle2,
-    Flame,
     ExternalLink,
     Heart,
     Clock,
@@ -236,6 +233,7 @@
               crop={data.member.avatar_crop as any}
               displayName={data.member.display_name}
               size={96}
+              loading="eager"
             />
           </div>
 
@@ -309,7 +307,7 @@
 
           {#if data.scanRoles && data.scanRoles.length > 0}
             <div class="scan-badges-row">
-              {#each data.scanRoles as sr}
+              {#each data.scanRoles as sr (sr.scan.id)}
                 <a
                   href="/scans/{sr.scan.slug}"
                   class="scan-staff-badge"
@@ -1061,7 +1059,7 @@
 
             {#if data.scanRoles && data.scanRoles.length > 0}
               <div class="teams-grid">
-                {#each data.scanRoles as sr}
+                {#each data.scanRoles as sr (sr.scan.id)}
                   <div class="user-team-card">
                     <div class="user-team-header">
                       <div class="team-logo-wrap">
@@ -1090,7 +1088,7 @@
                       <div class="team-positions-row">
                         <span class="team-positions-label">Cargos Editoriais:</span>
                         <div class="team-positions-tags">
-                          {#each sr.positions as pos}
+                          {#each sr.positions as pos (pos.id)}
                             <span class="user-pos-tag" class:primary={pos.is_primary}>
                               {#if pos.is_primary}★ {/if}{pos.name}
                             </span>
@@ -2249,24 +2247,115 @@
 
   @media (max-width: 640px) {
     .profile-page {
-      padding: 1rem 0.75rem 4rem;
+      padding: 0.75rem 0.6rem 3.5rem;
+    }
+
+    .profile-card {
+      border-radius: 16px;
     }
 
     .profile-body {
-      padding: 0 1rem 2rem;
+      padding: 0 1.1rem 2rem;
     }
 
     .profile-banner-wrap {
-      height: 160px;
+      height: 118px;
     }
 
     .identity-row {
-      margin-top: -40px;
-      margin-bottom: 1rem;
+      align-items: center;
+      margin-top: -42px;
+      margin-bottom: 1.15rem;
+      gap: 0.75rem;
+    }
+
+    .avatar-holder :global(.user-avatar-root) {
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+    }
+
+    .action-buttons {
+      flex: 1;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .btn-profile-action {
+      min-height: 42px;
+      justify-content: center;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .profile-tabs-header {
+      gap: 0.25rem;
+      margin-inline: -0.25rem;
+      padding-inline: 0.25rem;
+      scroll-snap-type: x proximity;
+    }
+
+    .profile-tab-btn {
+      min-height: 44px;
+      padding: 0.7rem 0.85rem;
+      font-size: 0.86rem;
+      scroll-snap-align: start;
+    }
+
+    .info-block {
+      margin-bottom: 1.35rem;
+    }
+
+    .name-line {
+      align-items: flex-start;
+      gap: 0.5rem 0.6rem;
+      margin-bottom: 0.5rem;
     }
 
     .display-name {
-      font-size: 1.45rem;
+      width: 100%;
+      font-size: clamp(1.45rem, 7vw, 1.75rem);
+      line-height: 1.08;
+    }
+
+    .meta-line {
+      align-items: flex-start;
+      gap: 0.35rem 0.5rem;
+      flex-wrap: wrap;
+      line-height: 1.35;
+    }
+
+    .meta-dot {
+      display: none;
+    }
+
+    .social-counts-row {
+      gap: 0.55rem;
+      margin-top: 1rem;
+    }
+
+    .social-count-item {
+      flex: 1;
+      min-width: 0;
+      padding: 0.6rem 0.45rem;
+      text-align: center;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .scan-badges-row {
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+    }
+
+    .scan-staff-badge {
+      max-width: 100%;
+      padding: 0.3rem 0.55rem;
+      font-size: 0.7rem;
+    }
+
+    .xp-strip {
+      margin-inline: -0.1rem;
+      padding: 0.9rem;
     }
 
     .stats-grid {

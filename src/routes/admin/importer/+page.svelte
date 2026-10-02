@@ -90,12 +90,14 @@
 
   // Chart computation for Cap/min view
   const chartBuckets = $derived.by(() => {
-    const bucketsMap = new Map<string, { fresh: number; completed: number }>();
+    const bucketsMap = new Map<string, { visible: number; completed: number }>();
     for (const b of (data.rateBuckets || [])) {
       if (b.bucket_minute) {
         const minKey = new Date(b.bucket_minute).toISOString().slice(0, 16);
         bucketsMap.set(minKey, {
-          fresh: Number(b.fresh_visible || 0),
+          // Cap/min is canonical visibility, not fresh-only releases nor
+          // pipeline completion. The latter remains a diagnostic overlay.
+          visible: Number(b.visible_published || 0),
           completed: Number(b.completed_jobs || 0)
         });
       }
@@ -107,17 +109,17 @@
       const t = new Date(now - i * 60 * 1000);
       const key = t.toISOString().slice(0, 16);
       const timeLabel = t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const val = bucketsMap.get(key) || { fresh: 0, completed: 0 };
+      const val = bucketsMap.get(key) || { visible: 0, completed: 0 };
       result.push({
         time: timeLabel,
-        fresh: val.fresh,
+        visible: val.visible,
         completed: val.completed
       });
     }
-    const maxVal = Math.max(1, ...result.map((r) => Math.max(r.fresh, r.completed)));
-    const totalFresh60m = result.reduce((acc, r) => acc + r.fresh, 0);
+    const maxVal = Math.max(1, ...result.map((r) => Math.max(r.visible, r.completed)));
+    const totalVisible60m = result.reduce((acc, r) => acc + r.visible, 0);
     const totalCompleted60m = result.reduce((acc, r) => acc + r.completed, 0);
-    return { buckets: result, maxVal, totalFresh60m, totalCompleted60m };
+    return { buckets: result, maxVal, totalVisible60m, totalCompleted60m };
   });
 
   // Catalog Health & Manifest state
@@ -538,7 +540,7 @@
     <button type="button" class="importer-tab-link" class:active={currentTab === 'cap-min'} onclick={() => selectTab('cap-min')}>
       <Gauge size={15} />
       <span>Cap/min</span>
-      <span class="tab-badge rate">{data.rateTelemetry?.rate5m ?? 0}/m</span>
+      <span class="tab-badge rate">{data.rateTelemetry?.rate1m ?? 0}/m</span>
     </button>
     <button type="button" class="importer-tab-link" class:active={currentTab === 'prioridades'} onclick={() => selectTab('prioridades')}>
       <Flame size={15} />
@@ -618,7 +620,7 @@
       <div class="cap-kpis-grid">
         <div class="cap-kpi-card highlight-rate">
           <div class="cap-kpi-header">
-            <span class="cap-kpi-label">VAZÃO AGORA (1 MIN)</span>
+            <span class="cap-kpi-label">CAP/MIN CANÔNICO — AGORA (1 MIN)</span>
             <span class="pulse-indicator">
               <span class="pulse-dot green"></span>
               LIVE
@@ -627,28 +629,22 @@
           <div class="cap-kpi-val-row">
             <span class="cap-kpi-number">{data.rateTelemetry?.rate1m ?? 0}</span>
             <span class="cap-kpi-unit">cap/min</span>
-            {#if (data.rateTelemetry?.rate5m ?? 0) >= 12}
+            {#if (data.rateTelemetry?.rate1m ?? 0) >= 12}
               <span class="status-pill status-ceiling">TETO 12</span>
-            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 10}
+            {:else if (data.rateTelemetry?.rate1m ?? 0) >= 10}
               <span class="status-pill status-preferred">PREFERIDO 10</span>
-            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 7}
+            {:else if (data.rateTelemetry?.rate1m ?? 0) >= 7}
               <span class="status-pill status-optimal">IDEAL 7–9</span>
-            {:else if (data.rateTelemetry?.rate5m ?? 0) >= 5}
+            {:else if (data.rateTelemetry?.rate1m ?? 0) >= 5}
               <span class="status-pill status-floor">PISO 5</span>
             {:else}
               <span class="status-pill status-subfloor">SUB-PISO &lt;5</span>
             {/if}
           </div>
           <div class="cap-kpi-details">
-            <span><strong>{data.rateTelemetry?.rate5m ?? 0}</strong> / 5 min</span>
+            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh1m ?? 0}</strong> inéditos visíveis</span>
             <span class="detail-sep">·</span>
-            <span><strong>{data.rateTelemetry?.rate10m ?? 0}</strong> / 10 min</span>
-            <span class="detail-sep">·</span>
-            <span><strong>{data.rateTelemetry?.rate30m ?? 0}</strong> / 30 min</span>
-            <span class="detail-sep">·</span>
-            <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh5m ?? 0}</strong> inéditos / 5 min</span>
-            <span class="detail-sep">·</span>
-            <span class="detail-pipeline">Pipeline: {data.rateTelemetry?.completedRate5m ?? 0}/min</span>
+            <span class="detail-pipeline">5m: {data.rateTelemetry?.rate5m ?? 0}/min</span>
           </div>
           <div class="cap-kpi-targets">
             <span class="target-tick">Piso: 5</span>
@@ -660,7 +656,7 @@
 
         <div class="cap-kpi-card">
           <div class="cap-kpi-header">
-            <span class="cap-kpi-label">TENDÊNCIA (5 MIN)</span>
+            <span class="cap-kpi-label">TENDÊNCIA CANÔNICA</span>
             <Clock size={15} class="text-zinc-400" />
           </div>
           <div class="cap-kpi-val-row">
@@ -668,9 +664,9 @@
             <span class="cap-kpi-unit">cap/min</span>
           </div>
           <div class="cap-kpi-details">
-            <span><strong>{data.rateTelemetry?.rate10m ?? 0}</strong> cap/min em 10 min</span>
+            <span class="detail-fresh">10m: <strong>{data.rateTelemetry?.rate10m ?? 0}</strong>/min</span>
             <span class="detail-sep">·</span>
-            <span><strong>{data.rateTelemetry?.rate30m ?? 0}</strong> cap/min em 30 min</span>
+            <span class="detail-pipeline">30m: {data.rateTelemetry?.rate30m ?? 0}/min</span>
           </div>
           {#if data.adaptiveCapacity?.limitingFactor && (data.rateTelemetry?.rate5m ?? 0) < 5}
             <div class="limiting-factor-row" title={data.adaptiveCapacity.limitingFactor}>
@@ -687,12 +683,20 @@
           </div>
           <div class="cap-kpi-val-row">
             <span class="cap-kpi-number">{data.adaptiveCapacity?.concurrency ?? 1}</span>
-            <span class="cap-kpi-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+            <span class="cap-kpi-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? data.telemetry?.concurrency ?? 1} permits</span>
           </div>
           <div class="cap-kpi-details">
             <span class="capacity-status-pill status-{(data.adaptiveCapacity?.state || 'RUNNING_STABLE').toLowerCase()}">
               {data.adaptiveCapacity?.state ?? 'RUNNING_STABLE'}
             </span>
+            {#if data.pipelineCapacity?.slots}
+              <span class="detail-sep">·</span>
+              <span class="detail-pipeline">Úteis: {data.pipelineCapacity.slots.productiveSlots}/{data.pipelineCapacity.slots.effectiveSlots ?? data.pipelineCapacity.slots.configuredSlots} efetivos</span>
+            {/if}
+            {#if data.eligibleBacklog > 0}
+              <span class="detail-sep">·</span>
+              <span class="detail-pipeline">Elegíveis: {data.eligibleBacklog.toLocaleString('pt-BR')}</span>
+            {/if}
           </div>
         </div>
 
@@ -719,12 +723,12 @@
         <div class="chart-header">
           <div>
             <h3 class="chart-title">Vazão Minuto a Minuto (Últimos 60 Minutos)</h3>
-            <p class="chart-sub">Volume de novos capítulos entregues no site vs execuções do pipeline em tempo real</p>
+            <p class="chart-sub">Publicações canônicas visíveis no site vs execuções do pipeline</p>
           </div>
           <div class="chart-legend">
             <div class="legend-item">
               <span class="legend-color-box color-fresh"></span>
-              <span>Fresh Visível (Site)</span>
+              <span>Canônico visível (Site)</span>
             </div>
             <div class="legend-item">
               <span class="legend-color-box color-completed"></span>
@@ -736,15 +740,15 @@
         <div class="chart-bars-wrap">
           <div class="chart-bars-container">
             {#each chartBuckets.buckets as b}
-              {@const freshPct = Math.min(100, Math.round((b.fresh / chartBuckets.maxVal) * 100))}
+              {@const visiblePct = Math.min(100, Math.round((b.visible / chartBuckets.maxVal) * 100))}
               {@const compPct = Math.min(100, Math.round((b.completed / chartBuckets.maxVal) * 100))}
-              <div class="bar-col" title="{b.time} — Fresh: {b.fresh} cap | Pipeline: {b.completed} jobs">
+              <div class="bar-col" title="{b.time} — Canônico: {b.visible} cap | Pipeline: {b.completed} jobs">
                 <div class="bar-track">
                   {#if b.completed > 0}
                     <div class="bar-fill comp-fill" style="height: {compPct}%;"></div>
                   {/if}
-                  {#if b.fresh > 0}
-                    <div class="bar-fill fresh-fill" style="height: {freshPct}%;"></div>
+                  {#if b.visible > 0}
+                    <div class="bar-fill fresh-fill" style="height: {visiblePct}%;"></div>
                   {/if}
                 </div>
                 <span class="bar-time-tick">{b.time.slice(3)}</span>
@@ -755,8 +759,8 @@
 
         <div class="chart-footer-metrics">
           <div class="footer-metric">
-            <span class="f-label">Acumulado 60m (Fresh):</span>
-            <span class="f-val text-gold">{chartBuckets.totalFresh60m} capítulos</span>
+            <span class="f-label">Acumulado 60m (canônico):</span>
+            <span class="f-val text-gold">{chartBuckets.totalVisible60m} capítulos</span>
           </div>
           <div class="footer-metric">
             <span class="f-label">Acumulado 60m (Pipeline):</span>
@@ -817,16 +821,16 @@
                 <span class="metric-value">{data.rateTelemetry?.rate1m ?? 0}</span>
                 <span class="metric-unit">cap/min</span>
               </div>
-              <span class="metric-sub">{data.rateTelemetry?.rate5m ?? 0}/min em 5 min</span>
+              <span class="metric-sub">5m: {data.rateTelemetry?.rate5m ?? 0}/min</span>
             </div>
 
             <div class="metric-block">
-              <span class="metric-label">Tendência 10 min</span>
+              <span class="metric-label">Tendência canônica</span>
               <div class="metric-value-row">
                 <span class="metric-value">{data.rateTelemetry?.rate10m ?? 0}</span>
                 <span class="metric-unit">cap/min</span>
               </div>
-              <span class="metric-sub">{data.rateTelemetry?.rate30m ?? 0}/min em 30 min</span>
+              <span class="metric-sub">30m: {data.rateTelemetry?.rate30m ?? 0}/min</span>
             </div>
 
             <div class="metric-block">
@@ -864,7 +868,7 @@
               <span class="metric-label">Concorrência Global</span>
               <div class="metric-value-row">
                 <span class="metric-value">{data.adaptiveCapacity?.concurrency ?? 1}</span>
-                <span class="metric-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? 8} permits</span>
+                <span class="metric-unit">/ {data.adaptiveCapacity?.maxConcurrency ?? data.telemetry?.concurrency ?? 1} permits</span>
               </div>
               <span class="metric-sub">Piso mínimo = 1 (nunca 0 automático)</span>
             </div>
@@ -883,6 +887,18 @@
             <span class="reason-label">Decisão do Autotuner:</span>
             <span class="reason-text">{data.adaptiveCapacity?.reason || 'Sistema operando com capacidade adaptativa contínua.'}</span>
           </div>
+
+          {#if data.pipelineCapacity}
+            <div class="capacity-reason-row">
+              <span class="reason-label">Pipeline:</span>
+              <span class="reason-text">
+                Slots úteis {data.pipelineCapacity.slots?.productiveSlots ?? 0}/{data.pipelineCapacity.slots?.effectiveSlots ?? data.pipelineCapacity.slots?.configuredSlots ?? 0} efetivos
+                · mídia {data.pipelineCapacity.media?.active ?? 0}/{data.pipelineCapacity.media?.configuredCapacity ?? 0}
+                · download {data.pipelineCapacity.downloads?.active ?? 0}/{data.pipelineCapacity.downloads?.configuredCapacity ?? 0}
+                · backlog elegível {data.eligibleBacklog.toLocaleString('pt-BR')}
+              </span>
+            </div>
+          {/if}
 
           {#if data.adaptiveCapacity?.noProgressReason}
             <div class="progress-diagnostic-row">
@@ -922,7 +938,7 @@
                   PRIORIDADE ABSOLUTA (RETRYING)
                 </span>
                 <span class="focus-pause-badge retry-badge">
-                  Aguardando retry técnico · Fila normal pausada
+                  Aguardando retry técnico · P0 e fila regular seguem com orçamento seguro
                 </span>
               {:else if data.activeFocus.status === 'BLOCKED'}
                 <span class="focus-pill blocked">
@@ -938,7 +954,7 @@
                   PRIORIDADE ABSOLUTA ATIVA
                 </span>
                 <span class="focus-pause-badge">
-                  Fila regular pausada (Modo Foco)
+                  Recebe prioridade de seleção · P0 mantém oportunidade limitada
                 </span>
               {/if}
             </div>
@@ -1691,8 +1707,8 @@
                     {#if job.chapter_sort_key}
                       <span class="job-chapter-num">Cap. {job.chapter_sort_key}</span>
                     {/if}
-                    <span class="job-priority-pill" class:boosted={job.priority >= 80}>
-                      {job.priority >= 90 ? 'P:90 BLOCKER' : job.priority >= 85 ? 'P:85 STAFF' : job.priority >= 80 ? 'P:80 NOVO' : job.priority >= 70 ? 'P:70 GAP' : 'P:' + job.priority}
+                    <span class="job-priority-pill" class:boosted={job.priority >= 100}>
+                      {job.priority >= 1000 ? 'STAFF' : job.priority >= 100 ? 'P0 FRESH' : job.priority >= 90 ? 'P1 GAP' : job.priority >= 70 ? 'P1 BACKFILL' : job.priority >= 40 ? 'P2 NOVA' : job.priority >= 20 ? 'P3 DISCOVERY' : 'P:' + job.priority}
                     </span>
                   </div>
 
@@ -2322,8 +2338,8 @@
                     {#if q.chapter_sort_key}
                       <span class="ch-tag">Cap. {q.chapter_sort_key}</span>
                     {/if}
-                    <span class="prio-tag" class:high={q.priority >= 80}>
-                      {q.priority >= 90 ? 'P:90 BLOCKER' : q.priority >= 85 ? 'P:85 STAFF' : q.priority >= 80 ? 'P:80 NOVO' : q.priority >= 70 ? 'P:70 GAP' : 'P:' + q.priority}
+                    <span class="prio-tag" class:high={q.priority >= 100}>
+                      {q.priority >= 1000 ? 'STAFF' : q.priority >= 100 ? 'P0 FRESH' : q.priority >= 90 ? 'P1 GAP' : q.priority >= 70 ? 'P1 BACKFILL' : q.priority >= 40 ? 'P2 NOVA' : q.priority >= 20 ? 'P3 DISCOVERY' : 'P:' + q.priority}
                     </span>
                   </div>
                 </div>

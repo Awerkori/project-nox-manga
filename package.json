@@ -6,7 +6,8 @@
   "overrides": {
     "@sveltejs/kit": {
       "cookie": "^0.7.2"
-    }
+    },
+    "devalue": "5.9.4"
   },
   "scripts": {
     "dev": "vite dev --host 127.0.0.1",

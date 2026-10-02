@@ -4,6 +4,7 @@
   import { BookOpen, Sparkles, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
+  import { deferImage } from '$lib/actions/defer-image';
   import { decodeHtmlEntities } from '$lib/html-entities';
 
   let {
@@ -61,7 +62,10 @@
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
       if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace('?size=thumb', '');
+        const original = new URL(node.src);
+        original.searchParams.delete('size');
+        original.searchParams.delete('v');
+        node.src = original.href;
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
@@ -81,7 +85,8 @@
   <div class="card-media">
     <img
       use:fallbackCover
-      src={coverSrc}
+      use:deferImage={{ src: eager ? null : coverSrc }}
+      src={eager ? coverSrc : undefined}
       alt="Capa de {decodeHtmlEntities(work.title)}"
       loading={eager ? 'eager' : 'lazy'}
       fetchpriority={priority}

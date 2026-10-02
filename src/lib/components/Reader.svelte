@@ -9,6 +9,7 @@
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
   import { saveChapterOffline, getOfflineChapter } from '$lib/offline-storage';
+  import { formatChapterNumber } from '$lib/chapter-number';
   import type { PageData } from '../../routes/ler/[id]/$types';
   let { data }: { data: PageData } = $props();
   let current = $state(1),
@@ -36,7 +37,7 @@
   ];
 
   let reactionCounts = $state<Record<string, number>>({});
-  let userReactions = $state(new Set<string>());
+  let userReactions = new SvelteSet<string>();
   let reactionsLoading = $state(false);
 
   async function loadReactions(chapterId: string) {
@@ -46,7 +47,7 @@
       if (res.ok) {
         const d = await res.json();
         reactionCounts = d.counts || {};
-        userReactions = new Set(d.userReactions || []);
+        userReactions = new SvelteSet(d.userReactions || []);
       }
     } catch {
       // silent fallback
@@ -57,7 +58,7 @@
     if (!data.chapter?.id || reactionsLoading || typeof window === 'undefined') return;
     reactionsLoading = true;
     const had = userReactions.has(emoji);
-    const newSet = new Set(userReactions);
+    const newSet = new SvelteSet(userReactions);
     const newCounts = { ...reactionCounts };
     if (had) {
       newSet.delete(emoji);
@@ -78,7 +79,7 @@
       if (res.ok) {
         const d = await res.json();
         reactionCounts = d.counts || {};
-        userReactions = new Set(d.userReactions || []);
+        userReactions = new SvelteSet(d.userReactions || []);
       }
     } catch {
       // Keep optimistic state
@@ -118,21 +119,40 @@
   let previousChapterId = $state('');
   let readerSessionGen = 0;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
-  const preloadedMedia = new Set<string>();
-  const inFlightPreloads = new Set<string>();
-  const MAX_CONCURRENT_PRELOADS = 3;
+  const preloadedMedia = new SvelteSet<string>();
+  const inFlightPreloads = new SvelteSet<string>();
+
+  function preloadBudget() {
+    // Desktop can keep a wider window warm. On constrained/mobile connections,
+    // avoid competing with the visible page for bandwidth and decoded-image RAM.
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') {
+      return { concurrent: 1, lookahead: 2 };
+    }
+    if (matchMedia('(max-width: 767px)').matches || connection?.effectiveType === '3g') {
+      return { concurrent: 2, lookahead: 3 };
+    }
+    return { concurrent: 3, lookahead: 5 };
+  }
 
   function pumpPreload() {
     if (preloadMode !== 'full' || typeof window === 'undefined' || !data.pages?.length) return;
-    if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) return;
+    const budget = preloadBudget();
+    if (inFlightPreloads.size >= budget.concurrent) return;
 
     const currentGen = readerSessionGen;
-    const startIdx = Math.max(0, current - 1);
-    // Bound downloads to a lookahead near the current page.
-    const ordered = data.pages.slice(startIdx, startIdx + 5);
+    // Pages 1 and 2 are rendered eager below. Starting at page 1 here used two
+    // of the three prefetch permits on duplicate browser requests, leaving only
+    // one useful request ahead of the reader. On a fresh chapter start after
+    // those eager pages; on a restored reading position still include its
+    // current page so a deep link never relies solely on IntersectionObserver.
+    const startIdx = current <= 2 ? current : Math.max(0, current - 1);
+    const ordered = data.pages.slice(startIdx, startIdx + budget.lookahead);
 
     for (const page of ordered) {
-      if (inFlightPreloads.size >= MAX_CONCURRENT_PRELOADS) break;
+      if (inFlightPreloads.size >= budget.concurrent) break;
       const id = page.media_id;
       if (!id || preloadedMedia.has(id) || inFlightPreloads.has(id)) continue;
 
@@ -178,6 +198,12 @@
       visible.clear();
       preloadedMedia.clear();
       inFlightPreloads.clear();
+      // The first two page elements are explicitly eager/high-priority. Do not
+      // spend prefetch permits duplicating them; the browser coalesces the URL,
+      // but the local scheduler previously did not.
+      for (const page of data.pages.slice(0, 2)) {
+        if (page.media_id) preloadedMedia.add(page.media_id);
+      }
       loadReactions(data.chapter.id);
       const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
       current = saved;
@@ -458,7 +484,7 @@
 />
 
 <svelte:head>
-  <title>{data.chapter.works?.title} — Capítulo {data.chapter.number} | Project Nox</title>
+  <title>{data.chapter.works?.title} — Capítulo {formatChapterNumber(data.chapter.number)} | Project Nox</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -475,7 +501,7 @@
     </a>
     <div class="reader-header-meta">
       <strong>{data.chapter.works?.title}</strong>
-      <span>Capítulo {data.chapter.number}{data.preview ? ' · Prévia editorial' : ''}</span>
+      <span>Capítulo {formatChapterNumber(data.chapter.number)}{data.preview ? ' · Prévia editorial' : ''}</span>
     </div>
     <div class="reader-tools">
       <span class="pages-count">{current}/{data.pages.length}</span>
@@ -593,7 +619,7 @@
       <Sparkles size={15} />
       <span>CAPÍTULO CONCLUÍDO</span>
     </div>
-    <h2 class="end-heading">Fim do Capítulo {data.chapter.number}</h2>
+    <h2 class="end-heading">Fim do Capítulo {formatChapterNumber(data.chapter.number)}</h2>
     <p class="end-sub">
       {data.chapter.works?.title}{data.scans && data.scans.length > 0 ? ` · ${data.scans.map((s) => s.name).join(' × ')}` : ''}
     </p>
@@ -601,7 +627,7 @@
     <div class="chapter-reactions-box">
       <span class="reactions-title">O que achou deste capítulo?</span>
       <div class="chapter-reactions-cluster">
-        {#each REACTION_CONFIG as item}
+        {#each REACTION_CONFIG as item (item.id)}
           <button
             type="button"
             class="reaction-btn"
@@ -697,7 +723,7 @@
     <ReportModal
       targetType="CHAPTER"
       chapterId={data.chapter.id}
-      targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${data.chapter.number}`}
+      targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${formatChapterNumber(data.chapter.number)}`}
       pageNumber={current}
       onclose={() => (showReportModal = false)}
       onsuccess={() => {
@@ -737,7 +763,7 @@
         <strong>{data.chapter.works?.title}</strong>
       </div>
       <div class="drawer-list">
-        {#each (data.siblings || []) as sibling}
+        {#each (data.siblings || []) as sibling (sibling.id)}
           {@const isCurrent = sibling.id === data.chapter.id}
           <a
             href="/ler/{sibling.id}"
@@ -745,7 +771,7 @@
             class:current={isCurrent}
             onclick={() => (showChaptersDrawer = false)}
           >
-            <span class="drawer-item-number">Capítulo {sibling.number}</span>
+            <span class="drawer-item-number">Capítulo {formatChapterNumber(sibling.number)}</span>
             {#if isCurrent}
               <span class="drawer-current-badge">Lendo agora</span>
             {/if}

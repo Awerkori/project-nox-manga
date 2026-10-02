@@ -1,4 +1,10 @@
 import { error } from '@sveltejs/kit';
+import {
+  buildChapterProvenance,
+  type ChapterMappingRecord,
+  type SourceRecord
+} from '$lib/server/admin-work-provenance';
+
 export const load = async ({ locals, params }) => {
   const { data: work } = await locals.db.from('works').select('id,title').eq('id', params.id).maybeSingle();
   if (!work) error(404);
@@ -14,7 +20,7 @@ export const load = async ({ locals, params }) => {
             .maybeSingle()
         ).data;
   if (params.chapter !== 'novo' && !chapter) error(404);
-  const [pagesRes, allScansRes, workScansRes, chapterScansRes] = await Promise.all([
+  const [pagesRes, allScansRes, workScansRes, chapterScansRes, chapterMappingsRes, sourcesRes] = await Promise.all([
     chapter
       ? locals.db
           .from('pages')
@@ -36,6 +42,16 @@ export const load = async ({ locals, params }) => {
           .from('chapter_scans')
           .select('scan_id,scans(id,name,slug,is_official)')
           .eq('chapter_id', chapter.id)
+      : Promise.resolve({ data: [] }),
+    chapter
+      ? locals.db
+          .from('importer_chapter_mappings')
+          .select('id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at')
+          .eq('chapter_id', chapter.id)
+          .eq('work_id', work.id)
+      : Promise.resolve({ data: [] }),
+    chapter
+      ? locals.db.from('importer_sources').select('id,name,base_url,enabled,status')
       : Promise.resolve({ data: [] })
   ]);
 
@@ -47,5 +63,13 @@ export const load = async ({ locals, params }) => {
     ? chapterScansRes.data || []
     : workScans.map((ws) => ({ scan_id: ws.scan_id, scans: ws.scans }));
 
-  return { work, chapter, pages, allScans, workScans, chapterScans };
+  const chapterProvenance = chapter
+    ? buildChapterProvenance(
+        [chapter.id],
+        (chapterMappingsRes.data || []) as ChapterMappingRecord[],
+        (sourcesRes.data || []) as SourceRecord[]
+      )[chapter.id] || null
+    : null;
+
+  return { work, chapter, pages, allScans, workScans, chapterScans, chapterProvenance };
 };

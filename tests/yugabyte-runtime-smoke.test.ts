@@ -29,6 +29,7 @@ vi.mock('pg', () => {
 import {
   fetchWorkFromYugabyte,
   fetchWorkChaptersFromYugabyte,
+  fetchWorkTagsFromYugabyte,
   fetchMediaMetadataFromYugabyte,
   withYugabyteLkg,
   setLkg,
@@ -173,7 +174,7 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
     expect(json.releases[0].chapters[0].number).toBe(1190);
   });
 
-  it('verifies fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, and fetchMediaMetadataFromYugabyte execute safely', async () => {
+  it('verifies work, chapters, tags, and media helpers execute safely', async () => {
     const mockEnv = {
       HYPERDRIVE: { connectionString: 'postgresql://mock:5433/mock' }
     };
@@ -183,6 +184,9 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
 
     const chapters = await fetchWorkChaptersFromYugabyte('test-id', false, mockEnv);
     expect(Array.isArray(chapters)).toBe(true);
+
+    const tags = await fetchWorkTagsFromYugabyte('test-id', mockEnv);
+    expect(Array.isArray(tags)).toBe(true);
 
     const media = await fetchMediaMetadataFromYugabyte('test-id', mockEnv);
     expect(media).toBeDefined();

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */
 // src/worker.js
 import { Server } from "./../.svelte-kit/output/server/index.js";
 import { manifest, prerendered, base_path } from "./../.svelte-kit/cloudflare-tmp/manifest.js";
@@ -96,6 +97,8 @@ var worker_default = {
         });
         const body = await res.text().catch(() => "");
         console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}: ${body}`);
+        // Cover warming is event-driven at publication time. Do not poll KV,
+        // Yugabyte, or Telegram from this frequent email cron.
       } catch (err) {
         console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
       }

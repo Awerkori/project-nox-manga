@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { member, privileged } from '$lib/server/db';
 import { storeImage, RateLimitError } from '$lib/server/media';
+import { normalizeAvatarCrop } from '$lib/avatar';
 
 export const POST = async ({ request, locals }) => {
   const userId = member(locals);
@@ -8,14 +9,11 @@ export const POST = async ({ request, locals }) => {
   const file = formData.get('file');
   if (!file || !(file instanceof Blob)) error(400, 'Selecione uma imagem.');
 
-  const cropX = parseFloat(formData.get('crop_x') as string) || 50;
-  const cropY = parseFloat(formData.get('crop_y') as string) || 50;
-  const cropZoom = parseFloat(formData.get('crop_zoom') as string) || 1;
-  const crop = {
-    x: Math.max(0, Math.min(100, cropX)),
-    y: Math.max(0, Math.min(100, cropY)),
-    zoom: Math.max(1, Math.min(3, cropZoom))
-  };
+  const crop = normalizeAvatarCrop({
+    x: formData.get('crop_x'),
+    y: formData.get('crop_y'),
+    zoom: formData.get('crop_zoom')
+  });
 
   let image;
   try {

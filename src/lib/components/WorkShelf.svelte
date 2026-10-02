@@ -4,6 +4,7 @@
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl } from '$lib/covers';
+  import { deferImage } from '$lib/actions/defer-image';
 
   type Props = {
     title: string;
@@ -121,7 +122,7 @@
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
       if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace('?size=thumb', '');
+        node.src = node.src.replace(/\?size=thumb(?:&[^#]*)?$/, '');
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
@@ -213,13 +214,21 @@
           {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
           {@const shelfCover = resolveCoverUrl(work.cover_id || work.coverId, work.slug, work.id, { size: 'thumb' })}
           {@const scanInfo = getScanInfo(work)}
-          {@const isEager = shelfIndex === 0 && i < 4}
+          <!--
+            The shelf is directly below the hero and can expose more than four
+            cards on common desktop widths.  These are the first-view covers:
+            render a bounded initial batch with a real src so they do not wait
+            for client hydration + IntersectionObserver before starting.
+            Everything after this small batch remains deferred.
+          -->
+          {@const isEager = shelfIndex === 0 && i < 8}
           {@const priority = shelfIndex === 0 && i < 2 ? 'high' : 'auto'}
           <a href="/obra/{work.slug}" class="shelf-card">
             <div class="card-cover-box">
               <img
                 use:fallbackCover
-                src={shelfCover}
+                use:deferImage={{ src: isEager ? null : shelfCover, rootMargin: '0px 450px' }}
+                src={isEager ? shelfCover : undefined}
                 alt={work.title}
                 class="card-img"
                 class:blurred-cover={effectiveBlur}
@@ -337,6 +346,9 @@
     position: relative;
     margin-bottom: 3.5rem;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   .shelf-header {
@@ -489,6 +501,8 @@
     -ms-overflow-style: none;
     margin: 0 -0.5rem;
     padding: 0.5rem;
+    max-width: calc(100% + 1rem);
+    overscroll-behavior-x: contain;
   }
 
   .shelf-scroll-container::-webkit-scrollbar {
@@ -759,6 +773,32 @@
   }
 
   @media (max-width: 640px) {
+    .shelf-section {
+      margin-bottom: 2.75rem;
+    }
+
+    .shelf-header {
+      align-items: flex-start;
+      margin-bottom: 0.85rem;
+    }
+
+    .shelf-actions {
+      gap: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .view-all-link span {
+      display: none;
+    }
+
+    .shelf-scroll-container {
+      /* Keep the intentional horizontal shelf scroll local to the shelf. */
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding-inline: 0;
+    }
+
     .shelf-card {
       width: 145px;
     }

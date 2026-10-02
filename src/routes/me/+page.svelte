@@ -5,7 +5,6 @@
   import { enhance } from '$app/forms';
   import {
     Sparkles,
-    User,
     BookOpen,
     Bookmark,
     Clock,
@@ -42,8 +41,6 @@
     Library,
     Move,
     ZoomIn,
-    RotateCcw,
-    Sliders,
     X,
     ExternalLink
   } from '@lucide/svelte';
@@ -195,12 +192,8 @@
   });
 
   // Notifications State & Realtime
-  let notifsList = $state<any[]>(data.notifications || []);
+  let notifsList = $derived<any[]>(data.notifications || []);
   let notifFilter = $state<'ALL' | 'UNREAD'>('ALL');
-
-  $effect(() => {
-    notifsList = data.notifications || [];
-  });
 
   $effect(() => {
     if (!data.member?.id) return;
@@ -787,7 +780,7 @@
 
               <div class="ach-category-select-wrap">
                 <select class="ach-category-select" bind:value={achCategoryFilter}>
-                  {#each Object.entries(categoryLabels) as [catKey, catLabel]}
+                  {#each Object.entries(categoryLabels) as [catKey, catLabel] (catKey)}
                     <option value={catKey}>{catLabel}</option>
                   {/each}
                 </select>
@@ -1728,6 +1721,10 @@
     gap: 2rem;
   }
 
+  .me-layout > * {
+    min-width: 0;
+  }
+
   .me-nav-sidebar {
     display: flex;
     flex-direction: column;
@@ -2551,7 +2548,13 @@
     .me-nav-sidebar {
       flex-direction: row;
       overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
       padding-bottom: 0.5rem;
+    }
+
+    .me-nav-sidebar::-webkit-scrollbar {
+      display: none;
     }
 
     .me-nav-item {
@@ -2560,6 +2563,169 @@
 
     .media-uploaders-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  /* Meu Espaço uses a different composition on a phone instead of a squeezed
+     desktop sidebar. The navigation remains intentionally scrollable, while
+     identity and actions receive their own comfortable rows. */
+  @media (max-width: 640px) {
+    .me-page {
+      padding: 1rem 0.75rem calc(5.75rem + env(safe-area-inset-bottom));
+    }
+
+    .me-header-strip {
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.15rem;
+      margin-bottom: 1.25rem;
+      border-radius: 16px;
+    }
+
+    .header-avatar-col :global(.user-avatar-root) {
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+    }
+
+    .header-details-col {
+      width: 100%;
+      min-width: 0;
+      gap: 0.55rem;
+    }
+
+    .title-row {
+      align-items: flex-start;
+      gap: 0.45rem 0.5rem;
+    }
+
+    .me-display-name {
+      width: 100%;
+      font-size: clamp(1.45rem, 7vw, 1.75rem);
+      line-height: 1.08;
+      overflow-wrap: anywhere;
+    }
+
+    .level-pill,
+    .cosmetic-title {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta-row {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.55rem;
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+    .meta-row .dot {
+      display: none;
+    }
+
+    .public-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 42px;
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid rgba(181, 154, 245, 0.28);
+      border-radius: 10px;
+      background: rgba(181, 154, 245, 0.08);
+      font-weight: 700;
+    }
+
+    .me-layout {
+      gap: 1rem;
+    }
+
+    .me-nav-sidebar {
+      gap: 0.45rem;
+      margin-inline: -0.75rem;
+      padding: 0.1rem 0.75rem 0.7rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .me-nav-item {
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .me-nav-item.active {
+      border-color: rgba(139, 92, 246, 0.42);
+    }
+
+    .nav-separator {
+      align-self: stretch;
+      width: 1px;
+      height: auto;
+      margin: 0.15rem 0.1rem;
+    }
+
+    .me-content-pane {
+      padding: 1.1rem;
+      border-radius: 16px;
+    }
+
+    .pane-title {
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+    }
+
+    .overview-stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.7rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .ov-card {
+      min-width: 0;
+      padding: 0.9rem;
+    }
+
+    .ov-lbl {
+      line-height: 1.35;
+    }
+
+    .works-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .history-item-row {
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+    }
+
+    .h-meta {
+      min-width: 0;
+    }
+
+    .h-work,
+    .h-ch {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .h-time {
+      display: none;
+    }
+
+    .settings-row {
+      align-items: flex-start;
+      gap: 1rem;
+      flex-direction: column;
+    }
+
+    .settings-row :global(.button) {
+      width: 100%;
     }
   }
 

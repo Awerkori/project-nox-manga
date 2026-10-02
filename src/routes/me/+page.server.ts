@@ -1,6 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
+import { normalizeAvatarCrop } from '$lib/avatar';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -262,14 +263,7 @@ export const actions: Actions = {
   updateAvatarCrop: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
-    const x = parseFloat(formData.get('x') as string) || 50;
-    const y = parseFloat(formData.get('y') as string) || 50;
-    const zoom = parseFloat(formData.get('zoom') as string) || 1;
-    const crop = {
-      x: Math.max(0, Math.min(100, x)),
-      y: Math.max(0, Math.min(100, y)),
-      zoom: Math.max(1, Math.min(3, zoom))
-    };
+    const crop = normalizeAvatarCrop({ x: formData.get('x'), y: formData.get('y'), zoom: formData.get('zoom') });
 
     const { error } = await locals.db
       .from('members')

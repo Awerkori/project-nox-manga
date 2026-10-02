@@ -188,7 +188,7 @@ export async function loadSnapshot({ locals, platform }: any) {
 
   const bucketRows = rateBucketsRes?.data || [];
   const nowMs = Date.now();
-  const oneMinAgo = nowMs - 60 * 1000;
+  const oneMinAgo = nowMs - 1 * 60 * 1000;
   const fiveMinAgo = nowMs - 5 * 60 * 1000;
   const tenMinAgo = nowMs - 10 * 60 * 1000;
   const thirtyMinAgo = nowMs - 30 * 60 * 1000;
@@ -197,25 +197,35 @@ export async function loadSnapshot({ locals, platform }: any) {
   let visible5m = 0;
   let visible10m = 0;
   let visible30m = 0;
+  let fresh1m = 0;
   let fresh5m = 0;
+  let fresh10m = 0;
   let completed5m = 0;
   let fresh30m = 0;
   let completed30m = 0;
 
   for (const b of bucketRows) {
     const t = new Date(b.bucket_minute).getTime();
-    const visible = Number(b.visible_published || 0);
-    if (t >= oneMinAgo) visible1m += visible;
+    const visible = b.visible_published || 0;
+    const fresh = b.fresh_visible || 0;
+    const completed = b.completed_jobs || 0;
+    if (t >= oneMinAgo) {
+      visible1m += visible;
+      fresh1m += fresh;
+    }
     if (t >= fiveMinAgo) {
       visible5m += visible;
-      fresh5m += b.fresh_visible || 0;
-      completed5m += b.completed_jobs || 0;
+      fresh5m += fresh;
+      completed5m += completed;
     }
-    if (t >= tenMinAgo) visible10m += visible;
+    if (t >= tenMinAgo) {
+      visible10m += visible;
+      fresh10m += fresh;
+    }
     if (t >= thirtyMinAgo) {
       visible30m += visible;
-      fresh30m += b.fresh_visible || 0;
-      completed30m += b.completed_jobs || 0;
+      fresh30m += fresh;
+      completed30m += completed;
     }
   }
 
@@ -230,9 +240,8 @@ export async function loadSnapshot({ locals, platform }: any) {
     }
   }
 
-  // Cap/min is canonical publication throughput only.  Fresh releases and
-  // completed jobs remain supplementary counters; neither can stand in for a
-  // published_at NULL -> NOT NULL transition.
+  // Canonical visible publications are the only Cap/min definition. The
+  // fallback intentionally uses visible_published, never fresh or completed.
   const rate1m = heartbeatData?.rate1m ?? visible1m;
   const rate5m = heartbeatData?.rate5m ?? (Math.round((visible5m / 5.0) * 10) / 10);
   const rate10m = heartbeatData?.rate10m ?? (Math.round((visible10m / 10.0) * 10) / 10);
@@ -245,7 +254,13 @@ export async function loadSnapshot({ locals, platform }: any) {
     rate5m,
     rate10m,
     rate30m,
+    visible1m,
+    visible5m,
+    visible10m,
+    visible30m,
+    fresh1m,
     fresh5m: heartbeatData?.fresh5m ?? fresh5m,
+    fresh10m,
     fresh30m: heartbeatData?.fresh30m ?? fresh30m,
     completedRate5m,
     completedRate30m,
@@ -256,7 +271,10 @@ export async function loadSnapshot({ locals, platform }: any) {
   const telemetry = telemetryRes.data || null;
   const adaptiveCapacity = {
     concurrency: heartbeatData?.capacity?.concurrency ?? telemetry?.concurrency ?? 1,
-    maxConcurrency: heartbeatData?.capacity?.maxConcurrency ?? 8,
+    // Never resurrect the historic eight-slot default when the heartbeat is
+    // temporarily unavailable: the last real telemetry value is safer and
+    // keeps the operator panel truthful during a partial outage.
+    maxConcurrency: heartbeatData?.capacity?.maxConcurrency ?? telemetry?.concurrency ?? 1,
     state: heartbeatData?.capacity?.state ?? (telemetry?.protective_stop ? 'MANUAL_STOP' : 'RUNNING_STABLE'),
     pressureScore: heartbeatData?.capacity?.pressureScore ?? 0,
     siteHealth: heartbeatData?.capacity?.siteHealth ?? 'GREEN',
@@ -272,6 +290,10 @@ export async function loadSnapshot({ locals, platform }: any) {
     throughputStatus: heartbeatData?.capacity?.throughputStatus ?? heartbeatData?.throughput?.status ?? null,
     autoEmergencyPause: heartbeatData?.autoEmergencyPause ?? null,
   };
+  // This is part of the importer heartbeat write, not another panel query.
+  // It explains capacity without turning the admin page into DB pressure.
+  const pipelineCapacity = heartbeatData?.pipelineCapacity ?? null;
+  const eligibleBacklog = Number(heartbeatData?.eligibleJobs ?? 0);
 
   const importingJobs = importingJobsRes.data || [];
   const retryJobs = retryJobsRes.data || [];
@@ -423,6 +445,8 @@ export async function loadSnapshot({ locals, platform }: any) {
     rateTelemetry,
     rateBuckets: bucketRows,
     adaptiveCapacity,
+    pipelineCapacity,
+    eligibleBacklog,
     activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
     counts: {
       queued: queuedCount.count || 0,

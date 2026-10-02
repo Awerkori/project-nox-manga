@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   extractFullAuthCookie: vi.fn(),
   decodeSessionJwt: vi.fn(),
   dbFrom: vi.fn(),
+  fetchMediaMetadataFromYugabyte: vi.fn(),
   mediaRecord: null as any
 }));
 
@@ -34,11 +35,16 @@ vi.mock('$lib/server/session-cache', () => ({
   resolveSessionData: mocks.resolveSessionData
 }));
 
+vi.mock('$lib/server/yugabyte', () => ({
+  fetchMediaMetadataFromYugabyte: mocks.fetchMediaMetadataFromYugabyte
+}));
+
 import { GET } from '../src/routes/media/[id]/+server';
 
 describe('Media Security and Cache Guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchMediaMetadataFromYugabyte.mockResolvedValue(null);
     // Default mock DB behavior
     mocks.dbFrom.mockReturnValue({
       select: () => ({
@@ -47,6 +53,61 @@ describe('Media Security and Cache Guard', () => {
         })
       })
     });
+  });
+
+  it('writes a cold cover once only for an authenticated publication warm', async () => {
+    const mediaId = '88888888-8888-4888-8888-888888888888';
+    const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string> }>();
+    const kv = {
+      getWithMetadata: vi.fn(async (key: string) => records.get(key) || null),
+      put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string> }) => {
+        records.set(key, { value, metadata: options.metadata });
+      })
+    };
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'warm_hash', provider_key: 'warm_key', bytes: 4,
+      width: 1440, height: 2048
+    };
+    mocks.download.mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    const res = await GET({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`, {
+        headers: { Authorization: 'Bearer internal-token' }
+      }),
+      platform: { env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: 'internal-token' } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Cover-Warm')).toBe('stored');
+    expect(kv.getWithMetadata).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an unauthenticated cold cover view create a KV write', async () => {
+    const mediaId = '99999999-9999-4999-8999-999999999999';
+    const kv = { getWithMetadata: vi.fn(async () => null), put: vi.fn() };
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'public_hash', provider_key: 'public_key', bytes: 4,
+      width: 1440, height: 2048
+    };
+    mocks.download.mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    const res = await GET({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      platform: { env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: 'internal-token' } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(kv.getWithMetadata).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('rejects anonymous access to staff_manual media (MUST NOT be public)', async () => {
@@ -174,6 +235,40 @@ describe('Media Security and Cache Guard', () => {
     expect(data.error).toBe('Página temporariamente indisponível');
   });
 
+  it('returns controlled 502 instead of reusing a consumed stream after thumbnail processing fails', async () => {
+    const mediaId = '56565656-5656-4656-8656-565656565656';
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'broken_thumbnail_source',
+      provider_key: 'broken_thumbnail_source_key',
+      bytes: 128,
+      width: 1000,
+      height: 1500
+    };
+    mocks.download.mockResolvedValue(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error('source stream failed'));
+      }
+    }));
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(502);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+  });
+
   it('generates real thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
     const jpeg = (await import('jpeg-js')).default;
     const w = 1000, h = 1500;
@@ -213,7 +308,7 @@ describe('Media Security and Cache Guard', () => {
 
     expect(thumbRes.status).toBe(200);
     expect(thumbRes.headers.get('Content-Type')).toBe('image/jpeg');
-    expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb"');
+    expect(thumbRes.headers.get('ETag')).toBe('"fixture_original_sha256-thumb-v3"');
 
     const thumbBytes = new Uint8Array(await thumbRes.arrayBuffer());
     // Must be significantly fewer bytes than the 1000x1500 JPEG fixture (>50% reduction)
@@ -238,6 +333,38 @@ describe('Media Security and Cache Guard', () => {
     // Must be byte-identical to the original fixture
     expect(originalBytes.length).toBe(fixtureJpeg.length);
     expect(Buffer.from(originalBytes).equals(Buffer.from(fixtureJpeg))).toBe(true);
+  });
+
+  it('streams a compact, high-pixel cover instead of holding the cold request for JS resizing', async () => {
+    const mediaId = '67666666-6666-4666-8666-666666666666';
+    const original = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'compact_high_pixel_cover',
+      provider_key: 'compact_high_pixel_cover_key',
+      bytes: original.length,
+      width: 1440,
+      height: 2048
+    };
+    mocks.download.mockResolvedValue(original);
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Thumbnail-Strategy')).toBe('stream-original');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(original);
   });
 
   it('preserves animated GIFs intact on ?size=thumb without converting to static image', async () => {

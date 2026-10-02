@@ -9,8 +9,27 @@ import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
 import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
+import {
+  MAX_COVER_THUMBNAIL_BYTES,
+  persistCoverThumbnail,
+  readBoundedCoverResponse,
+  readCoverThumbnail
+} from '$lib/server/cover-thumbnail-cache';
 
-async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
+function safeTokenCompare(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const encoder = new TextEncoder();
+  const a = encoder.encode(provided);
+  const b = encoder.encode(expected);
+  if (a.byteLength !== b.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < a.byteLength; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
+
+async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
   if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
@@ -19,13 +38,27 @@ async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
     const reader = (body as ReadableStream<Uint8Array>).getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        total += value.length;
+    try {
+      while (true) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const next = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('cover body timed out')), idleTimeoutMs);
+          })
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+        });
+        const { done, value } = next;
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          total += value.length;
+        }
       }
+    } catch (failure) {
+      void reader.cancel().catch(() => {});
+      throw failure;
     }
     const result = new Uint8Array(total);
     let offset = 0;
@@ -45,10 +78,19 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
-  const canonicalUrl = sizeParam ? `${url.origin}/media/${params.id}?size=${sizeParam}` : `${url.origin}/media/${params.id}`;
+  const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
+  const expectedWarmToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN;
+  const auth = request.headers.get('authorization') || '';
+  const internalCoverWarm = Boolean(
+    coverVariant && expectedWarmToken && auth.startsWith('Bearer ') &&
+    safeTokenCompare(auth.slice(7).trim(), expectedWarmToken)
+  );
+  // Do not reuse immutable v1/v2 thumbnails. v3 also avoids the old cold path
+  // that buffered a complete small original merely to make a thumbnail.
+  const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
-  if (cache) {
+  if (cache && !internalCoverWarm) {
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
@@ -65,6 +107,19 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     } catch {
       // Fall through to standard retrieval on cache check failure
     }
+  }
+
+  // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
+  // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
+  // on another region/device. Never use it for full pages or private media.
+  if (coverVariant) {
+    const prewarmed = await readCoverThumbnail(
+      platform?.env?.COVER_THUMBNAILS,
+      params.id,
+      request.headers.get('if-none-match'),
+      coverVariant
+    );
+    if (prewarmed) return prewarmed;
   }
 
   const db = privileged();
@@ -236,20 +291,45 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  if (sizeParam === 'thumb') {
-    try {
-      const rawBytes = await toUint8Array(body);
-      const thumb = await generateThumbnail(rawBytes, media.mime);
-      body = thumb.data;
-      headers['Content-Type'] = thumb.mime;
-      headers['Content-Length'] = String(thumb.data.length);
-      if (thumb.resized) {
-        headers['ETag'] = `"${media.sha256}-thumb"`;
-      }
-    } catch (thumbErr) {
-      console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
-      if (media.bytes && Number(media.bytes) > 0) {
-        headers['Content-Length'] = String(media.bytes);
+  if (coverVariant) {
+    const bytes = Number(media.bytes) || 0;
+    const mime = String(media.mime || '').toLowerCase();
+    const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
+    const canResize = mime === 'image/jpeg' || mime === 'image/png';
+    // A cold thumbnail used to wait for Telegram, then buffer and run a pure-JS
+    // decode/resize/encode. For normal covers this added seconds of blank UI.
+    // Small originals are cheaper to transfer once than to hold the request open;
+    // unsupported formats must also remain streamed rather than buffered only to
+    // fall back to the original. The immutable v3 URL is cached at the edge.
+    const streamOriginal = !canResize || (coverVariant === 'thumb' && bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
+    if (streamOriginal) {
+      headers['X-Thumbnail-Strategy'] = 'stream-original';
+      if (bytes > 0) headers['Content-Length'] = String(bytes);
+    } else {
+      try {
+        const rawBytes = await toUint8Array(body);
+        const thumb = await generateThumbnail(rawBytes, media.mime,
+          coverVariant === 'hero' ? { maxWidth: 720, maxHeight: 1020 } : undefined);
+        body = thumb.data;
+        headers['Content-Type'] = thumb.mime;
+        headers['Content-Length'] = String(thumb.data.length);
+        if (thumb.resized) {
+          headers['ETag'] = `"${media.sha256}-thumb-v3"`;
+        }
+        headers['X-Thumbnail-Strategy'] = 'resized';
+      } catch (thumbErr) {
+        // `body` is a one-shot Telegram stream.  Reusing it after a failed
+        // read/resize can yield a partial or locked response (a blank cover
+        // with HTTP 200). Return a controlled error instead; the card action
+        // retries the untouched original URL once with a fresh stream.
+        console.warn('[THUMBNAIL_GENERATION_FAILED]', { id: params.id, reason: (thumbErr as Error)?.message });
+        return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
+          status: 502,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
+        });
       }
     }
   } else {
@@ -263,6 +343,26 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   const response = new Response(body, { status: 200, headers });
+
+  // Only the authenticated publication event may create a global KV entry.
+  // Interactive requests still read a hot entry, but never write one: that
+  // prevents a cold edge or concurrent browser views from exhausting the KV
+  // free-tier write budget. Large/full reader pages never enter this path.
+  const kv = platform?.env?.COVER_THUMBNAILS;
+  const responseBytes = Number(headers['Content-Length'] || 0);
+  if (internalCoverWarm && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
+    const persist = readBoundedCoverResponse(response.clone())
+      .then((bytes) => bytes && persistCoverThumbnail(kv, params.id, bytes, {
+        contentType: headers['Content-Type'],
+        etag: headers['ETag'],
+        contentLength: headers['Content-Length']
+      }, coverVariant))
+      .catch(() => 'skipped');
+    // The event endpoint observes a completed warm only after this single KV
+    // write is done; user-facing media never waits for it.
+    const persisted = await persist;
+    response.headers.set('X-Cover-Warm', persisted === 'stored' ? 'stored' : 'skipped');
+  }
 
   // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
   const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);

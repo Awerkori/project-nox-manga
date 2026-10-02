@@ -8,13 +8,14 @@
   import { MessageSquare, Flag, X } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   type Comment = {
     id: string;
     user_id: string;
     body: string;
     created_at: string;
     parent_id: string | null;
-    members: { username: string; display_name: string; avatar_id?: string | null } | null;
+    members: { username: string; display_name: string; avatar_id?: string | null; avatar_crop?: unknown } | null;
     comment_likes: { user_id: string }[];
   };
   let {
@@ -237,16 +238,12 @@
     <div class="comment-list">
       {#each threaded as comment (comment.id)}<article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
         <div class="comment-author">
-          <span class="avatar"
-            >{#if comment.members?.avatar_id}<img
-                src="/media/{comment.members.avatar_id}"
-                alt=""
-                width="38"
-                height="38"
-                style="border-radius:50%"
-                loading="lazy"
-              />{:else}{(comment.members?.display_name[0] || 'N').toUpperCase()}{/if}</span
-          >
+          <UserAvatar
+            avatarId={comment.members?.avatar_id}
+            crop={comment.members?.avatar_crop}
+            displayName={comment.members?.display_name || 'Leitor'}
+            size={38}
+          />
           <div>
             <a href="/u/{comment.members?.username}">{comment.members?.display_name || 'Leitor'}</a><time
               datetime={comment.created_at}>{date(comment.created_at)}</time
