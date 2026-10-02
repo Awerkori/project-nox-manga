@@ -2,7 +2,7 @@
   /* eslint-disable */
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { invalidateAll } from '$app/navigation';
+  import { pushState } from '$app/navigation';
   import { enhance } from '$app/forms';
   import {
     Activity,
@@ -39,7 +39,54 @@
 
   let { data, form } = $props();
 
-  let currentTab = $derived(page.url.searchParams.get('tab') || 'resumo');
+  const importerTabs = new Set([
+    'resumo',
+    'fontes',
+    'atividade',
+    'erros',
+    'cap-min',
+    'prioridades',
+    'proximas-obras',
+    'proximos-capitulos',
+    'capitulos-faltando'
+  ]);
+  const normalizeTab = (tab: string | null) => importerTabs.has(tab || '') ? tab! : 'resumo';
+  let currentTab = $state(normalizeTab(page.url.searchParams.get('tab')));
+  let snapshotRefreshing = $state(false);
+  let snapshotUpdatedAt = $state(Date.now());
+
+  /**
+   * A tab is presentation state over one secured snapshot. Shallow history keeps
+   * deep links/back-forward working without rerunning the page server load.
+   */
+  function selectTab(tab: string) {
+    const nextTab = normalizeTab(tab);
+    if (nextTab === currentTab) return;
+    currentTab = nextTab;
+    const url = new URL(window.location.href);
+    if (nextTab === 'resumo') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', nextTab);
+    pushState(`${url.pathname}${url.search}`, page.state);
+    window.dispatchEvent(new CustomEvent('nox:importer-tab', { detail: nextTab }));
+  }
+
+  async function refreshSnapshot() {
+    if (snapshotRefreshing) return;
+    snapshotRefreshing = true;
+    try {
+      const res = await fetch('/api/internal/importer/snapshot');
+      if (!res.ok) return;
+      const body = await res.json();
+      if (body.success && body.data) {
+        data = body.data;
+        snapshotUpdatedAt = Date.now();
+      }
+    } catch (error) {
+      console.warn('Não foi possível atualizar o painel do Importer', error);
+    } finally {
+      snapshotRefreshing = false;
+    }
+  }
 
   // Chart computation for Cap/min view
   const chartBuckets = $derived.by(() => {
@@ -73,13 +120,6 @@
     const totalVisible60m = result.reduce((acc, r) => acc + r.visible, 0);
     const totalCompleted60m = result.reduce((acc, r) => acc + r.completed, 0);
     return { buckets: result, maxVal, totalVisible60m, totalCompleted60m };
-  });
-
-  onMount(() => {
-    const interval = setInterval(() => {
-      invalidateAll();
-    }, 20000);
-    return () => clearInterval(interval);
   });
 
   // Catalog Health & Manifest state
@@ -364,7 +404,8 @@
 
   let pollInterval: ReturnType<typeof setTimeout> | null = null;
 
-  // Real-time live polling every 4s while tab is visible
+  // One background refresh keeps operational data current without coupling it
+  // to a tab change or issuing duplicate full-page invalidations.
   onMount(() => {
     const handleGlobalClick = () => {
       activeMenuJobId = null;
@@ -372,27 +413,24 @@
     window.addEventListener('click', handleGlobalClick);
 
     let disposed = false;
-    const poll = async () => {
-      try {
-        if (document.visibilityState === 'visible') {
-          const res = await fetch('/api/internal/importer/snapshot');
-          if (res.ok) {
-            const body = await res.json();
-            if (body.success && body.data) {
-              data = body.data;
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('Não foi possível atualizar o painel do Importer', error);
-      } finally {
-        if (!disposed) pollInterval = setTimeout(poll, 4000);
-      }
+    const onTabRequest = (event: Event) => {
+      selectTab((event as CustomEvent<string>).detail);
     };
-    pollInterval = setTimeout(poll, 4000);
+    const onHistoryChange = () => {
+      currentTab = normalizeTab(new URL(window.location.href).searchParams.get('tab'));
+    };
+    const poll = async () => {
+      if (document.visibilityState === 'visible') await refreshSnapshot();
+      if (!disposed) pollInterval = setTimeout(poll, 20_000);
+    };
+    window.addEventListener('nox:importer-tab', onTabRequest);
+    window.addEventListener('popstate', onHistoryChange);
+    pollInterval = setTimeout(poll, 20_000);
 
     return () => {
       window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('nox:importer-tab', onTabRequest);
+      window.removeEventListener('popstate', onHistoryChange);
       disposed = true;
       if (pollInterval) clearTimeout(pollInterval);
     };
@@ -458,6 +496,17 @@
     <div class="header-action-wrap">
       <button
         type="button"
+        class="btn-refresh"
+        onclick={refreshSnapshot}
+        disabled={snapshotRefreshing}
+        aria-label="Atualizar dados do Importer"
+        title={`Última atualização local: ${new Date(snapshotUpdatedAt).toLocaleTimeString('pt-BR')}`}
+      >
+        <RotateCw size={15} class={snapshotRefreshing ? 'spin' : ''} />
+        <span>{snapshotRefreshing ? 'Atualizando…' : 'Atualizar'}</span>
+      </button>
+      <button
+        type="button"
         class="btn-prioritize"
         onclick={() => (showPrioritizeModal = true)}
       >
@@ -469,55 +518,55 @@
 
   <!-- Horizontal Subtabs Navigation -->
   <nav class="importer-tabs-nav" aria-label="Abas do Importer">
-    <a href="/admin/importer" class="importer-tab-link" class:active={currentTab === 'resumo' || currentTab === ''}>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'resumo'} onclick={() => selectTab('resumo')}>
       <Activity size={15} />
       <span>Resumo</span>
-    </a>
-    <a href="/admin/importer?tab=fontes" class="importer-tab-link" class:active={currentTab === 'fontes'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'fontes'} onclick={() => selectTab('fontes')}>
       <Radio size={15} />
       <span>Fontes</span>
-    </a>
-    <a href="/admin/importer?tab=atividade" class="importer-tab-link" class:active={currentTab === 'atividade'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'atividade'} onclick={() => selectTab('atividade')}>
       <Compass size={15} />
       <span>Atividade</span>
-    </a>
-    <a href="/admin/importer?tab=erros" class="importer-tab-link" class:active={currentTab === 'erros'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'erros'} onclick={() => selectTab('erros')}>
       <AlertOctagon size={15} />
       <span>Erros</span>
       {#if (data.counts?.retry ?? 0) + (data.counts?.failed ?? 0) > 0}
         <span class="tab-badge warning">{(data.counts?.retry ?? 0) + (data.counts?.failed ?? 0)}</span>
       {/if}
-    </a>
-    <a href="/admin/importer?tab=cap-min" class="importer-tab-link" class:active={currentTab === 'cap-min'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'cap-min'} onclick={() => selectTab('cap-min')}>
       <Gauge size={15} />
       <span>Cap/min</span>
       <span class="tab-badge rate">{data.rateTelemetry?.rate1m ?? 0}/m</span>
-    </a>
-    <a href="/admin/importer?tab=prioridades" class="importer-tab-link" class:active={currentTab === 'prioridades'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'prioridades'} onclick={() => selectTab('prioridades')}>
       <Flame size={15} />
       <span>Prioridades</span>
       {#if (data.staffRequests || []).length > 0}
         <span class="tab-badge gold">{(data.staffRequests || []).length}</span>
       {/if}
-    </a>
-    <a href="/admin/importer?tab=proximas-obras" class="importer-tab-link" class:active={currentTab === 'proximas-obras'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'proximas-obras'} onclick={() => selectTab('proximas-obras')}>
       <Layers size={15} />
       <span>Próximas Obras</span>
-    </a>
-    <a href="/admin/importer?tab=proximos-capitulos" class="importer-tab-link" class:active={currentTab === 'proximos-capitulos'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'proximos-capitulos'} onclick={() => selectTab('proximos-capitulos')}>
       <ListOrdered size={15} />
       <span>Próximos Capítulos</span>
       {#if (data.counts?.queued ?? 0) > 0}
         <span class="tab-badge neutral">{(data.counts?.queued ?? 0).toLocaleString('pt-BR')}</span>
       {/if}
-    </a>
-    <a href="/admin/importer?tab=capitulos-faltando" class="importer-tab-link" class:active={currentTab === 'capitulos-faltando'}>
+    </button>
+    <button type="button" class="importer-tab-link" class:active={currentTab === 'capitulos-faltando'} onclick={() => selectTab('capitulos-faltando')}>
       <AlertTriangle size={15} />
       <span>Capítulos Faltando</span>
       {#if (data.healthMetrics?.incompleteCount ?? 0) > 0}
         <span class="tab-badge alert">{data.healthMetrics?.incompleteCount}</span>
       {/if}
-    </a>
+    </button>
   </nav>
 
   <!-- Notification Banner -->
@@ -3111,12 +3160,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
     margin-bottom: 24px;
     padding-bottom: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    overflow: visible;
   }
 
   .importer-tab-link {
@@ -3130,7 +3178,9 @@
     color: #94a3b8;
     font-size: 13px;
     font-weight: 600;
+    font-family: inherit;
     text-decoration: none;
+    cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
   }
@@ -3146,6 +3196,12 @@
     background: rgba(223, 194, 141, 0.12);
     border-color: rgba(223, 194, 141, 0.35);
     font-weight: 700;
+  }
+
+  .importer-tab-link:focus-visible,
+  .btn-refresh:focus-visible {
+    outline: 2px solid #dfc28d;
+    outline-offset: 2px;
   }
 
   .tab-badge {
@@ -3190,6 +3246,36 @@
   }
 
   @media (max-width: 640px) {
+    .importer-tabs-nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: stretch;
+      overflow-x: visible;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .importer-tab-link {
+      min-width: 0;
+      min-height: 42px;
+      justify-content: flex-start;
+      padding: 8px 10px;
+      white-space: normal;
+      text-align: left;
+      line-height: 1.2;
+    }
+
+    .importer-tab-link :global(svg) {
+      flex: 0 0 auto;
+    }
+
+    .importer-tab-link .tab-badge {
+      margin-left: auto;
+      flex: 0 0 auto;
+    }
+
     .cap-kpis-grid {
       grid-template-columns: 1fr;
     }
@@ -4231,6 +4317,44 @@
     cursor: pointer;
     box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .header-action-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .btn-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.045);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-refresh:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+  }
+
+  .btn-refresh:disabled {
+    cursor: wait;
+    opacity: 0.7;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
   }
 
   .btn-prioritize:hover {
@@ -6736,9 +6860,11 @@
 
     .header-action-wrap {
       width: 100%;
+      justify-content: stretch;
     }
 
-    .btn-prioritize {
+    .btn-prioritize,
+    .btn-refresh {
       width: 100%;
       justify-content: center;
       box-sizing: border-box;
