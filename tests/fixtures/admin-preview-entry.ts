@@ -1,6 +1,9 @@
 import { mount } from 'svelte';
-import Harness from './AdminPreviewHarness.svelte';
 import '../../src/app.css';
+
+(globalThis as any).__sveltekit_dev ??= { env: {} };
+
+const { default: Harness } = await import('./AdminPreviewHarness.svelte');
 
 const params = new URLSearchParams(window.location.search);
 const page = params.get('view') || 'dashboard';

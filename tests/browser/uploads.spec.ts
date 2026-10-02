@@ -21,7 +21,7 @@ for (const width of [390, 768, 1366, 1440])
       staffRequests++;
       return route.abort();
     });
-    await page.route('**/api/upload', (route) => {
+    await page.route('**/api/upload?*', (route) => {
       uploads++;
       return route.fulfill(
         uploads === 2
@@ -45,11 +45,9 @@ for (const width of [390, 768, 1366, 1440])
     await page
       .locator('input[type=file]')
       .setInputFiles({ name: 'local-test.zip', mimeType: 'application/zip', buffer: zip });
-    await expect(page.getByRole('status')).toContainText('As páginas já enviadas foram preservadas');
-    await expect(page.locator('.page-tile')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled();
-    await page.getByRole('button', { name: 'Continuar envio' }).click();
+    await expect(page.getByRole('status')).toContainText('Páginas enviadas. Confira a ordem e salve o rascunho.');
     await expect(page.locator('.page-tile')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Continuar envio' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Salvar rascunho' })).toBeEnabled();
     expect(uploads).toBe(4);
     expect(staffRequests).toBe(0);

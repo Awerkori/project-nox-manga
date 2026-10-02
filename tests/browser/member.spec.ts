@@ -30,7 +30,7 @@ for (const width of [390, 768, 1366, 1440])
         );
       } else {
         await expect(page.getByRole('navigation', { name: 'Paginação' })).toHaveCount(0);
-        await expect(page.getByText('Obras na biblioteca', { exact: true })).toBeVisible();
+        await expect(page.locator('.profile-stats-grid').getByText('Na biblioteca', { exact: true })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath('profile.png') });
       }
     }
