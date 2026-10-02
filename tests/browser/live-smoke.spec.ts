@@ -2,6 +2,28 @@ import { test, expect } from '@playwright/test';
 
 const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
 
+/**
+ * Production is a real distributed dependency, not the local Vite server.
+ * A cold Worker/database hop can very occasionally return a transient 503.
+ * Retrying that status twice keeps the smoke meaningful: it still fails for
+ * every non-200 response that does not recover promptly.
+ */
+async function gotoLiveReader(page: import('@playwright/test').Page) {
+  let response: Awaited<ReturnType<typeof page.goto>> = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    response = await page.goto(`${LIVE_URL}/ler/a12eebc6-691e-4fff-b699-70bc5350a5e3`, {
+      waitUntil: 'domcontentloaded'
+    });
+
+    if (response?.status() === 200 || response?.status() !== 503 || attempt === 3) break;
+    console.warn(`Reader returned transient 503 (attempt ${attempt}/3); retrying.`);
+    await page.waitForTimeout(250 * attempt);
+  }
+
+  return response;
+}
+
 test.describe('Production Live Smoke Tests', () => {
   test('Live Home page renders clean footer, canvas snow, and no explore banner', async ({ page }) => {
     await page.context().addCookies([
@@ -58,7 +80,7 @@ test.describe('Production Live Smoke Tests', () => {
       { name: 'nox-age-status', value: 'ADULT', domain: 'manga.project-nox-awerkori.workers.dev', path: '/' }
     ]);
 
-    const res = await page.goto(`${LIVE_URL}/ler/a12eebc6-691e-4fff-b699-70bc5350a5e3`, { waitUntil: 'domcontentloaded' });
+    const res = await gotoLiveReader(page);
     expect(res?.status()).toBe(200);
 
     await expect(page.getByRole('button', { name: 'Voltar ao topo' })).toBeAttached();
