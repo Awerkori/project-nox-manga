@@ -100,7 +100,13 @@ describe('/admin/obras/[id] load', () => {
   it('fails safely when a dependent administrative query fails', async () => {
     const { load } = await import('../src/routes/admin/obras/[id]/+page.server');
     await expect(
-      load(event(database({ importer_sources: result(null, { code: '42P01', message: 'relation missing' }) })) as any)
+      load(
+        event(
+          database(),
+          workId,
+          database({ importer_sources: result(null, { code: '42P01', message: 'relation missing' }) })
+        ) as any
+      )
     ).rejects.toMatchObject({ status: 500 });
   });
 });

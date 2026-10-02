@@ -52,13 +52,13 @@ export const load = async ({ locals, params, request }) => {
           .eq('work_id', params.id),
     params.id === 'nova'
       ? Promise.resolve({ data: [], error: null })
-      : locals.db
+      : provenanceDb!
           .from('importer_work_mappings')
           .select('id,source,source_work_id,source_slug,source_title,sync_status,last_synced_at,is_primary,metadata,updated_at')
           .eq('work_id', params.id),
     params.id === 'nova'
       ? Promise.resolve({ data: [], error: null })
-      : locals.db
+      : provenanceDb!
           .from('importer_sources')
           .select('id,name,base_url,enabled,status'),
     params.id === 'nova'
@@ -95,7 +95,7 @@ export const load = async ({ locals, params, request }) => {
   const chapterMappings =
     params.id === 'nova' || chapterIds.length === 0
       ? { data: [] }
-      : await locals.db
+      : await provenanceDb!
           .from('importer_chapter_mappings')
           .select('id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at')
           .eq('work_id', params.id);
