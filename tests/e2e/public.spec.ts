@@ -16,8 +16,11 @@ test.beforeEach(async ({ context }) => {
 });
 
 test('visitor cannot enter any administrative route or modify the API', async ({ request }) => {
-  for (const path of ['/admin', '/admin/obras', '/admin/gestao'])
-    expect((await request.get(path)).status()).toBe(403);
+  for (const path of ['/admin', '/admin/obras', '/admin/gestao']) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    expect(response.headers().location).toMatch(/^\/entrar\?redirect=/);
+  }
   expect(
     (await request.post('/api/action', { data: { scope: 'owner', action: 'role', data: {} } })).status()
   ).toBe(403);

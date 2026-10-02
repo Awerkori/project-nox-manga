@@ -53,7 +53,7 @@ test.describe('Production Live Smoke Tests', () => {
     await expect(desktopCta).toBeHidden();
   });
 
-  test('Live Reader page renders navigation, back-to-top, and reactions', async ({ page }) => {
+  test('Live Reader page renders navigation, scroll controls, and reactions', async ({ page }) => {
     await page.context().addCookies([
       { name: 'nox-age-status', value: 'ADULT', domain: 'manga.project-nox-awerkori.workers.dev', path: '/' }
     ]);
@@ -61,8 +61,7 @@ test.describe('Production Live Smoke Tests', () => {
     const res = await page.goto(`${LIVE_URL}/ler/a12eebc6-691e-4fff-b699-70bc5350a5e3`, { waitUntil: 'domcontentloaded' });
     expect(res?.status()).toBe(200);
 
-    const backTop = page.locator('.back-top');
-    await expect(backTop).toBeAttached();
+    await expect(page.getByRole('button', { name: 'Voltar ao topo' })).toBeAttached();
 
     // Scroll to end
     await page.evaluate(() => {

@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { testArtifactDir } from '../test-artifacts';
+
+const screenshotDir = testArtifactDir('scans');
 
 const viewports = [
   { name: 'desktop-1920', width: 1920, height: 1080 },
@@ -27,9 +30,8 @@ for (const vp of viewports) {
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth);
 
     await page.screenshot({
-      path: `/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/scans/scans_${vp.name}.png`,
+      path: `${screenshotDir}/scans_${vp.name}.png`,
       fullPage: true
     });
   });
 }
-

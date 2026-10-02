@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import { testArtifactDir } from '../test-artifacts';
 
-const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854';
-const SCREENSHOT_DIR = `${ARTIFACT_DIR}/screenshots/homologation`;
+const SCREENSHOT_DIR = testArtifactDir('scan-homologation');
 
 test.beforeAll(() => {
   if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -143,7 +143,7 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     expect(errors).toEqual([]);
   });
 
-  test('3. ScanHome 9 Canonical Stages & Unified Active Demands', async ({ page }) => {
+  test('3. ScanHome canonical queues & unified active demands', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
@@ -152,9 +152,9 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     await page.goto('/qa-scan-proof?tab=home');
     await page.waitForSelector('.scan-home-layout');
 
-    // 9 canonical stages in queue grid
-    const queueCards = page.locator('.queues-grid .queue-card');
-    await expect(queueCards).toHaveCount(9);
+    // The current ScanHome exposes its seven canonical queues as accessible chips.
+    const queueCards = page.locator('.queues-strip .queue-chip');
+    await expect(queueCards).toHaveCount(7);
 
     // Click Typeset queue card -> should navigate to Pipeline
     const typesetQueueCard = queueCards.nth(3); // 0=raw, 1=clean, 2=traducao, 3=typeset

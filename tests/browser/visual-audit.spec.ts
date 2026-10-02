@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import { testArtifactDir } from '../test-artifacts';
 
-const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854';
-const SCREENSHOT_DIR = process.env.AUDIT_MODE === 'after'
-  ? `${ARTIFACT_DIR}/screenshots/after`
-  : `${ARTIFACT_DIR}/screenshots/before`;
+const SCREENSHOT_DIR = testArtifactDir(process.env.AUDIT_MODE === 'after' ? 'after' : 'before');
+const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 const VIEWPORTS = [
   { name: 'mobile-360', width: 360, height: 800 },
@@ -25,7 +25,9 @@ async function setupRoutes(page: any) {
     try {
       localStorage.setItem('nox-age-status', 'ADULT');
       localStorage.setItem('nox-blur-nsfw', 'false');
-    } catch (e) {}
+    } catch {
+      // Local storage can be unavailable in the test browser.
+    }
   });
 
   // Admin preview route
@@ -76,12 +78,12 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
   }
 
   const pagesToAudit = [
-    { id: 'home', path: '/', selector: 'main' },
-    { id: 'obra', path: '/obra/vinganca-do-cao-de-caca', selector: '.work-page-container' },
-    { id: 'admin-dashboard', path: '/preview-admin?view=dashboard&role=ADMIN', selector: '.editorial-workspace' },
-    { id: 'admin-obras', path: '/preview-admin?view=obras&role=ADMIN', selector: '.works-manager-shell' },
-    { id: 'admin-importer', path: '/preview-admin?view=importer&role=ADMIN', selector: '.importer-dashboard' },
-    { id: 'notificacoes', path: '/qa-member?area=notificacoes', selector: '#member' }
+    { id: 'home', path: LIVE_URL, selector: 'main' },
+    { id: 'obra', path: `${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, selector: '.work-page-container' },
+    { id: 'admin-dashboard', path: `${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`, selector: '.dashboard-shell' },
+    { id: 'admin-obras', path: `${LOCAL_URL}/preview-admin?view=obras&role=ADMIN`, selector: '.works-manager-shell' },
+    { id: 'admin-importer', path: `${LOCAL_URL}/preview-admin?view=importer&role=ADMIN`, selector: '.importer-dashboard' },
+    { id: 'notificacoes', path: `${LOCAL_URL}/qa-member?area=notificacoes`, selector: '#member' }
   ];
 
   const auditReport: Array<{ page: string; viewport: string; overflow: boolean; scrollWidth: number; innerWidth: number; offenders: any[] }> = [];
@@ -90,18 +92,20 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
     await page.setViewportSize({ width: vp.width, height: vp.height });
 
     for (const item of pagesToAudit) {
-      try {
-        await page.goto(item.path, { waitUntil: 'domcontentloaded' });
-        await page.waitForSelector(item.selector, { timeout: 10000 });
+      await page.goto(item.path, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector(item.selector, { timeout: 10000 });
 
         // Let layout settle
         await page.waitForTimeout(400);
 
         // Check horizontal overflow
         const overflowData = await page.evaluate(() => {
-          const docEl = document.documentElement;
-          const body = document.body;
-          const scrollWidth = Math.max(docEl.scrollWidth, body ? body.scrollWidth : 0);
+          // The page scroller is the user-visible horizontal boundary. A carousel
+          // may have an overflowing child inside its own scroll container; body
+          // dimensions alone would report that intentional local scrolling as a
+          // page-level overflow even when the document cannot scroll sideways.
+          const scrollRoot = document.scrollingElement || document.documentElement;
+          const scrollWidth = scrollRoot.scrollWidth;
           const innerWidth = window.innerWidth;
           const hasOverflow = scrollWidth > innerWidth;
 
@@ -149,9 +153,6 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
           fullPage: false
         });
 
-      } catch (err: any) {
-        console.error(`Error auditing ${item.id} at ${vp.name}:`, err.message);
-      }
     }
   }
 
@@ -166,4 +167,5 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
       console.log(`  Offenders: ${JSON.stringify(o.offenders.slice(0, 3))}`);
     }
   }
+  expect(overflows).toEqual([]);
 });
