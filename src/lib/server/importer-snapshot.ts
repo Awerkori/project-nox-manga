@@ -1,4 +1,22 @@
-export async function loadSnapshot({ locals }: any) {
+export async function loadSnapshot({ locals, platform }: any) {
+  const snapshotStartedAt = performance.now();
+  const queryTimings: Record<string, number> = {};
+  const profileEnabled =
+    platform?.env?.IMPORTER_SNAPSHOT_PROFILE === '1' ||
+    (typeof process !== 'undefined' && process.env?.IMPORTER_SNAPSHOT_PROFILE === '1');
+  // The database client is deliberately untyped in this server module. Keep the
+  // profiling wrapper equally transparent so it cannot change the inferred
+  // response type of existing queries.
+  const timed = async (name: string, query: () => any): Promise<any> => {
+    if (!profileEnabled) return query();
+    const startedAt = performance.now();
+    try {
+      return await query();
+    } finally {
+      queryTimings[name] = Math.round(performance.now() - startedAt);
+    }
+  };
+
   const [
     telemetryRes,
     stagedCountRes,
@@ -15,102 +33,115 @@ export async function loadSnapshot({ locals }: any) {
     staffAuditRes
   ] = await Promise.all([
     // 1. Latest telemetry heartbeat
-    locals.db
+    timed('telemetry', () => locals.db
       .from('importer_telemetry')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle(),
+      .maybeSingle()
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 2. STAGED count in chapter mappings
-    locals.db
+    timed('staged_count', () => locals.db
       .from('importer_chapter_mappings')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'STAGED'),
+      .eq('status', 'STAGED')
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 3. Currently active importing jobs (ONLY IMPORTING)
-    locals.db
+    timed('importing_jobs', () => locals.db
       .from('importer_queue')
       .select('*')
       .eq('status', 'IMPORTING')
       .order('updated_at', { ascending: false })
-      .limit(64),
+      .limit(64)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 3b. Jobs awaiting retry (DEDICATED RETRIES AREA)
-    locals.db
+    timed('retry_jobs', () => locals.db
       .from('importer_queue')
       .select('*')
       .eq('status', 'RETRY')
       .order('next_run_at', { ascending: true })
-      .limit(24),
+      .limit(24)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 3c. Jobs paused by staff
-    locals.db
+    timed('paused_jobs', () => locals.db
       .from('importer_queue')
       .select('*')
       .eq('status', 'PAUSED_BY_STAFF')
       .order('updated_at', { ascending: false })
-      .limit(16),
+      .limit(16)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 4. Staff priority requests
-    locals.db
+    timed('staff_requests', () => locals.db
       .from('importer_staff_requests')
       .select('*, works(id, title, slug, cover_id), requester:members!importer_staff_requests_requested_by_fkey(id, username, display_name), canceller:members!importer_staff_requests_cancelled_by_fkey(id, username, display_name)')
       .order('created_at', { ascending: false })
-      .limit(12),
+      .limit(12)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 5. Top queued jobs
-    locals.db
+    timed('next_queued_jobs', () => locals.db
       .from('importer_queue')
       .select('*')
       .eq('status', 'QUEUED')
       .order('priority', { ascending: false })
       .order('chapter_sort_key', { ascending: true, nullsFirst: false })
       .order('next_run_at', { ascending: true })
-      .limit(8),
+      .limit(8)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 6. Chapters staged behind canonical barrier
-    locals.db
+    timed('staged_chapters', () => locals.db
       .from('importer_chapter_mappings')
       .select('*, works(id, title, cover_id)')
       .eq('status', 'STAGED')
       .order('chapter_sort_key', { ascending: true })
-      .limit(8),
+      .limit(8)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 7. Sources status & health
-    locals.db
+    timed('sources', () => locals.db
       .from('importer_sources')
       .select('*')
-      .order('name', { ascending: true }),
+      .order('name', { ascending: true })
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 8. Works catalog for manual priority selection
-    locals.db
+    timed('catalog_works', () => locals.db
       .from('works')
       .select('id, title, slug, cover_id')
       .order('title', { ascending: true })
-      .limit(80),
+      .limit(80)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 9. Catalog Work Health & Cross-Provider Reconciliations
-    locals.db
+    timed('work_health', () => locals.db
       .from('importer_work_health')
       .select('*, works(id, title, slug, cover_id)')
       .order('last_reconciled_at', { ascending: false, nullsFirst: false })
-      .limit(60),
+      .limit(60)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 10. Chapter manifest entries
-    locals.db
+    timed('chapter_manifest', () => locals.db
       .from('importer_chapter_manifest')
       .select('id, work_id, chapter_number, chapter_sort_key, status, selected_source, available_sources, page_count, last_checked_at')
       .order('chapter_sort_key', { ascending: true })
-      .limit(100),
+      .limit(100)
+      .abortSignal(AbortSignal.timeout(10000))),
 
     // 11. Recent staff audit records
-    locals.db
+    timed('staff_audit', () => locals.db
       .from('importer_staff_audit')
       .select('*, actor:members!importer_staff_audit_actor_id_fkey(id, username, display_name)')
       .order('created_at', { ascending: false })
       .limit(10)
-  ].map(query => query.abortSignal(AbortSignal.timeout(10000))));
+      .abortSignal(AbortSignal.timeout(10000)))
+  ]);
 
   const failedSections = [telemetryRes, stagedCountRes, importingJobsRes, retryJobsRes, pausedJobsRes, staffRequestsRes, nextQueuedRes, stagedRes, sourcesRes, worksListRes, workHealthRes, recentManifestRes, staffAuditRes].filter(r => r.error);
   if (failedSections.length) {
@@ -119,8 +150,8 @@ export async function loadSnapshot({ locals }: any) {
   }
 
   const [countRes, recentFailuresRes] = await Promise.all([
-    (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(10000)),
-    locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(10000))
+    timed('queue_counts', () => (locals.db as any).rpc('admin_importer_queue_counts').abortSignal(AbortSignal.timeout(10000))),
+    timed('recent_failures', () => locals.db.from('importer_queue').select('id, source, chapter_sort_key, last_error, updated_at, payload').eq('status', 'FAILED').order('updated_at', { ascending: false }).limit(6).abortSignal(AbortSignal.timeout(10000)))
   ]);
   if (countRes.error || !countRes.data) throw new Error('Métricas do Importer temporariamente indisponíveis.');
   const queueCounts = countRes.data;
@@ -131,23 +162,23 @@ export async function loadSnapshot({ locals }: any) {
 
   // Fetch Rate Buckets & Heartbeat for Always-On Adaptive Capacity
   const [rateBucketsRes, heartbeatRes] = await Promise.all([
-    locals.db
+    timed('rate_buckets', () => locals.db
       .from('importer_rate_buckets')
       .select('*')
       .gte('bucket_minute', new Date(Date.now() - 65 * 60 * 1000).toISOString())
       .order('bucket_minute', { ascending: false })
-      .abortSignal(AbortSignal.timeout(5000))
+      .abortSignal(AbortSignal.timeout(5000)))
       .then((r: any) => r)
       .catch((err: any) => {
         console.warn('[RATE_BUCKETS_FETCH_WARN]', err?.message);
         return { data: [] };
       }),
-    locals.db
+    timed('heartbeat', () => locals.db
       .from('settings')
       .select('value')
       .eq('key', 'importer_heartbeat')
       .maybeSingle()
-      .abortSignal(AbortSignal.timeout(5000))
+      .abortSignal(AbortSignal.timeout(5000)))
       .then((r: any) => r)
       .catch((err: any) => {
         console.warn('[HEARTBEAT_FETCH_WARN]', err?.message);
@@ -258,19 +289,19 @@ export async function loadSnapshot({ locals }: any) {
 
   let worksMap: Record<string, any> = {};
   if (neededWorkIds.length > 0) {
-    const { data: worksFound } = await locals.db
-      .from('works')
-      .select('id, title, cover_id, slug')
-      .in('id', neededWorkIds);
+    const { data: worksFound } = await timed('job_works', () => locals.db
+        .from('works')
+        .select('id, title, cover_id, slug')
+        .in('id', neededWorkIds));
     if (worksFound) {
-      worksMap = Object.fromEntries(worksFound.map((w) => [w.id, w]));
+      worksMap = Object.fromEntries(worksFound.map((w: any) => [w.id, w]));
     }
   }
 
   // Active Focus Request (Prioridade Absoluta)
   const staffRequests = staffRequestsRes.data || [];
   const activeFocus = staffRequests.find(
-    (r) => r.status === 'QUEUED' || r.status === 'IMPORTING' || r.status === 'RETRYING' || r.status === 'BLOCKED'
+    (r: any) => r.status === 'QUEUED' || r.status === 'IMPORTING' || r.status === 'RETRYING' || r.status === 'BLOCKED'
   ) || null;
 
   let activeFocusStats: {
@@ -294,35 +325,35 @@ export async function loadSnapshot({ locals }: any) {
   if (activeFocus) {
     const focusWorkId = activeFocus.work_id;
     const [mappingsRes, publishedCountRes, currentJobRes, failedJobRes] = await Promise.all([
-      locals.db
+      timed('focus_mappings', () => locals.db
         .from('importer_chapter_mappings')
         .select('id, status, chapter_number, chapter_sort_key')
-        .eq('work_id', focusWorkId),
-      locals.db
+        .eq('work_id', focusWorkId)),
+      timed('focus_published_count', () => locals.db
         .from('chapters')
         .select('id', { count: 'exact', head: true })
         .eq('work_id', focusWorkId)
-        .not('published_at', 'is', null),
-      locals.db
+        .not('published_at', 'is', null)),
+      timed('focus_current_job', () => locals.db
         .from('importer_queue')
         .select('task_type, status, chapter_sort_key, payload')
         .eq('status', 'IMPORTING')
         .limit(1)
-        .maybeSingle(),
-      locals.db
+        .maybeSingle()),
+      timed('focus_failed_job', () => locals.db
         .from('importer_queue')
         .select('source, last_error, updated_at, attempts, payload, chapter_sort_key')
         .eq('status', 'FAILED')
         .order('updated_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle())
     ]);
 
     const mappings = mappingsRes.data || [];
     const totalDiscovered = mappings.length;
-    const completed = mappings.filter((m) => m.status === 'COMPLETED').length;
-    const staged = mappings.filter((m) => m.status === 'STAGED').length;
-    const pending = mappings.filter((m) => m.status === 'PENDING' || m.status === 'DOWNLOADING').length;
+    const completed = mappings.filter((m: any) => m.status === 'COMPLETED').length;
+    const staged = mappings.filter((m: any) => m.status === 'STAGED').length;
+    const pending = mappings.filter((m: any) => m.status === 'PENDING' || m.status === 'DOWNLOADING').length;
     const published = publishedCountRes.count || 0;
     const percent = totalDiscovered > 0 ? Math.round((completed / totalDiscovered) * 100) : 0;
     const currentChapter = currentJobRes.data
@@ -375,7 +406,19 @@ export async function loadSnapshot({ locals }: any) {
     remoteStatus: (s.blocked_details as any)?.discloud_status ?? null
   }));
 
+  const snapshotDurationMs = Math.round(performance.now() - snapshotStartedAt);
+  if (profileEnabled) {
+    console.info('[IMPORTER_SNAPSHOT_PROFILE]', JSON.stringify({
+      durationMs: snapshotDurationMs,
+      queries: queryTimings
+    }));
+  }
+
   return {
+    snapshotMeta: {
+      generatedAt: new Date().toISOString(),
+      durationMs: snapshotDurationMs
+    },
     telemetry: telemetryRes.data || null,
     rateTelemetry,
     rateBuckets: bucketRows,
@@ -407,15 +450,15 @@ export async function loadSnapshot({ locals }: any) {
     totalSourcesCount: sourcesList.length,
     recentFailures: recentFailuresRes.data || [],
     recentAudit: staffAuditRes.data || [],
-    importingJobs: importingJobs.map((j) => ({
+    importingJobs: importingJobs.map((j: any) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
-    retryJobs: retryJobs.map((j) => ({
+    retryJobs: retryJobs.map((j: any) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
-    pausedJobs: pausedJobs.map((j) => ({
+    pausedJobs: pausedJobs.map((j: any) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
@@ -424,7 +467,7 @@ export async function loadSnapshot({ locals }: any) {
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),
     staffRequests,
-    queuedJobs: queuedJobs.map((j) => ({
+    queuedJobs: queuedJobs.map((j: any) => ({
       ...j,
       work: (j.payload as any)?.workId ? worksMap[(j.payload as any).workId] : null
     })),

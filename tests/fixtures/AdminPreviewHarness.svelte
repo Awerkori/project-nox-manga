@@ -8,6 +8,7 @@
   import ChapterEditor from '../../src/routes/admin/obras/[id]/capitulos/[chapter]/+page.svelte';
   import Importer from '../../src/routes/admin/importer/+page.svelte';
   import Staff from '../../src/routes/admin/staff/+page.svelte';
+  import Scans from '../../src/routes/admin/scans/+page.svelte';
   import storageData from './storage-preview-data.json';
 
   let { page = 'dashboard', role = 'ADMIN' } = $props<{ page?: string; role?: 'ADMIN' | 'EDITOR' }>();
@@ -365,6 +366,48 @@
     counts: { total: 2, admins: 1, editors: 1, suspended: 0 }
   });
 
+  // Deliberately includes the complete four-action footer on a narrow card.
+  // The visual suite uses this fixture to guard against clipped Scan controls.
+  let scansData = $derived({
+    ...baseData,
+    scans: [
+      {
+        id: 'scan-official',
+        name: 'Project Nox',
+        slug: 'project-nox',
+        description: 'Scan oficial do Project Nox, responsável pela curadoria e publicação editorial.',
+        website: 'https://project-nox.example',
+        discord: 'https://discord.gg/project-nox',
+        status: 'ACTIVE',
+        is_official: true,
+        works_count: 48,
+        chapters_count: 1120,
+        members_count: 12,
+        openings_count: 0,
+        owner: { id: 'usr-1', username: 'awerkori', display_name: 'Awerkori' }
+      },
+      {
+        id: 'scan-partner',
+        name: 'Parceiros da Aurora Editorial',
+        slug: 'parceiros-aurora',
+        description: 'Parceira com obras em andamento e controles administrativos completos.',
+        website: 'https://aurora.example',
+        discord: null,
+        status: 'SUSPENDED',
+        is_official: false,
+        works_count: 8,
+        chapters_count: 209,
+        members_count: 4,
+        openings_count: 2,
+        owner: null
+      }
+    ],
+    partnerRequests: [],
+    projectRequests: [],
+    auditLogs: [],
+    users: [{ id: 'usr-1', username: 'awerkori', display_name: 'Awerkori' }]
+  });
+
   let activeData = $derived(
     page === 'dashboard'
       ? dashboardData
@@ -380,7 +423,9 @@
                 ? importerData
                 : page === 'staff'
                   ? staffData
-                  : chapterData
+                  : page === 'scans'
+                    ? scansData
+                    : chapterData
   );
 </script>
 
@@ -400,6 +445,8 @@
       <Importer data={importerData as any} form={null} />
     {:else if page === 'staff'}
       <Staff data={staffData as any} form={null} />
+    {:else if page === 'scans'}
+      <Scans data={scansData as any} />
     {:else if page === 'capitulo'}
       <ChapterEditor data={chapterData as any} />
     {/if}

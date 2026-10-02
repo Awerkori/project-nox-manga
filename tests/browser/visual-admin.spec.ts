@@ -99,7 +99,7 @@ test('capture admin visual pages across viewports', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 950 });
   await page.goto('/preview-admin?view=dashboard&role=EDITOR');
   await page.waitForSelector('.dashboard-shell');
-  await expect(page.locator('.operator-badge')).toContainText('EDITOR');
+  await expect(page.locator('.operator-badge')).toContainText('Editor');
   await expect(page.locator('.nav-group:has-text("Gestão do Sistema")')).toHaveCount(0);
   await page.screenshot({ path: `${ARTIFACT_DIR}/admin-editor-role-desktop.png`, fullPage: true });
 });

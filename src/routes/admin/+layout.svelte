@@ -31,6 +31,7 @@
     X,
     Shield,
     Sparkles,
+    FileEdit,
     Code,
     Headphones,
     Scan,
@@ -42,6 +43,7 @@
   let mobileDrawerOpen = $state(false);
   let currentPath = $derived(page.url.pathname);
   let currentTab = $derived(page.url.searchParams.get('tab') || '');
+  let activeImporterTab = $state(page.url.searchParams.get('tab') || 'resumo');
 
   // Role & Capabilities
   let role = $derived((data.role || 'LEITOR').toUpperCase());
@@ -53,7 +55,9 @@
   let canManageShop = $derived(isOwnerOrAdmin);
   let canViewImporter = $derived(true);
   let canViewCommunity = $derived(isOwnerOrAdmin);
-  let canManageScans = $derived(isOwnerOrAdmin || role === 'STAFF_SITE');
+  // Global Scan Management is an ADMIN-only route. Do not advertise a control
+  // to roles that the server must reject.
+  let canManageScans = $derived(role === 'ADMIN');
   let canViewStaff = $derived(isOwnerOrAdmin);
   let canViewSystem = $derived(role === 'ADMIN');
   let canManageConfig = $derived(role === 'ADMIN');
@@ -67,6 +71,8 @@
         return { label: 'Gerente', badgeClass: 'badge-gerente', icon: Sparkles };
       case 'DEVELOPER':
         return { label: 'Developer', badgeClass: 'badge-dev', icon: Code };
+      case 'EDITOR':
+        return { label: 'Editor', badgeClass: 'badge-gerente', icon: FileEdit };
       case 'SUPORTE':
         return { label: 'Suporte', badgeClass: 'badge-suporte', icon: Headphones };
       default:
@@ -86,6 +92,11 @@
     } catch {
       /* ignore */
     }
+    const syncImporterTab = (event: Event) => {
+      activeImporterTab = (event as CustomEvent<string>).detail || 'resumo';
+    };
+    window.addEventListener('nox:importer-tab', syncImporterTab);
+    return () => window.removeEventListener('nox:importer-tab', syncImporterTab);
   });
 
   function toggleCategory(cat: string) {
@@ -98,6 +109,9 @@
   }
 
   function isCategoryOpen(cat: string, paths: string[]): boolean {
+    // On a phone the drawer is a navigation sheet, not an accordion maze:
+    // expose every permitted destination as soon as it opens.
+    if (mobileDrawerOpen) return true;
     if (paths.some(p => isActive(p))) return true;
     return !collapsed[cat];
   }
@@ -119,6 +133,14 @@
 
   function closeMobile() {
     mobileDrawerOpen = false;
+  }
+
+  function selectImporterTab(event: MouseEvent, tab: string) {
+    closeMobile();
+    if (currentPath !== '/admin/importer') return;
+    event.preventDefault();
+    activeImporterTab = tab;
+    window.dispatchEvent(new CustomEvent('nox:importer-tab', { detail: tab }));
   }
 </script>
 
@@ -402,8 +424,8 @@
               <a
                 href="/admin/importer"
                 class="nav-link"
-                class:active={isActive('/admin/importer', true)}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'resumo'}
+                onclick={(event) => selectImporterTab(event, 'resumo')}
               >
                 <Activity size={16} class="nav-icon" />
                 <span>Resumo</span>
@@ -411,8 +433,8 @@
               <a
                 href="/admin/importer?tab=fontes"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'fontes')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'fontes'}
+                onclick={(event) => selectImporterTab(event, 'fontes')}
               >
                 <Radio size={16} class="nav-icon" />
                 <span>Fontes</span>
@@ -420,8 +442,8 @@
               <a
                 href="/admin/importer?tab=atividade"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'atividade')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'atividade'}
+                onclick={(event) => selectImporterTab(event, 'atividade')}
               >
                 <Compass size={16} class="nav-icon" />
                 <span>Atividade</span>
@@ -429,8 +451,8 @@
               <a
                 href="/admin/importer?tab=erros"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'erros')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'erros'}
+                onclick={(event) => selectImporterTab(event, 'erros')}
               >
                 <AlertOctagon size={16} class="nav-icon" />
                 <span>Erros</span>
@@ -438,8 +460,8 @@
               <a
                 href="/admin/importer?tab=cap-min"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'cap-min')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'cap-min'}
+                onclick={(event) => selectImporterTab(event, 'cap-min')}
               >
                 <Gauge size={16} class="nav-icon" />
                 <span>Cap/min</span>
@@ -447,8 +469,8 @@
               <a
                 href="/admin/importer?tab=prioridades"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'prioridades')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'prioridades'}
+                onclick={(event) => selectImporterTab(event, 'prioridades')}
               >
                 <Flame size={16} class="nav-icon" />
                 <span>Prioridades</span>
@@ -456,8 +478,8 @@
               <a
                 href="/admin/importer?tab=proximas-obras"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'proximas-obras')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'proximas-obras'}
+                onclick={(event) => selectImporterTab(event, 'proximas-obras')}
               >
                 <Layers size={16} class="nav-icon" />
                 <span>Próximas Obras</span>
@@ -465,8 +487,8 @@
               <a
                 href="/admin/importer?tab=proximos-capitulos"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'proximos-capitulos')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'proximos-capitulos'}
+                onclick={(event) => selectImporterTab(event, 'proximos-capitulos')}
               >
                 <ListOrdered size={16} class="nav-icon" />
                 <span>Próximos Capítulos</span>
@@ -474,8 +496,8 @@
               <a
                 href="/admin/importer?tab=capitulos-faltando"
                 class="nav-link"
-                class:active={isActive('/admin/importer', false, 'capitulos-faltando')}
-                onclick={closeMobile}
+                class:active={currentPath === '/admin/importer' && activeImporterTab === 'capitulos-faltando'}
+                onclick={(event) => selectImporterTab(event, 'capitulos-faltando')}
               >
                 <AlertTriangle size={16} class="nav-icon" />
                 <span>Capítulos Faltando</span>
@@ -978,8 +1000,8 @@
       top: 0;
       left: 0;
       bottom: 0;
-      width: 290px;
-      max-width: 82vw;
+      width: min(340px, calc(100vw - 32px));
+      max-width: 92vw;
       height: 100vh;
       border-radius: 0;
       border: none;
@@ -988,6 +1010,8 @@
       transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 1000;
       background: #0d1117;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
 
     .admin-sidebar.open {
@@ -997,6 +1021,8 @@
 
     .drawer-close-btn {
       display: flex;
+      width: 40px;
+      height: 40px;
     }
 
     .mobile-backdrop {
@@ -1005,6 +1031,27 @@
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(4px);
       z-index: 999;
+    }
+
+    .mobile-admin-header {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      min-height: 48px;
+      margin: 0 -12px 16px;
+      padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+      background: rgba(7, 9, 15, 0.94);
+      backdrop-filter: blur(12px);
+    }
+
+    .mobile-expand-btn,
+    .nav-link,
+    .category-toggle {
+      min-height: 44px;
+    }
+
+    .sidebar-nav {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
     }
   }
 </style>

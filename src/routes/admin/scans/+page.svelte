@@ -9,7 +9,6 @@
     Edit3,
     Trash2,
     Shield,
-    ShieldCheck,
     ExternalLink,
     CheckCircle2,
     X,
@@ -27,7 +26,7 @@
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { enhance } from '$app/forms';
 
-  let { data, form } = $props();
+  let { data } = $props();
 
   // Navigation sections: Scans, Partner Requests, Project Requests
   let activeSection = $state<'scans' | 'partner_requests' | 'project_requests' | 'audit_log'>('scans');
@@ -203,30 +202,6 @@
     }
   }
 
-  async function handleDeleteScan(scan: any) {
-    if (scan.is_official) {
-      alert('A scan oficial Project Nox não pode ser excluída.');
-      return;
-    }
-
-    const confirmPrompt = confirm(
-      `Tem certeza que deseja excluir a scan "${scan.name}"? As obras e capítulos associados não serão apagados, mas perderão a atribuição a esta scan.`
-    );
-    if (!confirmPrompt) return;
-
-    busy = true;
-    try {
-      await action('editor', 'delete_scan', { id: scan.id });
-      await invalidateAll();
-      notice = `Scan "${scan.name}" removida com sucesso.`;
-      noticeType = 'success';
-    } catch (err: any) {
-      notice = err.message || 'Erro ao remover scan.';
-      noticeType = 'error';
-    } finally {
-      busy = false;
-    }
-  }
 </script>
 
 <svelte:head>
@@ -379,7 +354,7 @@
                 </span>
               {/if}
               <span class="status-pill status-{scan.status.toLowerCase()}">
-                {scan.status === 'ACTIVE' ? 'Ativa' : scan.status === 'INACTIVE' ? 'Inativa' : 'Encerrada'}
+                {scan.status === 'ACTIVE' ? 'Ativa' : scan.status === 'INACTIVE' ? 'Inativa' : scan.status === 'SUSPENDED' ? 'Suspensa' : scan.status === 'ARCHIVED' ? 'Arquivada' : 'Encerrada'}
               </span>
             </div>
           </div>
@@ -429,16 +404,16 @@
           <div class="scan-card-footer">
             <div class="footer-links">
               {#if scan.website}
-                <a href={scan.website} target="_blank" rel="noopener noreferrer" class="link-btn" title="Website oficial">
+                <a href={scan.website} target="_blank" rel="noopener noreferrer" class="link-btn" title="Website oficial" aria-label={`Abrir website da scan ${scan.name}`}>
                   <Globe size={14} />
                 </a>
               {/if}
               {#if scan.discord}
-                <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="link-btn" title="Servidor do Discord">
+                <a href={scan.discord} target="_blank" rel="noopener noreferrer" class="link-btn" title="Servidor do Discord" aria-label={`Abrir Discord da scan ${scan.name}`}>
                   <MessageCircle size={14} />
                 </a>
               {/if}
-              <a href="/scans/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Página pública no site">
+              <a href="/scans/{scan.slug}" target="_blank" rel="noopener noreferrer" class="link-btn" title="Página pública no site" aria-label={`Abrir página pública da scan ${scan.name}`}>
                 <ExternalLink size={14} />
               </a>
             </div>
@@ -452,6 +427,7 @@
                   statusModalReason = '';
                 }}
                 title="Alterar Status do Ciclo de Vida"
+                aria-label={`Alterar status da scan ${scan.name}`}
               >
                 <Shield size={14} />
                 <span>Status</span>
@@ -464,12 +440,14 @@
                   recoverOwnerReason = '';
                 }}
                 title="Recuperar / Transferir Liderança"
+                aria-label={`Recuperar ou transferir liderança da scan ${scan.name}`}
               >
                 <Users size={14} />
                 <span>Liderança</span>
               </button>
-              <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan">
+              <button class="btn-icon edit" onclick={() => openEditModal(scan)} title="Editar scan" aria-label={`Editar scan ${scan.name}`}>
                 <Edit3 size={14} />
+                <span>Editar</span>
               </button>
               {#if !scan.is_official}
                 <button
@@ -480,8 +458,10 @@
                     hardDeleteConfirmation = '';
                   }}
                   title="Exclusão Definitiva (Admin Supremo)"
+                  aria-label={`Excluir definitivamente a scan ${scan.name}`}
                 >
                   <Trash2 size={14} />
+                  <span>Excluir</span>
                 </button>
               {/if}
             </div>
@@ -824,7 +804,7 @@
       </div>
     {:else}
       <div class="audit-log-list">
-        {#each filteredAuditLogs as log}
+        {#each filteredAuditLogs as log (log.id)}
           <div class="audit-card">
             <div class="audit-top">
               <span class="audit-badge action-{log.action.toLowerCase()}">{log.action}</span>
@@ -857,11 +837,12 @@
 
   <!-- Rejection Modal -->
   {#if rejectModalId}
-    <div class="modal-backdrop" onclick={() => (rejectModalId = null)}>
-      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar modal de recusa" onclick={() => (rejectModalId = null)}></button>
+      <div class="modal-card mini-reject-modal" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title">Recusar Solicitação</h2>
-          <button class="btn-close-modal" onclick={() => (rejectModalId = null)}>
+          <h2 id="reject-modal-title" class="modal-title">Recusar Solicitação</h2>
+          <button type="button" class="btn-close-modal" aria-label="Fechar modal de recusa" onclick={() => (rejectModalId = null)}>
             <X size={18} />
           </button>
         </div>
@@ -911,11 +892,12 @@
 
   <!-- Status Modal -->
   {#if statusModalScan}
-    <div class="modal-backdrop" onclick={() => (statusModalScan = null)}>
-      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar modal de status" onclick={() => (statusModalScan = null)}></button>
+      <div class="modal-card mini-reject-modal" role="dialog" aria-modal="true" aria-labelledby="status-modal-title" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title">Alterar Status: {statusModalScan.name}</h2>
-          <button class="btn-close-modal" onclick={() => (statusModalScan = null)}><X size={18} /></button>
+          <h2 id="status-modal-title" class="modal-title">Alterar Status: {statusModalScan.name}</h2>
+          <button type="button" class="btn-close-modal" aria-label="Fechar modal de status" onclick={() => (statusModalScan = null)}><X size={18} /></button>
         </div>
         <form
           method="POST"
@@ -961,11 +943,12 @@
 
   <!-- Recover Owner Modal -->
   {#if recoverOwnerModalScan}
-    <div class="modal-backdrop" onclick={() => (recoverOwnerModalScan = null)}>
-      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar modal de liderança" onclick={() => (recoverOwnerModalScan = null)}></button>
+      <div class="modal-card mini-reject-modal" role="dialog" aria-modal="true" aria-labelledby="owner-modal-title" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title">Liderança da Scan: {recoverOwnerModalScan.name}</h2>
-          <button class="btn-close-modal" onclick={() => (recoverOwnerModalScan = null)}><X size={18} /></button>
+          <h2 id="owner-modal-title" class="modal-title">Liderança da Scan: {recoverOwnerModalScan.name}</h2>
+          <button type="button" class="btn-close-modal" aria-label="Fechar modal de liderança" onclick={() => (recoverOwnerModalScan = null)}><X size={18} /></button>
         </div>
         <form
           method="POST"
@@ -982,7 +965,7 @@
           <div class="form-group">
             <label for="rec-owner" class="form-label">Selecionar Novo Dono / Líder:</label>
             <select id="rec-owner" name="new_owner_id" bind:value={recoverOwnerUserId} class="form-select" required>
-              {#each (data.users || []) as u}
+              {#each (data.users || []) as u (u.id)}
                 <option value={u.id}>{u.display_name || u.username} (@{u.username})</option>
               {/each}
             </select>
@@ -1010,11 +993,12 @@
 
   <!-- Hard Delete Modal (Supreme Delete) -->
   {#if hardDeleteModalScan}
-    <div class="modal-backdrop" onclick={() => (hardDeleteModalScan = null)}>
-      <div class="modal-card mini-reject-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar modal de exclusão" onclick={() => (hardDeleteModalScan = null)}></button>
+      <div class="modal-card mini-reject-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title text-danger">Exclusão Definitiva (Admin Supremo)</h2>
-          <button class="btn-close-modal" onclick={() => (hardDeleteModalScan = null)}><X size={18} /></button>
+          <h2 id="delete-modal-title" class="modal-title text-danger">Exclusão Definitiva (Admin Supremo)</h2>
+          <button type="button" class="btn-close-modal" aria-label="Fechar modal de exclusão" onclick={() => (hardDeleteModalScan = null)}><X size={18} /></button>
         </div>
         <form
           method="POST"
@@ -1080,11 +1064,12 @@
 
   <!-- Create / Edit Modal -->
   {#if showModal}
-    <div class="modal-backdrop" onclick={() => (showModal = false)}>
-      <div class="modal-card" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar modal da scan" onclick={() => (showModal = false)}></button>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="scan-modal-title" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title">{editingScan ? 'Editar Scan' : 'Nova Scan'}</h2>
-          <button class="btn-close-modal" onclick={() => (showModal = false)}>
+          <h2 id="scan-modal-title" class="modal-title">{editingScan ? 'Editar Scan' : 'Nova Scan'}</h2>
+          <button type="button" class="btn-close-modal" aria-label="Fechar modal da scan" onclick={() => (showModal = false)}>
             <X size={18} />
           </button>
         </div>
@@ -1483,6 +1468,19 @@
     border: 1px solid rgba(239, 68, 68, 0.3);
   }
 
+  .status-pill.status-suspended {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .status-pill.status-archived,
+  .status-pill.status-closed {
+    background: rgba(148, 163, 184, 0.14);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+
   .scan-description {
     font-size: 13px;
     line-height: 1.5;
@@ -1526,8 +1524,9 @@
   .scan-card-footer {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
+    flex-wrap: wrap;
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
@@ -1558,8 +1557,9 @@
   }
 
   .footer-actions {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex: 1 1 100%;
     gap: 8px;
   }
 
@@ -1576,6 +1576,10 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     color: #d1cde0;
     transition: all 0.2s ease;
+    justify-content: center;
+    min-width: 0;
+    min-height: 38px;
+    width: 100%;
   }
 
   .btn-icon.edit:hover {
@@ -1585,7 +1589,6 @@
   }
 
   .btn-icon.delete {
-    padding: 6px 9px;
     color: #f87171;
   }
 
@@ -1612,11 +1615,9 @@
   }
 
   /* Modal */
-  .modal-backdrop {
+  .modal-layer {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1624,7 +1625,19 @@
     padding: 20px;
   }
 
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    cursor: default;
+  }
+
   .modal-card {
+    position: relative;
+    z-index: 1;
     background: #0f121d;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
@@ -2159,8 +2172,7 @@
       justify-content: flex-start;
     }
     .footer-actions {
-      justify-content: flex-start;
-      flex-wrap: wrap;
+      grid-template-columns: 1fr 1fr;
     }
   }
 
