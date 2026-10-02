@@ -1157,7 +1157,7 @@
 
   /* Profile Banner */
   .profile-banner-wrap {
-    height: 230px;
+    aspect-ratio: 16 / 5;
     width: 100%;
     position: relative;
     background: #141724;
@@ -2259,7 +2259,7 @@
     }
 
     .profile-banner-wrap {
-      height: 118px;
+      aspect-ratio: 16 / 6;
     }
 
     .identity-row {

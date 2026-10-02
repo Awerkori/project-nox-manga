@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { onDestroy, onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { enhance } from '$app/forms';
+  import { enhance, type SubmitFunction } from '$app/forms';
   import {
     Sparkles,
     BookOpen,
@@ -48,6 +48,7 @@
   import WorkCard from '$lib/components/WorkCard.svelte';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { relativeTime, date } from '$lib/types';
+  import { normalizeAvatarCrop } from '$lib/avatar';
   import {
     getOfflineChapters,
     removeOfflineChapter,
@@ -245,9 +246,15 @@
   let currentXp = $derived(data.member.xp || 0);
   let userLevel = $derived(Math.floor(Math.sqrt(1 + currentXp / 50)));
 
-  // Media upload states
-  let avatarUploading = $state(false);
-  let bannerUploading = $state(false);
+  // Media is staged locally until the profile form is submitted. This keeps
+  // the canonical profile unchanged while a member experiments with a crop.
+  type Crop = { x: number; y: number; zoom: number };
+  type MediaDraft = { file: File | null; previewUrl: string; crop: Crop };
+  let draftAvatar = $state<MediaDraft | null>(null);
+  let draftBanner = $state<MediaDraft | null>(null);
+  let editDisplayName = $state(data.member.display_name || '');
+  let editBio = $state(data.member.bio || '');
+  let profileSaving = $state(false);
   let uploadNotice = $state('');
 
   // Crop & Reposition States
@@ -260,16 +267,74 @@
   let cropZoom = $state(1);
   let cropSaving = $state(false);
   let modalNotice = $state('');
+  let cropBaseDraft = $state<MediaDraft | null>(null);
+  let cropPreviewOwnedByModal = $state(false);
+  let memberRevision = $state('');
+
+  const canonicalMediaUrl = (type: 'avatar' | 'banner') => {
+    const mediaId = type === 'avatar' ? data.member.avatar_id : data.member.banner_id;
+    return mediaId ? `/media/${mediaId}` : '';
+  };
+
+  const currentDraft = (type: 'avatar' | 'banner') => (type === 'avatar' ? draftAvatar : draftBanner);
+
+  function setDraft(type: 'avatar' | 'banner', next: MediaDraft | null) {
+    const previous = currentDraft(type);
+    if (previous?.previewUrl.startsWith('blob:') && previous.previewUrl !== next?.previewUrl) {
+      URL.revokeObjectURL(previous.previewUrl);
+    }
+    if (type === 'avatar') draftAvatar = next;
+    else draftBanner = next;
+  }
+
+  function discardMediaDrafts() {
+    setDraft('avatar', null);
+    setDraft('banner', null);
+  }
+
+  function cancelProfileChanges() {
+    closeCropModal();
+    discardMediaDrafts();
+    editDisplayName = data.member.display_name || '';
+    editBio = data.member.bio || '';
+    uploadNotice = 'Alterações descartadas. Seu perfil oficial não foi modificado.';
+  }
+
+  $effect(() => {
+    const revision = JSON.stringify({
+      id: data.member.id,
+      displayName: data.member.display_name,
+      bio: data.member.bio,
+      avatarId: data.member.avatar_id,
+      bannerId: data.member.banner_id,
+      avatarCrop: data.member.avatar_crop,
+      bannerCrop: data.member.banner_crop
+    });
+    if (revision === memberRevision) return;
+    memberRevision = revision;
+    discardMediaDrafts();
+    editDisplayName = data.member.display_name || '';
+    editBio = data.member.bio || '';
+  });
+
+  onDestroy(() => {
+    if (cropPreviewOwnedByModal && cropPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(cropPreviewUrl);
+    }
+    discardMediaDrafts();
+  });
 
   function openCropForNewFile(type: 'avatar' | 'banner', file: File) {
     modalNotice = '';
     cropType = type;
     pendingFile = file;
-    if (cropPreviewUrl && cropPreviewUrl.startsWith('blob:')) {
+    cropBaseDraft = currentDraft(type);
+    if (cropPreviewOwnedByModal && cropPreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(cropPreviewUrl);
     }
     cropPreviewUrl = URL.createObjectURL(file);
-    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    cropPreviewOwnedByModal = true;
+    const existing = cropBaseDraft?.crop || (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
     cropX = existing?.x ?? 50;
     cropY = existing?.y ?? 50;
     cropZoom = existing?.zoom ?? 1;
@@ -279,69 +344,46 @@
   function openReposition(type: 'avatar' | 'banner') {
     modalNotice = '';
     cropType = type;
-    pendingFile = null;
-    const mediaId = type === 'avatar' ? data.member.avatar_id : data.member.banner_id;
-    if (!mediaId) return;
-    cropPreviewUrl = `/media/${mediaId}`;
-    const existing = (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
+    cropBaseDraft = currentDraft(type);
+    const mediaUrl = cropBaseDraft?.previewUrl || canonicalMediaUrl(type);
+    if (!mediaUrl) return;
+    pendingFile = cropBaseDraft?.file || null;
+    cropPreviewUrl = mediaUrl;
+    cropPreviewOwnedByModal = false;
+    const existing = cropBaseDraft?.crop || (type === 'avatar' ? data.member.avatar_crop : data.member.banner_crop) as any;
     cropX = existing?.x ?? 50;
     cropY = existing?.y ?? 50;
     cropZoom = existing?.zoom ?? 1;
     showCropModal = true;
   }
 
-  function closeCropModal() {
+  function closeCropModal(keepPreview = false) {
     modalNotice = '';
     showCropModal = false;
-    if (pendingFile && cropPreviewUrl.startsWith('blob:')) {
+    if (!keepPreview && cropPreviewOwnedByModal && cropPreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(cropPreviewUrl);
     }
     pendingFile = null;
+    cropPreviewUrl = '';
+    cropBaseDraft = null;
+    cropPreviewOwnedByModal = false;
   }
 
-  async function saveCrop() {
+  function saveCrop() {
     cropSaving = true;
     modalNotice = '';
-    uploadNotice = '';
     try {
-      if (pendingFile) {
-        // Upload new file with crop coordinates
-        const fd = new FormData();
-        fd.append('file', pendingFile);
-        fd.append('crop_x', String(cropX));
-        fd.append('crop_y', String(cropY));
-        fd.append('crop_zoom', String(cropZoom));
-        const endpoint = cropType === 'avatar' ? '/api/avatar' : '/api/banner';
-        
-        let res = await fetch(endpoint, { method: 'POST', body: fd });
-        let result = await res.json();
-
-        if (res.status === 429) {
-          const wait = result.retryAfter || 5;
-          modalNotice = `Canal em espera (${wait}s). Reenviando automaticamente...`;
-          await new Promise((r) => setTimeout(r, (wait + 1) * 1000));
-          res = await fetch(endpoint, { method: 'POST', body: fd });
-          result = await res.json();
-        }
-
-        if (!res.ok) throw new Error(result.message || 'Falha ao salvar mídia.');
-        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} atualizado com sucesso!`;
-      } else {
-        // Repositioning existing media
-        const action = cropType === 'avatar' ? '?/updateAvatarCrop' : '?/updateBannerCrop';
-        const fd = new FormData();
-        fd.append('x', String(cropX));
-        fd.append('y', String(cropY));
-        fd.append('zoom', String(cropZoom));
-        const res = await fetch(action, { method: 'POST', body: fd });
-        if (!res.ok) throw new Error('Falha ao reposicionar.');
-        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} reposicionado com sucesso!`;
-      }
-      await invalidateAll();
-      closeCropModal();
+      const draft: MediaDraft = {
+        file: pendingFile || cropBaseDraft?.file || null,
+        previewUrl: cropPreviewUrl || canonicalMediaUrl(cropType),
+        crop: normalizeAvatarCrop({ x: cropX, y: cropY, zoom: cropZoom })
+      };
+      if (!draft.previewUrl) throw new Error('Selecione uma imagem antes de ajustar o enquadramento.');
+      setDraft(cropType, draft);
+      uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} pronto para prévia. Salve as alterações para confirmar.`;
+      closeCropModal(true);
     } catch (err: any) {
       modalNotice = err.message || 'Erro ao salvar posicionamento.';
-      uploadNotice = modalNotice;
     } finally {
       cropSaving = false;
     }
@@ -360,6 +402,32 @@
     openCropForNewFile('banner', input.files[0]);
     input.value = '';
   }
+
+  const submitProfile: SubmitFunction = ({ formData }) => {
+    uploadNotice = '';
+    if (draftAvatar?.file) formData.set('avatar_file', draftAvatar.file, draftAvatar.file.name);
+    if (draftBanner?.file) formData.set('banner_file', draftBanner.file, draftBanner.file.name);
+    if (draftAvatar) formData.set('avatar_crop', JSON.stringify(draftAvatar.crop));
+    if (draftBanner) formData.set('banner_crop', JSON.stringify(draftBanner.crop));
+    profileSaving = true;
+
+    return async ({ result, update }) => {
+      profileSaving = false;
+      if (result.type === 'success') {
+        const canonicalMember = (result.data as any)?.member;
+        if (canonicalMember) {
+          window.dispatchEvent(new CustomEvent('nox:profile-updated', { detail: canonicalMember }));
+        }
+        await update({ reset: false, invalidateAll: true });
+        discardMediaDrafts();
+        uploadNotice = 'Perfil salvo. Sua mídia oficial foi atualizada.';
+      } else if (result.type === 'failure') {
+        uploadNotice = (result.data as any)?.message || 'Não foi possível salvar as alterações.';
+      } else {
+        uploadNotice = 'Não foi possível salvar as alterações.';
+      }
+    };
+  };
 </script>
 
 <svelte:head>
@@ -1102,9 +1170,10 @@
                 <span class="upload-label">Foto de Perfil (Suporta GIFs)</span>
                 <div class="avatar-preview-wrap">
                   <UserAvatar
-                    avatarId={data.member.avatar_id}
+                    avatarId={draftAvatar ? null : data.member.avatar_id}
+                    avatarUrl={draftAvatar?.previewUrl || undefined}
                     frameId={data.member.frame_id}
-                    crop={data.member.avatar_crop}
+                    crop={draftAvatar?.crop || data.member.avatar_crop}
                     displayName={data.member.display_name || data.member.username}
                     size={80}
                   />
@@ -1117,11 +1186,11 @@
                       type="file"
                       accept="image/png,image/jpeg,image/webp,image/gif"
                       onchange={handleAvatarUpload}
-                      disabled={avatarUploading}
+                      disabled={profileSaving}
                       hidden
                     />
                   </label>
-                  {#if data.member.avatar_id}
+                  {#if data.member.avatar_id || draftAvatar}
                     <button
                       type="button"
                       class="btn-reposition"
@@ -1138,12 +1207,12 @@
               <div class="uploader-box">
                 <span class="upload-label">Banner de Perfil (Suporta GIFs)</span>
                 <div class="banner-preview-box">
-                  {#if data.member.banner_id}
+                  {#if draftBanner?.previewUrl || data.member.banner_id}
                     <img
-                      src="/media/{data.member.banner_id}"
-                      alt="Banner atual"
+                      src={draftBanner?.previewUrl || `/media/${data.member.banner_id}`}
+                      alt="Preview do banner"
                       class="banner-preview-img"
-                      style={(data.member.banner_crop as any) ? `object-position: ${(data.member.banner_crop as any).x ?? 50}% ${(data.member.banner_crop as any).y ?? 50}%; transform: scale(${(data.member.banner_crop as any).zoom ?? 1});` : ''}
+                      style={(draftBanner?.crop || data.member.banner_crop) ? `object-position: ${(draftBanner?.crop || data.member.banner_crop as any).x ?? 50}% ${(draftBanner?.crop || data.member.banner_crop as any).y ?? 50}%; transform: scale(${(draftBanner?.crop || data.member.banner_crop as any).zoom ?? 1});` : ''}
                     />
                   {:else}
                     <div class="banner-preview-placeholder">Nenhum banner</div>
@@ -1157,11 +1226,11 @@
                       type="file"
                       accept="image/png,image/jpeg,image/webp,image/gif"
                       onchange={handleBannerUpload}
-                      disabled={bannerUploading}
+                      disabled={profileSaving}
                       hidden
                     />
                   </label>
-                  {#if data.member.banner_id}
+                  {#if data.member.banner_id || draftBanner}
                     <button
                       type="button"
                       class="btn-reposition"
@@ -1176,7 +1245,7 @@
             </div>
 
             <!-- Profile Info Form -->
-            <form method="POST" action="?/updateProfile" use:enhance class="profile-form">
+            <form method="POST" action="?/updateProfile" use:enhance={submitProfile} class="profile-form">
               {#if form?.success && form?.action === 'profile'}
                 <div class="success-banner">
                   <CheckCircle2 size={16} />
@@ -1196,7 +1265,7 @@
                   id="display_name"
                   name="display_name"
                   type="text"
-                  value={data.member.display_name}
+                  bind:value={editDisplayName}
                   required
                   minlength="2"
                   maxlength="50"
@@ -1211,10 +1280,18 @@
                   rows="4"
                   maxlength="500"
                   placeholder="Escreva algo sobre seus gostos de mangás..."
-                >{data.member.bio || ''}</textarea>
+                  bind:value={editBio}
+                ></textarea>
               </div>
 
-              <button type="submit" class="btn-primary">Salvar Alterações</button>
+              <div class="profile-form-actions">
+                <button type="button" class="btn-cancel-profile" onclick={cancelProfileChanges} disabled={profileSaving}>
+                  Cancelar alterações
+                </button>
+                <button type="submit" class="btn-primary" disabled={profileSaving}>
+                  {profileSaving ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
             </form>
           </div>
 
@@ -2369,7 +2446,8 @@
 
   .banner-preview-box {
     width: 100%;
-    height: 80px;
+    aspect-ratio: 16 / 5;
+    min-height: 108px;
     border-radius: 10px;
     overflow: hidden;
     background: #141724;
@@ -2414,6 +2492,29 @@
     flex-direction: column;
     gap: 1.25rem;
     max-width: 540px;
+  }
+
+  .profile-form-actions {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn-cancel-profile {
+    min-height: 42px;
+    padding: 0.65rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    color: #cbd5e1;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-cancel-profile:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
   }
 
   .form-field {
@@ -2580,6 +2681,25 @@
       padding: 1.15rem;
       margin-bottom: 1.25rem;
       border-radius: 16px;
+    }
+
+    .banner-preview-box {
+      aspect-ratio: 16 / 6;
+      min-height: 126px;
+    }
+
+    .uploader-actions-row {
+      flex-direction: column;
+    }
+
+    .uploader-actions-row > * {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .profile-form-actions > * {
+      flex: 1 1 100%;
+      justify-content: center;
     }
 
     .header-avatar-col :global(.user-avatar-root) {

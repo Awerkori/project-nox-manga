@@ -1,7 +1,9 @@
 import { redirect, fail } from '@sveltejs/kit';
-import { WORK_FIELDS } from '$lib/server/db';
+import { WORK_FIELDS, privileged } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
 import { normalizeAvatarCrop } from '$lib/avatar';
+import { storeImage, RateLimitError } from '$lib/server/media';
+import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -179,16 +181,69 @@ export const actions: Actions = {
       return fail(400, { message: 'A biografia não pode exceder 500 caracteres.' });
     }
 
-    const { error } = await locals.db
-      .from('members')
-      .update({
-        display_name: displayName,
-        bio: bio
-      })
-      .eq('id', locals.user.id);
+    // Media selected in the editor is intentionally not activated by the crop
+    // modal. Store every pending asset first, then commit the complete profile
+    // in one member update. A failed second upload therefore leaves the
+    // canonical avatar/banner and profile fields untouched.
+    const avatarFile = formData.get('avatar_file');
+    const bannerFile = formData.get('banner_file');
+    const isPendingImage = (value: FormDataEntryValue | null): value is Blob =>
+      value instanceof Blob && value.size > 0;
+    const avatarCropRaw = formData.get('avatar_crop');
+    const bannerCropRaw = formData.get('banner_crop');
+    const avatarCrop = avatarCropRaw ? normalizeAvatarCrop(avatarCropRaw) : null;
+    const bannerCrop = bannerCropRaw ? normalizeAvatarCrop(bannerCropRaw) : null;
 
-    if (error) return fail(400, { message: error.message });
-    return { success: true, action: 'profile' };
+    let avatarImage: { id: string } | null = null;
+    let bannerImage: { id: string } | null = null;
+    try {
+      if (isPendingImage(avatarFile)) {
+        const upload = new FormData();
+        upload.append('file', avatarFile, (avatarFile as File).name || 'avatar');
+        avatarImage = await storeImage(upload, locals.user.id, 'avatar');
+      }
+      if (isPendingImage(bannerFile)) {
+        const upload = new FormData();
+        upload.append('file', bannerFile, (bannerFile as File).name || 'banner');
+        bannerImage = await storeImage(upload, locals.user.id, 'banner');
+      }
+    } catch (cause) {
+      if (cause instanceof RateLimitError) {
+        return fail(429, {
+          message: `Canal em espera. Tente novamente em ${cause.retryAfter}s.`,
+          retryAfter: cause.retryAfter
+        });
+      }
+      console.error('ME_PROFILE_MEDIA_STAGE_ERROR:', cause);
+      return fail(502, { message: 'Não foi possível preparar a mídia. Nenhuma alteração foi aplicada.' });
+    }
+
+    const update: Record<string, unknown> = {
+      display_name: displayName,
+      bio
+    };
+    if (avatarImage) update.avatar_id = avatarImage.id;
+    if (bannerImage) update.banner_id = bannerImage.id;
+    if (avatarCrop) update.avatar_crop = avatarCrop;
+    if (bannerCrop) update.banner_crop = bannerCrop;
+
+    const { data: updatedMember, error } = await privileged()
+      .from('members')
+      .update(update)
+      .eq('id', locals.user.id)
+      .select('id,username,display_name,bio,avatar_id,banner_id,avatar_frame_id,avatar_crop,banner_crop,name_color')
+      .maybeSingle();
+
+    if (error || !updatedMember) {
+      console.error('ME_PROFILE_COMMIT_ERROR:', error);
+      return fail(500, { message: 'Não foi possível salvar seu perfil. Nenhuma mídia nova foi ativada.' });
+    }
+
+    // The root layout uses this cache for the header avatar. Evict it before
+    // SvelteKit invalidates the page so every mounted layout receives the
+    // canonical media id immediately, without polling or a page reload.
+    invalidateUserSession(locals.user.id);
+    return { success: true, action: 'profile', member: updatedMember };
   },
 
   updateSettings: async ({ request, locals }) => {
@@ -271,6 +326,7 @@ export const actions: Actions = {
       .eq('id', locals.user.id);
 
     if (error) return fail(400, { message: error.message });
+    invalidateUserSession(locals.user.id);
     return { success: true, action: 'avatar_crop', crop };
   },
 
@@ -292,6 +348,7 @@ export const actions: Actions = {
       .eq('id', locals.user.id);
 
     if (error) return fail(400, { message: error.message });
+    invalidateUserSession(locals.user.id);
     return { success: true, action: 'banner_crop', crop };
   }
 };

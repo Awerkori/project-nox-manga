@@ -45,4 +45,4 @@
 
 </script>
 
-<MySpace {data} />
+<MySpace {data} form={null} />
