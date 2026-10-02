@@ -14,11 +14,16 @@ export const GET = async ({ locals, params, url }) => {
   }
 
   const db = privileged();
-  const { data: file } = await db
+  const { data: file, error: fileLookupError } = await db
     .from('scan_production_files')
     .select('*, scan_workflow_stages:stage_id(name, slug)')
     .eq('id', params.id)
     .maybeSingle();
+
+  if (fileLookupError) {
+    console.error('scan_pipeline_file_lookup_failed', { code: fileLookupError.code, message: fileLookupError.message });
+    return json({ error: 'Não foi possível consultar o arquivo agora.' }, { status: 503 });
+  }
 
   if (!file) {
     return json({ error: 'Arquivo não encontrado' }, { status: 404 });
@@ -27,12 +32,17 @@ export const GET = async ({ locals, params, url }) => {
   // Cross-scan authorization enforcement: strictly block non-members with 403
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
+    const { data: member, error: memberLookupError } = await db
       .from('scan_members')
       .select('role')
       .eq('scan_id', file.scan_id)
       .eq('user_id', locals.user.id)
       .maybeSingle();
+
+    if (memberLookupError) {
+      console.error('scan_pipeline_file_membership_lookup_failed', { code: memberLookupError.code, message: memberLookupError.message });
+      return json({ error: 'Não foi possível validar sua permissão agora.' }, { status: 503 });
+    }
 
     if (!member) {
       return json({
@@ -74,9 +84,8 @@ export const GET = async ({ locals, params, url }) => {
         .download(file.file_key);
 
       if (dlErr || !blob) {
-        return json({
-          error: 'Falha ao baixar do storage de artifacts: ' + (dlErr?.message || 'Arquivo não encontrado')
-        }, { status: 502 });
+        console.error('scan_pipeline_file_storage_download_failed', { code: dlErr?.name || null, message: dlErr?.message || 'not_found' });
+        return json({ error: 'O arquivo não está disponível no armazenamento neste momento.' }, { status: 502 });
       }
 
       return new Response(blob.stream(), {
@@ -89,10 +98,9 @@ export const GET = async ({ locals, params, url }) => {
           'X-Content-Type-Options': 'nosniff'
         }
       });
-    } catch (err: any) {
-      return json({
-        error: 'Erro no streaming do storage de artifacts: ' + (err?.message || 'Erro desconhecido')
-      }, { status: 502 });
+  } catch (err: any) {
+      console.error('scan_pipeline_file_storage_stream_failed', { message: err?.message || 'unknown' });
+      return json({ error: 'Não foi possível iniciar o download agora.' }, { status: 502 });
     }
   }
 
@@ -119,8 +127,57 @@ export const GET = async ({ locals, params, url }) => {
       }
     });
   } catch (err: any) {
-    return json({
-      error: 'Não foi possível baixar o arquivo do armazenamento Telegram: ' + (err?.message || 'Erro desconhecido')
-    }, { status: 502 });
+    console.error('scan_pipeline_file_telegram_download_failed', { message: err?.message || 'unknown' });
+    return json({ error: 'Não foi possível iniciar o download agora.' }, { status: 502 });
   }
+};
+
+// Removing a file means withdrawing that deliverable from the active delivery.
+// The private object is retained for audit/retention; it is never made public.
+export const DELETE = async ({ locals, params }) => {
+  if (!/^[0-9a-f-]{36}$/.test(params.id)) {
+    return json({ error: 'ID inválido' }, { status: 404 });
+  }
+  if (!locals.user) return json({ error: 'Autenticação necessária' }, { status: 401 });
+
+  const db = privileged();
+  const { data: file, error: fileError } = await db
+    .from('scan_production_files')
+    .select('id, scan_id, production_chapter_id, stage_id, stage_slug, file_name, uploaded_by, is_current')
+    .eq('id', params.id)
+    .maybeSingle();
+  if (fileError) {
+    console.error('scan_pipeline_file_remove_lookup_failed', { code: fileError.code, message: fileError.message });
+    return json({ error: 'Não foi possível localizar o arquivo.' }, { status: 503 });
+  }
+  if (!file) return json({ error: 'Arquivo não encontrado' }, { status: 404 });
+
+  let memberRole: string | null = null;
+  if (locals.role !== 'ADMIN') {
+    const { data: member, error: memberError } = await db
+      .from('scan_members')
+      .select('role')
+      .eq('scan_id', file.scan_id)
+      .eq('user_id', locals.user.id)
+      .maybeSingle();
+    if (memberError) return json({ error: 'Não foi possível validar sua permissão.' }, { status: 503 });
+    memberRole = member?.role || null;
+  }
+
+  const mayRemove = locals.role === 'ADMIN' || ['OWNER', 'ADMIN'].includes(memberRole || '') || file.uploaded_by === locals.user.id;
+  if (!mayRemove) return json({ error: 'Apenas quem enviou o arquivo ou a liderança da Scan pode removê-lo.' }, { status: 403 });
+  const { data: member } = await db.from('members').select('username, display_name').eq('id', locals.user.id).maybeSingle();
+  const isLeadership = locals.role === 'ADMIN' || ['OWNER', 'ADMIN'].includes(memberRole || '');
+  const { data: withdrawal, error: removeError } = await db.rpc('withdraw_scan_pipeline_file', {
+    p_file_id: file.id,
+    p_actor_id: locals.user.id,
+    p_actor_name: member?.display_name || member?.username || 'Membro',
+    p_is_leadership: isLeadership
+  });
+  if (removeError) {
+    const conflict = /FILE_WITHDRAW_NOT_ALLOWED|CHAPTER_STAGE_NOT_FOUND/.test(removeError.message || '');
+    console.error('scan_pipeline_file_remove_failed', { code: removeError.code || null, message: removeError.message || 'unknown', conflict });
+    return json({ error: conflict ? 'O arquivo ou a etapa mudou antes da remoção. Atualize a lista.' : 'Não foi possível remover o arquivo da entrega.' }, { status: conflict ? 409 : 503 });
+  }
+  return json(withdrawal || { success: true });
 };
