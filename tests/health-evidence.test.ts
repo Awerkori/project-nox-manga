@@ -10,6 +10,9 @@ describe('health requires evidence', () => {
     expect(data.components.database.status).toBe('SEM_DADOS');
     expect(data.components.importer.status).toBe('SEM_DADOS');
     expect(data.components.web.details).toEqual({});
+    expect(data.components.mobile.status).toBe('SEM_DADOS');
+    expect(data.components.sources.status).toBe('SEM_DADOS');
+    expect(data.components.readiness.status).toBe('SEM_DADOS');
   });
   it('marks an expired heartbeat as critical instead of RUNNING', async () => {
     vi.resetModules();
