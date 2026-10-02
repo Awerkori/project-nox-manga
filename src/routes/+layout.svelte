@@ -32,7 +32,9 @@
   let userMenuOpen = $state(false);
   let scrolled = $state(false);
   let reader = $derived(currentPath.startsWith('/ler/'));
-  let rank = $derived(data.profile ? memberRank(data.profile.xp) : null);
+  let profileOverride = $state<Record<string, any> | null>(null);
+  let profile = $derived(profileOverride || data.profile);
+  let rank = $derived(profile ? memberRank(profile.xp) : null);
   let unreadDelta = $state(0);
   let observedServerUnread = $state<number | null>(null);
   let localUnread = $derived(Math.max(0, (data.unread || 0) + unreadDelta));
@@ -45,11 +47,25 @@
     }
   });
 
+  $effect(() => {
+    // Once the invalidated layout reaches the same canonical media again, the
+    // short-lived client override is no longer needed.
+    if (
+      profileOverride &&
+      data.profile?.id === profileOverride.id &&
+      data.profile?.avatar_id === profileOverride.avatar_id &&
+      data.profile?.banner_id === profileOverride.banner_id &&
+      JSON.stringify(data.profile?.avatar_crop) === JSON.stringify(profileOverride.avatar_crop)
+    ) {
+      profileOverride = null;
+    }
+  });
+
   let subscribedProfileId: string | null = null;
   let activeRealtimeChannel: any = null;
 
   $effect(() => {
-    const profileId = data.profile?.id || null;
+    const profileId = profile?.id || null;
     if (profileId === subscribedProfileId) {
       // Profile ID has not changed; do NOT re-create the websocket channel on page navigation!
       return;
@@ -108,8 +124,18 @@
       scrolled = window.scrollY > 24;
     }
     window.addEventListener('scroll', handleScroll, { passive: true });
+    const handleProfileUpdate = (event: Event) => {
+      const next = (event as CustomEvent<Record<string, any>>).detail;
+      if (next?.id && next.id === data.profile?.id) {
+        profileOverride = { ...data.profile, ...next };
+      }
+    };
+    window.addEventListener('nox:profile-updated', handleProfileUpdate);
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('nox:profile-updated', handleProfileUpdate);
+    };
   });
 </script>
 
@@ -158,7 +184,7 @@
 
 <a class="skip" href="#conteudo">Pular para conteúdo</a>
 
-<AgeGateModal status={data.ageStatus} isLoggedIn={!!data.profile} />
+<AgeGateModal status={data.ageStatus} isLoggedIn={!!profile} />
 
 {#if !reader}
   <ParticleBackground />
@@ -236,7 +262,7 @@
           <Search size={18} />
         </a>
 
-        {#if data.profile}
+        {#if profile}
           <a
             class="icon-button notification-link"
             href="/notificacoes"
@@ -258,10 +284,10 @@
               }}
             >
               <UserAvatar
-                avatarId={data.profile.avatar_id}
-                displayName={data.profile.display_name}
-                frameId={data.profile.avatar_frame_id}
-                crop={data.profile.avatar_crop}
+                avatarId={profile.avatar_id}
+                displayName={profile.display_name}
+                frameId={profile.avatar_frame_id}
+                crop={profile.avatar_crop}
                 size={34}
                 loading="eager"
               />
@@ -269,17 +295,17 @@
 
             {#if userMenuOpen}
               <div class="user-dropdown" role="menu">
-                <a href="/u/{data.profile.username}" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
+                <a href="/u/{profile.username}" class="dropdown-header-link" onclick={() => (userMenuOpen = false)}>
                   <UserAvatar
-                    avatarId={data.profile.avatar_id}
-                    displayName={data.profile.display_name}
-                    frameId={data.profile.avatar_frame_id}
-                    crop={data.profile.avatar_crop}
+                    avatarId={profile.avatar_id}
+                    displayName={profile.display_name}
+                    frameId={profile.avatar_frame_id}
+                    crop={profile.avatar_crop}
                     size={42}
                   />
                   <div class="dropdown-user-meta">
-                    <span class="dropdown-user-name" style={data.profile.name_color ? `color: ${data.profile.name_color};` : ''}>{data.profile.display_name}</span>
-                    <span class="dropdown-user-handle">@{data.profile.username || 'leitor'}</span>
+                    <span class="dropdown-user-name" style={profile.name_color ? `color: ${profile.name_color};` : ''}>{profile.display_name}</span>
+                    <span class="dropdown-user-handle">@{profile.username || 'leitor'}</span>
                     {#if rank}
                       <span class="dropdown-rank-pill">{rank.title}</span>
                     {/if}
@@ -293,7 +319,7 @@
                     <UserRound size={16} />
                     <span>Meu Espaço</span>
                   </a>
-                  <a href="/u/{data.profile.username}" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                  <a href="/u/{profile.username}" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <BookOpen size={16} />
                     <span>Perfil Público</span>
                   </a>
@@ -443,13 +469,13 @@
             <ShoppingBag size={18} />
             <span>Loja de Cosméticos</span>
           </a>
-          {#if data.profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
+          {#if profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
             <a class:active={currentPath.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
               <UserRound size={18} />
               <span>Meu Espaço</span>
             </a>
-            {#if data.profile?.username}
-              <a href="/u/{data.profile.username}" onclick={() => (menu = false)}>
+            {#if profile?.username}
+              <a href="/u/{profile.username}" onclick={() => (menu = false)}>
                 <BookOpen size={18} />
                 <span>Perfil Público</span>
               </a>
@@ -549,7 +575,7 @@
     <a href="/catalogo" class:active={currentPath.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
     <a href="/scans" class:active={currentPath.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
     <a href="/loja" class:active={currentPath.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
-    <a href={data.profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{data.profile || data.authState !== 'ANONYMOUS' ? 'Espaço' : 'Entrar'}</span></a>
+    <a href={profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{profile || data.authState !== 'ANONYMOUS' ? 'Espaço' : 'Entrar'}</span></a>
   </nav>
 {/if}
 

@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { member, privileged } from '$lib/server/db';
 import { storeImage, RateLimitError } from '$lib/server/media';
 import { normalizeAvatarCrop } from '$lib/avatar';
+import { invalidateUserSession } from '$lib/server/session-cache';
 
 export const POST = async ({ request, locals }) => {
   const userId = member(locals);
@@ -38,6 +39,8 @@ export const POST = async ({ request, locals }) => {
     console.error('API_AVATAR_MEMBER_UPDATE_ERROR:', problem);
     error(500, 'Não foi possível atualizar seu avatar.');
   }
+
+  invalidateUserSession(userId);
 
   return json({ ...image, avatar_crop: crop });
 };
