@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { WORK_FIELDS } from '$lib/server/db';
+import { editor, privileged, WORK_FIELDS } from '$lib/server/db';
 import { logAdminLoadError, throwOnAdminLoadError } from '$lib/server/admin-load-errors';
 import {
   buildChapterProvenance,
@@ -20,16 +20,18 @@ function isMissingMetadataProvenance(error: { code?: string | null; message?: st
 }
 
 export const load = async ({ locals, params, request }) => {
+  editor(locals);
   if (params.id !== 'nova' && !UUID.test(params.id)) error(404, 'Obra não encontrada');
 
   const queryContext = {
     route: '/admin/obras/[id]',
     requestId: request.headers.get('cf-ray') || request.headers.get('x-request-id')
   };
+  const provenanceDb = params.id === 'nova' ? null : privileged();
   const queries = await Promise.all([
     params.id === 'nova'
       ? Promise.resolve({ data: null, error: null })
-      : locals.db.from('works').select(`${WORK_FIELDS},metadata_provenance`).eq('id', params.id).maybeSingle(),
+      : locals.db.from('works').select(WORK_FIELDS).eq('id', params.id).maybeSingle(),
     locals.db.from('tags').select('*').order('name'),
     params.id === 'nova'
       ? Promise.resolve({ data: [], error: null })
@@ -55,19 +57,27 @@ export const load = async ({ locals, params, request }) => {
           .select('id,source,source_work_id,source_slug,source_title,sync_status,last_synced_at,is_primary,metadata,updated_at')
           .eq('work_id', params.id),
     params.id === 'nova'
-      ? Promise.resolve({ data: [] })
+      ? Promise.resolve({ data: [], error: null })
       : locals.db
           .from('importer_sources')
-          .select('id,name,base_url,enabled,status')
+          .select('id,name,base_url,enabled,status'),
+    params.id === 'nova'
+      ? Promise.resolve({ data: null, error: null })
+      : provenanceDb!.from('works').select('metadata_provenance').eq('id', params.id).maybeSingle()
   ]);
-  let work = queries[0];
-  const [, tags, selected, chapters, allScans, workScans, workMappings, sources] = queries;
+  const [work, tags, selected, chapters, allScans, workScans, workMappings, sources, provenanceMetadata] = queries;
 
   let metadataProvenanceAvailable = true;
-  if (params.id !== 'nova' && isMissingMetadataProvenance(work.error)) {
-    logAdminLoadError('admin_load_query_degraded', work.error!, { ...queryContext, operation: 'work_metadata_provenance' });
-    work = await locals.db.from('works').select(WORK_FIELDS).eq('id', params.id).maybeSingle();
-    metadataProvenanceAvailable = false;
+  if (params.id !== 'nova' && provenanceMetadata.error) {
+    if (isMissingMetadataProvenance(provenanceMetadata.error)) {
+      logAdminLoadError('admin_load_query_degraded', provenanceMetadata.error, {
+        ...queryContext,
+        operation: 'work_metadata_provenance'
+      });
+      metadataProvenanceAvailable = false;
+    } else {
+      throwOnAdminLoadError(provenanceMetadata, { ...queryContext, operation: 'work_metadata_provenance' });
+    }
   }
 
   throwOnAdminLoadError(work, { ...queryContext, operation: 'work' });
@@ -95,7 +105,7 @@ export const load = async ({ locals, params, request }) => {
   const sourceRecords = (sources.data || []) as SourceRecord[];
   const provenance = work.data
     ? buildWorkProvenance(
-        (work.data as any).metadata_provenance,
+        provenanceMetadata.data?.metadata_provenance,
         (workMappings.data || []) as WorkMappingRecord[],
         sourceRecords
       )

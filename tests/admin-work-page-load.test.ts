@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const privilegedState = vi.hoisted(() => ({ db: null as any }));
+
+vi.mock('$lib/server/db', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/lib/server/db')>();
+  return { ...original, privileged: () => privilegedState.db };
+});
+
 const workId = '11111111-1111-4111-8111-111111111111';
 
 function result(data: unknown, error: unknown = null) {
@@ -33,7 +40,12 @@ function database(overrides: Record<string, ReturnType<typeof result> | ReturnTy
   };
 }
 
-function event(db: ReturnType<typeof database>, id = workId) {
+function event(
+  db: ReturnType<typeof database>,
+  id = workId,
+  provenanceDb: ReturnType<typeof database> = database({ works: result({ metadata_provenance: {} }) })
+) {
+  privilegedState.db = provenanceDb;
   return {
     locals: { user: { id: 'admin' }, role: 'ADMIN', db },
     params: { id },
@@ -66,12 +78,11 @@ describe('/admin/obras/[id] load', () => {
   it('keeps the work page usable when only the optional provenance column is pending migration', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { load } = await import('../src/routes/admin/obras/[id]/+page.server');
-    const loaded = await load(event(database({
-      works: [
-        result(null, { code: 'PGRST204', message: 'metadata_provenance is missing from schema cache' }),
-        result({ id: workId, title: 'Obra QA' })
-      ]
-    })) as any);
+    const loaded = await load(event(
+      database(),
+      workId,
+      database({ works: result(null, { code: 'PGRST204', message: 'metadata_provenance is missing from schema cache' }) })
+    ) as any);
     expect(loaded.work).toMatchObject({ id: workId });
     expect(loaded.metadataProvenanceAvailable).toBe(false);
     expect(spy).toHaveBeenCalledWith(
