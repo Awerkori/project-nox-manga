@@ -129,7 +129,11 @@ for (const width of [390, 768, 1440])
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('a[href="/catalogo"]').first().click();
+    if (width <= 760) await page.getByRole('navigation', { name: 'Atalhos' }).getByRole('link', { name: 'Explorar' }).click();
+    else if (width <= 768) {
+      await page.getByRole('button', { name: 'Abrir menu' }).click();
+      await page.getByRole('navigation', { name: 'Menu móvel' }).getByRole('link', { name: 'Catálogo' }).click();
+    } else await page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Catálogo' }).click();
     await expect(page).toHaveURL(/catalogo/);
     await page.getByLabel('Título da obra').fill('Uma busca sem resultado');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();
