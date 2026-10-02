@@ -36,6 +36,7 @@ export const load = async ({ locals }) => {
         created_at,
         work_scans(count),
         chapter_scans(count),
+        scan_members(count),
         scan_recruitment_openings(
           id,
           title,
@@ -59,6 +60,7 @@ export const load = async ({ locals }) => {
         ...s,
         worksCount: s.work_scans?.[0]?.count ?? 0,
         chaptersCount: s.chapter_scans?.[0]?.count ?? 0,
+        membersCount: s.scan_members?.[0]?.count ?? 0,
         openings: openVacancies,
         isRecruiting: openVacancies.length > 0,
         recruitingPositions: Array.from(

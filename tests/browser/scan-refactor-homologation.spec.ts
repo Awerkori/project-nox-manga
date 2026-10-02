@@ -33,6 +33,19 @@ async function setupScanHarness(page: any) {
   });
 }
 
+async function setupPublicScanHarness(page: any) {
+  await page.route('**/qa-scan-public-proof*', (route: any) => {
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Public Scan Proof</title></head>
+<body style="margin:0; background:#08060f;"><div id="preview-root"></div><script type="module" src="/tests/fixtures/scan-public-proof-entry.ts"></script></body>
+</html>`
+    });
+  });
+}
+
 const VIEWPORTS = [
   { name: 'desktop-1440x900', width: 1440, height: 900 },
   { name: 'desktop-1280x800', width: 1280, height: 800 },
@@ -44,6 +57,30 @@ const VIEWPORTS = [
 ];
 
 test.describe('Scan / Produção Homologation & Responsive Verification', () => {
+  test('0. Public Scan recruitment deep link opens the vacancy view on desktop and mobile', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await setupPublicScanHarness(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/qa-scan-public-proof#recrutamento');
+    await expect(page.getByRole('heading', { name: 'Vagas Abertas em Nebula Scans' })).toBeVisible();
+    await expect(page.getByText('2 posições', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Conectar-se para Candidatar/ }).first()).toHaveAttribute('href', /redirect=.*%23recrutamento/);
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/00_public_scan_recruitment_desktop.png`, fullPage: true });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/00_public_scan_recruitment_mobile.png`, fullPage: true });
+
+    await page.getByRole('button', { name: /Obras \(0\)/ }).click();
+    await expect(page.getByRole('heading', { name: 'Nenhuma obra associada' })).toBeVisible();
+    expect(new URL(page.url()).hash).toBe('');
+    await page.getByRole('button', { name: /Comentários \(0\)/ }).click();
+    await expect(page.getByRole('link', { name: 'Entrar no Project Nox' })).toHaveAttribute('href', /redirect=.*%23comentarios/);
+    expect(errors).toEqual([]);
+  });
+
   test('1. Pipeline Accordions, Modals, and Dynamic Counters on Desktop', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
@@ -143,6 +180,62 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     expect(errors).toEqual([]);
   });
 
+  test('2b. Pipeline accepts a multi-file delivery and exposes per-file replacement controls', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    let uploadCount = 0;
+
+    await setupScanHarness(page);
+    await page.route('**/api/scan/production/upload', (route: any) => {
+      uploadCount += 1;
+      // One item fails independently. The two completed siblings remain in
+      // place and only the failed item is retried.
+      if (uploadCount === 3) {
+        return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Storage temporariamente indisponível' }) });
+      }
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, version: uploadCount }) });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/qa-scan-proof?tab=pipeline&stage=typeset');
+    const delivery = page.locator('.deliverable-upload');
+    await expect(delivery).toBeVisible();
+    await expect(delivery.getByText('Ceu_Distante_Cap01_Typeset.zip')).toBeVisible();
+    await expect(delivery.getByRole('button', { name: /Substituir/i })).toBeVisible();
+
+    await delivery.locator('input[type="file"][multiple]').setInputFiles([
+      { name: 'Capitulo_84_Parte_1.txt', mimeType: 'text/plain', buffer: Buffer.from('parte 1') },
+      { name: 'Capitulo_84_Parte_2.txt', mimeType: 'text/plain', buffer: Buffer.from('parte 2') },
+      { name: 'notas.txt', mimeType: 'text/plain', buffer: Buffer.from('notas') }
+    ]);
+
+    await expect(delivery.locator('.upload-row')).toHaveCount(3);
+    await expect(delivery.getByText('Capitulo_84_Parte_1.txt')).toBeVisible();
+    await expect(delivery.getByText('Capitulo_84_Parte_2.txt')).toBeVisible();
+    await expect.poll(() => uploadCount).toBe(3);
+    await expect(delivery.locator('.success-icon')).toHaveCount(2);
+    await expect(delivery.getByRole('button', { name: /Tentar novamente/i })).toBeVisible();
+    await delivery.getByRole('button', { name: /Tentar novamente/i }).click();
+    await expect.poll(() => uploadCount).toBe(4);
+    await expect(delivery.locator('.success-icon')).toHaveCount(3);
+
+    // Drag-and-drop accepts another batch without replacing the successful
+    // files already in this delivery.
+    await delivery.locator('.delivery-dropzone').evaluate((element) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['drag one'], 'referencia_1.png', { type: 'image/png' }));
+      transfer.items.add(new File(['drag two'], 'referencia_2.png', { type: 'image/png' }));
+      element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    });
+    await expect(delivery.locator('.upload-row')).toHaveCount(5);
+    await expect.poll(() => uploadCount).toBe(6);
+    await expect(delivery.locator('.success-icon')).toHaveCount(5);
+
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/02b_pipeline_multifile_mobile.png`, fullPage: true });
+    expect(errors).toEqual([]);
+  });
+
   test('3. ScanHome canonical queues & unified active demands', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
@@ -229,6 +322,25 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
       fullPage: true
     });
 
+    expect(errors).toEqual([]);
+  });
+
+  test('5b. Mobile navigation drawer is reachable, closes after navigation, and never overflows', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await setupScanHarness(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/qa-scan-proof?tab=pipeline&stage=typeset&drawer=1');
+    const drawer = page.locator('.workspace-sidebar');
+    await expect(drawer).toHaveClass(/mobile-open/);
+    await expect(drawer.getByText('Project Nox', { exact: true })).toBeVisible();
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/05b_mobile_drawer.png`, fullPage: true });
+
+    await drawer.getByRole('button', { name: 'Chat', exact: true }).click();
+    await expect(drawer).not.toHaveClass(/mobile-open/);
+    await expect(page.locator('.chat-module-root')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(errors).toEqual([]);
   });
 

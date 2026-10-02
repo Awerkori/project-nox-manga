@@ -5,18 +5,9 @@
     Clock,
     AlertCircle,
     AlertTriangle,
-    User,
-    Calendar,
-    ArrowRightLeft,
-    Trash2,
-    Filter,
-    MessageSquare,
     X,
     Zap,
     RotateCcw,
-    CheckSquare,
-    ChevronRight,
-    ChevronDown,
     Search,
     BookOpen,
     Layers,
@@ -27,35 +18,28 @@
     Sparkles,
     ShieldCheck,
     History,
-    ExternalLink,
-    Send
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import type { RealtimeChannel } from '@supabase/supabase-js';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { relativeTime } from '$lib/types';
+  import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
 
   let {
-    tasks = [],
     stages = [],
     chapterStages = [],
     productionChapters = [],
     productionFiles = [],
     chapterTimeline = [],
-    workOverrides = [],
-    creditSnapshots = [],
     team = [],
-    positions = [],
     works = [],
     currentUserId = '',
     currentScanId = '',
     userRole = 'MEMBER',
     isOwnerOrAdmin = false,
     initialView = 'AVAILABLE',
-    onOpenChapter = (chId: any) => {}
   } = $props();
 
   // Queue View Mode
@@ -92,10 +76,11 @@
   let rawWorkId = $state<string>('');
   let rawChapterId = $state<string>('');
 
-  // File Uploading State per stage
-  let uploadBusyStageId = $state<string | null>(null);
-  let uploadProgress = $state<number>(0);
-  let uploadFeedback = $state<{ stageId: string; type: 'success' | 'error'; text: string } | null>(null);
+  let stagesWithOpenUploads = $state<Record<string, boolean>>({});
+
+  function setStageUploadState(chapterStageId: string, hasOpenUploads: boolean) {
+    stagesWithOpenUploads = { ...stagesWithOpenUploads, [chapterStageId]: hasOpenUploads };
+  }
 
   // Realtime Supabase Channel
   let realtimeChannel: RealtimeChannel | null = null;
@@ -198,6 +183,7 @@
     assignee: any;
     completer: any;
     currentFile: any;
+    currentFiles: any[];
     allFiles: any[];
     dependencyFiles: any[];
     isStale: boolean;
@@ -218,17 +204,14 @@
       // Find files for this chapter and stage
       const chapterFiles = productionFiles.filter((f: any) => f.production_chapter_id === ch.id);
       const stageFiles = chapterFiles.filter((f: any) => f.stage_id === cs.stage_id);
-      const currentFile = stageFiles.find((f: any) => f.is_current) || stageFiles[0] || null;
+      const currentFiles = stageFiles.filter((f: any) => f.is_current);
+      const currentFile = currentFiles[0] || stageFiles[0] || null;
 
       // Find files for dependency stages
       const depSlugs = wfStage.dependencies || [];
-      const dependencyFiles: any[] = [];
-      for (const dSlug of depSlugs) {
-        const dFile = chapterFiles.find((f: any) => (f.stage_slug === dSlug || f.stage?.slug === dSlug) && f.is_current);
-        if (dFile) {
-          dependencyFiles.push(dFile);
-        }
-      }
+      const dependencyFiles = chapterFiles.filter((file: any) =>
+        file.is_current && depSlugs.includes(file.stage_slug || file.stage?.slug)
+      );
 
       // Check stale status
       let isStale = false;
@@ -260,6 +243,7 @@
         assignee: cs.assignee,
         completer: cs.completer,
         currentFile,
+        currentFiles,
         allFiles: stageFiles,
         dependencyFiles,
         isStale,
@@ -347,51 +331,6 @@
     rawChapterId ? unifiedItems.find(i => i.production_chapter_id === rawChapterId && i.stage?.slug === 'raw' && i.status === 'AVAILABLE') : null
   );
 
-  // Handle file upload for a stage
-  async function handleFileUpload(stageItem: UnifiedStageItem, file: File) {
-    if (!file) return;
-    uploadBusyStageId = stageItem.id;
-    uploadProgress = 10;
-    uploadFeedback = null;
-
-    try {
-      const formData = new FormData();
-      formData.set('scan_id', currentScanId);
-      formData.set('production_chapter_id', stageItem.production_chapter_id);
-      formData.set('stage_id', stageItem.stage_id);
-      formData.set('file', file);
-
-      uploadProgress = 40;
-      const res = await fetch('/api/scan/production/upload', {
-        method: 'POST',
-        body: formData
-      });
-      uploadProgress = 80;
-
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        throw new Error(json.error || 'Falha no upload do arquivo');
-      }
-
-      uploadProgress = 100;
-      uploadFeedback = {
-        stageId: stageItem.id,
-        type: 'success',
-        text: `Arquivo enviado com sucesso (Versão v${json.version}). Agora você pode concluir a etapa!`
-      };
-
-      await invalidateAll();
-    } catch (err: any) {
-      uploadFeedback = {
-        stageId: stageItem.id,
-        type: 'error',
-        text: err.message || 'Erro ao enviar arquivo.'
-      };
-    } finally {
-      uploadBusyStageId = null;
-    }
-  }
-
   // Open Chapter Timeline
   function openChapterTimeline(chapter: any) {
     selectedTimelineChapter = chapter;
@@ -477,7 +416,7 @@
     >
       Todas as Etapas
     </button>
-    {#each stages as st}
+    {#each stages as st (st.id)}
       <button
         type="button"
         class="stage-filter-pill"
@@ -553,7 +492,7 @@
     <div class="work-filter-select-wrapper">
       <select bind:value={selectedWorkFilter} class="filter-select">
         <option value="ALL">Todas as Obras ({works.length})</option>
-        {#each works as w}
+        {#each works as w (w.id)}
           <option value={w.id}>{w.title}</option>
         {/each}
       </select>
@@ -575,7 +514,7 @@
         <div class="picker-field">
           <label for="raw-work-select">Obra</label>
           <select id="raw-work-select" bind:value={rawWorkId} class="picker-select">
-            {#each works as w}
+            {#each works as w (w.id)}
               <option value={w.id}>{w.title}</option>
             {/each}
           </select>
@@ -593,7 +532,7 @@
               <option value="">Nenhum capítulo aguardando RAW</option>
             {:else}
               <option value="">Selecione o capítulo...</option>
-              {#each rawAvailableChapters as ch}
+              {#each rawAvailableChapters as ch (ch.id)}
                 <option value={ch.id}>
                   Capítulo #{ch.chapter_number} {ch.chapter_label ? `(${ch.chapter_label})` : ''}
                 </option>
@@ -678,7 +617,7 @@
                 {#if item.stage?.dependencies?.length > 0}
                   <span class="deps-label">Pré-requisitos concluídos:</span>
                   <div class="deps-tags">
-                    {#each item.stage.dependencies as dep}
+                    {#each item.stage.dependencies as dep (dep)}
                       <span class="dep-done-tag">✓ {dep.toUpperCase()}</span>
                     {/each}
                   </div>
@@ -765,7 +704,7 @@
                     <span>Materiais de Entrada (Pré-requisitos)</span>
                   </div>
                   <div class="download-artifacts-row">
-                    {#each item.dependencyFiles as depFile}
+                    {#each item.dependencyFiles as depFile (depFile.id)}
                       <a
                         href="/api/scan/production/files/{depFile.id}?download=1"
                         download={depFile.file_name}
@@ -786,57 +725,16 @@
               <section class="card-section-box upload-box">
                 <div class="section-title-sm">
                   <Upload size={13} />
-                  <span>Enviar Seu Arquivo ({item.stage?.name})</span>
+                  <span>Arquivos da Entrega ({item.stage?.name})</span>
                 </div>
-
-                {#if item.currentFile}
-                  <div class="current-file-badge">
-                    <FileText size={15} class="text-emerald-400 flex-shrink-0" />
-                    <div class="file-meta">
-                      <strong>{item.currentFile.file_name} (v{item.currentFile.version})</strong>
-                      <small>{formatBytes(item.currentFile.byte_size)} · Enviado por {item.currentFile.uploader?.display_name || item.currentFile.uploader?.username || 'Você'}</small>
-                    </div>
-                    <a
-                      href="/api/scan/production/files/{item.currentFile.id}?download=1"
-                      download={item.currentFile.file_name}
-                      class="btn-icon-download"
-                      title="Baixar versão enviada"
-                    >
-                      <Download size={14} />
-                    </a>
-                  </div>
-                {/if}
-
-                <!-- File Input Drag-and-drop / selector -->
-                <label class="file-upload-dropzone">
-                  <input
-                    type="file"
-                    class="sr-only"
-                    disabled={uploadBusyStageId === item.id}
-                    onchange={(e) => {
-                      const files = (e.target as HTMLInputElement).files;
-                      if (files && files[0]) {
-                        handleFileUpload(item, files[0]);
-                      }
-                    }}
-                  />
-                  <div class="dropzone-content">
-                    <Upload size={18} class="text-purple-400" />
-                    {#if uploadBusyStageId === item.id}
-                      <span class="uploading-text">Enviando arquivo... {uploadProgress}%</span>
-                    {:else if item.currentFile}
-                      <span>Clique para enviar uma <strong>nova versão (v{(item.currentFile.version || 1) + 1})</strong></span>
-                    {:else}
-                      <span>Clique para selecionar o <strong>arquivo pronto</strong> para esta etapa</span>
-                    {/if}
-                  </div>
-                </label>
-
-                {#if uploadFeedback && uploadFeedback.stageId === item.id}
-                  <div class="upload-feedback {uploadFeedback.type}">
-                    {uploadFeedback.text}
-                  </div>
-                {/if}
+                <PipelineDeliverableUpload
+                  scanId={currentScanId}
+                  productionChapterId={item.production_chapter_id}
+                  stageId={item.stage_id}
+                  currentFiles={item.currentFiles}
+                  onFilesChanged={async () => { await invalidateAll(); }}
+                  onUploadStateChange={(open: boolean) => setStageUploadState(item.id, open)}
+                />
               </section>
 
               <!-- STEP 3: ACTIONS & COMPLETION -->
@@ -883,7 +781,7 @@
                         <span>Concluir (Envie Arquivo)</span>
                       </button>
                     {:else}
-                      <button type="submit" class="btn-complete-primary">
+                      <button type="submit" class="btn-complete-primary" disabled={Boolean(stagesWithOpenUploads[item.id])} title={stagesWithOpenUploads[item.id] ? 'Finalize ou descarte os uploads pendentes antes de concluir' : undefined}>
                         <CheckCircle2 size={15} />
                         <span>Concluir {item.stage?.name}</span>
                       </button>
@@ -1017,20 +915,20 @@
                 </div>
               </header>
 
-              {#if item.currentFile}
-                <div class="current-file-badge done-file">
-                  <FileText size={14} class="text-emerald-400 flex-shrink-0" />
-                  <div class="file-meta">
-                    <strong>{item.currentFile.file_name} (v{item.currentFile.version})</strong>
-                    <small>{formatBytes(item.currentFile.byte_size)} · Concluído por {item.completer?.display_name || item.completer?.username || 'Membro'}</small>
-                  </div>
-                  <a
-                    href="/api/scan/production/files/{item.currentFile.id}?download=1"
-                    download={item.currentFile.file_name}
-                    class="btn-icon-download"
-                  >
-                    <Download size={13} />
-                  </a>
+              {#if item.currentFiles.length > 0}
+                <div class="done-files-list">
+                  {#each item.currentFiles as file (file.id)}
+                    <div class="current-file-badge done-file">
+                      <FileText size={14} class="text-emerald-400 flex-shrink-0" />
+                      <div class="file-meta">
+                        <strong>{file.file_name} (v{file.version})</strong>
+                        <small>{formatBytes(file.byte_size)} · Concluído por {item.completer?.display_name || item.completer?.username || 'Membro'}</small>
+                      </div>
+                      <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-icon-download">
+                        <Download size={13} />
+                      </a>
+                    </div>
+                  {/each}
                 </div>
               {/if}
 
@@ -1174,7 +1072,7 @@
                 <label for="target-user-select">Novo Membro Responsável</label>
                 <select id="target-user-select" name="target_user_id" bind:value={overrideTargetUserId} class="modal-select" required>
                   <option value="">Selecione um membro...</option>
-                  {#each team as m}
+                  {#each team as m (m.id)}
                     <option value={m.id}>{m.display_name || m.username}</option>
                   {/each}
                 </select>
@@ -1234,7 +1132,7 @@
             <div class="modal-field">
               <label for="new-ch-work">Obra *</label>
               <select id="new-ch-work" name="work_id" class="modal-select" required>
-                {#each works as w}
+                {#each works as w (w.id)}
                   <option value={w.id}>{w.title}</option>
                 {/each}
               </select>
@@ -1310,7 +1208,7 @@
             <div class="modal-field">
               <label for="bulk-work-select">Obra *</label>
               <select id="bulk-work-select" name="work_id" class="modal-select" required>
-                {#each works as w}
+                {#each works as w (w.id)}
                   <option value={w.id}>{w.title}</option>
                 {/each}
               </select>
@@ -1372,7 +1270,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {#each chapterTimelineFiles as f}
+                    {#each chapterTimelineFiles as f (f.id)}
                       <tr class:is-current={f.is_current}>
                         <td>
                           <span class="version-tag" class:current={f.is_current}>v{f.version}</span>
@@ -1400,7 +1298,7 @@
               <p class="text-muted-sm">Nenhum evento registrado ainda.</p>
             {:else}
               <div class="timeline-list">
-                {#each chapterTimelineEvents as evt}
+                {#each chapterTimelineEvents as evt (evt.id)}
                   <div class="timeline-entry">
                     <div class="timeline-dot"></div>
                     <div class="timeline-info">

@@ -2,23 +2,19 @@
   import {
     ArrowLeft,
     Layers,
-    ListTodo,
     FolderArchive,
     MessageSquare,
     Eye,
     CheckSquare,
     Clock,
     User,
-    Upload,
     Download,
     Plus,
     X,
     CheckCircle2,
     AlertTriangle,
-    AlertCircle,
     FileText,
     Sparkles,
-    Send,
     ExternalLink,
     BookOpen,
     Lock,
@@ -30,22 +26,18 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { relativeTime } from '$lib/types';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
 
   let {
     chapterId,
     scanId,
-    userProfile,
     currentUserId = '',
     userRole = 'MEMBER',
     chapters = [],
-    stages = [],
     chapterStages = [],
     productionFiles = [],
     chapterTimeline = [],
-    tasks = [],
     qcIssues = [],
-    team = [],
     onBackToPipeline = () => {}
   } = $props();
 
@@ -115,87 +107,35 @@
     const deps: string[] = activeStageItem.stage?.dependencies || [];
     if (deps.length === 0) return [];
 
-    const result: any[] = [];
-    for (const depSlug of deps) {
-      const file = currentChapterFiles.find(
-        (f: any) => (f.stage_slug === depSlug || f.stage?.slug === depSlug) && f.is_current
-      );
-      if (file) {
-        result.push(file);
-      }
-    }
-    return result;
+    return currentChapterFiles.filter((file: any) =>
+      file.is_current && deps.includes(file.stage_slug || file.stage?.slug)
+    );
   });
 
-  // Current deliverable file uploaded for active stage
-  let activeStageCurrentFile = $derived(
+  // The delivery is a collection; every file can be replaced independently.
+  let activeStageCurrentFiles = $derived(
     activeStageItem
-      ? currentChapterFiles.find(
+      ? currentChapterFiles.filter(
           (f: any) =>
             (f.stage_id === activeStageItem.stage_id ||
               f.stage_slug === activeStageItem.stage?.slug ||
               f.stage?.slug === activeStageItem.stage?.slug) &&
             f.is_current
         )
-      : null
+      : []
   );
 
-  // File upload state for active stage
-  let isUploadingFile = $state(false);
-  let uploadProgress = $state(0);
-  let uploadError = $state('');
-  let uploadSuccess = $state('');
+  let hasOpenUploads = $state(false);
 
   // Rework Return Modal
   let showReworkModal = $state(false);
   let reworkTargetSlug = $state('typeset');
   let reworkReason = $state('');
 
-  // QC modal
   let showNewQcModal = $state(false);
   let qcPageNumber = $state(1);
   let qcType = $state('TYPESET');
   let qcComment = $state('');
-
-  async function handleDeliverableUpload(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file || !activeStageItem) return;
-
-    isUploadingFile = true;
-    uploadProgress = 20;
-    uploadError = '';
-    uploadSuccess = '';
-
-    try {
-      const formData = new FormData();
-      formData.set('scan_id', scanId);
-      formData.set('production_chapter_id', actualChapterId);
-      formData.set('stage_id', activeStageItem.stage_id);
-      formData.set('file', file);
-
-      uploadProgress = 50;
-      const res = await fetch('/api/scan/production/upload', {
-        method: 'POST',
-        body: formData
-      });
-      uploadProgress = 85;
-
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Falha no upload do arquivo');
-      }
-
-      uploadProgress = 100;
-      uploadSuccess = `Arquivo "${file.name}" enviado com sucesso (v${data.version || 1})!`;
-      await invalidateAll();
-    } catch (err: any) {
-      uploadError = err.message || 'Erro ao enviar arquivo';
-    } finally {
-      isUploadingFile = false;
-      input.value = '';
-    }
-  }
 
   function formatBytes(bytes: number): string {
     if (!bytes || bytes === 0) return '0 B';
@@ -208,11 +148,11 @@
   // Can the stage be completed?
   // Requires deliverable upload unless requires_output is false (like revisao or qc)
   let requiresDeliverable = $derived(activeStageItem?.stage?.requires_output !== false);
-  let hasDeliverable = $derived(Boolean(activeStageCurrentFile));
+  let hasDeliverable = $derived(activeStageCurrentFiles.length > 0);
   let canCompleteStage = $derived(
     activeStageItem &&
       activeStageItem.status === 'IN_PROGRESS' &&
-      (!requiresDeliverable || hasDeliverable)
+      (!requiresDeliverable || hasDeliverable) && !hasOpenUploads
   );
 
   let isReadyToPublish = $derived(
@@ -316,7 +256,7 @@
   <!-- Stepper Bar (Horizontal 7 stages) -->
   <div class="stepper-band">
     <div class="stepper-band-track">
-      {#each currentChapterStages as st, idx}
+      {#each currentChapterStages as st, idx (st.id)}
         {@const isSelected = st.id === selectedStageId}
         {@const isDone = st.status === 'DONE'}
         {@const isProgress = st.status === 'IN_PROGRESS'}
@@ -479,7 +419,7 @@
             <div class="step-card-body">
               {#if upstreamFiles().length > 0}
                 <div class="upstream-files-grid">
-                  {#each upstreamFiles() as file}
+                  {#each upstreamFiles() as file (file.id)}
                     <div class="upstream-file-item">
                       <div class="file-icon-box">
                         <FileText size={20} class="text-purple-400" />
@@ -560,68 +500,15 @@
             </div>
 
             <div class="step-card-body">
-              <!-- Current active file if exists -->
-              {#if activeStageCurrentFile}
-                <div class="current-deliverable-card">
-                  <div class="deliv-left">
-                    <CheckCircle2 size={20} class="text-emerald-400" />
-                    <div class="deliv-info">
-                      <span class="deliv-name">{activeStageCurrentFile.file_name}</span>
-                      <div class="deliv-sub">
-                        <span class="deliv-badge-v">Versão v{activeStageCurrentFile.version}</span>
-                        <span>{formatBytes(activeStageCurrentFile.byte_size)}</span>
-                        <span>•</span>
-                        <span>Enviado por {activeStageCurrentFile.uploader?.display_name || activeStageCurrentFile.uploader?.username || 'Membro'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <a
-                    href="/api/scan/production/files/{activeStageCurrentFile.id}?download=1"
-                    download={activeStageCurrentFile.file_name}
-                    class="btn-deliv-download"
-                  >
-                    <Download size={14} />
-                    <span>Baixar</span>
-                  </a>
-                </div>
-              {/if}
-
-              <!-- Upload input form -->
               {#if activeStageItem.status === 'IN_PROGRESS'}
-                <div class="upload-dropzone">
-                  <Upload size={24} class="text-purple-400" />
-                  <div class="upload-text-group">
-                    <span class="upload-main-text">
-                      {activeStageCurrentFile ? 'Enviar nova versão do arquivo entregável' : 'Selecione ou arraste o arquivo final desta etapa'}
-                    </span>
-                    <span class="upload-sub-text">Formatos suportados: ZIP, RAR, PSD, KRA, DOCX, CBZ (Máx: 200MB)</span>
-                  </div>
-
-                  <label class="btn-select-file" class:disabled={isUploadingFile}>
-                    <Upload size={14} />
-                    <span>{isUploadingFile ? `Enviando (${uploadProgress}%)...` : 'Selecionar Arquivo'}</span>
-                    <input
-                      type="file"
-                      class="hidden-file-input"
-                      onchange={handleDeliverableUpload}
-                      disabled={isUploadingFile}
-                    />
-                  </label>
-                </div>
-
-                {#if uploadSuccess}
-                  <div class="feedback-box success">
-                    <CheckCircle2 size={16} />
-                    <span>{uploadSuccess}</span>
-                  </div>
-                {/if}
-
-                {#if uploadError}
-                  <div class="feedback-box error">
-                    <AlertCircle size={16} />
-                    <span>{uploadError}</span>
-                  </div>
-                {/if}
+                <PipelineDeliverableUpload
+                  {scanId}
+                  productionChapterId={actualChapterId}
+                  stageId={activeStageItem.stage_id}
+                  currentFiles={activeStageCurrentFiles}
+                  onFilesChanged={async () => { await invalidateAll(); }}
+                  onUploadStateChange={(open: boolean) => (hasOpenUploads = open)}
+                />
               {:else}
                 <div class="notice-box-muted">
                   <Lock size={15} />
@@ -701,7 +588,7 @@
 
         {#if currentChapterFiles.length > 0}
           <div class="files-lineage-list">
-            {#each currentChapterFiles as f}
+            {#each currentChapterFiles as f (f.id)}
               <div class="file-lineage-card" class:is-stale={f.is_stale}>
                 <div class="file-lineage-top">
                   <div class="file-left-cluster">
@@ -764,7 +651,7 @@
                   <div class="input-lineage-box">
                     <span class="lineage-label">Linhagem de Entrada (Inputs Utilizados):</span>
                     <div class="lineage-tags-strip">
-                      {#each Object.entries(f.input_files) as [depSlug, info]}
+                      {#each Object.entries(f.input_files) as [depSlug, info] (depSlug)}
                         <span class="lineage-tag">
                           <strong>{depSlug.toUpperCase()}:</strong> {(info as any).file_name || 'arquivo'} (v{(info as any).version || 1})
                         </span>
@@ -795,7 +682,7 @@
 
         {#if currentChapterTimeline.length > 0}
           <div class="timeline-feed">
-            {#each currentChapterTimeline as item}
+            {#each currentChapterTimeline as item (item.id)}
               <div class="timeline-row">
                 <div class="timeline-dot-connector">
                   <div class="timeline-dot"></div>
@@ -852,7 +739,7 @@
 
         {#if currentQcIssues.length > 0}
           <div class="qc-issues-grid">
-            {#each currentQcIssues as q}
+            {#each currentQcIssues as q (q.id)}
               <div class="qc-card" class:resolved={q.status === 'RESOLVED'}>
                 <div class="qc-card-top">
                   <span class="qc-page-pill">Página #{q.page_number}</span>
@@ -892,6 +779,48 @@
     {/if}
   </div>
 </div>
+
+<!-- Modal: Novo apontamento QC -->
+{#if showNewQcModal}
+  <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => { if (event.target === event.currentTarget) showNewQcModal = false; }} onkeydown={(event) => { if (event.key === 'Escape') showNewQcModal = false; }}>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Novo apontamento de QC</h3>
+        <button type="button" class="btn-close-modal" onclick={() => (showNewQcModal = false)} aria-label="Fechar"><X size={16} /></button>
+      </div>
+      <form method="POST" action="?/createQcIssue" use:enhance={() => {
+        return async ({ update }) => {
+          await update();
+          showNewQcModal = false;
+          qcComment = '';
+        };
+      }} class="modal-body">
+        <input type="hidden" name="chapterId" value={actualChapterId} />
+        <div class="form-group">
+          <label for="qc-page" class="form-label">Página</label>
+          <input id="qc-page" name="pageNumber" type="number" min="1" bind:value={qcPageNumber} required class="form-input" />
+        </div>
+        <div class="form-group">
+          <label for="qc-type" class="form-label">Tipo</label>
+          <select id="qc-type" name="issueType" bind:value={qcType} class="form-select">
+            <option value="TYPESET">Typeset</option>
+            <option value="TRANSLATION">Tradução</option>
+            <option value="CLEAN">Clean/Redraw</option>
+            <option value="QUALITY">Qualidade visual</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="qc-comment" class="form-label">Apontamento</label>
+          <textarea id="qc-comment" name="description" bind:value={qcComment} required rows={3} class="form-textarea" placeholder="Descreva o ajuste necessário para a equipe."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" onclick={() => (showNewQcModal = false)}>Cancelar</button>
+          <button type="submit" class="btn-confirm-return" disabled={!qcComment.trim()}>Registrar apontamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
 
 <!-- Modal: Solicitar Retrabalho -->
 {#if showReworkModal}

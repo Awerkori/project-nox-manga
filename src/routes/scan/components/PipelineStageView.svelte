@@ -1,12 +1,9 @@
 <script lang="ts">
   import {
-    Layers,
     Download,
-    Upload,
     CheckCircle2,
     AlertTriangle,
     Clock,
-    ArrowRight,
     RotateCcw,
     FileText,
     Sparkles,
@@ -18,45 +15,41 @@
     Check,
     X,
     ChevronRight,
-    Send,
     AlertCircle,
-    ExternalLink,
     CheckSquare,
     Globe,
     FileCheck2,
     Edit2,
     Trash2,
     ChevronDown,
-    ChevronUp,
     Info,
     Lock,
     Shield,
     Zap
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { evaluateStageClaim, normalizePositionName, CANONICAL_PIPELINE_STAGES } from '$lib/scan-roles';
   import { getSupabaseBrowserClient } from '$lib/supabase';
+  import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
   import type { RealtimeChannel } from '@supabase/supabase-js';
 
   let {
     currentStageSlug = 'clean_redraw',
-    stages = [],
     chapterStages = [],
     chapters = [],
     works = [],
     productionFiles = [],
-    tasks = [],
-    qcIssues = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
     seenStages = [],
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
-    onSelectStage = (slug: string) => {},
-    onOpenChapter = (ch: any) => {}
+    onSelectStage = (_slug: string) => {},
+    onOpenChapter = (_ch: any) => {}
   } = $props();
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
@@ -65,11 +58,11 @@
   let pipelinePersonalBadgesEnabled = $state(true);
 
   // Optimistic seen set for immediate UI feedback on click/expansion
-  let localSeenSet = $state<Set<string>>(new Set());
+  let localSeenSet = new SvelteSet<string>();
 
   // Reactive seen set: combination of server loaded seen records and local clicks
   let seenStageMap = $derived.by(() => {
-    const set = new Set<string>();
+    const set = new SvelteSet<string>();
     if (Array.isArray(seenStages)) {
       for (const s of seenStages) {
         if (s?.chapter_stage_id) {
@@ -203,7 +196,6 @@
     if (localSeenSet.has(key)) return;
 
     localSeenSet.add(key);
-    localSeenSet = new Set(localSeenSet);
 
     try {
       await fetch('/api/scan/pipeline/seen', {
@@ -325,11 +317,6 @@
     CANONICAL_STAGES[0] // default raw provider
   );
 
-  // Active DB Stage Record
-  let activeDbStage = $derived(
-    stages.find((st: any) => matchesStageSlug(st.slug, activeCanonical.slug)) || null
-  );
-
   // Active Stage Claim Permission & State Evaluation
   let claimEvaluation = $derived(
     evaluateStageClaim(userRole, userPositions, activeCanonical.slug)
@@ -392,9 +379,11 @@
   let reworkChapterTitle = $state('');
 
   // Upload feedback and progress tracking per stage ID
-  let uploadBusyStageId = $state<string | null>(null);
-  let uploadProgress = $state(0);
-  let uploadFeedback = $state<{ stageId: string; type: 'success' | 'error'; text: string } | null>(null);
+  let stagesWithOpenUploads = $state<Record<string, boolean>>({});
+
+  function setStageUploadState(chapterStageId: string, hasOpenUploads: boolean) {
+    stagesWithOpenUploads = { ...stagesWithOpenUploads, [chapterStageId]: hasOpenUploads };
+  }
 
   // Revision checklist state per stage ID
   let revisionNotes = $state<Record<string, string>>({});
@@ -603,13 +592,13 @@
 
     // If stage is Typeset, explicitly return Clean and Tradução separated
     if (matchesStageSlug(cs.stage?.slug, 'typeset')) {
-      const cleanFile = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'clean_redraw'));
-      const tradFile = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'traducao'));
+      const cleanFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'clean_redraw'));
+      const tradFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'traducao'));
       return {
         isTypeset: true,
-        cleanFile,
-        tradFile,
-        all: [cleanFile, tradFile].filter(Boolean)
+        cleanFiles,
+        tradFiles,
+        all: [...cleanFiles, ...tradFiles]
       };
     }
 
@@ -627,61 +616,14 @@
     return { isTypeset: false, all: matched };
   }
 
-  // Get current deliverable file for active stage
-  function getCurrentDeliverableFile(cs: any, chId: string) {
-    return productionFiles.find((f: any) =>
+  // A stage delivery is a collection. Each current file has independent
+  // versioning, so replacing one file never hides its siblings.
+  function getCurrentDeliverableFiles(cs: any, chId: string) {
+    return productionFiles.filter((f: any) =>
       f.production_chapter_id === chId &&
       (f.stage_id === cs.stage_id || matchesStageSlug(f.stage_slug || f.stage?.slug, cs.stage?.slug)) &&
       f.is_current
     );
-  }
-
-  // Handle file upload
-  async function handleFileUpload(e: Event, item: any) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    uploadBusyStageId = item.cs.id;
-    uploadProgress = 15;
-    uploadFeedback = null;
-
-    try {
-      const formData = new FormData();
-      formData.set('scan_id', scanId);
-      formData.set('production_chapter_id', item.ch.id);
-      formData.set('stage_id', item.cs.stage_id);
-      formData.set('file', file);
-
-      uploadProgress = 45;
-      const res = await fetch('/api/scan/production/upload', {
-        method: 'POST',
-        body: formData
-      });
-      uploadProgress = 85;
-
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Falha ao enviar arquivo');
-      }
-
-      uploadProgress = 100;
-      uploadFeedback = {
-        stageId: item.cs.id,
-        type: 'success',
-        text: `Arquivo "${file.name}" enviado com sucesso (v${data.version || 1})! Etapa pronta para ser concluída.`
-      };
-      await invalidateAll();
-    } catch (err: any) {
-      uploadFeedback = {
-        stageId: item.cs.id,
-        type: 'error',
-        text: err.message || 'Erro ao enviar arquivo'
-      };
-    } finally {
-      uploadBusyStageId = null;
-      input.value = '';
-    }
   }
 
   // Open rework modal
@@ -724,7 +666,7 @@
     <!-- Canonical Stages Switcher Bar with Personal & Total Badges -->
     <nav class="canonical-stages-nav-bar" aria-label="Navegação entre etapas do pipeline">
       <div class="stage-pills-scroll">
-        {#each CANONICAL_STAGES as st}
+        {#each CANONICAL_STAGES as st (st.slug)}
           {@const isSelected = matchesStageSlug(st.slug, activeCanonical.slug)}
           {@const totalAvail = stageCounts[st.slug]?.available || 0}
           {@const personalNew = stagePersonalNewCounts[st.slug] || 0}
@@ -770,7 +712,7 @@
           <Filter size={15} class="filter-icon" />
           <select bind:value={filterWorkId} class="work-select-field">
             <option value="ALL">Todas as Obras ({works.length})</option>
-            {#each works as w}
+            {#each works as w (w.id)}
               <option value={w.id}>{w.title}</option>
             {/each}
           </select>
@@ -833,7 +775,7 @@
           <label for="raw_work_select" class="field-label">Obra *</label>
           <select id="raw_work_select" name="work_id" required bind:value={newChapterWorkId} class="field-input">
             <option value="" disabled selected>Selecione a obra...</option>
-            {#each works as w}
+            {#each works as w (w.id)}
               <option value={w.id}>{w.title}</option>
             {/each}
           </select>
@@ -922,7 +864,7 @@
             bind:value={rawSelectedWorkId}
             class="picker-select"
           >
-            {#each works as w}
+            {#each works as w (w.id)}
               <option value={w.id}>{w.title}</option>
             {/each}
           </select>
@@ -940,7 +882,7 @@
               <option value="">Não há capítulos disponíveis para Raw Provider nesta obra.</option>
             {:else}
               <option value="">Selecione o capítulo...</option>
-              {#each eligibleRawChaptersForWork as item}
+              {#each eligibleRawChaptersForWork as item (item.cs.id)}
                 <option value={item.cs.id}>
                   Capítulo #{item.ch.chapter_number} {item.ch.chapter_label ? `(${item.ch.chapter_label})` : ''}
                 </option>
@@ -1211,30 +1153,22 @@
                         </div>
                         {#if upstream.isTypeset}
                           <div class="upstream-pill-list">
-                            {#if upstream.cleanFile}
-                              <a
-                                href="/api/scan/production/files/{upstream.cleanFile.id}?download=1"
-                                download={upstream.cleanFile.file_name}
-                                class="btn-upstream-dl-pill clean"
-                              >
+                            {#each upstream.cleanFiles as file (file.id)}
+                              <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-upstream-dl-pill clean">
                                 <FileText size={13} />
-                                <span>Clean: {upstream.cleanFile.file_name} ({formatBytes(upstream.cleanFile.byte_size)})</span>
+                                <span>Clean: {file.file_name} (v{file.version} · {formatBytes(file.byte_size)})</span>
                               </a>
-                            {/if}
-                            {#if upstream.tradFile}
-                              <a
-                                href="/api/scan/production/files/{upstream.tradFile.id}?download=1"
-                                download={upstream.tradFile.file_name}
-                                class="btn-upstream-dl-pill traducao"
-                              >
+                            {/each}
+                            {#each upstream.tradFiles as file (file.id)}
+                              <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-upstream-dl-pill traducao">
                                 <FileText size={13} />
-                                <span>Tradução: {upstream.tradFile.file_name} ({formatBytes(upstream.tradFile.byte_size)})</span>
+                                <span>Tradução: {file.file_name} (v{file.version} · {formatBytes(file.byte_size)})</span>
                               </a>
-                            {/if}
+                            {/each}
                           </div>
                         {:else if upstream.all.length > 0}
                           <div class="upstream-pill-list">
-                            {#each upstream.all as file}
+                            {#each upstream.all as file (file.id)}
                               <a
                                 href="/api/scan/production/files/{file.id}?download=1"
                                 download={file.file_name}
@@ -1402,14 +1336,14 @@
           {#each myItems as item, idx (item.cs.id)}
             {@const isOpen = isMyChapterOpen(item.cs.id, idx)}
             {@const upstream = getUpstreamFilesForStage(item.cs, item.ch.id)}
-            {@const deliverable = getCurrentDeliverableFile(item.cs, item.ch.id)}
+            {@const deliverables = getCurrentDeliverableFiles(item.cs, item.ch.id)}
             {@const checks = getRevisionChecks(item.cs.id)}
             {@const isTypesetStage = matchesStageSlug(activeCanonical.slug, 'typeset')}
             {@const isRevisorQcStage = matchesStageSlug(activeCanonical.slug, 'revisor_qc')}
             {@const isReadyStage = matchesStageSlug(activeCanonical.slug, 'pre_aprovado')}
             {@const isPublicado = matchesStageSlug(activeCanonical.slug, 'publicado')}
-            {@const isBusyUploading = uploadBusyStageId === item.cs.id}
-            {@const canComplete = !activeCanonical.requiresOutput || Boolean(deliverable)}
+            {@const hasOpenUploads = Boolean(stagesWithOpenUploads[item.cs.id])}
+            {@const canComplete = !activeCanonical.requiresOutput || deliverables.length > 0}
 
             <article class="my-chapter-accordion-card" class:is-open={isOpen}>
               <!-- CLOSED HEADER / TRIGGER BAR -->
@@ -1534,22 +1468,20 @@
                           <div class="typeset-dual-downloads">
                             <div class="dual-download-card">
                               <span class="dual-label text-pink-400">Insumo: Clean / Redraw</span>
-                              {#if upstream.cleanFile}
-                                <div class="file-item-pill">
-                                  <FileText size={16} class="text-pink-400" />
-                                  <div class="file-pill-info">
-                                    <span class="pill-name">{upstream.cleanFile.file_name}</span>
-                                    <span class="pill-meta">v{upstream.cleanFile.version} · {formatBytes(upstream.cleanFile.byte_size)}</span>
+                              {#if upstream.cleanFiles.length > 0}
+                                {#each upstream.cleanFiles as file (file.id)}
+                                  <div class="file-item-pill">
+                                    <FileText size={16} class="text-pink-400" />
+                                    <div class="file-pill-info">
+                                      <span class="pill-name">{file.file_name}</span>
+                                      <span class="pill-meta">v{file.version} · {formatBytes(file.byte_size)}</span>
+                                    </div>
+                                    <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-download-pill">
+                                      <Download size={14} />
+                                      <span>Baixar Clean</span>
+                                    </a>
                                   </div>
-                                  <a
-                                    href="/api/scan/production/files/{upstream.cleanFile.id}?download=1"
-                                    download={upstream.cleanFile.file_name}
-                                    class="btn-download-pill"
-                                  >
-                                    <Download size={14} />
-                                    <span>Baixar Clean</span>
-                                  </a>
-                                </div>
+                                {/each}
                               {:else}
                                 <div class="waiting-dep-box">Aguardando envio do arquivo Clean</div>
                               {/if}
@@ -1557,22 +1489,20 @@
 
                             <div class="dual-download-card">
                               <span class="dual-label text-blue-400">Insumo: Tradução</span>
-                              {#if upstream.tradFile}
-                                <div class="file-item-pill">
-                                  <FileText size={16} class="text-blue-400" />
-                                  <div class="file-pill-info">
-                                    <span class="pill-name">{upstream.tradFile.file_name}</span>
-                                    <span class="pill-meta">v{upstream.tradFile.version} · {formatBytes(upstream.tradFile.byte_size)}</span>
+                              {#if upstream.tradFiles.length > 0}
+                                {#each upstream.tradFiles as file (file.id)}
+                                  <div class="file-item-pill">
+                                    <FileText size={16} class="text-blue-400" />
+                                    <div class="file-pill-info">
+                                      <span class="pill-name">{file.file_name}</span>
+                                      <span class="pill-meta">v{file.version} · {formatBytes(file.byte_size)}</span>
+                                    </div>
+                                    <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-download-pill">
+                                      <Download size={14} />
+                                      <span>Baixar Tradução</span>
+                                    </a>
                                   </div>
-                                  <a
-                                    href="/api/scan/production/files/{upstream.tradFile.id}?download=1"
-                                    download={upstream.tradFile.file_name}
-                                    class="btn-download-pill"
-                                  >
-                                    <Download size={14} />
-                                    <span>Baixar Tradução</span>
-                                  </a>
-                                </div>
+                                {/each}
                               {:else}
                                 <div class="waiting-dep-box">Aguardando envio do script de Tradução</div>
                               {/if}
@@ -1580,7 +1510,7 @@
                           </div>
                         {:else if upstream.all.length > 0}
                           <div class="upstream-files-row">
-                            {#each upstream.all as file}
+                            {#each upstream.all as file (file.id)}
                               <div class="file-item-pill">
                                 <FileText size={16} class="text-purple-400" />
                                 <div class="file-pill-info">
@@ -1680,59 +1610,14 @@
                           </div>
                         {:else}
                           <!-- Upload Deliverable File -->
-                          {#if deliverable}
-                            <div class="current-uploaded-file-banner">
-                              <CheckCircle2 size={18} class="text-emerald-400" />
-                              <div class="uploaded-meta">
-                                <strong>Arquivo pronto: {deliverable.file_name}</strong>
-                                <span>Versão v{deliverable.version} · {formatBytes(deliverable.byte_size)}</span>
-                              </div>
-                              <label class="btn-reupload-label">
-                                <input
-                                  type="file"
-                                  class="hidden-file-input"
-                                  onchange={(e) => handleFileUpload(e, item)}
-                                  disabled={isBusyUploading}
-                                />
-                                <span>Substituir</span>
-                              </label>
-                            </div>
-                          {/if}
-
-                          <div class="upload-drop-zone">
-                            {#if isBusyUploading}
-                              <div class="upload-progress-box">
-                                <div class="progress-bar-track">
-                                  <div class="progress-bar-fill" style="width: {uploadProgress}%"></div>
-                                </div>
-                                <span class="progress-text">Enviando arquivo ({uploadProgress}%)...</span>
-                              </div>
-                            {:else}
-                              <label class="drop-zone-label">
-                                <Upload size={22} class="upload-icon-cloud" />
-                                <span class="upload-prompt-title">
-                                  {deliverable ? 'Enviar nova versão do arquivo' : 'Selecionar arquivo final da etapa'}
-                                </span>
-                                <span class="upload-prompt-hint">Formatos suportados: ZIP, RAR, DOCX, TXT, PSD ou PNG/JPG</span>
-                                <input
-                                  type="file"
-                                  class="hidden-file-input"
-                                  onchange={(e) => handleFileUpload(e, item)}
-                                />
-                              </label>
-                            {/if}
-                          </div>
-
-                          {#if uploadFeedback && uploadFeedback.stageId === item.cs.id}
-                            <div class="upload-feedback-banner {uploadFeedback.type}">
-                              {#if uploadFeedback.type === 'success'}
-                                <CheckCircle2 size={16} />
-                              {:else}
-                                <AlertCircle size={16} />
-                              {/if}
-                              <span>{uploadFeedback.text}</span>
-                            </div>
-                          {/if}
+                          <PipelineDeliverableUpload
+                            scanId={scanId}
+                            productionChapterId={item.ch.id}
+                            stageId={item.cs.stage_id}
+                            currentFiles={deliverables}
+                            onFilesChanged={async () => { await invalidateAll(); }}
+                            onUploadStateChange={(open: boolean) => setStageUploadState(item.cs.id, open)}
+                          />
                         {/if}
                       </div>
                     </div>
@@ -1759,8 +1644,8 @@
                             <button
                               type="submit"
                               class="btn-complete-editorial"
-                              disabled={!canComplete}
-                              title={!canComplete ? 'Envie o arquivo final no Passo 2 antes de concluir' : 'Concluir esta etapa'}
+                              disabled={!canComplete || hasOpenUploads}
+                              title={hasOpenUploads ? 'Finalize ou descarte os uploads pendentes antes de concluir' : !canComplete ? 'Envie o arquivo final no Passo 2 antes de concluir' : 'Concluir esta etapa'}
                             >
                               <CheckCircle2 size={16} />
                               <span>Concluir Etapa</span>
@@ -1814,7 +1699,9 @@
                           {/if}
                         </div>
 
-                        {#if !canComplete && activeCanonical.requiresOutput}
+                        {#if hasOpenUploads}
+                          <span class="gate-warning-hint">⏳ Aguarde o término dos uploads ou tente novamente os itens que falharam.</span>
+                        {:else if !canComplete && activeCanonical.requiresOutput}
                           <span class="gate-warning-hint">
                             ⚠️ Envie o arquivo finalizado no Passo 2 para habilitar o botão de conclusão.
                           </span>
@@ -4241,6 +4128,24 @@
 
     .typeset-dual-downloads {
       grid-template-columns: 1fr;
+    }
+
+    /* A delivery can contain several long-named files. Keep its primary
+       download action reachable instead of letting the filename squeeze it
+       beyond the card edge on narrow screens. */
+    .file-item-pill {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .file-pill-info {
+      min-width: min(100%, 12rem);
+    }
+
+    .btn-download-pill {
+      width: 100%;
+      min-height: 2.5rem;
+      justify-content: center;
     }
 
     .completion-actions-cluster {

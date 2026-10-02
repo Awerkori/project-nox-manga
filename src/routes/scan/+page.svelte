@@ -6,7 +6,6 @@
     Layers,
     Eye,
     Users,
-    Globe,
     MessageSquare,
     ArrowRight,
     CheckCircle2,
@@ -25,30 +24,22 @@
     FileText,
     Activity,
     Tag,
-    Filter,
     ExternalLink,
     Edit2,
     PlayCircle,
     PauseCircle,
     UserCheck,
-    Calendar,
     Pin,
     Trash2,
     Shield,
     User,
-    Lock,
     Sliders
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { relativeTime, slugify } from '$lib/types';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import {
-    SCAN_ADMIN_FUNCTIONS,
-    CANONICAL_EDITORIAL_ROLES,
-    CANONICAL_PIPELINE_STAGES,
     canManageMembers,
-    canPromoteToManager,
-    canDemoteManager,
     canRemoveMember,
     normalizePositionName
   } from '$lib/scan-roles';
@@ -67,7 +58,6 @@
   import QCTab from './components/QCTab.svelte';
   import AcademiaTab from './components/AcademiaTab.svelte';
   import WorkloadTab from './components/WorkloadTab.svelte';
-  import ChapterWorkspaceModal from './components/ChapterWorkspaceModal.svelte';
   import WorkspaceCommandPalette from './components/WorkspaceCommandPalette.svelte';
   import ScanSidebar from './components/ScanSidebar.svelte';
   import ScanHome from './components/ScanHome.svelte';
@@ -78,13 +68,6 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
-    BookA,
-    Link2,
-    CheckSquare,
-    BarChart3,
-    Inbox,
-    Hash,
-    GraduationCap,
     Menu,
     Search
   } from '@lucide/svelte';
@@ -229,7 +212,6 @@
     }
   }
 
-  let activeCategory = $state<'geral' | 'comunicacao' | 'producao' | 'equipe' | 'recursos' | 'gestao'>('geral');
   let activeDashTab = $state<DashTab>('works');
   let showCommandPalette = $state(false);
   let activeWorkspaceChapter = $state<any>(null);
@@ -243,16 +225,6 @@
     } else {
       activeWorkspaceChapter = ch.chapters || ch;
     }
-  }
-
-  function setCategory(cat: 'geral' | 'comunicacao' | 'producao' | 'equipe' | 'recursos' | 'gestao') {
-    activeCategory = cat;
-    if (cat === 'geral') activeDashTab = 'works';
-    else if (cat === 'comunicacao') activeDashTab = 'chat';
-    else if (cat === 'producao') activeDashTab = 'pipeline';
-    else if (cat === 'equipe') activeDashTab = 'team';
-    else if (cat === 'recursos') activeDashTab = 'academia';
-    else if (cat === 'gestao') activeDashTab = 'settings';
   }
 
   let staffNotes = $derived(data.staffNotes || []);
@@ -322,7 +294,6 @@
   let openingExpLevel = $state('QUALQUER');
   let openingAvail = $state('');
   let openingSlots = $state<number | null>(null);
-  let openingNotes = $state('');
   let openingStatus = $state('OPEN');
 
   function openCreateOpeningModal() {
@@ -334,7 +305,6 @@
     openingExpLevel = 'QUALQUER';
     openingAvail = '';
     openingSlots = null;
-    openingNotes = '';
     openingStatus = 'OPEN';
     showOpeningModal = true;
   }
@@ -348,7 +318,6 @@
     openingExpLevel = op.experience_level || 'QUALQUER';
     openingAvail = op.availability || '';
     openingSlots = op.slots || null;
-    openingNotes = op.notes || '';
     openingStatus = op.status || 'OPEN';
     showOpeningModal = true;
   }
@@ -360,14 +329,12 @@
   let posName = $state('');
   let posDesc = $state('');
   let posDisplayOrder = $state(0);
-  let posIsActive = $state(true);
 
   function openCreatePositionModal() {
     editingPosition = null;
     posName = '';
     posDesc = '';
     posDisplayOrder = positions.length + 1;
-    posIsActive = true;
     showPositionModal = true;
   }
 
@@ -376,7 +343,6 @@
     posName = pos.name;
     posDesc = pos.description || '';
     posDisplayOrder = pos.display_order || 0;
-    posIsActive = pos.is_active !== false;
     showPositionModal = true;
   }
 
@@ -467,10 +433,18 @@
       return () => clearTimeout(t);
     }
   });
+
+  function dismissBackdrop(event: MouseEvent, dismiss: () => void) {
+    if (event.target === event.currentTarget) dismiss();
+  }
+
+  function dismissOnEscape(event: KeyboardEvent, dismiss: () => void) {
+    if (event.key === 'Escape') dismiss();
+  }
 </script>
 
 <svelte:head>
-  <title>Painel de Scan Parceira | Project Nox</title>
+  <title>{data.currentScan ? `Painel — ${data.currentScan.name} | Project Nox` : 'Painel de Scan Parceira | Project Nox'}</title>
 </svelte:head>
 
 {#if !data.authenticated || !data.isMember}
@@ -1226,7 +1200,7 @@
                   </div>
                   <div class="member-positions-tags">
                     {#if member.positions && member.positions.length > 0}
-                      {#each member.positions as pos}
+                      {#each member.positions as pos (pos.id)}
                         <span class="pos-badge" class:primary={pos.is_primary}>
                           <span class="pos-emoji">{getPositionIcon(pos.name)}</span>
                           {#if pos.is_primary}★ {/if}{pos.name}
@@ -1613,7 +1587,7 @@
                       <div class="app-qa-answers-box">
                         <strong class="app-qa-title">Respostas ao Questionário da Vaga:</strong>
                         <div class="app-qa-list">
-                          {#each appAnswers as ans}
+                          {#each appAnswers as ans (ans.id ?? `${ans.application_id}:${ans.question_id}`)}
                             <div class="app-qa-entry">
                               <span class="app-qa-question">{ans.question?.question || 'Pergunta'}:</span>
                               <span class="app-qa-answer">{ans.answer}</span>
@@ -2210,8 +2184,8 @@
 
   <!-- Modals -->
   {#if showInviteModal}
-    <div class="modal-backdrop" onclick={() => (showInviteModal = false)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (showInviteModal = false))} onkeydown={(event) => dismissOnEscape(event, () => (showInviteModal = false))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">Gerar Convite de Equipe</h2>
           <button class="btn-close-modal" onclick={() => (showInviteModal = false)}><X size={18} /></button>
@@ -2260,8 +2234,8 @@
   {/if}
 
   {#if showProjectModal}
-    <div class="modal-backdrop" onclick={() => (showProjectModal = false)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (showProjectModal = false))} onkeydown={(event) => dismissOnEscape(event, () => (showProjectModal = false))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">Solicitar Obra do Catálogo</h2>
           <button class="btn-close-modal" onclick={() => (showProjectModal = false)}><X size={18} /></button>
@@ -2284,7 +2258,7 @@
             <label for="proj-work">Selecione a Obra Desejada:</label>
             <select id="proj-work" name="work_id" bind:value={selectedWorkId} required class="form-select">
               <option value="" disabled>Escolha uma obra...</option>
-              {#each data.catalogWorks as w}
+              {#each data.catalogWorks as w (w.id)}
                 <option value={w.id}>{w.title}</option>
               {/each}
             </select>
@@ -2313,8 +2287,8 @@
   {/if}
 
   {#if transferTarget}
-    <div class="modal-backdrop" onclick={() => (transferTarget = null)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (transferTarget = null))} onkeydown={(event) => dismissOnEscape(event, () => (transferTarget = null))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">Transferir Liderança</h2>
           <button class="btn-close-modal" onclick={() => (transferTarget = null)}><X size={18} /></button>
@@ -2358,8 +2332,8 @@
   {/if}
 
   {#if removeTarget}
-    <div class="modal-backdrop" onclick={() => (removeTarget = null)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (removeTarget = null))} onkeydown={(event) => dismissOnEscape(event, () => (removeTarget = null))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">Remover Membro da Scan</h2>
           <button class="btn-close-modal" onclick={() => (removeTarget = null)}><X size={18} /></button>
@@ -2406,8 +2380,8 @@
   {/if}
 
   {#if showOpeningModal}
-    <div class="modal-backdrop" onclick={() => (showOpeningModal = false)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (showOpeningModal = false))} onkeydown={(event) => dismissOnEscape(event, () => (showOpeningModal = false))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">{editingOpening ? 'Editar Vaga de Recrutamento' : 'Nova Vaga de Recrutamento'}</h2>
           <button class="btn-close-modal" onclick={() => (showOpeningModal = false)}><X size={18} /></button>
@@ -2433,7 +2407,7 @@
           <div class="form-field">
             <label for="op-pos">Cargo da Vaga *:</label>
             <select id="op-pos" name="position_id" bind:value={openingPosId} required class="form-select">
-              {#each positions as pos}
+              {#each positions as pos (pos.id)}
                 <option value={pos.id}>{pos.name}</option>
               {/each}
             </select>
@@ -2534,8 +2508,8 @@
 
   {#if reviewingApp}
     {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.application_id === reviewingApp.id)}
-    <div class="modal-backdrop" onclick={() => (reviewingApp = null)}>
-      <div class="modal-card" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (reviewingApp = null))} onkeydown={(event) => dismissOnEscape(event, () => (reviewingApp = null))}>
+      <div class="modal-card">
         <div class="modal-header">
           <h2 class="modal-title">Avaliar Candidatura</h2>
           <button class="btn-close-modal" onclick={() => (reviewingApp = null)}><X size={18} /></button>
@@ -2606,7 +2580,7 @@
             <div class="review-info-item">
               <span class="item-label">Respostas ao Questionário da Vaga:</span>
               <div class="review-qa-list">
-                {#each appAnswers as ans}
+                {#each appAnswers as ans (ans.id ?? `${ans.application_id}:${ans.question_id}`)}
                   <div class="review-qa-entry">
                     <span class="qa-q-text">{ans.question?.question || 'Pergunta'}:</span>
                     <p class="qa-a-text">{ans.answer}</p>
@@ -2697,8 +2671,8 @@
   {/if}
 
   {#if showPositionModal}
-    <div class="modal-backdrop" onclick={() => (showPositionModal = false)}>
-      <div class="modal-card mini-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (showPositionModal = false))} onkeydown={(event) => dismissOnEscape(event, () => (showPositionModal = false))}>
+      <div class="modal-card mini-modal">
         <div class="modal-header">
           <h2 class="modal-title">{editingPosition ? 'Editar Cargo Editorial' : 'Criar Novo Cargo Editorial'}</h2>
           <button class="btn-close-modal" onclick={() => (showPositionModal = false)}><X size={18} /></button>
@@ -2768,8 +2742,8 @@
   {/if}
 
   {#if editingMember}
-    <div class="modal-backdrop" onclick={() => (editingMember = null)}>
-      <div class="modal-card member-management-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (editingMember = null))} onkeydown={(event) => dismissOnEscape(event, () => (editingMember = null))}>
+      <div class="modal-card member-management-modal">
         <div class="modal-header">
           <div class="modal-header-profile">
             <UserAvatar
@@ -2921,7 +2895,7 @@
             </div>
 
             <div class="positions-selection-list">
-              {#each positions as pos}
+              {#each positions as pos (pos.id)}
                 {@const isChecked = editingPositionIds.includes(pos.id)}
                 <label class="position-checkbox-item" class:checked={isChecked}>
                   <input

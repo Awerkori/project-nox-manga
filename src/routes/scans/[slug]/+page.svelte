@@ -14,7 +14,6 @@
     Briefcase,
     CheckCircle2,
     X,
-    ExternalLink,
     AlertCircle,
     Star,
     Heart,
@@ -31,15 +30,29 @@
   import FluxerIcon from "$lib/components/icons/FluxerIcon.svelte";
   import DiscordIcon from "$lib/components/icons/DiscordIcon.svelte";
   import { relativeTime } from "$lib/types";
-  import { formatScanRoleTitle, getScanPreposition } from "$lib/scans";
+  import { onMount } from "svelte";
 
-  let { data, form } = $props();
+  // The generated database schema is intentionally incomplete for scan
+  // extensions. Keep this presentation component independent from that global
+  // type debt; its server loader remains the contract boundary.
+  let { data, form }: { data: any; form: any } = $props();
 
-  let activeTab = $state<"works" | "chapters" | "members" | "recruitment" | "activity" | "comments">("works");
+  type PublicScanTab = "works" | "chapters" | "members" | "recruitment" | "activity" | "comments";
+  const TAB_HASH: Record<PublicScanTab, string> = {
+    works: "",
+    chapters: "#capitulos",
+    members: "#equipe",
+    recruitment: "#recrutamento",
+    activity: "#atividade",
+    comments: "#comentarios"
+  };
+  const HASH_TAB: Record<string, PublicScanTab | undefined> = Object.fromEntries(
+    Object.entries(TAB_HASH).map(([tab, hash]) => [hash, tab as PublicScanTab]).filter(([hash]) => Boolean(hash))
+  );
+  let activeTab = $state<PublicScanTab>("works");
   let applyingOpening = $state<any>(null);
   let openingQuestions = $derived((data.recruitmentQuestions || []).filter((q: any) => q.opening_id === applyingOpening?.id));
   let isSubmitting = $state(false);
-  let successModal = $state(false);
 
   // Comments interaction state
   let replyToId = $state<string | null>(null);
@@ -57,7 +70,6 @@
     data.works.filter((w: any) => w.scan_status === "COMPLETED" || w.scan_status === "ABANDONED")
   );
 
-  let preposition = $derived(getScanPreposition(data.scan));
 
   // Group members logically
   let owners = $derived(data.members.filter((m: any) => m.role === "OWNER"));
@@ -71,11 +83,10 @@
     (data.comments || []).filter((c: any) => !c.parent_id)
   );
   let repliesMap = $derived.by(() => {
-    const map = new Map<string, any[]>();
+    const map: Record<string, any[]> = {};
     for (const c of (data.comments || [])) {
       if (c.parent_id) {
-        if (!map.has(c.parent_id)) map.set(c.parent_id, []);
-        map.get(c.parent_id)!.push(c);
+        (map[c.parent_id] ??= []).push(c);
       }
     }
     return map;
@@ -88,6 +99,24 @@
   function closeApplyModal() {
     applyingOpening = null;
   }
+
+  function syncTabFromHash() {
+    const tab = HASH_TAB[window.location.hash];
+    if (tab) activeTab = tab;
+  }
+
+  function selectPublicTab(tab: PublicScanTab) {
+    activeTab = tab;
+    if (typeof window === "undefined") return;
+    const nextHash = TAB_HASH[tab];
+    if (window.location.hash !== nextHash) history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+  }
+
+  onMount(() => {
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  });
 </script>
 
 <svelte:head>
@@ -166,7 +195,7 @@
               <button
                 type="button"
                 class="btn-hero-recruit"
-                onclick={() => (activeTab = "recruitment")}
+                onclick={() => selectPublicTab("recruitment")}
               >
                 <UserPlus size={16} />
                 <span>Vagas Abertas</span>
@@ -245,7 +274,7 @@
       <button
         class="tab-btn"
         class:active={activeTab === "works"}
-        onclick={() => (activeTab = "works")}
+        onclick={() => selectPublicTab("works")}
         type="button"
       >
         <BookOpen size={16} />
@@ -255,7 +284,7 @@
       <button
         class="tab-btn"
         class:active={activeTab === "chapters"}
-        onclick={() => (activeTab = "chapters")}
+        onclick={() => selectPublicTab("chapters")}
         type="button"
       >
         <Layers size={16} />
@@ -265,7 +294,7 @@
       <button
         class="tab-btn"
         class:active={activeTab === "members"}
-        onclick={() => (activeTab = "members")}
+        onclick={() => selectPublicTab("members")}
         type="button"
       >
         <Users size={16} />
@@ -276,7 +305,7 @@
         class="tab-btn"
         id="recrutamento"
         class:active={activeTab === "recruitment"}
-        onclick={() => (activeTab = "recruitment")}
+        onclick={() => selectPublicTab("recruitment")}
         type="button"
       >
         <Briefcase size={16} />
@@ -289,7 +318,7 @@
       <button
         class="tab-btn"
         class:active={activeTab === "activity"}
-        onclick={() => (activeTab = "activity")}
+        onclick={() => selectPublicTab("activity")}
         type="button"
       >
         <Clock size={16} />
@@ -299,7 +328,7 @@
       <button
         class="tab-btn"
         class:active={activeTab === "comments"}
-        onclick={() => (activeTab = "comments")}
+        onclick={() => selectPublicTab("comments")}
         type="button"
       >
         <MessageSquare size={16} />
@@ -335,7 +364,7 @@
                 <p class="section-subtitle">Obras ativas e em lançamento contínuo por {data.scan.name}</p>
               </div>
               <div class="works-grid">
-                {#each currentWorks as work}
+                {#each currentWorks as work (work.id)}
                   <WorkCard {work} />
                 {/each}
               </div>
@@ -349,7 +378,7 @@
                 <p class="section-subtitle">Obras concluídas ou encerradas no catálogo</p>
               </div>
               <div class="works-grid">
-                {#each pastWorks as work}
+                {#each pastWorks as work (work.id)}
                   <WorkCard {work} />
                 {/each}
               </div>
@@ -370,7 +399,7 @@
         <div class="tab-pane">
           {#if data.chapters.length > 0}
             <div class="chapters-list">
-              {#each data.chapters as ch}
+              {#each data.chapters as ch (ch.id)}
                 <div class="chapter-card">
                   <div class="chapter-left">
                     <a href="/obra/{ch.works.slug}" class="chapter-work-link">
@@ -417,7 +446,7 @@
                   <span>Liderança & Propriedade</span>
                 </h3>
                 <div class="members-grid">
-                  {#each owners as member}
+                  {#each owners as member (member.id)}
                     <div class="member-card is-owner">
                       <UserAvatar
                         avatarId={member.avatar_id}
@@ -439,7 +468,7 @@
                         <!-- Positions -->
                         <div class="member-positions-tags">
                           {#if member.positions && member.positions.length > 0}
-                            {#each member.positions as pos}
+                            {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
                               <span class="position-badge">{pos.name}</span>
                             {/each}
                           {:else}
@@ -461,7 +490,7 @@
                   <span>Administração</span>
                 </h3>
                 <div class="members-grid">
-                  {#each admins as member}
+                  {#each admins as member (member.id)}
                     <div class="member-card is-admin">
                       <UserAvatar
                         avatarId={member.avatar_id}
@@ -480,7 +509,7 @@
 
                         <div class="member-positions-tags">
                           {#if member.positions && member.positions.length > 0}
-                            {#each member.positions as pos}
+                            {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
                               <span class="position-badge">{pos.name}</span>
                             {/each}
                           {:else}
@@ -502,7 +531,7 @@
                   <span>Equipe Editorial</span>
                 </h3>
                 <div class="members-grid">
-                  {#each otherMembers as member}
+                  {#each otherMembers as member (member.id)}
                     <div class="member-card">
                       <UserAvatar
                         avatarId={member.avatar_id}
@@ -523,7 +552,7 @@
 
                         <div class="member-positions-tags">
                           {#if member.positions && member.positions.length > 0}
-                            {#each member.positions as pos}
+                            {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
                               <span class="position-badge">{pos.name}</span>
                             {/each}
                           {:else}
@@ -559,7 +588,7 @@
             </div>
 
             <div class="openings-grid">
-              {#each data.openings as opening}
+              {#each data.openings as opening (opening.id)}
                 {@const alreadyApplied = data.userAppOpenings.includes(opening.id)}
                 <div class="opening-card">
                   <div class="opening-top">
@@ -595,6 +624,16 @@
                         <span class="meta-val">{opening.availability}</span>
                       </div>
                     {/if}
+                    <div class="meta-row">
+                      <span class="meta-label">Vagas:</span>
+                      <span class="meta-val">{opening.slots ? `${opening.slots} ${opening.slots === 1 ? 'posição' : 'posições'}` : 'Fluxo contínuo'}</span>
+                    </div>
+                    {#if opening.created_at}
+                      <div class="meta-row">
+                        <span class="meta-label">Aberta:</span>
+                        <span class="meta-val">{relativeTime(opening.created_at)}</span>
+                      </div>
+                    {/if}
                     {#if opening.requirements}
                       <div class="meta-requirements">
                         <strong>Requisitos:</strong>
@@ -611,7 +650,7 @@
                       </div>
                     {:else if !data.viewer}
                       <a
-                        href="/auth?redirect=/scans/{data.scan.slug}?vaga={opening.id}#recrutamento"
+                        href={`/auth?redirect=${encodeURIComponent(`/scans/${data.scan.slug}#recrutamento`)}`}
                         class="btn-apply-action"
                       >
                         <UserPlus size={15} />
@@ -645,7 +684,7 @@
         <div class="tab-pane">
           {#if data.activities.length > 0}
             <div class="activity-timeline">
-              {#each data.activities as act}
+              {#each data.activities as act (act.id)}
                 <div class="timeline-item">
                   <div class="timeline-dot"></div>
                   <div class="timeline-content">
@@ -736,7 +775,7 @@
                 <strong>Quer deixar um recado para a equipe?</strong>
                 <p>Faça login ou crie sua conta no Project Nox para comentar e interagir com as scans parceiras.</p>
               </div>
-              <a href="/login" class="btn-login-comment">Entrar no Project Nox</a>
+              <a href={`/auth?redirect=${encodeURIComponent(`/scans/${data.scan.slug}#comentarios`)}`} class="btn-login-comment">Entrar no Project Nox</a>
             </div>
           {/if}
 
@@ -744,7 +783,7 @@
           {#if rootComments.length > 0}
             <div class="comments-thread-list">
               {#each rootComments as comment (comment.id)}
-                {@const replies = repliesMap.get(comment.id) || []}
+                {@const replies = repliesMap[comment.id] || []}
                 <article class="comment-item" class:is-pinned={comment.pinned}>
                   {#if comment.pinned}
                     <div class="pinned-indicator">
@@ -1003,7 +1042,7 @@
 
 <!-- Application Modal -->
 {#if applyingOpening}
-  <div class="modal-backdrop" onclick={closeApplyModal} role="dialog" aria-modal="true">
+  <div class="modal-backdrop" onclick={closeApplyModal} onkeydown={(event) => event.key === 'Escape' && closeApplyModal()} role="dialog" aria-modal="true" tabindex="-1">
     <div class="modal-card" onclick={(e) => e.stopPropagation()} role="presentation">
       <div class="modal-header">
         <div class="modal-title-wrap">
@@ -1105,7 +1144,7 @@
         {#if openingQuestions.length > 0}
           <div class="custom-questions-box">
             <h4 class="custom-questions-heading">Perguntas Específicas da Vaga</h4>
-            {#each openingQuestions as q}
+            {#each openingQuestions as q (q.id)}
               <div class="form-group">
                 <label for="q-{q.id}" class="form-label">
                   {q.question} {q.required ? '*' : '(Opcional)'}
@@ -1129,7 +1168,7 @@
                   {@const opts = Array.isArray(q.options) ? q.options : []}
                   <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
                     <option value="">Selecione uma opção...</option>
-                    {#each opts as opt}
+                    {#each opts as opt (opt)}
                       <option value={opt}>{opt}</option>
                     {/each}
                   </select>
@@ -1162,7 +1201,7 @@
 
 <!-- Comment Report Modal -->
 {#if reportingComment}
-  <div class="modal-backdrop" onclick={() => (reportingComment = null)} role="dialog" aria-modal="true">
+  <div class="modal-backdrop" onclick={() => (reportingComment = null)} onkeydown={(event) => event.key === 'Escape' && (reportingComment = null)} role="dialog" aria-modal="true" tabindex="-1">
     <div class="modal-card modal-small" onclick={(e) => e.stopPropagation()} role="presentation">
       <div class="modal-header">
         <div class="modal-title-wrap">
@@ -1493,10 +1532,6 @@
   .metric-card.recruiting-metric {
     background: rgba(168, 85, 247, 0.08);
     border-color: rgba(168, 85, 247, 0.25);
-  }
-
-  .metric-icon {
-    color: #94a3b8;
   }
 
   .text-purple {
@@ -2672,12 +2707,6 @@
     border-radius: 10px;
   }
 
-  .reply-turn-icon {
-    color: #475569;
-    flex-shrink: 0;
-    margin-top: 4px;
-  }
-
   .reply-avatar {
     flex-shrink: 0;
   }
@@ -2760,6 +2789,28 @@
     .members-grid,
     .openings-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    /* The public profile has six equally important destinations. A compact
+       touch grid is more discoverable than a clipped horizontal tab strip. */
+    .profile-tabs-nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: visible;
+      gap: 0.4rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      min-width: 0;
+      min-height: 2.75rem;
+      justify-content: center;
+      white-space: normal;
+      text-align: center;
+      padding: 0.55rem 0.45rem;
+      font-size: 0.8rem;
     }
   }
 </style>
