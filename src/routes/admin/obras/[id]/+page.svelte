@@ -339,8 +339,10 @@
             </div>
           {/each}
         </div>
-      {:else}
+      {:else if data.metadataProvenanceAvailable}
         <p class="provenance-empty">Esta obra não possui proveniência de metadados registrada.</p>
+      {:else}
+        <p class="provenance-empty">A proveniência por campo está temporariamente indisponível; os mappings e fontes abaixo continuam disponíveis.</p>
       {/if}
     </section>
   {/if}

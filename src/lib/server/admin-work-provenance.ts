@@ -39,6 +39,13 @@ type FieldProvenance = {
   updated_at?: unknown;
 };
 
+type WorkFieldProvenance = {
+  field: string;
+  label: string;
+  source: ReturnType<typeof sourceDetails>;
+  updatedAt: string | null;
+};
+
 const fieldLabels: Record<string, string> = {
   title: 'Título',
   synopsis: 'Sinopse',
@@ -127,7 +134,7 @@ export function buildWorkProvenance(
   const provenance = asRecord(metadataProvenance) || {};
 
   const fields = Object.entries(provenance)
-    .map(([field, raw]) => {
+    .map<WorkFieldProvenance | null>(([field, raw]) => {
       const details = asRecord(raw) as FieldProvenance | null;
       const sourceId = typeof details?.source === 'string' ? details.source : null;
       if (!sourceId) return null;
@@ -138,7 +145,7 @@ export function buildWorkProvenance(
         updatedAt: typeof details?.updated_at === 'string' ? details.updated_at : null
       };
     })
-    .filter(Boolean);
+    .filter((field): field is WorkFieldProvenance => field !== null);
 
   return {
     primaryMapping: orderedMappings[0]
