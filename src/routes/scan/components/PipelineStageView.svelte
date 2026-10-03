@@ -448,6 +448,29 @@
     showDeleteModal = true;
   }
 
+  function closeEditModal() {
+    showEditModal = false;
+  }
+
+  function closeDeleteModal() {
+    showDeleteModal = false;
+  }
+
+  function closeReworkModal() {
+    showReworkModal = false;
+  }
+
+  function dismissModalBackdrop(event: MouseEvent, close: () => void) {
+    if (event.target === event.currentTarget) close();
+  }
+
+  function closeActiveModalOnEscape(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    if (showEditModal) closeEditModal();
+    else if (showDeleteModal) closeDeleteModal();
+    else if (showReworkModal) closeReworkModal();
+  }
+
   // Claim feedback state
   let isClaimingStageId = $state<string | null>(null);
   let claimFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
@@ -635,6 +658,8 @@
     showReworkModal = true;
   }
 </script>
+
+<svelte:window onkeydown={closeActiveModalOnEscape} />
 
 <div class="pipeline-stage-view-root">
   <!-- Top Location & Stage Header -->
@@ -1732,14 +1757,14 @@
 
 <!-- EDIT PRODUCTION CHAPTER MODAL -->
 {#if showEditModal && editTargetItem}
-  <div class="modal-backdrop" onclick={() => (showEditModal = false)}>
-    <div class="standard-modal-dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-backdrop" role="presentation" onclick={(event) => dismissModalBackdrop(event, closeEditModal)}>
+    <div class="standard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-production-chapter-title" tabindex="-1">
       <div class="modal-top">
         <div class="modal-title-wrap">
           <Edit2 size={18} class="text-purple-400" />
-          <h3>Editar Capítulo em Produção</h3>
+          <h3 id="edit-production-chapter-title">Editar Capítulo em Produção</h3>
         </div>
-        <button type="button" class="btn-close-modal" onclick={() => (showEditModal = false)}>
+        <button type="button" class="btn-close-modal" onclick={closeEditModal} aria-label="Fechar edição de capítulo">
           <X size={18} />
         </button>
       </div>
@@ -1756,7 +1781,7 @@
           return async ({ update }) => {
             await update();
             isEditingChapter = false;
-            showEditModal = false;
+            closeEditModal();
           };
         }}
         class="standard-form-grid"
@@ -1798,7 +1823,7 @@
         </div>
 
         <div class="modal-buttons-row">
-          <button type="button" class="btn-cancel-action" onclick={() => (showEditModal = false)}>
+          <button type="button" class="btn-cancel-action" onclick={closeEditModal}>
             Cancelar
           </button>
           <button type="submit" class="btn-confirm-primary" disabled={isEditingChapter}>
@@ -1818,14 +1843,14 @@
 
 <!-- DELETE PRODUCTION CHAPTER CONFIRMATION MODAL -->
 {#if showDeleteModal && deleteTargetItem}
-  <div class="modal-backdrop" onclick={() => (showDeleteModal = false)}>
-    <div class="standard-modal-dialog delete-dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-backdrop" role="presentation" onclick={(event) => dismissModalBackdrop(event, closeDeleteModal)}>
+    <div class="standard-modal-dialog delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-production-chapter-title" tabindex="-1">
       <div class="modal-top">
         <div class="modal-title-wrap text-rose">
           <Trash2 size={20} class="text-rose-500" />
-          <h3>Excluir Produção de Capítulo</h3>
+          <h3 id="delete-production-chapter-title">Excluir Produção de Capítulo</h3>
         </div>
-        <button type="button" class="btn-close-modal" onclick={() => (showDeleteModal = false)}>
+        <button type="button" class="btn-close-modal" onclick={closeDeleteModal} aria-label="Fechar confirmação de exclusão">
           <X size={18} />
         </button>
       </div>
@@ -1867,7 +1892,7 @@
             if (result.type === 'failure') {
               deleteError = result.data?.message || 'Falha ao excluir produção.';
             } else {
-              showDeleteModal = false;
+              closeDeleteModal();
               await update();
             }
           };
@@ -1894,7 +1919,7 @@
         </div>
 
         <div class="modal-buttons-row">
-          <button type="button" class="btn-cancel-action" onclick={() => (showDeleteModal = false)}>
+          <button type="button" class="btn-cancel-action" onclick={closeDeleteModal}>
             Cancelar
           </button>
           <button
@@ -1918,14 +1943,14 @@
 
 <!-- REWORK RETURN MODAL -->
 {#if showReworkModal}
-  <div class="modal-backdrop" onclick={() => (showReworkModal = false)}>
-    <div class="rework-modal-dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-backdrop" role="presentation" onclick={(event) => dismissModalBackdrop(event, closeReworkModal)}>
+    <div class="rework-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="rework-stage-title" tabindex="-1">
       <div class="modal-top">
         <div class="modal-title-wrap">
           <AlertTriangle size={20} class="text-amber-400" />
-          <h3>Solicitar Retrabalho de Etapa</h3>
+          <h3 id="rework-stage-title">Solicitar Retrabalho de Etapa</h3>
         </div>
-        <button type="button" class="btn-close-modal" onclick={() => (showReworkModal = false)}>
+        <button type="button" class="btn-close-modal" onclick={closeReworkModal} aria-label="Fechar solicitação de retrabalho">
           <X size={18} />
         </button>
       </div>
@@ -1940,7 +1965,7 @@
         use:enhance={() => {
           return async ({ update }) => {
             await update();
-            showReworkModal = false;
+            closeReworkModal();
           };
         }}
         class="rework-form"
@@ -1972,7 +1997,7 @@
         </div>
 
         <div class="modal-buttons-row">
-          <button type="button" class="btn-cancel-action" onclick={() => (showReworkModal = false)}>
+          <button type="button" class="btn-cancel-action" onclick={closeReworkModal}>
             Cancelar
           </button>
           <button
