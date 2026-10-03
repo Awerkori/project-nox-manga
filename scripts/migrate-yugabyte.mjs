@@ -61,7 +61,9 @@ if (!ca) {
   }
 }
 if (!ca) {
-  throw new Error('YUGABYTE_SSL_CA or a readable YUGABYTE_SSL_CERT is required for a verified TLS connection');
+  throw new Error(
+    'YUGABYTE_SSL_CA or a readable YUGABYTE_SSL_CERT is required for a verified TLS connection'
+  );
 }
 
 const client = new pg.Client({
@@ -80,13 +82,17 @@ const client = new pg.Client({
 });
 
 function migrationFiles() {
-  return fs.readdirSync(migrationsDir)
+  return fs
+    .readdirSync(migrationsDir)
     .filter((name) => /^\d+_[a-z0-9_]+\.sql$/i.test(name))
     .sort()
     .map((name) => ({
       name,
       sql: fs.readFileSync(path.join(migrationsDir, name), 'utf8'),
-      checksum: crypto.createHash('sha256').update(fs.readFileSync(path.join(migrationsDir, name))).digest('hex')
+      checksum: crypto
+        .createHash('sha256')
+        .update(fs.readFileSync(path.join(migrationsDir, name)))
+        .digest('hex')
     }));
 }
 
@@ -198,14 +204,14 @@ async function main() {
                ('scan_production_chapters'), ('scan_workflow_stages'),
                ('scan_chapter_stages'), ('scan_chapter_timeline')
       )
-      SELECT COALESCE(array_agg(required_tables.table_name ORDER BY required_tables.table_name)
-               FILTER (WHERE info.table_name IS NULL), ARRAY[]::text[]) AS missing_tables
+      SELECT COALESCE(array_agg(table_name ORDER BY table_name)
+               FILTER (WHERE to_regclass('public.' || table_name) IS NULL), ARRAY[]::text[]) AS missing_tables
       FROM required_tables
-      LEFT JOIN information_schema.tables info
-        ON info.table_schema = 'public' AND info.table_name = required_tables.table_name
     `);
     if (preflight.rows[0].missing_tables.length) {
-      throw new Error(`YSQL preflight failed; missing tables: ${preflight.rows[0].missing_tables.join(', ')}`);
+      throw new Error(
+        `YSQL preflight failed; missing tables: ${preflight.rows[0].missing_tables.join(', ')}`
+      );
     }
 
     const ledger = await client.query(`SELECT to_regclass('public.nox_schema_migrations') AS name`);
@@ -216,7 +222,9 @@ async function main() {
     const pending = migrationFiles().filter((migration) => {
       const existing = appliedByName.get(migration.name);
       if (existing && existing !== migration.checksum) {
-        throw new Error(`Checksum mismatch for already-applied migration ${migration.name}; create a new migration instead of editing history`);
+        throw new Error(
+          `Checksum mismatch for already-applied migration ${migration.name}; create a new migration instead of editing history`
+        );
       }
       return !existing;
     });
@@ -255,10 +263,10 @@ async function main() {
             );
           }
         }
-        await client.query(
-          'INSERT INTO public.nox_schema_migrations (filename, checksum) VALUES ($1, $2)',
-          [migration.name, migration.checksum]
-        );
+        await client.query('INSERT INTO public.nox_schema_migrations (filename, checksum) VALUES ($1, $2)', [
+          migration.name,
+          migration.checksum
+        ]);
         console.log(`applied ${migration.name}`);
       } catch (error) {
         throw new Error(

@@ -6,14 +6,22 @@ on:
   # connection URL and CA through the approved GitHub administration path.
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Run a read-only preflight or apply pending migrations'
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
       confirm:
-        description: "Type APPLY_YSQL to apply pending migrations"
+        description: 'Required only for apply: type APPLY_YSQL'
         required: true
         type: string
 
 jobs:
   deploy:
-    if: inputs.confirm == 'APPLY_YSQL'
+    if: inputs.mode == 'dry-run' || inputs.confirm == 'APPLY_YSQL'
     runs-on: ubuntu-latest
     env:
       YUGABYTE_URL: ${{ secrets.YUGABYTE_URL }}
@@ -34,4 +42,5 @@ jobs:
         run: npm run db:migrate:dry-run
 
       - name: Apply pending YSQL migrations
+        if: inputs.mode == 'apply'
         run: npm run db:migrate -- --all
