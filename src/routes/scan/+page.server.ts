@@ -359,6 +359,38 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     'scan_knowledge_snapshot_ysql'
   );
 
+  // Task transitions already run through YSQL transactions. Keep the queue
+  // itself on that same data plane, including its historical comments, so a
+  // refresh cannot combine an authoritative claim with a stale task list.
+  const taskSnapshotPromise = withTimeout(
+    executeYugabyteSql<any>(`
+      SELECT task.*,
+        COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', comment.id,
+            'task_id', comment.task_id,
+            'content', comment.content,
+            'created_at', comment.created_at,
+            'members', CASE WHEN author.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', author.id,
+              'username', author.username,
+              'display_name', author.display_name,
+              'avatar_id', author.avatar_id
+            ) END
+          ) ORDER BY comment.created_at ASC)
+          FROM public.scan_task_comments comment
+          LEFT JOIN public.members author ON author.id = comment.user_id
+          WHERE comment.task_id = task.id
+        ), '[]'::jsonb) AS scan_task_comments
+      FROM public.scan_tasks task
+      WHERE task.scan_id = $1
+      ORDER BY task.created_at DESC
+    `, [currentScan.id], platform?.env),
+    3_500,
+    null,
+    'scan_task_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -377,7 +409,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     staffNotesRes,
     ,
     ,
-    tasksRes,
+    ,
     ,
     ,
     ,
@@ -541,20 +573,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .order('created_at', { ascending: false }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
-    locals.db
-      .from('scan_tasks')
-      .select(`
-        *,
-        scan_task_comments(
-          id,
-          task_id,
-          content,
-          created_at,
-          members:user_id(id, username, display_name, avatar_id)
-        )
-      `)
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: false }),
+    // Task reads are served by the YSQL snapshot above. This placeholder
+    // preserves the batch's index layout for the incremental migration.
+    Promise.resolve({ data: [] }),
     // YSQL knowledge snapshot is started above. These placeholders preserve
     // the batch shape; legacy reads run only in the explicit fallback below.
     Promise.resolve({ data: [] }),
@@ -764,6 +785,37 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     };
   });
   const activity = activityRes.data || [];
+
+  let tasks: any[];
+  const taskSnapshot = await taskSnapshotPromise;
+  if (taskSnapshot) {
+    tasks = taskSnapshot.rows;
+  } else {
+    console.warn('scan_task_snapshot_ysql_fallback', {
+      scanId: currentScan.id,
+      message: 'ysql snapshot unavailable'
+    });
+    const tasksFallback = await withTimeout(
+      locals.db
+        .from('scan_tasks')
+        .select(`
+          *,
+          scan_task_comments(
+            id,
+            task_id,
+            content,
+            created_at,
+            members:user_id(id, username, display_name, avatar_id)
+          )
+        `)
+        .eq('scan_id', currentScan.id)
+        .order('created_at', { ascending: false }),
+      3_500,
+      { data: [] } as any,
+      'scan_task_snapshot_legacy_fallback'
+    );
+    tasks = tasksFallback.data || [];
+  }
 
   let wikiPages: any[];
   let glossary: any[];
@@ -1056,7 +1108,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     staffNotes,
     stages: workflowStages,
     chapterStages,
-    tasks: tasksRes.data || [],
+    tasks,
     wikiPages,
     glossary,
     references,
