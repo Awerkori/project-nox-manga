@@ -501,6 +501,29 @@
   let newChannelType = $state<'CHAT' | 'ANNOUNCEMENT'>('CHAT');
   let newChannelDesc = $state('');
 
+  function closeDeleteModal() {
+    if (!isDeletingMessage) messageToDelete = null;
+  }
+
+  function closeCreateChannelModal() {
+    showCreateChannelModal = false;
+  }
+
+  function dismissBackdrop(event: MouseEvent, close: () => void) {
+    if (event.target === event.currentTarget) close();
+  }
+
+  function closeOverlayOnEscape(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    if (messageToDelete) {
+      closeDeleteModal();
+    } else if (showCreateChannelModal) {
+      closeCreateChannelModal();
+    } else if (mobileLongPressMsg) {
+      closeMobileMsgMenu();
+    }
+  }
+
   // Pinned message filter
   let showOnlyPinned = $state(false);
   let displayedMessages = $derived(
@@ -619,6 +642,8 @@
     showMentionMenu = false;
   }
 </script>
+
+<svelte:window onkeydown={closeOverlayOnEscape} />
 
 <div class="chat-module-root">
   <!-- Left Sidebar: Channels & Categories -->
@@ -1184,8 +1209,8 @@
 
   <!-- Mobile long-press context menu -->
   {#if mobileLongPressMsg}
-    <div class="mobile-msg-menu-backdrop" onclick={closeMobileMsgMenu}>
-      <div class="mobile-msg-menu" onclick={(e) => e.stopPropagation()}>
+    <div class="mobile-msg-menu-backdrop" role="presentation" onclick={(event) => dismissBackdrop(event, closeMobileMsgMenu)}>
+      <div class="mobile-msg-menu" role="menu" aria-label="Ações da mensagem" tabindex="-1">
         <div class="mobile-msg-menu-header">
           <span class="mobile-menu-author">{mobileLongPressMsg.user?.display_name || mobileLongPressMsg.user?.username || 'Membro'}</span>
           <span class="mobile-menu-preview">{mobileLongPressMsg.content?.slice(0, 60)}{mobileLongPressMsg.content?.length > 60 ? '...' : ''}</span>
@@ -1220,14 +1245,14 @@
 
   <!-- Delete Confirmation Modal (Requirement 17: Excluir esta mensagem?) -->
   {#if messageToDelete}
-    <div class="delete-modal-backdrop" onclick={() => (messageToDelete = null)}>
-      <div class="delete-modal-card" onclick={(e) => e.stopPropagation()}>
+    <div class="delete-modal-backdrop" role="presentation" onclick={(event) => dismissBackdrop(event, closeDeleteModal)}>
+      <div class="delete-modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-message-dialog-title" tabindex="-1">
         <div class="delete-modal-header">
           <div class="delete-modal-title-row">
             <Trash2 size={18} class="delete-modal-icon" />
-            <h3 class="delete-modal-title">Excluir esta mensagem?</h3>
+            <h3 id="delete-message-dialog-title" class="delete-modal-title">Excluir esta mensagem?</h3>
           </div>
-          <button type="button" class="btn-close-modal" onclick={() => (messageToDelete = null)}>
+          <button type="button" class="btn-close-modal" aria-label="Fechar confirmação de exclusão" onclick={closeDeleteModal}>
             <X size={16} />
           </button>
         </div>
@@ -1245,7 +1270,7 @@
           <button
             type="button"
             class="btn-modal-cancel"
-            onclick={() => (messageToDelete = null)}
+            onclick={closeDeleteModal}
             disabled={isDeletingMessage}
           >
             Cancelar
@@ -1328,11 +1353,11 @@
 
 <!-- Modal: Criar Novo Canal -->
 {#if showCreateChannelModal}
-  <div class="modal-backdrop" onclick={() => (showCreateChannelModal = false)}>
-    <div class="modal-card-sm" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-backdrop" role="presentation" onclick={(event) => dismissBackdrop(event, closeCreateChannelModal)}>
+    <div class="modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="create-channel-dialog-title" tabindex="-1">
       <div class="modal-header">
-        <h3 class="modal-title">Novo Canal de Equipe</h3>
-        <button type="button" class="btn-icon-xs" onclick={() => (showCreateChannelModal = false)}>
+        <h3 id="create-channel-dialog-title" class="modal-title">Novo Canal de Equipe</h3>
+        <button type="button" class="btn-icon-xs" aria-label="Fechar criação de canal" onclick={closeCreateChannelModal}>
           <X size={16} />
         </button>
       </div>
@@ -1342,7 +1367,7 @@
         action="?/createChannel"
         use:enhance={() => {
           return async ({ update }) => {
-            showCreateChannelModal = false;
+            closeCreateChannelModal();
             await update();
           };
         }}
@@ -1392,7 +1417,7 @@
         </div>
 
         <div class="modal-footer-actions">
-          <button type="button" class="btn-secondary" onclick={() => (showCreateChannelModal = false)}>
+          <button type="button" class="btn-secondary" onclick={closeCreateChannelModal}>
             Cancelar
           </button>
           <button type="submit" class="btn-primary" disabled={!newChannelName.trim()}>
