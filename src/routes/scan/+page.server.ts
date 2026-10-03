@@ -391,6 +391,29 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     'scan_task_snapshot_ysql'
   );
 
+  // Personal inbox reads stay on the same authoritative data plane as task
+  // transitions. Both queries are scoped to the authenticated Scan member.
+  const notificationSnapshotPromise = withTimeout(
+    Promise.all([
+      executeYugabyteSql<any>(`
+        SELECT notification.*
+        FROM public.scan_notifications notification
+        WHERE notification.scan_id = $1 AND notification.user_id = $2
+        ORDER BY notification.created_at DESC
+        LIMIT 50
+      `, [currentScan.id, locals.user.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT preference.*
+        FROM public.scan_notification_preferences preference
+        WHERE preference.scan_id = $1 AND preference.user_id = $2
+        LIMIT 1
+      `, [currentScan.id, locals.user.id], platform?.env)
+    ]),
+    3_500,
+    null,
+    'scan_notification_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -418,8 +441,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ,
     ,
     ,
-    notificationsRes,
-    notificationPrefsRes,
+    ,
+    ,
     tutorialsRes,
     qcIssuesRes,
     ,
@@ -599,19 +622,10 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     // explicit availability fallback below if that snapshot is unavailable.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
-    locals.db
-      .from('scan_notifications')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id)
-      .order('created_at', { ascending: false })
-      .limit(50),
-    locals.db
-      .from('scan_notification_preferences')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id)
-      .maybeSingle(),
+    // Personal inbox reads are served by the YSQL snapshot above. These
+    // placeholders preserve the existing batch index during the migration.
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: null }),
     locals.db
       .from('scan_academy_tutorials')
       .select('*')
@@ -785,6 +799,43 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     };
   });
   const activity = activityRes.data || [];
+
+  let notifications: any[];
+  let notificationPrefs: any;
+  const notificationSnapshot = await notificationSnapshotPromise;
+  if (notificationSnapshot) {
+    const [notificationsResult, preferencesResult] = notificationSnapshot;
+    notifications = notificationsResult.rows;
+    notificationPrefs = preferencesResult.rows[0] || null;
+  } else {
+    console.warn('scan_notification_snapshot_ysql_fallback', {
+      scanId: currentScan.id,
+      userId: locals.user.id,
+      message: 'ysql snapshot unavailable'
+    });
+    const [notificationsFallback, preferencesFallback] = await withTimeout(
+      Promise.all([
+        locals.db
+          .from('scan_notifications')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .eq('user_id', locals.user.id)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        locals.db
+          .from('scan_notification_preferences')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .eq('user_id', locals.user.id)
+          .maybeSingle()
+      ]),
+      3_500,
+      [{ data: [] }, { data: null }] as any,
+      'scan_notification_snapshot_legacy_fallback'
+    );
+    notifications = notificationsFallback.data || [];
+    notificationPrefs = preferencesFallback.data || null;
+  }
 
   let tasks: any[];
   const taskSnapshot = await taskSnapshotPromise;
@@ -1119,8 +1170,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     messages: chatMessages,
     channelReadStates,
     applicationAnswers,
-    notifications: notificationsRes.data || [],
-    notificationPrefs: notificationPrefsRes.data || null,
+    notifications,
+    notificationPrefs,
     tutorials: tutorialsRes.data || [],
     qcIssues: qcIssuesRes.data || [],
     productionChapters,
