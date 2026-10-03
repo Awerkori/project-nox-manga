@@ -44,7 +44,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       productionChapters: [],
       pipelineTemplates: [],
       muralPosts: [],
-      attachments: []
+      attachments: [],
+      chapterNotes: []
     };
   }
 
@@ -128,7 +129,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       productionChapters: [],
       pipelineTemplates: [],
       muralPosts: [],
-      attachments: []
+      attachments: [],
+      chapterNotes: []
     };
   }
 
@@ -638,6 +640,44 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     console.warn('scan_pipeline_files_ysql_fallback', { message: String(error?.message || 'unknown').slice(0, 240) });
   }
 
+  // Notes are a separate, editable collaboration stream. They are read from
+  // the YSQL data plane rather than the retired PostgREST/RPC path; only the
+  // already-authorized Scan member reaches this query.
+  let chapterNotes: any[] = [];
+  try {
+    const ysqlNotes = await withTimeout(
+      executeYugabyteSql<any>(`
+        SELECT note.*,
+          jsonb_build_object(
+            'id', author.id, 'username', author.username,
+            'display_name', author.display_name, 'avatar_id', author.avatar_id
+          ) AS author,
+          CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
+          ) END AS stage
+        FROM public.scan_chapter_notes note
+        JOIN public.members author ON author.id = note.author_id
+        LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
+        WHERE note.scan_id = $1 AND note.deleted_at IS NULL
+        ORDER BY note.is_pinned DESC, note.created_at ASC
+      `, [currentScan.id], platform?.env),
+      2_000,
+      { rows: [], rowCount: 0 },
+      'scan_chapter_notes_ysql'
+    );
+    chapterNotes = ysqlNotes.rows.map((note: any) => ({
+      ...note,
+      canEdit: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
+      canDelete: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
+      canPin: isScanLeader || isGlobalEditor
+    }));
+  } catch (error: any) {
+    console.warn('scan_chapter_notes_ysql_unavailable', {
+      scanId: currentScan.id,
+      message: String(error?.message || 'unknown').slice(0, 240)
+    });
+  }
+
   return {
     authenticated: true,
     isMember: true,
@@ -683,6 +723,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     muralPosts,
     attachments: attachmentsRes.data || [],
     productionFiles,
+    chapterNotes,
     chapterTimeline: chapterTimelineRes.data || [],
     workOverrides: workOverridesRes.data || [],
     creditSnapshots: creditSnapshotsRes.data || [],
@@ -2780,6 +2821,89 @@ export const actions: Actions = {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
     return { success: true, result: data };
+  },
+
+  createChapterNote: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const scanId = String(formData.get('scan_id') || '');
+    const productionChapterId = String(formData.get('production_chapter_id') || '');
+    const stageId = formData.get('stage_id') ? String(formData.get('stage_id')) : null;
+    const body = String(formData.get('body') || '').trim();
+    const kind = String(formData.get('kind') || 'NORMAL').toUpperCase();
+    if (!scanId || !productionChapterId || !body) return fail(400, { message: 'Escreva uma observação para o capítulo.' });
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.create_scan_chapter_note_ysql($1, $2, $3, $4, $5, $6, $7) AS result',
+        [scanId, productionChapterId, locals.user.id, locals.role === 'ADMIN', stageId, body, kind], platform?.env
+      );
+      return { success: true, chapterNote: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_chapter_note_create_ysql_failed', { scanId, productionChapterId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /CHAPTER_NOTE_(BODY_INVALID|KIND_INVALID|STAGE_INVALID)|PRODUCTION_CHAPTER_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'O capítulo, etapa ou sua permissão mudou. Atualize a página.' : 'Não foi possível salvar a observação com segurança agora.' });
+    }
+  },
+
+  editChapterNote: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const noteId = String(formData.get('note_id') || '');
+    const body = String(formData.get('body') || '').trim();
+    const kind = String(formData.get('kind') || '').toUpperCase() || null;
+    if (!noteId || !body) return fail(400, { message: 'A observação não pode ficar vazia.' });
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.edit_scan_chapter_note_ysql($1, $2, $3, $4, $5) AS result',
+        [noteId, locals.user.id, locals.role === 'ADMIN', body, kind], platform?.env
+      );
+      return { success: true, chapterNote: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_chapter_note_edit_ysql_failed', { noteId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /CHAPTER_NOTE_(NOT_FOUND|BODY_INVALID|KIND_INVALID|EDIT_FORBIDDEN)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A observação foi alterada ou você não pode editá-la. Atualize a página.' : 'Não foi possível editar a observação com segurança agora.' });
+    }
+  },
+
+  deleteChapterNote: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const noteId = String(formData.get('note_id') || '');
+    if (!noteId) return fail(400, { message: 'Observação ausente.' });
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.delete_scan_chapter_note_ysql($1, $2, $3) AS result',
+        [noteId, locals.user.id, locals.role === 'ADMIN'], platform?.env
+      );
+      return { success: true, chapterNote: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_chapter_note_delete_ysql_failed', { noteId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /CHAPTER_NOTE_(NOT_FOUND|DELETE_FORBIDDEN)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A observação foi alterada ou você não pode removê-la. Atualize a página.' : 'Não foi possível remover a observação com segurança agora.' });
+    }
+  },
+
+  pinChapterNote: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const noteId = String(formData.get('note_id') || '');
+    const pinned = String(formData.get('pinned') || '') === 'true';
+    if (!noteId) return fail(400, { message: 'Observação ausente.' });
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.pin_scan_chapter_note_ysql($1, $2, $3, $4) AS result',
+        [noteId, locals.user.id, locals.role === 'ADMIN', pinned], platform?.env
+      );
+      return { success: true, chapterNote: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_chapter_note_pin_ysql_failed', { noteId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /CHAPTER_NOTE_(NOT_FOUND|PIN_FORBIDDEN)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A observação foi alterada ou você não pode fixá-la. Atualize a página.' : 'Não foi possível atualizar o destaque com segurança agora.' });
+    }
   },
 
   publishProductionChapter: async ({ request, locals, platform }) => {

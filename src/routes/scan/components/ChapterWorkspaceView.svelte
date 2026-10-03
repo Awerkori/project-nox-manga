@@ -21,11 +21,16 @@
     RotateCcw,
     History,
     ShieldCheck,
-    Check
+    Check,
+    Send,
+    Pin,
+    Pencil,
+    Trash2
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { relativeTime } from '$lib/types';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
 
   let {
@@ -37,6 +42,7 @@
     chapterStages = [],
     productionFiles = [],
     chapterTimeline = [],
+    chapterNotes = [],
     qcIssues = [],
     onBackToPipeline = () => {}
   } = $props();
@@ -72,6 +78,15 @@
     chapterTimeline
       .filter((t: any) => t.production_chapter_id === actualChapterId)
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  );
+
+  let currentChapterNotes = $derived(
+    chapterNotes
+      .filter((note: any) => note.production_chapter_id === actualChapterId)
+      .sort((a: any, b: any) => Number(b.is_pinned) - Number(a.is_pinned) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  );
+  let highlightedChapterNotes = $derived(
+    currentChapterNotes.filter((note: any) => note.is_pinned || note.kind === 'IMPORTANT' || note.kind === 'PENDING')
   );
 
   // QC issues for this chapter
@@ -136,6 +151,23 @@
   let qcPageNumber = $state(1);
   let qcType = $state('TYPESET');
   let qcComment = $state('');
+  let chapterNoteBody = $state('');
+  let chapterNoteKind = $state<'NORMAL' | 'IMPORTANT' | 'PENDING'>('NORMAL');
+  let editingNoteId = $state<string | null>(null);
+  let editingNoteBody = $state('');
+  let editingNoteKind = $state<'NORMAL' | 'IMPORTANT' | 'PENDING'>('NORMAL');
+
+  function beginNoteEdit(note: any) {
+    editingNoteId = note.id;
+    editingNoteBody = note.body || '';
+    editingNoteKind = note.kind || 'NORMAL';
+  }
+
+  function cancelNoteEdit() {
+    editingNoteId = null;
+    editingNoteBody = '';
+    editingNoteKind = 'NORMAL';
+  }
 
   function formatBytes(bytes: number): string {
     if (!bytes || bytes === 0) return '0 B';
@@ -767,14 +799,117 @@
         <div class="panel-section-header">
           <div>
             <h2 class="panel-title">Chat & Notas do Capítulo</h2>
-            <p class="panel-desc">Comunicação e orientações internas entre os membros envolvidos na produção.</p>
+            <p class="panel-desc">Contexto persistente entre etapas. As observações acompanham o capítulo sem substituir o chat geral da Scan.</p>
           </div>
+          <span class="note-count-badge">{currentChapterNotes.length} nota{currentChapterNotes.length === 1 ? '' : 's'}</span>
         </div>
 
-        <div class="notes-placeholder-box">
-          <MessageSquare size={32} class="text-purple-400" />
-          <p>Para interações em tempo real com a equipe completa da scan, utilize a aba geral <strong>Chat de Equipe</strong> no menu lateral.</p>
-        </div>
+        {#if highlightedChapterNotes.length > 0}
+          <section class="chapter-note-highlights" aria-label="Observações importantes">
+            <div class="note-highlight-heading"><Pin size={15} /><span>Observações em destaque</span></div>
+            <div class="note-highlight-list">
+              {#each highlightedChapterNotes as note (note.id)}
+                <button type="button" class="note-highlight-item kind-{note.kind.toLowerCase()}" onclick={() => document.getElementById(`chapter-note-${note.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+                  <span>{note.kind === 'PENDING' ? 'Pendência' : note.is_pinned ? 'Fixada' : 'Importante'}</span>
+                  <strong>{note.body}</strong>
+                </button>
+              {/each}
+            </div>
+          </section>
+        {/if}
+
+        <form
+          method="POST"
+          action="?/createChapterNote"
+          use:enhance={() => {
+            return async ({ result, update }) => {
+              if (result.type === 'success') {
+                chapterNoteBody = '';
+                chapterNoteKind = 'NORMAL';
+              }
+              await update();
+            };
+          }}
+          class="chapter-note-composer"
+        >
+          <input type="hidden" name="scan_id" value={scanId} />
+          <input type="hidden" name="production_chapter_id" value={actualChapterId} />
+          <input type="hidden" name="stage_id" value={activeStageItem?.stage_id || ''} />
+          <div class="note-composer-topline">
+            <label for="chapter-note-body">Deixar observação para as próximas etapas</label>
+            <select name="kind" bind:value={chapterNoteKind} aria-label="Tipo de observação">
+              <option value="NORMAL">Normal</option>
+              <option value="IMPORTANT">Importante</option>
+              <option value="PENDING">Pendência</option>
+            </select>
+          </div>
+          <textarea id="chapter-note-body" name="body" bind:value={chapterNoteBody} maxlength="3000" placeholder="Ex.: manter a onomatopeia original da página 8…" required></textarea>
+          <div class="note-composer-footer">
+            <span>A etapa atual será registrada quando disponível.</span>
+            <button type="submit" class="btn-send-chapter-note"><Send size={15} />Enviar observação</button>
+          </div>
+        </form>
+
+        {#if currentChapterNotes.length > 0}
+          <div class="chapter-notes-thread" aria-live="polite">
+            {#each currentChapterNotes as note (note.id)}
+              <article id="chapter-note-{note.id}" class="chapter-note-message kind-{note.kind.toLowerCase()}" class:is-pinned={note.is_pinned}>
+                <UserAvatar user={note.author} size={36} />
+                <div class="chapter-note-content">
+                  <header class="chapter-note-meta">
+                    <strong>{note.author?.display_name || note.author?.username || 'Membro'}</strong>
+                    {#if note.stage?.name}<span class="chapter-note-stage">{note.stage.name}</span>{/if}
+                    {#if note.is_pinned}<span class="chapter-note-pin"><Pin size={11} />Fixada</span>{/if}
+                    <time datetime={note.created_at} title={new Date(note.created_at).toLocaleString('pt-BR')}>{relativeTime(note.created_at)}</time>
+                  </header>
+                  {#if editingNoteId === note.id}
+                    <form
+                      method="POST"
+                      action="?/editChapterNote"
+                      use:enhance={() => {
+                        return async ({ result, update }) => {
+                          if (result.type === 'success') cancelNoteEdit();
+                          await update();
+                        };
+                      }}
+                      class="chapter-note-edit-form"
+                    >
+                      <input type="hidden" name="note_id" value={note.id} />
+                      <select name="kind" bind:value={editingNoteKind} aria-label="Tipo de observação"><option value="NORMAL">Normal</option><option value="IMPORTANT">Importante</option><option value="PENDING">Pendência</option></select>
+                      <textarea name="body" bind:value={editingNoteBody} maxlength="3000" required></textarea>
+                      <div><button type="submit" class="btn-note-inline-save">Salvar</button><button type="button" class="btn-note-inline-cancel" onclick={cancelNoteEdit}>Cancelar</button></div>
+                    </form>
+                  {:else}
+                    <p class="chapter-note-body">{note.body}</p>
+                  {/if}
+                  {#if note.canEdit || note.canDelete || note.canPin}
+                    <div class="chapter-note-actions">
+                      {#if note.canEdit}<button type="button" onclick={() => beginNoteEdit(note)}><Pencil size={13} />Editar</button>{/if}
+                      {#if note.canPin}
+                        <form method="POST" action="?/pinChapterNote" use:enhance>
+                          <input type="hidden" name="note_id" value={note.id} />
+                          <input type="hidden" name="pinned" value={note.is_pinned ? 'false' : 'true'} />
+                          <button type="submit"><Pin size={13} />{note.is_pinned ? 'Desafixar' : 'Fixar'}</button>
+                        </form>
+                      {/if}
+                      {#if note.canDelete}
+                        <form method="POST" action="?/deleteChapterNote" use:enhance>
+                          <input type="hidden" name="note_id" value={note.id} />
+                          <button type="submit" class="note-delete"><Trash2 size={13} />Remover</button>
+                        </form>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              </article>
+            {/each}
+          </div>
+        {:else}
+          <div class="notes-placeholder-box">
+            <MessageSquare size={32} class="text-purple-400" />
+            <p>Nenhuma observação ainda. Registre contexto importante para quem pegar a próxima etapa.</p>
+          </div>
+        {/if}
       </section>
     {/if}
   </div>
@@ -2238,6 +2373,192 @@
     border-radius: 10px;
     color: #94a3b8;
     font-size: 13px;
+  }
+
+  .chapter-notes-panel {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .chapter-notes-panel .panel-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .note-count-badge,
+  .chapter-note-stage,
+  .chapter-note-pin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+    border-radius: 999px;
+    border: 1px solid rgba(167, 139, 250, 0.28);
+    background: rgba(124, 58, 237, 0.12);
+    color: #ddd6fe;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.22rem 0.5rem;
+  }
+
+  .chapter-note-highlights,
+  .chapter-note-composer,
+  .chapter-notes-thread {
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .chapter-note-highlights {
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.09), rgba(124, 58, 237, 0.06));
+    padding: 0.875rem;
+  }
+
+  .note-highlight-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #fde68a;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 0.625rem;
+  }
+
+  .note-highlight-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  .note-highlight-item {
+    min-width: 0;
+    text-align: left;
+    display: grid;
+    gap: 0.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 8, 18, 0.58);
+    border-radius: 8px;
+    padding: 0.6rem 0.7rem;
+    color: #e5e7eb;
+    cursor: pointer;
+  }
+
+  .note-highlight-item:hover { border-color: rgba(251, 191, 36, 0.5); }
+  .note-highlight-item span { color: #fbbf24; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+  .note-highlight-item strong { overflow-wrap: anywhere; font-size: 0.8rem; line-height: 1.4; }
+
+  .chapter-note-composer {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 12px;
+    background: rgba(9, 7, 18, 0.72);
+    padding: 0.9rem;
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .note-composer-topline,
+  .note-composer-footer,
+  .chapter-note-meta,
+  .chapter-note-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .note-composer-topline { justify-content: space-between; }
+  .note-composer-topline label { color: #e2e8f0; font-size: 0.84rem; font-weight: 750; }
+  .note-composer-topline select,
+  .chapter-note-edit-form select {
+    color: #e2e8f0;
+    background: #0d0c18;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 7px;
+    padding: 0.36rem 0.5rem;
+  }
+
+  .chapter-note-composer textarea,
+  .chapter-note-edit-form textarea {
+    width: 100%;
+    min-height: 5.25rem;
+    resize: vertical;
+    box-sizing: border-box;
+    color: #e5e7eb;
+    background: #080711;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    padding: 0.7rem;
+    font: inherit;
+    line-height: 1.5;
+  }
+
+  .chapter-note-composer textarea:focus,
+  .chapter-note-edit-form textarea:focus { outline: 2px solid rgba(139, 92, 246, 0.72); outline-offset: 1px; }
+  .note-composer-footer { justify-content: space-between; color: #94a3b8; font-size: 0.76rem; }
+
+  .btn-send-chapter-note,
+  .btn-note-inline-save,
+  .btn-note-inline-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.25rem;
+    border-radius: 7px;
+    padding: 0.45rem 0.72rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 750;
+  }
+
+  .btn-send-chapter-note,
+  .btn-note-inline-save { background: #6d28d9; color: white; }
+  .btn-send-chapter-note:hover,
+  .btn-note-inline-save:hover { background: #7c3aed; }
+  .btn-note-inline-cancel { background: transparent; border-color: rgba(148, 163, 184, 0.25); color: #cbd5e1; margin-left: 0.45rem; }
+
+  .chapter-notes-thread { display: grid; gap: 0.65rem; }
+  .chapter-note-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    border-radius: 10px;
+    background: rgba(10, 10, 20, 0.7);
+  }
+
+  .chapter-note-message.kind-important { border-left: 3px solid #f59e0b; }
+  .chapter-note-message.kind-pending { border-left: 3px solid #60a5fa; }
+  .chapter-note-message.is-pinned { box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.18); }
+  .chapter-note-content { flex: 1; min-width: 0; }
+  .chapter-note-meta { flex-wrap: wrap; color: #94a3b8; font-size: 0.75rem; }
+  .chapter-note-meta strong { color: #f1f5f9; font-size: 0.84rem; }
+  .chapter-note-meta time { margin-left: auto; white-space: nowrap; }
+  .chapter-note-pin { color: #fde68a; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); }
+  .chapter-note-body { margin: 0.42rem 0; color: #dbe4f0; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .chapter-note-actions { flex-wrap: wrap; margin-top: 0.35rem; }
+  .chapter-note-actions form { margin: 0; }
+  .chapter-note-actions button { display: inline-flex; align-items: center; gap: 0.25rem; border: 0; padding: 0.2rem 0; background: transparent; color: #a5b4fc; font: inherit; font-size: 0.75rem; cursor: pointer; }
+  .chapter-note-actions button:hover { color: #ddd6fe; }
+  .chapter-note-actions .note-delete { color: #fda4af; }
+  .chapter-note-edit-form { display: grid; gap: 0.45rem; margin: 0.5rem 0; }
+
+  @media (max-width: 640px) {
+    .chapter-notes-panel .panel-section-header,
+    .note-composer-topline,
+    .note-composer-footer { align-items: stretch; flex-direction: column; }
+    .note-composer-footer { gap: 0.55rem; }
+    .btn-send-chapter-note { width: 100%; }
+    .chapter-note-meta time { width: 100%; margin-left: 0; }
+    .note-highlight-list { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 640px) {
