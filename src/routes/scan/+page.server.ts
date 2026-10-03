@@ -141,6 +141,12 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 
   const activeScanId = url.searchParams.get('id') || myScans[0].id;
   const currentScan = myScans.find((s: any) => s.id === activeScanId) || myScans[0];
+  const isScanLeader = ['OWNER', 'ADMIN'].includes(currentScan.role);
+  const isGlobalEditor = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
+  const canManageRecruitment = isScanLeader || isGlobalEditor;
+  // This is intentionally narrower than management. The historical policy
+  // exposes free-form candidate answers to scan leaders and global ADMIN only.
+  const canReadAllApplicationAnswers = isScanLeader || locals.role === 'ADMIN';
 
   // Start the authoritative editorial graph immediately. It deliberately runs
   // beside the rest of the workspace batch: a member should not wait for
@@ -253,6 +259,77 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     'scan_chat_snapshot_ysql'
   );
 
+  // The recruitment board contains both public vacancy data and private
+  // candidate answers. Fetch it directly from YSQL, but carry the legacy RLS
+  // visibility rules into the query: ordinary members can inspect scan
+  // applications, while only the applicant, a scan leader, or global ADMIN
+  // receives the answer text.
+  const recruitmentSnapshotPromise = withTimeout(
+    Promise.all([
+      executeYugabyteSql<any>(`
+        SELECT position.*
+        FROM public.scan_positions position
+        WHERE position.scan_id = $1
+          AND (position.is_active = true OR $2::boolean)
+        ORDER BY position.display_order ASC
+      `, [currentScan.id, canManageRecruitment], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT opening.*,
+          CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', position.id, 'name', position.name, 'description', position.description,
+            'icon', position.icon, 'display_order', position.display_order
+          ) END AS scan_positions
+        FROM public.scan_recruitment_openings opening
+        LEFT JOIN public.scan_positions position ON position.id = opening.position_id
+        WHERE opening.scan_id = $1
+          AND (opening.status = 'OPEN' OR $2::boolean)
+        ORDER BY opening.created_at DESC
+      `, [currentScan.id, canManageRecruitment], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT application.*,
+          CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', position.id, 'name', position.name, 'description', position.description,
+            'icon', position.icon, 'display_order', position.display_order
+          ) END AS scan_positions,
+          CASE WHEN opening.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', opening.id, 'title', opening.title
+          ) END AS scan_recruitment_openings,
+          CASE WHEN applicant.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', applicant.id, 'username', applicant.username,
+            'display_name', applicant.display_name, 'avatar_id', applicant.avatar_id
+          ) END AS members
+        FROM public.scan_applications application
+        LEFT JOIN public.scan_positions position ON position.id = application.position_id
+        LEFT JOIN public.scan_recruitment_openings opening ON opening.id = application.opening_id
+        LEFT JOIN public.members applicant ON applicant.id = application.user_id
+        WHERE application.scan_id = $1
+        ORDER BY application.created_at DESC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT question.*
+        FROM public.scan_recruitment_questions question
+        WHERE question.scan_id = $1
+        ORDER BY question.display_order ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT answer.*,
+          CASE WHEN question.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', question.id, 'question', question.question,
+            'question_type', question.question_type, 'display_order', question.display_order
+          ) END AS question
+        FROM public.scan_application_answers answer
+        JOIN public.scan_applications application ON application.id = answer.application_id
+        LEFT JOIN public.scan_recruitment_questions question ON question.id = answer.question_id
+        WHERE application.scan_id = $1
+          AND ($2::boolean OR application.user_id = $3)
+        ORDER BY answer.created_at ASC
+      `, [currentScan.id, canReadAllApplicationAnswers, locals.user.id], platform?.env)
+    ]),
+    3_500,
+    null,
+    'scan_recruitment_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -263,9 +340,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     catalogWorksRes,
     transferRequestsRes,
     incomingTransferRes,
-    positionsRes,
-    openingsRes,
-    applicationsRes,
+    ,
+    ,
+    ,
     activityRes,
     memberPositionsRes,
     staffNotesRes,
@@ -277,7 +354,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     referencesRes,
     integrationsRes,
     uploadersRes,
-    recruitmentQuestionsRes,
+    ,
     ,
     ,
     notificationsRes,
@@ -295,7 +372,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     workOverridesRes,
     creditSnapshotsRes,
     ,
-    applicationAnswersRes,
+    ,
     seenStagesRes
   ] = await withTimeout(
     Promise.all([
@@ -385,29 +462,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .eq('to_user_id', locals.user.id)
       .eq('status', 'PENDING')
       .maybeSingle(),
-    locals.db
-      .from('scan_positions')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_recruitment_openings')
-      .select(`
-        *,
-        scan_positions(id, name, description, icon, display_order)
-      `)
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_applications')
-      .select(`
-        *,
-        scan_positions(id, name, description, icon, display_order),
-        scan_recruitment_openings(id, title),
-        members:user_id(id, username, display_name, avatar_id)
-      `)
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: false }),
+    // Recruitment is loaded from the YSQL snapshot below. Keep its legacy
+    // reads out of the healthy request path.
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_activity')
       .select(`
@@ -496,11 +555,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         works:work_id(id, title)
       `)
       .eq('scan_id', currentScan.id),
-    locals.db
-      .from('scan_recruitment_questions')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('display_order', { ascending: true }),
+    Promise.resolve({ data: [] }),
     // YSQL chat snapshot is started above. Retired reads are only used by the
     // explicit availability fallback below if that snapshot is unavailable.
     Promise.resolve({ data: [] }),
@@ -568,12 +623,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .eq('scan_id', currentScan.id)
       .order('role_order', { ascending: true }),
     Promise.resolve({ data: [] }),
-    locals.db
-      .from('scan_application_answers')
-      .select(`
-        *,
-        question:question_id(id, question, question_type, display_order)
-      `),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_pipeline_stage_seen')
       .select('chapter_stage_id, availability_version, seen_at')
@@ -621,20 +671,81 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   const catalogWorks = catalogWorksRes.data || [];
   const transferRequests = transferRequestsRes.data || [];
   const incomingTransfer = incomingTransferRes.data || null;
-  const positions = positionsRes.data || [];
-  const openings = (openingsRes.data || []).map((op: any) => {
-    const apps = (applicationsRes.data || []).filter((a: any) => a.opening_id === op.id);
+  let positions: any[];
+  let recruitmentOpenings: any[];
+  let applications: any[];
+  let recruitmentQuestions: any[];
+  let applicationAnswers: any[];
+  const recruitmentSnapshot = await recruitmentSnapshotPromise;
+  if (recruitmentSnapshot) {
+    const [positionsResult, openingsResult, applicationsResult, questionsResult, answersResult] = recruitmentSnapshot;
+    positions = positionsResult.rows;
+    recruitmentOpenings = openingsResult.rows;
+    applications = applicationsResult.rows;
+    recruitmentQuestions = questionsResult.rows;
+    applicationAnswers = answersResult.rows;
+  } else {
+    console.warn('scan_recruitment_snapshot_ysql_fallback', {
+      scanId: currentScan.id,
+      message: 'ysql snapshot unavailable'
+    });
+    const [positionsFallback, openingsFallback, applicationsFallback, questionsFallback, answersFallback] = await withTimeout(
+      Promise.all([
+        locals.db
+          .from('scan_positions')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('display_order', { ascending: true }),
+        locals.db
+          .from('scan_recruitment_openings')
+          .select(`
+            *,
+            scan_positions(id, name, description, icon, display_order)
+          `)
+          .eq('scan_id', currentScan.id)
+          .order('created_at', { ascending: false }),
+        locals.db
+          .from('scan_applications')
+          .select(`
+            *,
+            scan_positions(id, name, description, icon, display_order),
+            scan_recruitment_openings(id, title),
+            members:user_id(id, username, display_name, avatar_id)
+          `)
+          .eq('scan_id', currentScan.id)
+          .order('created_at', { ascending: false }),
+        locals.db
+          .from('scan_recruitment_questions')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('display_order', { ascending: true }),
+        locals.db
+          .from('scan_application_answers')
+          .select(`
+            *,
+            question:question_id(id, question, question_type, display_order)
+          `)
+      ]),
+      3_500,
+      Array.from({ length: 5 }, () => ({ data: [] })) as any,
+      'scan_recruitment_snapshot_legacy_fallback'
+    );
+    positions = positionsFallback.data || [];
+    recruitmentOpenings = openingsFallback.data || [];
+    applications = applicationsFallback.data || [];
+    recruitmentQuestions = questionsFallback.data || [];
+    applicationAnswers = answersFallback.data || [];
+  }
+
+  const openings = recruitmentOpenings.map((op: any) => {
+    const apps = applications.filter((a: any) => a.opening_id === op.id);
     return {
       ...op,
       applications_count: apps.length,
       pending_count: apps.filter((a: any) => ['PENDING', 'UNDER_REVIEW'].includes(a.status)).length
     };
   });
-  const applications = applicationsRes.data || [];
   const activity = activityRes.data || [];
-
-  const isScanLeader = ['OWNER', 'ADMIN'].includes(currentScan.role);
-  const isGlobalEditor = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
 
   const staffNotes = (staffNotesRes.data || []).map((n: any) => ({
     id: n.id,
@@ -891,11 +1002,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     references: referencesRes.data || [],
     integrations: integrationsRes.data || [],
     workUploaders: uploadersRes.data || [],
-    recruitmentQuestions: recruitmentQuestionsRes.data || [],
+    recruitmentQuestions,
     channels: chatChannels,
     messages: chatMessages,
     channelReadStates,
-    applicationAnswers: applicationAnswersRes.data || [],
+    applicationAnswers,
     notifications: notificationsRes.data || [],
     notificationPrefs: notificationPrefsRes.data || null,
     tutorials: tutorialsRes.data || [],
