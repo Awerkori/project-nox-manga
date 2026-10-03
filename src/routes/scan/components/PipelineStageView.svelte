@@ -4189,17 +4189,8 @@
   }
 
   @media (max-width: 480px) {
-    .canonical-stages-nav-bar {
-      overflow-x: auto;
-      scrollbar-width: thin;
-      -webkit-overflow-scrolling: touch;
-    }
-
     .stage-pills-scroll {
-      flex-wrap: nowrap;
-      min-width: max-content;
       gap: 0.35rem;
-      padding-bottom: 0.3rem;
     }
 
     .stage-nav-pill {
