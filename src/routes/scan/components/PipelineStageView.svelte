@@ -2773,23 +2773,17 @@
   /* Canonical stages horizontal nav bar */
   .canonical-stages-nav-bar {
     width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
     padding: 0.25rem 0 0.75rem;
     margin-bottom: 0.75rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
-  .canonical-stages-nav-bar::-webkit-scrollbar {
-    display: none;
-  }
-
   .stage-pills-scroll {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.5rem;
-    min-width: min-content;
+    min-width: 0;
   }
 
   .stage-nav-pill {
@@ -4195,8 +4189,17 @@
   }
 
   @media (max-width: 480px) {
+    .canonical-stages-nav-bar {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+
     .stage-pills-scroll {
+      flex-wrap: nowrap;
+      min-width: max-content;
       gap: 0.35rem;
+      padding-bottom: 0.3rem;
     }
 
     .stage-nav-pill {
