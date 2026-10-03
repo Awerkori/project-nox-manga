@@ -1099,7 +1099,6 @@
                         };
                       }}
                       class="inline-claim-form"
-                      onclick={(e) => e.stopPropagation()}
                     >
                       <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
                       <button
@@ -1107,6 +1106,7 @@
                         class="btn-claim-primary-compact"
                         class:btn-claim-disabled={!claimEvaluation.canClaim}
                         disabled={isClaiming || !claimEvaluation.canClaim}
+                        onclick={(e) => e.stopPropagation()}
                         title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Intervenção Administrativa' : 'Pegar etapa')}
                       >
                         {#if isClaiming}
