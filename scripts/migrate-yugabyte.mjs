@@ -3,8 +3,10 @@
  * The authoritative Project Nox schema lives in YugabyteDB Aeon (YSQL).
  * This intentionally has no Supabase CLI or Supabase credential dependency.
  *
- * Required environment: YUGABYTE_HOST, YUGABYTE_USER, YUGABYTE_PASSWORD,
- * YUGABYTE_DATABASE and either YUGABYTE_SSL_CA or YUGABYTE_SSL_CERT.
+ * Required environment: YUGABYTE_URL (preferred) or YUGABYTE_HOST,
+ * YUGABYTE_USER, YUGABYTE_PASSWORD and YUGABYTE_DATABASE; plus either
+ * YUGABYTE_SSL_CA or YUGABYTE_SSL_CERT. A URL keeps GitHub Actions from
+ * distributing one connection across several independent secrets.
  * Pass YUGABYTE_ENV_FILE=/secure/path/.env for an operator-only local run.
  */
 import crypto from 'node:crypto';
@@ -40,10 +42,13 @@ function parseEnvFile(file) {
 const envFile = process.env.YUGABYTE_ENV_FILE;
 const fileEnv = envFile ? parseEnvFile(envFile) : {};
 const value = (name) => process.env[name] || fileEnv[name] || '';
-const required = ['YUGABYTE_HOST', 'YUGABYTE_USER', 'YUGABYTE_PASSWORD', 'YUGABYTE_DATABASE'];
-const missing = required.filter((name) => !value(name));
-if (missing.length) {
-  throw new Error(`Missing required Yugabyte configuration: ${missing.join(', ')}`);
+const connectionString = value('YUGABYTE_URL');
+if (!connectionString) {
+  const required = ['YUGABYTE_HOST', 'YUGABYTE_USER', 'YUGABYTE_PASSWORD', 'YUGABYTE_DATABASE'];
+  const missing = required.filter((name) => !value(name));
+  if (missing.length) {
+    throw new Error(`Missing required Yugabyte configuration: YUGABYTE_URL or ${missing.join(', ')}`);
+  }
 }
 
 let ca = value('YUGABYTE_SSL_CA');
@@ -56,28 +61,38 @@ if (!ca) {
   }
 }
 if (!ca) {
-  throw new Error('YUGABYTE_SSL_CA or a readable YUGABYTE_SSL_CERT is required for a verified TLS connection');
+  throw new Error(
+    'YUGABYTE_SSL_CA or a readable YUGABYTE_SSL_CERT is required for a verified TLS connection'
+  );
 }
 
 const client = new pg.Client({
-  host: value('YUGABYTE_HOST'),
-  port: Number(value('YUGABYTE_PORT') || 5433),
-  user: value('YUGABYTE_USER'),
-  password: value('YUGABYTE_PASSWORD'),
-  database: value('YUGABYTE_DATABASE'),
+  ...(connectionString
+    ? { connectionString }
+    : {
+        host: value('YUGABYTE_HOST'),
+        port: Number(value('YUGABYTE_PORT') || 5433),
+        user: value('YUGABYTE_USER'),
+        password: value('YUGABYTE_PASSWORD'),
+        database: value('YUGABYTE_DATABASE')
+      }),
   connectionTimeoutMillis: 25_000,
   ssl: { rejectUnauthorized: true, ca },
   application_name: 'project-nox-ysql-migrator'
 });
 
 function migrationFiles() {
-  return fs.readdirSync(migrationsDir)
+  return fs
+    .readdirSync(migrationsDir)
     .filter((name) => /^\d+_[a-z0-9_]+\.sql$/i.test(name))
     .sort()
     .map((name) => ({
       name,
       sql: fs.readFileSync(path.join(migrationsDir, name), 'utf8'),
-      checksum: crypto.createHash('sha256').update(fs.readFileSync(path.join(migrationsDir, name))).digest('hex')
+      checksum: crypto
+        .createHash('sha256')
+        .update(fs.readFileSync(path.join(migrationsDir, name)))
+        .digest('hex')
     }));
 }
 
@@ -189,14 +204,14 @@ async function main() {
                ('scan_production_chapters'), ('scan_workflow_stages'),
                ('scan_chapter_stages'), ('scan_chapter_timeline')
       )
-      SELECT COALESCE(array_agg(required_tables.table_name ORDER BY required_tables.table_name)
-               FILTER (WHERE info.table_name IS NULL), ARRAY[]::text[]) AS missing_tables
+      SELECT COALESCE(array_agg(table_name ORDER BY table_name)
+               FILTER (WHERE to_regclass('public.' || table_name) IS NULL), ARRAY[]::text[]) AS missing_tables
       FROM required_tables
-      LEFT JOIN information_schema.tables info
-        ON info.table_schema = 'public' AND info.table_name = required_tables.table_name
     `);
     if (preflight.rows[0].missing_tables.length) {
-      throw new Error(`YSQL preflight failed; missing tables: ${preflight.rows[0].missing_tables.join(', ')}`);
+      throw new Error(
+        `YSQL preflight failed; missing tables: ${preflight.rows[0].missing_tables.join(', ')}`
+      );
     }
 
     const ledger = await client.query(`SELECT to_regclass('public.nox_schema_migrations') AS name`);
@@ -207,7 +222,9 @@ async function main() {
     const pending = migrationFiles().filter((migration) => {
       const existing = appliedByName.get(migration.name);
       if (existing && existing !== migration.checksum) {
-        throw new Error(`Checksum mismatch for already-applied migration ${migration.name}; create a new migration instead of editing history`);
+        throw new Error(
+          `Checksum mismatch for already-applied migration ${migration.name}; create a new migration instead of editing history`
+        );
       }
       return !existing;
     });
@@ -246,10 +263,10 @@ async function main() {
             );
           }
         }
-        await client.query(
-          'INSERT INTO public.nox_schema_migrations (filename, checksum) VALUES ($1, $2)',
-          [migration.name, migration.checksum]
-        );
+        await client.query('INSERT INTO public.nox_schema_migrations (filename, checksum) VALUES ($1, $2)', [
+          migration.name,
+          migration.checksum
+        ]);
         console.log(`applied ${migration.name}`);
       } catch (error) {
         throw new Error(

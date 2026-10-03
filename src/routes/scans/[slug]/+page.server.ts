@@ -1,138 +1,131 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { WORK_FIELDS } from "$lib/server/db";
 import { createNotification } from "$lib/server/notifications";
 import { executeYugabyteSql } from "$lib/server/yugabyte";
 import type { PageServerLoad, Actions } from "./$types";
 
 export const load: PageServerLoad = async ({ locals, params, platform }) => {
-  const { data: scan } = await locals.db
-    .from("scans")
-    .select("*")
-    .eq("slug", params.slug)
-    .maybeSingle();
+  const scanResult = await executeYugabyteSql<any>(
+    `SELECT * FROM public.scans WHERE slug = $1 LIMIT 1`,
+    [params.slug],
+    platform?.env
+  );
+  const scan = scanResult.rows[0] || null;
 
   if (!scan) {
     // Check slug history for 301 redirection
-    const { data: hist } = await locals.db
-      .from("scan_slug_history")
-      .select("scan_id, scans(slug)")
-      .eq("old_slug", params.slug)
-      .maybeSingle();
+    const historyResult = await executeYugabyteSql<{ slug: string }>(`
+      SELECT current_scan.slug
+      FROM public.scan_slug_history history
+      JOIN public.scans current_scan ON current_scan.id = history.scan_id
+      WHERE history.old_slug = $1
+      LIMIT 1
+    `, [params.slug], platform?.env);
+    const redirectSlug = historyResult.rows[0]?.slug;
 
-    if (hist?.scans?.slug) {
-      throw redirect(301, `/scans/${hist.scans.slug}`);
+    if (redirectSlug) {
+      throw redirect(301, `/scans/${redirectSlug}`);
     }
 
     error(404, "Scan não encontrada");
   }
 
   const [worksRes, chaptersRes, membersRes, positionsRes, openingsRes, activitiesRes, userAppsRes, commentsRes, questionsRes] = await Promise.all([
-    locals.db
-      .from("work_scans")
-      .select(`
-        is_primary,
-        status,
-        works!inner(${WORK_FIELDS})
-      `)
-      .eq("scan_id", scan.id)
-      .eq("works.published", true),
-    locals.db
-      .from("chapter_scans")
-      .select(`
-        chapters!inner(
-          id,
-          number,
-          title,
-          published_at,
-          work_id,
-          views_total,
-          works!inner(id, slug, title, cover_id, content_rating)
-        )
-      `)
-      .eq("scan_id", scan.id)
-      .not("chapters.published_at", "is", null)
-      .order("chapters(published_at)", { ascending: false })
-      .limit(30),
-    locals.db
-      .from("scan_members")
-      .select(`
-        role,
-        created_at,
-        members!inner(
-          id,
-          username,
-          display_name,
-          avatar_id,
-          xp,
-          avatar_frame_id,
-          name_color
-        )
-      `)
-      .eq("scan_id", scan.id)
-      .order("role", { ascending: true }),
-    locals.db
-      .from("scan_member_positions")
-      .select("scan_id, user_id, is_primary, position:scan_positions(id, name, display_order)")
-      .eq("scan_id", scan.id),
-    locals.db
-      .from("scan_recruitment_openings")
-      .select("*, position:scan_positions(id, name, display_order)")
-      .eq("scan_id", scan.id)
-      .eq("status", "OPEN")
-      .order("created_at", { ascending: false }),
-    locals.db
-      .from("scan_activity")
-      .select("*, user:members(id, username, display_name, avatar_id)")
-      .eq("scan_id", scan.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
+    executeYugabyteSql<any>(`
+      SELECT work_scan.is_primary, work_scan.status,
+             jsonb_build_object(
+               'id', work.id, 'slug', work.slug, 'title', work.title, 'aliases', work.aliases,
+               'synopsis', work.synopsis, 'description', work.description, 'author', work.author,
+               'artist', work.artist, 'kind', work.kind, 'status', work.status, 'year', work.year,
+               'age_rating', work.age_rating, 'published', work.published, 'featured', work.featured,
+               'cover_id', work.cover_id, 'updated_at', work.updated_at, 'created_at', work.created_at,
+               'content_rating', work.content_rating, 'views_total', work.views_total
+             ) AS work
+      FROM public.work_scans work_scan
+      JOIN public.works work ON work.id = work_scan.work_id AND work.published = true
+      WHERE work_scan.scan_id = $1
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT jsonb_build_object(
+        'id', chapter.id, 'number', chapter.number, 'title', chapter.title,
+        'published_at', chapter.published_at, 'work_id', chapter.work_id, 'views_total', chapter.views_total,
+        'works', jsonb_build_object('id', work.id, 'slug', work.slug, 'title', work.title,
+          'cover_id', work.cover_id, 'content_rating', work.content_rating)
+      ) AS chapter
+      FROM public.chapter_scans chapter_scan
+      JOIN public.chapters chapter ON chapter.id = chapter_scan.chapter_id AND chapter.published_at IS NOT NULL
+      JOIN public.works work ON work.id = chapter.work_id
+      WHERE chapter_scan.scan_id = $1
+      ORDER BY chapter.published_at DESC
+      LIMIT 30
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT scan_member.role, scan_member.created_at,
+             jsonb_build_object('id', member.id, 'username', member.username,
+               'display_name', member.display_name, 'avatar_id', member.avatar_id, 'xp', member.xp,
+               'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS member
+      FROM public.scan_members scan_member
+      JOIN public.members member ON member.id = scan_member.user_id
+      WHERE scan_member.scan_id = $1
+      ORDER BY scan_member.role ASC, scan_member.created_at ASC
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT member_position.scan_id, member_position.user_id, member_position.is_primary,
+             jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
+      FROM public.scan_member_positions member_position
+      JOIN public.scan_positions position ON position.id = member_position.position_id
+      WHERE member_position.scan_id = $1
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT opening.*, jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
+      FROM public.scan_recruitment_openings opening
+      JOIN public.scan_positions position ON position.id = opening.position_id
+      WHERE opening.scan_id = $1 AND opening.status = 'OPEN'
+      ORDER BY opening.created_at DESC
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
+        'display_name', member.display_name, 'avatar_id', member.avatar_id) AS activity_user
+      FROM public.scan_activity activity
+      LEFT JOIN public.members member ON member.id = activity.user_id
+      WHERE activity.scan_id = $1
+      ORDER BY activity.created_at DESC
+      LIMIT 20
+    `, [scan.id], platform?.env),
     locals.user
-      ? locals.db
-          .from("scan_applications")
-          .select("id, opening_id, status, created_at")
-          .eq("scan_id", scan.id)
-          .eq("user_id", locals.user.id)
-      : Promise.resolve({ data: [] }),
-    locals.db
-      .from("scan_comments")
-      .select(`
-        id,
-        scan_id,
-        user_id,
-        parent_id,
-        body,
-        removed,
-        pinned,
-        created_at,
-        updated_at,
-        members:user_id(
-          id,
-          username,
-          display_name,
-          avatar_id,
-          avatar_frame_id,
-          name_color
-        ),
-        scan_comment_likes(user_id)
-      `)
-      .eq("scan_id", scan.id)
-      .eq("removed", false)
-      .order("pinned", { ascending: false })
-      .order("created_at", { ascending: false }),
-    locals.db
-      .from("scan_recruitment_questions")
-      .select("*")
-      .eq("scan_id", scan.id)
-      .order("display_order", { ascending: true })
+      ? executeYugabyteSql<any>(`
+          SELECT id, opening_id, status, created_at
+          FROM public.scan_applications
+          WHERE scan_id = $1 AND user_id = $2
+        `, [scan.id, locals.user.id], platform?.env)
+      : Promise.resolve({ rows: [] as any[] }),
+    executeYugabyteSql<any>(`
+      SELECT comment.id, comment.scan_id, comment.user_id, comment.parent_id, comment.body,
+        comment.removed, comment.pinned, comment.created_at, comment.updated_at,
+        jsonb_build_object('id', member.id, 'username', member.username, 'display_name', member.display_name,
+          'avatar_id', member.avatar_id, 'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members,
+        COALESCE(jsonb_agg(jsonb_build_object('user_id', comment_like.user_id))
+          FILTER (WHERE comment_like.user_id IS NOT NULL), '[]'::jsonb) AS scan_comment_likes
+      FROM public.scan_comments comment
+      LEFT JOIN public.members member ON member.id = comment.user_id
+      LEFT JOIN public.scan_comment_likes comment_like ON comment_like.comment_id = comment.id
+      WHERE comment.scan_id = $1 AND comment.removed = false
+      GROUP BY comment.id, member.id
+      ORDER BY comment.pinned DESC, comment.created_at DESC
+    `, [scan.id], platform?.env),
+    executeYugabyteSql<any>(`
+      SELECT * FROM public.scan_recruitment_questions
+      WHERE scan_id = $1
+      ORDER BY display_order ASC
+    `, [scan.id], platform?.env)
   ]);
 
-  const works = (worksRes.data || []).map((row: any) => ({
-    ...row.works,
+  const works = (worksRes.rows || []).map((row: any) => ({
+    ...row.work,
     scan_status: row.status || "ACTIVE",
     is_primary: row.is_primary
   })).filter(Boolean);
 
-  const attributedChapters = (chaptersRes.data || []).map((row: any) => row.chapters).filter(Boolean);
+  const attributedChapters = (chaptersRes.rows || []).map((row: any) => row.chapter).filter(Boolean);
 
   // `chapter_scans` is optional attribution metadata. Public releases owned by
   // a scan's work must still appear when that compatibility table has not yet
@@ -197,7 +190,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
 
   // Map member positions
   const positionsByUser = new Map<string, any[]>();
-  for (const p of (positionsRes.data || []) as any[]) {
+  for (const p of (positionsRes.rows || []) as any[]) {
     if (!positionsByUser.has(p.user_id)) positionsByUser.set(p.user_id, []);
     if (p.position) {
       positionsByUser.get(p.user_id)!.push({
@@ -209,36 +202,36 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     }
   }
 
-  const members = (membersRes.data || []).map((row: any) => {
-    const userPositions = positionsByUser.get(row.members?.id) || [];
+  const members = (membersRes.rows || []).map((row: any) => {
+    const userPositions = positionsByUser.get(row.member?.id) || [];
     const primary = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
     return {
       role: row.role,
       joined_at: row.created_at,
-      ...row.members,
-      frame_id: row.members?.avatar_frame_id,
+      ...row.member,
+      frame_id: row.member?.avatar_frame_id,
       positions: userPositions,
       primaryPosition: primary
     };
   });
 
-  const openings = (openingsRes.data || []).map((o: any) => ({
+  const openings = (openingsRes.rows || []).map((o: any) => ({
     ...o,
     positionName: o.position?.name || "Geral"
   }));
 
-  const activities = (activitiesRes.data || []).map((a: any) => ({
+  const activities = (activitiesRes.rows || []).map((a: any) => ({
     ...a,
-    userName: a.user?.display_name || a.user?.username || null
+    userName: a.activity_user?.display_name || a.activity_user?.username || null
   }));
 
-  const userApplications = userAppsRes.data || [];
+  const userApplications = userAppsRes.rows || [];
   const userAppOpenings = new Set(userApplications.map((a: any) => a.opening_id));
 
   // Calculate total views for this scan works
   const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
 
-  const rawComments = (commentsRes.data || []) as any[];
+  const rawComments = (commentsRes.rows || []) as any[];
   const memberUserIds = new Set(members.map((m: any) => m.id));
   const viewerId = locals.user?.id;
   const isViewerScanAdmin = members.some((m: any) => m.id === viewerId && ['OWNER', 'ADMIN'].includes(m.role));
@@ -276,7 +269,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     canModerateComments,
     userApplications,
     userAppOpenings: Array.from(userAppOpenings),
-    recruitmentQuestions: questionsRes.data || [],
+    recruitmentQuestions: questionsRes.rows || [],
     totalViews,
     viewer: locals.user
       ? {
@@ -291,7 +284,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
 };
 
 export const actions: Actions = {
-  apply: async ({ request, locals }) => {
+  apply: async ({ request, locals, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Você precisa estar conectado para se candidatar." });
     }
@@ -307,66 +300,63 @@ export const actions: Actions = {
       return fail(400, { message: "Vaga não especificada." });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc("apply_for_scan_opening", {
-      p_opening_id: openingId,
-      p_experience: experience,
-      p_availability: availability,
-      p_presentation: presentation,
-      p_portfolio_url: portfolioUrl,
-      p_contact_info: contactInfo
-    });
-
-    if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
-    }
-
-    const applicationId = (data as any)?.application_id;
-    if (applicationId) {
-      const answersToInsert: Array<{ application_id: string; question_id: string; answer: string }> = [];
-      for (const [key, value] of formData.entries()) {
-        if (key.startsWith("question_") && typeof value === "string" && value.trim()) {
-          const qId = key.replace("question_", "");
-          answersToInsert.push({
-            application_id: applicationId,
-            question_id: qId,
-            answer: value.trim()
-          });
-        }
-      }
-      if (answersToInsert.length > 0) {
-        await locals.db.from("scan_application_answers").insert(answersToInsert);
+    const answers: Array<{ question_id: string; answer: string }> = [];
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith("question_") && typeof value === "string" && value.trim()) {
+        answers.push({ question_id: key.replace("question_", ""), answer: value.trim() });
       }
     }
+
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.apply_for_scan_opening_ysql($1, $2, $3, $4, $5, $6, $7, $8::jsonb) AS result`,
+        [openingId, locals.user.id, experience, availability, presentation, portfolioUrl, contactInfo, JSON.stringify(answers)],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_APPLICATION_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_recruitment_apply_ysql_failed', {
+        openingId,
+        actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const conflict = /OPENING_NOT_OPEN|APPLICATION_ALREADY_ACTIVE|APPLICATION_RATE_LIMITED/.test(detail);
+      const validation = /OPENING_REQUIRED|OPENING_NOT_FOUND|PORTFOLIO_URL_INVALID|APPLICATION_(ANSWERS_INVALID|ANSWER_DUPLICATE|ANSWER_INVALID|REQUIRED_ANSWER_MISSING)/.test(detail);
+      return fail(conflict ? 409 : validation ? 400 : 503, {
+        message: detail.includes('APPLICATION_ALREADY_ACTIVE')
+          ? 'Você já possui uma candidatura em análise para esta vaga.'
+          : detail.includes('OPENING_NOT_OPEN')
+            ? 'Esta vaga não está mais recebendo candidaturas.'
+            : detail.includes('APPLICATION_RATE_LIMITED')
+              ? 'Limite de candidaturas por hora atingido. Aguarde antes de tentar novamente.'
+              : validation
+                ? 'Revise os campos e as perguntas obrigatórias da candidatura.'
+                : 'Não foi possível registrar sua candidatura com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
+
+    const applicationId = data.application_id as string;
 
     // Notify Scan Leaders
     try {
-      const { data: op } = await locals.db
-        .from('scan_openings')
-        .select('title, scan_id, scans(name)')
-        .eq('id', openingId)
-        .maybeSingle();
-
-      if (op) {
-        const { data: leads } = await locals.db
-          .from('scan_members')
-          .select('user_id')
-          .eq('scan_id', op.scan_id)
-          .in('role', ['OWNER', 'ADMIN']);
-
-        for (const lead of (leads || [])) {
-          if (lead.user_id !== locals.user.id) {
+      const leaders = Array.isArray(data.leader_ids) ? data.leader_ids : [];
+      for (const leaderId of leaders) {
+        if (typeof leaderId === 'string' && leaderId !== locals.user.id) {
             await createNotification({
-              recipientUserId: lead.user_id,
+              recipientUserId: leaderId,
               actorUserId: locals.user.id,
               type: 'APPLICATION',
-              title: `Nova candidatura: ${op.title}`,
-              body: `Um membro enviou candidatura para a vaga de ${op.title} na Scan ${(op.scans as any)?.name || ''}.`,
-              deepLink: `/scan?id=${op.scan_id}&tab=inbox`,
-              scanId: op.scan_id,
+              title: `Nova candidatura: ${data.opening_title || data.position_name || 'Vaga'}`,
+              body: `Um membro enviou candidatura para a vaga de ${data.opening_title || data.position_name || 'vaga'} na Scan ${data.scan_name || ''}.`,
+              deepLink: `/scan?id=${data.scan_id}&tab=inbox`,
+              scanId: data.scan_id,
               priority: 'NORMAL',
-              dedupeKey: `app:${applicationId}:${lead.user_id}`
+              dedupeKey: `app:${applicationId}:${leaderId}`
             }).catch(e => console.error('Error notifying lead:', e));
-          }
         }
       }
     } catch (e) {
@@ -376,7 +366,7 @@ export const actions: Actions = {
     return { success: true, applicationSent: true, data };
   },
 
-  postComment: async ({ request, locals, params }) => {
+  postComment: async ({ request, locals, params, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Você precisa estar conectado para comentar." });
     }
@@ -389,28 +379,36 @@ export const actions: Actions = {
       return fail(400, { message: "Comentário não pode estar em branco." });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc("post_scan_comment", {
-      p_scan_id: scanId,
-      p_body: body,
-      p_parent_id: parentId
-    });
-
-    if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.post_scan_comment_ysql($1, $2, $3, $4) AS result`,
+        [scanId, locals.user.id, body, parentId],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_COMMENT_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_public_comment_ysql_failed', {
+        scanId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const invalid = /COMMENT_BODY_INVALID|COMMENT_PARENT_NOT_FOUND|SCAN_NOT_FOUND/.test(detail);
+      return fail(invalid ? 400 : 503, {
+        message: invalid
+          ? 'O comentário é inválido ou a conversa foi alterada. Atualize a página.'
+          : 'Não foi possível publicar o comentário com segurança agora. Nenhuma alteração foi aplicada.'
+      });
     }
 
     // Notify parent comment author
     if (parentId) {
       try {
-        const { data: parent } = await locals.db
-          .from("scan_comments")
-          .select("user_id, body")
-          .eq("id", parentId)
-          .maybeSingle();
-
-        if (parent && parent.user_id && parent.user_id !== locals.user.id) {
+        if (data.parent_author_id && data.parent_author_id !== locals.user.id) {
           await createNotification({
-            recipientUserId: parent.user_id,
+            recipientUserId: data.parent_author_id,
             actorUserId: locals.user.id,
             type: "REPLY_COMMENT",
             title: "Responderam ao seu comentário na página da Scan",
@@ -429,7 +427,7 @@ export const actions: Actions = {
     return { success: true, commentPosted: true, data };
   },
 
-  likeComment: async ({ request, locals }) => {
+  likeComment: async ({ request, locals, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Você precisa estar conectado para curtir." });
     }
@@ -440,18 +438,29 @@ export const actions: Actions = {
       return fail(400, { message: "Comentário não informado." });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc("like_scan_comment", {
-      p_comment_id: commentId
-    });
-
-    if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.toggle_scan_comment_like_ysql($1, $2) AS result`,
+        [commentId, locals.user.id],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_COMMENT_LIKE_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_public_comment_like_ysql_failed', { commentId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      return fail(/COMMENT_NOT_FOUND/.test(detail) ? 404 : 503, {
+        message: /COMMENT_NOT_FOUND/.test(detail)
+          ? 'Este comentário não está mais disponível.'
+          : 'Não foi possível atualizar a reação com segurança agora.'
+      });
     }
 
     return { success: true, likeResult: data };
   },
 
-  moderateComment: async ({ request, locals }) => {
+  moderateComment: async ({ request, locals, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Acesso negado." });
     }
@@ -463,19 +472,30 @@ export const actions: Actions = {
       return fail(400, { message: "Dados insuficientes para moderação." });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc("moderate_scan_comment", {
-      p_comment_id: commentId,
-      p_action: actionType
-    });
-
-    if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.moderate_scan_comment_ysql($1, $2, $3, $4) AS result`,
+        [commentId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), actionType],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_COMMENT_MODERATION_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_public_comment_moderation_ysql_failed', { commentId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const forbidden = /COMMENT_MODERATION_FORBIDDEN/.test(detail);
+      return fail(forbidden ? 403 : /COMMENT_NOT_FOUND/.test(detail) ? 404 : 503, {
+        message: forbidden
+          ? 'Você não tem permissão para moderar comentários desta Scan.'
+          : 'Não foi possível moderar o comentário com segurança agora.'
+      });
     }
 
     return { success: true, moderateResult: data };
   },
 
-  reportComment: async ({ request, locals }) => {
+  reportComment: async ({ request, locals, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Você precisa estar conectado para denunciar." });
     }
@@ -487,13 +507,24 @@ export const actions: Actions = {
       return fail(400, { message: "Informe um motivo de denúncia válido." });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc("report_scan_comment", {
-      p_comment_id: commentId,
-      p_reason: reason
-    });
-
-    if (rpcErr) {
-      return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.report_scan_comment_ysql($1, $2, $3) AS result`,
+        [commentId, locals.user.id, reason],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_COMMENT_REPORT_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_public_comment_report_ysql_failed', { commentId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const invalid = /COMMENT_REPORT_REASON_INVALID|COMMENT_NOT_FOUND/.test(detail);
+      return fail(invalid ? 400 : 503, {
+        message: invalid
+          ? 'O comentário não está mais disponível ou o motivo informado é inválido.'
+          : 'Não foi possível enviar a denúncia com segurança agora.'
+      });
     }
 
     return { success: true, reportSent: true, data };
