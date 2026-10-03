@@ -1,9 +1,10 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { WORK_FIELDS } from "$lib/server/db";
 import { createNotification } from "$lib/server/notifications";
+import { executeYugabyteSql } from "$lib/server/yugabyte";
 import type { PageServerLoad, Actions } from "./$types";
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, platform }) => {
   const { data: scan } = await locals.db
     .from("scans")
     .select("*")
@@ -131,7 +132,68 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     is_primary: row.is_primary
   })).filter(Boolean);
 
-  const chapters = (chaptersRes.data || []).map((row: any) => row.chapters).filter(Boolean);
+  const attributedChapters = (chaptersRes.data || []).map((row: any) => row.chapters).filter(Boolean);
+
+  // `chapter_scans` is optional attribution metadata. Public releases owned by
+  // a scan's work must still appear when that compatibility table has not yet
+  // received a row. Read the public catalog directly from Yugabyte and merge
+  // it with attributed releases so old records remain visible too.
+  let catalogChapters: any[] = [];
+  try {
+    const result = await executeYugabyteSql<{
+      id: string;
+      number: number | string;
+      title: string | null;
+      published_at: string;
+      work_id: string;
+      views_total: number | string | null;
+      work_slug: string;
+      work_title: string;
+      work_cover_id: string | null;
+      work_content_rating: string | null;
+    }>(`
+      SELECT chapter.id, chapter.number, chapter.title, chapter.published_at,
+             chapter.work_id, chapter.views_total,
+             work.slug AS work_slug, work.title AS work_title,
+             work.cover_id AS work_cover_id, work.content_rating AS work_content_rating
+      FROM public.work_scans work_scan
+      JOIN public.works work
+        ON work.id = work_scan.work_id AND work.published = true
+      JOIN public.chapters chapter
+        ON chapter.work_id = work_scan.work_id AND chapter.published_at IS NOT NULL
+      WHERE work_scan.scan_id = $1
+      ORDER BY chapter.published_at DESC
+      LIMIT 30
+    `, [scan.id], platform?.env);
+    catalogChapters = result.rows.map((chapter) => ({
+      id: chapter.id,
+      number: chapter.number,
+      title: chapter.title,
+      published_at: chapter.published_at,
+      work_id: chapter.work_id,
+      views_total: Number(chapter.views_total || 0),
+      works: {
+        id: chapter.work_id,
+        slug: chapter.work_slug,
+        title: chapter.work_title,
+        cover_id: chapter.work_cover_id,
+        content_rating: chapter.work_content_rating
+      }
+    }));
+  } catch (error: any) {
+    console.warn('public_scan_chapters_ysql_fallback', {
+      scanId: scan.id,
+      message: String(error?.message || 'unknown').slice(0, 240)
+    });
+  }
+
+  const chaptersById = new Map<string, any>();
+  for (const chapter of [...catalogChapters, ...attributedChapters]) {
+    if (chapter?.id && !chaptersById.has(chapter.id)) chaptersById.set(chapter.id, chapter);
+  }
+  const chapters = Array.from(chaptersById.values())
+    .sort((a: any, b: any) => Date.parse(b.published_at || '') - Date.parse(a.published_at || ''))
+    .slice(0, 30);
 
   // Map member positions
   const positionsByUser = new Map<string, any[]>();
