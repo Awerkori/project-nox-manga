@@ -42,10 +42,10 @@ describe('scan workspace membership YSQL read', () => {
     expect(result.rows[0].scans).toMatchObject({ id: ids.scan, name: 'QA Scan' });
   });
 
-  it('keeps a bounded legacy fallback instead of making PostgREST the primary read', () => {
+  it('uses YSQL as the only workspace membership read path', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
     expect(workspace).toContain("'scan_member_rows_ysql'");
-    expect(workspace).toContain("'scan_member_rows_legacy_fallback'");
+    expect(workspace).not.toContain("'scan_member_rows_legacy_fallback'");
     expect(workspace).toContain('FROM public.scan_members scan_member');
     expect(workspace).toContain('ORDER BY scan.is_official DESC, scan.name ASC');
   });
