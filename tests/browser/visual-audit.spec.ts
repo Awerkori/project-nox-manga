@@ -31,8 +31,8 @@ async function setupRoutes(page: any) {
   });
 
   // Admin preview route
-  await page.route('**/preview-admin*', (route: any) => {
-    route.fulfill({
+  await page.route('**/preview-admin*', async (route: any) => {
+    await route.fulfill({
       contentType: 'text/html',
       body: `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -50,8 +50,8 @@ async function setupRoutes(page: any) {
   });
 
   // Member QA route
-  await page.route('**/qa-member*', (route: any) => {
-    route.fulfill({
+  await page.route('**/qa-member*', async (route: any) => {
+    await route.fulfill({
       contentType: 'text/html',
       body: `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -69,6 +69,29 @@ async function setupRoutes(page: any) {
   });
 }
 
+async function navigateToAuditPage(page: any, item: { id: string; path: string; selector: string }) {
+  let lastFailure = 'unknown navigation failure';
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const response = await page.goto(item.path, { waitUntil: 'domcontentloaded' });
+    const status = response?.status() ?? 0;
+    if (status >= 500) {
+      lastFailure = `document returned HTTP ${status}`;
+    } else {
+      try {
+        await page.waitForSelector(item.selector, { timeout: 10000 });
+        return;
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message.split('\n')[0] : String(error);
+      }
+    }
+
+    if (attempt === 1) await page.waitForTimeout(250);
+  }
+
+  throw new Error(`Visual audit page ${item.id} did not render after one retry: ${lastFailure}`);
+}
+
 test('audit visual layout and detect horizontal overflows across viewports', async ({ page }) => {
   test.setTimeout(180000);
   await setupRoutes(page);
@@ -83,7 +106,10 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
     { id: 'admin-dashboard', path: `${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`, selector: '.dashboard-shell' },
     { id: 'admin-obras', path: `${LOCAL_URL}/preview-admin?view=obras&role=ADMIN`, selector: '.works-manager-shell' },
     { id: 'admin-importer', path: `${LOCAL_URL}/preview-admin?view=importer&role=ADMIN`, selector: '.importer-dashboard' },
-    { id: 'notificacoes', path: `${LOCAL_URL}/qa-member?area=notificacoes`, selector: '#member' }
+    // The mount target itself has no dimensions before Svelte renders. Audit a
+    // semantic element instead, so the visual test only continues once the
+    // member fixture actually mounted.
+    { id: 'notificacoes', path: `${LOCAL_URL}/qa-member?area=notificacoes`, selector: 'h1' }
   ];
 
   const auditReport: Array<{ page: string; viewport: string; overflow: boolean; scrollWidth: number; innerWidth: number; offenders: any[] }> = [];
@@ -92,8 +118,7 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
     await page.setViewportSize({ width: vp.width, height: vp.height });
 
     for (const item of pagesToAudit) {
-      await page.goto(item.path, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector(item.selector, { timeout: 10000 });
+      await navigateToAuditPage(page, item);
 
         // Let layout settle
         await page.waitForTimeout(400);
