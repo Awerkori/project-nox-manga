@@ -7,20 +7,11 @@
     Send,
     Smile,
     Pin,
-    Check,
-    CheckCheck,
     CornerDownRight,
     AtSign,
-    Users,
-    Bell,
-    BellOff,
     MoreVertical,
     X,
-    Filter,
     Shield,
-    Sparkles,
-    FileText,
-    ExternalLink,
     Paperclip,
     GripVertical,
     Edit2,
@@ -52,10 +43,15 @@
   let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId));
   let myDisplayName = $derived(myMemberInfo?.display_name || myMemberInfo?.username || 'Membro');
 
-  let localChannels = $state<any[]>([]);
-
-  $effect(() => {
-    localChannels = [...channels].sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  // The server is the source of truth. This small local order is only kept
+  // while an owner receives feedback from a channel-reorder request.
+  let localChannelOrder = $state<string[] | null>(null);
+  let localChannels = $derived.by(() => {
+    const serverOrder = [...channels].sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    if (!localChannelOrder) return serverOrder;
+    const byId = new Map(serverOrder.map((channel: any) => [channel.id, channel]));
+    const optimistic = localChannelOrder.map((id) => byId.get(id)).filter(Boolean);
+    return optimistic.length === serverOrder.length ? optimistic : serverOrder;
   });
 
   let activeChannelId = $state<string>('');
@@ -139,7 +135,7 @@
     items.splice(toIdx, 0, moved);
 
     const updated = items.map((ch, idx) => ({ ...ch, display_order: idx * 10 }));
-    localChannels = updated;
+    localChannelOrder = updated.map((channel) => channel.id);
     draggedChannelId = null;
     dragOverChannelId = null;
 
@@ -150,8 +146,11 @@
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
       await fetch('?/reorderChannels', { method: 'POST', body: fd });
+      await invalidateAll();
+      localChannelOrder = null;
     } catch (e) {
       console.error('Failed to persist channel order:', e);
+      localChannelOrder = null;
     } finally {
       isReordering = false;
     }
@@ -169,7 +168,7 @@
     items.splice(targetIdx, 0, moved);
 
     const updated = items.map((ch, i) => ({ ...ch, display_order: i * 10 }));
-    localChannels = updated;
+    localChannelOrder = updated.map((channel) => channel.id);
 
     try {
       isReordering = true;
@@ -178,8 +177,11 @@
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
       await fetch('?/reorderChannels', { method: 'POST', body: fd });
+      await invalidateAll();
+      localChannelOrder = null;
     } catch (e) {
       console.error('Failed to move channel:', e);
+      localChannelOrder = null;
     } finally {
       isReordering = false;
     }
@@ -285,16 +287,13 @@
 
   // Grouped reactions helper
   function getGroupedReactions(reactions: any[] = []) {
-    const map = new Map<string, { emoji: string; count: number; reactedByMe: boolean }>();
+    const grouped: Record<string, { emoji: string; count: number; reactedByMe: boolean }> = {};
     for (const r of reactions) {
-      if (!map.has(r.emoji)) {
-        map.set(r.emoji, { emoji: r.emoji, count: 0, reactedByMe: false });
-      }
-      const item = map.get(r.emoji)!;
+      const item = (grouped[r.emoji] ??= { emoji: r.emoji, count: 0, reactedByMe: false });
       item.count++;
       if (r.user_id === currentUserId) item.reactedByMe = true;
     }
-    return Array.from(map.values());
+    return Object.values(grouped);
   }
 
   // Toggle Reaction Action
@@ -411,7 +410,7 @@
       fd.set('channelId', activeChannelId);
       fd.set('messageId', latest.id);
       await fetch('?/markChannelRead', { method: 'POST', body: fd });
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -453,24 +452,36 @@
     }
   }
 
-  function formatMessageText(text: string) {
-    if (!text) return '';
-    const escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+  type MessageSegment = { type: 'text' | 'mention' | 'link'; value: string; href?: string };
 
-    const withLinks = escaped.replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" class="chat-file-link">$1</a>'
-    );
+  function safeChatHref(value: string): string | null {
+    if (value.startsWith('/api/scan/attachments/')) return value;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
 
-    return withLinks.replace(
-      /(^|[^a-zA-Z0-9_])(@[a-zA-Z0-9_À-ÿ]+)/g,
-      '$1<span class="mention-tag">$2</span>'
-    );
+  function formatMessageSegments(text: string): MessageSegment[] {
+    if (!text) return [];
+    const segments: MessageSegment[] = [];
+    const token = /\[([^\]]+)\]\(([^)]+)\)|(@[a-zA-Z0-9_À-ÿ]+)/g;
+    let cursor = 0;
+    for (const match of text.matchAll(token)) {
+      const offset = match.index ?? 0;
+      if (offset > cursor) segments.push({ type: 'text', value: text.slice(cursor, offset) });
+      if (match[1] !== undefined) {
+        const href = safeChatHref(match[2]);
+        segments.push(href ? { type: 'link', value: match[1], href } : { type: 'text', value: match[0] });
+      } else {
+        segments.push({ type: 'mention', value: match[3] });
+      }
+      cursor = offset + match[0].length;
+    }
+    if (cursor < text.length) segments.push({ type: 'text', value: text.slice(cursor) });
+    return segments;
   }
 
   // Mention autocomplete popup state
@@ -627,7 +638,7 @@
     </div>
 
     <div class="channels-list-scroll">
-      {#each Object.entries(channelCategories) as [category, chList]}
+      {#each Object.entries(channelCategories) as [category, chList] (category)}
         <div class="category-block">
           <span class="category-name">{category}</span>
           <div class="category-channels">
@@ -867,14 +878,22 @@
                     </div>
                   {:else}
                     <div class="message-content-text">
-                      {@html formatMessageText(msg.content)}
+                      {#each formatMessageSegments(msg.content) as segment, segmentIndex (`${msg.id}:${segmentIndex}`)}
+                        {#if segment.type === 'link' && segment.href}
+                          <a href={segment.href} target="_blank" rel="noopener noreferrer" class="chat-file-link">{segment.value}</a>
+                        {:else if segment.type === 'mention'}
+                          <span class="mention-tag">{segment.value}</span>
+                        {:else}
+                          {segment.value}
+                        {/if}
+                      {/each}
                     </div>
                   {/if}
 
                   <!-- Grouped reactions strip -->
                   {#if grouped.length > 0}
                     <div class="grouped-reactions-strip">
-                      {#each grouped as g}
+                      {#each grouped as g (g.emoji)}
                         <button
                           type="button"
                           class="reaction-pill"
@@ -1002,7 +1021,7 @@
                 {#if activeEmojiPickerMsgId === msg.id}
                   <div class="emoji-picker-popover">
                     <div class="emoji-picker-grid">
-                      {#each ['👍', '❤️', '🎉', '😂', '🔥', '🚀', '👀', '✨', '👏', '🙏', '💯', '🤔'] as em}
+                      {#each ['👍', '❤️', '🎉', '😂', '🔥', '🚀', '👀', '✨', '👏', '🙏', '💯', '🤔'] as em (em)}
                         <button
                           type="button"
                           class="emoji-picker-btn"
@@ -1056,7 +1075,7 @@
         {#if showMentionMenu && mentionCandidates.length > 0}
           <div class="mention-autocomplete-menu" role="listbox">
             <div class="mention-menu-header">Mencionar na Scan:</div>
-            {#each mentionCandidates as cand, idx}
+            {#each mentionCandidates as cand, idx (`${cand.type}:${cand.id}`)}
               <button
                 type="button"
                 class="mention-candidate-item"
@@ -1810,6 +1829,7 @@
     font-size: 0.875rem;
     line-height: 1.45;
     color: #d4d4d8;
+    white-space: pre-wrap;
     word-break: break-word;
     user-select: text;
     -webkit-user-select: text;
@@ -2790,8 +2810,11 @@
   @media (max-width: 768px) {
     .chat-module-root {
       flex-direction: column;
-      height: 100%;
-      min-height: 500px;
+      /* The global mobile navigation is fixed. Keep the composer inside the
+         visible viewport instead of letting its send controls sit behind it. */
+      height: calc(100vh - 13.75rem);
+      min-height: 0;
+      max-height: calc(100vh - 13.75rem);
     }
     .chat-channels-sidebar {
       width: 100%;
