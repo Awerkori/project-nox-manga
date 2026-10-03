@@ -6,14 +6,12 @@
     Search,
     Edit3,
     Trash2,
-    Calendar,
-    User,
     X,
     FileText
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
 
-  let { wikiPages = [], isOwnerOrAdmin = false, scanId = '' } = $props();
+  let { wikiPages = [], isOwnerOrAdmin = false } = $props();
 
   let search = $state('');
   let categoryFilter = $state('ALL');
@@ -22,7 +20,6 @@
   let editingPage = $state<any>(null);
 
   let pageTitle = $state('');
-  let pageSlug = $state('');
   let pageCategory = $state('Geral');
   let pageContent = $state('');
   let pagePinned = $state(false);
@@ -51,7 +48,6 @@
   function openCreate() {
     editingPage = null;
     pageTitle = '';
-    pageSlug = '';
     pageCategory = 'Geral';
     pageContent = '';
     pagePinned = false;
@@ -61,13 +57,26 @@
   function openEdit(page: any) {
     editingPage = page;
     pageTitle = page.title;
-    pageSlug = page.slug;
     pageCategory = page.category || 'Geral';
     pageContent = page.content;
     pagePinned = Boolean(page.is_pinned);
     showEditorModal = true;
   }
+
+  function closeEditorModal() {
+    showEditorModal = false;
+  }
+
+  function dismissEditorBackdrop(event: MouseEvent) {
+    if (event.target === event.currentTarget) closeEditorModal();
+  }
+
+  function closeEditorOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape' && showEditorModal) closeEditorModal();
+  }
 </script>
+
+<svelte:window onkeydown={closeEditorOnEscape} />
 
 <div class="wiki-tab-root">
   <div class="wiki-header-bar">
@@ -106,7 +115,7 @@
         >
           Todos ({wikiPages.length})
         </button>
-        {#each categories as cat}
+        {#each categories as cat (cat)}
           <button
             type="button"
             class="cat-chip"
@@ -119,7 +128,7 @@
       </div>
 
       <div class="wiki-pages-list">
-        {#each filteredPages as page}
+        {#each filteredPages as page (page.id)}
           <button
             type="button"
             class="wiki-page-nav-item"
@@ -188,16 +197,16 @@
 
 <!-- Editor Modal -->
 {#if showEditorModal}
-  <div class="modal-backdrop" onclick={() => (showEditorModal = false)}>
-    <div class="modal-card modal-large" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-backdrop" role="presentation" onclick={dismissEditorBackdrop}>
+    <div class="modal-card modal-large" role="dialog" aria-modal="true" aria-labelledby="wiki-editor-dialog-title" tabindex="-1">
       <div class="modal-header">
-        <h3 class="modal-title">{editingPage ? 'Editar Artigo da Wiki' : 'Novo Artigo da Wiki'}</h3>
-        <button type="button" class="btn-close-modal" onclick={() => (showEditorModal = false)}>
+        <h3 id="wiki-editor-dialog-title" class="modal-title">{editingPage ? 'Editar Artigo da Wiki' : 'Novo Artigo da Wiki'}</h3>
+        <button type="button" class="btn-close-modal" aria-label="Fechar editor de artigo" onclick={closeEditorModal}>
           <X size={16} />
         </button>
       </div>
 
-      <form method="POST" action={editingPage ? '?/updateWikiPage' : '?/createWikiPage'} use:enhance={() => { showEditorModal = false; }} class="modal-form">
+      <form method="POST" action={editingPage ? '?/updateWikiPage' : '?/createWikiPage'} use:enhance={() => { closeEditorModal(); }} class="modal-form">
         {#if editingPage}
           <input type="hidden" name="page_id" value={editingPage.id} />
         {/if}
@@ -227,7 +236,7 @@
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn-cancel" onclick={() => (showEditorModal = false)}>Cancelar</button>
+          <button type="button" class="btn-cancel" onclick={closeEditorModal}>Cancelar</button>
           <button type="submit" class="btn-submit">{editingPage ? 'Salvar Alterações' : 'Publicar Artigo'}</button>
         </div>
       </form>

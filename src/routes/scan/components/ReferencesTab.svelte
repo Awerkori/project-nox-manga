@@ -4,12 +4,8 @@
     ExternalLink,
     Plus,
     Trash2,
-    FileText,
-    FolderKanban,
     Search,
-    BookOpen,
     X,
-    Layers
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
 
@@ -51,7 +47,17 @@
   function closeModal() {
     showModal = false;
   }
+
+  function dismissModalBackdrop(event: MouseEvent) {
+    if (event.target === event.currentTarget) closeModal();
+  }
+
+  function closeModalOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape' && showModal) closeModal();
+  }
 </script>
+
+<svelte:window onkeydown={closeModalOnEscape} />
 
 <div class="references-tab">
   <!-- Header / Controls -->
@@ -88,7 +94,7 @@
     <!-- Work Filter -->
     <select bind:value={selectedWorkId} class="filter-select">
       <option value="ALL">Todas as Obras ({works.length})</option>
-      {#each works as work}
+      {#each works as work (work.id)}
         <option value={work.id}>{work.title}</option>
       {/each}
     </select>
@@ -108,7 +114,7 @@
     </div>
   {:else}
     <div class="refs-grid">
-      {#each filteredReferences as ref}
+      {#each filteredReferences as ref (ref.id)}
         {@const work = works.find((w: any) => w.id === ref.work_id)}
         <div class="ref-card">
           <div class="ref-header">
@@ -167,11 +173,11 @@
 
   <!-- Create Modal -->
   {#if showModal}
-    <div class="modal-backdrop" onclick={closeModal} role="presentation">
-      <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div class="modal-backdrop" onclick={dismissModalBackdrop} role="presentation">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reference-dialog-title" tabindex="-1">
         <div class="modal-header">
-          <h3>Adicionar Referência / Recurso</h3>
-          <button class="btn-close" onclick={closeModal}><X size={18} /></button>
+          <h3 id="reference-dialog-title">Adicionar Referência / Recurso</h3>
+          <button class="btn-close" aria-label="Fechar editor de referência" onclick={closeModal}><X size={18} /></button>
         </div>
 
         <form
@@ -192,7 +198,7 @@
           <div class="form-group">
             <label for="ref-work">Obra Relacionada *</label>
             <select id="ref-work" name="work_id" bind:value={formWorkId} required class="input">
-              {#each works as w}
+              {#each works as w (w.id)}
                 <option value={w.id}>{w.title}</option>
               {/each}
             </select>
