@@ -1,17 +1,19 @@
 name: Deploy Yugabyte YSQL Migrations
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'yugabyte/migrations/**'
-      - 'scripts/migrate-yugabyte.mjs'
-      - '.github/workflows/migrations.yml'
+  # YSQL credentials are intentionally not uploaded to GitHub implicitly.
+  # Run this only after a maintainer has configured the least-privilege YSQL
+  # secrets through the approved GitHub administration path.
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY_YSQL to apply pending migrations"
+        required: true
+        type: string
 
 jobs:
   deploy:
+    if: inputs.confirm == 'APPLY_YSQL'
     runs-on: ubuntu-latest
     env:
       YUGABYTE_HOST: ${{ secrets.YUGABYTE_HOST }}
