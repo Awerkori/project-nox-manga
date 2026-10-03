@@ -1,7 +1,7 @@
-import { error, json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { json } from '@sveltejs/kit';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET = async ({ locals, params, url }) => {
+export const GET = async ({ locals, params, url, platform }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) {
     return json({ error: 'ID de anexo inválido' }, { status: 404 });
   }
@@ -10,12 +10,10 @@ export const GET = async ({ locals, params, url }) => {
     return json({ error: 'Autenticação necessária' }, { status: 401 });
   }
 
-  const db = privileged();
-  const { data: attachment } = await db
-    .from('scan_attachments')
-    .select('*')
-    .eq('id', params.id)
-    .maybeSingle();
+  const lookup = await executeYugabyteSql<any>(
+    `SELECT * FROM public.scan_attachments WHERE id = $1 LIMIT 1`, [params.id], platform?.env
+  );
+  const attachment = lookup.rows[0] || null;
 
   if (!attachment) {
     return json({ error: 'Anexo não encontrado' }, { status: 404 });
@@ -24,12 +22,10 @@ export const GET = async ({ locals, params, url }) => {
   // Cross-scan authorization enforcement
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', attachment.scan_id)
-      .eq('user_id', locals.user.id)
-      .maybeSingle();
+    const member = (await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2 LIMIT 1`,
+      [attachment.scan_id, locals.user.id], platform?.env
+    )).rows[0] || null;
 
     if (!member) {
       return json({

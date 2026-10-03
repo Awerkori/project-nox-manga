@@ -1,23 +1,17 @@
 <script lang="ts">
   import {
     ShieldAlert,
-    PauseCircle,
-    UserX,
     Flame,
     Globe,
     Webhook,
     Download,
     LogOut,
     AlertTriangle,
-    CheckCircle2,
     Plus,
     Trash2,
-    ToggleLeft,
-    ToggleRight,
     Image,
     Upload,
     Palette,
-    Sparkles,
     Check,
     X
   } from '@lucide/svelte';
@@ -641,7 +635,7 @@
         <input type="hidden" name="scan_id" value={currentScan?.id} />
 
         <div class="slug-input-wrapper">
-          <span class="slug-prefix">projectnox.com/scans/</span>
+          <span class="slug-prefix">manga.project-nox-awerkori.workers.dev/scans/</span>
           <input
             type="text"
             name="new_slug"
@@ -679,7 +673,7 @@
         </div>
       {:else}
         <div class="webhooks-list">
-          {#each integrations as webhook}
+          {#each integrations as webhook (webhook.id)}
             <div class="webhook-item">
               <div class="wh-meta">
                 <span class="wh-platform {webhook.platform.toLowerCase()}">{webhook.platform}</span>

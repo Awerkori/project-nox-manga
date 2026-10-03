@@ -66,10 +66,10 @@ describe('scan task YSQL reads', () => {
     ]);
   });
 
-  it('uses the YSQL task snapshot before the legacy task read', () => {
+  it('uses the YSQL task snapshot without a legacy task read', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
     expect(workspace).toContain("'scan_task_snapshot_ysql'");
-    expect(workspace).toContain("'scan_task_snapshot_legacy_fallback'");
+    expect(workspace).not.toContain("'scan_task_snapshot_legacy_fallback'");
     expect(workspace).toContain('FROM public.scan_tasks task');
     expect(workspace).toContain('FROM public.scan_task_comments comment');
   });

@@ -149,7 +149,7 @@ export const POST = async ({ locals, request, platform }) => {
     return json({ error: message, uploadId }, { status });
   };
 
-  let deliveryKey = crypto.randomUUID();
+  let deliveryKey: string = crypto.randomUUID();
   if (replacementId) {
     try {
       const replacement = await ysql<{ delivery_key: string | null }>(platform, `

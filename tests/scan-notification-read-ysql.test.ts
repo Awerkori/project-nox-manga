@@ -50,10 +50,10 @@ describe('scan notification YSQL reads', () => {
     expect(preferences.rows).toEqual([expect.objectContaining({ user_id: ids.owner, tasks: false })]);
   });
 
-  it('uses one bounded YSQL snapshot with an explicit legacy fallback', () => {
+  it('uses one bounded YSQL snapshot without a legacy database fallback', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
     expect(workspace).toContain("'scan_notification_snapshot_ysql'");
-    expect(workspace).toContain("'scan_notification_snapshot_legacy_fallback'");
+    expect(workspace).not.toContain("'scan_notification_snapshot_legacy_fallback'");
     expect(workspace).toContain('WHERE notification.scan_id = $1 AND notification.user_id = $2');
     expect(workspace).toContain('WHERE preference.scan_id = $1 AND preference.user_id = $2');
   });
