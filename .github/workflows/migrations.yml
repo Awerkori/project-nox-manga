@@ -14,6 +14,14 @@ on:
         options:
           - dry-run
           - apply
+      runner:
+        description: 'Where to run the migration workflow'
+        required: true
+        default: github-hosted
+        type: choice
+        options:
+          - github-hosted
+          - ysql-migrations
       confirm:
         description: 'Required only for apply: type APPLY_YSQL'
         required: true
@@ -22,7 +30,10 @@ on:
 jobs:
   deploy:
     if: inputs.mode == 'dry-run' || inputs.confirm == 'APPLY_YSQL'
-    runs-on: ubuntu-latest
+    # The dedicated self-hosted label is only used by a one-job ephemeral
+    # runner on an already allowlisted operator host. It avoids widening the
+    # cluster network policy for GitHub's rotating hosted-runner IP ranges.
+    runs-on: ${{ inputs.runner == 'ysql-migrations' && 'ysql-migrations' || 'ubuntu-latest' }}
     env:
       YUGABYTE_URL: ${{ secrets.YUGABYTE_URL }}
       YUGABYTE_SSL_CA: ${{ secrets.YUGABYTE_SSL_CA }}
