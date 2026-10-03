@@ -330,6 +330,35 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     'scan_recruitment_snapshot_ysql'
   );
 
+  // Knowledge is a read-heavy workspace surface. Keep the three collections
+  // on the YSQL data plane while preserving a single bounded fallback so a
+  // transient database-path issue cannot mix stale and fresh documents.
+  const knowledgeSnapshotPromise = withTimeout(
+    Promise.all([
+      executeYugabyteSql<any>(`
+        SELECT wiki_page.*
+        FROM public.scan_wiki_pages wiki_page
+        WHERE wiki_page.scan_id = $1
+        ORDER BY wiki_page.is_pinned DESC, wiki_page.title ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT glossary_entry.*
+        FROM public.work_glossary_entries glossary_entry
+        WHERE glossary_entry.scan_id = $1
+        ORDER BY glossary_entry.source_term ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT work_reference.*
+        FROM public.work_references work_reference
+        WHERE work_reference.scan_id = $1
+        ORDER BY work_reference.created_at DESC
+      `, [currentScan.id], platform?.env)
+    ]),
+    3_500,
+    null,
+    'scan_knowledge_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -349,9 +378,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ,
     ,
     tasksRes,
-    wikiRes,
-    glossaryRes,
-    referencesRes,
+    ,
+    ,
+    ,
     integrationsRes,
     uploadersRes,
     ,
@@ -526,22 +555,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       `)
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_wiki_pages')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('is_pinned', { ascending: false })
-      .order('title', { ascending: true }),
-    locals.db
-      .from('work_glossary_entries')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('source_term', { ascending: true }),
-    locals.db
-      .from('work_references')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: false }),
+    // YSQL knowledge snapshot is started above. These placeholders preserve
+    // the batch shape; legacy reads run only in the explicit fallback below.
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_integrations')
       .select('*')
@@ -746,6 +764,48 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     };
   });
   const activity = activityRes.data || [];
+
+  let wikiPages: any[];
+  let glossary: any[];
+  let references: any[];
+  const knowledgeSnapshot = await knowledgeSnapshotPromise;
+  if (knowledgeSnapshot) {
+    const [wikiResult, glossaryResult, referencesResult] = knowledgeSnapshot;
+    wikiPages = wikiResult.rows;
+    glossary = glossaryResult.rows;
+    references = referencesResult.rows;
+  } else {
+    console.warn('scan_knowledge_snapshot_ysql_fallback', {
+      scanId: currentScan.id,
+      message: 'ysql snapshot unavailable'
+    });
+    const [wikiFallback, glossaryFallback, referencesFallback] = await withTimeout(
+      Promise.all([
+        locals.db
+          .from('scan_wiki_pages')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('is_pinned', { ascending: false })
+          .order('title', { ascending: true }),
+        locals.db
+          .from('work_glossary_entries')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('source_term', { ascending: true }),
+        locals.db
+          .from('work_references')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('created_at', { ascending: false })
+      ]),
+      3_500,
+      Array.from({ length: 3 }, () => ({ data: [] })) as any,
+      'scan_knowledge_snapshot_legacy_fallback'
+    );
+    wikiPages = wikiFallback.data || [];
+    glossary = glossaryFallback.data || [];
+    references = referencesFallback.data || [];
+  }
 
   const staffNotes = (staffNotesRes.data || []).map((n: any) => ({
     id: n.id,
@@ -997,9 +1057,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     stages: workflowStages,
     chapterStages,
     tasks: tasksRes.data || [],
-    wikiPages: wikiRes.data || [],
-    glossary: glossaryRes.data || [],
-    references: referencesRes.data || [],
+    wikiPages,
+    glossary,
+    references,
     integrations: integrationsRes.data || [],
     workUploaders: uploadersRes.data || [],
     recruitmentQuestions,
