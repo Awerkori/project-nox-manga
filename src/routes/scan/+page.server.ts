@@ -2610,12 +2610,28 @@ export const actions: Actions = {
     const reason = formData.get('reason') ? String(formData.get('reason')) : null;
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('release_scan_chapter_stage', {
-      p_chapter_stage_id: stageId,
-      p_reason: reason
-    });
-
-    if (error) return fail(400, { message: error.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.release_scan_chapter_stage_ysql($1, $2, $3, $4) AS result`,
+        [stageId, locals.user.id, locals.role === 'ADMIN', reason], platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_STAGE_RELEASE_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_pipeline_stage_release_ysql_failed', {
+        chapterStageId: stageId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const expected = /CHAPTER_STAGE_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED|STAGE_RELEASE_FORBIDDEN|WORKFLOW_STAGE_NOT_FOUND/.test(detail);
+      return fail(expected ? 409 : 503, {
+        message: expected
+          ? 'A etapa foi alterada ou você não tem mais permissão para liberá-la. Atualize a página.'
+          : 'Não foi possível liberar a etapa com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     if (platform?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
@@ -2675,13 +2691,28 @@ export const actions: Actions = {
       return fail(400, { message: 'Etapa de origem, destino e motivo (mín. 3 caracteres) são obrigatórios.' });
     }
 
-    const { data, error } = await locals.db.rpc('return_scan_chapter_stage', {
-      p_source_stage_id: sourceStageId,
-      p_target_stage_slug: targetStageSlug,
-      p_reason: reason
-    });
-
-    if (error) return fail(400, { message: error.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.return_scan_chapter_stage_ysql($1, $2, $3, $4, $5) AS result`,
+        [sourceStageId, locals.user.id, locals.role === 'ADMIN', targetStageSlug, reason], platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_STAGE_REWORK_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_pipeline_stage_rework_ysql_failed', {
+        sourceStageId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const expected = /CHAPTER_STAGE_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED|REWORK_(REASON_REQUIRED|TARGET_NOT_FOUND)|WORKFLOW_STAGE_NOT_FOUND/.test(detail);
+      return fail(expected ? 409 : 503, {
+        message: expected
+          ? 'A etapa de destino foi alterada ou você não tem mais permissão. Atualize a página.'
+          : 'Não foi possível solicitar retrabalho com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     if (platform?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
@@ -2700,14 +2731,28 @@ export const actions: Actions = {
       return fail(400, { message: 'Etapa, ação e justificativa (mín. 3 caracteres) são obrigatórios.' });
     }
 
-    const { data, error } = await locals.db.rpc('admin_override_scan_stage', {
-      p_chapter_stage_id: stageId,
-      p_action: action,
-      p_reason: reason,
-      p_target_user_id: targetUserId
-    });
-
-    if (error) return fail(400, { message: error.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.admin_override_scan_stage_ysql($1, $2, $3, $4, $5, $6) AS result`,
+        [stageId, locals.user.id, locals.role === 'ADMIN', action, reason, targetUserId], platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_STAGE_OVERRIDE_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_pipeline_stage_override_ysql_failed', {
+        chapterStageId: stageId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const expected = /CHAPTER_STAGE_NOT_FOUND|STAGE_OVERRIDE_FORBIDDEN|OVERRIDE_(ACTION_INVALID|REASON_REQUIRED|TRANSFER_TARGET_REQUIRED|TRANSFER_TARGET_NOT_MEMBER)|WORKFLOW_STAGE_NOT_FOUND/.test(detail);
+      return fail(expected ? 409 : 503, {
+        message: expected
+          ? 'A etapa, o membro de destino ou sua permissão mudou. Atualize a página.'
+          : 'Não foi possível aplicar o override com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     if (platform?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
