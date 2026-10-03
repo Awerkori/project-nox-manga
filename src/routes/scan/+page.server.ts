@@ -49,21 +49,45 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     };
   }
 
-  const memberRowsRes = await withTimeout(
-    locals.db
-      .from('scan_members')
-      .select(`
-        role,
-        scan_id,
-        scans!inner(*)
-      `)
-      .eq('user_id', locals.user.id),
+  // Resolve workspace membership from the authoritative YSQL plane first.
+  // The bounded PostgREST fallback is kept only for older deployments where
+  // the scan catalog has not been migrated yet; it is never the normal path.
+  const memberRowsYsql = await withTimeout(
+    executeYugabyteSql<any>(`
+      SELECT scan_member.role, scan_member.scan_id, to_jsonb(scan) AS scans
+      FROM public.scan_members scan_member
+      JOIN public.scans scan ON scan.id = scan_member.scan_id
+      WHERE scan_member.user_id = $1
+      ORDER BY scan.is_official DESC, scan.name ASC
+    `, [locals.user.id], platform?.env),
     2000,
-    { data: [] } as any,
-    'scan_member_rows'
+    null,
+    'scan_member_rows_ysql',
+    'YUGABYTE'
   );
 
-  let memberRows = memberRowsRes?.data || [];
+  let memberRows = memberRowsYsql?.rows?.map((row: any) => ({
+    role: row.role,
+    scan_id: row.scan_id,
+    scans: row.scans
+  })) || [];
+
+  if (!memberRowsYsql) {
+    const memberRowsRes = await withTimeout(
+      locals.db
+        .from('scan_members')
+        .select(`
+          role,
+          scan_id,
+          scans!inner(*)
+        `)
+        .eq('user_id', locals.user.id),
+      2000,
+      { data: [] } as any,
+      'scan_member_rows_legacy_fallback'
+    );
+    memberRows = memberRowsRes?.data || [];
+  }
   if (memberRows.length === 0 && locals.sessionCache?.userScans?.length) {
     memberRows = locals.sessionCache.userScans.map((us: any) => ({
       role: us.role,
