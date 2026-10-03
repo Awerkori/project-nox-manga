@@ -1200,7 +1200,7 @@
                   </div>
                   <div class="member-positions-tags">
                     {#if member.positions && member.positions.length > 0}
-                      {#each member.positions as pos (pos.id)}
+                      {#each member.positions as pos (pos.position_id)}
                         <span class="pos-badge" class:primary={pos.is_primary}>
                           <span class="pos-emoji">{getPositionIcon(pos.name)}</span>
                           {#if pos.is_primary}★ {/if}{pos.name}
