@@ -142,6 +142,66 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   const activeScanId = url.searchParams.get('id') || myScans[0].id;
   const currentScan = myScans.find((s: any) => s.id === activeScanId) || myScans[0];
 
+  // Start the authoritative editorial graph immediately. It deliberately runs
+  // beside the rest of the workspace batch: a member should not wait for
+  // unrelated backoffice widgets before the pipeline can render. The retired
+  // PostgREST reads remain an availability fallback below, never the primary
+  // source for this state.
+  const pipelineSnapshotPromise = withTimeout(
+    Promise.all([
+      executeYugabyteSql<any>(`
+        SELECT workflow_stage.*
+        FROM public.scan_workflow_stages workflow_stage
+        WHERE workflow_stage.scan_id = $1
+        ORDER BY workflow_stage.display_order ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT chapter_stage.*,
+          CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug,
+            'color', workflow_stage.color, 'display_order', workflow_stage.display_order,
+            'dependencies', workflow_stage.dependencies,
+            'dependency_operator', workflow_stage.dependency_operator,
+            'requires_output', workflow_stage.requires_output
+          ) END AS stage,
+          CASE WHEN assignee.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', assignee.id, 'username', assignee.username,
+            'display_name', assignee.display_name, 'avatar_id', assignee.avatar_id
+          ) END AS assignee,
+          CASE WHEN completer.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', completer.id, 'username', completer.username,
+            'display_name', completer.display_name, 'avatar_id', completer.avatar_id
+          ) END AS completer
+        FROM public.scan_chapter_stages chapter_stage
+        LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = chapter_stage.stage_id
+        LEFT JOIN public.members assignee ON assignee.id = chapter_stage.assigned_to
+        LEFT JOIN public.members completer ON completer.id = chapter_stage.completed_by
+        WHERE chapter_stage.scan_id = $1
+        ORDER BY chapter_stage.created_at ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT production_chapter.*,
+          CASE WHEN work.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', work.id, 'title', work.title, 'slug', work.slug, 'cover_id', work.cover_id
+          ) END AS work
+        FROM public.scan_production_chapters production_chapter
+        LEFT JOIN public.works work ON work.id = production_chapter.work_id
+        WHERE production_chapter.scan_id = $1
+        ORDER BY production_chapter.chapter_sort_key ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT timeline.*
+        FROM public.scan_chapter_timeline timeline
+        WHERE timeline.scan_id = $1
+        ORDER BY timeline.created_at DESC
+        LIMIT 200
+      `, [currentScan.id], platform?.env)
+    ]),
+    3_500,
+    null,
+    'scan_pipeline_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -158,8 +218,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     activityRes,
     memberPositionsRes,
     staffNotesRes,
-    stagesRes,
-    chapterStagesRes,
+    ,
+    ,
     tasksRes,
     wikiRes,
     glossaryRes,
@@ -173,14 +233,14 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     notificationPrefsRes,
     tutorialsRes,
     qcIssuesRes,
-    productionChaptersRes,
+    ,
     pipelineTemplatesRes,
     muralPostsRes,
     muralCommentsRes,
     muralReactionsRes,
     attachmentsRes,
     productionFilesRes,
-    chapterTimelineRes,
+    ,
     workOverridesRes,
     creditSnapshotsRes,
     channelReadStatesRes,
@@ -340,20 +400,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .eq('scan_id', currentScan.id)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_workflow_stages')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_chapter_stages')
-      .select(`
-        *,
-        stage:stage_id(id, name, slug, color, display_order, dependencies, dependency_operator, requires_output),
-        assignee:assigned_to(id, username, display_name, avatar_id),
-        completer:completed_by(id, username, display_name, avatar_id)
-      `)
-      .eq('scan_id', currentScan.id),
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_tasks')
       .select(`
@@ -441,11 +489,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .select('*, assignee:assigned_to(id, username, display_name, avatar_id), creator:created_by(id, username, display_name)')
       .eq('scan_id', currentScan.id)
       .order('created_at', { ascending: false }),
-    locals.db
-      .from('scan_production_chapters')
-      .select('*, work:work_id(id, title, slug, cover_id)')
-      .eq('scan_id', currentScan.id)
-      .order('chapter_sort_key', { ascending: true }),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_pipeline_templates')
       .select('*'),
@@ -474,12 +518,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .select('*, uploader:uploaded_by(id, username, display_name, avatar_id), stage:stage_id(id, name, slug)')
       .eq('scan_id', currentScan.id)
       .order('version', { ascending: false }),
-    locals.db
-      .from('scan_chapter_timeline')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: false })
-      .limit(200),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_work_workflow_overrides')
       .select('*')
@@ -640,81 +679,62 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     console.warn('scan_pipeline_files_ysql_fallback', { message: String(error?.message || 'unknown').slice(0, 240) });
   }
 
-  // The workflow graph is the other half of a production delivery. Keep it on
-  // the same authoritative YSQL plane as multi-file deliveries so an old
-  // PostgREST cache cannot make a completed/claimed stage disappear from the
-  // member workspace.
-  let workflowStages = stagesRes.data || [];
-  let chapterStages = chapterStagesRes.data || [];
-  let productionChapters = productionChaptersRes.data || [];
-  let chapterTimeline = chapterTimelineRes.data || [];
-  try {
-    const pipelineSnapshot = await withTimeout(
-      Promise.all([
-        executeYugabyteSql<any>(`
-          SELECT workflow_stage.*
-          FROM public.scan_workflow_stages workflow_stage
-          WHERE workflow_stage.scan_id = $1
-          ORDER BY workflow_stage.display_order ASC
-        `, [currentScan.id], platform?.env),
-        executeYugabyteSql<any>(`
-          SELECT chapter_stage.*,
-            CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug,
-              'color', workflow_stage.color, 'display_order', workflow_stage.display_order,
-              'dependencies', workflow_stage.dependencies,
-              'dependency_operator', workflow_stage.dependency_operator,
-              'requires_output', workflow_stage.requires_output
-            ) END AS stage,
-            CASE WHEN assignee.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', assignee.id, 'username', assignee.username,
-              'display_name', assignee.display_name, 'avatar_id', assignee.avatar_id
-            ) END AS assignee,
-            CASE WHEN completer.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', completer.id, 'username', completer.username,
-              'display_name', completer.display_name, 'avatar_id', completer.avatar_id
-            ) END AS completer
-          FROM public.scan_chapter_stages chapter_stage
-          LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = chapter_stage.stage_id
-          LEFT JOIN public.members assignee ON assignee.id = chapter_stage.assigned_to
-          LEFT JOIN public.members completer ON completer.id = chapter_stage.completed_by
-          WHERE chapter_stage.scan_id = $1
-          ORDER BY chapter_stage.created_at ASC
-        `, [currentScan.id], platform?.env),
-        executeYugabyteSql<any>(`
-          SELECT production_chapter.*,
-            CASE WHEN work.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', work.id, 'title', work.title, 'slug', work.slug, 'cover_id', work.cover_id
-            ) END AS work
-          FROM public.scan_production_chapters production_chapter
-          LEFT JOIN public.works work ON work.id = production_chapter.work_id
-          WHERE production_chapter.scan_id = $1
-          ORDER BY production_chapter.chapter_sort_key ASC
-        `, [currentScan.id], platform?.env),
-        executeYugabyteSql<any>(`
-          SELECT timeline.*
-          FROM public.scan_chapter_timeline timeline
-          WHERE timeline.scan_id = $1
-          ORDER BY timeline.created_at DESC
-          LIMIT 200
-        `, [currentScan.id], platform?.env)
-      ]),
-      3_500,
-      null,
-      'scan_pipeline_snapshot_ysql'
-    );
-    if (pipelineSnapshot) {
-      const [workflowResult, chapterStageResult, productionChapterResult, timelineResult] = pipelineSnapshot;
-      workflowStages = workflowResult.rows;
-      chapterStages = chapterStageResult.rows;
-      productionChapters = productionChapterResult.rows;
-      chapterTimeline = timelineResult.rows;
-    }
-  } catch (error: any) {
+  // The workflow graph is the other half of a production delivery. YSQL is
+  // primary; the former data plane is queried only if the direct snapshot was
+  // unavailable, preserving an explicit availability fallback during the
+  // staged migration without paying for both on every healthy request.
+  let workflowStages: any[];
+  let chapterStages: any[];
+  let productionChapters: any[];
+  let chapterTimeline: any[];
+  const pipelineSnapshot = await pipelineSnapshotPromise;
+  if (pipelineSnapshot) {
+    const [workflowResult, chapterStageResult, productionChapterResult, timelineResult] = pipelineSnapshot;
+    workflowStages = workflowResult.rows;
+    chapterStages = chapterStageResult.rows;
+    productionChapters = productionChapterResult.rows;
+    chapterTimeline = timelineResult.rows;
+  } else {
     console.warn('scan_pipeline_snapshot_ysql_fallback', {
       scanId: currentScan.id,
-      message: String(error?.message || 'unknown').slice(0, 240)
+      message: 'ysql snapshot unavailable'
     });
+    const [stagesFallback, chapterStagesFallback, productionChaptersFallback, timelineFallback] = await withTimeout(
+      Promise.all([
+        locals.db
+          .from('scan_workflow_stages')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('display_order', { ascending: true }),
+        locals.db
+          .from('scan_chapter_stages')
+          .select(`
+            *,
+            stage:stage_id(id, name, slug, color, display_order, dependencies, dependency_operator, requires_output),
+            assignee:assigned_to(id, username, display_name, avatar_id),
+            completer:completed_by(id, username, display_name, avatar_id)
+          `)
+          .eq('scan_id', currentScan.id),
+        locals.db
+          .from('scan_production_chapters')
+          .select('*, work:work_id(id, title, slug, cover_id)')
+          .eq('scan_id', currentScan.id)
+          .order('chapter_sort_key', { ascending: true }),
+        locals.db
+          .from('scan_chapter_timeline')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('created_at', { ascending: false })
+          .limit(200)
+      ]),
+      3_500,
+      Array.from({ length: 4 }, () => ({ data: [] })) as any,
+      'scan_pipeline_snapshot_legacy_fallback'
+    );
+    workflowStages = stagesFallback.data || [];
+    chapterStages = chapterStagesFallback.data || [];
+    productionChapters = productionChaptersFallback.data || [];
+    chapterTimeline = timelineFallback.data || [];
   }
 
   // Notes are a separate, editable collaboration stream. They are read from
