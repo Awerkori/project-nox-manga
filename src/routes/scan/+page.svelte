@@ -828,6 +828,7 @@
                 chapterStages={data.chapterStages || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
+                chapterNotes={data.chapterNotes || []}
                 tasks={(data.tasks || []).filter((t: any) => t.chapter_id === activeChId || t.chapter_id === activeWorkspaceChapter.id || t.chapter_id === activeWorkspaceChapter.target_chapter_id || t.chapter_number === (activeWorkspaceChapter.number || activeWorkspaceChapter.chapter_number))}
                 team={team}
                 userProfile={{ id: data.userId }}

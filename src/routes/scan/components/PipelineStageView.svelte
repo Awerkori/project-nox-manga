@@ -1102,10 +1102,21 @@
 
                     <button
                       type="button"
-                      class="btn-toggle-details"
-                      aria-label={isOpen ? "Ocultar detalhes" : "Ver detalhes"}
+                      class="btn-open-chapter-details"
+                      onclick={(e) => { e.stopPropagation(); onOpenChapter(item.ch); }}
+                      title="Abrir arquivos, responsáveis e observações antes de assumir"
                     >
-                      <span>{isOpen ? 'Ocultar' : 'Ver detalhes'}</span>
+                      <Eye size={14} />
+                      <span>Detalhes</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn-toggle-details"
+                      aria-label={isOpen ? "Ocultar resumo" : "Ver resumo"}
+                      onclick={(e) => e.stopPropagation()}
+                    >
+                      <span>{isOpen ? 'Ocultar' : 'Resumo'}</span>
                       <ChevronDown size={15} class="accordion-chevron {isOpen ? 'is-rotated' : ''}" />
                     </button>
                   </div>
@@ -3008,6 +3019,29 @@
     border-color: rgba(255, 255, 255, 0.2);
   }
 
+  .btn-open-chapter-details {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid rgba(96, 165, 250, 0.32);
+    background: rgba(59, 130, 246, 0.10);
+    color: #bfdbfe;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  }
+
+  .btn-open-chapter-details:hover {
+    background: rgba(59, 130, 246, 0.18);
+    border-color: rgba(96, 165, 250, 0.58);
+    color: #eff6ff;
+  }
+
   .accordion-chevron {
     transition: transform 0.2s ease;
     color: #94a3b8;
@@ -3045,7 +3079,7 @@
 
   .expanded-details-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
   }
 
@@ -3057,6 +3091,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .detail-panel-box.alert-box {
@@ -3115,8 +3151,22 @@
     font-size: 0.8125rem;
     text-decoration: none;
     transition: all 0.2s ease;
-    width: fit-content;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    align-items: flex-start;
+    line-height: 1.35;
+  }
+
+  .btn-upstream-dl-pill :global(svg) {
+    flex: 0 0 auto;
+    margin-top: 0.1rem;
+  }
+
+  .btn-upstream-dl-pill span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .btn-upstream-dl-pill.clean {
@@ -4092,6 +4142,11 @@
     .btn-toggle-details {
       flex: 1;
       justify-content: center;
+    }
+
+    .btn-open-chapter-details {
+      flex: 1;
+      min-width: 0;
     }
 
     .expanded-details-grid {
