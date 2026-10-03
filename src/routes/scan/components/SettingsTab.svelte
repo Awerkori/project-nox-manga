@@ -1,23 +1,17 @@
 <script lang="ts">
   import {
     ShieldAlert,
-    PauseCircle,
-    UserX,
     Flame,
     Globe,
     Webhook,
     Download,
     LogOut,
     AlertTriangle,
-    CheckCircle2,
     Plus,
     Trash2,
-    ToggleLeft,
-    ToggleRight,
     Image,
     Upload,
     Palette,
-    Sparkles,
     Check,
     X
   } from '@lucide/svelte';
@@ -679,7 +673,7 @@
         </div>
       {:else}
         <div class="webhooks-list">
-          {#each integrations as webhook}
+          {#each integrations as webhook (webhook.id)}
             <div class="webhook-item">
               <div class="wh-meta">
                 <span class="wh-platform {webhook.platform.toLowerCase()}">{webhook.platform}</span>
