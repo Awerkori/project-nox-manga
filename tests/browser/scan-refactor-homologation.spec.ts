@@ -144,6 +144,38 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     expect(errors).toEqual([]);
   });
 
+  test('1b. Canonical Pipeline stages remain fully accessible without a hidden strip', async ({ page }) => {
+    await setupScanHarness(page);
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 }
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/qa-scan-proof?tab=pipeline&stage=clean_redraw');
+      await page.waitForSelector('.pipeline-stage-view-root');
+
+      const navigation = page.locator('.canonical-stages-nav-bar');
+      const pills = navigation.locator('.stage-nav-pill');
+      await expect(pills).toHaveCount(7);
+
+      const layout = await navigation.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const clipped = Array.from(element.querySelectorAll<HTMLElement>('.stage-nav-pill')).some((pill) => {
+          const rect = pill.getBoundingClientRect();
+          return rect.left < bounds.left || rect.right > bounds.right;
+        });
+        return {
+          clipped,
+          horizontalOverflow: element.scrollWidth > element.clientWidth,
+          pageOverflow: document.documentElement.scrollWidth > window.innerWidth
+        };
+      });
+
+      expect(layout).toEqual({ clipped: false, horizontalOverflow: false, pageOverflow: false });
+    }
+  });
+
   test('2. Pipeline Typeset Stage with Upstream Files & Completion Actions', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
