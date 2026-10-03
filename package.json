@@ -19,6 +19,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:browser": "playwright test --config playwright.components.config.ts",
+    "db:migrate": "node scripts/migrate-yugabyte.mjs",
+    "db:migrate:dry-run": "node scripts/migrate-yugabyte.mjs --dry-run",
     "deploy": "wrangler deploy",
     "prebuild": "node scripts/retain-client-assets.mjs save"
   },

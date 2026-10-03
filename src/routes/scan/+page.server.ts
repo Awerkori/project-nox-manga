@@ -3,9 +3,10 @@ import { WORK_FIELDS } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, platform }) => {
   if (!locals.user) {
     return {
       authenticated: false,
@@ -611,6 +612,32 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     };
   });
 
+  // Pipeline delivery state is authoritative in Yugabyte/YSQL. Keep the rest
+  // of this incremental Scan workspace migration intact while ensuring a new
+  // multi-file upload is visible immediately after invalidation.
+  let productionFiles = productionFilesRes.data || [];
+  try {
+    const ysqlFiles = await withTimeout(
+      executeYugabyteSql<any>(`
+        SELECT file.*,
+          jsonb_build_object('id', member.id, 'username', member.username,
+            'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
+          jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
+        FROM public.scan_production_files file
+        LEFT JOIN public.members member ON member.id = file.uploaded_by
+        LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
+        WHERE file.scan_id = $1
+        ORDER BY file.version DESC, file.created_at DESC
+      `, [currentScan.id], platform?.env),
+      2_000,
+      { rows: [], rowCount: 0 },
+      'scan_pipeline_files_ysql'
+    );
+    productionFiles = ysqlFiles.rows;
+  } catch (error: any) {
+    console.warn('scan_pipeline_files_ysql_fallback', { message: String(error?.message || 'unknown').slice(0, 240) });
+  }
+
   return {
     authenticated: true,
     isMember: true,
@@ -655,7 +682,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     pipelineTemplates: pipelineTemplatesRes.data || [],
     muralPosts,
     attachments: attachmentsRes.data || [],
-    productionFiles: productionFilesRes.data || [],
+    productionFiles,
     chapterTimeline: chapterTimelineRes.data || [],
     workOverrides: workOverridesRes.data || [],
     creditSnapshots: creditSnapshotsRes.data || [],
@@ -926,7 +953,7 @@ export const actions: Actions = {
       }
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_member', {
+    const { error: rpcErr } = await locals.db.rpc('manage_scan_member', {
       p_scan_id: scanId,
       p_target_user_id: targetUserId,
       p_new_role: role || null,
@@ -948,7 +975,7 @@ export const actions: Actions = {
     const targetUserId = formData.get('user_id') as string;
     const newRole = formData.get('role') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_member', {
+    const { error: rpcErr } = await locals.db.rpc('manage_scan_member', {
       p_scan_id: scanId,
       p_target_user_id: targetUserId,
       p_new_role: newRole,
@@ -990,7 +1017,7 @@ export const actions: Actions = {
     const scanId = formData.get('scan_id') as string;
     const targetUserId = formData.get('target_user_id') as string || formData.get('new_owner_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('request_scan_ownership_transfer', {
+    const { error: rpcErr } = await locals.db.rpc('request_scan_ownership_transfer', {
       p_scan_id: scanId,
       p_target_user_id: targetUserId
     });
@@ -1005,7 +1032,7 @@ export const actions: Actions = {
     const requestId = formData.get('request_id') as string;
     const accept = formData.get('accept') === 'true';
 
-    const { data, error: rpcErr } = await locals.db.rpc('respond_scan_ownership_transfer', {
+    const { error: rpcErr } = await locals.db.rpc('respond_scan_ownership_transfer', {
       p_request_id: requestId,
       p_accept: accept
     });
@@ -1019,7 +1046,7 @@ export const actions: Actions = {
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_transfer_request', {
+    const { error: rpcErr } = await locals.db.rpc('cancel_scan_transfer_request', {
       p_request_id: requestId
     });
 
@@ -1056,7 +1083,7 @@ export const actions: Actions = {
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_project_request', {
+    const { error: rpcErr } = await locals.db.rpc('cancel_scan_project_request', {
       p_request_id: requestId
     });
 
@@ -1069,7 +1096,7 @@ export const actions: Actions = {
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('cancel_scan_partner_request', {
+    const { error: rpcErr } = await locals.db.rpc('cancel_scan_partner_request', {
       p_request_id: requestId
     });
 
@@ -1084,7 +1111,7 @@ export const actions: Actions = {
     const workId = formData.get('work_id') as string;
     const status = formData.get('status') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('update_work_scan_status', {
+    const { error: rpcErr } = await locals.db.rpc('update_work_scan_status', {
       p_scan_id: scanId,
       p_work_id: workId,
       p_status: status
@@ -1293,7 +1320,7 @@ export const actions: Actions = {
 
     if (!noteId) return fail(400, { message: 'Nota não informada.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('delete_scan_staff_note', {
+    const { error: rpcErr } = await locals.db.rpc('delete_scan_staff_note', {
       p_note_id: noteId
     });
 
@@ -1310,7 +1337,7 @@ export const actions: Actions = {
 
     if (!scanId || !targetUserId) return fail(400, { message: 'Dados insuficientes.' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('update_scan_member_visibility', {
+    const { error: rpcErr } = await locals.db.rpc('update_scan_member_visibility', {
       p_scan_id: scanId,
       p_user_id: targetUserId,
       p_is_public: isPublic
@@ -1734,7 +1761,7 @@ export const actions: Actions = {
       }
     }
 
-    const { data: msg, error: msgErr } = await locals.db.from('scan_messages').insert({
+    const { data: msg } = await locals.db.from('scan_messages').insert({
       scan_id: ch.scan_id,
       channel_id: channelId,
       user_id: locals.user.id,
@@ -1830,7 +1857,9 @@ export const actions: Actions = {
         try {
           const rawEditMentions = formData.get('mentionsData');
           if (rawEditMentions) editMentionsData = JSON.parse(String(rawEditMentions));
-        } catch {}
+        } catch {
+          // Invalid optional mention metadata must not block message editing.
+        }
 
         await dispatchMentions({
           locals,
@@ -2249,7 +2278,6 @@ export const actions: Actions = {
   commentMuralPost: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
-    const scanId = String(formData.get('scan_id') || '');
     const postId = String(formData.get('post_id') || '');
     const content = String(formData.get('content') || '').trim();
     const parentCommentId = formData.get('parent_comment_id') ? String(formData.get('parent_comment_id')) : null;
@@ -2323,7 +2351,6 @@ export const actions: Actions = {
   togglePinMuralPost: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
-    const scanId = String(formData.get('scan_id') || '');
     const postId = String(formData.get('post_id') || '');
 
     const { data: post } = await locals.db.from('scan_mural_posts').select('is_pinned').eq('id', postId).single();
@@ -2654,9 +2681,10 @@ export const actions: Actions = {
     const template = String(formData.get('template') || 'MANHWA');
     const customStagesRaw = String(formData.get('custom_stages') || '[]');
 
-    let customStages = [];
+    let customStages: unknown[];
     try {
-      customStages = JSON.parse(customStagesRaw);
+      const parsed = JSON.parse(customStagesRaw);
+      customStages = Array.isArray(parsed) ? parsed : [];
     } catch {
       customStages = [];
     }

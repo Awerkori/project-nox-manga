@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { uploadPipelineFileToStorage } from '$lib/server/storage-router';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { RateLimitError } from '$lib/server/media';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -19,13 +19,26 @@ function sanitizeFilename(rawFilename: string): string {
   return rawFilename.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase();
 }
 
-async function checkScanAccess(db: ReturnType<typeof privileged>, scanId: string, userId: string, role: string | null | undefined) {
-  if (role === 'ADMIN') return { allowed: true, error: null };
-  const { data: member, error } = await db.from('scan_members').select('role').eq('scan_id', scanId).eq('user_id', userId).maybeSingle();
-  return { allowed: Boolean(member), error };
+function logYsqlFailure(operation: string, error: any) {
+  console.error('scan_pipeline_ysql_failed', {
+    operation,
+    code: typeof error?.code === 'string' ? error.code : null,
+    message: String(error?.message || 'unknown').slice(0, 240)
+  });
 }
 
-export const POST = async ({ locals, request }) => {
+async function ysql<T>(platform: any, query: string, params: any[] = []) {
+  return executeYugabyteSql<T>(query, params, platform?.env);
+}
+
+async function checkScanAccess(platform: any, scanId: string, userId: string, isGlobalAdmin: boolean) {
+  if (isGlobalAdmin) return { allowed: true, role: 'ADMIN' };
+  const result = await ysql<{ role: string }>(platform,
+    'SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2 LIMIT 1', [scanId, userId]);
+  return { allowed: Boolean(result.rows[0]), role: result.rows[0]?.role || null };
+}
+
+export const POST = async ({ locals, request, platform }) => {
   if (!locals.user) return json({ error: 'Não autenticado' }, { status: 401 });
 
   const formData = await request.formData();
@@ -36,8 +49,11 @@ export const POST = async ({ locals, request }) => {
   const replacementId = formData.get('replace_file_id')?.toString() || null;
   const requestedUploadId = formData.get('upload_id')?.toString() || null;
   const file = formData.get('file');
+  const isGlobalAdmin = locals.role === 'ADMIN';
 
-  if (!scanId || !productionChapterId || !stageId) return json({ error: 'scan_id, production_chapter_id e stage_id são obrigatórios' }, { status: 400 });
+  if (!isUuid(scanId) || !isUuid(productionChapterId) || !isUuid(stageId)) {
+    return json({ error: 'scan_id, production_chapter_id e stage_id válidos são obrigatórios' }, { status: 400 });
+  }
   if (!file || !(file instanceof Blob)) return json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
   if (replacementId && !isUuid(replacementId)) return json({ error: 'Arquivo a substituir inválido' }, { status: 400 });
 
@@ -46,88 +62,108 @@ export const POST = async ({ locals, request }) => {
   if (BLOCKED_EXTENSIONS.includes(ext)) return json({ error: 'Formato de arquivo executável bloqueado por políticas de segurança da plataforma.' }, { status: 400 });
   if (file.size > MAX_PIPELINE_SIZE) return json({ error: `Arquivo excede o limite máximo permitido de 500 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB enviado).` }, { status: 413 });
 
-  const db = privileged();
-  const access = await checkScanAccess(db, scanId, locals.user.id, locals.role);
-  if (access.error) {
-    console.error('scan_pipeline_upload_access_lookup_failed', { code: access.error.code, message: access.error.message });
-    return json({ error: 'Não foi possível validar sua permissão agora.' }, { status: 503 });
-  }
-  if (!access.allowed) return json({ error: 'Acesso não autorizado a esta Scan' }, { status: 403 });
-
-  // Never trust a chapter/stage supplied by the browser to belong to the scan.
-  const [{ data: chapter, error: chapterError }, { data: stage, error: stageError }] = await Promise.all([
-    db.from('scan_production_chapters').select('id, work_id, chapter_number').eq('id', productionChapterId).eq('scan_id', scanId).maybeSingle(),
-    db.from('scan_workflow_stages').select('id, slug, name').eq('id', stageId).eq('scan_id', scanId).maybeSingle()
-  ]);
-  if (chapterError || stageError) {
-    console.error('scan_pipeline_upload_lookup_failed', { operation: chapterError ? 'chapter_lookup' : 'stage_lookup', code: chapterError?.code || stageError?.code || null, message: chapterError?.message || stageError?.message || 'unknown' });
-    return json({ error: 'Não foi possível validar o destino do upload. Tente novamente.' }, { status: 503 });
+  let memberRole: string | null;
+  let chapter: { id: string; work_id: string } | undefined;
+  let stage: { id: string; slug: string; name: string } | undefined;
+  try {
+    const [access, chapterResult, stageResult] = await Promise.all([
+      checkScanAccess(platform, scanId, locals.user.id, isGlobalAdmin),
+      ysql<{ id: string; work_id: string }>(platform,
+        'SELECT id, work_id FROM public.scan_production_chapters WHERE id = $1 AND scan_id = $2 LIMIT 1', [productionChapterId, scanId]),
+      ysql<{ id: string; slug: string; name: string }>(platform,
+        'SELECT id, slug, name FROM public.scan_workflow_stages WHERE id = $1 AND scan_id = $2 LIMIT 1', [stageId, scanId])
+    ]);
+    if (!access.allowed) return json({ error: 'Acesso não autorizado a esta Scan' }, { status: 403 });
+    memberRole = access.role;
+    chapter = chapterResult.rows[0];
+    stage = stageResult.rows[0];
+  } catch (error) {
+    logYsqlFailure('upload_destination_lookup', error);
+    return json({ error: 'Não foi possível validar o destino do upload agora.' }, { status: 503 });
   }
   if (!chapter) return json({ error: 'Capítulo não encontrado nesta Scan' }, { status: 404 });
   if (!stage) return json({ error: 'Etapa não encontrada nesta Scan' }, { status: 404 });
 
-  // A member must work only on their claimed stage. Leadership and global
-  // administrators retain their established intervention powers.
-  let membershipRole: string | null = null;
-  if (locals.role !== 'ADMIN') {
-    const [{ data: membership, error: membershipError }, { data: chapterStage, error: chapterStageError }] = await Promise.all([
-      db.from('scan_members').select('role').eq('scan_id', scanId).eq('user_id', locals.user.id).maybeSingle(),
-      db.from('scan_chapter_stages').select('assigned_to, status').eq('production_chapter_id', productionChapterId).eq('stage_id', stageId).maybeSingle()
-    ]);
-    if (membershipError || chapterStageError) {
-      console.error('scan_pipeline_upload_assignment_lookup_failed', { code: membershipError?.code || chapterStageError?.code || null, message: membershipError?.message || chapterStageError?.message || 'unknown' });
+  // The finalizer repeats this authorization under a row lock. This preflight
+  // only gives immediate feedback when the browser is visibly stale.
+  if (!isGlobalAdmin && !['OWNER', 'ADMIN'].includes(memberRole || '')) {
+    try {
+      const chapterStage = await ysql<{ assigned_to: string | null; status: string }>(platform, `
+        SELECT assigned_to, status
+        FROM public.scan_chapter_stages
+        WHERE scan_id = $1 AND stage_id = $2
+          AND (production_chapter_id = $3 OR chapter_id = $3)
+        ORDER BY CASE WHEN production_chapter_id = $3 THEN 0 ELSE 1 END
+        LIMIT 1
+      `, [scanId, stageId, productionChapterId]);
+      const current = chapterStage.rows[0];
+      if (!current || current.assigned_to !== locals.user.id || !['IN_PROGRESS', 'REWORK'].includes(current.status)) {
+        return json({ error: 'Assuma esta etapa antes de enviar ou alterar arquivos.' }, { status: 403 });
+      }
+    } catch (error) {
+      logYsqlFailure('upload_assignment_lookup', error);
       return json({ error: 'Não foi possível validar sua atribuição nesta etapa.' }, { status: 503 });
     }
-    membershipRole = membership?.role || null;
-    const isLeadership = ['OWNER', 'ADMIN'].includes(membershipRole || '');
-    const isAssignee = chapterStage?.assigned_to === locals.user.id && ['IN_PROGRESS', 'REWORK'].includes(chapterStage.status);
-    if (!isLeadership && !isAssignee) return json({ error: 'Assuma esta etapa antes de enviar ou alterar arquivos.' }, { status: 403 });
   }
 
   const uploadId = isUuid(requestedUploadId) ? requestedUploadId : crypto.randomUUID();
-  const { data: previousAttempt, error: previousAttemptError } = await db.from('scan_pipeline_upload_attempts')
-    .select('id, scan_id, production_chapter_id, stage_id, user_id, status, file_id').eq('id', uploadId).maybeSingle();
-  if (previousAttemptError) {
-    console.error('scan_pipeline_upload_attempt_lookup_failed', { code: previousAttemptError.code, message: previousAttemptError.message });
+  try {
+    const existing = await ysql<{
+      id: string; scan_id: string; production_chapter_id: string; stage_id: string; user_id: string; status: string; file_id: string | null;
+    }>(platform, `
+      SELECT id, scan_id, production_chapter_id, stage_id, user_id, status, file_id
+      FROM public.scan_pipeline_upload_attempts WHERE id = $1 LIMIT 1
+    `, [uploadId]);
+    const previous = existing.rows[0];
+    if (previous) {
+      const sameDestination = previous.scan_id === scanId && previous.production_chapter_id === productionChapterId && previous.stage_id === stageId;
+      if (!sameDestination || (previous.user_id !== locals.user.id && !isGlobalAdmin)) {
+        return json({ error: 'Tentativa de upload não autorizada' }, { status: 403 });
+      }
+      if (previous.status === 'SUCCEEDED' && previous.file_id) {
+        const finished = await ysql<any>(platform, 'SELECT * FROM public.scan_production_files WHERE id = $1 LIMIT 1', [previous.file_id]);
+        if (finished.rows[0]) return json({ success: true, file: finished.rows[0], version: finished.rows[0].version, uploadId, idempotent: true });
+      }
+    } else {
+      await ysql(platform, `
+        INSERT INTO public.scan_pipeline_upload_attempts
+          (id, scan_id, production_chapter_id, stage_id, user_id, file_name, byte_size, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'UPLOADING')
+      `, [uploadId, scanId, productionChapterId, stageId, locals.user.id, rawFilename, file.size]);
+    }
+  } catch (error) {
+    logYsqlFailure('upload_attempt_prepare', error);
     return json({ error: 'Não foi possível preparar o upload. Tente novamente.' }, { status: 503 });
-  }
-  if (previousAttempt) {
-    const sameDestination = previousAttempt.scan_id === scanId && previousAttempt.production_chapter_id === productionChapterId && previousAttempt.stage_id === stageId;
-    if (!sameDestination || (previousAttempt.user_id !== locals.user.id && locals.role !== 'ADMIN')) return json({ error: 'Tentativa de upload não autorizada' }, { status: 403 });
-    if (previousAttempt.status === 'SUCCEEDED' && previousAttempt.file_id) {
-      const { data: existingFile } = await db.from('scan_production_files').select('*').eq('id', previousAttempt.file_id).maybeSingle();
-      if (existingFile) return json({ success: true, file: existingFile, version: existingFile.version, uploadId, idempotent: true });
-    }
-  } else {
-    const { error: attemptInsertError } = await db.from('scan_pipeline_upload_attempts').insert({
-      id: uploadId, scan_id: scanId, production_chapter_id: productionChapterId, stage_id: stageId,
-      user_id: locals.user.id, file_name: rawFilename, byte_size: file.size, status: 'UPLOADING'
-    });
-    if (attemptInsertError) {
-      console.error('scan_pipeline_upload_attempt_create_failed', { code: attemptInsertError.code, message: attemptInsertError.message });
-      return json({ error: 'Não foi possível iniciar o upload. Tente novamente.' }, { status: 503 });
-    }
   }
 
   const failAttempt = async (message: string, status = 502, errorCode?: string) => {
-    const { error } = await db.from('scan_pipeline_upload_attempts').update({ status: 'FAILED', error_code: errorCode || null, updated_at: new Date().toISOString() }).eq('id', uploadId);
-    if (error) console.error('scan_pipeline_upload_attempt_failure_record_failed', { code: error.code, message: error.message });
+    try {
+      await ysql(platform, `
+        UPDATE public.scan_pipeline_upload_attempts
+        SET status = 'FAILED', error_code = $2, updated_at = now()
+        WHERE id = $1 AND status <> 'SUCCEEDED'
+      `, [uploadId, errorCode || null]);
+    } catch (error) {
+      logYsqlFailure('upload_attempt_fail_record', error);
+    }
     return json({ error: message, uploadId }, { status });
   };
 
   let deliveryKey = crypto.randomUUID();
   if (replacementId) {
-    const { data: replacement, error: replacementError } = await db.from('scan_production_files')
-      .select('id, delivery_key').eq('id', replacementId).eq('scan_id', scanId).eq('production_chapter_id', productionChapterId).eq('stage_id', stageId).eq('is_current', true).maybeSingle();
-    if (replacementError) {
-      console.error('scan_pipeline_upload_replacement_lookup_failed', { code: replacementError.code, message: replacementError.message });
-      return failAttempt('Não foi possível validar o arquivo a substituir.', 503, replacementError.code);
+    try {
+      const replacement = await ysql<{ delivery_key: string | null }>(platform, `
+        SELECT delivery_key FROM public.scan_production_files
+        WHERE id = $1 AND scan_id = $2 AND production_chapter_id = $3 AND stage_id = $4 AND is_current = true
+        LIMIT 1
+      `, [replacementId, scanId, productionChapterId, stageId]);
+      if (!replacement.rows[0]?.delivery_key) return failAttempt('O arquivo a substituir não está mais disponível.', 409, 'REPLACEMENT_NOT_CURRENT');
+      deliveryKey = replacement.rows[0].delivery_key;
+    } catch (error) {
+      logYsqlFailure('upload_replacement_lookup', error);
+      return failAttempt('Não foi possível validar o arquivo a substituir.', 503, 'REPLACEMENT_LOOKUP_FAILED');
     }
-    if (!replacement) return failAttempt('O arquivo a substituir não está mais disponível.', 409, 'REPLACEMENT_NOT_CURRENT');
-    deliveryKey = replacement.delivery_key;
   }
-
-  const safeFilename = sanitizeFilename(rawFilename);
 
   let buffer: Buffer;
   let checksum: string;
@@ -135,29 +171,39 @@ export const POST = async ({ locals, request }) => {
     buffer = Buffer.from(await file.arrayBuffer());
     checksum = crypto.createHash('sha256').update(buffer).digest('hex');
   } catch (error) {
-    console.error('scan_pipeline_upload_read_failed', { message: error instanceof Error ? error.message : 'unknown' });
+    logYsqlFailure('upload_file_read', error);
     return failAttempt('Não foi possível ler o arquivo selecionado.', 400, 'READ_FAILED');
   }
 
-  let storedRecord: { provider: string; fileKey: string; shardId: string | null; poolId: string | null; botReference: string; telegramFileId: string | null; sha256: string; byteSize: number };
-  // Version allocation happens atomically after storage succeeds. Keeping the
-  // storage key independent of that version prevents two concurrent uploads
-  // from racing for the same path before the database serializes them.
+  const safeFilename = sanitizeFilename(rawFilename);
   const artifactKey = `production/${scanId}/${productionChapterId}/${stage.slug}/${deliveryKey}/${uploadId}-${safeFilename}`;
   const storeInArtifacts = async () => {
-    const staffDb = createClient(env.STAFF_SUPABASE_URL || 'https://pgumtergvtbeepzpgvkv.supabase.co', env.STAFF_SUPABASE_SERVICE_ROLE_KEY || '');
-    const { error } = await staffDb.storage.from('scan-artifacts').upload(artifactKey, buffer, { contentType: file.type || 'application/octet-stream', upsert: false });
+    // Private artifact storage is separate from the authoritative YSQL data
+    // plane. Metadata, memberships and state transitions never use Supabase.
+    const staffStorage = createClient(env.STAFF_SUPABASE_URL || 'https://pgumtergvtbeepzpgvkv.supabase.co', env.STAFF_SUPABASE_SERVICE_ROLE_KEY || '');
+    const { error } = await staffStorage.storage.from('scan-artifacts').upload(artifactKey, buffer, {
+      contentType: file.type || 'application/octet-stream', upsert: false
+    });
     if (error) throw error;
     return { provider: 'STORAGE', fileKey: artifactKey, shardId: null, poolId: null, botReference: 'PRODUCTION_STORAGE', telegramFileId: null, sha256: checksum, byteSize: file.size };
   };
 
+  let storedRecord: { provider: string; fileKey: string; shardId: string | null; poolId: string | null; botReference: string; telegramFileId: string | null; sha256: string; byteSize: number };
   try {
     if (file.size > LARGE_FILE_THRESHOLD) {
       storedRecord = await storeInArtifacts();
     } else {
       try {
-        const tgRecord = await uploadPipelineFileToStorage({ bytes: new Uint8Array(buffer), fileName: safeFilename, mime: file.type || 'application/octet-stream', userId: locals.user.id, scanId, productionChapterId, stageId });
-        storedRecord = { provider: 'TELEGRAM', fileKey: `prod_${checksum.slice(0, 16)}_${Date.now()}`, shardId: tgRecord.shardId, poolId: tgRecord.poolId, botReference: tgRecord.botReference, telegramFileId: tgRecord.telegramFileId, sha256: tgRecord.sha256 || checksum, byteSize: tgRecord.byteSize };
+        const telegramRecord = await uploadPipelineFileToStorage({
+          bytes: new Uint8Array(buffer), fileName: safeFilename, mime: file.type || 'application/octet-stream',
+          userId: locals.user.id, scanId, productionChapterId, stageId
+        }, platform?.env);
+        storedRecord = {
+          provider: 'TELEGRAM', fileKey: `prod_${checksum.slice(0, 16)}_${Date.now()}`,
+          shardId: telegramRecord.shardId, poolId: telegramRecord.poolId,
+          botReference: telegramRecord.botReference, telegramFileId: telegramRecord.telegramFileId,
+          sha256: telegramRecord.sha256 || checksum, byteSize: telegramRecord.byteSize
+        };
       } catch (error: any) {
         if (error instanceof RateLimitError) {
           const response = await failAttempt('Rate limit temporário do armazenamento. Tente novamente em instantes.', 429, 'RATE_LIMIT');
@@ -168,80 +214,59 @@ export const POST = async ({ locals, request }) => {
         storedRecord = await storeInArtifacts();
       }
     }
-  } catch (error: any) {
-    console.error('scan_pipeline_upload_storage_failed', { uploadId, code: error?.code || null, message: error?.message || 'unknown' });
-    return failAttempt('Falha ao enviar o arquivo ao armazenamento. Você pode tentar novamente sem perder os demais arquivos.', 502, error?.code || 'STORAGE_FAILED');
+  } catch (error) {
+    logYsqlFailure('upload_storage', error);
+    return failAttempt('Falha ao enviar o arquivo ao armazenamento. Você pode tentar novamente sem perder os demais arquivos.', 502, 'STORAGE_FAILED');
   }
 
-  // The database owns the state transition from stored artifact -> current
-  // delivery. It locks the stage and the delivery lineage, versions only that
-  // file, and updates the upload intent in one transaction.
-  const { data: finalized, error: finalizeError } = await db.rpc('finalize_scan_pipeline_file', {
-    p_upload_id: uploadId,
-    p_replace_file_id: replacementId,
-    p_payload: {
-      scan_id: scanId,
-      work_id: chapter.work_id,
-      production_chapter_id: productionChapterId,
-      stage_id: stageId,
-      stage_slug: stage.slug,
-      delivery_key: deliveryKey,
-      file_name: rawFilename,
-      byte_size: storedRecord.byteSize,
-      mime_type: file.type || 'application/octet-stream',
-      file_key: storedRecord.fileKey,
-      storage_pool_id: storedRecord.poolId,
-      storage_shard_id: storedRecord.shardId,
-      bot_reference: storedRecord.botReference,
-      telegram_file_id: storedRecord.telegramFileId,
-      sha256: storedRecord.sha256,
-      provider: storedRecord.provider,
-      uploaded_by: locals.user.id,
-      is_leadership: locals.role === 'ADMIN' || ['OWNER', 'ADMIN'].includes(membershipRole || ''),
-      note
-    }
-  });
-  const currentFile = Array.isArray(finalized) ? finalized[0] : finalized;
-  if (finalizeError || !currentFile) {
-    const conflict = /REPLACEMENT_NOT_CURRENT|STAGE_NO_LONGER_ACCEPTS_UPLOAD|STAGE_ASSIGNMENT_CHANGED/.test(finalizeError?.message || '');
-    console.error('scan_pipeline_upload_finalize_failed', { code: finalizeError?.code || null, message: finalizeError?.message || 'unknown', conflict });
+  try {
+    const nameResult = await ysql<{ display_name: string | null; username: string | null }>(platform,
+      'SELECT display_name, username FROM public.members WHERE id = $1 LIMIT 1', [locals.user.id]);
+    const actorName = nameResult.rows[0]?.display_name || nameResult.rows[0]?.username || 'Membro';
+    const result = await ysql<{ file: any }>(platform, `
+      SELECT to_jsonb(finalized) AS file
+      FROM public.finalize_scan_pipeline_file_ysql($1, $2, $3, $4, $5, $6::jsonb) AS finalized
+    `, [uploadId, replacementId, locals.user.id, isGlobalAdmin, actorName, JSON.stringify({
+      scan_id: scanId, production_chapter_id: productionChapterId, stage_id: stageId,
+      delivery_key: deliveryKey, file_name: rawFilename, byte_size: storedRecord.byteSize,
+      mime_type: file.type || 'application/octet-stream', file_key: storedRecord.fileKey,
+      storage_pool_id: storedRecord.poolId, storage_shard_id: storedRecord.shardId,
+      bot_reference: storedRecord.botReference, telegram_file_id: storedRecord.telegramFileId,
+      sha256: storedRecord.sha256, provider: storedRecord.provider, note
+    })]);
+    const currentFile = result.rows[0]?.file;
+    if (!currentFile) throw new Error('YSQL finalizer returned no file');
+    return json({ success: true, file: currentFile, version: currentFile.version, uploadId, deliveryKey: currentFile.delivery_key });
+  } catch (error: any) {
+    const conflict = /REPLACEMENT_NOT_CURRENT|STAGE_NO_LONGER_ACCEPTS_UPLOAD|STAGE_ASSIGNMENT_CHANGED|UPLOAD_ATTEMPT_NOT_FINALIZABLE/.test(String(error?.message || ''));
+    logYsqlFailure('upload_finalize', error);
     return failAttempt(
-      conflict
-        ? 'A etapa ou o arquivo foi atualizado por outra pessoa. Atualize a lista antes de tentar novamente.'
-        : 'O arquivo foi enviado, mas não pôde ser registrado com segurança. Tente reenviá-lo.',
+      conflict ? 'A etapa ou o arquivo foi atualizado por outra pessoa. Atualize a lista antes de tentar novamente.' : 'O arquivo foi enviado, mas não pôde ser registrado com segurança. Tente reenviá-lo.',
       conflict ? 409 : 503,
-      finalizeError?.code || (conflict ? 'CONCURRENT_UPDATE' : 'FINALIZE_FAILED')
+      conflict ? 'CONCURRENT_UPDATE' : 'FINALIZE_FAILED'
     );
   }
-
-  const { data: callerMember } = await db.from('members').select('username, display_name').eq('id', locals.user.id).maybeSingle();
-  const callerName = callerMember?.display_name || callerMember?.username || 'Membro';
-  await Promise.all([
-    db.from('scan_chapter_timeline').insert({ scan_id: scanId, production_chapter_id: productionChapterId, stage_id: stageId, stage_slug: stage.slug, event_type: 'FILE_UPLOADED', user_id: locals.user.id, user_name: callerName, details: { file_name: rawFilename, version: currentFile.version, delivery_key: currentFile.delivery_key, byte_size: file.size, note: note || null } })
-  ]);
-  const { error: resolveError } = await db.rpc('resolve_scan_chapter_dependencies', { p_production_chapter_id: productionChapterId });
-  if (resolveError) console.error('scan_pipeline_upload_dependency_resolve_failed', { code: resolveError.code, message: resolveError.message });
-  return json({ success: true, file: currentFile, version: currentFile.version, uploadId, deliveryKey: currentFile.delivery_key });
 };
 
-// A failed item may be discarded; it must not block a valid partial delivery
-// forever. This never touches a successfully stored file.
-export const DELETE = async ({ locals, url }) => {
+export const DELETE = async ({ locals, url, platform }) => {
   if (!locals.user) return json({ error: 'Não autenticado' }, { status: 401 });
   const uploadId = url.searchParams.get('upload_id');
   if (!isUuid(uploadId)) return json({ error: 'Upload inválido' }, { status: 400 });
-  const db = privileged();
-  const { data: attempt, error } = await db.from('scan_pipeline_upload_attempts').select('id, scan_id, user_id, status').eq('id', uploadId).maybeSingle();
-  if (error) return json({ error: 'Não foi possível localizar o upload.' }, { status: 503 });
-  if (!attempt) return json({ error: 'Upload não encontrado' }, { status: 404 });
-  const access = await checkScanAccess(db, attempt.scan_id, locals.user.id, locals.role);
-  if (access.error) {
-    console.error('scan_pipeline_upload_discard_access_lookup_failed', { code: access.error.code, message: access.error.message });
-    return json({ error: 'Não foi possível validar sua permissão agora.' }, { status: 503 });
+  try {
+    const attemptResult = await ysql<{ id: string; scan_id: string; user_id: string; status: string }>(platform,
+      'SELECT id, scan_id, user_id, status FROM public.scan_pipeline_upload_attempts WHERE id = $1 LIMIT 1', [uploadId]);
+    const attempt = attemptResult.rows[0];
+    if (!attempt) return json({ error: 'Upload não encontrado' }, { status: 404 });
+    const access = await checkScanAccess(platform, attempt.scan_id, locals.user.id, locals.role === 'ADMIN');
+    if (!access.allowed || (attempt.user_id !== locals.user.id && locals.role !== 'ADMIN')) return json({ error: 'Acesso não autorizado' }, { status: 403 });
+    if (attempt.status === 'SUCCEEDED') return json({ error: 'Uploads concluídos não podem ser descartados por esta ação.' }, { status: 409 });
+    await ysql(platform, `
+      UPDATE public.scan_pipeline_upload_attempts SET status = 'CANCELLED', updated_at = now()
+      WHERE id = $1 AND status <> 'SUCCEEDED'
+    `, [uploadId]);
+    return json({ success: true });
+  } catch (error) {
+    logYsqlFailure('upload_discard', error);
+    return json({ error: 'Não foi possível descartar o upload.' }, { status: 503 });
   }
-  if (!access.allowed || (attempt.user_id !== locals.user.id && locals.role !== 'ADMIN')) return json({ error: 'Acesso não autorizado' }, { status: 403 });
-  if (attempt.status === 'SUCCEEDED') return json({ error: 'Uploads concluídos não podem ser descartados por esta ação.' }, { status: 409 });
-  const { error: updateError } = await db.from('scan_pipeline_upload_attempts').update({ status: 'CANCELLED', updated_at: new Date().toISOString() }).eq('id', uploadId);
-  if (updateError) return json({ error: 'Não foi possível descartar o upload.' }, { status: 503 });
-  return json({ success: true });
 };

@@ -1,27 +1,38 @@
-name: Deploy Supabase Migrations
+name: Deploy Yugabyte YSQL Migrations
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'supabase/migrations/**'
+  # YSQL credentials are intentionally not uploaded to GitHub implicitly.
+  # Run this only after a maintainer has configured the least-privilege YSQL
+  # secrets through the approved GitHub administration path.
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY_YSQL to apply pending migrations"
+        required: true
+        type: string
 
 jobs:
   deploy:
+    if: inputs.confirm == 'APPLY_YSQL'
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: izregkwaqdygwioqzwwo
+      YUGABYTE_HOST: ${{ secrets.YUGABYTE_HOST }}
+      YUGABYTE_PORT: ${{ secrets.YUGABYTE_PORT }}
+      YUGABYTE_USER: ${{ secrets.YUGABYTE_USER }}
+      YUGABYTE_PASSWORD: ${{ secrets.YUGABYTE_PASSWORD }}
+      YUGABYTE_DATABASE: ${{ secrets.YUGABYTE_DATABASE }}
+      YUGABYTE_SSL_CA: ${{ secrets.YUGABYTE_SSL_CA }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: 22
+          cache: npm
 
-      - name: Push Migrations
-        run: supabase link --project-ref $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD && supabase db push --password $SUPABASE_DB_PASSWORD
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply pending YSQL migrations
+        run: npm run db:migrate -- --all

@@ -38,21 +38,21 @@ describe('scan pipeline multi-file delivery', () => {
   });
 
   it('keeps completion guarded while failed or in-progress upload intents exist', () => {
-    const migration = readFileSync(resolve('supabase/migrations/20261002090000_scan_pipeline_multifile_deliverables.sql'), 'utf8');
+    const migration = readFileSync(resolve('yugabyte/migrations/20261002200000_scan_pipeline_multifile_deliverables.sql'), 'utf8');
     expect(migration).toContain("status IN ('UPLOADING', 'FAILED')");
     expect(migration).toContain('delivery_key');
     expect(migration).toContain("jsonb_agg(jsonb_build_object(");
   });
 
   it('finalizes replacements atomically and rejects a stale competing writer', () => {
-    const migration = readFileSync(resolve('supabase/migrations/20261002090000_scan_pipeline_multifile_deliverables.sql'), 'utf8');
-    expect(migration).toContain('finalize_scan_pipeline_file');
+    const migration = readFileSync(resolve('yugabyte/migrations/20261002200000_scan_pipeline_multifile_deliverables.sql'), 'utf8');
+    expect(migration).toContain('finalize_scan_pipeline_file_ysql');
     expect(migration).toContain('pg_advisory_xact_lock');
     expect(migration).toContain("FOR UPDATE;");
     expect(migration).toContain("RAISE EXCEPTION 'REPLACEMENT_NOT_CURRENT'");
     expect(migration).toContain("RAISE EXCEPTION 'STAGE_NO_LONGER_ACCEPTS_UPLOAD'");
     expect(migration).toContain("SET status = 'SUCCEEDED', file_id = v_file.id");
-    expect(migration).toContain('withdraw_scan_pipeline_file');
+    expect(migration).toContain('withdraw_scan_pipeline_file_ysql');
     expect(migration).toContain('Um insumo usado nesta entrega foi removido ou atualizado.');
   });
 
@@ -67,9 +67,9 @@ describe('scan pipeline multi-file delivery', () => {
   it('does not retain the old whole-stage overwrite query', () => {
     const endpoint = readFileSync(resolve('src/routes/api/scan/production/upload/+server.ts'), 'utf8');
     const filesEndpoint = readFileSync(resolve('src/routes/api/scan/production/files/[id]/+server.ts'), 'utf8');
-    expect(endpoint).toContain("db.rpc('finalize_scan_pipeline_file'");
+    expect(endpoint).toContain('finalize_scan_pipeline_file_ysql');
     expect(endpoint).not.toContain(".update({ is_current: false })\n      .eq('production_chapter_id', productionChapterId)");
     expect(endpoint).toContain("Assuma esta etapa antes de enviar ou alterar arquivos.");
-    expect(filesEndpoint).toContain("db.rpc('withdraw_scan_pipeline_file'");
+    expect(filesEndpoint).toContain('withdraw_scan_pipeline_file_ysql');
   });
 });
