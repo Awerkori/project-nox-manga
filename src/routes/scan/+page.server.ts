@@ -820,30 +820,48 @@ export const actions: Actions = {
     return { success: true, bannerRemoved: true };
   },
 
-  claimTask: async ({ request, locals }) => {
+  claimTask: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = (formData.get('task_id') || formData.get('taskId')) as string;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('claim_scan_task', { p_task_id: taskId });
-    if (error) return fail(400, { message: error.message });
-    return { success: true, taskClaimed: data || true };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.claim_scan_task_ysql($1, $2, $3) AS result',
+        [taskId, locals.user.id, locals.role === 'ADMIN'], platform?.env
+      );
+      return { success: true, taskClaimed: result.rows[0]?.result || true };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_task_claim_ysql_failed', { taskId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /TASK_(NOT_FOUND|NOT_CLAIMABLE|ALREADY_CLAIMED|POSITION_REQUIRED|WORKFLOW_STAGE_NOT_FOUND)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A tarefa foi alterada ou você não pode assumi-la. Atualize a página.' : 'Não foi possível assumir a tarefa com segurança agora.' });
+    }
   },
 
-  releaseTask: async ({ request, locals }) => {
+  releaseTask: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
     const reason = (formData.get('reason') as string)?.trim() || null;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('release_scan_task', { p_task_id: taskId, p_reason: reason });
-    if (error) return fail(400, { message: error.message });
-    return { success: true, taskReleased: data };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.release_scan_task_ysql($1, $2, $3, $4) AS result',
+        [taskId, locals.user.id, locals.role === 'ADMIN', reason], platform?.env
+      );
+      return { success: true, taskReleased: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_task_release_ysql_failed', { taskId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /TASK_(NOT_FOUND|NOT_RELEASABLE|RELEASE_FORBIDDEN)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A tarefa foi alterada ou você não pode devolvê-la. Atualize a página.' : 'Não foi possível devolver a tarefa com segurança agora.' });
+    }
   },
 
-  completeStage: async ({ request, locals }) => {
+  completeStage: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const taskId = formData.get('task_id') as string;
@@ -851,13 +869,18 @@ export const actions: Actions = {
     const fileId = (formData.get('file_id') as string)?.trim() || null;
     if (!taskId) return fail(400, { message: 'ID da tarefa ausente' });
 
-    const { data, error } = await locals.db.rpc('complete_scan_stage', {
-      p_task_id: taskId,
-      p_note: note,
-      p_file_id: fileId
-    });
-    if (error) return fail(400, { message: error.message });
-    return { success: true, stageCompleted: data };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        'SELECT public.complete_scan_task_ysql($1, $2, $3, $4, $5) AS result',
+        [taskId, locals.user.id, locals.role === 'ADMIN', note, fileId], platform?.env
+      );
+      return { success: true, stageCompleted: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_task_completion_ysql_failed', { taskId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /TASK_(NOT_FOUND|NOT_COMPLETABLE|COMPLETION_FORBIDDEN|WORKFLOW_STAGE_NOT_FOUND)|SCAN_MEMBERSHIP_REQUIRED/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'A tarefa foi alterada ou você não pode concluí-la. Atualize a página.' : 'Não foi possível concluir a tarefa com segurança agora.' });
+    }
   },
 
   requestPartner: async ({ request, locals }) => {
