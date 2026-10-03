@@ -202,6 +202,57 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     'scan_pipeline_snapshot_ysql'
   );
 
+  // Chat is a high-frequency workspace surface, so its read model follows the
+  // same YSQL-first pattern as the editorial graph. Realtime remains in the
+  // browser for now; replacing it requires an equivalent event transport, not
+  // a polling regression.
+  const chatSnapshotPromise = withTimeout(
+    Promise.all([
+      executeYugabyteSql<any>(`
+        SELECT channel.*
+        FROM public.scan_channels channel
+        WHERE channel.scan_id = $1
+        ORDER BY channel.display_order ASC
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT message.*,
+          CASE WHEN author.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', author.id, 'username', author.username,
+            'display_name', author.display_name, 'avatar_id', author.avatar_id
+          ) END AS user,
+          CASE WHEN reply.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id', reply.id, 'content', reply.content, 'deleted_at', reply.deleted_at,
+            'user', CASE WHEN reply_author.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', reply_author.id, 'username', reply_author.username,
+              'display_name', reply_author.display_name
+            ) END
+          ) END AS reply_to,
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'id', reaction.id, 'emoji', reaction.emoji, 'user_id', reaction.user_id
+            ) ORDER BY reaction.created_at ASC)
+            FROM public.scan_message_reactions reaction
+            WHERE reaction.message_id = message.id
+          ), '[]'::jsonb) AS reactions
+        FROM public.scan_messages message
+        LEFT JOIN public.members author ON author.id = message.user_id
+        LEFT JOIN public.scan_messages reply ON reply.id = message.reply_to_id
+        LEFT JOIN public.members reply_author ON reply_author.id = reply.user_id
+        WHERE message.scan_id = $1
+        ORDER BY message.created_at ASC
+        LIMIT 150
+      `, [currentScan.id], platform?.env),
+      executeYugabyteSql<any>(`
+        SELECT read_state.*
+        FROM public.scan_channel_read_states read_state
+        WHERE read_state.scan_id = $1 AND read_state.user_id = $2
+      `, [currentScan.id, locals.user.id], platform?.env)
+    ]),
+    3_500,
+    null,
+    'scan_chat_snapshot_ysql'
+  );
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -227,8 +278,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     integrationsRes,
     uploadersRes,
     recruitmentQuestionsRes,
-    channelsRes,
-    messagesRes,
+    ,
+    ,
     notificationsRes,
     notificationPrefsRes,
     tutorialsRes,
@@ -243,7 +294,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ,
     workOverridesRes,
     creditSnapshotsRes,
-    channelReadStatesRes,
+    ,
     applicationAnswersRes,
     seenStagesRes
   ] = await withTimeout(
@@ -450,22 +501,10 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_channels')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .order('display_order', { ascending: true }),
-    locals.db
-      .from('scan_messages')
-      .select(`
-        *,
-        user:user_id(id, username, display_name, avatar_id),
-        reply_to:reply_to_id(id, content, deleted_at, user:user_id(id, username, display_name)),
-        reactions:scan_message_reactions(id, emoji, user_id)
-      `)
-      .eq('scan_id', currentScan.id)
-      .order('created_at', { ascending: true })
-      .limit(150),
+    // YSQL chat snapshot is started above. Retired reads are only used by the
+    // explicit availability fallback below if that snapshot is unavailable.
+    Promise.resolve({ data: [] }),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_notifications')
       .select('*')
@@ -528,11 +567,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       .select('*')
       .eq('scan_id', currentScan.id)
       .order('role_order', { ascending: true }),
-    locals.db
-      .from('scan_channel_read_states')
-      .select('*')
-      .eq('scan_id', currentScan.id)
-      .eq('user_id', locals.user.id),
+    Promise.resolve({ data: [] }),
     locals.db
       .from('scan_application_answers')
       .select(`
@@ -775,6 +810,56 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     });
   }
 
+  // Do not pay for PostgREST chat reads when YSQL is healthy. The fallback is
+  // deliberately all-or-nothing so channels, messages and read markers stay
+  // from the same data plane on a degraded request.
+  let chatChannels: any[];
+  let chatMessages: any[];
+  let channelReadStates: any[];
+  const chatSnapshot = await chatSnapshotPromise;
+  if (chatSnapshot) {
+    const [channelsResult, messagesResult, readStatesResult] = chatSnapshot;
+    chatChannels = channelsResult.rows;
+    chatMessages = messagesResult.rows;
+    channelReadStates = readStatesResult.rows;
+  } else {
+    console.warn('scan_chat_snapshot_ysql_fallback', {
+      scanId: currentScan.id,
+      message: 'ysql snapshot unavailable'
+    });
+    const [channelsFallback, messagesFallback, readStatesFallback] = await withTimeout(
+      Promise.all([
+        locals.db
+          .from('scan_channels')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .order('display_order', { ascending: true }),
+        locals.db
+          .from('scan_messages')
+          .select(`
+            *,
+            user:user_id(id, username, display_name, avatar_id),
+            reply_to:reply_to_id(id, content, deleted_at, user:user_id(id, username, display_name)),
+            reactions:scan_message_reactions(id, emoji, user_id)
+          `)
+          .eq('scan_id', currentScan.id)
+          .order('created_at', { ascending: true })
+          .limit(150),
+        locals.db
+          .from('scan_channel_read_states')
+          .select('*')
+          .eq('scan_id', currentScan.id)
+          .eq('user_id', locals.user.id)
+      ]),
+      3_500,
+      Array.from({ length: 3 }, () => ({ data: [] })) as any,
+      'scan_chat_snapshot_legacy_fallback'
+    );
+    chatChannels = channelsFallback.data || [];
+    chatMessages = messagesFallback.data || [];
+    channelReadStates = readStatesFallback.data || [];
+  }
+
   return {
     authenticated: true,
     isMember: true,
@@ -807,9 +892,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     integrations: integrationsRes.data || [],
     workUploaders: uploadersRes.data || [],
     recruitmentQuestions: recruitmentQuestionsRes.data || [],
-    channels: channelsRes.data || [],
-    messages: messagesRes.data || [],
-    channelReadStates: channelReadStatesRes.data || [],
+    channels: chatChannels,
+    messages: chatMessages,
+    channelReadStates,
     applicationAnswers: applicationAnswersRes.data || [],
     notifications: notificationsRes.data || [],
     notificationPrefs: notificationPrefsRes.data || null,
