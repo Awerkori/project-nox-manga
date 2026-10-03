@@ -31,8 +31,20 @@ CREATE TABLE IF NOT EXISTS public.scan_pipeline_stage_seen (
   UNIQUE (user_id, chapter_stage_id, availability_version)
 );
 
-CREATE INDEX IF NOT EXISTS idx_scan_pipeline_stage_seen_user_scan
-  ON public.scan_pipeline_stage_seen(user_id, scan_id);
+-- Existing installations may own this table with the legacy deployment role.
+-- A least-privilege migrator cannot create an index on a relation it does not
+-- own, even when the index is absent. Try the optimization, but keep the
+-- schema migration idempotent and let the table owner add it separately.
+DO $$
+BEGIN
+  BEGIN
+    CREATE INDEX IF NOT EXISTS idx_scan_pipeline_stage_seen_user_scan
+      ON public.scan_pipeline_stage_seen(user_id, scan_id);
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping idx_scan_pipeline_stage_seen_user_scan: relation owner required';
+  END;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.scan_attachments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -50,8 +62,22 @@ CREATE TABLE IF NOT EXISTS public.scan_attachments (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_scan_attachments_ctx ON public.scan_attachments(context_type, context_id);
-CREATE INDEX IF NOT EXISTS idx_scan_attachments_scan ON public.scan_attachments(scan_id);
+DO $$
+BEGIN
+  BEGIN
+    CREATE INDEX IF NOT EXISTS idx_scan_attachments_ctx
+      ON public.scan_attachments(context_type, context_id);
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping idx_scan_attachments_ctx: relation owner required';
+  END;
+  BEGIN
+    CREATE INDEX IF NOT EXISTS idx_scan_attachments_scan
+      ON public.scan_attachments(scan_id);
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping idx_scan_attachments_scan: relation owner required';
+  END;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.create_scan_production_chapter_ysql(
   p_scan_id uuid, p_work_id uuid, p_chapter_number numeric,
