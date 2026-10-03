@@ -79,4 +79,10 @@ describe('scan pipeline multi-file delivery', () => {
     expect(workspace).toContain('UPLOADS_PENDING');
     expect(workspace).not.toContain("locals.db.rpc('complete_scan_chapter_stage'");
   });
+
+  it('keys a member position by the position identifier returned by the workspace loader', () => {
+    const workspace = readFileSync(resolve('src/routes/scan/+page.svelte'), 'utf8');
+    expect(workspace).toContain('{#each member.positions as pos (pos.position_id)}');
+    expect(workspace).not.toContain('{#each member.positions as pos (pos.id)}');
+  });
 });
