@@ -938,4 +938,39 @@
       justify-content: flex-end;
     }
   }
+
+  /* Keep public recruiting actions comfortably tappable on narrow phones.
+     A card has room for the full vacancy CTA; it should not be sacrificed to
+     an icon row or wrap into an ambiguous two-line button. */
+  @media (max-width: 430px) {
+    .card-footer {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    .social-links {
+      justify-content: space-between;
+    }
+
+    .social-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0.55rem;
+    }
+
+    .btn-apply,
+    .btn-view-works {
+      min-width: 0;
+      min-height: 2.65rem;
+      justify-content: center;
+      padding-inline: 0.5rem;
+      white-space: nowrap;
+    }
+  }
 </style>
