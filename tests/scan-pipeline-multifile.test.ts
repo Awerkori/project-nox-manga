@@ -72,4 +72,11 @@ describe('scan pipeline multi-file delivery', () => {
     expect(endpoint).toContain("Assuma esta etapa antes de enviar ou alterar arquivos.");
     expect(filesEndpoint).toContain('withdraw_scan_pipeline_file_ysql');
   });
+
+  it('uses the YSQL completion guard for the multi-file Pipeline', () => {
+    const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
+    expect(workspace).toContain('complete_scan_chapter_stage_ysql');
+    expect(workspace).toContain('UPLOADS_PENDING');
+    expect(workspace).not.toContain("locals.db.rpc('complete_scan_chapter_stage'");
+  });
 });

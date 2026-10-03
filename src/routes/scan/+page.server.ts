@@ -2575,12 +2575,35 @@ export const actions: Actions = {
     const notes = formData.get('notes') ? String(formData.get('notes')) : null;
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('complete_scan_chapter_stage', {
-      p_chapter_stage_id: stageId,
-      p_notes: notes
-    });
-
-    if (error) return fail(400, { message: error.message });
+    // Completion must share the same YSQL transaction boundary as the
+    // multi-file finalizer. The legacy RPC cannot see upload attempts or the
+    // complete per-file lineage, which could allow a stage to close while a
+    // sibling upload was still pending.
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(`
+        SELECT public.complete_scan_chapter_stage_ysql($1, $2, $3, $4) AS result
+      `, [stageId, locals.user.id, locals.role === 'ADMIN', notes], platform?.env);
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_STAGE_COMPLETION_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_pipeline_stage_completion_ysql_failed', {
+        chapterStageId: stageId,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const actionable = /CHAPTER_STAGE_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED|STAGE_COMPLETION_NOT_ALLOWED|WORKFLOW_STAGE_NOT_FOUND|UPLOADS_PENDING|STAGE_OUTPUT_REQUIRED/.test(detail);
+      return fail(actionable ? 409 : 503, {
+        message: detail.includes('UPLOADS_PENDING')
+          ? 'Aguarde os uploads pendentes terminarem ou corrija os arquivos que falharam.'
+          : detail.includes('STAGE_OUTPUT_REQUIRED')
+            ? 'Envie pelo menos um arquivo válido antes de concluir esta etapa.'
+            : actionable
+              ? 'A etapa foi alterada ou você não tem mais permissão para concluí-la. Atualize a página.'
+              : 'Não foi possível concluir a etapa com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     if (platform?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
