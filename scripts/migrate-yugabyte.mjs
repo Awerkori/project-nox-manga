@@ -3,8 +3,10 @@
  * The authoritative Project Nox schema lives in YugabyteDB Aeon (YSQL).
  * This intentionally has no Supabase CLI or Supabase credential dependency.
  *
- * Required environment: YUGABYTE_HOST, YUGABYTE_USER, YUGABYTE_PASSWORD,
- * YUGABYTE_DATABASE and either YUGABYTE_SSL_CA or YUGABYTE_SSL_CERT.
+ * Required environment: YUGABYTE_URL (preferred) or YUGABYTE_HOST,
+ * YUGABYTE_USER, YUGABYTE_PASSWORD and YUGABYTE_DATABASE; plus either
+ * YUGABYTE_SSL_CA or YUGABYTE_SSL_CERT. A URL keeps GitHub Actions from
+ * distributing one connection across several independent secrets.
  * Pass YUGABYTE_ENV_FILE=/secure/path/.env for an operator-only local run.
  */
 import crypto from 'node:crypto';
@@ -40,10 +42,13 @@ function parseEnvFile(file) {
 const envFile = process.env.YUGABYTE_ENV_FILE;
 const fileEnv = envFile ? parseEnvFile(envFile) : {};
 const value = (name) => process.env[name] || fileEnv[name] || '';
-const required = ['YUGABYTE_HOST', 'YUGABYTE_USER', 'YUGABYTE_PASSWORD', 'YUGABYTE_DATABASE'];
-const missing = required.filter((name) => !value(name));
-if (missing.length) {
-  throw new Error(`Missing required Yugabyte configuration: ${missing.join(', ')}`);
+const connectionString = value('YUGABYTE_URL');
+if (!connectionString) {
+  const required = ['YUGABYTE_HOST', 'YUGABYTE_USER', 'YUGABYTE_PASSWORD', 'YUGABYTE_DATABASE'];
+  const missing = required.filter((name) => !value(name));
+  if (missing.length) {
+    throw new Error(`Missing required Yugabyte configuration: YUGABYTE_URL or ${missing.join(', ')}`);
+  }
 }
 
 let ca = value('YUGABYTE_SSL_CA');
@@ -60,11 +65,15 @@ if (!ca) {
 }
 
 const client = new pg.Client({
-  host: value('YUGABYTE_HOST'),
-  port: Number(value('YUGABYTE_PORT') || 5433),
-  user: value('YUGABYTE_USER'),
-  password: value('YUGABYTE_PASSWORD'),
-  database: value('YUGABYTE_DATABASE'),
+  ...(connectionString
+    ? { connectionString }
+    : {
+        host: value('YUGABYTE_HOST'),
+        port: Number(value('YUGABYTE_PORT') || 5433),
+        user: value('YUGABYTE_USER'),
+        password: value('YUGABYTE_PASSWORD'),
+        database: value('YUGABYTE_DATABASE')
+      }),
   connectionTimeoutMillis: 25_000,
   ssl: { rejectUnauthorized: true, ca },
   application_name: 'project-nox-ysql-migrator'

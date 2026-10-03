@@ -1146,7 +1146,7 @@ export const actions: Actions = {
     return { success: true, positionManaged: true, data };
   },
 
-  manageOpening: async ({ request, locals }) => {
+  manageOpening: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1165,26 +1165,36 @@ export const actions: Actions = {
 
     if (!positionId) return fail(400, { message: 'Cargo é obrigatório' });
 
-    const { data, error: rpcErr } = await locals.db.rpc('manage_scan_opening', {
-      p_scan_id: scanId,
-      p_opening_id: openingId,
-      p_position_id: positionId,
-      p_title: title || '',
-      p_description: description,
-      p_requirements: requirements,
-      p_language: language,
-      p_experience_level: experienceLevel,
-      p_availability: availability,
-      p_slots: slots,
-      p_notes: notes,
-      p_status: status
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.manage_scan_opening_ysql($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) AS result`,
+        [
+          scanId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), openingId,
+          positionId, title || '', description, requirements, language, experienceLevel, availability, slots, notes, status
+        ],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_OPENING_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_recruitment_manage_opening_ysql_failed', {
+        scanId, openingId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const clientError = /RECRUITMENT_MANAGEMENT_FORBIDDEN|OPENING_(ARGUMENT_INVALID|STATUS_INVALID|SLOTS_INVALID|POSITION_NOT_FOUND|NOT_FOUND)/.test(detail);
+      return fail(clientError ? 403 : 503, {
+        message: clientError
+          ? 'A vaga foi alterada, o cargo é inválido ou você não tem permissão para administrá-la.'
+          : 'Não foi possível salvar a vaga com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     return { success: true, openingManaged: true, data };
   },
 
-  reviewApplication: async ({ request, locals }) => {
+  reviewApplication: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const applicationId = formData.get('application_id') as string;
@@ -1193,26 +1203,37 @@ export const actions: Actions = {
     const addToTeam = formData.get('add_to_team') === 'true';
     const initialRole = (formData.get('initial_role') as string) || 'MEMBER';
 
-    const { data, error: rpcErr } = await locals.db.rpc('review_scan_application', {
-      p_application_id: applicationId,
-      p_action: action,
-      p_notes: notes,
-      p_add_to_team: addToTeam,
-      p_initial_role: initialRole
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.review_scan_application_ysql($1, $2, $3, $4, $5, $6, $7) AS result`,
+        [applicationId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), action, notes, addToTeam, initialRole],
+        platform?.env
+      );
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_APPLICATION_REVIEW_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_recruitment_review_ysql_failed', {
+        applicationId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const conflict = /APPLICATION_ALREADY_FINALIZED/.test(detail);
+      const clientError = /APPLICATION_(NOT_FOUND|REVIEW_FORBIDDEN|ACTION_INVALID|MEMBER_ROLE_INVALID)|AUTHENTICATION_REQUIRED/.test(detail);
+      return fail(conflict ? 409 : clientError ? 403 : 503, {
+        message: conflict
+          ? 'Esta candidatura já foi concluída por outra pessoa. Atualize a página.'
+          : clientError
+            ? 'A candidatura foi alterada ou você não tem permissão para avaliá-la.'
+            : 'Não foi possível avaliar a candidatura com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
 
     try {
-      const { data: appRow } = await locals.db
-        .from('scan_applications')
-        .select('user_id, scan_id, scans(name), openings:opening_id(title)')
-        .eq('id', applicationId)
-        .maybeSingle();
-
-      if (appRow && appRow.user_id && appRow.user_id !== locals.user.id) {
-        const scanName = (appRow.scans as any)?.name || 'Scan';
-        const opTitle = (appRow.openings as any)?.title || 'Vaga';
+      if (data.applicant_id && data.applicant_id !== locals.user.id) {
+        const scanName = data.scan_name || 'Scan';
+        const opTitle = data.opening_title || 'Vaga';
         const actionTitle = action === 'APPROVE' ? 'Candidatura Aprovada!' : action === 'REJECT' ? 'Atualização sobre sua candidatura' : 'Candidatura em análise';
         const actionBody = action === 'APPROVE'
           ? `Parabéns! Sua candidatura para ${opTitle} na scan ${scanName} foi aprovada.`
@@ -1221,13 +1242,13 @@ export const actions: Actions = {
           : `Sua candidatura para ${opTitle} na scan ${scanName} foi colocada sob análise pela liderança.`;
 
         await createNotification({
-          recipientUserId: appRow.user_id,
+          recipientUserId: data.applicant_id,
           actorUserId: locals.user.id,
           type: 'APPLICATION_UPDATE',
           title: actionTitle,
           body: notes ? `${actionBody} Observações: ${notes}` : actionBody,
           deepLink: `/me`,
-          scanId: appRow.scan_id,
+          scanId: data.scan_id,
           priority: 'NORMAL',
           dedupeKey: `app_review:${applicationId}:${action}:${Date.now()}`
         }).catch(err => console.error('Error notifying applicant:', err));
@@ -1239,7 +1260,7 @@ export const actions: Actions = {
     return { success: true, applicationReviewed: true, data };
   },
 
-  assignPosition: async ({ request, locals }) => {
+  assignPosition: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
@@ -1247,49 +1268,63 @@ export const actions: Actions = {
     const positionId = formData.get('position_id') as string;
     const isPrimary = formData.get('is_primary') === 'true';
 
-    const { data, error: rpcErr } = await locals.db.rpc('assign_scan_member_position', {
-      p_scan_id: scanId,
-      p_user_id: userId,
-      p_position_id: positionId,
-      p_is_primary: isPrimary
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, positionAssigned: true, data };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.manage_scan_member_position_ysql('ASSIGN', $1, $2, $3, $4, $5, $6) AS result`,
+        [scanId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), userId, positionId, isPrimary],
+        platform?.env
+      );
+      return { success: true, positionAssigned: true, data: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_member_position_assign_ysql_failed', { scanId, userId, positionId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /MEMBER_POSITION_(FORBIDDEN|TARGET_NOT_MEMBER|NOT_FOUND|ARGUMENT_INVALID)/.test(detail);
+      return fail(expected ? 403 : 503, { message: expected ? 'O membro, cargo ou sua permissão mudou. Atualize a página.' : 'Não foi possível atribuir o cargo com segurança agora.' });
+    }
   },
 
-  removePosition: async ({ request, locals }) => {
+  removePosition: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const userId = formData.get('user_id') as string;
     const positionId = formData.get('position_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('remove_scan_member_position', {
-      p_scan_id: scanId,
-      p_user_id: userId,
-      p_position_id: positionId
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, positionRemoved: true, data };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.manage_scan_member_position_ysql('REMOVE', $1, $2, $3, $4, $5, false) AS result`,
+        [scanId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), userId, positionId],
+        platform?.env
+      );
+      return { success: true, positionRemoved: true, data: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_member_position_remove_ysql_failed', { scanId, userId, positionId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /MEMBER_POSITION_(FORBIDDEN|TARGET_NOT_MEMBER|NOT_FOUND|NOT_ASSIGNED|ARGUMENT_INVALID)/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'O cargo já foi alterado ou você não tem permissão. Atualize a página.' : 'Não foi possível remover o cargo com segurança agora.' });
+    }
   },
 
-  setPrimaryPosition: async ({ request, locals }) => {
+  setPrimaryPosition: async ({ request, locals, platform }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const userId = formData.get('user_id') as string;
     const positionId = formData.get('position_id') as string;
 
-    const { data, error: rpcErr } = await locals.db.rpc('set_primary_scan_position', {
-      p_scan_id: scanId,
-      p_user_id: userId,
-      p_position_id: positionId
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, primaryPositionSet: true, data };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.manage_scan_member_position_ysql('SET_PRIMARY', $1, $2, $3, $4, $5, true) AS result`,
+        [scanId, locals.user.id, ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || ''), userId, positionId],
+        platform?.env
+      );
+      return { success: true, primaryPositionSet: true, data: result.rows[0]?.result };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_member_position_primary_ysql_failed', { scanId, userId, positionId, actorId: locals.user.id, message: detail.slice(0, 240) });
+      const expected = /MEMBER_POSITION_(FORBIDDEN|TARGET_NOT_MEMBER|NOT_FOUND|NOT_ASSIGNED|ARGUMENT_INVALID)/.test(detail);
+      return fail(expected ? 409 : 503, { message: expected ? 'O cargo já foi alterado ou você não tem permissão. Atualize a página.' : 'Não foi possível definir o cargo principal com segurança agora.' });
+    }
   },
 
   postStaffNote: async ({ request, locals }) => {
@@ -2538,11 +2573,30 @@ export const actions: Actions = {
     const stageId = String(formData.get('chapter_stage_id') || '');
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
-    const { data, error } = await locals.db.rpc('claim_scan_chapter_stage', {
-      p_chapter_stage_id: stageId
-    });
-
-    if (error) return fail(400, { message: error.message });
+    let data: any;
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(`
+        SELECT public.claim_scan_chapter_stage_ysql($1, $2, $3) AS result
+      `, [stageId, locals.user.id, locals.role === 'ADMIN'], platform?.env);
+      data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_STAGE_CLAIM_EMPTY_RESULT');
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_pipeline_stage_claim_ysql_failed', {
+        chapterStageId: stageId, actorId: locals.user.id,
+        code: typeof error?.code === 'string' ? error.code : null,
+        message: detail.slice(0, 240)
+      });
+      const conflict = /STAGE_ALREADY_CLAIMED/.test(detail);
+      const actionable = /CHAPTER_STAGE_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED|WORKFLOW_STAGE_NOT_FOUND|FINAL_STAGE_NOT_CLAIMABLE|LEADERSHIP_CLAIM_REQUIRED|STAGE_POSITION_REQUIRED/.test(detail);
+      return fail(conflict || actionable ? 409 : 503, {
+        message: conflict
+          ? 'Esta etapa acabou de ser assumida por outro membro. Atualize a página.'
+          : actionable
+            ? 'A etapa foi alterada ou você não tem o cargo necessário para assumi-la.'
+            : 'Não foi possível assumir a etapa com segurança agora. Nenhuma alteração foi aplicada.'
+      });
+    }
     if (platform?.context?.waitUntil) {
       platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
     }
