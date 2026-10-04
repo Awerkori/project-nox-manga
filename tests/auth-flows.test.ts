@@ -62,31 +62,56 @@ describe('account actions', () => {
     expect(claimInvite).not.toHaveBeenCalled();
   });
   it('sends registration confirmation to the own origin without claiming unverified roles', async () => {
-    const e = event('cadastrar');
+    const e = event('cadastrar', {
+      username: 'reader_qa',
+      email: 'reader@example.invalid',
+      password: 'long-password'
+    });
     expect(await actions.default(e)).toMatchObject({ success: true });
     expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
       email: 'reader@example.invalid',
       password: 'long-password',
-      options: { emailRedirectTo: 'https://nox.invalid/auth/confirm' }
+      options: {
+        emailRedirectTo: 'https://nox.invalid/auth/confirm',
+        data: { username: 'reader_qa' }
+      }
     });
     expect(claimInvite).not.toHaveBeenCalled();
   });
   it('shows a safe retry message when email quota is exhausted', async () => {
-    const e = event('cadastrar');
+    const e = event('cadastrar', {
+      username: 'reader_qa',
+      email: 'reader@example.invalid',
+      password: 'long-password'
+    });
     e.locals.db.auth.signUp.mockResolvedValue({ error: { code: 'over_email_send_rate_limit' } });
     expect(await actions.default(e)).toMatchObject({
       status: 400,
       data: { message: 'Limite de envio atingido. Tente novamente mais tarde.' }
     });
   });
-  it('keeps the legacy optional username contract while pinning production callbacks', async () => {
-    const e = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
+  it('requires a username while pinning production callbacks', async () => {
+    const missing = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
+    expect(await actions.default(missing)).toMatchObject({
+      status: 400,
+      data: { message: 'Informe um @handle para criar sua conta.' }
+    });
+    expect(missing.locals.db.auth.signUp).not.toHaveBeenCalled();
+
+    const e = event('cadastrar', {
+      username: 'reader_qa',
+      email: 'reader@example.invalid',
+      password: 'long-password'
+    });
     e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
     expect(await actions.default(e)).toMatchObject({ success: true });
     expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
       email: 'reader@example.invalid',
       password: 'long-password',
-      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
+      options: {
+        emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm',
+        data: { username: 'reader_qa' }
+      }
     });
   });
   it('resends confirmation through the existing provider with a cooldown-capable action', async () => {
