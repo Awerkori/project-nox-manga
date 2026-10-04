@@ -26,14 +26,18 @@
   // Signup fields
   let displayName = $state('');
   let username = $state('');
+  let email = $state('');
   let usernameStatus = $state<'idle' | 'checking' | 'available' | 'error'>('idle');
   let usernameMessage = $state('');
   let checkTimer: any = null;
+  let usernameRequest = 0;
+  let resendCooldown = $state(0);
+  let resendTimer: any = null;
 
   let title = $derived(
     {
       entrar: 'Bom ter você de volta.',
-      cadastrar: 'Seu próximo capítulo.',
+      cadastrar: 'Crie seu espaço na Nox.',
       recuperar: 'Vamos recuperar seu acesso.',
       redefinir: 'Uma nova senha.'
     }[data.mode]
@@ -68,11 +72,13 @@
 
     usernameStatus = 'checking';
     usernameMessage = 'Verificando...';
+    const requestId = ++usernameRequest;
 
     checkTimer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(sanitized)}`);
         const json = await res.json();
+        if (requestId !== usernameRequest) return;
         if (json.available) {
           usernameStatus = 'available';
           usernameMessage = `@${sanitized} está disponível!`;
@@ -81,10 +87,23 @@
           usernameMessage = json.reason || 'Nome indisponível.';
         }
       } catch {
+        if (requestId !== usernameRequest) return;
         usernameStatus = 'error';
         usernameMessage = 'Erro ao verificar disponibilidade.';
       }
     }, 280);
+  }
+
+  function startResendCooldown() {
+    if (resendTimer) clearInterval(resendTimer);
+    resendCooldown = 30;
+    resendTimer = setInterval(() => {
+      resendCooldown -= 1;
+      if (resendCooldown <= 0) {
+        clearInterval(resendTimer);
+        resendTimer = null;
+      }
+    }, 1000);
   }
 </script>
 
@@ -99,18 +118,16 @@
     <aside class="auth-branding-col">
       <div class="brand-pill">
         <Sparkles size={14} />
-        <span>PROJECT NOX COMMUNITY</span>
+        <span>LEITURA · COMUNIDADE · NOX</span>
       </div>
 
       <h1 class="brand-headline">
-        Sua história<br />
-        também faz<br />
-        <span class="gradient-text">parte daqui.</span>
+        Leia no seu ritmo.<br />
+        <span class="gradient-text">Fique por perto.</span>
       </h1>
 
       <p class="brand-subtext">
-        Uma experiência definitiva de leitura digital, feita de leitores para leitores, com autonomia,
-        customização total e performance extrema.
+        Acompanhe suas obras, guarde seu progresso e encontre uma comunidade que também vive cada capítulo.
       </p>
 
       <!-- Platform Perks List -->
@@ -120,8 +137,8 @@
             <BookOpen size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Progresso em Nuvem</h4>
-            <p class="perk-desc">Continue de onde parou em qualquer dispositivo sem perder suas páginas lidas.</p>
+            <h4 class="perk-title">Seu progresso, sempre perto</h4>
+            <p class="perk-desc">Continue de onde parou em qualquer dispositivo.</p>
           </div>
         </div>
 
@@ -130,8 +147,8 @@
             <Trophy size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Economia Cósmica & Cosméticos</h4>
-            <p class="perk-desc">Acumule XP lendo capítulos e desbloqueie molduras animadas, títulos e cores.</p>
+            <h4 class="perk-title">Um perfil com a sua cara</h4>
+            <p class="perk-desc">Escolha seu @handle e organize sua identidade na comunidade.</p>
           </div>
         </div>
 
@@ -140,8 +157,8 @@
             <Download size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Leitura Offline Rápida</h4>
-            <p class="perk-desc">Baixe obras completas em segundos para ler mesmo sem conexão de internet.</p>
+            <h4 class="perk-title">Leitura sem distrações</h4>
+            <p class="perk-desc">Uma biblioteca simples para voltar às histórias que importam.</p>
           </div>
         </div>
 
@@ -150,8 +167,8 @@
             <Bell size={18} />
           </div>
           <div class="perk-content">
-            <h4 class="perk-title">Notificações em Tempo Real</h4>
-            <p class="perk-desc">Receba avisos instantâneos quando suas obras favoritas lançarem novos capítulos.</p>
+            <h4 class="perk-title">Novos capítulos no tempo certo</h4>
+            <p class="perk-desc">Receba avisos sobre suas obras favoritas.</p>
           </div>
         </div>
       </div>
@@ -164,13 +181,13 @@
           <h2 class="auth-card-title">{title}</h2>
           <p class="auth-card-subtitle">
             {#if data.mode === 'entrar'}
-              Entre com suas credenciais para continuar sua jornada na Nox.
+              Acesse sua biblioteca e continue de onde parou.
             {:else if data.mode === 'cadastrar'}
-              Crie sua conta gratuita em segundos e garanta seu @username exclusivo.
+              Escolha um @handle único e tenha um espaço seu na comunidade.
             {:else if data.mode === 'recuperar'}
-              Informe seu e-mail cadastrado e enviaremos instruções de recuperação.
+              Informe seu e-mail e enviaremos um link seguro para trocar a senha.
             {:else}
-              Defina sua nova senha de acesso com segurança.
+              Defina uma nova senha para voltar à sua conta.
             {/if}
           </p>
         </header>
@@ -181,6 +198,7 @@
             class:success={form?.success}
             class:error={!form?.success}
             role="status"
+            aria-live="polite"
           >
             {#if form?.success}
               <CheckCircle2 size={18} class="alert-icon" />
@@ -189,6 +207,44 @@
             {/if}
             <div class="alert-text">{form?.message || data.error}</div>
           </div>
+        {/if}
+
+        {#if data.mode === 'cadastrar' && form?.success}
+          <section class="confirmation-state" aria-labelledby="confirmation-title">
+            <div class="confirmation-icon"><Mail size={22} /></div>
+            <h3 id="confirmation-title">Confira seu e-mail</h3>
+            <p>
+              Enviamos a confirmação para
+              <strong>{email || 'seu endereço'}</strong>. Abra o e-mail mais recente para ativar a conta.
+            </p>
+            <p class="field-hint">Não encontrou? Verifique o spam antes de pedir outro envio.</p>
+            <form
+              method="POST"
+              class="resend-form"
+              use:enhance={() => {
+                busy = true;
+                return async ({ update }) => {
+                  try {
+                    await update();
+                    startResendCooldown();
+                  } finally {
+                    busy = false;
+                  }
+                };
+              }}
+            >
+              <input type="hidden" name="intent" value="resend_confirmation" />
+              <input type="hidden" name="email" value={email} />
+              <button class="btn-secondary-auth" type="submit" disabled={busy || resendCooldown > 0}>
+                {#if resendCooldown > 0}
+                  Reenviar em {resendCooldown}s
+                {:else}
+                  Reenviar confirmação
+                {/if}
+              </button>
+            </form>
+            <a href="/cadastrar" class="switch-link">Usar outro e-mail</a>
+          </section>
         {/if}
 
         <form
@@ -222,7 +278,7 @@
                   minlength="2"
                   maxlength="50"
                   autocomplete="name"
-                  placeholder="Ex: Amanda Silva ou Aventureiro Nox"
+                  placeholder="Como quer ser chamado?"
                   class="custom-input"
                 />
               </div>
@@ -234,20 +290,20 @@
               <div class="label-row">
                 <label for="username" class="input-label">
                   <AtSign size={15} />
-                  <span>Nome de Usuário (@)</span>
+                  <span>@Handle</span>
                 </label>
                 {#if usernameStatus === 'checking'}
-                  <span class="status-indicator checking">
+                  <span class="status-indicator checking" aria-live="polite">
                     <Loader2 size={13} class="spin-icon" />
                     <span>Verificando...</span>
                   </span>
                 {:else if usernameStatus === 'available'}
-                  <span class="status-indicator available">
+                  <span class="status-indicator available" aria-live="polite">
                     <CheckCircle2 size={13} />
                     <span>Disponível</span>
                   </span>
                 {:else if usernameStatus === 'error'}
-                  <span class="status-indicator error">
+                  <span class="status-indicator error" aria-live="polite">
                     <AlertCircle size={13} />
                     <span>{usernameMessage}</span>
                   </span>
@@ -255,7 +311,7 @@
               </div>
 
               <div class="input-wrap has-prefix">
-                <span class="input-prefix">@</span>
+                <span class="input-prefix" aria-hidden="true">@</span>
                 <input
                   id="username"
                   type="text"
@@ -273,7 +329,7 @@
                   class:invalid={usernameStatus === 'error'}
                 />
               </div>
-              <span class="field-hint">De 3 a 30 caracteres minúsculos, números e sublinhados (_).</span>
+              <span class="field-hint">3–30 caracteres: letras minúsculas, números e _.</span>
             </div>
           {/if}
 
@@ -289,6 +345,7 @@
                   id="email"
                   type="email"
                   name="email"
+                  bind:value={email}
                   required
                   maxlength="254"
                   autocomplete="email"
@@ -359,7 +416,7 @@
           <button
             type="submit"
             class="btn-submit-auth"
-            disabled={busy || (data.mode === 'cadastrar' && usernameStatus === 'error')}
+            disabled={busy || (data.mode === 'cadastrar' && usernameStatus !== 'available')}
           >
             {#if busy}
               <Loader2 size={18} class="spin-icon" />
@@ -368,7 +425,7 @@
               <span>Entrar na Nox</span>
               <ArrowRight size={17} />
             {:else if data.mode === 'cadastrar'}
-              <span>Criar Conta & Fazer Parte</span>
+              <span>Criar conta</span>
               <ArrowRight size={17} />
             {:else if data.mode === 'recuperar'}
               <span>Enviar Link de Recuperação</span>
@@ -577,6 +634,77 @@
     color: #6ee7b7;
   }
 
+  .confirmation-state {
+    display: grid;
+    justify-items: center;
+    gap: 0.7rem;
+    text-align: center;
+    padding: 1rem 0 1.25rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .confirmation-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.35);
+  }
+
+  .confirmation-state h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.1rem;
+  }
+
+  .confirmation-state p {
+    max-width: 34rem;
+    margin: 0;
+    color: #a1a1aa;
+    font-size: 0.87rem;
+    line-height: 1.55;
+  }
+
+  .confirmation-state strong {
+    display: inline-block;
+    margin-left: 0.25rem;
+    color: #e9d5ff;
+    overflow-wrap: anywhere;
+  }
+
+  .resend-form {
+    width: 100%;
+    display: grid;
+    justify-items: center;
+    margin-top: 0.25rem;
+  }
+
+  .btn-secondary-auth {
+    width: 100%;
+    padding: 0.72rem 1rem;
+    border: 1px solid rgba(196, 181, 253, 0.28);
+    border-radius: 10px;
+    color: #ddd6fe;
+    background: rgba(139, 92, 246, 0.08);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-secondary-auth:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.16);
+  }
+
+  .btn-secondary-auth:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
   :global(.alert-icon) {
     flex-shrink: 0;
     margin-top: 1px;
@@ -707,6 +835,15 @@
 
   .btn-toggle-password:hover {
     color: #cbd5e1;
+  }
+
+  .btn-toggle-password:focus-visible,
+  .btn-submit-auth:focus-visible,
+  .btn-secondary-auth:focus-visible,
+  .switch-link:focus-visible,
+  .forgot-link:focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 3px;
   }
 
   .field-hint {
@@ -861,6 +998,20 @@
     .brand-headline {
       font-size: 2rem;
     }
+
+    .auth-card-header {
+      margin-bottom: 1.25rem;
+    }
+
+    .auth-card-title {
+      font-size: 1.5rem;
+    }
+
+    .input-label,
+    .custom-input,
+    .btn-submit-auth,
+    .btn-secondary-auth {
+      font-size: 0.9rem;
+    }
   }
 </style>
-

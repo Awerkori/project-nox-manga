@@ -47,23 +47,23 @@ export const GET = async ({ url, locals }) => {
   const raw = (url.searchParams.get('username') || url.searchParams.get('q') || '').trim().toLowerCase();
 
   if (!raw) {
-    return json({ available: false, reason: 'Informe um nome de usuário.' });
+    return json({ available: false, reason: 'Informe um @handle.' }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   if (raw.length < 3) {
-    return json({ available: false, reason: 'Mínimo de 3 caracteres.' });
+    return json({ available: false, reason: 'Mínimo de 3 caracteres.' }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   if (raw.length > 30) {
-    return json({ available: false, reason: 'Máximo de 30 caracteres.' });
+    return json({ available: false, reason: 'Máximo de 30 caracteres.' }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   if (!/^[a-z0-9_]+$/.test(raw)) {
-    return json({ available: false, reason: 'Use apenas letras minúsculas, números e sublinhados (_).' });
+    return json({ available: false, reason: 'Use apenas letras minúsculas, números e sublinhados (_).' }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   if (RESERVED_USERNAMES.has(raw)) {
-    return json({ available: false, reason: 'Este nome de usuário é reservado.' });
+    return json({ available: false, reason: 'Este @handle é reservado pelo Project Nox.' }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   // If current user already owns this username, it's available to them
@@ -75,19 +75,27 @@ export const GET = async ({ url, locals }) => {
       .maybeSingle();
 
     if (currentMember?.username?.toLowerCase() === raw) {
-      return json({ available: true, username: raw, current: true });
+      return json({ available: true, username: raw, current: true }, { headers: { 'Cache-Control': 'no-store' } });
     }
   }
 
-  const { data: collision } = await privileged()
+  const { data: collision, error: collisionError } = await privileged()
     .from('members')
     .select('id')
     .ilike('username', raw)
     .maybeSingle();
 
-  if (collision) {
-    return json({ available: false, reason: 'Este nome de usuário já está em uso.' });
+  if (collisionError) {
+    console.warn(`[AUTH_HANDLE_CHECK] provider_error=${collisionError.code || 'UNKNOWN'}`);
+    return json(
+      { available: false, reason: 'Não foi possível verificar agora. Tente novamente.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
-  return json({ available: true, username: raw });
+  if (collision) {
+    return json({ available: false, reason: 'Este @handle já está em uso.' }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  return json({ available: true, username: raw }, { headers: { 'Cache-Control': 'no-store' } });
 };
