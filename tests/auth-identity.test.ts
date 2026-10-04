@@ -7,12 +7,13 @@ const migration = readFileSync('yugabyte/migrations/20261004020000_auth_handles_
 const authMigration = readFileSync('supabase/migrations/20261004030000_auth_handle_strict.sql', 'utf8');
 
 describe('Project Nox account identity', () => {
-  it('requires a debounced @handle with a backend availability check', () => {
+  it('keeps the legacy optional @handle UX with a debounced availability hint', () => {
     expect(page).toContain('setTimeout(async () =>');
     expect(page).toContain('/api/auth/check-username?username=');
-    expect(page).toContain("usernameStatus !== 'available'");
-    expect(server).toContain('Escolha um @handle');
-    expect(server).toContain('RESERVED_HANDLES.has(rawUsername)');
+    expect(page).toContain('@Handle <small>(opcional)</small>');
+    expect(page).not.toContain("usernameStatus !== 'available'");
+    expect(server).toContain('if (rawUsername)');
+    expect(server).not.toContain('RESERVED_HANDLES.has(rawUsername)');
   });
 
   it('keeps the race-safe case-insensitive uniqueness constraint in YSQL', () => {
