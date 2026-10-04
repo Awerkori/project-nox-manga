@@ -1,11 +1,21 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
+
+const DEFAULT_SITE_ORIGIN = 'https://manga.project-nox-awerkori.workers.dev';
+
+function authOrigin(url: URL): string {
+  // Keep local development/tests on their own origin, but ensure production
+  // auth callbacks never point at an obsolete/custom hostname.
+  if (['localhost', '127.0.0.1', 'nox.invalid'].includes(url.hostname)) return url.origin;
+  return DEFAULT_SITE_ORIGIN;
+}
+
 export const load = ({ params, url }) => ({
   mode: params.auth,
   error:
     params.auth === 'entrar' && url.searchParams.get('erro') === 'link-expirado'
-      ? 'Este link é inválido ou expirou. Solicite um novo link de recuperação ou entre na sua conta.'
+      ? 'Este link é inválido, já foi utilizado ou expirou. Solicite um novo link e abra o e-mail mais recente.'
       : ''
 });
 export const actions = {
@@ -13,7 +23,24 @@ export const actions = {
     const f = await request.formData(),
       mode = params.auth;
     const email = String(f.get('email') || '').trim(),
-      password = String(f.get('password') || '');
+      password = String(f.get('password') || ''),
+      intent = String(f.get('intent') || '');
+    const redirectOrigin = authOrigin(url);
+
+    if (mode === 'cadastrar' && intent === 'resend_confirmation') {
+      if (!z.email().safeParse(email).success) {
+        return fail(400, { message: 'Informe um e-mail válido para reenviar a confirmação.' });
+      }
+      const { error } = await locals.db.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${redirectOrigin}/auth/confirm` }
+      });
+      if (error) {
+        return fail(400, { message: 'Não foi possível reenviar agora. Aguarde alguns segundos e tente novamente.' });
+      }
+      return { success: true, resend: true, message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.' };
+    }
     if (mode !== 'redefinir' && !z.email().safeParse(email).success)
       return fail(400, { message: 'Informe um e-mail válido.' });
     if (mode !== 'recuperar' && password.length < 10)
@@ -43,14 +70,19 @@ export const actions = {
           return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
         }
 
-        // Check username collision if locals.db.from exists
+        // This is only an early UX check. Existing production schema remains
+        // authoritative and optional usernames keep the legacy signup contract.
         if (typeof locals.db.from === 'function') {
-          const { data: collision } = await locals.db
+          const { data: collision, error: collisionError } = await locals.db
             .from('members')
             .select('id')
             .ilike('username', rawUsername)
             .maybeSingle();
 
+          if (collisionError) {
+            console.warn(`[AUTH_HANDLE_CHECK] provider_error=${collisionError.code || 'UNKNOWN'}`);
+            return fail(503, { message: 'Não foi possível verificar o nome agora. Tente novamente.' });
+          }
           if (collision) {
             return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
           }
@@ -58,7 +90,7 @@ export const actions = {
       }
 
       const signUpOptions: { emailRedirectTo: string; data?: Record<string, string> } = {
-        emailRedirectTo: `${url.origin}/auth/confirm`
+        emailRedirectTo: `${redirectOrigin}/auth/confirm`
       };
       if (rawUsername || displayName) {
         signUpOptions.data = {
@@ -83,7 +115,7 @@ export const actions = {
     }
     if (mode === 'recuperar') {
       const { error } = await locals.db.auth.resetPasswordForEmail(email, {
-        redirectTo: `${url.origin}/auth/confirm?next=/redefinir`
+        redirectTo: `${redirectOrigin}/auth/confirm?next=/redefinir`
       });
       if (error)
         return fail(400, { message: 'Não foi possível enviar o e-mail agora. Tente novamente mais tarde.' });

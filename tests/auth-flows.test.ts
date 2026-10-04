@@ -10,6 +10,7 @@ function event(mode = 'entrar', fields = { email: 'reader@example.invalid', pass
   const auth = {
     signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
     signUp: vi.fn().mockResolvedValue({ error: null }),
+    resend: vi.fn().mockResolvedValue({ error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
     updateUser: vi.fn().mockResolvedValue({ error: null }),
     verifyOtp: vi.fn().mockResolvedValue({ error: null }),
@@ -76,6 +77,26 @@ describe('account actions', () => {
     expect(await actions.default(e)).toMatchObject({
       status: 400,
       data: { message: 'Limite de envio atingido. Tente novamente mais tarde.' }
+    });
+  });
+  it('keeps the legacy optional username contract while pinning production callbacks', async () => {
+    const e = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
+    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
+    expect(await actions.default(e)).toMatchObject({ success: true });
+    expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
+      email: 'reader@example.invalid',
+      password: 'long-password',
+      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
+    });
+  });
+  it('resends confirmation through the existing provider with a cooldown-capable action', async () => {
+    const e = event('cadastrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
+    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
+    expect(await actions.default(e)).toMatchObject({ success: true, resend: true });
+    expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'reader@example.invalid',
+      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
     });
   });
   it('recovery requires no password and uses a fixed reset destination', async () => {

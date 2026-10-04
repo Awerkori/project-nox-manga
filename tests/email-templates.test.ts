@@ -11,8 +11,9 @@ describe('authentication email templates', () => {
       expect(html).toContain('lang="pt-BR"');
       expect(html).toContain('PROJECT NOX');
       expect(html).toContain(
-        `href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=${type}"`
+        `href="https://manga.project-nox-awerkori.workers.dev/auth/confirm?token_hash={{ .TokenHash }}&amp;type=${type}"`
       );
+      expect(html).not.toContain('projectnox.com');
       expect(html).not.toMatch(/<script\b|\son\w+\s*=|javascript:/i);
       expect(html).not.toContain('{{ .ConfirmationURL }}');
       expect(html.match(/href=/g)).toHaveLength(1);
