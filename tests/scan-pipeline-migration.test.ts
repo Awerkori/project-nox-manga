@@ -81,6 +81,12 @@ function payload(fileKey: string) {
 describe('scan pipeline multi-file migration', () => {
   let db: PGlite;
 
+  it('allows draft production stages before a public chapter exists', () => {
+    const compatibility = readFileSync(resolve('yugabyte/migrations/20261003040000_scan_production_stage_nullable_chapter_id.sql'), 'utf8');
+    expect(compatibility).toContain('ALTER COLUMN chapter_id DROP NOT NULL');
+    expect(compatibility).toContain('scan_chapter_stages');
+  });
+
   beforeEach(async () => {
     db = new PGlite();
     await createSchema(db);
