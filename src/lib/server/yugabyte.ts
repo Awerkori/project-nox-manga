@@ -140,6 +140,34 @@ export async function executeYugabyteSql<T = any>(
   }
 }
 
+/**
+ * Run a small authoritative operation in one Hyperdrive-backed YSQL
+ * transaction.  Unlike executeYugabyteSql this deliberately does not fall
+ * back to the HTTP gateway: BEGIN/COMMIT semantics cannot be preserved across
+ * independent gateway requests.
+ */
+export async function withYugabyteTransaction<T>(
+  platformEnv: any,
+  operation: (client: Client) => Promise<T>
+): Promise<T> {
+  const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
+  if (!connectionString) throw new Error('YUGABYTE_TRANSACTION_UNAVAILABLE');
+
+  const client = new Client({ connectionString, connectionTimeoutMillis: 1_500 });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 // ============================================================
 // EXPLICIT, TYPED YUGABYTE PUBLIC READ HELPERS
 // ============================================================

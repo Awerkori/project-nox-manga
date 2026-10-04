@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { withYugabyteTransaction } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -190,12 +190,73 @@ export const actions: Actions = {
     if (!locals.user?.id) return fail(401, { message: 'Sessão administrativa inválida.' });
 
     try {
-      const result = await executeYugabyteSql<{ result: any }>(
-        `SELECT public.global_admin_hard_delete_scan_ysql($1, $2, $3, $4, $5) AS result`,
-        [scanId, confirmation, reason, locals.user.id, true],
-        platform?.env
-      );
-      return { success: true, hardDeleted: true, result: result.rows[0]?.result || null };
+      const result = await withYugabyteTransaction(platform?.env, async (client) => {
+        const scanResult = await client.query<{ name: string }>(
+          'SELECT name FROM public.scans WHERE id = $1 FOR UPDATE',
+          [scanId]
+        );
+        const scanName = scanResult.rows[0]?.name;
+        if (!scanName) throw new Error('SCAN_NOT_FOUND');
+        if (!confirmation || confirmation.trim() !== scanName.trim()) {
+          throw new Error('SCAN_CONFIRMATION_INVALID');
+        }
+
+        // Remove only Scan attribution; public works and chapters remain.
+        const attributionTables = await client.query<{ table_name: string }>(`
+          SELECT table_name
+          FROM (VALUES ('chapter_scans'), ('work_scans')) AS tables(table_name)
+          WHERE to_regclass('public.' || table_name) IS NOT NULL
+        `);
+        for (const row of attributionTables.rows) {
+          await client.query(`DELETE FROM public."${row.table_name}" WHERE scan_id = $1`, [scanId]);
+        }
+
+        const tableResult = await client.query<{ table_name: string }>(`
+          SELECT columns.table_name
+          FROM information_schema.columns columns
+          JOIN information_schema.tables catalog_tables
+            ON catalog_tables.table_schema = columns.table_schema
+           AND catalog_tables.table_name = columns.table_name
+          WHERE columns.table_schema = 'public'
+            AND columns.column_name = 'scan_id'
+            AND catalog_tables.table_type = 'BASE TABLE'
+            AND columns.table_name NOT IN ('scans', 'work_scans', 'chapter_scans', 'scan_global_audit_log')
+          ORDER BY CASE columns.table_name
+            WHEN 'scan_message_reactions' THEN 1
+            WHEN 'scan_message_mentions_ysql' THEN 2
+            WHEN 'scan_pipeline_stage_seen' THEN 3
+            WHEN 'scan_chapter_note_events' THEN 4
+            WHEN 'scan_chapter_notes' THEN 5
+            WHEN 'scan_pipeline_upload_attempts' THEN 6
+            WHEN 'scan_production_files' THEN 7
+            WHEN 'scan_chapter_stages' THEN 8
+            WHEN 'scan_production_chapters' THEN 9
+            WHEN 'scan_workflow_stages' THEN 10
+            ELSE 50
+          END, columns.table_name
+        `);
+
+        for (const row of tableResult.rows) {
+          if (!/^[a-z0-9_]+$/i.test(row.table_name)) continue;
+          await client.query(`DELETE FROM public."${row.table_name}" WHERE scan_id = $1`, [scanId]);
+        }
+
+        const auditTable = await client.query<{ present: boolean }>(
+          `SELECT to_regclass('public.scan_global_audit_log') IS NOT NULL AS present`
+        );
+        if (auditTable.rows[0]?.present) {
+          await client.query(
+            `INSERT INTO public.scan_global_audit_log
+              (scan_id, scan_name, admin_id, action, reason)
+             VALUES ($1, $2, $3, 'SCAN_HARD_DELETED', $4)`,
+            [scanId, scanName, locals.user!.id, reason]
+          );
+        }
+
+        await client.query('DELETE FROM public.scans WHERE id = $1', [scanId]);
+        return { deleted_scan_name: scanName, public_content_preserved: true };
+      });
+      return { success: true, hardDeleted: true, result };
     } catch (err: any) {
       const message = String(err?.message || 'Falha ao excluir a Scan.').slice(0, 240);
       const safeMessage =
