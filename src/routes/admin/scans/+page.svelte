@@ -179,16 +179,30 @@
     notice = '';
 
     try {
-      await action('editor', 'scan', {
-        id: formId || undefined,
-        name: formName.trim(),
-        slug: formSlug.trim(),
-        description: formDescription.trim(),
-        website: formWebsite.trim(),
-        discord: formDiscord.trim(),
-        status: formStatus,
-        is_official: formIsOfficial
-      });
+      if (!editingScan) {
+        const formData = new FormData();
+        formData.set('name', formName.trim());
+        formData.set('slug', formSlug.trim());
+        formData.set('description', formDescription.trim());
+        formData.set('website', formWebsite.trim());
+        formData.set('discord', formDiscord.trim());
+        const response = await fetch('/admin/scans?/createScan', { method: 'POST', body: formData });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(result?.data?.message || result?.message || 'Erro ao criar scan.');
+        }
+      } else {
+        await action('editor', 'scan', {
+          id: formId || undefined,
+          name: formName.trim(),
+          slug: formSlug.trim(),
+          description: formDescription.trim(),
+          website: formWebsite.trim(),
+          discord: formDiscord.trim(),
+          status: formStatus,
+          is_official: formIsOfficial
+        });
+      }
 
       await invalidateAll();
       showModal = false;

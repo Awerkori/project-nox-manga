@@ -27,6 +27,15 @@ describe('admin panel polish regressions', () => {
     expect(scansServer).toContain('public_content_preserved');
   });
 
+  it('creates Scans in the same YSQL transaction used by deletion', () => {
+    expect(scansServer).toMatch(/createScan:[\s\S]*?withYugabyteTransaction/);
+    expect(scansServer).toMatch(/createScan:[\s\S]*?INSERT INTO public\.scans/);
+    expect(scansServer).toMatch(/createScan:[\s\S]*?INSERT INTO public\.scan_members/);
+    expect(scansServer).toMatch(/createScan:[\s\S]*?SCAN_SLUG_EXISTS/);
+    expect(scansPage).toContain("fetch('/admin/scans?/createScan'");
+    expect(scansPage).toMatch(/if \(!editingScan\)[\s\S]*?createScan[\s\S]*?else \{[\s\S]*?action\('editor', 'scan'/);
+  });
+
   it('uses the canonical avatar renderer and persisted crop in admin chrome', () => {
     expect(adminLayout).toContain("import UserAvatar from '$lib/components/UserAvatar.svelte'");
     expect(adminLayout).toContain('crop={data.profile?.avatar_crop}');
