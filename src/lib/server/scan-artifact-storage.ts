@@ -31,10 +31,23 @@ export function getScanArtifactStorage(platformEnv?: RuntimeEnv): SupabaseClient
   const parts = key.split('.');
   if (parts.length !== 3) throw new Error('SCAN_ARTIFACT_STORAGE_KEY_INVALID');
   try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { iss?: unknown };
-    if (typeof payload.iss === 'string') {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
+      iss?: unknown;
+      ref?: unknown;
+      role?: unknown;
+    };
+    const projectRef = parsed.hostname.slice(0, -'.supabase.co'.length);
+    if (typeof payload.ref === 'string' && payload.ref !== projectRef) {
+      throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
+    }
+    // Supabase service-role JWTs commonly use the literal `supabase` issuer;
+    // only URL issuers need host comparison. The ref claim is authoritative.
+    if (!payload.ref && typeof payload.iss === 'string' && payload.iss.includes('://')) {
       const issuer = new URL(payload.iss);
       if (issuer.hostname !== parsed.hostname) throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
+    }
+    if (payload.role && payload.role !== 'service_role') {
+      throw new Error('SCAN_ARTIFACT_STORAGE_KEY_INVALID');
     }
   } catch (error) {
     if (error instanceof Error && error.message === 'SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH') throw error;
