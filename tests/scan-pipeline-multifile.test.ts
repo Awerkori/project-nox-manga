@@ -84,6 +84,21 @@ describe('scan pipeline multi-file delivery', () => {
     expect(endpoint).not.toContain('pgumtergvtbeepzpgvkv.supabase.co');
   });
 
+  it('persists Telegram deletion coordinates and compensates provider uploads', () => {
+    const migration = readFileSync(resolve('yugabyte/migrations/20261004010000_scan_telegram_cleanup_metadata.sql'), 'utf8');
+    const telegram = readFileSync(resolve('src/lib/server/telegram.ts'), 'utf8');
+    const router = readFileSync(resolve('src/lib/server/storage-router.ts'), 'utf8');
+    const endpoint = readFileSync(resolve('src/routes/api/scan/production/upload/+server.ts'), 'utf8');
+    expect(migration).toContain('telegram_message_id');
+    expect(migration).toContain('telegram_chat_id');
+    expect(telegram).toContain("'deleteMessage'");
+    expect(telegram).toContain('messageId: telegramNumericId(result.message_id)');
+    expect(router).toContain('p_message_id: receipt.messageId');
+    expect(router).toContain('deleteTelegramObject');
+    expect(endpoint).toContain('upload_cancel_telegram_compensation');
+    expect(endpoint).toContain('replacement_telegram_cleanup');
+  });
+
   it('does not block non-chat workspace tabs on the chat snapshot', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
     const endpoint = readFileSync(resolve('src/routes/api/scan/chat/+server.ts'), 'utf8');

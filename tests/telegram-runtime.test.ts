@@ -15,7 +15,7 @@ it('constructs Telegram upload requests in the actual Cloudflare runtime', async
           // Real workerd validation, without external network access or credentials.
           const request = new Request('https://example.invalid', options);
           if (request.redirect !== 'manual') throw new Error('Unexpected redirect mode');
-          return Response.json({ok:true,result:{document:{file_id:'runtime_file'}}});
+          return Response.json({ok:true,result:{message_id:1,chat:{id:'-100123'},document:{file_id:'runtime_file'}}});
         };
         const file = await telegramStorage('noncredential', 'local', transport)
           .upload(new Uint8Array([1,2,3]), 'image/png', 'runtime');
@@ -43,7 +43,9 @@ it('constructs Telegram upload requests in the actual Cloudflare runtime', async
   try {
     const response = await runtime.dispatchFetch('http://localhost');
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ file: 'runtime_file' });
+    expect(await response.json()).toEqual({
+      file: { fileId: 'runtime_file', messageId: '1', chatId: '-100123', uniqueFileId: null }
+    });
   } finally {
     await runtime.dispose();
   }

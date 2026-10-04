@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { privileged } from '$lib/server/db';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { telegramStorage, TelegramStorageError } from '$lib/server/telegram';
+import { telegramStorage, TelegramStorageError, type TelegramUploadReceipt } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
 import { RateLimitError } from '$lib/server/media';
 
@@ -49,6 +49,17 @@ export interface StoredMediaRecord {
   bytes: number;
   sha256: string;
   isOverflow: boolean;
+}
+
+/** Best-effort physical cleanup for a Telegram object with persisted metadata. */
+export async function deleteTelegramObject(
+  botReference: string,
+  chatId: string | null | undefined,
+  messageId: string | null | undefined
+): Promise<boolean> {
+  if (!chatId || !messageId) return false;
+  const client = resolveBotClient(botReference, chatId);
+  return client.client.deleteMessage(messageId, chatId);
 }
 
 /**
@@ -376,10 +387,10 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     }
 
     const startTime = Date.now();
-    let providerKey: string;
+    let receipt: TelegramUploadReceipt;
 
     try {
-      providerKey = await botClient.client.upload(
+      receipt = await botClient.client.upload(
         bytes as unknown as Uint8Array<ArrayBuffer>,
         info.mime,
         mediaId
@@ -426,18 +437,34 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const { error: commitErr } = await db.rpc('commit_media_record', {
       p_id: mediaId,
       p_shard_id: shardId,
-      p_provider_key: providerKey,
-      p_message_id: null,
-      p_unique_file_id: null
+      p_provider_key: receipt.fileId,
+      p_message_id: receipt.messageId,
+      p_unique_file_id: receipt.uniqueFileId
     });
 
     if (commitErr) {
-      console.warn('commit_media_record_warning:', commitErr.message);
+      // The provider upload and the metadata commit are separate systems. If
+      // the commit fails, remove the just-created Telegram message when the
+      // provider returned enough metadata to do so, then release the local
+      // reservation. Never report a successful upload with an untracked blob.
+      try {
+        await deleteTelegramObject(botRef, receipt.chatId || channelId, receipt.messageId);
+      } catch (cleanupError) {
+        console.warn('telegram_upload_compensation_failed', {
+          mediaId,
+          hasMessageMetadata: Boolean(receipt.messageId && (receipt.chatId || channelId)),
+          error: String((cleanupError as Error)?.message || 'unknown').slice(0, 160)
+        });
+      }
+      await db.from('media_locations').delete().eq('media_id', mediaId);
+      await db.from('media_records').delete().eq('id', mediaId);
+      await db.from('media').delete().eq('id', mediaId);
+      throw new Error('Falha ao registrar o arquivo no catálogo de mídia.');
     }
 
     return {
       id: mediaId,
-      providerKey,
+      providerKey: receipt.fileId,
       shardId,
       poolKey,
       botReference: botRef,
@@ -467,6 +494,9 @@ export interface PipelineFileUploadOptions {
 
 export interface PipelineFileStoredRecord {
   telegramFileId: string;
+  telegramMessageId: string | null;
+  telegramChatId: string | null;
+  telegramUniqueFileId: string | null;
   shardId: string;
   poolId: string;
   botReference: string;
@@ -539,10 +569,10 @@ export async function uploadPipelineFileToStorage(
 
     const fileId = crypto.randomUUID();
     const startTime = Date.now();
-    let telegramFileId: string;
+    let receipt: TelegramUploadReceipt;
 
     try {
-      telegramFileId = await botClient.client.upload(
+      receipt = await botClient.client.upload(
         bytes as unknown as Uint8Array<ArrayBuffer>,
         mime || 'application/octet-stream',
         fileId
@@ -589,7 +619,10 @@ export async function uploadPipelineFileToStorage(
     `, [shardId, elapsedMs, bytes.byteLength], platformEnv);
 
     return {
-      telegramFileId,
+      telegramFileId: receipt.fileId,
+      telegramMessageId: receipt.messageId,
+      telegramChatId: receipt.chatId || channelId || null,
+      telegramUniqueFileId: receipt.uniqueFileId,
       shardId,
       poolId: shard.pool_id,
       botReference: botClient.botRef,

@@ -134,7 +134,9 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
       env: { NOX_STORAGE_BRIDGE_TOKEN: TEST_TOKEN, TELEGRAM_BOT_TOKEN: 'super-secret-token', TELEGRAM_CHAT_ID: '-100123' }
     }));
 
-    const mockUpload = vi.fn().mockResolvedValue('tg-file-id-abc-123');
+    const mockUpload = vi.fn().mockResolvedValue({
+      fileId: 'tg-file-id-abc-123', messageId: '42', chatId: '-100123', uniqueFileId: 'tg-unique-42'
+    });
     vi.doMock('../src/lib/server/telegram', () => ({
       telegramStorage: () => ({ upload: mockUpload }),
       TelegramStorageError: class extends Error {}
@@ -167,6 +169,9 @@ describe('Internal Storage Bridge Endpoint (/api/internal/storage/upload)', () =
     const body = await res.json();
     expect(body).toEqual({
       providerKey: 'tg-file-id-abc-123',
+      telegramMessageId: '42',
+      telegramChatId: '-100123',
+      telegramUniqueFileId: 'tg-unique-42',
       botReference: 'MANGA_STORAGE_01',
       mime: 'image/png',
       width: 1,

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { resolveBotDownloadClient } from '$lib/server/storage-router';
+import { deleteTelegramObject, resolveBotDownloadClient } from '$lib/server/storage-router';
 import { getScanArtifactStorage } from '$lib/server/scan-artifact-storage';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -31,9 +31,14 @@ export const GET = async ({ locals, params, url, platform }) => {
   let file: any;
   try {
     const lookup = await ysql<any>(platform, `
-      SELECT file.*, stage.name AS stage_name, stage.slug AS workflow_stage_slug
+      SELECT file.*, stage.name AS stage_name, stage.slug AS workflow_stage_slug,
+             attempt.provider AS attempt_provider,
+             attempt.bot_reference AS attempt_bot_reference,
+             attempt.telegram_message_id AS attempt_telegram_message_id,
+             attempt.telegram_chat_id AS attempt_telegram_chat_id
       FROM public.scan_production_files file
       LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
+      LEFT JOIN public.scan_pipeline_upload_attempts attempt ON attempt.file_id = file.id
       WHERE file.id = $1
       LIMIT 1
     `, [params.id]);
@@ -104,8 +109,14 @@ export const DELETE = async ({ locals, params, platform }) => {
 
   try {
     const found = await ysql<any>(platform, `
-      SELECT id, scan_id, production_chapter_id, stage_id, stage_slug, file_name, uploaded_by, is_current
-      FROM public.scan_production_files WHERE id = $1 LIMIT 1
+      SELECT file.id, file.scan_id, file.production_chapter_id, file.stage_id, file.stage_slug,
+             file.file_name, file.uploaded_by, file.is_current,
+             COALESCE(attempt.provider, file.provider) AS storage_provider,
+             COALESCE(attempt.bot_reference, file.bot_reference) AS storage_bot_reference,
+             attempt.telegram_message_id, attempt.telegram_chat_id
+      FROM public.scan_production_files file
+      LEFT JOIN public.scan_pipeline_upload_attempts attempt ON attempt.file_id = file.id
+      WHERE file.id = $1 LIMIT 1
     `, [params.id]);
     const file = found.rows[0];
     if (!file) return json({ error: 'Arquivo não encontrado' }, { status: 404 });
@@ -121,6 +132,10 @@ export const DELETE = async ({ locals, params, platform }) => {
     const withdrawn = await ysql<{ result: any }>(platform, `
       SELECT public.withdraw_scan_pipeline_file_ysql($1, $2, $3, $4) AS result
     `, [file.id, locals.user.id, locals.role === 'ADMIN', actorName]);
+    if (file.storage_provider === 'TELEGRAM' && file.storage_bot_reference && file.telegram_message_id && file.telegram_chat_id) {
+      await deleteTelegramObject(file.storage_bot_reference, file.telegram_chat_id, file.telegram_message_id)
+        .catch((cleanupError) => logYsqlFailure('withdraw_telegram_cleanup', cleanupError));
+    }
     return json(withdrawn.rows[0]?.result || { success: true });
   } catch (error) {
     logYsqlFailure('withdraw', error);
