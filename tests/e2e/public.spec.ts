@@ -67,7 +67,9 @@ test('invalid confirmation has clear guidance without external redirect or refle
   // No token or code: does not send email or call the confirmation provider.
   await page.goto('/auth/confirm?next=https://attacker.invalid');
   await expect(page).toHaveURL(/\/entrar\?erro=link-expirado$/);
-  await expect(page.getByRole('status')).toContainText('Este link é inválido ou expirou.');
+  await expect(page.getByRole('status')).toContainText(
+    'Este link é inválido, já foi utilizado ou expirou.'
+  );
   await expect(page.getByRole('link', { name: 'Esqueci minha senha' })).toBeVisible();
   await page.goto('/entrar?erro=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
   await expect(page.getByRole('status')).toHaveCount(0);
