@@ -85,6 +85,8 @@ describe('scan pipeline multi-file migration', () => {
     const compatibility = readFileSync(resolve('yugabyte/migrations/20261003040000_scan_production_stage_nullable_chapter_id.sql'), 'utf8');
     expect(compatibility).toContain('ALTER COLUMN chapter_id DROP NOT NULL');
     expect(compatibility).toContain('scan_chapter_stages');
+    expect(compatibility).toContain('v_chapter_nullable');
+    expect(compatibility).toContain('published_at)');
   });
 
   beforeEach(async () => {
