@@ -1,3 +1,70 @@
+export interface PublicationRateTelemetry {
+  rate1m: number;
+  rate5m: number;
+  rate10m: number;
+  rate30m: number;
+  fresh5m: number;
+  fresh30m: number;
+  completedRate5m: number;
+  completedRate30m: number;
+  completed5m: number;
+  completed30m: number;
+}
+
+/**
+ * Calculate throughput from publication buckets only.  Heartbeat data is
+ * intentionally not accepted here: it describes process liveness, not a
+ * chapter transition to published state.
+ */
+export function calculatePublicationRateTelemetry(
+  bucketRows: Array<Record<string, any>>,
+  nowMs = Date.now(),
+): PublicationRateTelemetry {
+  const oneMinAgo = nowMs - 60 * 1000;
+  const fiveMinAgo = nowMs - 5 * 60 * 1000;
+  const tenMinAgo = nowMs - 10 * 60 * 1000;
+  const thirtyMinAgo = nowMs - 30 * 60 * 1000;
+
+  let visible1m = 0;
+  let visible5m = 0;
+  let visible10m = 0;
+  let visible30m = 0;
+  let fresh5m = 0;
+  let completed5m = 0;
+  let fresh30m = 0;
+  let completed30m = 0;
+
+  for (const bucket of bucketRows) {
+    const timestamp = new Date(bucket.bucket_minute).getTime();
+    const visible = Number(bucket.visible_published || 0);
+    if (timestamp >= oneMinAgo) visible1m += visible;
+    if (timestamp >= fiveMinAgo) {
+      visible5m += visible;
+      fresh5m += Number(bucket.fresh_visible || 0);
+      completed5m += Number(bucket.completed_jobs || 0);
+    }
+    if (timestamp >= tenMinAgo) visible10m += visible;
+    if (timestamp >= thirtyMinAgo) {
+      visible30m += visible;
+      fresh30m += Number(bucket.fresh_visible || 0);
+      completed30m += Number(bucket.completed_jobs || 0);
+    }
+  }
+
+  return {
+    rate1m: visible1m,
+    rate5m: Math.round((visible5m / 5) * 10) / 10,
+    rate10m: Math.round((visible10m / 10) * 10) / 10,
+    rate30m: Math.round((visible30m / 30) * 10) / 10,
+    fresh5m,
+    fresh30m,
+    completedRate5m: Math.round((completed5m / 5) * 10) / 10,
+    completedRate30m: Math.round((completed30m / 30) * 10) / 10,
+    completed5m,
+    completed30m,
+  };
+}
+
 export async function loadSnapshot({ locals, platform }: any) {
   const snapshotStartedAt = performance.now();
   const queryTimings: Record<string, number> = {};
@@ -187,37 +254,7 @@ export async function loadSnapshot({ locals, platform }: any) {
   ]);
 
   const bucketRows = rateBucketsRes?.data || [];
-  const nowMs = Date.now();
-  const oneMinAgo = nowMs - 60 * 1000;
-  const fiveMinAgo = nowMs - 5 * 60 * 1000;
-  const tenMinAgo = nowMs - 10 * 60 * 1000;
-  const thirtyMinAgo = nowMs - 30 * 60 * 1000;
-
-  let visible1m = 0;
-  let visible5m = 0;
-  let visible10m = 0;
-  let visible30m = 0;
-  let fresh5m = 0;
-  let completed5m = 0;
-  let fresh30m = 0;
-  let completed30m = 0;
-
-  for (const b of bucketRows) {
-    const t = new Date(b.bucket_minute).getTime();
-    const visible = Number(b.visible_published || 0);
-    if (t >= oneMinAgo) visible1m += visible;
-    if (t >= fiveMinAgo) {
-      visible5m += visible;
-      fresh5m += b.fresh_visible || 0;
-      completed5m += b.completed_jobs || 0;
-    }
-    if (t >= tenMinAgo) visible10m += visible;
-    if (t >= thirtyMinAgo) {
-      visible30m += visible;
-      fresh30m += b.fresh_visible || 0;
-      completed30m += b.completed_jobs || 0;
-    }
-  }
+  const publicationRates = calculatePublicationRateTelemetry(bucketRows);
 
   let heartbeatData: any = null;
   if (heartbeatRes?.data?.value) {
@@ -230,27 +267,13 @@ export async function loadSnapshot({ locals, platform }: any) {
     }
   }
 
-  // Cap/min is canonical publication throughput only.  Fresh releases and
-  // completed jobs remain supplementary counters; neither can stand in for a
-  // published_at NULL -> NOT NULL transition.
-  const rate1m = heartbeatData?.rate1m ?? visible1m;
-  const rate5m = heartbeatData?.rate5m ?? (Math.round((visible5m / 5.0) * 10) / 10);
-  const rate10m = heartbeatData?.rate10m ?? (Math.round((visible10m / 10.0) * 10) / 10);
-  const rate30m = heartbeatData?.rate30m ?? (Math.round((visible30m / 30.0) * 10) / 10);
-  const completedRate5m = heartbeatData?.completedRate5m ?? (Math.round((completed5m / 5.0) * 10) / 10);
-  const completedRate30m = heartbeatData?.completedRate30m ?? (Math.round((completed30m / 30.0) * 10) / 10);
-
+  // Cap/min is canonical publication throughput only.  Do not let the
+  // heartbeat overwrite these values: a heartbeat proves liveness of the
+  // process, not that a chapter was actually published.  The rate buckets
+  // are written from the publication barrier after the published_at
+  // transition, so they remain zero during a heartbeat-only stall.
   const rateTelemetry = {
-    rate1m,
-    rate5m,
-    rate10m,
-    rate30m,
-    fresh5m: heartbeatData?.fresh5m ?? fresh5m,
-    fresh30m: heartbeatData?.fresh30m ?? fresh30m,
-    completedRate5m,
-    completedRate30m,
-    completed5m: heartbeatData?.completed5m ?? completed5m,
-    completed30m: heartbeatData?.completed30m ?? completed30m,
+    ...publicationRates,
   };
 
   const telemetry = telemetryRes.data || null;
