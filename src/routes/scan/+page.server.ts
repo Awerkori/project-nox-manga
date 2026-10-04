@@ -273,7 +273,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
       `, [currentScan.id], platform?.env),
       executeYugabyteSql<any>(`
         SELECT read_state.*
-        FROM public.scan_channel_read_states read_state
+        FROM public.scan_channel_read_states_ysql read_state
         WHERE read_state.scan_id = $1 AND read_state.user_id = $2
       `, [currentScan.id, locals.user.id], platform?.env)
     ]),
@@ -2543,7 +2543,7 @@ export const actions: Actions = {
     if (!scanId || !channelId) return fail(400, { message: 'Dados inválidos' });
 
     const result = await executeYugabyteSql(
-      `INSERT INTO public.scan_channel_read_states (scan_id, channel_id, user_id, last_read_message_id, last_read_at)
+      `INSERT INTO public.scan_channel_read_states_ysql (scan_id, channel_id, user_id, last_read_message_id, last_read_at)
        VALUES ($1,$2,$3,$4,now())
        ON CONFLICT (scan_id, channel_id, user_id) DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id, last_read_at = now()`,
       [scanId, channelId, locals.user.id, messageId], platform?.env

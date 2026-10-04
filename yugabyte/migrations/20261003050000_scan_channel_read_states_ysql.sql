@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS public.scan_channel_read_states (
   UNIQUE (channel_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_scan_channel_read_lookup_ysql
-  ON public.scan_channel_read_states(channel_id, user_id);
-
+DO $$
+BEGIN
+  CREATE INDEX IF NOT EXISTS idx_scan_channel_read_lookup_ysql
+    ON public.scan_channel_read_states(channel_id, user_id);
+EXCEPTION WHEN insufficient_privilege THEN
+  -- A pre-existing legacy relation may belong to the deployment role.  The
+  -- Scan workspace uses the dedicated *_ysql relation from the follow-up
+  -- migration below, so never escalate ownership just for this index.
+  RAISE NOTICE 'legacy scan_channel_read_states index skipped: insufficient privilege';
+END $$;
