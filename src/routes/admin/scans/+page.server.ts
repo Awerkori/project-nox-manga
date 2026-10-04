@@ -1,9 +1,9 @@
 import { error, fail } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
-import { withYugabyteTransaction } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteTransaction } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, platform }) => {
   // STRICT ACCESS: Only global ADMIN can access Global Scan Management
   if (locals.role !== 'ADMIN') {
     throw error(403, 'Acesso restrito exclusivamente a Administradores Globais do Project Nox.');
@@ -11,35 +11,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const db = locals.db || privileged();
 
+  // The Scan entity and its operational impact counts must come from the
+  // same authoritative YSQL plane used by hardDelete.  Keeping creation on
+  // the old RPC while deletion reads YSQL creates a false "not found" state.
+  const scansYsql = await executeYugabyteSql<any>(
+    `SELECT scan.*,
+       (SELECT count(*)::int FROM public.work_scans ws WHERE ws.scan_id = scan.id) AS works_count,
+       (SELECT count(*)::int FROM public.chapter_scans cs WHERE cs.scan_id = scan.id) AS chapters_count,
+       (SELECT count(*)::int FROM public.scan_members sm WHERE sm.scan_id = scan.id) AS members_count,
+       (SELECT count(*)::int FROM public.scan_recruitment_openings so WHERE so.scan_id = scan.id AND so.status = 'OPEN') AS openings_count,
+       (SELECT count(*)::int FROM public.scan_production_chapters spc WHERE spc.scan_id = scan.id) AS pipeline_count,
+       (SELECT count(*)::int FROM public.scan_applications sa WHERE sa.scan_id = scan.id) AS applications_count,
+       (SELECT jsonb_build_object('id', member.id, 'username', member.username,
+                                  'display_name', member.display_name, 'avatar_id', member.avatar_id,
+                                  'avatar_crop', member.avatar_crop)
+          FROM public.scan_members owner_members
+          JOIN public.members member ON member.id = owner_members.user_id
+         WHERE owner_members.scan_id = scan.id AND owner_members.role = 'OWNER'
+         ORDER BY owner_members.created_at ASC LIMIT 1) AS owner
+      FROM public.scans scan
+      ORDER BY scan.is_official DESC, scan.name ASC`,
+    [],
+    platform?.env
+  );
+
   const [
-    scansRes,
-    workCountsRes,
-    chapterCountsRes,
-    memberCountsRes,
-    openingsCountsRes,
-    pipelineCountsRes,
-    applicationCountsRes,
-    ownersRes,
     partnerReqsRes,
     projectReqsRes,
     auditLogsRes,
     usersRes
   ] = await Promise.all([
-    db
-      .from('scans')
-      .select('*')
-      .order('is_official', { ascending: false })
-      .order('name', { ascending: true }),
-    db.from('work_scans').select('scan_id'),
-    db.from('chapter_scans').select('scan_id'),
-    db.from('scan_members').select('scan_id'),
-    db.from('scan_recruitment_openings').select('scan_id').eq('status', 'OPEN'),
-    db.from('scan_production_chapters').select('scan_id'),
-    db.from('scan_applications').select('scan_id'),
-    db
-      .from('scan_members')
-      .select('scan_id, role, members!inner(id, username, display_name, avatar_id, avatar_crop)')
-      .eq('role', 'OWNER'),
     db
       .from('scan_partner_requests')
       .select(`
@@ -71,54 +72,15 @@ export const load: PageServerLoad = async ({ locals }) => {
       .limit(100)
   ]);
 
-  if (scansRes.error) throw error(500, scansRes.error.message);
-
-  const workCountMap: Record<string, number> = {};
-  for (const row of (workCountsRes.data || []) as any[]) {
-    workCountMap[row.scan_id] = (workCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const chapterCountMap: Record<string, number> = {};
-  for (const row of (chapterCountsRes.data || []) as any[]) {
-    chapterCountMap[row.scan_id] = (chapterCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const memberCountMap: Record<string, number> = {};
-  for (const row of (memberCountsRes.data || []) as any[]) {
-    memberCountMap[row.scan_id] = (memberCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const openingsCountMap: Record<string, number> = {};
-  for (const row of (openingsCountsRes.data || []) as any[]) {
-    openingsCountMap[row.scan_id] = (openingsCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const pipelineCountMap: Record<string, number> = {};
-  for (const row of (pipelineCountsRes.data || []) as any[]) {
-    pipelineCountMap[row.scan_id] = (pipelineCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const applicationCountMap: Record<string, number> = {};
-  for (const row of (applicationCountsRes.data || []) as any[]) {
-    applicationCountMap[row.scan_id] = (applicationCountMap[row.scan_id] || 0) + 1;
-  }
-
-  const ownerMap: Record<string, any> = {};
-  for (const row of (ownersRes.data || []) as any[]) {
-    if (!ownerMap[row.scan_id]) {
-      ownerMap[row.scan_id] = row.members;
-    }
-  }
-
-  const scans = (scansRes.data || []).map((s: any) => ({
+  const scans = (scansYsql.rows || []).map((s: any) => ({
     ...s,
-    works_count: workCountMap[s.id] || 0,
-    chapters_count: chapterCountMap[s.id] || 0,
-    members_count: memberCountMap[s.id] || 0,
-    openings_count: openingsCountMap[s.id] || 0,
-    pipeline_count: pipelineCountMap[s.id] || 0,
-    applications_count: applicationCountMap[s.id] || 0,
-    owner: ownerMap[s.id] || null
+    works_count: Number(s.works_count || 0),
+    chapters_count: Number(s.chapters_count || 0),
+    members_count: Number(s.members_count || 0),
+    openings_count: Number(s.openings_count || 0),
+    pipeline_count: Number(s.pipeline_count || 0),
+    applications_count: Number(s.applications_count || 0),
+    owner: s.owner || null
   }));
 
   return {
@@ -131,6 +93,75 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+  createScan: async ({ request, locals, platform }) => {
+    if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
+    if (!locals.user?.id) return fail(401, { message: 'Sessão administrativa inválida.' });
+
+    const formData = await request.formData();
+    const name = (formData.get('name') as string)?.trim() || '';
+    const slug = (formData.get('slug') as string)?.trim().toLowerCase() || '';
+    const description = (formData.get('description') as string)?.trim() || '';
+    const website = (formData.get('website') as string)?.trim() || '';
+    const discord = (formData.get('discord') as string)?.trim() || '';
+
+    if (name.length < 2 || name.length > 100) {
+      return fail(400, { message: 'O nome da Scan deve ter entre 2 e 100 caracteres.' });
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return fail(400, { message: 'Slug inválido. Use apenas letras minúsculas, números e hífens.' });
+    }
+    if (description.length > 2000 || website.length > 255 || discord.length > 255) {
+      return fail(400, { message: 'Um dos campos excede o limite permitido.' });
+    }
+
+    const scanId = crypto.randomUUID();
+    try {
+      const created = await withYugabyteTransaction(platform?.env, async (client) => {
+        const duplicate = await client.query<{ id: string }>(
+          'SELECT id FROM public.scans WHERE slug = $1 FOR KEY SHARE',
+          [slug]
+        );
+        if (duplicate.rows[0]) throw new Error('SCAN_SLUG_EXISTS');
+
+        const scan = await client.query(
+          `INSERT INTO public.scans
+             (id, name, slug, description, website, discord, status, is_official)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', false)
+           RETURNING id, name, slug`,
+          [scanId, name, slug, description, website, discord]
+        );
+
+        await client.query(
+          `INSERT INTO public.scan_members (scan_id, user_id, role)
+           VALUES ($1, $2, 'OWNER')`,
+          [scanId, locals.user.id]
+        );
+
+        const auditTable = await client.query<{ present: boolean }>(
+          `SELECT to_regclass('public.scan_global_audit_log') IS NOT NULL AS present`
+        );
+        if (auditTable.rows[0]?.present) {
+          await client.query(
+            `INSERT INTO public.scan_global_audit_log
+              (scan_id, scan_name, admin_id, action, reason)
+             VALUES ($1, $2, $3, 'SCAN_CREATED', 'Criação administrativa')`,
+            [scanId, name, locals.user.id]
+          );
+        }
+
+        return scan.rows[0];
+      });
+      return { success: true, scanCreated: created };
+    } catch (err: any) {
+      const message = String(err?.message || 'Falha ao criar a Scan.');
+      if (message.includes('SCAN_SLUG_EXISTS') || message.includes('duplicate key')) {
+        return fail(409, { message: 'Esse slug já está em uso.' });
+      }
+      console.error('admin_scan_create_ysql_failed', { actorId: locals.user.id, message: message.slice(0, 240) });
+      return fail(503, { message: 'Não foi possível criar a Scan com segurança agora.' });
+    }
+  },
+
   setStatus: async ({ request, locals }) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
