@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -16,6 +17,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     chapterCountsRes,
     memberCountsRes,
     openingsCountsRes,
+    pipelineCountsRes,
+    applicationCountsRes,
     ownersRes,
     partnerReqsRes,
     projectReqsRes,
@@ -31,15 +34,17 @@ export const load: PageServerLoad = async ({ locals }) => {
     db.from('chapter_scans').select('scan_id'),
     db.from('scan_members').select('scan_id'),
     db.from('scan_recruitment_openings').select('scan_id').eq('status', 'OPEN'),
+    db.from('scan_production_chapters').select('scan_id'),
+    db.from('scan_applications').select('scan_id'),
     db
       .from('scan_members')
-      .select('scan_id, role, members!inner(id, username, display_name, avatar_id)')
+      .select('scan_id, role, members!inner(id, username, display_name, avatar_id, avatar_crop)')
       .eq('role', 'OWNER'),
     db
       .from('scan_partner_requests')
       .select(`
         *,
-        members!user_id(id, username, display_name, avatar_id)
+        members!user_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .order('created_at', { ascending: false }),
     db
@@ -55,13 +60,13 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from('scan_global_audit_log')
       .select(`
         *,
-        admin:members!admin_id(id, username, display_name, avatar_id)
+        admin:members!admin_id(id, username, display_name, avatar_id, avatar_crop)
       `)
       .order('created_at', { ascending: false })
       .limit(50),
     db
       .from('members')
-      .select('id, username, display_name, avatar_id')
+      .select('id, username, display_name, avatar_id, avatar_crop')
       .order('username')
       .limit(100)
   ]);
@@ -88,6 +93,16 @@ export const load: PageServerLoad = async ({ locals }) => {
     openingsCountMap[row.scan_id] = (openingsCountMap[row.scan_id] || 0) + 1;
   }
 
+  const pipelineCountMap: Record<string, number> = {};
+  for (const row of (pipelineCountsRes.data || []) as any[]) {
+    pipelineCountMap[row.scan_id] = (pipelineCountMap[row.scan_id] || 0) + 1;
+  }
+
+  const applicationCountMap: Record<string, number> = {};
+  for (const row of (applicationCountsRes.data || []) as any[]) {
+    applicationCountMap[row.scan_id] = (applicationCountMap[row.scan_id] || 0) + 1;
+  }
+
   const ownerMap: Record<string, any> = {};
   for (const row of (ownersRes.data || []) as any[]) {
     if (!ownerMap[row.scan_id]) {
@@ -101,6 +116,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     chapters_count: chapterCountMap[s.id] || 0,
     members_count: memberCountMap[s.id] || 0,
     openings_count: openingsCountMap[s.id] || 0,
+    pipeline_count: pipelineCountMap[s.id] || 0,
+    applications_count: applicationCountMap[s.id] || 0,
     owner: ownerMap[s.id] || null
   }));
 
@@ -158,7 +175,7 @@ export const actions: Actions = {
     return { success: true, ownerRecovered: true };
   },
 
-  hardDelete: async ({ request, locals }) => {
+  hardDelete: async ({ request, locals, platform }) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -170,14 +187,27 @@ export const actions: Actions = {
       return fail(400, { message: 'Scan é obrigatória.' });
     }
 
-    const { error: rpcErr } = await locals.db.rpc('global_admin_hard_delete_scan', {
-      p_scan_id: scanId,
-      p_reason: reason,
-      p_confirmation: confirmation
-    });
+    if (!locals.user?.id) return fail(401, { message: 'Sessão administrativa inválida.' });
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, hardDeleted: true };
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(
+        `SELECT public.global_admin_hard_delete_scan_ysql($1, $2, $3, $4, $5) AS result`,
+        [scanId, confirmation, reason, locals.user.id, true],
+        platform?.env
+      );
+      return { success: true, hardDeleted: true, result: result.rows[0]?.result || null };
+    } catch (err: any) {
+      const message = String(err?.message || 'Falha ao excluir a Scan.').slice(0, 240);
+      const safeMessage =
+        message.includes('GLOBAL_ADMIN_REQUIRED')
+          ? 'Apenas ADMIN global pode excluir uma Scan.'
+          : message.includes('SCAN_CONFIRMATION_INVALID')
+            ? 'A confirmação não corresponde ao nome da Scan.'
+            : message.includes('SCAN_NOT_FOUND')
+              ? 'Scan não encontrada.'
+              : 'Não foi possível concluir a exclusão da Scan. Nenhuma alteração foi aplicada.';
+      return fail(400, { message: safeMessage });
+    }
   },
 
   reviewPartner: async ({ request, locals }) => {

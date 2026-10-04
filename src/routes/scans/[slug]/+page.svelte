@@ -450,6 +450,7 @@
                     <div class="member-card is-owner">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={56}
                         frameId={member.frame_id}
@@ -494,6 +495,7 @@
                     <div class="member-card is-admin">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={52}
                         frameId={member.frame_id}
@@ -535,6 +537,7 @@
                     <div class="member-card">
                       <UserAvatar
                         avatarId={member.avatar_id}
+                        crop={member.avatar_crop}
                         displayName={member.display_name || member.username}
                         size={48}
                         frameId={member.frame_id}

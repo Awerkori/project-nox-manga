@@ -389,7 +389,7 @@
             {#if scan.owner}
               <div class="owner-pill">
                 <span class="owner-lbl">Líder:</span>
-                <UserAvatar user={scan.owner} size={18} />
+                <UserAvatar user={scan.owner} crop={scan.owner.avatar_crop} size={18} />
                 <span class="owner-name">{scan.owner.display_name || scan.owner.username}</span>
               </div>
             {:else}
@@ -530,6 +530,7 @@
             <div class="request-user">
               <UserAvatar
                 avatarId={req.members?.avatar_id}
+                crop={req.members?.avatar_crop}
                 displayName={req.members?.display_name || req.members?.username || 'Usuário'}
                 size={40}
               />
@@ -1017,7 +1018,13 @@
             <div>
               <strong>Atenção Máxima: Ação Irreversível</strong>
               <p>Esta ação apagará permanentemente a scan <strong>{hardDeleteModalScan.name}</strong> e todo o seu workspace privado (tarefas, canais, mensagens, tutoriais, mural e membros).</p>
-              <p class="safe-note">✓ Obras e capítulos do catálogo público continuarão 100% intactos com suas páginas e leitor funcionando normalmente.</p>
+              <ul class="delete-impact-list">
+                <li><strong>{hardDeleteModalScan.members_count || 0}</strong> membro(s)</li>
+                <li><strong>{hardDeleteModalScan.works_count || 0}</strong> obra(s) vinculada(s)</li>
+                <li><strong>{hardDeleteModalScan.pipeline_count || 0}</strong> produção(ões) / pipeline</li>
+                <li><strong>{hardDeleteModalScan.openings_count || 0}</strong> vaga(s) aberta(s) · <strong>{hardDeleteModalScan.applications_count || 0}</strong> candidatura(s)</li>
+              </ul>
+              <p class="safe-note">✓ Obras e capítulos do catálogo público continuarão 100% intactos; apenas a atribuição à Scan será removida.</p>
             </div>
           </div>
           <div class="form-group">
@@ -2319,6 +2326,26 @@
 
   .text-danger {
     color: #ef4444;
+  }
+
+  .delete-impact-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 18px;
+    margin: 12px 0 10px;
+    padding-left: 18px;
+    color: #d8d3e5;
+    font-size: 12px;
+  }
+
+  .delete-impact-list strong {
+    color: #fff;
+  }
+
+  @media (max-width: 560px) {
+    .delete-impact-list {
+      grid-template-columns: 1fr;
+    }
   }
 
   .confirm-target-name {
