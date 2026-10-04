@@ -235,7 +235,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
   // same YSQL-first pattern as the editorial graph. Realtime remains in the
   // browser for now; replacing it requires an equivalent event transport, not
   // a polling regression.
-  const chatSnapshotPromise = withTimeout(
+  const requestedTab = url.searchParams.get('tab');
+  const chatSnapshotPromise = requestedTab === 'chat' ? withTimeout(
     Promise.all([
       executeYugabyteSql<any>(`
         SELECT channel.*
@@ -244,6 +245,13 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
         ORDER BY channel.display_order ASC
       `, [currentScan.id], platform?.env),
       executeYugabyteSql<any>(`
+        WITH recent_messages AS (
+          SELECT message.*
+          FROM public.scan_messages message
+          WHERE message.scan_id = $1
+          ORDER BY message.created_at DESC
+          LIMIT 150
+        )
         SELECT message.*,
           CASE WHEN author.id IS NULL THEN NULL ELSE jsonb_build_object(
             'id', author.id, 'username', author.username,
@@ -263,13 +271,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
             FROM public.scan_message_reactions reaction
             WHERE reaction.message_id = message.id
           ), '[]'::jsonb) AS reactions
-        FROM public.scan_messages message
+        FROM recent_messages message
         LEFT JOIN public.members author ON author.id = message.user_id
         LEFT JOIN public.scan_messages reply ON reply.id = message.reply_to_id
         LEFT JOIN public.members reply_author ON reply_author.id = reply.user_id
-        WHERE message.scan_id = $1
         ORDER BY message.created_at ASC
-        LIMIT 150
       `, [currentScan.id], platform?.env),
       executeYugabyteSql<any>(`
         SELECT read_state.*
@@ -280,7 +286,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     3_500,
     null,
     'scan_chat_snapshot_ysql'
-  );
+  ) : Promise.resolve(null);
 
   // The recruitment board contains both public vacancy data and private
   // candidate answers. Fetch it directly from YSQL, but carry the legacy RLS

@@ -1,8 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { resolveBotDownloadClient } from '$lib/server/storage-router';
-import { createClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
+import { getScanArtifactStorage } from '$lib/server/scan-artifact-storage';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -75,10 +74,7 @@ export const GET = async ({ locals, params, url, platform }) => {
   // above are authoritative YSQL. No client receives a storage URL.
   if (['STORAGE', 'scan_artifacts', 'supabase'].includes(file.provider)) {
     try {
-      const staffStorage = createClient(
-        env.STAFF_SUPABASE_URL || 'https://pgumtergvtbeepzpgvkv.supabase.co',
-        env.STAFF_SUPABASE_SERVICE_ROLE_KEY || ''
-      );
+      const staffStorage = getScanArtifactStorage(platform?.env);
       const { data: blob, error } = await staffStorage.storage.from('scan-artifacts').download(file.file_key);
       if (error || !blob) {
         console.error('scan_pipeline_file_storage_download_failed', { code: error?.name || null, message: String(error?.message || 'not_found').slice(0, 240) });
