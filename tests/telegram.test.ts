@@ -38,7 +38,7 @@ describe('private Telegram provider', () => {
     );
     expect(
       await telegramStorage(token, '-100123', transport).upload(new Uint8Array(3), 'image/png', 'page')
-    ).toBe('opaque_file_id');
+    ).toEqual({ fileId: 'opaque_file_id', messageId: null, chatId: '-100123', uniqueFileId: null });
     const options = transport.mock.calls[0][1]!;
     expect(options.redirect).toBe('manual');
     expect(options.signal).toBeInstanceOf(AbortSignal);
@@ -49,6 +49,27 @@ describe('private Telegram provider', () => {
     expect((form.get('document') as File).name).toBe('page.bin');
     expect((form.get('document') as File).type).toBe('application/octet-stream');
     expect(form.has('allow_paid_broadcast')).toBe(false);
+  });
+
+  it('returns deletion coordinates and deletes only the uploaded Telegram message', async () => {
+    const transport = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({
+        ok: true,
+        result: {
+          message_id: 42,
+          chat: { id: -100123 },
+          document: { file_id: 'opaque_file_id', file_unique_id: 'unique_file_id' }
+        }
+      }))
+      .mockResolvedValueOnce(Response.json({ ok: true, result: true }));
+    const client = telegramStorage(token, '-100123', transport);
+    await expect(client.upload(new Uint8Array(3), 'image/png', 'page')).resolves.toEqual({
+      fileId: 'opaque_file_id', messageId: '42', chatId: '-100123', uniqueFileId: 'unique_file_id'
+    });
+    await expect(client.deleteMessage('42')).resolves.toBe(true);
+    const options = transport.mock.calls[1][1]!;
+    expect(options.redirect).toBe('manual');
+    expect(JSON.parse(String(options.body))).toEqual({ chat_id: '-100123', message_id: 42 });
   });
 
   it.each(['network', 'json', 'rejected'])('does not expose %s error details', async (kind) => {

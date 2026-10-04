@@ -10,8 +10,33 @@ export class TelegramStorageError extends Error {
 }
 const unavailable = () => new TelegramStorageError();
 
+/**
+ * Telegram returns the file id used for reads, but physical deletion requires
+ * the message and chat that contain the uploaded document. Keep both pieces
+ * of metadata together so a later replacement/cancel can clean up safely.
+ */
+export interface TelegramUploadReceipt {
+  fileId: string;
+  messageId: string | null;
+  chatId: string | null;
+  uniqueFileId: string | null;
+}
+
+function telegramNumericId(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value);
+  if (typeof value === 'string' && /^-?\d{1,32}$/.test(value)) return value;
+  return null;
+}
+
+function telegramChatId(value: unknown): string | null {
+  const numeric = telegramNumericId(value);
+  if (numeric) return numeric;
+  if (typeof value === 'string' && /^@[A-Za-z0-9_]{5,64}$/.test(value)) return value;
+  return null;
+}
+
 export function telegramStorage(token: string, chatId: string, transport: typeof fetch = fetch) {
-  async function api(method: 'sendDocument' | 'getFile', body: BodyInit, headers?: HeadersInit) {
+  async function api(method: 'sendDocument' | 'getFile' | 'deleteMessage', body: BodyInit, headers?: HeadersInit) {
     try {
       const response = await transport(`https://api.telegram.org/bot${token}/${method}`, {
         method: 'POST',
@@ -32,7 +57,9 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
           if (body?.description) {
             errorDetails = body.description;
           }
-        } catch {}
+        } catch {
+          // Malformed provider errors are intentionally ignored.
+        }
         if (response.status === 429 && !retryAfter) {
           const header = response.headers?.get?.('retry-after');
           if (header) {
@@ -60,7 +87,7 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
   }
 
   return {
-    async upload(bytes: Uint8Array<ArrayBuffer>, _mime: string, id: string): Promise<string> {
+    async upload(bytes: Uint8Array<ArrayBuffer>, _mime: string, id: string): Promise<TelegramUploadReceipt> {
       const form = new FormData();
       form.append('chat_id', chatId);
       // Preserve the exact validated bytes; don't let Telegram turn WebP pages into stickers.
@@ -71,7 +98,26 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
       const result = await api('sendDocument', form);
       const fileId = result.document?.file_id;
       if (typeof fileId !== 'string' || !/^[A-Za-z0-9_-]{1,512}$/.test(fileId)) throw unavailable();
-      return fileId;
+      return {
+        fileId,
+        messageId: telegramNumericId(result.message_id),
+        chatId: telegramChatId(result.chat?.id) || telegramChatId(chatId),
+        uniqueFileId:
+          typeof result.document?.file_unique_id === 'string' && /^[A-Za-z0-9_-]{1,512}$/.test(result.document.file_unique_id)
+            ? result.document.file_unique_id
+            : null
+      };
+    },
+    async deleteMessage(messageId: string, targetChatId?: string): Promise<boolean> {
+      const normalizedMessageId = telegramNumericId(messageId);
+      const normalizedChatId = telegramChatId(targetChatId) || telegramChatId(chatId);
+      if (!normalizedMessageId || !normalizedChatId) return false;
+      const result = await api(
+        'deleteMessage',
+        JSON.stringify({ chat_id: normalizedChatId, message_id: Number(normalizedMessageId) }),
+        { 'Content-Type': 'application/json' }
+      );
+      return result === true;
     },
     async download(fileId: string): Promise<ReadableStream<Uint8Array>> {
       const result = await api('getFile', JSON.stringify({ file_id: fileId }), {

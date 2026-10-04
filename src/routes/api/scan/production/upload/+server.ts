@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { uploadPipelineFileToStorage } from '$lib/server/storage-router';
+import { deleteTelegramObject, uploadPipelineFileToStorage } from '$lib/server/storage-router';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { RateLimitError } from '$lib/server/media';
 import { getScanArtifactStorage, removeScanArtifact } from '$lib/server/scan-artifact-storage';
@@ -149,15 +149,36 @@ export const POST = async ({ locals, request, platform }) => {
   };
 
   let deliveryKey: string = crypto.randomUUID();
+  let replacedTelegram: {
+    botReference: string | null;
+    messageId: string | null;
+    chatId: string | null;
+  } | undefined;
   if (replacementId) {
     try {
-      const replacement = await ysql<{ delivery_key: string | null }>(platform, `
-        SELECT delivery_key FROM public.scan_production_files
-        WHERE id = $1 AND scan_id = $2 AND production_chapter_id = $3 AND stage_id = $4 AND is_current = true
+      const replacement = await ysql<{
+        delivery_key: string | null; provider: string | null; bot_reference: string | null;
+        telegram_message_id: string | null; telegram_chat_id: string | null;
+      }>(platform, `
+        SELECT file.delivery_key,
+               COALESCE(attempt.provider, file.provider) AS provider,
+               COALESCE(attempt.bot_reference, file.bot_reference) AS bot_reference,
+               attempt.telegram_message_id, attempt.telegram_chat_id
+        FROM public.scan_production_files file
+        LEFT JOIN public.scan_pipeline_upload_attempts attempt ON attempt.file_id = file.id
+        WHERE file.id = $1 AND file.scan_id = $2 AND file.production_chapter_id = $3
+          AND file.stage_id = $4 AND file.is_current = true
         LIMIT 1
       `, [replacementId, scanId, productionChapterId, stageId]);
       if (!replacement.rows[0]?.delivery_key) return failAttempt('O arquivo a substituir não está mais disponível.', 409, 'REPLACEMENT_NOT_CURRENT');
       deliveryKey = replacement.rows[0].delivery_key;
+      if (replacement.rows[0].provider === 'TELEGRAM') {
+        replacedTelegram = {
+          botReference: replacement.rows[0].bot_reference,
+          messageId: replacement.rows[0].telegram_message_id,
+          chatId: replacement.rows[0].telegram_chat_id
+        };
+      }
     } catch (error) {
       logYsqlFailure('upload_replacement_lookup', error);
       return failAttempt('Não foi possível validar o arquivo a substituir.', 503, 'REPLACEMENT_LOOKUP_FAILED');
@@ -188,10 +209,19 @@ export const POST = async ({ locals, request, platform }) => {
     if (error) throw error;
     storedArtifactKey = artifactKey;
     storedArtifactProvider = 'STORAGE';
-    return { provider: 'STORAGE', fileKey: artifactKey, shardId: null, poolId: null, botReference: 'PRODUCTION_STORAGE', telegramFileId: null, sha256: checksum, byteSize: file.size };
+    return {
+      provider: 'STORAGE', fileKey: artifactKey, shardId: null, poolId: null,
+      botReference: 'PRODUCTION_STORAGE', telegramFileId: null,
+      telegramMessageId: null, telegramChatId: null, telegramUniqueFileId: null,
+      sha256: checksum, byteSize: file.size
+    };
   };
 
-  let storedRecord: { provider: string; fileKey: string; shardId: string | null; poolId: string | null; botReference: string; telegramFileId: string | null; sha256: string; byteSize: number };
+  let storedRecord: {
+    provider: string; fileKey: string; shardId: string | null; poolId: string | null;
+    botReference: string; telegramFileId: string | null; telegramMessageId: string | null;
+    telegramChatId: string | null; telegramUniqueFileId: string | null; sha256: string; byteSize: number;
+  } | undefined;
   try {
     if (file.size > LARGE_FILE_THRESHOLD) {
       storedRecord = await storeInArtifacts();
@@ -205,6 +235,8 @@ export const POST = async ({ locals, request, platform }) => {
           provider: 'TELEGRAM', fileKey: `prod_${checksum.slice(0, 16)}_${Date.now()}`,
           shardId: telegramRecord.shardId, poolId: telegramRecord.poolId,
           botReference: telegramRecord.botReference, telegramFileId: telegramRecord.telegramFileId,
+          telegramMessageId: telegramRecord.telegramMessageId, telegramChatId: telegramRecord.telegramChatId,
+          telegramUniqueFileId: telegramRecord.telegramUniqueFileId,
           sha256: telegramRecord.sha256 || checksum, byteSize: telegramRecord.byteSize
         };
       } catch (error: any) {
@@ -222,7 +254,20 @@ export const POST = async ({ locals, request, platform }) => {
     return failAttempt('Falha ao enviar o arquivo ao armazenamento. Você pode tentar novamente sem perder os demais arquivos.', 502, 'STORAGE_FAILED');
   }
 
+  if (!storedRecord) return failAttempt('Falha ao preparar o registro do arquivo.', 503, 'STORAGE_RECORD_MISSING');
+
   try {
+    // Keep the provider deletion coordinates on the retry/cancellation row.
+    // This is the durable hand-off between the provider upload and the YSQL
+    // finalizer; it also lets a user cancel an in-flight upload safely.
+    await ysql(platform, `
+      UPDATE public.scan_pipeline_upload_attempts
+      SET provider = $2, bot_reference = $3, telegram_file_id = $4,
+          telegram_message_id = $5, telegram_chat_id = $6,
+          telegram_unique_file_id = $7, updated_at = now()
+      WHERE id = $1 AND status <> 'SUCCEEDED'
+    `, [uploadId, storedRecord.provider, storedRecord.botReference, storedRecord.telegramFileId,
+      storedRecord.telegramMessageId, storedRecord.telegramChatId, storedRecord.telegramUniqueFileId]);
     const nameResult = await ysql<{ display_name: string | null; username: string | null }>(platform,
       'SELECT display_name, username FROM public.members WHERE id = $1 LIMIT 1', [locals.user.id]);
     const actorName = nameResult.rows[0]?.display_name || nameResult.rows[0]?.username || 'Membro';
@@ -239,6 +284,10 @@ export const POST = async ({ locals, request, platform }) => {
     })]);
     const currentFile = result.rows[0]?.file;
     if (!currentFile) throw new Error('YSQL finalizer returned no file');
+    if (replacedTelegram?.botReference && replacedTelegram.messageId && replacedTelegram.chatId) {
+      await deleteTelegramObject(replacedTelegram.botReference, replacedTelegram.chatId, replacedTelegram.messageId)
+        .catch((cleanupError) => logYsqlFailure('replacement_telegram_cleanup', cleanupError));
+    }
     return json({ success: true, file: currentFile, version: currentFile.version, uploadId, deliveryKey: currentFile.delivery_key });
   } catch (error: any) {
     const conflict = /REPLACEMENT_NOT_CURRENT|STAGE_NO_LONGER_ACCEPTS_UPLOAD|STAGE_ASSIGNMENT_CHANGED|UPLOAD_ATTEMPT_NOT_FINALIZABLE/.test(String(error?.message || ''));
@@ -246,6 +295,10 @@ export const POST = async ({ locals, request, platform }) => {
       await removeScanArtifact(platform?.env, storedArtifactKey).catch((cleanupError) => {
         logYsqlFailure('upload_storage_compensation', cleanupError);
       });
+    }
+    if (storedRecord?.provider === 'TELEGRAM' && storedRecord.telegramMessageId && storedRecord.telegramChatId) {
+      await deleteTelegramObject(storedRecord.botReference, storedRecord.telegramChatId, storedRecord.telegramMessageId)
+        .catch((cleanupError) => logYsqlFailure('upload_telegram_compensation', cleanupError));
     }
     logYsqlFailure('upload_finalize', error);
     return failAttempt(
@@ -261,8 +314,15 @@ export const DELETE = async ({ locals, url, platform }) => {
   const uploadId = url.searchParams.get('upload_id');
   if (!isUuid(uploadId)) return json({ error: 'Upload inválido' }, { status: 400 });
   try {
-    const attemptResult = await ysql<{ id: string; scan_id: string; user_id: string; status: string }>(platform,
-      'SELECT id, scan_id, user_id, status FROM public.scan_pipeline_upload_attempts WHERE id = $1 LIMIT 1', [uploadId]);
+    const attemptResult = await ysql<{
+      id: string; scan_id: string; user_id: string; status: string;
+      provider: string | null; bot_reference: string | null; telegram_message_id: string | null;
+      telegram_chat_id: string | null;
+    }>(platform, `
+      SELECT id, scan_id, user_id, status, provider, bot_reference,
+             telegram_message_id, telegram_chat_id
+      FROM public.scan_pipeline_upload_attempts WHERE id = $1 LIMIT 1
+    `, [uploadId]);
     const attempt = attemptResult.rows[0];
     if (!attempt) return json({ error: 'Upload não encontrado' }, { status: 404 });
     const access = await checkScanAccess(platform, attempt.scan_id, locals.user.id, locals.role === 'ADMIN');
@@ -272,6 +332,10 @@ export const DELETE = async ({ locals, url, platform }) => {
       UPDATE public.scan_pipeline_upload_attempts SET status = 'CANCELLED', updated_at = now()
       WHERE id = $1 AND status <> 'SUCCEEDED'
     `, [uploadId]);
+    if (attempt.provider === 'TELEGRAM' && attempt.bot_reference && attempt.telegram_message_id && attempt.telegram_chat_id) {
+      await deleteTelegramObject(attempt.bot_reference, attempt.telegram_chat_id, attempt.telegram_message_id)
+        .catch((cleanupError) => logYsqlFailure('upload_cancel_telegram_compensation', cleanupError));
+    }
     return json({ success: true });
   } catch (error) {
     logYsqlFailure('upload_discard', error);
