@@ -19,8 +19,7 @@ export const GET = async ({ url, locals }) => {
       await claimInvite(locals);
       redirect(303, type === 'recovery' ? '/redefinir' : next);
     }
-    // Never log the token or the URL. This is enough to correlate provider
-    // failures without leaking credentials into Worker logs.
+    // Never log token values or the full URL; keep only a safe provider code.
     console.warn(`[AUTH_CONFIRM] mode=otp type=${type} result=failed provider_code=${error?.code || 'UNKNOWN'}`);
   }
   redirect(303, '/entrar?erro=link-expirado');

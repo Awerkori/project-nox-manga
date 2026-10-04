@@ -30,7 +30,6 @@
   let usernameStatus = $state<'idle' | 'checking' | 'available' | 'error'>('idle');
   let usernameMessage = $state('');
   let checkTimer: any = null;
-  let usernameRequest = 0;
   let resendCooldown = $state(0);
   let resendTimer: any = null;
 
@@ -72,13 +71,11 @@
 
     usernameStatus = 'checking';
     usernameMessage = 'Verificando...';
-    const requestId = ++usernameRequest;
 
     checkTimer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(sanitized)}`);
         const json = await res.json();
-        if (requestId !== usernameRequest) return;
         if (json.available) {
           usernameStatus = 'available';
           usernameMessage = `@${sanitized} está disponível!`;
@@ -87,7 +84,6 @@
           usernameMessage = json.reason || 'Nome indisponível.';
         }
       } catch {
-        if (requestId !== usernameRequest) return;
         usernameStatus = 'error';
         usernameMessage = 'Erro ao verificar disponibilidade.';
       }
@@ -148,7 +144,7 @@
           </div>
           <div class="perk-content">
             <h4 class="perk-title">Um perfil com a sua cara</h4>
-            <p class="perk-desc">Escolha seu @handle e organize sua identidade na comunidade.</p>
+            <p class="perk-desc">Escolha um nome público para sua identidade na comunidade.</p>
           </div>
         </div>
 
@@ -183,7 +179,7 @@
             {#if data.mode === 'entrar'}
               Acesse sua biblioteca e continue de onde parou.
             {:else if data.mode === 'cadastrar'}
-              Escolha um @handle único e tenha um espaço seu na comunidade.
+              Crie sua conta com o e-mail que você já usa para ler.
             {:else if data.mode === 'recuperar'}
               Informe seu e-mail e enviaremos um link seguro para trocar a senha.
             {:else}
@@ -236,11 +232,7 @@
               <input type="hidden" name="intent" value="resend_confirmation" />
               <input type="hidden" name="email" value={email} />
               <button class="btn-secondary-auth" type="submit" disabled={busy || resendCooldown > 0}>
-                {#if resendCooldown > 0}
-                  Reenviar em {resendCooldown}s
-                {:else}
-                  Reenviar confirmação
-                {/if}
+                {#if resendCooldown > 0}Reenviar em {resendCooldown}s{:else}Reenviar confirmação{/if}
               </button>
             </form>
             <a href="/cadastrar" class="switch-link">Usar outro e-mail</a>
@@ -278,7 +270,7 @@
                   minlength="2"
                   maxlength="50"
                   autocomplete="name"
-                  placeholder="Como quer ser chamado?"
+                  placeholder="Ex: Amanda Silva ou Aventureiro Nox"
                   class="custom-input"
                 />
               </div>
@@ -290,20 +282,20 @@
               <div class="label-row">
                 <label for="username" class="input-label">
                   <AtSign size={15} />
-                  <span>@Handle</span>
+                  <span>@Handle <small>(opcional)</small></span>
                 </label>
                 {#if usernameStatus === 'checking'}
-                  <span class="status-indicator checking" aria-live="polite">
+                  <span class="status-indicator checking">
                     <Loader2 size={13} class="spin-icon" />
                     <span>Verificando...</span>
                   </span>
                 {:else if usernameStatus === 'available'}
-                  <span class="status-indicator available" aria-live="polite">
+                  <span class="status-indicator available">
                     <CheckCircle2 size={13} />
                     <span>Disponível</span>
                   </span>
                 {:else if usernameStatus === 'error'}
-                  <span class="status-indicator error" aria-live="polite">
+                  <span class="status-indicator error">
                     <AlertCircle size={13} />
                     <span>{usernameMessage}</span>
                   </span>
@@ -318,7 +310,6 @@
                   name="username"
                   value={username}
                   oninput={onUsernameInput}
-                  required
                   minlength="3"
                   maxlength="30"
                   pattern="[a-z0-9_]+"
@@ -329,7 +320,7 @@
                   class:invalid={usernameStatus === 'error'}
                 />
               </div>
-              <span class="field-hint">3–30 caracteres: letras minúsculas, números e _.</span>
+              <span class="field-hint">Opcional · 3–30 caracteres: letras minúsculas, números e _.</span>
             </div>
           {/if}
 
@@ -416,7 +407,7 @@
           <button
             type="submit"
             class="btn-submit-auth"
-            disabled={busy || (data.mode === 'cadastrar' && usernameStatus !== 'available')}
+            disabled={busy || (data.mode === 'cadastrar' && (usernameStatus === 'error' || usernameStatus === 'checking'))}
           >
             {#if busy}
               <Loader2 size={18} class="spin-icon" />
@@ -739,6 +730,12 @@
     color: #cbd5e1;
   }
 
+  .input-label small {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+
   .status-indicator {
     display: inline-flex;
     align-items: center;
@@ -837,15 +834,6 @@
     color: #cbd5e1;
   }
 
-  .btn-toggle-password:focus-visible,
-  .btn-submit-auth:focus-visible,
-  .btn-secondary-auth:focus-visible,
-  .switch-link:focus-visible,
-  .forgot-link:focus-visible {
-    outline: 2px solid #c4b5fd;
-    outline-offset: 3px;
-  }
-
   .field-hint {
     font-size: 0.75rem;
     color: #64748b;
@@ -904,6 +892,15 @@
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
+  }
+
+  .btn-toggle-password:focus-visible,
+  .btn-submit-auth:focus-visible,
+  .btn-secondary-auth:focus-visible,
+  .switch-link:focus-visible,
+  .forgot-link:focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 3px;
   }
 
   /* Footer */

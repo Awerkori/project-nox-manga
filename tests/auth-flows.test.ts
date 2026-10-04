@@ -62,64 +62,42 @@ describe('account actions', () => {
     expect(claimInvite).not.toHaveBeenCalled();
   });
   it('sends registration confirmation to the own origin without claiming unverified roles', async () => {
-    const e = event('cadastrar', {
-      email: 'reader@example.invalid',
-      password: 'long-password',
-      displayName: 'Reader',
-      username: 'reader_nox'
-    });
+    const e = event('cadastrar');
     expect(await actions.default(e)).toMatchObject({ success: true });
     expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
       email: 'reader@example.invalid',
       password: 'long-password',
-      options: {
-        emailRedirectTo: 'https://nox.invalid/auth/confirm',
-        data: { username: 'reader_nox', display_name: 'Reader' }
-      }
+      options: { emailRedirectTo: 'https://nox.invalid/auth/confirm' }
     });
     expect(claimInvite).not.toHaveBeenCalled();
   });
   it('shows a safe retry message when email quota is exhausted', async () => {
-    const e = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password', username: 'reader_nox' });
+    const e = event('cadastrar');
     e.locals.db.auth.signUp.mockResolvedValue({ error: { code: 'over_email_send_rate_limit' } });
     expect(await actions.default(e)).toMatchObject({
       status: 400,
       data: { message: 'Limite de envio atingido. Tente novamente mais tarde.' }
     });
   });
-  it('requires a valid, non-reserved @handle before contacting Auth', async () => {
-    const missing = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
-    expect(await actions.default(missing)).toMatchObject({ status: 400 });
-    expect(missing.locals.db.auth.signUp).not.toHaveBeenCalled();
-
-    const reserved = event('cadastrar', {
+  it('keeps the legacy optional username contract while pinning production callbacks', async () => {
+    const e = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
+    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
+    expect(await actions.default(e)).toMatchObject({ success: true });
+    expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
       email: 'reader@example.invalid',
       password: 'long-password',
-      username: 'admin'
+      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
     });
-    expect(await actions.default(reserved)).toMatchObject({ status: 400 });
-    expect(reserved.locals.db.auth.signUp).not.toHaveBeenCalled();
   });
-  it('resends signup confirmation through the provider with the canonical callback', async () => {
+  it('resends confirmation through the existing provider with a cooldown-capable action', async () => {
     const e = event('cadastrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
+    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
     expect(await actions.default(e)).toMatchObject({ success: true, resend: true });
     expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
       type: 'signup',
       email: 'reader@example.invalid',
-      options: { emailRedirectTo: 'https://nox.invalid/auth/confirm' }
+      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
     });
-  });
-  it('never creates production auth links for a legacy request host', async () => {
-    const e = event('cadastrar', {
-      email: 'reader@example.invalid',
-      password: 'long-password',
-      username: 'reader_nox'
-    });
-    e.url = new URL('https://legacy.invalid/cadastrar');
-    expect(await actions.default(e)).toMatchObject({ success: true });
-    expect(e.locals.db.auth.signUp.mock.calls[0][0].options.emailRedirectTo).toBe(
-      'https://manga.project-nox-awerkori.workers.dev/auth/confirm'
-    );
   });
   it('recovery requires no password and uses a fixed reset destination', async () => {
     const e = event('recuperar', { email: 'reader@example.invalid', password: '' });
