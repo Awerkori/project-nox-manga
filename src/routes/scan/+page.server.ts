@@ -231,12 +231,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     'scan_pipeline_snapshot_ysql'
   );
 
-  // Chat is a high-frequency workspace surface, so its read model follows the
-  // same YSQL-first pattern as the editorial graph. Realtime remains in the
-  // browser for now; replacing it requires an equivalent event transport, not
-  // a polling regression.
-  const requestedTab = url.searchParams.get('tab');
-  const chatSnapshotPromise = requestedTab === 'chat' ? withTimeout(
+  // Chat is loaded by its dedicated endpoint when the Chat tab mounts. This
+  // keeps every other workspace tab independent from the chat read model.
+  const chatSnapshotPromise = Promise.resolve(null);
+  /* const requestedTab = url.searchParams.get('tab');
+  const legacyChatSnapshotPromise = requestedTab === 'chat' ? withTimeout(
     Promise.all([
       executeYugabyteSql<any>(`
         SELECT channel.*
@@ -286,7 +285,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     3_500,
     null,
     'scan_chat_snapshot_ysql'
-  ) : Promise.resolve(null);
+  ) : Promise.resolve(null); */
 
   // The recruitment board contains both public vacancy data and private
   // candidate answers. Fetch it directly from YSQL, but carry the legacy RLS

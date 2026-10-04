@@ -19,7 +19,6 @@
     Copy
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
-  import { invalidateAll } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import type { RealtimeChannel } from '@supabase/supabase-js';
   import { enhance } from '$app/forms';
@@ -39,6 +38,11 @@
   } = $props();
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
+  let chatChannels = $state<any[]>(channels);
+  let chatMessages = $state<any[]>(messages);
+  let chatReadStates = $state<any[]>(channelReadStates);
+  let chatLoading = $state(false);
+  let chatError = $state('');
 
   let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId));
   let myDisplayName = $derived(myMemberInfo?.display_name || myMemberInfo?.username || 'Membro');
@@ -47,7 +51,7 @@
   // while an owner receives feedback from a channel-reorder request.
   let localChannelOrder = $state<string[] | null>(null);
   let localChannels = $derived.by(() => {
-    const serverOrder = [...channels].sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    const serverOrder = [...chatChannels].sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
     if (!localChannelOrder) return serverOrder;
     const byId = new Map(serverOrder.map((channel: any) => [channel.id, channel]));
     const optimistic = localChannelOrder.map((id) => byId.get(id)).filter(Boolean);
@@ -70,7 +74,7 @@
   let activeChannel = $derived(localChannels.find((c: any) => c.id === activeChannelId) || localChannels[0]);
 
   let channelMessages = $derived(
-    messages.filter((m: any) => m.channel_id === activeChannelId)
+    chatMessages.filter((m: any) => m.channel_id === activeChannelId)
   );
 
   let messageInput = $state('');
@@ -146,7 +150,7 @@
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
       await fetch('?/reorderChannels', { method: 'POST', body: fd });
-      await invalidateAll();
+      await loadChatSnapshot();
       localChannelOrder = null;
     } catch (e) {
       console.error('Failed to persist channel order:', e);
@@ -177,7 +181,7 @@
       fd.set('scan_id', currentScanId);
       fd.set('orders', JSON.stringify(payload));
       await fetch('?/reorderChannels', { method: 'POST', body: fd });
-      await invalidateAll();
+      await loadChatSnapshot();
       localChannelOrder = null;
     } catch (e) {
       console.error('Failed to move channel:', e);
@@ -212,7 +216,29 @@
     return names[0] + ' e outros estão digitando...';
   });
 
+  async function loadChatSnapshot() {
+    if (!currentScanId) return;
+    chatLoading = true;
+    chatError = '';
+    try {
+      const response = await fetch(`/api/scan/chat?scan_id=${encodeURIComponent(currentScanId)}`, {
+        headers: { accept: 'application/json' },
+        cache: 'no-store'
+      });
+      const snapshot = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(snapshot?.error || 'Não foi possível carregar o chat.');
+      chatChannels = Array.isArray(snapshot.channels) ? snapshot.channels : [];
+      chatMessages = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+      chatReadStates = Array.isArray(snapshot.channelReadStates) ? snapshot.channelReadStates : [];
+    } catch (error) {
+      chatError = error instanceof Error ? error.message : 'Não foi possível carregar o chat.';
+    } finally {
+      chatLoading = false;
+    }
+  }
+
   onMount(() => {
+    void loadChatSnapshot();
     const client = getSupabaseBrowserClient();
     if (!client || !currentScanId) return;
 
@@ -229,7 +255,7 @@
           filter: 'scan_id=eq.' + currentScanId
         },
         async () => {
-          await invalidateAll();
+          await loadChatSnapshot();
         }
       )
       .on(
@@ -240,7 +266,7 @@
           table: 'scan_message_reactions'
         },
         async () => {
-          await invalidateAll();
+          await loadChatSnapshot();
         }
       )
       .on('broadcast', { event: 'typing' }, ({ payload }: any) => {
@@ -264,7 +290,7 @@
     // Deep link hash handling (#msg-<id>)
     if (typeof window !== 'undefined' && window.location.hash?.startsWith('#msg-')) {
       const targetMsgId = window.location.hash.replace('#msg-', '');
-      const foundMsg = messages.find((m: any) => m.id === targetMsgId);
+      const foundMsg = chatMessages.find((m: any) => m.id === targetMsgId);
       if (foundMsg) {
         if (foundMsg.channel_id && foundMsg.channel_id !== activeChannelId) {
           activeChannelId = foundMsg.channel_id;
@@ -304,7 +330,7 @@
       fd.set('messageId', messageId);
       fd.set('emoji', emoji);
       await fetch('?/toggleReaction', { method: 'POST', body: fd });
-      await invalidateAll();
+      await loadChatSnapshot();
     } catch (e) {
       console.error('Failed to toggle reaction:', e);
     }
@@ -319,7 +345,7 @@
       fd.set('content', editingContent.trim());
       await fetch('?/editMessage', { method: 'POST', body: fd });
       editingMessageId = null;
-      await invalidateAll();
+      await loadChatSnapshot();
     } catch (e) {
       console.error('Failed to edit message:', e);
     }
@@ -346,7 +372,7 @@
         body: fd
       });
       messageToDelete = null;
-      await invalidateAll();
+      await loadChatSnapshot();
     } catch (e) {
       console.error('Failed to delete message:', e);
     } finally {
@@ -371,7 +397,7 @@
       el.classList.add('highlight-pulse');
       setTimeout(() => el.classList.remove('highlight-pulse'), 2500);
 
-      const msgObj = messages.find((m: any) => m.id === id);
+      const msgObj = chatMessages.find((m: any) => m.id === id);
       if (msgObj?.deleted_at) {
         showDeepLinkNotice('Esta mensagem não está mais disponível.');
       }
@@ -388,7 +414,7 @@
 
   // Channel Unread Divider State
   let activeChannelReadState = $derived(
-    channelReadStates.find((s: any) => s.channel_id === activeChannelId)
+    chatReadStates.find((s: any) => s.channel_id === activeChannelId)
   );
 
   let firstUnreadMsgId = $derived.by(() => {
@@ -752,6 +778,14 @@
 
   <!-- Central Chat Area -->
   <main class="chat-main-area">
+    {#if chatError}
+      <div class="chat-load-state chat-load-error" role="alert">
+        <span>{chatError}</span>
+        <button type="button" class="btn-control-pill" onclick={loadChatSnapshot}>Tentar novamente</button>
+      </div>
+    {:else if chatLoading && chatChannels.length === 0}
+      <div class="chat-load-state">Carregando mensagens…</div>
+    {/if}
     <!-- Channel Header -->
     <header class="channel-header-bar">
       <div class="channel-header-info">
@@ -1137,7 +1171,7 @@
                 replyingTo = null;
                 trackedMentions = [];
               }
-              await invalidateAll();
+              await loadChatSnapshot();
             };
           }}
           class="composer-form"
@@ -1612,6 +1646,24 @@
     height: 100%;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .chat-load-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding: 0.75rem 1rem;
+    color: var(--text-muted, #9ca3af);
+    background: rgba(15, 23, 42, 0.55);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    font-size: 0.85rem;
+  }
+
+  .chat-load-error {
+    justify-content: space-between;
+    color: #fecaca;
   }
 
   .channel-header-bar {
