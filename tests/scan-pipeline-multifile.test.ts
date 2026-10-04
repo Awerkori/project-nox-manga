@@ -79,6 +79,8 @@ describe('scan pipeline multi-file delivery', () => {
     expect(endpoint).toContain('removeScanArtifact');
     expect(helper).toContain('SCAN_ARTIFACT_STORAGE_CONFIG_MISSING');
     expect(helper).toContain('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
+    expect(helper).toContain("payload.ref !== projectRef");
+    expect(helper).toContain("payload.iss.includes('://')");
     expect(endpoint).not.toContain('pgumtergvtbeepzpgvkv.supabase.co');
   });
 
