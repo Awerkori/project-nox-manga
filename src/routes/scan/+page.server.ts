@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { dispatchMentions } from '$lib/server/mentions';
-import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { dispatchScanMentions } from '$lib/server/scan-mentions';
+import { createScanNotification } from '$lib/server/scan-notifications';
+import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
@@ -174,9 +175,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
 
   // Start the authoritative editorial graph immediately. It deliberately runs
   // beside the rest of the workspace batch: a member should not wait for
-  // unrelated backoffice widgets before the pipeline can render. The retired
-  // PostgREST reads remain an availability fallback below, never the primary
-  // source for this state.
+  // unrelated backoffice widgets before the pipeline can render.
   const pipelineSnapshotPromise = withTimeout(
     Promise.all([
       executeYugabyteSql<any>(`
@@ -354,9 +353,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     'scan_recruitment_snapshot_ysql'
   );
 
-  // Knowledge is a read-heavy workspace surface. Keep the three collections
-  // on the YSQL data plane while preserving a single bounded fallback so a
-  // transient database-path issue cannot mix stale and fresh documents.
+  // Knowledge is a read-heavy workspace surface. Keep all three collections
+  // on the YSQL data plane and fail closed to empty state on a transient error.
   const knowledgeSnapshotPromise = withTimeout(
     Promise.all([
       executeYugabyteSql<any>(`
@@ -597,7 +595,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     // preserves the batch's index layout for the incremental migration.
     Promise.resolve({ data: [] }),
     // YSQL knowledge snapshot is started above. These placeholders preserve
-    // the batch shape; legacy reads run only in the explicit fallback below.
+    // the batch shape while that snapshot resolves.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
@@ -617,8 +615,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
       [currentScan.id], platform, 'scan_work_uploaders_ysql'
     ),
     Promise.resolve({ data: [] }),
-    // YSQL chat snapshot is started above. Retired reads are only used by the
-    // explicit availability fallback below if that snapshot is unavailable.
+    // YSQL chat snapshot is started above. These placeholders preserve the
+    // batch shape while that snapshot resolves.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     // Personal inbox reads are served by the YSQL snapshot above. These
@@ -751,7 +749,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     recruitmentQuestions = questionsResult.rows;
     applicationAnswers = answersResult.rows;
   } else {
-    console.warn('scan_recruitment_snapshot_ysql_fallback', {
+    console.warn('scan_recruitment_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       message: 'ysql snapshot unavailable'
     });
@@ -780,7 +778,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     notifications = notificationsResult.rows;
     notificationPrefs = preferencesResult.rows[0] || null;
   } else {
-    console.warn('scan_notification_snapshot_ysql_fallback', {
+    console.warn('scan_notification_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       userId: locals.user.id,
       message: 'ysql snapshot unavailable'
@@ -794,7 +792,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
   if (taskSnapshot) {
     tasks = taskSnapshot.rows;
   } else {
-    console.warn('scan_task_snapshot_ysql_fallback', {
+    console.warn('scan_task_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       message: 'ysql snapshot unavailable'
     });
@@ -811,7 +809,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     glossary = glossaryResult.rows;
     references = referencesResult.rows;
   } else {
-    console.warn('scan_knowledge_snapshot_ysql_fallback', {
+    console.warn('scan_knowledge_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       message: 'ysql snapshot unavailable'
     });
@@ -895,13 +893,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     );
     productionFiles = ysqlFiles.rows;
   } catch (error: any) {
-    console.warn('scan_pipeline_files_ysql_fallback', { message: String(error?.message || 'unknown').slice(0, 240) });
+    console.warn('scan_pipeline_files_ysql_unavailable', { message: String(error?.message || 'unknown').slice(0, 240) });
   }
 
   // The workflow graph is the other half of a production delivery. YSQL is
-  // primary; the former data plane is queried only if the direct snapshot was
-  // unavailable, preserving an explicit availability fallback during the
-  // staged migration without paying for both on every healthy request.
+  // the only data plane used by this workspace.
   let workflowStages: any[];
   let chapterStages: any[];
   let productionChapters: any[];
@@ -914,7 +910,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     productionChapters = productionChapterResult.rows;
     chapterTimeline = timelineResult.rows;
   } else {
-    console.warn('scan_pipeline_snapshot_ysql_fallback', {
+    console.warn('scan_pipeline_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       message: 'ysql snapshot unavailable'
     });
@@ -924,9 +920,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     chapterTimeline = [];
   }
 
-  // Notes are a separate, editable collaboration stream. They are read from
-  // the YSQL data plane rather than the retired PostgREST/RPC path; only the
-  // already-authorized Scan member reaches this query.
+  // Notes are a separate, editable collaboration stream read from the
+  // authoritative YSQL data plane.
   let chapterNotes: any[] = [];
   try {
     const ysqlNotes = await withTimeout(
@@ -962,9 +957,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     });
   }
 
-  // Do not pay for PostgREST chat reads when YSQL is healthy. The fallback is
-  // deliberately all-or-nothing so channels, messages and read markers stay
-  // from the same data plane on a degraded request.
+  // Keep channels, messages and read markers from one authoritative data plane.
   let chatChannels: any[];
   let chatMessages: any[];
   let channelReadStates: any[];
@@ -975,7 +968,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     chatMessages = messagesResult.rows;
     channelReadStates = readStatesResult.rows;
   } else {
-    console.warn('scan_chat_snapshot_ysql_fallback', {
+    console.warn('scan_chat_snapshot_ysql_unavailable', {
       scanId: currentScan.id,
       message: 'ysql snapshot unavailable'
     });
@@ -1680,7 +1673,7 @@ export const actions: Actions = {
           ? `Agradecemos seu interesse na vaga de ${opTitle} na scan ${scanName}. No momento optamos por outro perfil.`
           : `Sua candidatura para ${opTitle} na scan ${scanName} foi colocada sob análise pela liderança.`;
 
-        await createNotification({
+        await createScanNotification({
           recipientUserId: data.applicant_id,
           actorUserId: locals.user.id,
           type: 'APPLICATION_UPDATE',
@@ -1689,7 +1682,8 @@ export const actions: Actions = {
           deepLink: `/me`,
           scanId: data.scan_id,
           priority: 'NORMAL',
-          dedupeKey: `app_review:${applicationId}:${action}:${Date.now()}`
+          dedupeKey: `app_review:${applicationId}:${action}:${Date.now()}`,
+          platform
         }).catch(err => console.error('Error notifying applicant:', err));
       }
     } catch (e) {
@@ -2306,7 +2300,7 @@ export const actions: Actions = {
 
         if (origMsg && origMsg.user_id && origMsg.user_id !== locals.user.id) {
           const preview = origMsg.content ? `"${origMsg.content.slice(0, 50)}..."` : 'sua mensagem';
-          await createNotification({
+          await createScanNotification({
             recipientUserId: origMsg.user_id,
             actorUserId: locals.user.id,
             type: 'REPLY_CHAT',
@@ -2336,7 +2330,7 @@ export const actions: Actions = {
       console.warn('Failed to parse mentionsData:', e);
     }
 
-    await dispatchMentions({
+    await dispatchScanMentions({
       locals,
       text: content,
       messageId: msg.id,
@@ -2351,7 +2345,7 @@ export const actions: Actions = {
     }).catch(err => console.error('Error dispatching chat mentions:', err));
 
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(10).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
     }
 
     return { success: true, messageId: msg.id };
@@ -2386,7 +2380,7 @@ export const actions: Actions = {
           // Invalid optional mention metadata must not block message editing.
         }
 
-        await dispatchMentions({
+        await dispatchScanMentions({
           locals,
           text: content,
           messageId,
@@ -2395,7 +2389,8 @@ export const actions: Actions = {
           authorId: locals.user.id,
           deepLink: `/scan?id=${currentMsg.scan_id}&tab=chat&channelId=${currentMsg.channel_id}#msg-${messageId}`,
           contextType: 'CHAT',
-          mentionsData: editMentionsData
+          mentionsData: editMentionsData,
+          platform
         });
       }
     } catch (err) {
@@ -2449,7 +2444,7 @@ export const actions: Actions = {
     // Notify parent author
     if (parent.user_id && parent.user_id !== locals.user.id) {
       const preview = parent.content ? `"${parent.content.slice(0, 50)}..."` : 'sua mensagem';
-      await createNotification({
+      await createScanNotification({
         recipientUserId: parent.user_id,
         actorUserId: locals.user.id,
         type: 'REPLY_CHAT',
@@ -2459,12 +2454,13 @@ export const actions: Actions = {
         context: 'Thread',
         scanId: parent.scan_id,
         priority: 'NORMAL',
-        dedupeKey: `thread_reply:${parentMessageId}:${locals.user.id}:${Date.now()}`
+        dedupeKey: `thread_reply:${parentMessageId}:${locals.user.id}:${Date.now()}`,
+        platform
       }).catch(err => console.error('Error dispatching thread reply notification:', err));
     }
 
     // Dispatch mentions in thread reply
-    await dispatchMentions({
+    await dispatchScanMentions({
       locals,
       text: content,
       scanId: parent.scan_id,
@@ -2472,7 +2468,8 @@ export const actions: Actions = {
       authorId: locals.user.id,
       title: 'Nova menção em resposta de thread',
       deepLink: `/scan?id=${parent.scan_id}&tab=chat&channelId=${parent.channel_id || ''}#msg-${parentMessageId}`,
-      contextType: 'CHAT'
+      contextType: 'CHAT',
+      platform
     }).catch(err => console.error('Error dispatching thread mentions:', err));
 
     return { success: true };
@@ -2599,7 +2596,7 @@ export const actions: Actions = {
     if (result.rowCount === 0) return fail(403, { message: 'Você não pertence a esta Scan.' });
 
     if (assignedTo && assignedTo !== locals.user.id) {
-      await createNotification({
+      await createScanNotification({
         recipientUserId: assignedTo,
         actorUserId: locals.user.id,
         type: 'QC_ISSUE',
@@ -2608,7 +2605,8 @@ export const actions: Actions = {
         deepLink: `/scan?id=${scanId}&tab=pipeline&chapterId=${chapterId}`,
         scanId,
         priority: 'URGENT',
-        dedupeKey: `qc:${chapterId}:${pageNumber}:${assignedTo}:${Date.now()}`
+        dedupeKey: `qc:${chapterId}:${pageNumber}:${assignedTo}:${Date.now()}`,
+        platform
       }).catch(err => console.error('Error dispatching QC notification:', err));
     }
 
@@ -2803,14 +2801,15 @@ export const actions: Actions = {
       }
     }
 
-    await dispatchMentions({
+    await dispatchScanMentions({
       locals,
       text: content,
       scanId,
       authorId: locals.user.id,
       title: `Nova publicação no Mural: "${title}"`,
       deepLink: `/scan?id=${scanId}&tab=mural&postId=${post.id}`,
-      contextType: 'MURAL'
+      contextType: 'MURAL',
+      platform
     }).catch(err => console.error('Error dispatching mural post mentions:', err));
 
     return { success: true, muralPostCreated: true };
@@ -2841,14 +2840,15 @@ export const actions: Actions = {
     );
     if (result.rowCount === 0) return fail(403, { message: 'Você não pertence a esta Scan.' });
 
-    await dispatchMentions({
+    await dispatchScanMentions({
       locals,
       text: content,
       scanId,
       authorId: locals.user.id,
       title: `Novo comentário no Mural`,
       deepLink: `/scan?id=${scanId}&tab=mural&postId=${postId}`,
-      contextType: 'MURAL'
+      contextType: 'MURAL',
+      platform
     }).catch(err => console.error('Error dispatching mural comment mentions:', err));
 
     return { success: true, muralCommentCreated: true };
@@ -3044,7 +3044,7 @@ export const actions: Actions = {
       return fail(expected ? 409 : 503, { message: expected ? 'O capítulo já existe ou você não tem o cargo necessário.' : 'Não foi possível criar o capítulo com segurança agora.' });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, chapterId };
   },
@@ -3075,7 +3075,7 @@ export const actions: Actions = {
       return fail(/BULK_RANGE_INVALID|SCAN_MEMBERSHIP_REQUIRED|RAW_PROVIDER_REQUIRED/.test(detail) ? 400 : 503, { message: 'Não foi possível criar os capítulos em lote com segurança.' });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: resultData };
   },
@@ -3111,7 +3111,7 @@ export const actions: Actions = {
       });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3146,7 +3146,7 @@ export const actions: Actions = {
       });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3188,7 +3188,7 @@ export const actions: Actions = {
       });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3227,7 +3227,7 @@ export const actions: Actions = {
       });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3267,7 +3267,7 @@ export const actions: Actions = {
       });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3372,7 +3372,7 @@ export const actions: Actions = {
       return fail(503, { message: 'Não foi possível publicar o capítulo com segurança agora.' });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },
@@ -3395,7 +3395,7 @@ export const actions: Actions = {
       return fail(503, { message: 'Não foi possível retirar o capítulo do público com segurança agora.' });
     }
     if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20).catch(() => {}));
+      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
   },

@@ -1,6 +1,7 @@
 import { privileged } from './db';
 import { sendBrevoEmail, queryBrevoEvents } from './brevo';
 import { generateEmailHtml } from './email-templates';
+import { executeYugabyteSql } from './yugabyte';
 
 export type NotificationType =
   | 'MENTION'
@@ -289,13 +290,17 @@ let hasQueuedRun = false;
  */
 export async function processPendingEmailOutbox(
   limit: number = 20,
-  specificId?: string
+  specificId?: string,
+  platformEnv?: any
 ): Promise<{
   processed: number;
   sent: number;
   failed: number;
   details: any[];
 }> {
+  if (platformEnv) {
+    return processYsqlScanEmailOutbox(limit, specificId, platformEnv);
+  }
   if (isDispatching) {
     hasQueuedRun = true;
     return { processed: 0, sent: 0, failed: 0, details: [] };
@@ -458,7 +463,9 @@ export async function processPendingEmailOutbox(
     try {
       const res = await (db.rpc('get_scan_email_outbox_metrics') as any);
       metrics = res?.data;
-    } catch {}
+    } catch {
+      // Metrics are advisory; delivery status remains authoritative.
+    }
     if (metrics?.queue_stalled) {
       console.warn(
         `[OUTBOX_STALLED_ALERT] Fila de e-mails com atraso superior a 10 minutos! Mais antigo aguardando há ${metrics.oldest_pending_age_seconds}s (${metrics.pending_count} pendentes).`
@@ -482,11 +489,96 @@ export async function processPendingEmailOutbox(
 }
 
 /**
+ * Scan-only mail delivery path.  It deliberately uses the YSQL outbox created
+ * by the Scan migration.  The legacy branch above remains for non-Scan public
+ * notifications until those consumers are migrated independently.
+ */
+async function processYsqlScanEmailOutbox(limit: number, specificId: string | undefined, platformEnv: any) {
+  const workerId = `scan-mailer_${Math.random().toString(36).slice(2, 8)}_${Date.now()}`;
+  const claimed = await executeYugabyteSql<any>(
+    `SELECT * FROM public.claim_scan_email_outbox_ysql($1,$2::uuid,$3,$4)`,
+    [limit, specificId || null, 300, workerId],
+    platformEnv
+  );
+  let sent = 0;
+  let failed = 0;
+  const details: any[] = [];
+  for (const item of claimed.rows) {
+    const requestKey = `${item.id}:${item.attempts || 1}`;
+    await executeYugabyteSql(
+      `UPDATE public.scan_email_outbox_ysql
+       SET send_started_at = now(), provider_request_key = $2, delivery_status = 'SENDING'
+       WHERE id = $1`,
+      [item.id, requestKey],
+      platformEnv
+    );
+    const result = await sendBrevoEmail({
+      toEmail: item.recipient_email,
+      subject: item.subject,
+      htmlContent: item.html_body,
+      customHeaders: { 'X-Nox-Outbox-Id': item.id, 'X-Nox-Request-Key': requestKey },
+      tags: ['nox', 'scan', String(item.priority || 'normal').toLowerCase()]
+    });
+    if (result.success && result.messageId) {
+      await executeYugabyteSql(
+        `UPDATE public.scan_email_outbox_ysql
+         SET status='SENT', delivery_status='ACCEPTED', provider_message_id=$2,
+             sent_at=now(), last_error=NULL, lease_expires_at=NULL
+         WHERE id=$1`,
+        [item.id, result.messageId],
+        platformEnv
+      );
+      sent++;
+      details.push({ id: item.id, status: 'SENT' });
+    } else {
+      const retryAfter = result.isRateLimit ? (result.retryAfterSeconds || 60) : Math.min(1800, Math.pow(2, Math.min(item.attempts || 1, 4)) * 60);
+      const permanent = !!result.isPermanentFailure || (item.attempts || 1) >= 5;
+      await executeYugabyteSql(
+        `UPDATE public.scan_email_outbox_ysql
+         SET status=$2, delivery_status=$3, last_error=$4,
+             scheduled_at=now() + ($5::text || ' seconds')::interval,
+             send_started_at=NULL, lease_expires_at=NULL
+         WHERE id=$1`,
+        [item.id, permanent ? 'FAILED' : 'PENDING', permanent ? 'FAILED' : 'RETRYING', result.error || 'Brevo delivery failed', retryAfter],
+        platformEnv
+      );
+      failed++;
+      details.push({ id: item.id, status: permanent ? 'FAILED' : 'RETRYING' });
+    }
+  }
+  return { processed: sent + failed, sent, failed, details };
+}
+
+/**
  * Reconcilia registros em DELIVERY_UNCERTAIN após crash ou perda de conexão.
  * Consulta a API de eventos do Brevo para verificar se o e-mail foi aceito/entregue
  * antes de decidir entre marcar RECONCILED_SENT ou liberar para novo envio seguro.
  */
-export async function reconcileUncertainEmailOutbox(limit = 10) {
+export async function reconcileUncertainEmailOutbox(limit = 10, platformEnv?: any) {
+  if (platformEnv) {
+    const workerId = `scan-reconciler_${Math.random().toString(36).slice(2, 8)}_${Date.now()}`;
+    const rows = await executeYugabyteSql<any>(
+      `SELECT * FROM public.claim_uncertain_scan_email_outbox_ysql($1,$2,$3)`,
+      [limit, workerId, 300],
+      platformEnv
+    );
+    let retried = 0;
+    for (const item of rows.rows) {
+      // Brevo event reconciliation is intentionally conservative.  Without a
+      // matching event we release the lease for the next bounded retry.
+      await executeYugabyteSql(
+        `UPDATE public.scan_email_outbox_ysql
+         SET status='PENDING', delivery_status='RECONCILED_RETRY',
+             send_started_at=NULL, lease_expires_at=NULL,
+             last_error='No Brevo event found during reconciliation'
+         WHERE id=$1`,
+        [item.id],
+        platformEnv
+      );
+      retried++;
+    }
+    return { reconciled: 0, retried, waiting: 0 };
+  }
   const db = privileged();
   const workerId = `reconciler_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
 
