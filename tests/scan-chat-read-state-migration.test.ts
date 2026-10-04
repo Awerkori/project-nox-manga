@@ -17,6 +17,7 @@ describe('Scan chat read-state YSQL migration', () => {
     expect(migration).toContain('UNIQUE (channel_id, user_id)');
     expect(source).toContain('FROM public.scan_channel_read_states_ysql');
     expect(source).toContain('INSERT INTO public.scan_channel_read_states_ysql');
+    expect(source).toContain('ON CONFLICT (channel_id, user_id)');
     expect(dedicatedMigration).toContain('CREATE TABLE IF NOT EXISTS public.scan_channel_read_states_ysql');
   });
 });

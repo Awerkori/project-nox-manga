@@ -2550,7 +2550,7 @@ export const actions: Actions = {
     const result = await executeYugabyteSql(
       `INSERT INTO public.scan_channel_read_states_ysql (scan_id, channel_id, user_id, last_read_message_id, last_read_at)
        VALUES ($1,$2,$3,$4,now())
-       ON CONFLICT (scan_id, channel_id, user_id) DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id, last_read_at = now()`,
+       ON CONFLICT (channel_id, user_id) DO UPDATE SET scan_id = EXCLUDED.scan_id, last_read_message_id = EXCLUDED.last_read_message_id, last_read_at = now()`,
       [scanId, channelId, locals.user.id, messageId], platform?.env
     );
     const data = { updated: result.rowCount >= 0 };
