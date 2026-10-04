@@ -66,7 +66,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     executeYugabyteSql<any>(`
       SELECT scan_member.role, scan_member.created_at,
              jsonb_build_object('id', member.id, 'username', member.username,
-               'display_name', member.display_name, 'avatar_id', member.avatar_id, 'xp', member.xp,
+               'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'xp', member.xp,
                'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS member
       FROM public.scan_members scan_member
       JOIN public.members member ON member.id = scan_member.user_id
@@ -89,7 +89,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     `, [scan.id], platform?.env),
     executeYugabyteSql<any>(`
       SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
-        'display_name', member.display_name, 'avatar_id', member.avatar_id) AS activity_user
+        'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop) AS activity_user
       FROM public.scan_activity activity
       LEFT JOIN public.members member ON member.id = activity.user_id
       WHERE activity.scan_id = $1
@@ -107,7 +107,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
       SELECT comment.id, comment.scan_id, comment.user_id, comment.parent_id, comment.body,
         comment.removed, comment.pinned, comment.created_at, comment.updated_at,
         jsonb_build_object('id', member.id, 'username', member.username, 'display_name', member.display_name,
-          'avatar_id', member.avatar_id, 'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members,
+          'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members,
         COALESCE(jsonb_agg(jsonb_build_object('user_id', comment_like.user_id))
           FILTER (WHERE comment_like.user_id IS NOT NULL), '[]'::jsonb) AS scan_comment_likes
       FROM public.scan_comments comment
