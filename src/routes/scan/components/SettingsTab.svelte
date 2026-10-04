@@ -16,6 +16,7 @@
     X
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
 
   let {
     currentScan,
@@ -122,9 +123,14 @@
       form.append('discord', scanDiscord);
       form.append('fluxer', scanFluxer);
       form.append('display_preposition', scanDisplayPrep);
-      await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persist = await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persistBody = await persist.json().catch(() => null);
+      if (!persist.ok || persistBody?.type === 'failure' || persistBody?.data?.message) {
+        throw new Error(persistBody?.data?.message || 'Não foi possível confirmar o logo no banco.');
+      }
 
       cancelLogoPreview();
+      await invalidateAll();
       logoSuccess = 'Logo atualizado e salvo com sucesso!';
       setTimeout(() => (logoSuccess = ''), 4000);
     } catch (err: any) {
@@ -196,9 +202,14 @@
       form.append('discord', scanDiscord);
       form.append('fluxer', scanFluxer);
       form.append('display_preposition', scanDisplayPrep);
-      await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persist = await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persistBody = await persist.json().catch(() => null);
+      if (!persist.ok || persistBody?.type === 'failure' || persistBody?.data?.message) {
+        throw new Error(persistBody?.data?.message || 'Não foi possível confirmar o banner no banco.');
+      }
 
       cancelBannerPreview();
+      await invalidateAll();
       bannerSuccess = 'Banner atualizado e salvo com sucesso!';
       setTimeout(() => (bannerSuccess = ''), 4000);
     } catch (err: any) {
@@ -1379,7 +1390,7 @@
 
   .banner-preview-box {
     width: 100%;
-    height: 110px;
+    height: 150px;
     border-radius: 0.75rem;
     background: rgba(0, 0, 0, 0.4);
     border: 1px dashed rgba(255, 255, 255, 0.15);

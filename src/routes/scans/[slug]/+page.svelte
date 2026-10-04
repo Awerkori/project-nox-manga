@@ -1303,7 +1303,7 @@
   }
 
   .hero-banner {
-    height: 180px;
+    height: clamp(180px, 18vw, 260px);
     width: 100%;
     position: relative;
     background: #141829;
@@ -2754,7 +2754,7 @@
     }
 
     .hero-banner {
-      height: 140px;
+      height: 180px;
     }
 
     .hero-body {

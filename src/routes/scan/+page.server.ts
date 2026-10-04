@@ -4,6 +4,7 @@ import { createScanNotification } from '$lib/server/scan-notifications';
 import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 type YsqlCollection<T = any> = { data: T[]; error: null };
@@ -1109,6 +1110,7 @@ export const actions: Actions = {
         logoId !== null && logoId !== undefined, logoId?.trim() || '', bannerId !== null && bannerId !== undefined, bannerId?.trim() || '', locals.role, locals.user.id], platform?.env
     );
     if (result.rowCount === 0) return fail(403, { message: 'Permissão negada ou scan inexistente.' });
+    invalidateScansDirectoryCache();
     return { success: true, brandingUpdated: true };
   },
 
