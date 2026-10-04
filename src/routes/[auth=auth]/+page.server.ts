@@ -62,42 +62,41 @@ export const actions = {
       if (displayName && (displayName.length < 2 || displayName.length > 50)) {
         return fail(400, { message: 'Nome de exibição deve ter entre 2 e 50 caracteres.' });
       }
-      if (rawUsername) {
-        if (rawUsername.length < 3 || rawUsername.length > 30) {
-          return fail(400, { message: 'O nome de usuário (@) deve ter entre 3 e 30 caracteres.' });
-        }
-        if (!/^[a-z0-9_]+$/.test(rawUsername)) {
-          return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
-        }
+      if (!rawUsername) {
+        return fail(400, { message: 'Informe um @handle para criar sua conta.' });
+      }
+      if (rawUsername.length < 3 || rawUsername.length > 30) {
+        return fail(400, { message: 'O nome de usuário (@) deve ter entre 3 e 30 caracteres.' });
+      }
+      if (!/^[a-z0-9_]+$/.test(rawUsername)) {
+        return fail(400, { message: 'O nome de usuário deve conter apenas letras minúsculas, números e sublinhados (_).' });
+      }
 
-        // This is only an early UX check. Existing production schema remains
-        // authoritative and optional usernames keep the legacy signup contract.
-        if (typeof locals.db.from === 'function') {
-          const { data: collision, error: collisionError } = await locals.db
-            .from('members')
-            .select('id')
-            .ilike('username', rawUsername)
-            .maybeSingle();
+      // This is only an early UX check. Existing production schema remains
+      // authoritative for the final uniqueness decision.
+      if (typeof locals.db.from === 'function') {
+        const { data: collision, error: collisionError } = await locals.db
+          .from('members')
+          .select('id')
+          .ilike('username', rawUsername)
+          .maybeSingle();
 
-          if (collisionError) {
-            console.warn(`[AUTH_HANDLE_CHECK] provider_error=${collisionError.code || 'UNKNOWN'}`);
-            return fail(503, { message: 'Não foi possível verificar o nome agora. Tente novamente.' });
-          }
-          if (collision) {
-            return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
-          }
+        if (collisionError) {
+          console.warn(`[AUTH_HANDLE_CHECK] provider_error=${collisionError.code || 'UNKNOWN'}`);
+          return fail(503, { message: 'Não foi possível verificar o nome agora. Tente novamente.' });
+        }
+        if (collision) {
+          return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
         }
       }
 
       const signUpOptions: { emailRedirectTo: string; data?: Record<string, string> } = {
         emailRedirectTo: `${redirectOrigin}/auth/confirm`
       };
-      if (rawUsername || displayName) {
-        signUpOptions.data = {
-          ...(rawUsername ? { username: rawUsername } : {}),
-          ...(displayName ? { display_name: displayName } : {})
-        };
-      }
+      signUpOptions.data = {
+        username: rawUsername,
+        ...(displayName ? { display_name: displayName } : {})
+      };
 
       const { error } = await locals.db.auth.signUp({
         email,

@@ -101,6 +101,13 @@
       }
     }, 1000);
   }
+
+  function validateSignup(event: SubmitEvent) {
+    if (data.mode !== 'cadastrar' || usernameStatus === 'available') return;
+    event.preventDefault();
+    usernameStatus = 'error';
+    usernameMessage = username ? 'Aguarde a verificação do @handle.' : 'Informe um @handle obrigatório.';
+  }
 </script>
 
 <svelte:head>
@@ -241,6 +248,7 @@
 
         <form
           method="POST"
+          onsubmit={validateSignup}
           use:enhance={() => {
             busy = true;
             return async ({ update }) => {
@@ -270,7 +278,7 @@
                   minlength="2"
                   maxlength="50"
                   autocomplete="name"
-                  placeholder="Ex: Amanda Silva ou Aventureiro Nox"
+                  placeholder="Ex: Seu nome ou apelido"
                   class="custom-input"
                 />
               </div>
@@ -282,7 +290,7 @@
               <div class="label-row">
                 <label for="username" class="input-label">
                   <AtSign size={15} />
-                  <span>@Handle <small>(opcional)</small></span>
+                  <span>@Handle</span>
                 </label>
                 {#if usernameStatus === 'checking'}
                   <span class="status-indicator checking">
@@ -310,17 +318,19 @@
                   name="username"
                   value={username}
                   oninput={onUsernameInput}
+                  required
+                  aria-required="true"
                   minlength="3"
                   maxlength="30"
                   pattern="[a-z0-9_]+"
                   autocomplete="username"
-                  placeholder="seu_nome_usuario"
+                  placeholder="@seuusuario"
                   class="custom-input with-prefix"
                   class:valid={usernameStatus === 'available'}
                   class:invalid={usernameStatus === 'error'}
                 />
               </div>
-              <span class="field-hint">Opcional · 3–30 caracteres: letras minúsculas, números e _.</span>
+              <span class="field-hint">Obrigatório · 3–30 caracteres: letras minúsculas, números e _.</span>
             </div>
           {/if}
 
@@ -728,12 +738,6 @@
     font-size: 0.84rem;
     font-weight: 600;
     color: #cbd5e1;
-  }
-
-  .input-label small {
-    color: #64748b;
-    font-size: 0.72rem;
-    font-weight: 500;
   }
 
   .status-indicator {
