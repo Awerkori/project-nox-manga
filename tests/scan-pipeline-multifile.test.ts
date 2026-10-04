@@ -84,9 +84,11 @@ describe('scan pipeline multi-file delivery', () => {
 
   it('does not block non-chat workspace tabs on the chat snapshot', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
-    expect(workspace).toContain("requestedTab === 'chat'");
-    expect(workspace).toContain('WITH recent_messages AS');
-    expect(workspace).toContain('ORDER BY message.created_at DESC');
+    const endpoint = readFileSync(resolve('src/routes/api/scan/chat/+server.ts'), 'utf8');
+    expect(workspace).toContain('dedicated endpoint when the Chat tab mounts');
+    expect(endpoint).toContain('WITH recent_messages AS');
+    expect(endpoint).toContain('ORDER BY message.created_at DESC');
+    expect(endpoint).toContain('scan_channel_read_states_ysql');
   });
 
   it('uses the YSQL completion guard for the multi-file Pipeline', () => {
