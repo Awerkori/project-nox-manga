@@ -212,6 +212,35 @@
           </div>
         {/if}
 
+        {#if data.mode === 'entrar' && form?.unconfirmed}
+          <section class="confirmation-state" aria-labelledby="unconfirmed-title">
+            <div class="confirmation-icon"><Mail size={22} /></div>
+            <h3 id="unconfirmed-title">Verifique seu e-mail</h3>
+            <p>Sua conta foi criada, mas você ainda precisa confirmar seu endereço para entrar.</p>
+            <form
+              method="POST"
+              class="resend-form"
+              use:enhance={() => {
+                busy = true;
+                return async ({ update, result }) => {
+                  try {
+                    await update();
+                    if (result.type === 'success') startResendCooldown();
+                  } finally {
+                    busy = false;
+                  }
+                };
+              }}
+            >
+              <input type="hidden" name="intent" value="resend_confirmation" />
+              <input type="hidden" name="email" value={form.email || email} />
+              <button class="btn-secondary-auth" type="submit" disabled={busy || resendCooldown > 0}>
+                {#if resendCooldown > 0}Reenviar em {resendCooldown}s{:else}Reenviar e-mail de verificação{/if}
+              </button>
+            </form>
+          </section>
+        {/if}
+
         {#if data.mode === 'cadastrar' && form?.success}
           <section class="confirmation-state" aria-labelledby="confirmation-title">
             <div class="confirmation-icon"><Mail size={22} /></div>
@@ -226,10 +255,10 @@
               class="resend-form"
               use:enhance={() => {
                 busy = true;
-                return async ({ update }) => {
+                return async ({ update, result }) => {
                   try {
                     await update();
-                    startResendCooldown();
+                    if (result.type === 'success') startResendCooldown();
                   } finally {
                     busy = false;
                   }

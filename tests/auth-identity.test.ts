@@ -36,4 +36,14 @@ describe('Project Nox account identity', () => {
     expect(server).toContain('emailRedirectTo: `${redirectOrigin}/auth/confirm`');
     expect(server).not.toContain('projectnox.com');
   });
+
+  it('offers verification resend after an unconfirmed login', () => {
+    expect(page).toContain("data.mode === 'entrar' && form?.unconfirmed");
+    expect(page).toContain('Verifique seu e-mail');
+    expect(page).toContain('Reenviar e-mail de verificação');
+    expect(page).toContain('resendCooldown');
+    expect(server).toContain("message: 'Verifique seu e-mail para continuar.'");
+    expect(server).toContain("intent === 'resend_confirmation'");
+    expect(server).toContain("code === 'email_not_confirmed'");
+  });
 });
