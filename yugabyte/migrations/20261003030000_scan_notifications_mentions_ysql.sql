@@ -13,10 +13,13 @@ CREATE TABLE IF NOT EXISTS public.scan_notification_dedupe (
 
 CREATE TABLE IF NOT EXISTS public.scan_message_mentions_ysql (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  message_id uuid NOT NULL REFERENCES public.scan_messages(id) ON DELETE CASCADE,
+  -- The legacy scan_messages relation is owned by the deployment role.  Do
+  -- not require REFERENCES ownership here; the YSQL service validates the
+  -- message/scan pair before writing and cleanup is handled by scan deletion.
+  message_id uuid NOT NULL,
   mention_type text NOT NULL CHECK (mention_type IN ('USER', 'ROLE', 'ALL')),
-  target_user_id uuid REFERENCES public.members(id) ON DELETE CASCADE,
-  target_role_id uuid REFERENCES public.scan_positions(id) ON DELETE CASCADE,
+  target_user_id uuid,
+  target_role_id uuid,
   mention_text text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
