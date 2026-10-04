@@ -109,12 +109,12 @@
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Falha no envio da imagem do logo');
       }
-      logoId = data.id;
+      const uploadedLogoId = data.id;
 
       // Persist directly in DB
       const form = new FormData();
       form.append('scan_id', currentScan.id);
-      form.append('logo_id', data.id);
+      form.append('logo_id', uploadedLogoId);
       form.append('banner_id', bannerId || '');
       form.append('name', scanName);
       form.append('description', scanDescription);
@@ -130,6 +130,7 @@
       }
 
       cancelLogoPreview();
+      logoId = uploadedLogoId;
       await invalidateAll();
       logoSuccess = 'Logo atualizado e salvo com sucesso!';
       setTimeout(() => (logoSuccess = ''), 4000);
@@ -188,13 +189,13 @@
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Falha no envio do banner');
       }
-      bannerId = data.id;
+      const uploadedBannerId = data.id;
 
       // Persist directly in DB
       const form = new FormData();
       form.append('scan_id', currentScan.id);
       form.append('logo_id', logoId || '');
-      form.append('banner_id', data.id);
+      form.append('banner_id', uploadedBannerId);
       form.append('name', scanName);
       form.append('description', scanDescription);
       form.append('bio', scanBio);
@@ -209,6 +210,7 @@
       }
 
       cancelBannerPreview();
+      bannerId = uploadedBannerId;
       await invalidateAll();
       bannerSuccess = 'Banner atualizado e salvo com sucesso!';
       setTimeout(() => (bannerSuccess = ''), 4000);
