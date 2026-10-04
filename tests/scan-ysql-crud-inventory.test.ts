@@ -32,5 +32,42 @@ describe('Scan YSQL CRUD inventory', () => {
       'delete_scan_production_chapter_ysql',
       'mark_pipeline_stage_seen_ysql'
     ]) expect(migration).toContain(`FUNCTION public.${name}`);
+
+    const notifications = readFileSync(resolve('yugabyte/migrations/20261003030000_scan_notifications_mentions_ysql.sql'), 'utf8');
+    for (const name of [
+      'create_scan_notification_ysql',
+      'claim_scan_email_outbox_ysql',
+      'claim_uncertain_scan_email_outbox_ysql'
+    ]) expect(notifications).toContain(`FUNCTION public.${name}`);
+  });
+
+  it('keeps Scan notifications and mentions on YSQL', () => {
+    const sources = [
+      readFileSync(resolve('src/lib/server/scan-notifications.ts'), 'utf8'),
+      readFileSync(resolve('src/lib/server/scan-mentions.ts'), 'utf8')
+    ].join('\n');
+    expect(sources).not.toMatch(/\b(?:locals|db|client|privileged)\.from\s*\(/);
+    expect(sources).not.toMatch(/\.rpc\s*\(/);
+    expect(sources).not.toMatch(/createClient\s*\(/);
+    expect(sources).toContain('executeYugabyteSql');
+  });
+
+  it('does not route Scan server actions through the legacy DB client', () => {
+    const files = [
+      resolve('src/routes/scan/+page.server.ts'),
+      resolve('src/routes/scans/[slug]/+page.server.ts')
+    ];
+    const source = files.map((file) => readFileSync(file, 'utf8')).join('\n');
+    expect(source).not.toMatch(/from ['"]\$lib\/server\/mentions['"]/);
+    expect(source).not.toMatch(/\.rpc\s*\(/);
+    expect(source).not.toMatch(/\b(?:locals|db|client|privileged)\.from\s*\(/);
+  });
+
+  it('documents the only non-database realtime/storage boundary', () => {
+    const source = readFileSync(resolve('src/routes/api/scan/production/upload/+server.ts'), 'utf8');
+    // Artifact bytes may remain in the existing private storage provider; the
+    // authoritative file metadata and authorization are YSQL above it.
+    expect(source).toContain('scan-artifacts');
+    expect(source).toContain('executeYugabyteSql');
   });
 });

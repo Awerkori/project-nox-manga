@@ -1,5 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { createNotification } from "$lib/server/notifications";
+import { createScanNotification } from "$lib/server/scan-notifications";
 import { executeYugabyteSql } from "$lib/server/yugabyte";
 import type { PageServerLoad, Actions } from "./$types";
 
@@ -351,7 +351,7 @@ export const actions: Actions = {
       const leaders = Array.isArray(data.leader_ids) ? data.leader_ids : [];
       for (const leaderId of leaders) {
         if (typeof leaderId === 'string' && leaderId !== locals.user.id) {
-            await createNotification({
+            await createScanNotification({
               recipientUserId: leaderId,
               actorUserId: locals.user.id,
               type: 'APPLICATION',
@@ -360,7 +360,8 @@ export const actions: Actions = {
               deepLink: `/scan?id=${data.scan_id}&tab=inbox`,
               scanId: data.scan_id,
               priority: 'NORMAL',
-              dedupeKey: `app:${applicationId}:${leaderId}`
+              dedupeKey: `app:${applicationId}:${leaderId}`,
+              platform
             }).catch(e => console.error('Error notifying lead:', e));
         }
       }
@@ -412,7 +413,7 @@ export const actions: Actions = {
     if (parentId) {
       try {
         if (data.parent_author_id && data.parent_author_id !== locals.user.id) {
-          await createNotification({
+          await createScanNotification({
             recipientUserId: data.parent_author_id,
             actorUserId: locals.user.id,
             type: "REPLY_COMMENT",
@@ -421,7 +422,8 @@ export const actions: Actions = {
             deepLink: `/scans/${params.slug}#comment-${parentId}`,
             scanId,
             priority: "NORMAL",
-            dedupeKey: `scan_comm_reply:${parentId}:${locals.user.id}:${Date.now()}`
+            dedupeKey: `scan_comm_reply:${parentId}:${locals.user.id}:${Date.now()}`,
+            platform
           }).catch(e => console.error("Error notifying comment reply:", e));
         }
       } catch (e) {
