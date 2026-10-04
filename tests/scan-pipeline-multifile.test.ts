@@ -73,6 +73,22 @@ describe('scan pipeline multi-file delivery', () => {
     expect(filesEndpoint).toContain('withdraw_scan_pipeline_file_ysql');
   });
 
+  it('fails closed for artifact storage and compensates a failed finalization', () => {
+    const endpoint = readFileSync(resolve('src/routes/api/scan/production/upload/+server.ts'), 'utf8');
+    const helper = readFileSync(resolve('src/lib/server/scan-artifact-storage.ts'), 'utf8');
+    expect(endpoint).toContain('removeScanArtifact');
+    expect(helper).toContain('SCAN_ARTIFACT_STORAGE_CONFIG_MISSING');
+    expect(helper).toContain('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
+    expect(endpoint).not.toContain('pgumtergvtbeepzpgvkv.supabase.co');
+  });
+
+  it('does not block non-chat workspace tabs on the chat snapshot', () => {
+    const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
+    expect(workspace).toContain("requestedTab === 'chat'");
+    expect(workspace).toContain('WITH recent_messages AS');
+    expect(workspace).toContain('ORDER BY message.created_at DESC');
+  });
+
   it('uses the YSQL completion guard for the multi-file Pipeline', () => {
     const workspace = readFileSync(resolve('src/routes/scan/+page.server.ts'), 'utf8');
     expect(workspace).toContain('complete_scan_chapter_stage_ysql');
