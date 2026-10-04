@@ -11,6 +11,17 @@ function authOrigin(url: URL): string {
   return DEFAULT_SITE_ORIGIN;
 }
 
+function isUnconfirmedEmailError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const details = error as { code?: unknown; status?: unknown; message?: unknown };
+  if (details.code === 'email_not_confirmed') return true;
+  return (
+    details.status === 400 &&
+    typeof details.message === 'string' &&
+    /^email not confirmed$/i.test(details.message.trim())
+  );
+}
+
 export const load = ({ params, url }) => ({
   mode: params.auth,
   error:
@@ -27,7 +38,7 @@ export const actions = {
       intent = String(f.get('intent') || '');
     const redirectOrigin = authOrigin(url);
 
-    if (mode === 'cadastrar' && intent === 'resend_confirmation') {
+    if ((mode === 'cadastrar' || mode === 'entrar') && intent === 'resend_confirmation') {
       if (!z.email().safeParse(email).success) {
         return fail(400, { message: 'Informe um e-mail válido para reenviar a confirmação.' });
       }
@@ -39,7 +50,13 @@ export const actions = {
       if (error) {
         return fail(400, { message: 'Não foi possível reenviar agora. Aguarde alguns segundos e tente novamente.' });
       }
-      return { success: true, resend: true, message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.' };
+      return {
+        success: true,
+        resend: true,
+        unconfirmed: mode === 'entrar',
+        email,
+        message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.'
+      };
     }
     if (mode !== 'redefinir' && !z.email().safeParse(email).success)
       return fail(400, { message: 'Informe um e-mail válido.' });
@@ -48,6 +65,13 @@ export const actions = {
     if (password.length > 128) return fail(400, { message: 'A senha pode ter até 128 caracteres.' });
     if (mode === 'entrar') {
       const { error } = await locals.db.auth.signInWithPassword({ email, password });
+      if (error && isUnconfirmedEmailError(error)) {
+        return fail(400, {
+          message: 'Verifique seu e-mail para continuar.',
+          unconfirmed: true,
+          email
+        });
+      }
       if (error)
         return fail(400, {
           message: 'Não foi possível entrar. Confira o e-mail, a senha e a confirmação da conta.'

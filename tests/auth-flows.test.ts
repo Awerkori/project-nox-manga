@@ -61,6 +61,33 @@ describe('account actions', () => {
     expect(JSON.stringify(result)).not.toContain('private provider detail');
     expect(claimInvite).not.toHaveBeenCalled();
   });
+  it('guides an existing unconfirmed account without exposing provider details', async () => {
+    const e = event();
+    e.locals.db.auth.signInWithPassword.mockResolvedValue({
+      error: { code: 'email_not_confirmed', status: 400, message: 'Email not confirmed' }
+    });
+    const result = await actions.default(e);
+    expect(result).toMatchObject({
+      status: 400,
+      data: {
+        message: 'Verifique seu e-mail para continuar.',
+        unconfirmed: true,
+        email: 'reader@example.invalid'
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain('Email not confirmed');
+    expect(claimInvite).not.toHaveBeenCalled();
+  });
+  it('resends confirmation for an unconfirmed login through the existing provider', async () => {
+    const e = event('entrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
+    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/entrar');
+    expect(await actions.default(e)).toMatchObject({ success: true, resend: true, unconfirmed: true });
+    expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'reader@example.invalid',
+      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
+    });
+  });
   it('sends registration confirmation to the own origin without claiming unverified roles', async () => {
     const e = event('cadastrar', {
       username: 'reader_qa',
