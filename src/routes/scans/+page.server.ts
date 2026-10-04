@@ -1,12 +1,9 @@
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-
-type ScansCache = {
-  timestamp: number;
-  scans: any[];
-};
-
-let cachedScans: ScansCache | null = null;
-const SCANS_CACHE_TTL_MS = 300_000;
+import {
+  getScansDirectoryCache,
+  setScansDirectoryCache,
+  SCANS_DIRECTORY_CACHE_TTL_MS
+} from '$lib/server/scans-directory-cache';
 
 /**
  * Public Scan directory reads only the authoritative YSQL catalog. The old
@@ -14,7 +11,8 @@ const SCANS_CACHE_TTL_MS = 300_000;
  * Scalar aggregates avoid join multiplication while keeping cards inexpensive.
  */
 export const load = async ({ platform }: { platform?: any }) => {
-  if (cachedScans && Date.now() - cachedScans.timestamp < SCANS_CACHE_TTL_MS) {
+  const cachedScans = getScansDirectoryCache();
+  if (cachedScans && Date.now() - cachedScans.timestamp < SCANS_DIRECTORY_CACHE_TTL_MS) {
     return { scans: cachedScans.scans, loadError: false, isStale: false };
   }
 
@@ -67,6 +65,6 @@ export const load = async ({ platform }: { platform?: any }) => {
     };
   });
 
-  cachedScans = { timestamp: Date.now(), scans };
+  setScansDirectoryCache(scans);
   return { scans, loadError: false, isStale: false };
 };
