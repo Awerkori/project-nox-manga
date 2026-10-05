@@ -122,6 +122,13 @@
     return { buckets: result, maxVal, totalVisible60m, totalCompleted60m };
   });
 
+  function formatPublishedAt(value: string | null | undefined): string {
+    if (!value) return 'nenhuma na janela';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'indisponível';
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
   // Catalog Health & Manifest state
   let healthSearchQuery = $state('');
   let healthFilter = $state<'ALL' | 'INCOMPLETE' | 'HEALTHY' | 'RECONCILING' | 'UNRESOLVED'>('ALL');
@@ -645,6 +652,8 @@
             <span class="detail-fresh"><strong>{data.rateTelemetry?.fresh1m ?? 0}</strong> inéditos visíveis</span>
             <span class="detail-sep">·</span>
             <span class="detail-pipeline">5m: {data.rateTelemetry?.rate5m ?? 0}/min</span>
+            <span class="detail-sep">·</span>
+            <span class="detail-published">Última publicação: {formatPublishedAt(data.rateTelemetry?.latestPublishedAt)}</span>
           </div>
           <div class="cap-kpi-targets">
             <span class="target-tick">Piso: 5</span>
