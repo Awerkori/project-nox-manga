@@ -628,9 +628,9 @@
         <div class="cap-kpi-card highlight-rate">
           <div class="cap-kpi-header">
             <span class="cap-kpi-label">CAP/MIN CANÔNICO — AGORA (1 MIN)</span>
-            <span class="pulse-indicator">
-              <span class="pulse-dot green"></span>
-              LIVE
+            <span class="pulse-indicator" class:unavailable={data.rateTelemetry?.source !== 'YSQL_CANONICAL'}>
+              <span class="pulse-dot" class:green={data.rateTelemetry?.source === 'YSQL_CANONICAL'}></span>
+              {data.rateTelemetry?.source === 'YSQL_CANONICAL' ? 'LIVE' : 'YSQL indisponível'}
             </span>
           </div>
           <div class="cap-kpi-val-row">
@@ -3465,6 +3465,14 @@
     font-weight: 750;
     color: #22c55e;
   }
+  .pulse-indicator.unavailable { color: #fbbf24; }
+  .pulse-indicator .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #fbbf24;
+  }
+  .pulse-indicator .pulse-dot.green { background: #22c55e; }
 
   /* 60m Histogram Chart */
   .chart-section-card {
