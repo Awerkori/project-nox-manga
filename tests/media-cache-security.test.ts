@@ -206,6 +206,49 @@ describe('Media Security and Cache Guard', () => {
     expect(mocks.download).toHaveBeenCalledTimes(2);
   });
 
+  it('cancels a stalled thumbnail body and falls back to the original stream', async () => {
+    vi.useFakeTimers();
+    try {
+      const mediaId = '99999999-9999-4999-8999-999999999999';
+      const stalledBody = new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+        cancel: () => undefined
+      });
+      const originalBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+      mocks.mediaRecord = {
+        id: mediaId,
+        provider: 'telegram',
+        storage_ready: true,
+        status: 'ACTIVE',
+        access_class: 'PUBLIC',
+        purpose: 'editorial',
+        bot_reference: 'MANGA_STORAGE_01',
+        mime: 'image/jpeg',
+        sha256: 'stalled_sha256',
+        provider_key: 'stalled_key',
+        bytes: 3_000_000,
+        width: 2000,
+        height: 2000
+      };
+      mocks.download.mockResolvedValueOnce(stalledBody).mockResolvedValueOnce(originalBytes);
+
+      const responsePromise = GET({
+        locals: {},
+        params: { id: mediaId },
+        request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+        cookies: { getAll: () => [] }
+      });
+      await vi.advanceTimersByTimeAsync(12_000);
+      const res = await responsePromise;
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-Thumbnail-Strategy')).toBe('fallback-original');
+      expect(mocks.download).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('generates real thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {
     const jpeg = (await import('jpeg-js')).default;
     const w = 1000, h = 1500;
