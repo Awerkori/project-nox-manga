@@ -12,6 +12,21 @@ import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
 
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 
+async function downloadCoverWithTransientRetry(client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> }, fileId: string) {
+  try {
+    return await client.download(fileId);
+  } catch (failure) {
+    const status = failure instanceof TelegramStorageError ? failure.status : undefined;
+    // A single bounded retry covers transient Telegram/network failures without
+    // turning a broken cover into an unbounded request loop or rate-limit storm.
+    if (status === undefined || status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return client.download(fileId);
+    }
+    throw failure;
+  }
+}
+
 async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
@@ -201,9 +216,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     botRef = normalizeBotReference(botRef);
     downloadBotRef = botRef;
 
+    const client = resolveBotDownloadClient(botRef);
     try {
-      const client = resolveBotDownloadClient(botRef);
-      const stream = await client.download(media.provider_key);
+      const stream = await downloadCoverWithTransientRetry(client, media.provider_key);
       body = stream;
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
