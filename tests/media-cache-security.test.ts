@@ -40,6 +40,7 @@ vi.mock('$lib/server/yugabyte', () => ({
 }));
 
 import { GET } from '../src/routes/media/[id]/+server';
+import { TelegramStorageError } from '../src/lib/server/telegram';
 
 describe('Media Security and Cache Guard', () => {
   beforeEach(() => {
@@ -235,7 +236,7 @@ describe('Media Security and Cache Guard', () => {
     expect(data.error).toBe('Página temporariamente indisponível');
   });
 
-  it('returns controlled 502 instead of reusing a consumed stream after thumbnail processing fails', async () => {
+  it('falls back to a fresh original stream after thumbnail processing fails', async () => {
     const mediaId = '56565656-5656-4656-8656-565656565656';
     mocks.mediaRecord = {
       id: mediaId,
@@ -252,11 +253,12 @@ describe('Media Security and Cache Guard', () => {
       width: 1000,
       height: 1500
     };
-    mocks.download.mockResolvedValue(new ReadableStream<Uint8Array>({
+    const brokenStream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.error(new Error('source stream failed'));
       }
-    }));
+    });
+    mocks.download.mockResolvedValueOnce(brokenStream).mockResolvedValueOnce(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
 
     const res = await GET({
       locals: {},
@@ -265,8 +267,64 @@ describe('Media Security and Cache Guard', () => {
       cookies: { getAll: () => [] }
     });
 
-    expect(res.status).toBe(502);
-    expect(res.headers.get('Cache-Control')).toContain('no-store');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Thumbnail-Strategy')).toBe('fallback-original');
+    expect(mocks.download).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries one transient Telegram download failure before returning an error', async () => {
+    const mediaId = '88888888-8888-4888-8888-888888888888';
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'retry_sha256', provider_key: 'retry_key', bytes: bytes.length
+    };
+    mocks.download
+      .mockRejectedValueOnce(new TelegramStorageError('network'))
+      .mockResolvedValueOnce(bytes);
+
+    const res = await GET({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(mocks.download).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a stalled thumbnail body and falls back to the original stream', async () => {
+    vi.useFakeTimers();
+    try {
+      const mediaId = '99999999-9999-4999-8999-999999999999';
+      const stalledBody = new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+        cancel: () => undefined
+      });
+      const originalBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+      mocks.mediaRecord = {
+        id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+        access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+        mime: 'image/jpeg', sha256: 'stalled_sha256', provider_key: 'stalled_key',
+        bytes: 3_000_000, width: 2000, height: 2000
+      };
+      mocks.download.mockResolvedValueOnce(stalledBody).mockResolvedValueOnce(originalBytes);
+
+      const responsePromise = GET({
+        locals: {}, params: { id: mediaId },
+        request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+        cookies: { getAll: () => [] }
+      });
+      await vi.advanceTimersByTimeAsync(12_000);
+      const res = await responsePromise;
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-Thumbnail-Strategy')).toBe('fallback-original');
+      expect(mocks.download).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('generates real thumbnail derivative for ?size=thumb from 1000x1500 fixture while leaving original byte-identical', async () => {

@@ -3,7 +3,7 @@
   import type { Work } from '$lib/types';
   import { kindLabels } from '$lib/types';
   import { page } from '$app/state';
-  import { resolveCoverUrl } from '$lib/covers';
+  import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
   import { deferImage } from '$lib/actions/defer-image';
 
   type Props = {
@@ -121,8 +121,8 @@
 
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
-      if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace(/\?size=thumb(?:&[^#]*)?$/, '');
+      if (node.src.includes('size=thumb') || node.src.includes('size=hero')) {
+        node.src = resolveOriginalCoverUrl(node.src);
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {

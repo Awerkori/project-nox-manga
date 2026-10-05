@@ -18,3 +18,17 @@ export function resolveCoverUrl(
   }
   return '/brand/nox-symbol.webp';
 }
+
+/** Return the canonical original media URL for a failed derived variant. */
+export function resolveOriginalCoverUrl(src: string): string {
+  try {
+    const url = new URL(src, 'https://project-nox.invalid');
+    url.searchParams.delete('size');
+    url.searchParams.delete('v');
+    return url.origin === 'https://project-nox.invalid'
+      ? `${url.pathname}${url.search}`
+      : url.toString();
+  } catch {
+    return src.replace(/[?&]size=(?:thumb|hero)/, '').replace(/[?&]v=\d+/, '');
+  }
+}

@@ -3,6 +3,7 @@
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
+  import { resolveOriginalCoverUrl } from '$lib/covers';
 
   let { data } = $props();
 
@@ -25,6 +26,18 @@
         node.removeEventListener('scroll', updateContinueScroll);
       }
     };
+  }
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (node.src.includes('size=thumb') || node.src.includes('size=hero')) {
+        node.src = resolveOriginalCoverUrl(node.src);
+        return;
+      }
+      if (!node.src.endsWith('/brand/nox-symbol.webp')) node.src = '/brand/nox-symbol.webp';
+    };
+    node.addEventListener('error', onError);
+    return { destroy() { node.removeEventListener('error', onError); } };
   }
 
   function scrollContinue(direction: 'left' | 'right') {
@@ -98,7 +111,8 @@
               <div class="continue-thumb">
                 {#if item.coverId}
                   <img
-                    src="/media/{item.coverId}?size=thumb"
+                    use:fallbackCover
+                    src="/media/{item.coverId}?size=thumb&v=3"
                     alt={item.workTitle}
                     width="64"
                     height="90"
