@@ -116,10 +116,13 @@
         completed: val.completed
       });
     }
-    const maxVal = Math.max(1, ...result.map((r) => Math.max(r.visible, r.completed)));
+    // Keep the displayed peak truthful: a floor of 1 is only for bar scaling,
+    // never for the telemetry value shown to operators.
+    const maxVal = Math.max(0, ...result.map((r) => Math.max(r.visible, r.completed)));
+    const scaleMax = Math.max(1, maxVal);
     const totalVisible60m = result.reduce((acc, r) => acc + r.visible, 0);
     const totalCompleted60m = result.reduce((acc, r) => acc + r.completed, 0);
-    return { buckets: result, maxVal, totalVisible60m, totalCompleted60m };
+    return { buckets: result, maxVal, scaleMax, totalVisible60m, totalCompleted60m };
   });
 
   function formatPublishedAt(value: string | null | undefined): string {
@@ -749,8 +752,8 @@
         <div class="chart-bars-wrap">
           <div class="chart-bars-container">
             {#each chartBuckets.buckets as b}
-              {@const visiblePct = Math.min(100, Math.round((b.visible / chartBuckets.maxVal) * 100))}
-              {@const compPct = Math.min(100, Math.round((b.completed / chartBuckets.maxVal) * 100))}
+              {@const visiblePct = Math.min(100, Math.round((b.visible / chartBuckets.scaleMax) * 100))}
+              {@const compPct = Math.min(100, Math.round((b.completed / chartBuckets.scaleMax) * 100))}
               <div class="bar-col" title="{b.time} — Canônico: {b.visible} cap | Pipeline: {b.completed} jobs">
                 <div class="bar-track">
                   {#if b.completed > 0}
