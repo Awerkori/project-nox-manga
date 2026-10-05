@@ -29,6 +29,22 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 
+async function downloadCoverWithTransientRetry(
+  client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
+  fileId: string
+) {
+  try {
+    return await client.download(fileId);
+  } catch (failure) {
+    const status = failure instanceof TelegramStorageError ? failure.status : undefined;
+    if (status === undefined || status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return client.download(fileId);
+    }
+    throw failure;
+  }
+}
+
 async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
@@ -57,7 +73,7 @@ async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIME
         }
       }
     } catch (failure) {
-      void reader.cancel().catch(() => {});
+      await reader.cancel().catch(() => {});
       throw failure;
     }
     const result = new Uint8Array(total);
@@ -193,6 +209,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   let body: BodyInit;
+  let downloadBotRef = media.bot_reference;
   if (media.provider === 'supabase') {
     const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
     if (problem || !data) {
@@ -232,10 +249,11 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
 
     botRef = normalizeBotReference(botRef);
+    downloadBotRef = botRef;
 
     try {
       const client = resolveBotDownloadClient(botRef);
-      const stream = await client.download(media.provider_key);
+      const stream = await downloadCoverWithTransientRetry(client, media.provider_key);
       body = stream;
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
@@ -318,18 +336,26 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         }
         headers['X-Thumbnail-Strategy'] = 'resized';
       } catch (thumbErr) {
-        // `body` is a one-shot Telegram stream.  Reusing it after a failed
-        // read/resize can yield a partial or locked response (a blank cover
-        // with HTTP 200). Return a controlled error instead; the card action
-        // retries the untouched original URL once with a fresh stream.
-        console.warn('[THUMBNAIL_GENERATION_FAILED]', { id: params.id, reason: (thumbErr as Error)?.message });
-        return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
-          status: 502,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-          }
+        // The first Telegram stream is one-shot. Reopen it once so a stalled
+        // decoder/read degrades to a valid original instead of a broken image.
+        console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', {
+          id: params.id,
+          reason: (thumbErr as Error)?.message
         });
+        try {
+          const retryClient = resolveBotDownloadClient(downloadBotRef);
+          body = await downloadCoverWithTransientRetry(retryClient, media.provider_key);
+          headers['X-Thumbnail-Strategy'] = 'fallback-original';
+          if (bytes > 0) headers['Content-Length'] = String(bytes);
+        } catch {
+          return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
+            status: 502,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+            }
+          });
+        }
       }
     }
   } else {

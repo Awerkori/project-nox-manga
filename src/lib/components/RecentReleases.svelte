@@ -3,7 +3,7 @@
   import { ArrowRight, BookOpen, Clock, AlertTriangle, RefreshCw } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
-  import { resolveCoverUrl } from '$lib/covers';
+  import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
   import { formatChapterNumber } from '$lib/chapter-number';
   import { deferImage } from '$lib/actions/defer-image';
@@ -48,8 +48,8 @@
 
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
-      if (node.src.includes('?size=thumb')) {
-        node.src = node.src.replace(/\?size=thumb(?:&[^#]*)?$/, '');
+      if (node.src.includes('size=thumb') || node.src.includes('size=hero')) {
+        node.src = resolveOriginalCoverUrl(node.src);
         return;
       }
       if (!node.src.endsWith('/brand/nox-symbol.webp')) {
