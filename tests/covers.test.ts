@@ -1,0 +1,16 @@
+import { describe, expect, it } from 'vitest';
+import { resolveCoverUrl, resolveOriginalCoverUrl } from '../src/lib/covers';
+
+describe('cover URL resolution', () => {
+  it('uses a versioned derivative namespace for thumbnails', () => {
+    expect(resolveCoverUrl('11111111-1111-4111-8111-111111111111', null, null, { size: 'thumb' }))
+      .toBe('/media/11111111-1111-4111-8111-111111111111?size=thumb&v=3');
+  });
+
+  it('removes only derivative parameters when falling back to the original', () => {
+    expect(resolveOriginalCoverUrl('/media/abc?size=thumb&v=3'))
+      .toBe('/media/abc');
+    expect(resolveOriginalCoverUrl('/media/abc?size=hero&v=3&x=1'))
+      .toBe('/media/abc?x=1');
+  });
+});

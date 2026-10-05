@@ -3,12 +3,25 @@
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
+  import { resolveOriginalCoverUrl } from '$lib/covers';
 
   let { data } = $props();
 
   let continueContainer: HTMLDivElement | null = $state(null);
   let canScrollContinueLeft = $state(false);
   let canScrollContinueRight = $state(true);
+
+  function fallbackCover(node: HTMLImageElement) {
+    const onError = () => {
+      if (node.src.includes('size=thumb') || node.src.includes('size=hero')) {
+        node.src = resolveOriginalCoverUrl(node.src);
+      } else if (!node.src.endsWith('/brand/nox-symbol.webp')) {
+        node.src = '/brand/nox-symbol.webp';
+      }
+    };
+    node.addEventListener('error', onError);
+    return { destroy: () => node.removeEventListener('error', onError) };
+  }
 
   function updateContinueScroll() {
     if (!continueContainer) return;
@@ -98,7 +111,8 @@
               <div class="continue-thumb">
                 {#if item.coverId}
                   <img
-                    src="/media/{item.coverId}?size=thumb"
+                    use:fallbackCover
+                    src="/media/{item.coverId}?size=thumb&v=3"
                     alt={item.workTitle}
                     width="64"
                     height="90"

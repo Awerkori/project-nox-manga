@@ -10,7 +10,9 @@ import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$li
 import { generateThumbnail } from '$lib/server/thumbnail';
 import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
 
-async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
+const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
+
+async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIMEOUT_MS): Promise<Uint8Array> {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
   if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
@@ -19,13 +21,27 @@ async function toUint8Array(body: BodyInit): Promise<Uint8Array> {
     const reader = (body as ReadableStream<Uint8Array>).getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        total += value.length;
+    try {
+      while (true) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const next = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('cover body timed out')), idleTimeoutMs);
+          })
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+        });
+        const { done, value } = next;
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          total += value.length;
+        }
       }
+    } catch (failure) {
+      await reader.cancel().catch(() => {});
+      throw failure;
     }
     const result = new Uint8Array(total);
     let offset = 0;
@@ -45,7 +61,12 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');
-  const canonicalUrl = sizeParam ? `${url.origin}/media/${params.id}?size=${sizeParam}` : `${url.origin}/media/${params.id}`;
+  const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
+  // v3 invalidates the old derivative namespace that could contain a
+  // corrupted/partial thumbnail. It is only a cache-key version.
+  const canonicalUrl = coverVariant
+    ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3`
+    : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   if (cache) {
@@ -138,6 +159,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   let body: BodyInit;
+  let downloadBotRef = media.bot_reference;
   if (media.provider === 'supabase') {
     const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
     if (problem || !data) {
@@ -177,6 +199,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
 
     botRef = normalizeBotReference(botRef);
+    downloadBotRef = botRef;
 
     try {
       const client = resolveBotDownloadClient(botRef);
@@ -236,20 +259,52 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  if (sizeParam === 'thumb') {
-    try {
-      const rawBytes = await toUint8Array(body);
-      const thumb = await generateThumbnail(rawBytes, media.mime);
-      body = thumb.data;
-      headers['Content-Type'] = thumb.mime;
-      headers['Content-Length'] = String(thumb.data.length);
-      if (thumb.resized) {
-        headers['ETag'] = `"${media.sha256}-thumb"`;
-      }
-    } catch (thumbErr) {
-      console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', thumbErr);
-      if (media.bytes && Number(media.bytes) > 0) {
-        headers['Content-Length'] = String(media.bytes);
+  if (coverVariant) {
+    const bytes = Number(media.bytes) || 0;
+    const mime = String(media.mime || '').toLowerCase();
+    const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
+    const canResize = mime === 'image/jpeg' || mime === 'image/png';
+    // Cold, small/unsupported covers should stream immediately instead of
+    // waiting for a full Telegram download only to re-encode them. The edge
+    // cache stores the successful 200 under the versioned key above.
+    const streamOriginal = !canResize ||
+      (coverVariant === 'thumb' && bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
+    if (streamOriginal) {
+      headers['X-Thumbnail-Strategy'] = 'stream-original';
+      if (bytes > 0) headers['Content-Length'] = String(bytes);
+    } else {
+      try {
+        const rawBytes = await toUint8Array(body);
+        const thumb = await generateThumbnail(rawBytes, media.mime);
+        body = thumb.data;
+        headers['Content-Type'] = thumb.mime;
+        headers['Content-Length'] = String(thumb.data.length);
+        if (thumb.resized) {
+          headers['ETag'] = `"${media.sha256}-thumb-v3"`;
+        }
+        headers['X-Thumbnail-Strategy'] = 'resized';
+      } catch (thumbErr) {
+        // The first Telegram stream is one-shot. Reopen it once so a stalled
+        // decoder/read can degrade to a valid original instead of a broken
+        // image or a false successful response.
+        console.warn('[THUMBNAIL_FALLBACK_TO_ORIGINAL]', {
+          id: params.id,
+          reason: (thumbErr as Error)?.message
+        });
+        try {
+          const retryClient = resolveBotDownloadClient(downloadBotRef);
+          body = await retryClient.download(media.provider_key);
+          headers['X-Thumbnail-Strategy'] = 'fallback-original';
+          if (bytes > 0) headers['Content-Length'] = String(bytes);
+        } catch {
+          return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
+            status: 502,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+            }
+          });
+        }
       }
     }
   } else {
