@@ -1,27 +1,21 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { readerChapter, readerContent } from '$lib/server/reader-editorial';
 
-export const GET = async ({ params, locals, cookies }) => {
+// The public Reader already uses direct YSQL for canonical chapter identity.
+// Keep this API on the same authoritative path: PostgREST can otherwise hold
+// a stale schema cache immediately after additive chapter-identity migrations.
+export const GET = async ({ params, locals, cookies, platform }) => {
   const { id } = params;
-  const db = locals.db || privileged();
+  const platformEnv = (platform as any)?.env;
 
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
-  let query = db
-    .from('chapters')
-    .select('id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language, title, published_at, work_id, works(id, title, slug, content_rating, published)')
-    .eq('id', id);
+  const { data: chapter } = await readerChapter(id, isStaff, platformEnv);
 
-  if (!isStaff) {
-    query = query.not('published_at', 'is', null);
-  }
-
-  const { data: chapter, error: chErr } = await query.maybeSingle();
-
-  if (chErr || !chapter) {
+  if (!chapter) {
     return json({ error: 'Capítulo não encontrado' }, { status: 404 });
   }
 
-  const work = Array.isArray(chapter.works) ? chapter.works[0] : chapter.works;
+  const work = chapter.works;
   if (!work || (!isStaff && !work.published)) {
     return json({ error: 'Obra não publicada' }, { status: 404 });
   }
@@ -30,7 +24,7 @@ export const GET = async ({ params, locals, cookies }) => {
     const rawAgeCookie = cookies.get('nox-age-status');
     let ageStatus = rawAgeCookie;
     if (locals.user) {
-      const p = await db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
+      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
       if (p.data?.age_status) ageStatus = p.data.age_status;
     }
     if (ageStatus === 'MINOR') {
@@ -38,15 +32,7 @@ export const GET = async ({ params, locals, cookies }) => {
     }
   }
 
-  const { data: pages, error: pErr } = await db
-    .from('pages')
-    .select('position, media_id, width, height')
-    .eq('chapter_id', chapter.id)
-    .order('position', { ascending: true });
-
-  if (pErr) {
-    return json({ error: 'Erro ao carregar páginas' }, { status: 500 });
-  }
+  const { data: content } = await readerContent(chapter.id, chapter.work_id, platformEnv);
 
   return json({
     chapter_id: chapter.id,
@@ -63,6 +49,6 @@ export const GET = async ({ params, locals, cookies }) => {
     work_id: work.id,
     work_title: work.title,
     work_slug: work.slug,
-    pages: pages || []
+    pages: content?.pages || []
   });
 };
