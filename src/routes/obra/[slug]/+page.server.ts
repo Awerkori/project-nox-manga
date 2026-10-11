@@ -76,9 +76,11 @@ export const load = async ({ locals, params, url, cookies, platform }: any) => {
   if (!chaptersList || chaptersList.length === 0) {
     let chaptersQuery = locals.db
       .from('chapters')
-      .select('id,number,title,published_at,views_total')
+      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
       .eq('work_id', work.id)
-      .order('number', { ascending: false });
+      .order('chapter_order_key', { ascending: false, nullsFirst: false })
+      .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false });
 
     if (!preview) {
       chaptersQuery = chaptersQuery.not('published_at', 'is', null);

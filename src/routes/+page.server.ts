@@ -5,6 +5,7 @@ import {
   fetchMostReadFromYugabyte,
   fetchRecentReleasesFromYugabyte
 } from '$lib/server/yugabyte';
+import { chapterDisplayNumber, compareChapterIdentity } from '$lib/chapter-identity';
 
 type HomeCachePayload = {
   timestamp: number;
@@ -46,7 +47,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
       locals.db
         .from('reading')
         .select(
-          'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
+          'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,display_number,canonical_chapter_key,chapter_order_key,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
         )
         .not('chapters.published_at', 'is', null)
         .eq('chapters.works.published', true)
@@ -66,43 +67,28 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
         grouped.get(wid)!.push(row);
       }
       for (const [wid, rows] of grouped.entries()) {
-        const sorted = rows.sort((a: any, b: any) => (b.chapters?.number ?? 0) - (a.chapters?.number ?? 0));
+        const sorted = rows.sort((a: any, b: any) => compareChapterIdentity(b.chapters || {}, a.chapters || {}));
         const mostRecent = rows.sort((a: any, b: any) => b.updated_at.localeCompare(a.updated_at))[0];
         const highestRead = sorted[0];
         const currentCh = highestRead.chapters as any;
         const work = currentCh.works as any;
         if (!work) continue;
-        const nextNumber = (currentCh.number ?? 0) + 1;
-        const nextCh = sorted.find((r: any) => (r.chapters as any)?.number === nextNumber)?.chapters as any;
-        if (nextCh) {
-          continueReading.push({
-            workId: wid,
-            workTitle: work.title,
-            workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
-            chapterId: nextCh.id,
-            chapterNumber: nextCh.number,
-            destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
-            actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updated_at
-          });
-        } else {
-          continueReading.push({
-            workId: wid,
-            workTitle: work.title,
-            workSlug: work.slug,
-            coverId: work.cover_id,
-            contentRating: work.content_rating,
-            chapterId: currentCh.id,
-            chapterNumber: currentCh.number,
-            destinationUrl: `/obra/${work.slug}`,
-            progressText: `Em dia · Cap. ${currentCh.number}`,
-            actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updated_at
-          });
-        }
+        // This compact cache path only sees chapters already in the user's
+        // history. It must not infer a non-existent "next" chapter by adding
+        // one to a decimal (which also collapses 12.1/12.10).
+        continueReading.push({
+          workId: wid,
+          workTitle: work.title,
+          workSlug: work.slug,
+          coverId: work.cover_id,
+          contentRating: work.content_rating,
+          chapterId: currentCh.id,
+          chapterNumber: chapterDisplayNumber(currentCh),
+          destinationUrl: `/obra/${work.slug}`,
+          progressText: `Em dia · Cap. ${chapterDisplayNumber(currentCh)}`,
+          actionLabel: 'Ver obra ↗',
+          updatedAt: mostRecent.updated_at
+        });
       }
       continueReading.sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt));
       continueReading = continueReading.slice(0, 10);
@@ -128,7 +114,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
           locals.db
             .from('reading')
             .select(
-              'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
+              'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,display_number,canonical_chapter_key,chapter_order_key,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
             )
             .not('chapters.published_at', 'is', null)
             .eq('chapters.works.published', true)
@@ -155,7 +141,7 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
     coverId: string | null;
     contentRating?: string;
     chapterId: string;
-    chapterNumber: number;
+    chapterNumber: number | string;
     destinationUrl: string;
     progressText: string;
     actionLabel: string;
@@ -185,9 +171,9 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
           coverId: work.cover_id,
           contentRating: work.content_rating,
           chapterId: ch.id,
-          chapterNumber: ch.number,
+          chapterNumber: chapterDisplayNumber(ch),
           destinationUrl: `/ler/${ch.id}`,
-          progressText: `Capítulo ${ch.number} · Pág. ${incomplete.page}`,
+          progressText: `Capítulo ${chapterDisplayNumber(ch)} · Pág. ${incomplete.page}`,
           actionLabel: 'Retomar leitura ↗',
           updatedAt: incomplete.updated_at
         });
@@ -202,10 +188,12 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
       const nextChaptersRes = await withTimeout(
         locals.db
           .from('chapters')
-          .select('id,number,work_id')
+          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,work_id')
           .in('work_id', workIds)
           .not('published_at', 'is', null)
-          .order('number', { ascending: true }),
+          .order('chapter_order_key', { ascending: true, nullsFirst: false })
+          .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
+          .order('id', { ascending: true }),
         1500,
         { data: [] } as any,
         'home_batch_next_chapters'
@@ -214,7 +202,10 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
       const allNext = nextChaptersRes?.data || [];
 
       for (const { wid, rows, currentCh } of needsNextChapter) {
-        const nextCh = allNext.find((c: any) => c.work_id === wid && c.number > currentCh.number);
+        const ordered = allNext.filter((c: any) => c.work_id === wid)
+          .sort((a: any, b: any) => compareChapterIdentity(a, b));
+        const currentIndex = ordered.findIndex((c: any) => c.id === currentCh.id);
+        const nextCh = currentIndex >= 0 ? ordered[currentIndex + 1] : null;
         const work = (rows[0].chapters as any).works;
         const mostRecent = rows[0];
         if (nextCh) {
@@ -225,9 +216,9 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             coverId: work.cover_id,
             contentRating: work.content_rating,
             chapterId: nextCh.id,
-            chapterNumber: nextCh.number,
+            chapterNumber: chapterDisplayNumber(nextCh),
             destinationUrl: `/ler/${nextCh.id}`,
-            progressText: `Próximo: Capítulo ${nextCh.number}`,
+            progressText: `Próximo: Capítulo ${chapterDisplayNumber(nextCh)}`,
             actionLabel: 'Ler próximo ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -239,9 +230,9 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
             coverId: work.cover_id,
             contentRating: work.content_rating,
             chapterId: currentCh.id,
-            chapterNumber: currentCh.number,
+            chapterNumber: chapterDisplayNumber(currentCh),
             destinationUrl: `/obra/${work.slug}`,
-            progressText: `Em dia · Cap. ${currentCh.number}`,
+            progressText: `Em dia · Cap. ${chapterDisplayNumber(currentCh)}`,
             actionLabel: 'Ver obra ↗',
             updatedAt: mostRecent.updated_at
           });
@@ -266,7 +257,13 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
     latestPublishedAt: string;
     chapters: Array<{
       id: string;
-      number: number;
+      number: number | string | null;
+      display_number?: string | null;
+      canonical_chapter_key?: string | null;
+      chapter_order_key?: string | null;
+      chapter_kind?: string | null;
+      edition?: string | null;
+      language?: string | null;
       title: string | null;
       publishedAt: string;
     }>;
@@ -295,6 +292,12 @@ export const load = async ({ locals, setHeaders, url, platform }: any) => {
         group.chapters.push({
           id: (row as any).chapter_id,
           number: (row as any).chapter_number,
+          display_number: (row as any).chapter_display_number,
+          canonical_chapter_key: (row as any).canonical_chapter_key,
+          chapter_order_key: (row as any).chapter_order_key,
+          chapter_kind: (row as any).chapter_kind,
+          edition: (row as any).chapter_edition,
+          language: (row as any).chapter_language,
           title: (row as any).chapter_title,
           publishedAt: (row as any).chapter_published_at || ''
         });

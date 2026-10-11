@@ -38,6 +38,12 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
       group.chapters.push({
         id: (row as any).chapter_id,
         number: (row as any).chapter_number,
+        display_number: (row as any).chapter_display_number,
+        canonical_chapter_key: (row as any).canonical_chapter_key,
+        chapter_order_key: (row as any).chapter_order_key,
+        chapter_kind: (row as any).chapter_kind,
+        edition: (row as any).chapter_edition,
+        language: (row as any).chapter_language,
         title: (row as any).chapter_title,
         publishedAt: (row as any).chapter_published_at || ''
       });

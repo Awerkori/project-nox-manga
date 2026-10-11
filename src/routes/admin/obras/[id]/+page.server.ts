@@ -13,9 +13,11 @@ export const load = async ({ locals, params }) => {
       ? Promise.resolve({ data: [] })
       : locals.db
           .from('chapters')
-          .select('id,number,title,published_at')
+          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at')
           .eq('work_id', params.id)
-          .order('number', { ascending: false }),
+          .order('chapter_order_key', { ascending: false, nullsFirst: false })
+          .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: false }),
     locals.db.from('scans').select('id,name,slug,is_official,status').order('is_official', { ascending: false }).order('name'),
     params.id === 'nova'
       ? Promise.resolve({ data: [] })

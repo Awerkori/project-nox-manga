@@ -5,6 +5,7 @@
   import { page } from '$app/state';
   import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
+  import { chapterDisplayNumber, compareChapterIdentity } from '$lib/chapter-identity';
 
   type ReleaseItem = {
     workId: string;
@@ -16,7 +17,13 @@
     latestPublishedAt: string;
     chapters: Array<{
       id: string;
-      number: number;
+      number: number | string | null;
+      display_number?: string | null;
+      canonical_chapter_key?: string | null;
+      chapter_order_key?: string | null;
+      chapter_kind?: string | null;
+      edition?: string | null;
+      language?: string | null;
       title: string | null;
       publishedAt: string;
     }>;
@@ -90,7 +97,7 @@
       {#each currentReleases as rel, i (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-        {@const sortedChapters = rel.chapters.slice().sort((a, b) => b.number - a.number)}
+        {@const sortedChapters = rel.chapters.slice().sort((a, b) => compareChapterIdentity(b, a))}
         {@const isExpanded = Boolean(expandedCards[rel.workId])}
         {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
         {@const remainingCount = sortedChapters.length - 3}
@@ -143,9 +150,9 @@
                   href="/ler/{ch.id}"
                   class="chapter-pill"
                   class:latest-pill={idx === 0}
-                  title={`Ler Capítulo ${ch.number}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
+                  title={`Ler Capítulo ${chapterDisplayNumber(ch)}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
                 >
-                  <span class="ch-text">Cap. {ch.number}</span>
+                  <span class="ch-text">Cap. {chapterDisplayNumber(ch)}</span>
                 </a>
               {/each}
               {#if sortedChapters.length > 3}

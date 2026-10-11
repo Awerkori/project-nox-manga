@@ -67,7 +67,7 @@ export const GET = async ({ locals, params, url }) => {
     if (!locals.user) error(401, 'Autenticação necessária');
     const { data: history, count } = await locals.db
       .from('reading')
-      .select(`page,max_page,completed_at,updated_at,chapters(id,number,title,work_id,works(${WORK_FIELDS}))`, { count: 'exact' })
+      .select(`page,max_page,completed_at,updated_at,chapters(id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,works(${WORK_FIELDS}))`, { count: 'exact' })
       .eq('user_id', locals.user.id)
       .order('updated_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
@@ -106,10 +106,12 @@ export const GET = async ({ locals, params, url }) => {
     if (!work) error(404);
     result = await locals.db
       .from('chapters')
-      .select('id,number,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
+      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
       .eq('work_id', work.id)
       .not('published_at', 'is', null)
-      .order('number', { ascending: false })
+      .order('chapter_order_key', { ascending: false, nullsFirst: false })
+      .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
   } else if (parts[0] === 'chapters' && parts[2] === 'pages' && parts.length === 3) {
     const { data: allowed } = await locals.db.rpc('public_chapter', { p_id: parts[1] });

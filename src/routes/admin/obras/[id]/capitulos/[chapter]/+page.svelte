@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
+  import { canonicalChapterKey, chapterKindForInput, chapterOrderKey, chapterIdentityLabel } from '$lib/chapter-identity';
   import { expandFiles, normalizePage } from '$lib/uploads';
   import { flushUploads, UploadRateLimitError } from '$lib/upload-queue';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
@@ -26,13 +27,16 @@
   let { data } = $props();
   const initial = untrack(() => data);
   let pages = $state(initial.pages.map((p) => ({ id: p.media_id, name: `Página ${p.position}` }))),
-    number = $state(initial.chapter?.number ?? 1),
+    number = $state(String(initial.chapter?.display_number ?? initial.chapter?.number ?? 1)),
     title = $state(initial.chapter?.title || ''),
     notice = $state(''),
     busy = $state(false),
     progress = $state(0),
     confirmed = $state(false);
   let selectedScanIds = $state<string[]>((initial.chapterScans || []).map((cs: any) => cs.scan_id));
+  let chapterKind = $state(initial.chapter?.chapter_kind || 'chapter');
+  let edition = $state(initial.chapter?.edition || 'default');
+  let language = $state(initial.chapter?.language || 'pt-BR');
   let finals = $state<{ id: string; number: string; title: string | null }[]>([]);
   let sourceChapter = $state('');
   let loadingFinals = $state(false), finalsChecked = $state(false);
@@ -52,12 +56,15 @@
     savedNavigation = false;
   let savedVersion = $state(
     JSON.stringify({
-      number: initial.chapter?.number ?? 1,
+      number: String(initial.chapter?.display_number ?? initial.chapter?.number ?? 1),
       title: initial.chapter?.title || '',
+      chapterKind: initial.chapter?.chapter_kind || 'chapter',
+      edition: initial.chapter?.edition || 'default',
+      language: initial.chapter?.language || 'pt-BR',
       pages: initial.pages.map((p) => p.media_id)
     })
   );
-  let dirty = $derived(JSON.stringify({ number, title, pages: pages.map((p) => p.id) }) !== savedVersion);
+  let dirty = $derived(JSON.stringify({ number, title, chapterKind, edition, language, pages: pages.map((p) => p.id) }) !== savedVersion);
   beforeNavigate(({ cancel, willUnload }) => {
     if (savedNavigation || (!dirty && !pendingUploads.length && !uploading)) return;
     if (willUnload || !window.confirm('Há páginas pendentes ou alterações não salvas. Sair desta página?'))
@@ -88,7 +95,7 @@
       const download = await fetch(result.url);
       if (!download.ok) throw new Error('Não foi possível baixar o arquivo final.');
       const file = new File([await download.blob()], result.name);
-      number = Number(result.number);
+      number = String(result.number ?? '');
       title = result.title || '';
       await uploadFiles([file]);
     } catch (e) {
@@ -248,15 +255,32 @@
     actionState = 'saving';
     notice = '';
     try {
+      const displayNumber = number.trim() || title.trim();
+      if (!displayNumber) throw new Error('Informe um número/rótulo ou um título para o capítulo.');
+      const identity = {
+        displayNumber,
+        title,
+        kind: chapterKind,
+        edition,
+        language
+      };
       const result = await action('editor', 'chapter', {
         id: data.chapter?.id,
         work_id: data.work.id,
-        number,
+        // `number` is only a legacy nullable projection.  The canonical key
+        // and display label retain the authored text (for example 12.10).
+        number: /^\d+(?:[.,]\d+)?$/.test(number.trim()) ? number.trim().replace(',', '.') : null,
+        display_number: displayNumber,
+        canonical_chapter_key: canonicalChapterKey(identity),
+        chapter_order_key: chapterOrderKey(identity),
+        chapter_kind: chapterKindForInput(identity),
+        edition: edition.trim() || 'default',
+        language: language.trim() || 'und',
         title,
         pages: pages.map((p) => p.id),
         scans: selectedScanIds
       });
-      savedVersion = JSON.stringify({ number, title, pages: pages.map((p) => p.id) });
+      savedVersion = JSON.stringify({ number, title, chapterKind, edition, language, pages: pages.map((p) => p.id) });
       confirmed = false;
       if (!data.chapter) {
         savedNavigation = true;
@@ -311,7 +335,7 @@
 </script>
 
 <svelte:head>
-  <title>Capítulo {number} — {data.work.title} — Nox Editorial</title>
+  <title>Capítulo {number || 'Especial'} — {data.work.title} — Nox Editorial</title>
 </svelte:head>
 
 <div class="chapter-editor-view">
@@ -320,7 +344,7 @@
     <div class="breadcrumb">
       <a href="/admin/obras/{data.work.id}">{data.work.title}</a>
       <span>/</span>
-      <span>{data.chapter ? `Capítulo ${number}` : 'Adicionar capítulo'}</span>
+      <span>{data.chapter ? `Capítulo ${number || 'Especial'}` : 'Adicionar capítulo'}</span>
     </div>
 
     <div class="header-title-bar">
@@ -411,15 +435,13 @@
 
       <div class="form-grid">
         <label class="field">
-          Número do capítulo
+          Número/rótulo do capítulo
           <input
-            type="number"
-            min="0"
-            max="999999"
-            step="0.01"
+            type="text"
             bind:value={number}
             disabled={!!data.chapter?.published_at}
-            required
+            maxlength="80"
+            placeholder="12.10 ou Prólogo"
           />
         </label>
 
@@ -431,6 +453,24 @@
             maxlength="200"
             disabled={!!data.chapter?.published_at}
           />
+        </label>
+
+        <label class="field">
+          Tipo
+          <select bind:value={chapterKind} disabled={!!data.chapter?.published_at}>
+            <option value="chapter">Capítulo</option>
+            <option value="special">Especial</option>
+          </select>
+        </label>
+
+        <label class="field">
+          Edição
+          <input type="text" bind:value={edition} maxlength="80" disabled={!!data.chapter?.published_at} placeholder="default" />
+        </label>
+
+        <label class="field">
+          Idioma
+          <input type="text" bind:value={language} maxlength="35" disabled={!!data.chapter?.published_at} placeholder="pt-BR" />
         </label>
 
         <!-- Scan Attribution Selector -->
@@ -712,7 +752,7 @@
     {#if data.role === 'ADMIN' && data.chapter}
       <DeleteContent
         id={data.chapter.id}
-        label={`Capítulo ${data.chapter.number}`}
+        label={`Capítulo ${chapterIdentityLabel(data.chapter)}`}
         kind="chapter"
         destination={`/admin/obras/${data.work.id}`}
       />

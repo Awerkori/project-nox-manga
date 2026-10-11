@@ -15,6 +15,7 @@
     HeartPulse
   } from '@lucide/svelte';
   import { relativeTime, kindLabels } from '$lib/types';
+  import { chapterIdentityLabel } from '$lib/chapter-identity';
 
   let { data } = $props();
 
@@ -258,7 +259,7 @@
                   <span class="status-chip draft-chip">Rascunho</span>
                 </div>
                 <div class="draft-detail">
-                  <span class="draft-ch-number">Capítulo {draft.number}</span>
+                  <span class="draft-ch-number">Capítulo {chapterIdentityLabel(draft)}</span>
                   {#if draft.title}
                     <span class="draft-ch-title">— {draft.title}</span>
                   {/if}
@@ -320,7 +321,7 @@
                 <div class="pub-info">
                   <div class="pub-line-1">
                     <strong class="pub-work-title">{pub.works?.title}</strong>
-                    <span class="pub-ch-num">Cap. {pub.number}</span>
+                    <span class="pub-ch-num">Cap. {chapterIdentityLabel(pub)}</span>
                   </div>
                   {#if pub.published_at}
                     <div class="pub-time">

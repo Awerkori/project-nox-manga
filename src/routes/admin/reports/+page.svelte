@@ -462,7 +462,7 @@
                 <div class="target-item">
                   <span class="target-label">Capítulo:</span>
                   <span class="target-text">
-                    Capítulo {report.chapter.number} {report.chapter.title ? `— ${report.chapter.title}` : ''}
+                    Capítulo {report.chapter.display_number ?? report.chapter.number ?? 'Especial'} {report.chapter.title ? `— ${report.chapter.title}` : ''}
                   </span>
                 </div>
               {:else if report.target_type === 'COMMENT' && report.comment}

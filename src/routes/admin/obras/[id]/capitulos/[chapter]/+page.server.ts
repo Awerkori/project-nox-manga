@@ -8,7 +8,7 @@ export const load = async ({ locals, params }) => {
       : (
           await locals.db
             .from('chapters')
-            .select('id,number,title,published_at')
+            .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at')
             .eq('id', params.chapter)
             .eq('work_id', work.id)
             .maybeSingle()

@@ -20,10 +20,13 @@ export const POST = async ({ request, locals, platform }: any) => {
   } catch {
     error(400, 'Solicitação inválida');
   }
-  const { data, error: problem } = await locals.db.rpc(`${body.scope}_action`, {
-    p_action: body.action,
-    p_data: body.data as Json
-  });
+  const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
+  const { data, error: problem } = isCanonicalChapterWrite
+    ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
+    : await locals.db.rpc(`${body.scope}_action`, {
+        p_action: body.action,
+        p_data: body.data as Json
+      });
   if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
 
   if (body.scope === 'member' && body.action === 'comment' && locals.user) {
@@ -50,10 +53,11 @@ export const POST = async ({ request, locals, platform }: any) => {
     if (chapterId) {
       const { data: chap } = await locals.db
         .from('chapters')
-        .select('number, works(slug, title)')
+        .select('number, display_number, works(slug, title)')
         .eq('id', chapterId)
         .maybeSingle();
-      if (chap?.number !== undefined && chap?.number !== null) chapterNumber = ` #${chap.number}`;
+      const displayNumber = String(chap?.display_number ?? chap?.number ?? '').trim();
+      if (displayNumber) chapterNumber = ` #${displayNumber}`;
       if (chap?.works) {
         const cw = chap.works as any;
         if (cw.slug) workSlug = cw.slug;

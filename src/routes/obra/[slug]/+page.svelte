@@ -23,6 +23,7 @@
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
+  import { chapterIdentityLabel } from '$lib/chapter-identity';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import {
@@ -67,12 +68,12 @@
     if (downloadingChapterIds[chapter.id] !== undefined) return;
 
     if (downloadedChapterIds.has(chapter.id)) {
-      if (confirm(`Remover capítulo ${chapter.number} do armazenamento offline?`)) {
+      if (confirm(`Remover capítulo ${chapterIdentityLabel(chapter)} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
         const next = new SvelteSet(downloadedChapterIds);
         next.delete(chapter.id);
         downloadedChapterIds = next;
-        notice = `Capítulo ${chapter.number} removido do armazenamento offline.`;
+        notice = `Capítulo ${chapterIdentityLabel(chapter)} removido do armazenamento offline.`;
       }
       return;
     }
@@ -85,7 +86,7 @@
       if (!payload.pages || !payload.pages.length) throw new Error('Capítulo não contém páginas');
 
       await saveChapterOffline(
-        { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
+        { id: chapter.id, work_id: data.work.id, number: chapterIdentityLabel(chapter), title: chapter.title },
         { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
         payload.pages,
         (loaded, total) => {
@@ -97,9 +98,9 @@
       const next = new SvelteSet(downloadedChapterIds);
       next.add(chapter.id);
       downloadedChapterIds = next;
-      notice = `Capítulo ${chapter.number} salvo com sucesso para leitura offline!`;
+      notice = `Capítulo ${chapterIdentityLabel(chapter)} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
-      notice = `Erro ao baixar capítulo ${chapter.number}: ${err.message}`;
+      notice = `Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}: ${err.message}`;
     } finally {
       const copy = { ...downloadingChapterIds };
       delete copy[chapter.id];
@@ -130,7 +131,7 @@
           const payload = await res.json();
           if (payload.pages && payload.pages.length) {
             await saveChapterOffline(
-              { id: chapter.id, work_id: data.work.id, number: chapter.number, title: chapter.title },
+              { id: chapter.id, work_id: data.work.id, number: chapterIdentityLabel(chapter), title: chapter.title },
               { title: data.work.title, slug: data.work.slug, cover_id: data.work.cover_id },
               payload.pages,
               (loaded, total) => {
@@ -143,7 +144,7 @@
             downloadedChapterIds = next;
           }
         } catch (e: any) {
-          console.error(`Erro ao baixar capítulo ${chapter.number}:`, e);
+          console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
         } finally {
           const copy = { ...downloadingChapterIds };
           delete copy[chapter.id];
@@ -170,7 +171,7 @@
     (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
       const term = search.trim().toLowerCase();
       if (!term) return true;
-      const matchNum = String(c.number).includes(term);
+      const matchNum = chapterIdentityLabel(c).toLowerCase().includes(term);
       const matchTitle = (c.title || '').toLowerCase().includes(term);
       return matchNum || matchTitle;
     })
@@ -643,7 +644,7 @@
             <a href="/ler/{chapter.id}" class="chapter-item" class:is-read={isRead}>
               <div class="chapter-left">
                 <div class="chapter-primary-row">
-                  <span class="chapter-num">Cap. {chapter.number}</span>
+                  <span class="chapter-num">Cap. {chapterIdentityLabel(chapter)}</span>
                   {#if isNew}
                     <span class="chapter-badge-new">NOVO</span>
                   {/if}

@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ locals }) => {
       created_at,
       updated_at,
       work:works(id, title, slug),
-      chapter:chapters(id, number, title, works(id, title, slug)),
+      chapter:chapters(id, number, display_number, title, works(id, title, slug)),
       comment:comments(id, body)
     `)
     .eq('reporter_id', locals.user.id)
@@ -33,7 +33,8 @@ export const GET: RequestHandler = async ({ locals }) => {
     let targetUrl: string | null = null;
 
     if (rep.target_type === 'CHAPTER' && rep.chapter) {
-      targetTitle = `${rep.chapter.works?.title || 'Obra'} — Cap. ${rep.chapter.number}`;
+      const displayNumber = rep.chapter.display_number ?? rep.chapter.number ?? 'Especial';
+      targetTitle = `${rep.chapter.works?.title || 'Obra'} — Cap. ${displayNumber}`;
       targetUrl = `/ler/${rep.chapter.id}`;
     } else if (rep.target_type === 'WORK' && rep.work) {
       targetTitle = rep.work.title;

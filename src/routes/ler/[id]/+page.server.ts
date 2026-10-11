@@ -59,7 +59,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
 
   let query = locals.db
     .from('chapters')
-    .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
+    .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
     .eq('id', params.id);
   if (!canAccessUnpublished) query = query.not('published_at', 'is', null);
 
@@ -78,18 +78,25 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       if (prodChapter.target_chapter_id) {
         const { data: targetChap } = await locals.db
           .from('chapters')
-          .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
+          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
           .eq('id', prodChapter.target_chapter_id)
           .maybeSingle();
         chapter = targetChap;
       } else {
-        const { data: targetChap } = await locals.db
-          .from('chapters')
-          .select('id,number,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-          .eq('work_id', prodChapter.work_id)
-          .eq('number', prodChapter.chapter_number)
-          .maybeSingle();
-        chapter = targetChap;
+        // A numeric production-stage value cannot select an already-published
+        // Reader chapter safely: 12.1 and 12.10 compare equal in YSQL. Only a
+        // matching textual label is accepted here; otherwise preview remains
+        // an explicit ephemeral production-stage item until it has a target id.
+        const label = String(prodChapter.chapter_label || '').trim();
+        if (label) {
+          const { data: targetChap } = await locals.db
+            .from('chapters')
+            .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
+            .eq('work_id', prodChapter.work_id)
+            .eq('display_number', label)
+            .maybeSingle();
+          chapter = targetChap;
+        }
       }
 
       if (!chapter) {
@@ -102,6 +109,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         chapter = {
           id: prodChapter.id,
           number: prodChapter.chapter_number,
+          display_number: prodChapter.chapter_label || String(prodChapter.chapter_number ?? 'Especial'),
+          canonical_chapter_key: null,
+          chapter_order_key: null,
+          chapter_kind: 'chapter',
+          edition: 'default',
+          language: 'und',
           title: prodChapter.chapter_label || prodChapter.chapter_title || `Capítulo ${prodChapter.chapter_number}`,
           work_id: prodChapter.work_id,
           published_at: null,
@@ -155,10 +168,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   const siblingsPromise = safeDbQuery(
     locals.db
       .from('chapters')
-      .select('id,number')
+      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language')
       .eq('work_id', chapter.work_id)
       .not('published_at', 'is', null)
-      .order('number'),
+      .order('chapter_order_key', { ascending: true, nullsFirst: false })
+      .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true }),
     5000,
     'reader_siblings'
   );

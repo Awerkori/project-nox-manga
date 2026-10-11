@@ -10,7 +10,7 @@ export const GET = async ({ params, request, url }) => {
   const db = privileged();
   const { data: chapter, error: chErr } = await db
     .from('chapters')
-    .select('id, number, title, published_at, work_id, works(id, title, slug, content_rating, published)')
+    .select('id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language, title, published_at, work_id, works(id, title, slug, content_rating, published)')
     .eq('id', id)
     .maybeSingle();
 
@@ -44,6 +44,12 @@ export const GET = async ({ params, request, url }) => {
   return json({
     chapter_id: chapter.id,
     chapter_number: chapter.number,
+    chapter_display_number: chapter.display_number || String(chapter.number ?? 'Especial'),
+    canonical_chapter_key: chapter.canonical_chapter_key,
+    chapter_order_key: chapter.chapter_order_key,
+    chapter_kind: chapter.chapter_kind,
+    edition: chapter.edition,
+    language: chapter.language,
     chapter_title: chapter.title,
     work_title: work.title,
     work_slug: work.slug,

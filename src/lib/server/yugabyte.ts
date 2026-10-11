@@ -168,7 +168,15 @@ export interface YugabyteWork {
 
 export interface YugabyteChapter {
   id: string;
-  number: number | string;
+  // Kept for clients which still consume the legacy numeric field. It is not
+  // an identity and can be null for title-only specials.
+  number: number | string | null;
+  display_number: string | null;
+  canonical_chapter_key: string | null;
+  chapter_order_key: string | null;
+  chapter_kind: string | null;
+  edition: string | null;
+  language: string | null;
   title: string | null;
   published_at: string | null;
   views_total: number;
@@ -184,7 +192,13 @@ export interface YugabyteReleaseRow {
   work_content_rating: string | null;
   latest_published_at: string;
   chapter_id: string;
-  chapter_number: number | string;
+  chapter_number: number | string | null;
+  chapter_display_number: string | null;
+  canonical_chapter_key: string | null;
+  chapter_order_key: string | null;
+  chapter_kind: string | null;
+  chapter_edition: string | null;
+  chapter_language: string | null;
   chapter_title: string | null;
   chapter_published_at: string;
 }
@@ -281,17 +295,24 @@ export async function fetchRecentReleasesFromYugabyte(
         ),
         ranked_chapters AS (
           SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating, lw.latest_published_at,
-                 c.id as chapter_id, c.number as chapter_number, c.title as chapter_title, c.published_at as chapter_published_at,
-                 ROW_NUMBER() OVER (PARTITION BY lw.work_id ORDER BY c.published_at DESC, c.number::numeric DESC) as rn
+                 c.id as chapter_id, c.number as chapter_number, c.display_number as chapter_display_number,
+                 c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+                 c.edition as chapter_edition, c.language as chapter_language,
+                 c.title as chapter_title, c.published_at as chapter_published_at,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY lw.work_id
+                   ORDER BY c.published_at DESC, c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC
+                 ) as rn
           FROM latest_works lw
           JOIN chapters c ON c.work_id = lw.work_id
           WHERE c.published_at IS NOT NULL
         )
         SELECT work_id, work_slug, work_title, work_cover_id, work_kind, work_content_rating, latest_published_at,
-               chapter_id, chapter_number, chapter_title, chapter_published_at
+               chapter_id, chapter_number, chapter_display_number, canonical_chapter_key, chapter_order_key,
+               chapter_kind, chapter_edition, chapter_language, chapter_title, chapter_published_at
         FROM ranked_chapters
         WHERE rn <= $2
-        ORDER BY latest_published_at DESC, chapter_number::numeric DESC;
+        ORDER BY latest_published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, chapter_id DESC;
       `;
 
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
@@ -335,8 +356,14 @@ export async function fetchWorkChaptersFromYugabyte(
     `work_chapters_${workId}_${preview}`,
     async () => {
       const sql = preview
-        ? `SELECT id, number, title, published_at, views_total, work_id FROM chapters WHERE work_id = $1 ORDER BY number::numeric DESC;`
-        : `SELECT id, number, title, published_at, views_total, work_id FROM chapters WHERE work_id = $1 AND published_at IS NOT NULL ORDER BY number::numeric DESC;`;
+        ? `SELECT id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language,
+                  title, published_at, views_total, work_id
+             FROM chapters WHERE work_id = $1
+             ORDER BY chapter_order_key DESC, canonical_chapter_key DESC, id DESC;`
+        : `SELECT id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language,
+                  title, published_at, views_total, work_id
+             FROM chapters WHERE work_id = $1 AND published_at IS NOT NULL
+             ORDER BY chapter_order_key DESC, canonical_chapter_key DESC, id DESC;`;
 
       const res = await executeYugabyteSql<YugabyteChapter>(sql, [workId], platformEnv);
       return res.rows;

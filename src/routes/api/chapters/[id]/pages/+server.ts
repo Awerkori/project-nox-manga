@@ -8,7 +8,7 @@ export const GET = async ({ params, locals, cookies }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   let query = db
     .from('chapters')
-    .select('id, number, title, published_at, work_id, works(id, title, slug, content_rating, published)')
+    .select('id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language, title, published_at, work_id, works(id, title, slug, content_rating, published)')
     .eq('id', id);
 
   if (!isStaff) {
@@ -50,7 +50,15 @@ export const GET = async ({ params, locals, cookies }) => {
 
   return json({
     chapter_id: chapter.id,
+    // Retain numeric `chapter_number` for old consumers and expose the
+    // authoritative text separately. New clients must display this field.
     chapter_number: chapter.number,
+    chapter_display_number: chapter.display_number || String(chapter.number ?? 'Especial'),
+    canonical_chapter_key: chapter.canonical_chapter_key,
+    chapter_order_key: chapter.chapter_order_key,
+    chapter_kind: chapter.chapter_kind,
+    edition: chapter.edition,
+    language: chapter.language,
     chapter_title: chapter.title,
     work_id: work.id,
     work_title: work.title,

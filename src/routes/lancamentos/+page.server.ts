@@ -32,7 +32,13 @@ export const load = async ({ url, platform, setHeaders }: any) => {
     if (group.chapters.length < 4) {
       group.chapters.push({
         id: (r as any).chapter_id,
-        number: Number((r as any).chapter_number),
+        number: (r as any).chapter_number,
+        display_number: (r as any).chapter_display_number,
+        canonical_chapter_key: (r as any).canonical_chapter_key,
+        chapter_order_key: (r as any).chapter_order_key,
+        chapter_kind: (r as any).chapter_kind,
+        edition: (r as any).chapter_edition,
+        language: (r as any).chapter_language,
         title: (r as any).chapter_title,
         publishedAt: (r as any).chapter_published_at || ""
       });

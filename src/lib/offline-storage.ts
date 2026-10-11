@@ -12,7 +12,9 @@ export type OfflineChapter = {
   workTitle: string;
   workSlug: string;
   coverId?: string | null;
-  number: number;
+  // Old IndexedDB records can contain numbers; new records preserve display
+  // text so 12.10 is not normalised to 12.1 offline.
+  number: number | string;
   title: string | null;
   pages: Array<{
     position: number;
@@ -60,7 +62,7 @@ export function isOfflineSupported(): boolean {
 }
 
 export async function saveChapterOffline(
-  chapter: { id: string; work_id: string; number: number; title: string | null },
+  chapter: { id: string; work_id: string; number: number | string; title: string | null },
   work: { title: string; slug: string; cover_id?: string | null },
   pages: Array<{ position: number; media_id: string }>,
   onProgress?: (loaded: number, total: number) => void

@@ -28,10 +28,12 @@ export const GET = async ({ params, request, url }) => {
   const [chaptersRes, tagsRes] = await Promise.all([
     db
       .from('chapters')
-      .select('id, number, title, published_at')
+      .select('id, number, display_number, canonical_chapter_key, chapter_order_key, chapter_kind, edition, language, title, published_at')
       .eq('work_id', work.id)
       .not('published_at', 'is', null)
-      .order('number', { ascending: true }),
+      .order('chapter_order_key', { ascending: true, nullsFirst: false })
+      .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true }),
     db
       .from('work_tags')
       .select('tags(name, slug, kind)')
@@ -59,6 +61,12 @@ export const GET = async ({ params, request, url }) => {
     chapters: (chaptersRes.data || []).map((ch) => ({
       id: ch.id,
       number: ch.number,
+      display_number: ch.display_number || String(ch.number ?? 'Especial'),
+      canonical_chapter_key: ch.canonical_chapter_key,
+      chapter_order_key: ch.chapter_order_key,
+      chapter_kind: ch.chapter_kind,
+      edition: ch.edition,
+      language: ch.language,
       title: ch.title,
       published_at: ch.published_at
     }))

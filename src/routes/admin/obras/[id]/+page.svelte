@@ -3,6 +3,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, slugify } from '$lib/types';
+  import { chapterIdentityLabel } from '$lib/chapter-identity';
   import DeleteContent from '$lib/components/DeleteContent.svelte';
   import BatchChapterModal from '$lib/components/BatchChapterModal.svelte';
   import {
@@ -621,7 +622,7 @@
               {#each data.chapters as ch (ch.id)}
                 <tr class="chapter-row">
                   <td class="td-ch-title">
-                    <strong class="ch-num">Capítulo {ch.number}</strong>
+                    <strong class="ch-num">Capítulo {chapterIdentityLabel(ch)}</strong>
                     {#if ch.title}
                       <span class="ch-desc">— {ch.title}</span>
                     {/if}

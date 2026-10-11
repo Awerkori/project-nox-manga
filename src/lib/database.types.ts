@@ -245,9 +245,15 @@ export type Database = {
       }
       chapters: {
         Row: {
+          canonical_chapter_key: string | null
+          chapter_kind: string | null
+          chapter_order_key: string | null
           created_at: string
+          display_number: string | null
+          edition: string | null
           id: string
-          number: number
+          language: string | null
+          number: number | null
           origin: string
           published_at: string | null
           source_id: string | null
@@ -256,9 +262,15 @@ export type Database = {
           work_id: string
         }
         Insert: {
+          canonical_chapter_key?: string | null
+          chapter_kind?: string | null
+          chapter_order_key?: string | null
           created_at?: string
+          display_number?: string | null
+          edition?: string | null
           id?: string
-          number: number
+          language?: string | null
+          number?: number | null
           origin?: string
           published_at?: string | null
           source_id?: string | null
@@ -267,8 +279,14 @@ export type Database = {
           work_id: string
         }
         Update: {
+          canonical_chapter_key?: string | null
+          chapter_kind?: string | null
+          chapter_order_key?: string | null
           created_at?: string
+          display_number?: string | null
+          edition?: string | null
           id?: string
+          language?: string | null
           number?: number
           origin?: string
           published_at?: string | null
@@ -3011,6 +3029,7 @@ export type Database = {
       }
       current_role: { Args: never; Returns: string }
       editor_action: { Args: { p_action: string; p_data: Json }; Returns: Json }
+      editor_chapter_identity_action: { Args: { p_data: Json }; Returns: Json }
       equip_cosmetic_item: {
         Args: { p_item_id: string; p_kind: string }
         Returns: Json

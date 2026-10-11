@@ -34,14 +34,14 @@ const loadSnapshot = async (locals: App.Locals) => {
     locals.db.from('tags').select('id', { count: 'exact', head: true }),
     locals.db
       .from('chapters')
-      .select('id,number,title,created_at,works(id,title,slug,cover_id)')
+      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,created_at,works(id,title,slug,cover_id)')
       .is('published_at', null)
       .eq('origin', 'MANUAL')
       .order('created_at', { ascending: false })
       .limit(8),
     locals.db
       .from('chapters')
-      .select('id,number,title,published_at,works(id,title,slug,cover_id)')
+      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,works(id,title,slug,cover_id)')
       .not('published_at', 'is', null)
       .order('published_at', { ascending: false })
       .limit(6),

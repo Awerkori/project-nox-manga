@@ -22,7 +22,7 @@ export const load = async ({ locals, url }) => {
       reporter:members!reports_reporter_id_fkey(id, username, display_name),
       assigned:members!reports_assigned_to_fkey(id, username, display_name),
       work:works(id, title, slug),
-      chapter:chapters(id, number, title, works(id, title, slug)),
+      chapter:chapters(id, number, display_number, title, works(id, title, slug)),
       comment:comments(id, body, user_id)
     `)
     .order('created_at', { ascending: false })
@@ -77,7 +77,8 @@ export const load = async ({ locals, url }) => {
     if (rep.target_type === 'CHAPTER' && rep.chapter) {
       key = `CHAPTER:${rep.chapter.id}`;
       const workTitle = rep.chapter.works?.title || 'Obra';
-      title = `${workTitle} — Cap. ${rep.chapter.number}${rep.chapter.title ? ` (${rep.chapter.title})` : ''}`;
+      const displayNumber = rep.chapter.display_number ?? rep.chapter.number ?? 'Especial';
+      title = `${workTitle} — Cap. ${displayNumber}${rep.chapter.title ? ` (${rep.chapter.title})` : ''}`;
       link = `/ler/${rep.chapter.id}`;
     } else if (rep.target_type === 'WORK' && rep.work) {
       key = `WORK:${rep.work.id}`;
