@@ -158,8 +158,24 @@ CREATE INDEX IF NOT EXISTS chapters_reader_canonical_order_idx
   WHERE published_at IS NOT NULL;
 
 -- The public Reader uses an explicit-column grant, not table-wide SELECT.
-GRANT SELECT (canonical_chapter_key, display_number, chapter_order_key, chapter_kind, edition, language)
-  ON public.chapters TO anon, authenticated;
+-- Deployments backed by direct YSQL need not have Supabase's `anon` and
+-- `authenticated` roles.  A missing optional web role must not make this
+-- otherwise additive migration fail (or tempt an operator to create roles
+-- with broader privileges).  Grant only to roles that already exist.
+DO $$
+DECLARE v_role name;
+BEGIN
+  FOR v_role IN
+    SELECT rolname::name FROM pg_roles
+    WHERE rolname IN ('anon', 'authenticated')
+  LOOP
+    EXECUTE format(
+      'GRANT SELECT (canonical_chapter_key, display_number, chapter_order_key, chapter_kind, edition, language) ON public.chapters TO %I',
+      v_role
+    );
+  END LOOP;
+END;
+$$;
 
 -- The existing generic `editor_action('chapter', ...)` only accepts a numeric
 -- number.  Keep it for legacy callers, but give the current editorial screen
