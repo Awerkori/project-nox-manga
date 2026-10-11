@@ -31,12 +31,29 @@ BEGIN
     RAISE EXCEPTION 'canonical uniqueness index is missing';
   END IF;
 
+  -- PostgreSQL generally represents UNIQUE(work_id,number) as a constraint;
+  -- Yugabyte YSQL deployments may expose the same protection as a unique LSM
+  -- index.  Accept only those two *verified equivalent* forms, never an
+  -- arbitrary similarly named object.
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conrelid = 'public.chapters'::regclass
       AND conname = 'chapters_work_id_number_key'
+      AND contype = 'u'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_index i
+    WHERE i.indrelid = 'public.chapters'::regclass
+      AND i.indexrelid = to_regclass('public.chapters_work_id_number_key')
+      AND i.indisunique
+      AND ARRAY(
+        SELECT a.attname::text
+        FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ordinality)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+        ORDER BY k.ordinality
+      ) = ARRAY['work_id', 'number']
   ) THEN
-    RAISE EXCEPTION 'expected legacy numeric constraint is absent; refusing an unknown schema change';
+    RAISE EXCEPTION 'expected legacy numeric unique protection is absent or differs; refusing an unknown schema change';
   END IF;
 END;
 $$;
@@ -48,7 +65,33 @@ ALTER TABLE public.chapters ALTER COLUMN number DROP NOT NULL;
 -- This is the only non-additive DDL in the plan. It is safe only because the
 -- canonical unique index has already been validated above. Do not combine this
 -- migration with unrelated schema changes.
-ALTER TABLE public.chapters DROP CONSTRAINT chapters_work_id_number_key;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.chapters'::regclass
+      AND conname = 'chapters_work_id_number_key' AND contype = 'u'
+  ) THEN
+    ALTER TABLE public.chapters DROP CONSTRAINT chapters_work_id_number_key;
+  ELSIF EXISTS (
+    SELECT 1
+    FROM pg_index i
+    WHERE i.indrelid = 'public.chapters'::regclass
+      AND i.indexrelid = to_regclass('public.chapters_work_id_number_key')
+      AND i.indisunique
+      AND ARRAY(
+        SELECT a.attname::text
+        FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ordinality)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+        ORDER BY k.ordinality
+      ) = ARRAY['work_id', 'number']
+  ) THEN
+    DROP INDEX public.chapters_work_id_number_key;
+  ELSE
+    RAISE EXCEPTION 'legacy numeric unique protection changed during phase 2; refusing to proceed';
+  END IF;
+END;
+$$;
 
 ALTER TABLE public.chapters
   ALTER COLUMN canonical_chapter_key SET NOT NULL,
