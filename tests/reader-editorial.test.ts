@@ -21,6 +21,9 @@ it('reads chapter, pages and navigation from Yugabyte in two queries', async () 
   expect(result.pages).toHaveLength(1);expect(result.siblings).toHaveLength(1);
   expect(sql).toHaveBeenCalledTimes(2);
   expect(sql.mock.calls[0][1]).toEqual(['published',false]);
+  expect(sql.mock.calls[0][0]).toContain('canonical_chapter_key');
+  expect(sql.mock.calls[1][0]).toContain('ORDER BY c.chapter_order_key, c.canonical_chapter_key, c.id');
+  expect(sql.mock.calls[1][0]).not.toContain('ORDER BY c.number');
 });
 it('does not turn a Yugabyte failure into a false legacy 404', async () => {
   const e=event('failed');sql.mockReset();sql.mockRejectedValue(new Error('temporary DB failure'));

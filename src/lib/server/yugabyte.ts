@@ -339,32 +339,23 @@ export async function fetchRecentReleasesFromYugabyte(
           ORDER BY w.latest_chapter_published_at DESC, w.id DESC
           LIMIT $1
         ),
-        ranked_chapters AS (
-          SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating, lw.latest_published_at,
-                 c.id as chapter_id, c.number as chapter_number, c.display_number as chapter_display_number,
-                 c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
-                 c.edition as chapter_edition, c.language as chapter_language,
-                 c.title as chapter_title, c.published_at as chapter_published_at,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY lw.work_id
-                   ORDER BY c.published_at DESC, c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC
-                 ) as rn
-          FROM latest_works lw
-          CROSS JOIN LATERAL (
-            SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
-                   chapter_kind, edition, language, title, published_at
-            FROM chapters
-            WHERE work_id = lw.work_id AND published_at IS NOT NULL
-            ORDER BY published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, id DESC
-            LIMIT $2
-          ) c
-        )
-        SELECT work_id, work_slug, work_title, work_cover_id, work_kind, work_content_rating, latest_published_at,
-               chapter_id, chapter_number, chapter_display_number, canonical_chapter_key, chapter_order_key,
-               chapter_kind, chapter_edition, chapter_language, chapter_title, chapter_published_at
-        FROM ranked_chapters
-        WHERE rn <= $2
-        ORDER BY latest_published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, chapter_id DESC;
+        SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating,
+               lw.latest_published_at,
+               c.id AS chapter_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+               c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+               c.edition AS chapter_edition, c.language AS chapter_language,
+               c.title AS chapter_title, c.published_at AS chapter_published_at
+        FROM latest_works lw
+        CROSS JOIN LATERAL (
+          SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                 chapter_kind, edition, language, title, published_at
+          FROM chapters
+          WHERE work_id = lw.work_id AND published_at IS NOT NULL
+          ORDER BY published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, id DESC
+          LIMIT $2
+        ) c
+        ORDER BY lw.latest_published_at DESC, lw.work_id DESC,
+                 c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC;
       `;
 
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
