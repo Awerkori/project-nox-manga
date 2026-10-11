@@ -47,6 +47,24 @@ outras migrations, não a aplique por rollback automático e não a inicie sem u
 snapshot verificável, um lock/leadership único do importador e a aprovação
 explícita para o cutover.
 
+### Verificador guardado para staging/descartável
+
+`npm run validate:reader-identity:staging` não tem fallback para variáveis de
+produção: requer `READER_IDENTITY_VALIDATION_TARGET=staging` ou `disposable`,
+credenciais `READER_IDENTITY_VALIDATION_YSQL_*` próprias e um certificado TLS.
+Sem flags de aplicação ele abre uma sessão somente leitura.
+
+Para uma cópia isolada, aplique a fase 1 somente com
+`READER_IDENTITY_VALIDATION_APPLY_PHASE_ONE=1` e
+`READER_IDENTITY_VALIDATION_CONFIRM_PHASE_ONE=APPLY_READER_IDENTITY_PHASE_ONE_TO_NON_PRODUCTION`.
+Execute o backfill em lotes, valide `readyForPhaseTwo: true` no relatório e só
+então, na mesma cópia não produtiva, aplique a fase 2 com
+`READER_IDENTITY_VALIDATION_APPLY_PHASE_TWO=1` e
+`READER_IDENTITY_VALIDATION_CONFIRM_PHASE_TWO=APPLY_READER_IDENTITY_PHASE_TWO_TO_NON_PRODUCTION`.
+O script recusa a fase 2 se o backfill, a unicidade canônica, o índice ou a
+constraint numérica esperada não estiverem corretos. Esses nomes de confirmação
+não autorizam uso em produção.
+
 O editor atual usa `editor_chapter_identity_action(jsonb)`, criado na fase 1,
 para gravar `display_number`, chave canônica, ordem, tipo, edição e idioma na
 mesma transação que as páginas. Por isso, o deploy do Reader que contém essa
