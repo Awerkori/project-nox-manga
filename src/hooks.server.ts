@@ -197,15 +197,36 @@ export const handle: Handle = async ({ event, resolve }) => {
   const renderDuration = Math.max(0, totalDuration - authDuration);
   response.headers.set('Server-Timing', `auth;dur=${authDuration}, render;dur=${renderDuration}, total;dur=${totalDuration}`);
 
-  // Never cache HTML responses at the edge to guarantee 100% accurate SSR auth state on every request
-  // Static assets and media endpoints handle their own caching headers and must not be overwritten
+  // Only the default anonymous Home document is safe to share. Personalized
+  // pages (including anonymous age/blur preferences) remain strictly private.
+  // Static assets and media endpoints handle their own caching headers.
   if (!isMedia && !isStaticAsset) {
     const isHtml = response.headers.get('content-type')?.includes('text/html') || event.request.headers.get('accept')?.includes('text/html');
-    if (isHtml || user || hasAuthCookie || event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/auth') || event.url.pathname.startsWith('/me') || event.url.pathname.startsWith('/scan')) {
+    const hasHomePreference = Boolean(event.cookies.get('nox-age-status') || event.cookies.get('nox-blur-nsfw'));
+    const isSharedAnonymousHome =
+      isHtml &&
+      event.request.method === 'GET' &&
+      event.url.pathname === '/' &&
+      !event.url.search &&
+      !user &&
+      !hasAuthCookie &&
+      !hasHomePreference;
+    if (
+      (isHtml && !isSharedAnonymousHome) ||
+      user ||
+      hasAuthCookie ||
+      event.url.pathname.startsWith('/admin') ||
+      event.url.pathname.startsWith('/auth') ||
+      event.url.pathname.startsWith('/me') ||
+      event.url.pathname.startsWith('/scan')
+    ) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Cookie, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
+    } else if (isSharedAnonymousHome) {
+      response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60');
+      response.headers.set('Vary', 'Accept');
     } else if (response.status >= 400) {
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       response.headers.set('Pragma', 'no-cache');

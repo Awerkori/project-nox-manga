@@ -2,7 +2,6 @@
   import {
     Home,
     Layers,
-    ListTodo,
     BookOpen,
     Calendar,
     MessageSquare,
@@ -17,7 +16,6 @@
     Briefcase,
     Crown,
     Settings,
-    Sliders,
     Hash,
     Search,
     ExternalLink,
@@ -25,7 +23,6 @@
     X,
     CheckSquare
   } from '@lucide/svelte';
-  import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { normalizePositionName, CANONICAL_PIPELINE_STAGES } from '$lib/scan-roles';
 
   let {
@@ -37,7 +34,6 @@
     currentUserId = '',
     activeTab = 'home',
     activeStage = 'clean_redraw',
-    stages = [],
     chapterStages = [],
     chapters = [],
     onSelectTab,
@@ -47,7 +43,7 @@
     openTasksCount = 0,
     mobileOpen = false,
     onCloseMobile,
-    onOpenCommandPalette
+    onOpenCommandPalette = () => {}
   } = $props();
 
   let scanSelectorOpen = $state(false);
@@ -129,15 +125,15 @@
   }
 
   let seenStageMap = $derived.by(() => {
-    const set = new Set<string>();
+    const seen: Record<string, true> = {};
     if (Array.isArray(seenStages)) {
       for (const s of seenStages) {
         if (s?.chapter_stage_id) {
-          set.add(`${s.chapter_stage_id}:${s.availability_version ?? 1}`);
+          seen[`${s.chapter_stage_id}:${s.availability_version ?? 1}`] = true;
         }
       }
     }
-    return set;
+    return seen;
   });
 
   let stagePersonalNewCounts = $derived.by(() => {
@@ -155,7 +151,7 @@
                   continue;
                 }
                 const key = `${cs.id}:${cs.availability_version ?? 1}`;
-                if (!seenStageMap.has(key)) {
+                if (!seenStageMap[key]) {
                   counts[cSt.slug]++;
                 }
               }
@@ -216,9 +212,11 @@
   }
 </script>
 
+<svelte:window onkeydown={(event) => { if (mobileOpen && event.key === 'Escape') onCloseMobile?.(); }} />
+
 <!-- Backdrop overlay for mobile drawer -->
 {#if mobileOpen}
-  <div class="sidebar-backdrop" aria-hidden="true" onclick={onCloseMobile}></div>
+  <button type="button" class="sidebar-backdrop" aria-label="Fechar menu de navegação" onclick={onCloseMobile}></button>
 {/if}
 
 <aside class="workspace-sidebar" class:mobile-open={mobileOpen}>
@@ -275,7 +273,7 @@
     {#if scanSelectorOpen && myScans.length > 1}
       <div class="scan-dropdown-menu" role="menu">
         <div class="dropdown-header">MINHAS SCANS</div>
-        {#each myScans as s}
+        {#each myScans as s (s.id)}
           <button
             type="button"
             class="dropdown-item"
@@ -362,7 +360,7 @@
         <!-- Subcategories / Stages -->
         {#if pipelineExpanded}
           <div class="nav-subcategories-tree">
-            {#each CANONICAL_STAGES as st}
+            {#each CANONICAL_STAGES as st (st.slug)}
               {@const isStageSelected = activeTab === 'pipeline' && (activeStage === st.slug || (st.aliases && st.aliases.includes(activeStage)))}
               {@const availCount = stageAvailableCounts[st.slug] || 0}
               {@const personalNew = stagePersonalNewCounts[st.slug] || 0}
@@ -1070,6 +1068,9 @@
     .sidebar-backdrop {
       position: fixed;
       inset: 0;
+      width: 100%;
+      padding: 0;
+      border: 0;
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(4px);
       z-index: 55;

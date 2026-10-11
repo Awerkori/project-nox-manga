@@ -80,9 +80,15 @@ export interface ThumbnailResult {
   resized: boolean;
 }
 
+export interface ThumbnailBounds {
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
 export async function generateThumbnail(
   sourceBytes: Uint8Array,
-  sourceMime?: string | null
+  sourceMime?: string | null,
+  bounds: ThumbnailBounds = {}
 ): Promise<ThumbnailResult> {
   const mime = (sourceMime || '').toLowerCase();
 
@@ -110,9 +116,26 @@ export async function generateThumbnail(
     } else if (mime === 'image/png' || isPng(sourceBytes)) {
       const decoded = decodePng(sourceBytes);
       if (decoded && decoded.width > 0 && decoded.height > 0) {
-        rawRgba = decoded.data;
         width = decoded.width;
         height = decoded.height;
+        // PNG decoders return native channels, not necessarily RGBA. Treating RGB
+        // as RGBA shifts every pixel and invents alpha (white/transparent thumbnails).
+        // Preserve unusual packed/palette formats until explicitly supported.
+        if (decoded.palette || ![8,16].includes(decoded.depth) || ![1,2,3,4].includes(decoded.channels)) {
+          return {data:sourceBytes,mime:'image/png',resized:false};
+        }
+        const {channels,data,depth}=decoded;
+        rawRgba = new Uint8Array(width*height*4);
+        const byte=(i:number)=>depth===16 ? Math.round(data[i]/257) : data[i];
+        for(let pixel=0;pixel<width*height;pixel++) {
+          const src=pixel*channels,dst=pixel*4;
+          rawRgba[dst]=byte(src);
+          rawRgba[dst+1]=channels<=2 ? byte(src) : byte(src+1);
+          rawRgba[dst+2]=channels<=2 ? byte(src) : byte(src+2);
+          rawRgba[dst+3]=channels===2 ? byte(src+1) : channels===4 ? byte(src+3) : 255;
+          if(decoded.transparency && (channels===1 || channels===3) &&
+            decoded.transparency.every((value,i)=>data[src+i]===value)) rawRgba[dst+3]=0;
+        }
       }
     }
 
@@ -125,11 +148,11 @@ export async function generateThumbnail(
       };
     }
 
-    const MAX_WIDTH = 360;
-    const MAX_HEIGHT = 480;
+    const maxWidth = bounds.maxWidth ?? 480;
+    const maxHeight = bounds.maxHeight ?? 680;
 
     // Rule: if image is already smaller or equal to target, serve original
-    if (width <= MAX_WIDTH && height <= MAX_HEIGHT) {
+    if (width <= maxWidth && height <= maxHeight) {
       return {
         data: sourceBytes,
         mime: sourceMime || (isJpeg(sourceBytes) ? 'image/jpeg' : isPng(sourceBytes) ? 'image/png' : 'image/jpeg'),
@@ -137,8 +160,8 @@ export async function generateThumbnail(
       };
     }
 
-    const widthRatio = MAX_WIDTH / width;
-    const heightRatio = MAX_HEIGHT / height;
+    const widthRatio = maxWidth / width;
+    const heightRatio = maxHeight / height;
     const scale = Math.min(widthRatio, heightRatio);
 
     const targetWidth = Math.max(1, Math.round(width * scale));

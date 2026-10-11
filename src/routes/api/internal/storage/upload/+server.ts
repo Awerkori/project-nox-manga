@@ -64,7 +64,7 @@ export const GET: RequestHandler = async ({ request, getClientAddress, url }) =>
   authenticate(request, getClientAddress, url);
 
   const targetShard = url.searchParams.get('bot') || url.searchParams.get('shard') || 'MANGA_STORAGE_01';
-  let configured = false;
+  let configured: boolean;
   try {
     const client = resolveBotClient(targetShard);
     configured = Boolean(client.token && client.chat);
@@ -115,7 +115,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
   if (env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       db = privileged();
-    } catch {}
+    } catch {
+      // Fall through to the provider upload path; missing control-plane
+      // configuration is handled by the fail-closed resolver below.
+    }
   }
 
   let shardId: string | null = null;
@@ -185,7 +188,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
   const startTime = Date.now();
 
   try {
-    const fileId = await botClient.client.upload(
+    const receipt = await botClient.client.upload(
       bytes,
       info.mime,
       id
@@ -203,7 +206,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     }
 
     const resultPayload: Record<string, any> = {
-      providerKey: fileId,
+      providerKey: receipt.fileId,
+      telegramMessageId: receipt.messageId,
+      telegramChatId: receipt.chatId || botClient.chat || null,
+      telegramUniqueFileId: receipt.uniqueFileId,
       botReference: botClient.botRef,
       mime: info.mime,
       width: info.width,

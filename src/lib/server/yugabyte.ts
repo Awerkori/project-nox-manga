@@ -140,6 +140,34 @@ export async function executeYugabyteSql<T = any>(
   }
 }
 
+/**
+ * Run a small authoritative operation in one Hyperdrive-backed YSQL
+ * transaction.  Unlike executeYugabyteSql this deliberately does not fall
+ * back to the HTTP gateway: BEGIN/COMMIT semantics cannot be preserved across
+ * independent gateway requests.
+ */
+export async function withYugabyteTransaction<T>(
+  platformEnv: any,
+  operation: (client: Client) => Promise<T>
+): Promise<T> {
+  const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
+  if (!connectionString) throw new Error('YUGABYTE_TRANSACTION_UNAVAILABLE');
+
+  const client = new Client({ connectionString, connectionTimeoutMillis: 1_500 });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 // ============================================================
 // EXPLICIT, TYPED YUGABYTE PUBLIC READ HELPERS
 // ============================================================
@@ -183,6 +211,13 @@ export interface YugabyteChapter {
   work_id?: string;
 }
 
+export interface YugabyteTag {
+  id: string;
+  name: string;
+  slug: string;
+  kind: string;
+}
+
 export interface YugabyteReleaseRow {
   work_id: string;
   work_slug: string;
@@ -209,6 +244,18 @@ const WORK_SELECT_COLUMNS = `
   updated_at, created_at, content_rating, views_total
 `;
 
+// Home SSR serializes these rows into the document. Keep this deliberately
+// small: detail-only fields such as aliases and description can otherwise add
+// substantial CPU and response size to every cold public Home render.
+const HOME_WORK_SELECT_COLUMNS = `
+  id, slug, title, LEFT(COALESCE(synopsis, ''), 1200) AS synopsis,
+  author, artist, kind, status, featured, cover_id, content_rating, views_total
+`;
+
+const HOME_MOST_READ_SELECT_COLUMNS = `
+  id, slug, title, author, kind, status, featured, cover_id, content_rating, views_total
+`;
+
 /**
  * Fetch top published works ordered by updated_at (Novas Obras).
  */
@@ -217,7 +264,7 @@ export async function fetchHomeWorksFromYugabyte(platformEnv?: any): Promise<Yug
     'home_works',
     async () => {
       const sql = `
-        SELECT ${WORK_SELECT_COLUMNS}
+        SELECT ${HOME_WORK_SELECT_COLUMNS}
         FROM works
         WHERE published = true
         ORDER BY updated_at DESC
@@ -238,7 +285,7 @@ export async function fetchMostReadFromYugabyte(platformEnv?: any): Promise<Yuga
     'home_most_read',
     async () => {
       const sql = `
-        SELECT ${WORK_SELECT_COLUMNS}
+        SELECT ${HOME_MOST_READ_SELECT_COLUMNS}
         FROM works
         WHERE published = true
         ORDER BY views_total DESC
@@ -266,13 +313,14 @@ export async function fetchRecentReleasesFromYugabyte(
   return withYugabyteLkg(
     opKey,
     async () => {
-      // Direct CTE query that is 100% portable and fast on Yugabyte
+      // The publication transaction maintains this frontier. Use existing
+      // works/latest and chapters/work/published indexes, not a catalogue-wide GROUP BY.
       let cursorClause = '';
       let kindClause = '';
       const params: any[] = [limit, chaptersPerWork];
       if (cursorTime && cursorId) {
         params.push(cursorTime, cursorId);
-        cursorClause = `AND (c.published_at, w.id) < ($${params.length - 1}, $${params.length})`;
+        cursorClause = `AND (w.latest_chapter_published_at, w.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`;
       }
       if (kind && kind.toUpperCase() !== 'ALL') {
         params.push(kind.toUpperCase());
@@ -280,17 +328,15 @@ export async function fetchRecentReleasesFromYugabyte(
       }
 
       const sql = `
-        WITH latest_works AS (
+        WITH latest_works AS MATERIALIZED (
           SELECT w.id as work_id, w.slug as work_slug, w.title as work_title, w.cover_id as work_cover_id,
                  w.kind as work_kind, w.content_rating as work_content_rating,
-                 MAX(c.published_at) as latest_published_at
-          FROM chapters c
-          JOIN works w ON c.work_id = w.id
-          WHERE c.published_at IS NOT NULL AND w.published = true
+                 w.latest_chapter_published_at as latest_published_at
+          FROM works w
+          WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
             ${kindClause}
             ${cursorClause}
-          GROUP BY w.id, w.slug, w.title, w.cover_id, w.kind, w.content_rating
-          ORDER BY latest_published_at DESC
+          ORDER BY w.latest_chapter_published_at DESC, w.id DESC
           LIMIT $1
         ),
         ranked_chapters AS (
@@ -304,8 +350,14 @@ export async function fetchRecentReleasesFromYugabyte(
                    ORDER BY c.published_at DESC, c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC
                  ) as rn
           FROM latest_works lw
-          JOIN chapters c ON c.work_id = lw.work_id
-          WHERE c.published_at IS NOT NULL
+          CROSS JOIN LATERAL (
+            SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                   chapter_kind, edition, language, title, published_at
+            FROM chapters
+            WHERE work_id = lw.work_id AND published_at IS NOT NULL
+            ORDER BY published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, id DESC
+            LIMIT $2
+          ) c
         )
         SELECT work_id, work_slug, work_title, work_cover_id, work_kind, work_content_rating, latest_published_at,
                chapter_id, chapter_number, chapter_display_number, canonical_chapter_key, chapter_order_key,
@@ -366,6 +418,32 @@ export async function fetchWorkChaptersFromYugabyte(
              ORDER BY chapter_order_key DESC, canonical_chapter_key DESC, id DESC;`;
 
       const res = await executeYugabyteSql<YugabyteChapter>(sql, [workId], platformEnv);
+      return res.rows;
+    },
+    []
+  );
+}
+
+/**
+ * Fetch the editorial taxonomy from the same authoritative data plane as the
+ * work and its chapters. Tags must never silently fall back to the legacy
+ * Supabase copy: imports persist work_tags in Yugabyte.
+ */
+export async function fetchWorkTagsFromYugabyte(
+  workId: string,
+  platformEnv?: any
+): Promise<YugabyteTag[]> {
+  return withYugabyteLkg(
+    `work_tags_${workId}`,
+    async () => {
+      const sql = `
+        SELECT t.id, t.name, t.slug, t.kind
+        FROM work_tags wt
+        INNER JOIN tags t ON t.id = wt.tag_id
+        WHERE wt.work_id = $1
+        ORDER BY t.kind ASC, t.name ASC;
+      `;
+      const res = await executeYugabyteSql<YugabyteTag>(sql, [workId], platformEnv);
       return res.rows;
     },
     []

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, Globe, ShieldCheck, BookOpen, Layers, ArrowRight, Sparkles, MessageSquare, Star, UserPlus } from "@lucide/svelte";
+  import { Search, Globe, ShieldCheck, BookOpen, Layers, ArrowRight, Sparkles, Star, UserPlus, Users } from "@lucide/svelte";
   import DiscordIcon from "$lib/components/icons/DiscordIcon.svelte";
   import FluxerIcon from "$lib/components/icons/FluxerIcon.svelte";
 
@@ -191,7 +191,7 @@
                       <span>Vagas abertas:</span>
                     </div>
                     <div class="recruiting-tags">
-                      {#each scan.recruitingPositions.slice(0, 3) as pos}
+                      {#each scan.recruitingPositions.slice(0, 3) as pos (pos)}
                         <span class="pos-tag">{pos}</span>
                       {/each}
                       {#if scan.recruitingPositions.length > 3}
@@ -211,6 +211,11 @@
                   <div class="stat-item" title="Total de capítulos lançados">
                     <Layers size={14} />
                     <span><strong>{scan.chaptersCount}</strong> {scan.chaptersCount === 1 ? "capítulo" : "capítulos"}</span>
+                  </div>
+                  <div class="stat-dot">·</div>
+                  <div class="stat-item" title="Membros da equipe">
+                    <Users size={14} />
+                    <span><strong>{scan.membersCount}</strong> {scan.membersCount === 1 ? "membro" : "membros"}</span>
                   </div>
                 </div>
 
@@ -760,9 +765,10 @@
   }
 
   /* Stats Bar */
-  .stats-row {
-    display: flex;
-    align-items: center;
+    .stats-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
     gap: 0.75rem;
     padding: 0.6rem 0.85rem;
     background: rgba(255, 255, 255, 0.03);
@@ -930,6 +936,41 @@
     .action-buttons {
       width: 100%;
       justify-content: flex-end;
+    }
+  }
+
+  /* Keep public recruiting actions comfortably tappable on narrow phones.
+     A card has room for the full vacancy CTA; it should not be sacrificed to
+     an icon row or wrap into an ambiguous two-line button. */
+  @media (max-width: 430px) {
+    .card-footer {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    .social-links {
+      justify-content: space-between;
+    }
+
+    .social-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0.55rem;
+    }
+
+    .btn-apply,
+    .btn-view-works {
+      min-width: 0;
+      min-height: 2.65rem;
+      justify-content: center;
+      padding-inline: 0.5rem;
+      white-space: nowrap;
     }
   }
 </style>

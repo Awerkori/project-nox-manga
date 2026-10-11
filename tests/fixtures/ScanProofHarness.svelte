@@ -5,14 +5,16 @@
   import WorkloadTab from '../../src/routes/scan/components/WorkloadTab.svelte';
   import ChatTab from '../../src/routes/scan/components/ChatTab.svelte';
 
-  let { initialTab = 'pipeline', initialStage = 'clean_redraw', role = 'OWNER' } = $props<{
+  let { initialTab = 'pipeline', initialStage = 'clean_redraw', role = 'OWNER', initialDrawer = false } = $props<{
     initialTab?: string;
     initialStage?: string;
     role?: string;
+    initialDrawer?: boolean;
   }>();
 
   let activeTab = $state(initialTab);
   let activeStageSlug = $state(initialStage);
+  let mobileDrawerOpen = $state(initialDrawer);
 
   const mockUser = {
     id: 'user-awerkori',
@@ -151,6 +153,16 @@
       byte_size: 52000,
       version: 1,
       is_current: true
+    },
+    {
+      id: 'file-typeset-1',
+      production_chapter_id: 'pch-1',
+      stage_id: 'st-type',
+      stage_slug: 'typeset',
+      file_name: 'Ceu_Distante_Cap01_Typeset.zip',
+      byte_size: 9400000,
+      version: 1,
+      is_current: true
     }
   ];
 
@@ -195,6 +207,7 @@
     if (tabId === 'pipeline' && subParam) {
       activeStageSlug = subParam;
     }
+    mobileDrawerOpen = false;
   }
 
   function handleSelectPipelineStage(slug: string) {
@@ -207,6 +220,8 @@
   <!-- Scan Sidebar Component -->
   <aside class="harness-sidebar">
     <ScanSidebar
+      currentScan={mockScan}
+      myScans={[{ ...mockScan, role }]}
       activeTab={activeTab}
       activeStage={activeStageSlug}
       userRole={role}
@@ -215,6 +230,9 @@
       chapterStages={mockChapterStages}
       chapters={mockChapters}
       onSelectTab={handleSelectTab}
+      mobileOpen={mobileDrawerOpen}
+      onCloseMobile={() => (mobileDrawerOpen = false)}
+      onOpenCommandPalette={() => {}}
     />
   </aside>
 
@@ -253,23 +271,18 @@
     {:else if activeTab === 'workload'}
       <WorkloadTab
         team={mockMembers}
-        chapterStages={mockChapterStages}
-        chapters={mockChapters}
-        works={mockWorks}
-        stages={mockStages}
+        tasks={[]}
         currentUserId="user-awerkori"
-        userRole={role}
-        onOpenChapter={(ch: any) => console.log('Open chapter', ch)}
+        isOwnerOrAdmin={role === 'OWNER' || role === 'ADMIN'}
       />
     {:else if activeTab === 'chat'}
       <ChatTab
-        scanId="scan-nox"
+        currentScanId="scan-nox"
         channels={mockChannels}
         messages={mockMessages}
         currentUserId="user-awerkori"
         userRole={role}
         team={mockMembers}
-        onChannelChange={(chId: string) => console.log('Channel', chId)}
       />
     {/if}
   </main>

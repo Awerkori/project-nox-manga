@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { testArtifactDir } from '../test-artifacts';
 
-const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854';
+const ARTIFACT_DIR = testArtifactDir('admin');
 
 async function setupPreviewRoute(page: any) {
   await page.route('**/preview-admin*', (route: any) => {

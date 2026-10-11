@@ -1,17 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { testArtifactDir } from '../test-artifacts';
+
+const screenshotDir = testArtifactDir('public-profile');
 
 test.describe('Public Profile: Conquistas & Cosméticos', () => {
-  test.beforeEach(async ({ context }) => {
+  test.beforeEach(async ({ context }, testInfo) => {
+    const origin = new URL(testInfo.project.use.baseURL as string).origin;
     await context.addCookies([
       {
         name: 'nox-age-status',
         value: 'ADULT',
-        url: 'http://127.0.0.1:5173'
+        url: origin
       },
       {
         name: 'nox-blur-nsfw',
         value: 'false',
-        url: 'http://127.0.0.1:5173'
+        url: origin
       }
     ]);
   });
@@ -19,9 +23,10 @@ test.describe('Public Profile: Conquistas & Cosméticos', () => {
   async function ensureAgeGateDismissed(page: any) {
     const ageModal = page.locator('.age-gate-backdrop');
     if (await ageModal.isVisible().catch(() => false)) {
-      const adultBtn = page.getByRole('button', { name: /Tenho 18 anos/i });
-      if (await adultBtn.isVisible().catch(() => false)) {
-        await adultBtn.click().catch(() => {});
+      const confirmButton = page.getByRole('button', { name: 'Confirmar e Continuar' });
+      if (await confirmButton.isVisible().catch(() => false)) {
+        await confirmButton.click();
+        await expect(ageModal).toBeHidden();
       }
     }
   }
@@ -40,8 +45,8 @@ test.describe('Public Profile: Conquistas & Cosméticos', () => {
     // 1. Capítulos Lidos
     await expect(statsGrid.getByText('Capítulos Lidos')).toBeVisible();
 
-    // 2. Obras na Coleção
-    await expect(statsGrid.getByText('Obras na Coleção')).toBeVisible();
+    // 2. Favoritos respects the profile owner's visibility preference.
+    await expect(statsGrid.getByRole('button', { name: /Favoritos/ })).toBeVisible();
 
     // 3. Conquistas in format "X / Y"
     const conquistasCard = statsGrid.locator('button.stat-card-interactive').filter({ hasText: 'Conquistas' });
@@ -142,7 +147,7 @@ test.describe('Public Profile: Conquistas & Cosméticos', () => {
     await page.goto('/u/kiritsuguxs', { waitUntil: 'networkidle' });
     await ensureAgeGateDismissed(page);
     await page.screenshot({
-      path: '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/public_profile_desktop.png',
+      path: `${screenshotDir}/public_profile_desktop.png`,
       fullPage: true
     });
 
@@ -151,7 +156,7 @@ test.describe('Public Profile: Conquistas & Cosméticos', () => {
     await cosmeticosCard.click();
     await page.waitForTimeout(300);
     await page.screenshot({
-      path: '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/public_profile_desktop_cosmetics.png',
+      path: `${screenshotDir}/public_profile_desktop_cosmetics.png`,
       fullPage: true
     });
 
@@ -160,7 +165,7 @@ test.describe('Public Profile: Conquistas & Cosméticos', () => {
     await page.goto('/u/kiritsuguxs', { waitUntil: 'networkidle' });
     await ensureAgeGateDismissed(page);
     await page.screenshot({
-      path: '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/public_profile_mobile.png',
+      path: `${screenshotDir}/public_profile_mobile.png`,
       fullPage: true
     });
   });

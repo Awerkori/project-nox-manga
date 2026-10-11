@@ -5,10 +5,7 @@
     Search,
     Edit3,
     Trash2,
-    Filter,
     X,
-    BookOpen,
-    Tag,
     Info
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
@@ -72,7 +69,17 @@
     showModal = false;
     editingEntry = null;
   }
+
+  function dismissModalBackdrop(event: MouseEvent) {
+    if (event.target === event.currentTarget) closeModal();
+  }
+
+  function closeModalOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape' && showModal) closeModal();
+  }
 </script>
+
+<svelte:window onkeydown={closeModalOnEscape} />
 
 <div class="glossary-tab">
   <!-- Header / Controls -->
@@ -110,7 +117,7 @@
       <!-- Work Filter -->
       <select bind:value={selectedWorkId} class="filter-select">
         <option value="ALL">Todas as Obras ({works.length})</option>
-        {#each works as work}
+        {#each works as work (work.id)}
           <option value={work.id}>{work.title}</option>
         {/each}
       </select>
@@ -118,7 +125,7 @@
       <!-- Category Filter -->
       <select bind:value={categoryFilter} class="filter-select">
         <option value="ALL">Todas as Categorias</option>
-        {#each CATEGORIES as cat}
+        {#each CATEGORIES as cat (cat)}
           <option value={cat}>{cat}</option>
         {/each}
       </select>
@@ -139,7 +146,7 @@
     </div>
   {:else}
     <div class="terms-grid">
-      {#each filteredEntries as entry}
+      {#each filteredEntries as entry (entry.id)}
         {@const work = works.find((w: any) => w.id === entry.work_id)}
         <div class="term-card">
           <div class="card-top">
@@ -201,11 +208,11 @@
 
   <!-- Create/Edit Modal -->
   {#if showModal}
-    <div class="modal-backdrop" onclick={closeModal} role="presentation">
-      <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div class="modal-backdrop" onclick={dismissModalBackdrop} role="presentation">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="glossary-dialog-title" tabindex="-1">
         <div class="modal-header">
-          <h3>{editingEntry ? 'Editar Termo' : 'Novo Termo no Glossário'}</h3>
-          <button class="btn-close" onclick={closeModal}><X size={18} /></button>
+          <h3 id="glossary-dialog-title">{editingEntry ? 'Editar Termo' : 'Novo Termo no Glossário'}</h3>
+          <button class="btn-close" aria-label="Fechar editor de termo" onclick={closeModal}><X size={18} /></button>
         </div>
 
         <form
@@ -229,7 +236,7 @@
           <div class="form-group">
             <label for="g-work">Obra Relacionada *</label>
             <select id="g-work" name="work_id" bind:value={formWorkId} required class="input">
-              {#each works as w}
+              {#each works as w (w.id)}
                 <option value={w.id}>{w.title}</option>
               {/each}
             </select>
@@ -251,7 +258,7 @@
             <div class="form-group flex-1">
               <label for="g-cat">Categoria</label>
               <select id="g-cat" name="category" bind:value={formCategory} class="input">
-                {#each CATEGORIES as cat}
+                {#each CATEGORIES as cat (cat)}
                   <option value={cat}>{cat}</option>
                 {/each}
               </select>

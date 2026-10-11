@@ -29,6 +29,7 @@ vi.mock('pg', () => {
 import {
   fetchWorkFromYugabyte,
   fetchWorkChaptersFromYugabyte,
+  fetchWorkTagsFromYugabyte,
   fetchMediaMetadataFromYugabyte,
   withYugabyteLkg,
   setLkg,
@@ -127,9 +128,11 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
       })
     };
 
+    const setHeaders = vi.fn();
     const result = await loadHome({
       locals: { db: mockDb, user: null },
-      setHeaders: vi.fn(),
+      setHeaders,
+      cookies: { get: vi.fn().mockReturnValue(undefined) },
       url: new URL('https://manga.project-nox.test/?fresh=1'),
       platform: { env: {} }
     } as any);
@@ -140,6 +143,33 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
     expect(result.recentReleases[0].workTitle).toBe('One Piece');
     expect(result.recentReleases[0].chapters[0].number).toBe(1190);
     expect(result.loadError).toBe(false);
+    expect(setHeaders).toHaveBeenCalledWith({
+      'cache-control': 'private, no-cache, no-store, must-revalidate'
+    });
+
+    const sharedHeaders = vi.fn();
+    await loadHome({
+      locals: { db: mockDb, user: null },
+      setHeaders: sharedHeaders,
+      cookies: { get: vi.fn().mockReturnValue(undefined) },
+      url: new URL('https://manga.project-nox.test/'),
+      platform: { env: {} }
+    } as any);
+    expect(sharedHeaders).toHaveBeenCalledWith({
+      'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
+    });
+
+    const personalizedHeaders = vi.fn();
+    await loadHome({
+      locals: { db: mockDb, user: null },
+      setHeaders: personalizedHeaders,
+      cookies: { get: vi.fn((name: string) => (name === 'nox-age-status' ? 'ADULT' : undefined)) },
+      url: new URL('https://manga.project-nox.test/'),
+      platform: { env: {} }
+    } as any);
+    expect(personalizedHeaders).toHaveBeenCalledWith({
+      'cache-control': 'private, no-cache, no-store, must-revalidate'
+    });
   });
 
   it('runs /api/releases endpoint successfully using Yugabyte helper', async () => {
@@ -173,7 +203,7 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
     expect(json.releases[0].chapters[0].number).toBe(1190);
   });
 
-  it('verifies fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, and fetchMediaMetadataFromYugabyte execute safely', async () => {
+  it('verifies work, chapters, tags, and media helpers execute safely', async () => {
     const mockEnv = {
       HYPERDRIVE: { connectionString: 'postgresql://mock:5433/mock' }
     };
@@ -183,6 +213,9 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
 
     const chapters = await fetchWorkChaptersFromYugabyte('test-id', false, mockEnv);
     expect(Array.isArray(chapters)).toBe(true);
+
+    const tags = await fetchWorkTagsFromYugabyte('test-id', mockEnv);
+    expect(Array.isArray(tags)).toBe(true);
 
     const media = await fetchMediaMetadataFromYugabyte('test-id', mockEnv);
     expect(media).toBeDefined();

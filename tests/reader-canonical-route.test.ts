@@ -1,4 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+
+const editorial = vi.hoisted(() => ({
+  chapter: null as any,
+  pages: [] as any[],
+  siblings: [] as any[],
+  work: null as any,
+}));
+
+vi.mock('$lib/server/reader-editorial', () => ({
+  readerChapter: vi.fn(async () => ({ data: editorial.chapter })),
+  readerContent: vi.fn(async () => ({ data: { pages: editorial.pages, siblings: editorial.siblings } })),
+  readerPreviewTarget: vi.fn(async () => ({ data: null })),
+  readerPreviewWork: vi.fn(async () => ({ data: editorial.work })),
+}));
+
 import { load } from '../src/routes/ler/[id]/+page.server';
 
 type Result = { data: any; error?: any };
@@ -32,6 +47,13 @@ function readerDb(chapter: any, siblings: any[]) {
   };
 }
 
+function setEditorialReader(chapter: any, siblings: any[]) {
+  editorial.chapter = chapter;
+  editorial.siblings = siblings;
+  editorial.pages = [{ position: 1, media_id: 'media-1', width: 800, height: 1200 }];
+  editorial.work = chapter.works;
+}
+
 describe('Reader UUID routes with canonical chapter labels', () => {
   it('keeps old UUID URLs and does not cross-cache 12.1 with 12.10', async () => {
     const work = { id: 'work-1', title: 'Teste', slug: 'teste', kind: 'MANGA', published: true, content_rating: 'GENERAL' };
@@ -47,7 +69,9 @@ describe('Reader UUID routes with canonical chapter labels', () => {
     };
     const shared = { url: new URL(`https://manga.example/ler/${one.id}`), cookies: { get: () => undefined }, setHeaders: vi.fn() };
 
+    setEditorialReader(one, [one, ten]);
     const first = await load({ ...shared, locals: { db: readerDb(one, [one, ten]), user: null }, params: { id: one.id } } as any);
+    setEditorialReader(ten, [one, ten]);
     const second = await load({ ...shared, locals: { db: readerDb(ten, [one, ten]), user: null }, params: { id: ten.id } } as any);
 
     expect(first.chapter.id).toBe(one.id);
@@ -70,6 +94,7 @@ describe('Reader UUID routes with canonical chapter labels', () => {
       canonical_chapter_key: 'en|official|chapter|12.1|-', chapter_order_key: 'n|000000000012|100000000000|1||',
       chapter_kind: 'chapter', edition: 'official', language: 'en', title: 'Official', published_at: '2026-10-11T00:01:00Z', works: work
     };
+    setEditorialReader(special, [official, special]);
     const data = await load({
       locals: { db: readerDb(special, [official, special]), user: null }, params: { id: special.id },
       url: new URL(`https://manga.example/ler/${special.id}`), cookies: { get: () => undefined }, setHeaders: vi.fn()

@@ -37,6 +37,7 @@
     Scan,
     Flag
   } from '@lucide/svelte';
+  import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data, children } = $props();
 
@@ -189,19 +190,15 @@
       <!-- Operator Identity Card -->
       <div class="operator-card">
         <div class="operator-avatar">
-          {#if data.profile?.avatar_id || data.profile?.avatarId}
-            <img
-              src="/media/{data.profile?.avatar_id || data.profile?.avatarId}"
-              alt=""
-              width="36"
-              height="36"
-              class="avatar-img"
-            />
-          {:else}
-            <span class="avatar-fallback">
-              {(data.profile?.display_name || data.profile?.displayName || role || 'O').slice(0, 1).toUpperCase()}
-            </span>
-          {/if}
+          <UserAvatar
+            user={data.profile}
+            avatarId={data.profile?.avatar_id || data.profile?.avatarId}
+            displayName={data.profile?.display_name || data.profile?.displayName || role || 'Operador Nox'}
+            crop={data.profile?.avatar_crop}
+            frameId={data.profile?.avatar_frame_id}
+            size={36}
+            loading="eager"
+          />
           <span class="operator-status-dot"></span>
         </div>
 

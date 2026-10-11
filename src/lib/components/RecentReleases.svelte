@@ -6,6 +6,7 @@
   import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
   import { chapterDisplayNumber, compareChapterIdentity } from '$lib/chapter-identity';
+  import { deferImage } from '$lib/actions/defer-image';
 
   type ReleaseItem = {
     workId: string;
@@ -102,20 +103,22 @@
         {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
         {@const remainingCount = sortedChapters.length - 3}
         {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
+        {@const isEager = i < 3}
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
             <div class="thumb-wrap">
               <img
                 use:fallbackCover
-                src={thumbCover}
+                use:deferImage={{ src: isEager ? null : thumbCover }}
+                src={isEager ? thumbCover : undefined}
                 alt={rel.workTitle}
                 class="thumb-img"
                 class:blurred-cover={effectiveBlur}
                 width="64"
                 height="90"
-                loading={i < 3 ? "eager" : "lazy"}
-                fetchpriority={i < 3 ? "high" : "auto"}
+                loading={isEager ? "eager" : "lazy"}
+                fetchpriority={isEager ? "high" : "auto"}
                 decoding="async"
               />
               {#if isAdult}

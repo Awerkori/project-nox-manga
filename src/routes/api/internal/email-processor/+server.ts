@@ -42,10 +42,23 @@ export const GET: RequestHandler = async ({ request, url, locals, platform }) =>
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
   const id = url.searchParams.get('id') || undefined;
 
-  const [outboxResult, reconResult] = await Promise.all([
+  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon] = await Promise.all([
     processPendingEmailOutbox(limit, id),
-    reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
+    processPendingEmailOutbox(limit, id, platform?.env),
+    reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
+    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
   ]);
+  const outboxResult = {
+    processed: legacyOutbox.processed + scanOutbox.processed,
+    sent: legacyOutbox.sent + scanOutbox.sent,
+    failed: legacyOutbox.failed + scanOutbox.failed,
+    details: [...legacyOutbox.details, ...scanOutbox.details]
+  };
+  const reconResult = {
+    reconciled: legacyRecon.reconciled + scanRecon.reconciled,
+    retried: legacyRecon.retried + scanRecon.retried,
+    waiting: legacyRecon.waiting + scanRecon.waiting
+  };
 
   return json({
     ok: true,
@@ -61,10 +74,23 @@ export const POST: RequestHandler = async ({ request, url, locals, platform }) =
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
   const id = url.searchParams.get('id') || undefined;
   
-  const [outboxResult, reconResult] = await Promise.all([
+  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon] = await Promise.all([
     processPendingEmailOutbox(limit, id),
-    reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
+    processPendingEmailOutbox(limit, id, platform?.env),
+    reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
+    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
   ]);
+  const outboxResult = {
+    processed: legacyOutbox.processed + scanOutbox.processed,
+    sent: legacyOutbox.sent + scanOutbox.sent,
+    failed: legacyOutbox.failed + scanOutbox.failed,
+    details: [...legacyOutbox.details, ...scanOutbox.details]
+  };
+  const reconResult = {
+    reconciled: legacyRecon.reconciled + scanRecon.reconciled,
+    retried: legacyRecon.retried + scanRecon.retried,
+    waiting: legacyRecon.waiting + scanRecon.waiting
+  };
 
   return json({
     ok: true,

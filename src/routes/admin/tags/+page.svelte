@@ -2,45 +2,52 @@
   import { action } from '$lib/actions';
   import { invalidateAll } from '$app/navigation';
   import { slugify } from '$lib/types';
-  import {
-    Tags,
-    Bookmark,
-    Search,
-    Plus,
-    Hash,
-    Check,
-    X,
-    Pencil,
-    Sparkles,
-    SlidersHorizontal
-  } from '@lucide/svelte';
+  import { Search, Plus, X, Pencil, Trash2, AlertTriangle, ShieldCheck } from '@lucide/svelte';
 
   let { data } = $props();
+
+  type TaxonomyTerm = {
+    id: string;
+    name: string;
+    slug: string;
+    kind: 'GENRE' | 'TAG';
+    workCount: number;
+  };
 
   let id = $state(''),
     name = $state(''),
     kind = $state<'GENRE' | 'TAG'>('TAG'),
     notice = $state(''),
     busy = $state(false),
+    deleteBusy = $state(false),
+    deleteOpen = $state(false),
+    confirmUnassign = $state(false),
     searchQuery = $state('');
 
   let generatedSlug = $derived(slugify(name));
+  let canDelete = $derived(data.role === 'ADMIN');
+  let selectedTerm = $derived(
+    (data.tags || []).find((tag: TaxonomyTerm) => tag.id === id) as TaxonomyTerm | undefined
+  );
 
   let filteredTags = $derived(
-    (data.tags || []).filter((t: { name: string; slug: string }) =>
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    (data.tags || []).filter(
+      (t: TaxonomyTerm) =>
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.slug.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
 
-  let genres = $derived(filteredTags.filter((t: { kind: string }) => t.kind === 'GENRE'));
-  let thematicTags = $derived(filteredTags.filter((t: { kind: string }) => t.kind !== 'GENRE'));
+  let genres = $derived(filteredTags.filter((t: TaxonomyTerm) => t.kind === 'GENRE'));
+  let thematicTags = $derived(filteredTags.filter((t: TaxonomyTerm) => t.kind !== 'GENRE'));
 
-  function selectForEdit(tag: { id: string; name: string; kind: string }) {
+  function selectForEdit(tag: TaxonomyTerm) {
     id = tag.id;
     name = tag.name;
     kind = tag.kind === 'GENRE' ? 'GENRE' : 'TAG';
     notice = '';
+    deleteOpen = false;
+    confirmUnassign = false;
     // Scroll editor into view on mobile if needed
     if (typeof window !== 'undefined' && window.innerWidth < 860) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -51,6 +58,8 @@
     id = '';
     name = '';
     kind = 'TAG';
+    deleteOpen = false;
+    confirmUnassign = false;
   }
 
   async function save() {
@@ -75,6 +84,32 @@
       busy = false;
     }
   }
+
+  async function removeSelectedTerm() {
+    if (!id || !selectedTerm) return;
+    deleteBusy = true;
+    notice = '';
+    try {
+      const response = await fetch(`/api/admin/tags/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmUnassign })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || 'Não foi possível excluir o termo.');
+
+      const removed = Number(result.removed_work_associations || 0);
+      notice = removed
+        ? `${selectedTerm.name} foi excluído e removido de ${removed} obra${removed === 1 ? '' : 's'}.`
+        : `${selectedTerm.name} foi excluído do catálogo.`;
+      cancelEdit();
+      await invalidateAll();
+    } catch (error) {
+      notice = (error as Error).message;
+    } finally {
+      deleteBusy = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -86,7 +121,7 @@
     <span class="eyebrow">ORGANIZAÇÃO DO CATÁLOGO</span>
     <h1>Gêneros e Tags</h1>
     <p class="subtitle">
-      Defina a taxonomia e os marcadores temáticos para classificação precisa das obras e filtros de busca.
+      Gêneros definem a categoria central da obra; tags registram temas, tropos e ambientações específicas.
     </p>
   </header>
 
@@ -116,6 +151,14 @@
               <span>Modo Edição</span>
             </div>
             <h2>Editar Termo</h2>
+            {#if selectedTerm}
+              <p class="selected-context">
+                {selectedTerm.workCount} obra{selectedTerm.workCount === 1 ? '' : 's'} usa{selectedTerm.workCount ===
+                1
+                  ? ''
+                  : 'm'} este termo
+              </p>
+            {/if}
           {:else}
             <div class="heading-badge create-badge">
               <Plus size={13} />
@@ -184,7 +227,66 @@
             </button>
           {/if}
         </div>
+
+        {#if id && selectedTerm?.slug === 'adulto-18'}
+          <p class="protected-note">
+            <ShieldCheck size={14} /> Termo de sistema protegido para classificação adulta.
+          </p>
+        {:else if id && canDelete}
+          <button
+            type="button"
+            class="delete-trigger"
+            onclick={() => {
+              deleteOpen = !deleteOpen;
+              confirmUnassign = false;
+            }}
+            disabled={busy || deleteBusy}
+          >
+            <Trash2 size={14} /> Excluir este termo
+          </button>
+        {/if}
       </form>
+
+      {#if id && selectedTerm && deleteOpen && canDelete}
+        <section class="delete-confirmation" aria-labelledby="delete-term-title">
+          <div class="delete-heading">
+            <AlertTriangle size={18} />
+            <div>
+              <h3 id="delete-term-title">Excluir {selectedTerm.kind === 'GENRE' ? 'gênero' : 'tag'}?</h3>
+              <p><strong>{selectedTerm.name}</strong> será removido permanentemente.</p>
+            </div>
+          </div>
+          {#if selectedTerm.workCount > 0}
+            <p class="delete-impact">
+              Ele está associado a <strong
+                >{selectedTerm.workCount} obra{selectedTerm.workCount === 1 ? '' : 's'}</strong
+              >. A exclusão só continua se você confirmar a remoção dessas associações.
+            </p>
+            <label class="confirm-option">
+              <input type="checkbox" bind:checked={confirmUnassign} />
+              <span>Entendo que essas obras perderão este termo.</span>
+            </label>
+          {:else}
+            <p class="delete-impact">Nenhuma obra está usando este termo.</p>
+          {/if}
+          <div class="delete-actions">
+            <button
+              type="button"
+              class="button secondary"
+              onclick={() => (deleteOpen = false)}
+              disabled={deleteBusy}>Cancelar</button
+            >
+            <button
+              type="button"
+              class="button danger"
+              onclick={removeSelectedTerm}
+              disabled={deleteBusy || (selectedTerm.workCount > 0 && !confirmUnassign)}
+            >
+              {deleteBusy ? 'Excluindo…' : 'Confirmar exclusão'}
+            </button>
+          </div>
+        </section>
+      {/if}
     </div>
 
     <!-- Tags List Column -->
@@ -211,7 +313,10 @@
         <div class="section-top">
           <div class="section-title">
             <span class="symbol-icon">◈</span>
-            <h3>Gêneros Principais</h3>
+            <div>
+              <h3>Gêneros</h3>
+              <p>Categorias centrais da obra.</p>
+            </div>
           </div>
           <span class="count-badge">{genres.length} cadastrados</span>
         </div>
@@ -230,6 +335,7 @@
               >
                 <span class="chip-symbol">◈</span>
                 <span class="chip-name">{tag.name}</span>
+                <span class="chip-count">{tag.workCount}</span>
                 <Pencil size={11} class="chip-edit-icon" />
               </button>
             {/each}
@@ -242,7 +348,10 @@
         <div class="section-top">
           <div class="section-title">
             <span class="symbol-icon">#</span>
-            <h3>Tags Temáticas & Tropos</h3>
+            <div>
+              <h3>Tags, Temas & Tropos</h3>
+              <p>Elementos narrativos, ambientações e recortes específicos.</p>
+            </div>
           </div>
           <span class="count-badge">{thematicTags.length} cadastradas</span>
         </div>
@@ -261,6 +370,7 @@
               >
                 <span class="chip-symbol">#</span>
                 <span class="chip-name">{tag.name}</span>
+                <span class="chip-count">{tag.workCount}</span>
                 <Pencil size={11} class="chip-edit-icon" />
               </button>
             {/each}
@@ -390,6 +500,12 @@
     color: #f8fafc;
   }
 
+  .selected-context {
+    color: #94a3b8;
+    font-size: 12px;
+    margin: -2px 0 0;
+  }
+
   .field {
     display: flex;
     flex-direction: column;
@@ -489,6 +605,92 @@
     margin-top: 4px;
   }
 
+  .delete-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: fit-content;
+    padding: 7px 2px;
+    border: 0;
+    background: transparent;
+    color: #fca5a5;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .delete-trigger:hover:not(:disabled) {
+    color: #fecaca;
+    text-decoration: underline;
+  }
+  .delete-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .protected-note {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .protected-note :global(svg) {
+    color: #a855f7;
+    flex: none;
+  }
+
+  .delete-confirmation {
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    border-radius: 12px;
+    background: rgba(127, 29, 29, 0.14);
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .delete-heading {
+    display: flex;
+    gap: 10px;
+    color: #fecaca;
+  }
+  .delete-heading :global(svg) {
+    flex: none;
+    margin-top: 2px;
+  }
+  .delete-heading h3 {
+    color: #fef2f2;
+    font-size: 14px;
+    margin: 0 0 3px;
+  }
+  .delete-heading p,
+  .delete-impact {
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.45;
+    margin: 0;
+  }
+  .confirm-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #e2e8f0;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .confirm-option input {
+    margin-top: 2px;
+    accent-color: #ef4444;
+  }
+  .delete-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
   /* List column */
   .list-column {
     display: flex;
@@ -563,6 +765,11 @@
     gap: 8px;
   }
 
+  .section-title > div {
+    display: grid;
+    gap: 2px;
+  }
+
   .symbol-icon {
     color: #a855f7;
     font-weight: 700;
@@ -574,6 +781,13 @@
     font-weight: 600;
     margin: 0;
     color: #f1f5f9;
+  }
+
+  .section-title p {
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+    margin: 0;
   }
 
   .count-badge {
@@ -612,6 +826,14 @@
     transition: all 0.15s ease;
   }
 
+  .chip-count {
+    color: #94a3b8;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    border-left: 1px solid rgba(148, 163, 184, 0.22);
+    padding-left: 7px;
+  }
+
   .tax-chip:hover {
     background: #1f1632;
     border-color: #634388;
@@ -642,5 +864,27 @@
   .tax-chip:hover :global(.chip-edit-icon) {
     opacity: 1;
     color: #a855f7;
+  }
+
+  .button.danger {
+    background: #b91c1c;
+    border-color: #dc2626;
+    color: #fff;
+  }
+
+  .button.danger:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  @media (max-width: 860px) {
+    .editor-form {
+      position: static;
+    }
+    .delete-actions {
+      justify-content: stretch;
+    }
+    .delete-actions .button {
+      flex: 1;
+    }
   }
 </style>

@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import { testArtifactDir } from '../test-artifacts';
 
-const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854';
-const SCREENSHOT_DIR = `${ARTIFACT_DIR}/screenshots/evolution`;
+const SCREENSHOT_DIR = testArtifactDir('evolution');
+const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 const VIEWPORTS = [
   { name: 'mobile-360x800', width: 360, height: 800 },
@@ -84,7 +85,7 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
   // 1. Audit Reader End Screen & Reactions
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto('/qa-reader');
+    await page.goto(`${LOCAL_URL}/qa-reader`);
     await page.waitForSelector('.reader-end');
 
     await page.evaluate(() => {
@@ -123,7 +124,7 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
   // 2. Audit Importer Priority Hero Banner
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto('/preview-admin?view=importer&role=ADMIN');
+    await page.goto(`${LOCAL_URL}/preview-admin?view=importer&role=ADMIN`);
     await page.waitForSelector('.priority-hero-card');
 
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -138,7 +139,7 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
   // 3. Audit Staff Management Page
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto('/preview-admin?view=staff&role=ADMIN');
+    await page.goto(`${LOCAL_URL}/preview-admin?view=staff&role=ADMIN`);
     await page.waitForSelector('.staff-workspace');
 
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -150,17 +151,17 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
     });
   }
 
-  // 4. Audit Admin Dashboard Triage Section
+  // 4. Audit Admin Dashboard
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto('/preview-admin?view=dashboard&role=ADMIN');
-    await page.waitForSelector('.triage-section');
+    await page.goto(`${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`);
+    await page.waitForSelector('.dashboard-shell');
 
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(hasOverflow, `Overflow in Dashboard at ${vp.name}`).toBe(false);
 
     await page.screenshot({
-      path: `${SCREENSHOT_DIR}/admin-dashboard-triage-${vp.name}.png`,
+      path: `${SCREENSHOT_DIR}/admin-dashboard-${vp.name}.png`,
       fullPage: false
     });
   }

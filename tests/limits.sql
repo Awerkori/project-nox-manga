@@ -1,8 +1,8 @@
 begin;
 create or replace function pg_temp.assert_true(value boolean,label text) returns void language plpgsql as $$begin if value is distinct from true then raise exception 'FAIL: %',label;end if;end$$;
 insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
- ('11000001-0000-4000-8000-000000000001','owner@example.invalid',now(),'{}'),
- ('11000002-0000-4000-8000-000000000002','editor@example.invalid',null,'{"role":"EDITOR"}');
+ ('11000001-0000-4000-8000-000000000001','owner@example.invalid',now(),'{"username":"limits_owner"}'),
+ ('11000002-0000-4000-8000-000000000002','editor@example.invalid',null,'{"username":"limits_editor","role":"EDITOR"}');
 update public.access_roles set role='ADMIN' where user_id='11000001-0000-4000-8000-000000000001';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','11000001-0000-4000-8000-000000000001',true);

@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
+import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } from '$lib/server/reader-editorial';
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -12,7 +13,16 @@ type ReaderCacheEntry = {
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
 
-export const load = async ({ locals, params, url, cookies, setHeaders }) => {
+function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
+  const links = pages
+    .slice(0, 2)
+    .map((page) => page.media_id)
+    .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
+    .map((mediaId) => `</media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
+  return links.length ? links.join(', ') : undefined;
+}
+
+export const load = async ({ locals, params, url, cookies, setHeaders, platform }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
   const canAccessUnpublished = isStaff && isPreviewRequested;
@@ -20,7 +30,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
   // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
   if (!isPreviewRequested && readerCache.has(params.id)) {
     const cached = readerCache.get(params.id)!;
-    if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS) {
+    if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS && cached.chapter.works?.content_rating !== 'ADULT_18') {
       let userProgress = null;
       if (locals.user) {
         const pRes = await withTimeout(
@@ -36,8 +46,10 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
         );
         userProgress = pRes?.data || null;
       } else {
+        const link = firstPagePreloadHeader(cached.pages);
         setHeaders({
-          'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+          'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+          ...(link ? { link } : {})
         });
       }
 
@@ -57,13 +69,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     }
   }
 
-  let query = locals.db
-    .from('chapters')
-    .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-    .eq('id', params.id);
-  if (!canAccessUnpublished) query = query.not('published_at', 'is', null);
-
-  const chapterRes = await safeDbQuery(query.maybeSingle(), 4500, 'reader_chapter');
+  const chapterRes = await safeDbQuery(readerChapter(params.id, canAccessUnpublished, platform?.env), 4500, 'reader_chapter', 'YUGABYTE');
   let chapter: any = chapterRes.data || null;
 
   // If not found directly in chapters and staff is accessing, check scan_production_chapters
@@ -76,35 +82,18 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
 
     if (prodChapter) {
       if (prodChapter.target_chapter_id) {
-        const { data: targetChap } = await locals.db
-          .from('chapters')
-          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-          .eq('id', prodChapter.target_chapter_id)
-          .maybeSingle();
+        const { data: targetChap } = await readerChapter(prodChapter.target_chapter_id, true, platform?.env);
         chapter = targetChap;
       } else {
-        // A numeric production-stage value cannot select an already-published
-        // Reader chapter safely: 12.1 and 12.10 compare equal in YSQL. Only a
-        // matching textual label is accepted here; otherwise preview remains
-        // an explicit ephemeral production-stage item until it has a target id.
         const label = String(prodChapter.chapter_label || '').trim();
         if (label) {
-          const { data: targetChap } = await locals.db
-            .from('chapters')
-            .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,published_at,works(id,title,slug,kind,published,content_rating)')
-            .eq('work_id', prodChapter.work_id)
-            .eq('display_number', label)
-            .maybeSingle();
+          const { data: targetChap } = await readerPreviewTarget(prodChapter.work_id, label, platform?.env);
           chapter = targetChap;
         }
       }
 
       if (!chapter) {
-        const { data: workData } = await locals.db
-          .from('works')
-          .select('id,title,slug,kind,published,content_rating')
-          .eq('id', prodChapter.work_id)
-          .maybeSingle();
+        const { data: workData } = await readerPreviewWork(prodChapter.work_id, platform?.env);
 
         chapter = {
           id: prodChapter.id,
@@ -154,29 +143,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     }
   }
   // 1. Fetch core chapter pages with dedicated timeout and resilience
-  const pagesPromise = safeDbQuery(
-    locals.db
-      .from('pages')
-      .select('position,media_id,width,height')
-      .eq('chapter_id', chapter.id)
-      .order('position'),
-    6000,
-    'reader_pages'
-  );
-
-  // 2. Fetch sibling chapters for navigation
-  const siblingsPromise = safeDbQuery(
-    locals.db
-      .from('chapters')
-      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language')
-      .eq('work_id', chapter.work_id)
-      .not('published_at', 'is', null)
-      .order('chapter_order_key', { ascending: true, nullsFirst: false })
-      .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true }),
-    5000,
-    'reader_siblings'
-  );
+  const contentPromise = safeDbQuery(readerContent(chapter.id, chapter.work_id, platform?.env), 6000, 'reader_content', 'YUGABYTE');
+  const pagesPromise = contentPromise.then(result => ({ ...result, data: result.data?.pages }));
+  const siblingsPromise = contentPromise.then(result => ({ ...result, data: result.data?.siblings }));
 
   // 3. Auxiliary metadata (comments, scans, reading progress) with resilient fallback
   const auxPromise = withTimeout(
@@ -192,7 +161,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
       locals.db
         .from('comments')
         .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
+          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
         )
         .eq('chapter_id', chapter.id)
         .eq('removed', false)
@@ -245,7 +214,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     scans = [{ id: '04872e99-37ad-4d45-aed4-35759d0eae33', name: 'Project Nox', slug: 'project-nox' }];
   }
 
-  let all = (siblingsRes.data || []) as any[];
+  const all = (siblingsRes.data || []) as any[];
   const index = all.findIndex((c) => c.id === chapter.id);
 
   if (!preview && chapter && pagesData.length > 0) {
@@ -262,10 +231,14 @@ export const load = async ({ locals, params, url, cookies, setHeaders }) => {
     });
   }
 
+  const link = firstPagePreloadHeader(pagesData);
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+      ...(link ? { link } : {})
     });
+  } else if (link) {
+    setHeaders({ link });
   }
 
   return {

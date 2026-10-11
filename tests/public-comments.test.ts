@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/server/db', () => ({ WORK_FIELDS: '*', check: () => {} }));
+vi.mock('$lib/server/reader-editorial', () => ({
+  readerChapter: async () => ({ data: { id:'chapter',work_id:'work',number:64,published_at:'2026-09-07',works:{id:'work',published:true} } }),
+  readerContent: async () => ({ data: { pages:[{position:1,media_id:'m1'}],siblings:[{id:'chapter',number:64}] } }),
+  readerPreviewTarget: vi.fn(),
+  readerPreviewWork: vi.fn()
+}));
 import { load as workLoad } from '../src/routes/obra/[slug]/+page.server';
 import { load as readerLoad } from '../src/routes/ler/[id]/+page.server';
 

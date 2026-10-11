@@ -1,33 +1,55 @@
 <script lang="ts">
+  import { avatarCropStyle } from '$lib/avatar';
+  type AvatarUser = {
+    avatar_id?: string | null;
+    avatarId?: string | null;
+    avatar_url?: string | null;
+    avatarUrl?: string | null;
+    avatar_crop?: unknown;
+    avatarCrop?: unknown;
+    display_name?: string | null;
+    displayName?: string | null;
+    username?: string | null;
+  };
   type Props = {
+    /** Supports the compact member objects used by staff/social views. */
+    user?: AvatarUser | null;
     avatarId?: string | null;
     avatarUrl?: string | null;
-    displayName: string;
+    displayName?: string;
     size?: number;
     frameId?: string | null;
     frameUrl?: string | null;
     crop?: { x?: number; y?: number; zoom?: number } | any | null;
+    loading?: 'eager' | 'lazy';
     class?: string;
   };
 
   let {
+    user = null,
     avatarId = null,
     avatarUrl = null,
-    displayName,
+    displayName = '',
     size = 40,
     frameId = null,
     frameUrl = null,
     crop = null,
+    loading = 'lazy',
     class: className = ''
   }: Props = $props();
 
-  let resolvedSrc = $derived(avatarUrl || (avatarId ? `/media/${avatarId}` : null));
-  let initial = $derived((displayName?.[0] || 'N').toUpperCase());
-  let cropStyle = $derived(
-    crop
-      ? `object-position: ${crop.x ?? 50}% ${crop.y ?? 50}%; transform: scale(${crop.zoom ?? 1});`
-      : 'object-position: 50% 50%;'
-  );
+  let resolvedAvatarId = $derived(avatarId || user?.avatar_id || user?.avatarId || null);
+  let resolvedAvatarUrl = $derived(avatarUrl || user?.avatar_url || user?.avatarUrl || null);
+  let resolvedDisplayName = $derived(displayName || user?.display_name || user?.displayName || user?.username || 'Leitor');
+  let resolvedSrc = $derived(resolvedAvatarUrl || (resolvedAvatarId ? `/media/${resolvedAvatarId}` : null));
+  let initial = $derived((resolvedDisplayName?.[0] || 'N').toUpperCase());
+  let cropStyle = $derived(avatarCropStyle(crop ?? user?.avatar_crop ?? user?.avatarCrop));
+  let failedSrc = $state<string | null>(null);
+  $effect(() => {
+    // A new media id is immutable and canonical. Reset a prior definitive
+    // load failure only when that id changes; never fall back to an old asset.
+    if (failedSrc && failedSrc !== resolvedSrc) failedSrc = null;
+  });
 </script>
 
 <div
@@ -41,15 +63,16 @@
   style="--avatar-size: {size}px;"
 >
   <div class="avatar-inner">
-    {#if resolvedSrc}
+    {#if resolvedSrc && failedSrc !== resolvedSrc}
       <img
         src={resolvedSrc}
-        alt="Avatar de {displayName}"
+        alt="Avatar de {resolvedDisplayName}"
         width={size}
         height={size}
         class="avatar-image"
         style={cropStyle}
-        loading="lazy"
+        loading={loading}
+        onerror={() => (failedSrc = resolvedSrc)}
       />
     {:else}
       <span class="avatar-fallback" style="font-size: {Math.max(12, Math.round(size * 0.42))}px;">

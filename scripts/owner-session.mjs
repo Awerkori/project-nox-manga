@@ -1,58 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-process.loadEnvFile('.env');
-function buildSyntheticOwnerCookie(origin) {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    aud: 'authenticated',
-    exp: Math.floor(Date.now() / 1000) + 86400 * 30,
-    sub: '732fbe87-5040-41fb-9983-0aedb2af44c8',
-    email: 'awerkori@gmail.com',
-    phone: '',
-    app_metadata: { provider: 'email', providers: ['email'], role: 'ADMIN' },
-    user_metadata: { display_name: 'Awerkori', username: 'awerkori' },
-    role: 'authenticated',
-    aal: 'aal1',
-    amr: [{ method: 'magiclink', timestamp: Math.floor(Date.now() / 1000) }],
-    session_id: '732fbe87-5040-41fb-9983-0aedb2af44c8',
-    is_anonymous: false
-  })).toString('base64url');
-  const fakeSig = 'fake-sig-for-ssr-claims-reading';
-  const token = `${header}.${payload}.${fakeSig}`;
-  const sessionObj = {
-    access_token: token,
-    token_type: 'bearer',
-    expires_in: 86400 * 30,
-    expires_at: Math.floor(Date.now() / 1000) + 86400 * 30,
-    refresh_token: 'fake-refresh-token',
-    user: {
-      id: '732fbe87-5040-41fb-9983-0aedb2af44c8',
-      email: 'awerkori@gmail.com',
-      user_metadata: { display_name: 'Awerkori', username: 'awerkori' }
-    }
-  };
-  const rawCookieVal = 'base64-' + Buffer.from(JSON.stringify(sessionObj)).toString('base64');
-  return [
-    {
-      name: 'sb-izregkwaqdygwioqzwwo-auth-token',
-      value: rawCookieVal,
-      url: origin,
-      httpOnly: true,
-      sameSite: 'Lax',
-      secure: origin.startsWith('https:')
-    },
-    {
-      name: 'nox-age-status',
-      value: 'ADULT',
-      url: origin,
-      httpOnly: false,
-      sameSite: 'Lax',
-      secure: origin.startsWith('https:')
-    }
-  ];
-}
+import { existsSync } from 'node:fs';
 
+if (existsSync('.env')) process.loadEnvFile('.env');
 export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
+  if (!process.env.PUBLIC_SUPABASE_URL || !process.env.PUBLIC_SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('OWNER_SESSION_UNAVAILABLE: configure a legitimate Supabase QA session; synthetic JWTs are prohibited.');
+  }
   try {
     const admin = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false }
@@ -61,7 +15,7 @@ export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
     const linkPromise = admin.auth.admin.generateLink({ type: 'magiclink', email });
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth API timeout')), 2000));
     const { data: link, error } = await Promise.race([linkPromise, timeoutPromise]);
-    if (error || !link) return buildSyntheticOwnerCookie(origin);
+    if (error || !link) throw new Error(`OWNER_SESSION_UNAVAILABLE: magic-link generation failed (${error?.message || 'no link'}).`);
 
     const cookies = [];
     const client = createServerClient(process.env.PUBLIC_SUPABASE_URL, process.env.PUBLIC_SUPABASE_ANON_KEY, {
@@ -76,7 +30,7 @@ export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
       token_hash: link.properties.hashed_token,
       type: 'magiclink'
     });
-    if (authError) return buildSyntheticOwnerCookie(origin);
+    if (authError) throw new Error(`OWNER_SESSION_UNAVAILABLE: magic-link verification failed (${authError.message}).`);
 
     return cookies.map((c) => ({
       name: c.name,
@@ -86,8 +40,12 @@ export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
       sameSite: 'Lax',
       secure: origin.startsWith('https:')
     }));
-  } catch {
-    return buildSyntheticOwnerCookie(origin);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('OWNER_SESSION_UNAVAILABLE:')) throw error;
+    throw new Error(
+      `OWNER_SESSION_UNAVAILABLE: could not establish a legitimate owner session (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error }
+    );
   }
 }
 
@@ -180,7 +138,7 @@ export async function getOwnerClient(origin = 'http://127.0.0.1:5173') {
     client: authenticatedClient,
     adminClient: admin,
     session: authData.session,
-    user,
+    user: authData.user,
     cookies: formattedCookies
   };
 }

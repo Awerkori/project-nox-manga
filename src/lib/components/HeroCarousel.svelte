@@ -25,7 +25,9 @@
 
   // Guard index if works length changes
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
-  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id || currentWork.coverId, currentWork.slug, currentWork.id) : '');
+  // A 720px derived cover is sufficient for the 320px desktop / 170px mobile
+  // card at modern DPR while avoiding a cold Telegram original above the fold.
+  let heroCover = $derived(currentWork ? resolveCoverUrl(currentWork.cover_id || currentWork.coverId, currentWork.slug, currentWork.id, { size: 'hero' }) : '');
   let isAdult = $derived(((currentWork?.content_rating || currentWork?.contentRating) === 'ADULT_18'));
   let effectiveBlur = $derived(isAdult && (page.data?.blurNsfw ?? true));
 

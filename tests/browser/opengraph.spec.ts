@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+
 test('verify obra page has single og:image and single twitter:image', async ({ page }) => {
   // Set age cookies so AgeGateModal is bypassed
   await page.context().addCookies([
@@ -7,7 +9,7 @@ test('verify obra page has single og:image and single twitter:image', async ({ p
     { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' }
   ]);
 
-  await page.goto('/obra/vinganca-do-cao-de-caca', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.work-page-container');
 
   const metaData = await page.evaluate(() => {
@@ -26,7 +28,7 @@ test('verify obra page has single og:image and single twitter:image', async ({ p
 });
 
 test('verify home page has default brand logo', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
 
   const metaData = await page.evaluate(() => {
     const ogImages = Array.from(document.querySelectorAll('meta[property="og:image"]')).map(el => el.getAttribute('content'));

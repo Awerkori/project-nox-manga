@@ -2,10 +2,10 @@ begin;
 create function pg_temp.assert_true(value boolean,label text) returns void language plpgsql as $$ begin if value is distinct from true then raise exception 'FAIL: %',label; end if; end $$;
 create function pg_temp.denied(query text,label text) returns void language plpgsql as $$ begin execute query; raise exception 'FAIL: % allowed',label; exception when insufficient_privilege then null; end $$;
 insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
- ('10000001-0000-4000-8000-000000000001','nox-owner-test@example.invalid',now(),'{}'),
- ('10000002-0000-4000-8000-000000000002','nox-editor-test@example.invalid',now(),'{}'),
- ('10000003-0000-4000-8000-000000000003','nox-user-test@example.invalid',now(),'{"role":"ADMIN","is_admin":true}'),
- ('10000004-0000-4000-8000-000000000004','nox-unconfirmed-test@example.invalid',null,'{}');
+ ('10000001-0000-4000-8000-000000000001','nox-owner-test@example.invalid',now(),'{"username":"owner_test"}'),
+ ('10000002-0000-4000-8000-000000000002','nox-editor-test@example.invalid',now(),'{"username":"editor_test"}'),
+ ('10000003-0000-4000-8000-000000000003','nox-user-test@example.invalid',now(),'{"username":"user_test","role":"ADMIN","is_admin":true}'),
+ ('10000004-0000-4000-8000-000000000004','nox-unconfirmed-test@example.invalid',null,'{"username":"unconfirmed_test"}');
 update public.access_roles set role='ADMIN' where user_id='10000001-0000-4000-8000-000000000001';
 update public.access_roles set role='EDITOR' where user_id='10000002-0000-4000-8000-000000000002';
 select pg_temp.assert_true((select role='USER' from public.access_roles where user_id='10000003-0000-4000-8000-000000000003'),'signup metadata cannot set role');

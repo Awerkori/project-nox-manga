@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import crypto from 'node:crypto';
 
 const BLOCKED_EXTENSIONS = [
@@ -7,7 +7,7 @@ const BLOCKED_EXTENSIONS = [
   '.vbs', '.ps1', '.scr', '.com', '.pif', '.hta', '.cpl', '.jar'
 ];
 
-export const POST = async ({ locals, request }) => {
+export const POST = async ({ locals, request, platform }: any) => {
   if (!locals.user) {
     return json({ error: 'Não autenticado' }, { status: 401 });
   }
@@ -26,17 +26,13 @@ export const POST = async ({ locals, request }) => {
     return json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
   }
 
-  const db = privileged();
-
   // Verify scan membership or Global Admin
   const isGlobalAdmin = locals.role === 'ADMIN';
   if (!isGlobalAdmin) {
-    const { data: member } = await db
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', scanId)
-      .eq('user_id', locals.user.id)
-      .maybeSingle();
+    const member = (await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2 LIMIT 1`,
+      [scanId, locals.user.id], platform?.env
+    )).rows[0] || null;
 
     if (!member) {
       return json({ error: 'Acesso não autorizado a esta Scan' }, { status: 403 });
@@ -61,28 +57,18 @@ export const POST = async ({ locals, request }) => {
   const buffer = Buffer.from(await file.arrayBuffer());
   const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
-  // Insert attachment metadata
-  const { data: attachment, error: dbErr } = await db
-    .from('scan_attachments')
-    .insert({
-      scan_id: scanId,
-      context_type: contextType,
-      context_id: contextId,
-      uploaded_by: locals.user.id,
-      original_filename: rawFilename,
-      safe_filename: safeFilename,
-      mime_type: file.type || 'application/octet-stream',
-      size: file.size,
-      checksum: checksum,
-      storage_reference: 'att_' + checksum.slice(0, 16) + '_' + Date.now(),
-      storage_provider: 'PRIVATE_STORAGE'
-    })
-    .select()
-    .single();
-
-  if (dbErr) {
-    return json({ error: 'Falha ao salvar anexo: ' + dbErr.message }, { status: 500 });
-  }
+  const attachmentResult = await executeYugabyteSql<any>(
+    `INSERT INTO public.scan_attachments
+      (scan_id, context_type, context_id, uploaded_by, original_filename, safe_filename,
+       mime_type, size, checksum, storage_reference, storage_provider)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PRIVATE_STORAGE')
+     RETURNING *`,
+    [scanId, contextType, contextId, locals.user.id, rawFilename, safeFilename,
+      file.type || 'application/octet-stream', file.size, checksum,
+      'att_' + checksum.slice(0, 16) + '_' + Date.now()], platform?.env
+  );
+  const attachment = attachmentResult.rows[0];
+  if (!attachment) return json({ error: 'Falha ao salvar anexo.' }, { status: 503 });
 
   return json({
     success: true,

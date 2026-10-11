@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { tick } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let {
@@ -19,14 +20,12 @@
   } = $props();
 
   let showMenu = $state(false);
-  let query = $state('');
   let selectedIndex = $state(0);
   let candidates = $state<any[]>([]);
-  let isLoading = $state(false);
   let trackedMentions = $state<any[]>([]);
 
   // In-memory query cache
-  const queryCache = new Map<string, any[]>();
+  const queryCache = new SvelteMap<string, any[]>();
   let debounceTimer: any = null;
 
   export function handleKeyDown(e: KeyboardEvent): boolean {
@@ -64,7 +63,6 @@
     if (lastAt !== -1 && (lastAt === 0 || /[\s\n]/.test(textBeforeCursor[lastAt - 1]))) {
       const q = textBeforeCursor.slice(lastAt + 1);
       if (!/[\s\n]/.test(q)) {
-        query = q;
         showMenu = true;
         selectedIndex = 0;
         fetchCandidates(q);
@@ -85,7 +83,6 @@
 
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
-      isLoading = true;
       try {
         const url = `/api/mentions/search?q=${encodeURIComponent(cleanQ)}${scanId ? `&scan_id=${scanId}` : ''}`;
         const res = await fetch(url);
@@ -96,8 +93,6 @@
         }
       } catch (err) {
         console.warn('Erro ao buscar menções:', err);
-      } finally {
-        isLoading = false;
       }
     }, 120);
   }
@@ -156,7 +151,7 @@
       <span>{scanId ? 'MENCIONAR NA SCAN:' : 'MENCIONAR MEMBRO:'}</span>
     </div>
     <div class="mention-candidates-list" role="listbox">
-      {#each candidates as cand, idx}
+      {#each candidates as cand, idx (cand.type + ':' + cand.id)}
         <button
           type="button"
           class="mention-candidate-item"
@@ -167,6 +162,7 @@
           {#if cand.type === 'user'}
             <UserAvatar
               avatarId={cand.avatar_id}
+              crop={cand.avatar_crop}
               displayName={cand.display_name || cand.username || cand.label}
               size={30}
             />

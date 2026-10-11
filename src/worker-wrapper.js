@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/no-unused-vars, no-empty */
 // src/worker.js
 import { Server } from "./../.svelte-kit/output/server/index.js";
 import { manifest, prerendered, base_path } from "./../.svelte-kit/cloudflare-tmp/manifest.js";
@@ -59,13 +60,12 @@ var initialized = server.init({
     return response.body;
   }
 });
-const AUTH_COOKIE_REGEX = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
-function hasAuth(req) {
-  const cookie = req.headers.get("cookie") || "";
-  if (AUTH_COOKIE_REGEX.test(cookie)) return true;
-  if (req.headers.has("authorization")) return true;
-  return false;
+function shouldBypassSharedCache(req) {
+  const cookie = req.headers.get('cookie') || '';
+  return AUTHENTICATED_SESSION_COOKIE.test(cookie) || PERSONALIZED_HOME_COOKIE.test(cookie) || req.headers.has('authorization');
 }
 
 var worker_default = {
@@ -73,31 +73,19 @@ var worker_default = {
     ctx.waitUntil((async () => {
       try {
         await initialized;
-        const targetUrl = (origin || "https://manga.project-nox-awerkori.workers.dev") + "/api/internal/email-processor?limit=25";
-        const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || "";
+        const targetUrl = (origin || 'https://manga.project-nox-awerkori.workers.dev') + '/api/internal/email-processor?limit=25';
+        const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || '';
         const req = new Request(targetUrl, {
-          method: "GET",
-          headers: {
-            "authorization": token ? `Bearer ${token}` : "",
-            "x-internal-cron": "true"
-          }
+          method: 'GET',
+          headers: { authorization: token ? `Bearer ${token}` : '', 'x-internal-cron': 'true' }
         });
         const res = await server.respond(req, {
-          platform: {
-            env: env2,
-            ctx,
-            context: ctx,
-            caches,
-            cf: {}
-          },
-          getClientAddress() {
-            return "127.0.0.1";
-          }
+          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
+          getClientAddress() { return '127.0.0.1'; }
         });
-        const body = await res.text().catch(() => "");
-        console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}: ${body}`);
+        console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}`);
       } catch (err) {
-        console.error("[CRON_EMAIL_PROCESSOR_ERROR]", err);
+        console.error('[CRON_EMAIL_PROCESSOR_ERROR]', err);
       }
     })());
   },
@@ -113,9 +101,9 @@ var worker_default = {
       origin = new URL(req.url).origin;
     }
     await initialized;
-    const isAuth = hasAuth(req);
     let pragma = req.headers.get("cache-control") || "";
-    let res = !isAuth && !pragma.includes("no-cache") && await r2(req);
+    const cacheBypassRequest = shouldBypassSharedCache(req);
+    let res = !cacheBypassRequest && !pragma.includes("no-cache") && await r2(req);
     if (res) return res;
     let { pathname, search } = new URL(req.url);
     try {
@@ -134,7 +122,7 @@ var worker_default = {
       if (res.status >= 400) {
         // ASSET_ERROR_NO_STORE
         res = new Response(res.body, res);
-        res.headers.set("cache-control", "no-store");
+        res.headers.set('cache-control', 'no-store');
       }
     } else if (location && prerendered.has(location)) {
       if (search) location += search;
@@ -165,7 +153,7 @@ var worker_default = {
       });
     }
     pragma = res.headers.get("cache-control") || "";
-    return !isAuth && pragma && res.status < 400 ? c(req, res, ctx) : res;
+    return !cacheBypassRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;
   }
 };
 export {

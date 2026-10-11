@@ -13,6 +13,36 @@ const component = (id: string, title: string, icon: string, details: Record<stri
   derivation: 'Métricas reais agregadas do banco e telemetria.', details
 });
 
+const emptyComponents = () => ({
+  database: component('database', 'PostgreSQL & Pool', 'Database'),
+  web: component('web', 'Web & Desktop', 'Globe'),
+  mobile: component('mobile', 'Experiência Mobile', 'Smartphone'),
+  importer: component('importer', 'Importer Engine', 'Cpu'),
+  storage: component('storage', 'Manga Storage', 'HardDrive'),
+  sources: component('sources', 'Fontes de Mídia', 'Layers'),
+  auth: component('auth', 'Autenticação & Sessões', 'ShieldCheck'),
+  reader: component('reader', 'Leitor de Capítulos', 'BookOpen'),
+  postgrest: component('postgrest', 'API / PostgREST', 'Zap'),
+  emails: component('emails', 'Serviço de Emails', 'Mail'),
+  readiness: component('readiness', 'Capacidade & Expansão de Fontes', 'TrendingUp')
+});
+
+const emptyPayload = (message: string) => ({
+  overall: {
+    status: 'ATENCAO' as HealthSeverity,
+    statusLabel: 'VERIFICAÇÃO PARCIAL',
+    message,
+    criticalIssues: [],
+    attentionIssues: ['Métricas de saúde temporariamente indisponíveis.'],
+    trend24h: 'Sem dados',
+    trend7d: 'Sem dados'
+  },
+  components: emptyComponents(),
+  slowQueries: [],
+  incidents: [],
+  fetchedAt: new Date().toISOString()
+});
+
 export const load = async ({ locals }) => {
   if (!locals.user || locals.role !== 'ADMIN') error(403, 'Acesso exclusivo para administradores globais.');
   if (cached && Date.now() - cached.at < 15000) return cached.payload;
@@ -103,10 +133,16 @@ export const load = async ({ locals }) => {
       storage.statusLabel = 'Ativo';
 
       const web = component('web', 'Web & Desktop', 'Globe');
+      const mobile = component('mobile', 'Experiência Mobile', 'Smartphone');
+      const sources = component('sources', 'Fontes de Mídia', 'Layers');
+      const auth = component('auth', 'Autenticação & Sessões', 'ShieldCheck');
       const reader = component('reader', 'Reader (Páginas)', 'BookOpen', { 'Latência Média': '66ms', 'Load Errors': '0' });
       reader.status = 'BOM'; reader.statusLabel = 'Rápido';
+      const postgrest = component('postgrest', 'API / PostgREST', 'Zap');
+      const emails = component('emails', 'Serviço de Emails', 'Mail');
+      const readiness = component('readiness', 'Capacidade & Expansão de Fontes', 'TrendingUp');
 
-      const allComponents = [database, importer, publication, storage, web, reader];
+      const allComponents = [database, web, mobile, importer, publication, storage, sources, auth, reader, postgrest, emails, readiness];
       const hasCritical = allComponents.some((c) => c.status === 'CRITICO');
       const hasWarningOrMissing = allComponents.some((c) => c.status === 'ATENCAO' || c.status === 'SEM_DADOS' || c.status === 'RUIM');
       const overallStatus: HealthSeverity = hasCritical ? 'CRITICO' : hasWarningOrMissing ? 'ATENCAO' : 'BOM';
@@ -121,7 +157,7 @@ export const load = async ({ locals }) => {
           trend24h: 'Estável',
           trend7d: 'Estável'
         },
-        components: { database, importer, publication, storage, web, reader },
+        components: { database, web, mobile, importer, publication, storage, sources, auth, reader, postgrest, emails, readiness },
         slowQueries: raw?.slow_queries || [], incidents: [], fetchedAt: new Date().toISOString()
       };
       
@@ -129,7 +165,7 @@ export const load = async ({ locals }) => {
       return payload;
     } catch (e) {
       console.error(e);
-      return { overall: { status: 'RUIM', message: 'Erro ao carregar.' } };
+      return emptyPayload('Erro ao carregar métricas. Tente atualizar em instantes.');
     }
   })();
   try { return await flight; } finally { flight = null; }

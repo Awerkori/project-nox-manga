@@ -1,27 +1,22 @@
 <script lang="ts">
   import {
     ShieldAlert,
-    PauseCircle,
-    UserX,
     Flame,
     Globe,
     Webhook,
     Download,
     LogOut,
     AlertTriangle,
-    CheckCircle2,
     Plus,
     Trash2,
-    ToggleLeft,
-    ToggleRight,
     Image,
     Upload,
     Palette,
-    Sparkles,
     Check,
     X
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
 
   let {
     currentScan,
@@ -114,12 +109,12 @@
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Falha no envio da imagem do logo');
       }
-      logoId = data.id;
+      const uploadedLogoId = data.id;
 
       // Persist directly in DB
       const form = new FormData();
       form.append('scan_id', currentScan.id);
-      form.append('logo_id', data.id);
+      form.append('logo_id', uploadedLogoId);
       form.append('banner_id', bannerId || '');
       form.append('name', scanName);
       form.append('description', scanDescription);
@@ -128,9 +123,15 @@
       form.append('discord', scanDiscord);
       form.append('fluxer', scanFluxer);
       form.append('display_preposition', scanDisplayPrep);
-      await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persist = await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persistBody = await persist.json().catch(() => null);
+      if (!persist.ok || persistBody?.type === 'failure' || persistBody?.data?.message) {
+        throw new Error(persistBody?.data?.message || 'Não foi possível confirmar o logo no banco.');
+      }
 
       cancelLogoPreview();
+      logoId = uploadedLogoId;
+      await invalidateAll();
       logoSuccess = 'Logo atualizado e salvo com sucesso!';
       setTimeout(() => (logoSuccess = ''), 4000);
     } catch (err: any) {
@@ -188,13 +189,13 @@
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Falha no envio do banner');
       }
-      bannerId = data.id;
+      const uploadedBannerId = data.id;
 
       // Persist directly in DB
       const form = new FormData();
       form.append('scan_id', currentScan.id);
       form.append('logo_id', logoId || '');
-      form.append('banner_id', data.id);
+      form.append('banner_id', uploadedBannerId);
       form.append('name', scanName);
       form.append('description', scanDescription);
       form.append('bio', scanBio);
@@ -202,9 +203,15 @@
       form.append('discord', scanDiscord);
       form.append('fluxer', scanFluxer);
       form.append('display_preposition', scanDisplayPrep);
-      await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persist = await fetch('?/updateScanBranding', { method: 'POST', body: form });
+      const persistBody = await persist.json().catch(() => null);
+      if (!persist.ok || persistBody?.type === 'failure' || persistBody?.data?.message) {
+        throw new Error(persistBody?.data?.message || 'Não foi possível confirmar o banner no banco.');
+      }
 
       cancelBannerPreview();
+      bannerId = uploadedBannerId;
+      await invalidateAll();
       bannerSuccess = 'Banner atualizado e salvo com sucesso!';
       setTimeout(() => (bannerSuccess = ''), 4000);
     } catch (err: any) {
@@ -641,7 +648,7 @@
         <input type="hidden" name="scan_id" value={currentScan?.id} />
 
         <div class="slug-input-wrapper">
-          <span class="slug-prefix">projectnox.com/scans/</span>
+          <span class="slug-prefix">manga.project-nox-awerkori.workers.dev/scans/</span>
           <input
             type="text"
             name="new_slug"
@@ -679,7 +686,7 @@
         </div>
       {:else}
         <div class="webhooks-list">
-          {#each integrations as webhook}
+          {#each integrations as webhook (webhook.id)}
             <div class="webhook-item">
               <div class="wh-meta">
                 <span class="wh-platform {webhook.platform.toLowerCase()}">{webhook.platform}</span>
@@ -1385,7 +1392,7 @@
 
   .banner-preview-box {
     width: 100%;
-    height: 110px;
+    height: 150px;
     border-radius: 0.75rem;
     background: rgba(0, 0, 0, 0.4);
     border: 1px dashed rgba(255, 255, 255, 0.15);

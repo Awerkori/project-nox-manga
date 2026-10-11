@@ -1,53 +1,77 @@
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 export interface PublicationRateTelemetry {
   rate1m: number;
   rate5m: number;
   rate10m: number;
   rate30m: number;
+  visible1m: number;
+  visible5m: number;
+  visible10m: number;
+  visible30m: number;
+  fresh1m: number;
   fresh5m: number;
+  fresh10m: number;
   fresh30m: number;
   completedRate5m: number;
   completedRate30m: number;
   completed5m: number;
   completed30m: number;
+  latestPublishedAt: string | null;
 }
 
-/**
- * Calculate throughput from publication buckets only.  Heartbeat data is
- * intentionally not accepted here: it describes process liveness, not a
- * chapter transition to published state.
- */
+export interface CanonicalPublicationSnapshot {
+  bucketRows: Array<Record<string, any>>;
+  latestPublishedAt: string | null;
+  source: 'YSQL_CANONICAL' | 'UNAVAILABLE';
+}
+
+/** Calculate all rate windows from canonical visible publication counts only. */
 export function calculatePublicationRateTelemetry(
   bucketRows: Array<Record<string, any>>,
   nowMs = Date.now(),
 ): PublicationRateTelemetry {
-  const oneMinAgo = nowMs - 60 * 1000;
-  const fiveMinAgo = nowMs - 5 * 60 * 1000;
-  const tenMinAgo = nowMs - 10 * 60 * 1000;
-  const thirtyMinAgo = nowMs - 30 * 60 * 1000;
-
+  const oneMinAgo = nowMs - 60_000;
+  const fiveMinAgo = nowMs - 5 * 60_000;
+  const tenMinAgo = nowMs - 10 * 60_000;
+  const thirtyMinAgo = nowMs - 30 * 60_000;
   let visible1m = 0;
   let visible5m = 0;
   let visible10m = 0;
   let visible30m = 0;
+  let fresh1m = 0;
   let fresh5m = 0;
-  let completed5m = 0;
+  let fresh10m = 0;
   let fresh30m = 0;
+  let completed5m = 0;
   let completed30m = 0;
+  let latestPublishedAt: string | null = null;
 
   for (const bucket of bucketRows) {
     const timestamp = new Date(bucket.bucket_minute).getTime();
     const visible = Number(bucket.visible_published || 0);
-    if (timestamp >= oneMinAgo) visible1m += visible;
+    const fresh = Number(bucket.fresh_visible || 0);
+    const completed = Number(bucket.completed_jobs || 0);
+    const latest = bucket.latest_published_at || (visible > 0 ? bucket.bucket_minute : null);
+    if (latest && (!latestPublishedAt || new Date(latest).getTime() > new Date(latestPublishedAt).getTime())) {
+      latestPublishedAt = new Date(latest).toISOString();
+    }
+    if (timestamp >= oneMinAgo) {
+      visible1m += visible;
+      fresh1m += fresh;
+    }
     if (timestamp >= fiveMinAgo) {
       visible5m += visible;
-      fresh5m += Number(bucket.fresh_visible || 0);
-      completed5m += Number(bucket.completed_jobs || 0);
+      fresh5m += fresh;
+      completed5m += completed;
     }
-    if (timestamp >= tenMinAgo) visible10m += visible;
+    if (timestamp >= tenMinAgo) {
+      visible10m += visible;
+      fresh10m += fresh;
+    }
     if (timestamp >= thirtyMinAgo) {
       visible30m += visible;
-      fresh30m += Number(bucket.fresh_visible || 0);
-      completed30m += Number(bucket.completed_jobs || 0);
+      fresh30m += fresh;
+      completed30m += completed;
     }
   }
 
@@ -56,13 +80,115 @@ export function calculatePublicationRateTelemetry(
     rate5m: Math.round((visible5m / 5) * 10) / 10,
     rate10m: Math.round((visible10m / 10) * 10) / 10,
     rate30m: Math.round((visible30m / 30) * 10) / 10,
+    visible1m,
+    visible5m,
+    visible10m,
+    visible30m,
+    fresh1m,
     fresh5m,
+    fresh10m,
     fresh30m,
     completedRate5m: Math.round((completed5m / 5) * 10) / 10,
     completedRate30m: Math.round((completed30m / 30) * 10) / 10,
     completed5m,
     completed30m,
+    latestPublishedAt,
   };
+}
+
+/**
+ * Read the authoritative publication transition from Yugabyte. The importer
+ * and the site must not use different database planes for this metric.
+ */
+export async function loadCanonicalPublicationSnapshot(platform: any, nowMs = Date.now()): Promise<CanonicalPublicationSnapshot> {
+  const since = new Date(nowMs - 65 * 60_000).toISOString();
+  try {
+    const [publishedResult, pipelineResult] = await Promise.allSettled([
+      executeYugabyteSql(
+        `SELECT date_trunc('minute', published_at) AS bucket_minute,
+                MAX(published_at) AS latest_published_at,
+                COUNT(*)::int AS visible_published,
+                COUNT(*) FILTER (WHERE COALESCE(is_fresh_release, false))::int AS fresh_visible
+         FROM public.chapters
+         WHERE published_at >= $1::timestamptz
+         GROUP BY date_trunc('minute', published_at)
+         ORDER BY bucket_minute DESC`,
+        [since],
+        platform?.env,
+      ),
+      executeYugabyteSql(
+        `SELECT bucket_minute, completed_jobs
+         FROM public.importer_rate_buckets
+         WHERE bucket_minute >= $1::timestamptz
+         ORDER BY bucket_minute DESC`,
+        [since],
+        platform?.env,
+      ),
+    ]);
+
+    // Canonical publication is the source of truth for cap/min. A secondary
+    // pipeline-bucket read must never turn a successful chapter publication
+    // into an all-zero snapshot when that auxiliary table is unavailable.
+    if (publishedResult.status === 'rejected') {
+      throw publishedResult.reason;
+    }
+    const publishedRes = publishedResult.value;
+    const pipelineRes = pipelineResult.status === 'fulfilled' ? pipelineResult.value : { rows: [] };
+    if (pipelineResult.status === 'rejected') {
+      console.warn('[PIPELINE_RATE_TELEMETRY_UNAVAILABLE]', pipelineResult.reason?.message || pipelineResult.reason);
+    }
+
+    const byMinute = new Map<string, Record<string, any>>();
+    for (const row of publishedRes.rows || []) {
+      const key = new Date(row.bucket_minute).toISOString();
+      byMinute.set(key, {
+        bucket_minute: key,
+        latest_published_at: row.latest_published_at,
+        visible_published: Number(row.visible_published || 0),
+        fresh_visible: Number(row.fresh_visible || 0),
+        completed_jobs: 0,
+      });
+    }
+    for (const row of pipelineRes.rows || []) {
+      const key = new Date(row.bucket_minute).toISOString();
+      const bucket = byMinute.get(key) || {
+        bucket_minute: key,
+        latest_published_at: null,
+        visible_published: 0,
+        fresh_visible: 0,
+        completed_jobs: 0,
+      };
+      bucket.completed_jobs = Number(row.completed_jobs || 0);
+      byMinute.set(key, bucket);
+    }
+    return {
+      bucketRows: [...byMinute.values()].sort((a, b) =>
+        new Date(b.bucket_minute).getTime() - new Date(a.bucket_minute).getTime()),
+      latestPublishedAt: publishedRes.rows?.[0]?.latest_published_at
+        ? new Date(publishedRes.rows[0].latest_published_at).toISOString()
+        : null,
+      source: 'YSQL_CANONICAL',
+    };
+  } catch (error: any) {
+    console.warn('[CANONICAL_PUBLICATION_TELEMETRY_UNAVAILABLE]', error?.message || error);
+    return { bucketRows: [], latestPublishedAt: null, source: 'UNAVAILABLE' };
+  }
+}
+
+export async function loadYsqlImporterHeartbeat(platform: any): Promise<any | null> {
+  try {
+    const result = await executeYugabyteSql(
+      `SELECT value FROM public.settings WHERE key = 'importer_heartbeat' LIMIT 1`,
+      [],
+      platform?.env,
+    );
+    const value = result.rows?.[0]?.value;
+    if (!value) return null;
+    return typeof value === 'string' ? JSON.parse(value) : value;
+  } catch (error: any) {
+    console.warn('[YSQL_HEARTBEAT_FETCH_WARN]', error?.message || error);
+    return null;
+  }
 }
 
 export async function loadSnapshot({ locals, platform }: any) {
@@ -227,59 +353,26 @@ export async function loadSnapshot({ locals, platform }: any) {
   const cancelledCount = { count: queueCounts.cancelled }, completedCount = { count: queueCounts.completed };
   const failedCount = { count: queueCounts.failed }, failed1hRes = { count: queueCounts.failed1h }, failed24hRes = { count: queueCounts.failed24h };
 
-  // Fetch Rate Buckets & Heartbeat for Always-On Adaptive Capacity
-  const [rateBucketsRes, heartbeatRes] = await Promise.all([
-    timed('rate_buckets', () => locals.db
-      .from('importer_rate_buckets')
-      .select('*')
-      .gte('bucket_minute', new Date(Date.now() - 65 * 60 * 1000).toISOString())
-      .order('bucket_minute', { ascending: false })
-      .abortSignal(AbortSignal.timeout(5000)))
-      .then((r: any) => r)
-      .catch((err: any) => {
-        console.warn('[RATE_BUCKETS_FETCH_WARN]', err?.message);
-        return { data: [] };
-      }),
-    timed('heartbeat', () => locals.db
-      .from('settings')
-      .select('value')
-      .eq('key', 'importer_heartbeat')
-      .maybeSingle()
-      .abortSignal(AbortSignal.timeout(5000)))
-      .then((r: any) => r)
-      .catch((err: any) => {
-        console.warn('[HEARTBEAT_FETCH_WARN]', err?.message);
-        return { data: null };
-      })
+  // The Importer writes canonical publication transitions to Yugabyte through
+  // its direct pool. Reading these metrics through locals.db (Supabase REST)
+  // made the panel observe a different data plane and show stale/zero rates.
+  const [canonicalPublication, heartbeatData] = await Promise.all([
+    timed('canonical_publications', () => loadCanonicalPublicationSnapshot(platform)),
+    timed('ysql_heartbeat', () => loadYsqlImporterHeartbeat(platform)),
   ]);
-
-  const bucketRows = rateBucketsRes?.data || [];
-  const publicationRates = calculatePublicationRateTelemetry(bucketRows);
-
-  let heartbeatData: any = null;
-  if (heartbeatRes?.data?.value) {
-    try {
-      heartbeatData = typeof heartbeatRes.data.value === 'string'
-        ? JSON.parse(heartbeatRes.data.value)
-        : heartbeatRes.data.value;
-    } catch {
-      // Ignore heartbeat parse error and fallback to rate buckets
-    }
-  }
-
-  // Cap/min is canonical publication throughput only.  Do not let the
-  // heartbeat overwrite these values: a heartbeat proves liveness of the
-  // process, not that a chapter was actually published.  The rate buckets
-  // are written from the publication barrier after the published_at
-  // transition, so they remain zero during a heartbeat-only stall.
+  const bucketRows = canonicalPublication.bucketRows;
   const rateTelemetry = {
-    ...publicationRates,
+    ...calculatePublicationRateTelemetry(bucketRows),
+    source: canonicalPublication.source,
   };
 
   const telemetry = telemetryRes.data || null;
   const adaptiveCapacity = {
     concurrency: heartbeatData?.capacity?.concurrency ?? telemetry?.concurrency ?? 1,
-    maxConcurrency: heartbeatData?.capacity?.maxConcurrency ?? 8,
+    // Never resurrect the historic eight-slot default when the heartbeat is
+    // temporarily unavailable: the last real telemetry value is safer and
+    // keeps the operator panel truthful during a partial outage.
+    maxConcurrency: heartbeatData?.capacity?.maxConcurrency ?? telemetry?.concurrency ?? 1,
     state: heartbeatData?.capacity?.state ?? (telemetry?.protective_stop ? 'MANUAL_STOP' : 'RUNNING_STABLE'),
     pressureScore: heartbeatData?.capacity?.pressureScore ?? 0,
     siteHealth: heartbeatData?.capacity?.siteHealth ?? 'GREEN',
@@ -295,6 +388,10 @@ export async function loadSnapshot({ locals, platform }: any) {
     throughputStatus: heartbeatData?.capacity?.throughputStatus ?? heartbeatData?.throughput?.status ?? null,
     autoEmergencyPause: heartbeatData?.autoEmergencyPause ?? null,
   };
+  // This is part of the importer heartbeat write, not another panel query.
+  // It explains capacity without turning the admin page into DB pressure.
+  const pipelineCapacity = heartbeatData?.pipelineCapacity ?? null;
+  const eligibleBacklog = Number(heartbeatData?.eligibleJobs ?? 0);
 
   const importingJobs = importingJobsRes.data || [];
   const retryJobs = retryJobsRes.data || [];
@@ -446,6 +543,8 @@ export async function loadSnapshot({ locals, platform }: any) {
     rateTelemetry,
     rateBuckets: bucketRows,
     adaptiveCapacity,
+    pipelineCapacity,
+    eligibleBacklog,
     activeFocus: activeFocus ? { ...activeFocus, stats: activeFocusStats, failure: activeFocusFailure } : null,
     counts: {
       queued: queuedCount.count || 0,

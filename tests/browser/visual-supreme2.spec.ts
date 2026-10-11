@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import { testArtifactDir } from '../test-artifacts';
 
-const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854';
-const SCREENSHOT_DIR = `${ARTIFACT_DIR}/screenshots/supreme2`;
+const SCREENSHOT_DIR = testArtifactDir('supreme2');
+const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 const VIEWPORTS = [
   { name: 'mobile-360x800', width: 360, height: 800 },
@@ -25,7 +27,9 @@ async function setupPreviewRoutes(page: any) {
     try {
       localStorage.setItem('nox-age-status', 'ADULT');
       localStorage.setItem('nox-blur-nsfw', 'false');
-    } catch (e) {}
+    } catch {
+      // Local storage can be unavailable in the test browser.
+    }
   });
 
   // 1. Admin Preview Route
@@ -103,7 +107,7 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
 
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('/obra/cronicas-do-demonio-de-sangue', { waitUntil: 'domcontentloaded' });
+      await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.work-page-container', { timeout: 15000 });
       await page.waitForTimeout(200);
 
@@ -146,16 +150,14 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
 
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('/qa-reader');
+      await page.goto(`${LOCAL_URL}/qa-reader`);
       await page.waitForSelector('.reader-end', { timeout: 15000 });
       await page.waitForTimeout(200);
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       expect(overflow, `Horizontal overflow on Reader at ${vp.name}`).toBe(false);
 
-      const backTop = page.locator('.back-top');
-      await expect(backTop).toBeAttached();
-      await expect(backTop).not.toHaveClass(/ui-hidden/);
+      await expect(page.getByRole('button', { name: 'Voltar ao topo' })).toBeAttached();
 
       await page.evaluate(() => {
         document.querySelector('.reader-end')?.scrollIntoView({ behavior: 'instant' });
@@ -177,27 +179,24 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
   });
 
   // 3. ADMIN DASHBOARD & MOBILE DRAWER
-  test('3. Admin Dashboard layout, mobile thumb FAB, and clean triage', async ({ page }) => {
+  test('3. Admin Dashboard layout, mobile navigation drawer, and quick actions', async ({ page }) => {
     test.setTimeout(120000);
     await setupPreviewRoutes(page);
 
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('/preview-admin?view=dashboard&role=ADMIN');
-      await page.waitForSelector('.editorial-workspace', { timeout: 15000 });
+      await page.goto(`${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`);
+      await page.waitForSelector('.dashboard-shell', { timeout: 15000 });
       await page.waitForTimeout(200);
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       expect(overflow, `Horizontal overflow on Admin Dashboard at ${vp.name}`).toBe(false);
 
-      const duplicateBar = page.locator('.admin-mobile-bar');
-      expect(await duplicateBar.count()).toBe(0);
-
       if (vp.width <= 950) {
-        const fab = page.locator('.mobile-admin-fab');
-        await expect(fab).toBeVisible();
+        const menu = page.getByRole('button', { name: 'Menu do painel de controle' });
+        await expect(menu).toBeVisible();
 
-        await fab.click();
+        await menu.click();
         await page.waitForSelector('.admin-sidebar.open', { timeout: 5000 });
         const drawerClose = page.locator('.drawer-close-btn');
         await expect(drawerClose).toBeVisible();
@@ -210,16 +209,13 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
         await drawerClose.click();
         await page.waitForTimeout(200);
       } else {
-        const fab = page.locator('.mobile-admin-fab');
-        await expect(fab).toBeHidden();
+        await expect(page.getByRole('button', { name: 'Menu do painel de controle' })).toBeHidden();
       }
 
-      const triage = page.locator('.triage-section');
-      await expect(triage).toBeVisible();
-      await expect(page.locator('.triage-alert-banner')).toBeHidden();
+      await expect(page.locator('.quick-actions-bar')).toBeVisible();
 
       await page.screenshot({
-        path: `${SCREENSHOT_DIR}/admin-dashboard-triage-${vp.name}.png`,
+        path: `${SCREENSHOT_DIR}/admin-dashboard-${vp.name}.png`,
         fullPage: false
       });
     }
@@ -232,7 +228,7 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
 
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(200);
 

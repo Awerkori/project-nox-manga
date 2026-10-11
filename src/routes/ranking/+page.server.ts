@@ -26,7 +26,7 @@ export const load = async ({ locals, setHeaders }) => {
   const res = await safeDbQuery(
     locals.db
       .from('members')
-      .select('id,username,display_name,xp,avatar_id,created_at,equipped_title_id,equipped_badge_id')
+      .select('id,username,display_name,xp,avatar_id,avatar_crop,created_at,equipped_title_id,equipped_badge_id')
       .eq('is_test', false)
       .gt('xp', 0)
       .order('xp', { ascending: false })
@@ -61,4 +61,3 @@ export const load = async ({ locals, setHeaders }) => {
     isStale: false
   };
 };
-

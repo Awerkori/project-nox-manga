@@ -6,12 +6,13 @@
   "overrides": {
     "@sveltejs/kit": {
       "cookie": "^0.7.2"
-    }
+    },
+    "devalue": "5.9.4"
   },
   "scripts": {
     "dev": "vite dev --host 127.0.0.1",
     "build": "vite build",
-    "postbuild": "node scripts/retain-client-assets.mjs restore && node scripts/inject-worker-auth-bypass.mjs",
+    "postbuild": "node scripts/retain-client-assets.mjs restore && node scripts/patch-worker-runtime.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
@@ -19,6 +20,8 @@
     "test:e2e": "playwright test",
     "test:browser": "playwright test --config playwright.components.config.ts",
     "validate:reader-identity:staging": "node scripts/validate-reader-canonical-identity-staging.mjs",
+    "db:migrate": "node scripts/migrate-yugabyte.mjs",
+    "db:migrate:dry-run": "node scripts/migrate-yugabyte.mjs --dry-run",
     "deploy": "wrangler deploy",
     "prebuild": "node scripts/retain-client-assets.mjs save"
   },

@@ -4,6 +4,7 @@
   import { BookOpen, Sparkles, Eye, ShieldCheck } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
+  import { deferImage } from '$lib/actions/defer-image';
   import { decodeHtmlEntities } from '$lib/html-entities';
 
   let {
@@ -81,7 +82,8 @@
   <div class="card-media">
     <img
       use:fallbackCover
-      src={coverSrc}
+      use:deferImage={{ src: eager ? null : coverSrc }}
+      src={eager ? coverSrc : undefined}
       alt="Capa de {decodeHtmlEntities(work.title)}"
       loading={eager ? 'eager' : 'lazy'}
       fetchpriority={priority}

@@ -1,23 +1,27 @@
 import { test, expect } from '@playwright/test';
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context }, testInfo) => {
+  const origin = new URL(testInfo.project.use.baseURL as string).origin;
   await context.addCookies([
     {
       name: 'nox-age-status',
       value: 'ADULT',
-      url: 'http://127.0.0.1:5173'
+      url: origin
     },
     {
       name: 'nox-blur-nsfw',
       value: 'false',
-      url: 'http://127.0.0.1:5173'
+      url: origin
     }
   ]);
 });
 
 test('visitor cannot enter any administrative route or modify the API', async ({ request }) => {
-  for (const path of ['/admin', '/admin/obras', '/admin/gestao'])
-    expect((await request.get(path)).status()).toBe(403);
+  for (const path of ['/admin', '/admin/obras', '/admin/gestao']) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    expect(response.headers().location).toMatch(/^\/entrar\?redirect=/);
+  }
   expect(
     (await request.post('/api/action', { data: { scope: 'owner', action: 'role', data: {} } })).status()
   ).toBe(403);
@@ -63,7 +67,9 @@ test('invalid confirmation has clear guidance without external redirect or refle
   // No token or code: does not send email or call the confirmation provider.
   await page.goto('/auth/confirm?next=https://attacker.invalid');
   await expect(page).toHaveURL(/\/entrar\?erro=link-expirado$/);
-  await expect(page.getByRole('status')).toContainText('Este link é inválido ou expirou.');
+  await expect(page.getByRole('status')).toContainText(
+    'Este link é inválido, já foi utilizado ou expirou.'
+  );
   await expect(page.getByRole('link', { name: 'Esqueci minha senha' })).toBeVisible();
   await page.goto('/entrar?erro=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
   await expect(page.getByRole('status')).toHaveCount(0);
@@ -125,7 +131,11 @@ for (const width of [390, 768, 1440])
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('a[href="/catalogo"]').first().click();
+    if (width <= 760) await page.getByRole('navigation', { name: 'Atalhos' }).getByRole('link', { name: 'Explorar' }).click();
+    else if (width <= 768) {
+      await page.getByRole('button', { name: 'Abrir menu' }).click();
+      await page.getByRole('navigation', { name: 'Menu móvel' }).getByRole('link', { name: 'Catálogo' }).click();
+    } else await page.getByRole('navigation', { name: 'Navegação principal' }).getByRole('link', { name: 'Catálogo' }).click();
     await expect(page).toHaveURL(/catalogo/);
     await page.getByLabel('Título da obra').fill('Uma busca sem resultado');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();

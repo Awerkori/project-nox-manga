@@ -1,7 +1,9 @@
 import { test } from '@playwright/test';
-const ARTIFACT_DIR = process.env.AUDIT_MODE === 'after'
-  ? '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/after'
-  : '/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/before';
+import { testArtifactDir } from '../test-artifacts';
+
+const ARTIFACT_DIR = testArtifactDir(process.env.AUDIT_MODE === 'after' ? 'after' : 'before');
+const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 test('capture middle and full details of key pages', async ({ page }) => {
   page.on('pageerror', err => console.error('PAGE_ERROR:', err.message));
@@ -16,7 +18,9 @@ test('capture middle and full details of key pages', async ({ page }) => {
     try {
       localStorage.setItem('nox-age-status', 'ADULT');
       localStorage.setItem('nox-blur-nsfw', 'false');
-    } catch (e) {}
+    } catch {
+      // Local storage can be unavailable in the test browser.
+    }
   });
 
   // Admin preview route
@@ -37,7 +41,7 @@ test('capture middle and full details of key pages', async ({ page }) => {
 
   // 1. Obra mobile middle
   await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto('/obra/vinganca-do-cao-de-caca', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.work-page-container', { timeout: 10000 });
   await page.waitForTimeout(400);
 
@@ -61,25 +65,25 @@ test('capture middle and full details of key pages', async ({ page }) => {
   await page.screenshot({ path: `${ARTIFACT_DIR}/obra-mobile-360-fullpage.png`, fullPage: true });
 
   // 2. Notificações mobile
-  await page.goto('/qa-member?area=notificacoes', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${LOCAL_URL}/qa-member?area=notificacoes`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#member', { timeout: 10000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${ARTIFACT_DIR}/notificacoes-mobile-360-fullpage.png`, fullPage: true });
 
   // 3. Admin dashboard full page
-  await page.goto('/preview-admin?view=dashboard&role=ADMIN', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.editorial-workspace', { timeout: 10000 });
+  await page.goto(`${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.dashboard-shell', { timeout: 10000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${ARTIFACT_DIR}/admin-dashboard-mobile-360-fullpage.png`, fullPage: true });
 
   // 4. Admin obras full page
-  await page.goto('/preview-admin?view=obras&role=ADMIN', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${LOCAL_URL}/preview-admin?view=obras&role=ADMIN`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.works-manager-shell', { timeout: 10000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${ARTIFACT_DIR}/admin-obras-mobile-360-fullpage.png`, fullPage: true });
 
   // 5. Admin importer
-  await page.goto('/preview-admin?view=importer&role=ADMIN', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${LOCAL_URL}/preview-admin?view=importer&role=ADMIN`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1000);
   await page.screenshot({ path: `${ARTIFACT_DIR}/admin-importer-mobile-360-preview.png` });
 });
