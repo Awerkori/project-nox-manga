@@ -279,7 +279,16 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.editor_chapter_identity_action(jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.editor_chapter_identity_action(jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.editor_chapter_identity_action(jsonb) FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.editor_chapter_identity_action(jsonb) FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.editor_chapter_identity_action(jsonb) TO authenticated';
+  END IF;
+END;
+$$;
 
 COMMIT;
