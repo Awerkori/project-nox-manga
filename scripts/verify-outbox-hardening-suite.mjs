@@ -230,7 +230,9 @@ async function run() {
     attempts: 0
   }).select('id').single();
 
-  const specificRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${specificItem.id}`);
+  const specificRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${specificItem.id}`, {
+      method: 'POST'
+    });
   const specificJson = await specificRes.json();
 
   const { data: specificAfter } = await admin
@@ -319,7 +321,9 @@ async function run() {
   record('Test 7.1: Pipeline stage created notification and outbox with priority HIGH', outbox?.priority === 'HIGH', `priority=${outbox?.priority}`);
 
   // Process via worker
-  const dispatchRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outbox.id}`);
+  const dispatchRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outbox.id}`, {
+      method: 'POST'
+    });
   const dispatchJson = await dispatchRes.json();
 
   const { data: outboxSent } = await admin

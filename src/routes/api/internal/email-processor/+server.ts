@@ -36,36 +36,15 @@ function verifyAuthorization(request: Request, locals: App.Locals, platformEnv?:
   error(401, 'Unauthorized');
 }
 
-export const GET: RequestHandler = async ({ request, url, locals, platform }) => {
-  verifyAuthorization(request, locals, platform?.env);
-
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
-  const id = url.searchParams.get('id') || undefined;
-
-  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon] = await Promise.all([
-    processPendingEmailOutbox(limit, id),
-    processPendingEmailOutbox(limit, id, platform?.env),
-    reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
-  ]);
-  const outboxResult = {
-    processed: legacyOutbox.processed + scanOutbox.processed,
-    sent: legacyOutbox.sent + scanOutbox.sent,
-    failed: legacyOutbox.failed + scanOutbox.failed,
-    details: [...legacyOutbox.details, ...scanOutbox.details]
-  };
-  const reconResult = {
-    reconciled: legacyRecon.reconciled + scanRecon.reconciled,
-    retried: legacyRecon.retried + scanRecon.retried,
-    waiting: legacyRecon.waiting + scanRecon.waiting
-  };
-
-  return json({
-    ok: true,
-    timestamp: new Date().toISOString(),
-    ...outboxResult,
-    reconciliation: reconResult
-  });
+// GET nao pode disparar o processamento: este endpoint envia e-mail, ou seja,
+// altera estado. Manter isso em GET quebra a semantica de safe-method e cria
+// vetor de disparo via prefetch, <img> ou navegacao de topo -- que carregam o
+// cookie de sessao com sameSite=lax. O processamento fica apenas em POST.
+export const GET: RequestHandler = async () => {
+  return json(
+    { error: 'Use POST para processar a outbox de e-mail.' },
+    { status: 405, headers: { Allow: 'POST' } }
+  );
 };
 
 export const POST: RequestHandler = async ({ request, url, locals, platform }) => {
