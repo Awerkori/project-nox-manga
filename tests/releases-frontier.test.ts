@@ -6,6 +6,10 @@ it('uses indexed work frontier with stable cursor and bounded per-work chapter r
   await fetchRecentReleasesFromYugabyte(24,4,'2026-09-28T00:00:00Z','11111111-1111-4111-8111-111111111111',{HYPERDRIVE:{connectionString:'test'}},'manga');
   const [sql,params]=query.mock.calls[0];
   expect(sql).toContain('WITH latest_works AS MATERIALIZED');
+  // A CTE is followed directly by SELECT. A trailing comma makes the
+  // Hyperdrive parser reject the statement and silently degrades the public
+  // releases feed to an empty LKG fallback.
+  expect(sql).not.toMatch(/\),\s*SELECT\s+lw\.work_id/);
   expect(sql).toContain('CROSS JOIN LATERAL');
   expect(sql).toContain('LIMIT $2');
   expect(sql).toContain('(w.latest_chapter_published_at, w.id) < ($3::timestamptz, $4::uuid)');

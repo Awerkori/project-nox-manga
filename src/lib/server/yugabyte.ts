@@ -338,7 +338,7 @@ export async function fetchRecentReleasesFromYugabyte(
             ${cursorClause}
           ORDER BY w.latest_chapter_published_at DESC, w.id DESC
           LIMIT $1
-        ),
+        )
         SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating,
                lw.latest_published_at,
                c.id AS chapter_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
