@@ -189,7 +189,7 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
       }
     ];
 
-    vi.spyOn(yugabyteModule, 'fetchRecentReleasesFromYugabyte').mockResolvedValue(mockReleases as any);
+    vi.spyOn(yugabyteModule, 'fetchRecentReleaseTimelineFromYugabyte').mockResolvedValue(mockReleases as any);
 
     const response = await getReleases({
       url: new URL('https://manga.project-nox.test/api/releases?limit=1'),

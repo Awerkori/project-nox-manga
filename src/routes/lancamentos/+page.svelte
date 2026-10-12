@@ -90,6 +90,25 @@
     goto(url.toString(), { keepFocus: true, noScroll: true });
   }
 
+  function mergeReleaseItems(existing: ReleaseItem[], incoming: ReleaseItem[]): ReleaseItem[] {
+    const merged = [...existing];
+
+    for (const release of incoming) {
+      const existingIndex = merged.findIndex((item) => item.workId === release.workId);
+      if (existingIndex === -1) {
+        merged.push(release);
+        continue;
+      }
+
+      const current = merged[existingIndex];
+      const chapterIds = new Set(current.chapters.map((chapter) => chapter.id));
+      const chapters = [...current.chapters, ...release.chapters.filter((chapter) => !chapterIds.has(chapter.id))];
+      merged[existingIndex] = { ...current, chapters };
+    }
+
+    return merged;
+  }
+
   async function handleLoadMore() {
     if (loadingMore || !hasMore || !nextCursorTime) return;
     loadingMore = true;
@@ -106,12 +125,10 @@
       if (newItems.length === 0) {
         hasMore = false;
       } else {
-        const existingIds = new Set(currentReleases.map((r) => r.workId));
-        const uniqueItems = newItems.filter((r) => !existingIds.has(r.workId));
-        currentReleases = [...currentReleases, ...uniqueItems];
+        currentReleases = mergeReleaseItems(currentReleases, newItems);
         nextCursorTime = json.nextCursorTime;
         nextCursorId = json.nextCursorId;
-        hasMore = Boolean(json.hasMore && uniqueItems.length > 0);
+        hasMore = Boolean(json.hasMore);
       }
     } catch (err) {
       console.error('[LOAD MORE ERROR]:', err);

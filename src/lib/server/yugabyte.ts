@@ -366,6 +366,67 @@ export async function fetchRecentReleasesFromYugabyte(
 }
 
 /**
+ * Fetch the public releases timeline by chapter rather than by work.
+ *
+ * The Home intentionally shows a small, grouped preview per work. The
+ * releases page is different: it is the public publication timeline, so a
+ * burst from one work must not make otherwise valid published chapters
+ * invisible merely because that work already has four entries in the list.
+ *
+ * Cursoring on the immutable chapter publication tuple keeps pagination
+ * stable when several chapters share a publication timestamp.
+ */
+export async function fetchRecentReleaseTimelineFromYugabyte(
+  limit = 24,
+  cursorTime?: string | null,
+  cursorId?: string | null,
+  platformEnv?: any,
+  kind?: string | null
+): Promise<YugabyteReleaseRow[]> {
+  const opKey = `recent_release_timeline_${limit}_${cursorTime || 'top'}_${cursorId || 'top'}_${kind || 'all'}`;
+  return withYugabyteLkg(
+    opKey,
+    async () => {
+      let cursorClause = '';
+      let kindClause = '';
+      const params: any[] = [limit];
+      if (cursorTime && cursorId) {
+        params.push(cursorTime, cursorId);
+        cursorClause = `AND (c.published_at, c.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`;
+      }
+      if (kind && kind.toUpperCase() !== 'ALL') {
+        params.push(kind.toUpperCase());
+        kindClause = `AND UPPER(w.kind) = $${params.length}`;
+      }
+
+      const sql = `
+        SELECT w.id AS work_id, w.slug AS work_slug, w.title AS work_title,
+               w.cover_id AS work_cover_id, w.kind AS work_kind,
+               w.content_rating AS work_content_rating,
+               c.published_at AS latest_published_at,
+               c.id AS chapter_id, c.number AS chapter_number,
+               c.display_number AS chapter_display_number,
+               c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+               c.edition AS chapter_edition, c.language AS chapter_language,
+               c.title AS chapter_title, c.published_at AS chapter_published_at
+        FROM chapters c
+        INNER JOIN works w ON w.id = c.work_id
+        WHERE c.published_at IS NOT NULL
+          AND w.published = true
+          ${kindClause}
+          ${cursorClause}
+        ORDER BY c.published_at DESC, c.id DESC
+        LIMIT $1;
+      `;
+
+      const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
+      return res.rows;
+    },
+    []
+  );
+}
+
+/**
  * Fetch a single work by slug or id from Yugabyte.
  */
 export async function fetchWorkFromYugabyte(
