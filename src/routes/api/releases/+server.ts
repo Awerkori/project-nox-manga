@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { fetchRecentReleasesFromYugabyte } from '$lib/server/yugabyte';
+import { fetchRecentReleaseTimelineFromYugabyte } from '$lib/server/yugabyte';
 
 export const GET = async ({ url, platform, setHeaders }: any) => {
   const cursorTime = url.searchParams.get('cursorTime') || null;
@@ -8,9 +8,8 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
   const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
   const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get('limit') || '15', 10)));
 
-  const chaptersData = await fetchRecentReleasesFromYugabyte(
+  const chaptersData = await fetchRecentReleaseTimelineFromYugabyte(
     limit,
-    4,
     cursorTime,
     cursorId,
     platform?.env,
@@ -34,20 +33,18 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
       });
     }
     const group = releasesMap.get(workId);
-    if (group.chapters.length < 4) {
-      group.chapters.push({
-        id: (row as any).chapter_id,
-        number: (row as any).chapter_number,
-        display_number: (row as any).chapter_display_number,
-        canonical_chapter_key: (row as any).canonical_chapter_key,
-        chapter_order_key: (row as any).chapter_order_key,
-        chapter_kind: (row as any).chapter_kind,
-        edition: (row as any).chapter_edition,
-        language: (row as any).chapter_language,
-        title: (row as any).chapter_title,
-        publishedAt: (row as any).chapter_published_at || ''
-      });
-    }
+    group.chapters.push({
+      id: (row as any).chapter_id,
+      number: (row as any).chapter_number,
+      display_number: (row as any).chapter_display_number,
+      canonical_chapter_key: (row as any).canonical_chapter_key,
+      chapter_order_key: (row as any).chapter_order_key,
+      chapter_kind: (row as any).chapter_kind,
+      edition: (row as any).chapter_edition,
+      language: (row as any).chapter_language,
+      title: (row as any).chapter_title,
+      publishedAt: (row as any).chapter_published_at || ''
+    });
   }
 
   const releases = Array.from(releasesMap.values());
@@ -60,8 +57,8 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
 
   return json({
     releases,
-    hasMore: releases.length === limit,
-    nextCursorTime: releases.length > 0 ? releases[releases.length - 1].latestPublishedAt : null,
-    nextCursorId: releases.length > 0 ? releases[releases.length - 1].workId : null
+    hasMore: chaptersData.length === limit,
+    nextCursorTime: chaptersData.length > 0 ? chaptersData[chaptersData.length - 1].chapter_published_at : null,
+    nextCursorId: chaptersData.length > 0 ? chaptersData[chaptersData.length - 1].chapter_id : null
   });
 };
