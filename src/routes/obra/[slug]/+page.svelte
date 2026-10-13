@@ -389,7 +389,7 @@
         <h1 class="work-title">{decodedTitle}</h1>
 
         {#if data.work.aliases.length}
-          <p class="aliases">{data.work.aliases.join(' · ')}</p>
+          <p class="aliases"><strong>Títulos alternativos:</strong> {data.work.aliases.join(' · ')}</p>
         {/if}
 
         {#if data.work.author || data.work.artist}
@@ -1021,6 +1021,11 @@
     font-size: 13px;
     color: #8c899a;
     margin: 0 0 14px;
+  }
+
+  .aliases strong {
+    color: #c2bed4;
+    font-weight: 650;
   }
 
   .author-artist-line {
