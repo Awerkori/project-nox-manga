@@ -247,7 +247,7 @@ async function run() {
   }
 
   // Dispara o reconciliador no endpoint de produção
-  await fetch(`${PROD_URL}/api/internal/email-processor?limit=10`);
+  await fetch(`${PROD_URL}/api/internal/email-processor?limit=10`, { method: 'POST' });
 
   const { data: reconciledItem } = await admin
     .from('scan_email_outbox')
@@ -287,7 +287,7 @@ async function run() {
   }).select('id').single();
 
   // Executa o endpoint de reconciliação
-  await fetch(`${PROD_URL}/api/internal/email-processor?limit=10`);
+  await fetch(`${PROD_URL}/api/internal/email-processor?limit=10`, { method: 'POST' });
 
   const { data: ghostAfter } = await admin
     .from('scan_email_outbox')
@@ -366,7 +366,9 @@ async function run() {
   record('Teste 6.1: Notificação e outbox criadas com prioridade HIGH', outbox?.priority === 'HIGH', `priority=${outbox?.priority}`);
 
   // Dispara via worker de produção com specificId
-  const dispatchRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outbox.id}`);
+  const dispatchRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outbox.id}`, {
+      method: 'POST'
+    });
   const dispatchJson = await dispatchRes.json();
 
   const { data: outboxSent } = await admin

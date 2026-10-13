@@ -187,7 +187,9 @@ async function main() {
   console.log('\n--- 8. INVOKING WORKER EMAIL PROCESSOR ---');
   console.log(`Calling ${PROD_URL}/api/internal/email-processor?id=${outboxItem.id}`);
   
-  const workerRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outboxItem.id}`);
+  const workerRes = await fetch(`${PROD_URL}/api/internal/email-processor?id=${outboxItem.id}`, {
+      method: 'POST'
+    });
   console.log('Worker HTTP Status:', workerRes.status);
   const workerJson = await workerRes.json();
   console.log('Worker Response:', JSON.stringify(workerJson, null, 2));

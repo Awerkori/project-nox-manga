@@ -13,6 +13,7 @@ artifacts/
 *.tsbuildinfo
 .secrets*
 *.log
+*.pid
 *.db
 run_*.sh
 test_*.js

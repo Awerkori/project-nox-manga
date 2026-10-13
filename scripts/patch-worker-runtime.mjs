@@ -54,7 +54,7 @@ var worker_default = {`;
         const targetUrl = (origin || 'https://manga.project-nox-awerkori.workers.dev') + '/api/internal/email-processor?limit=25';
         const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || '';
         const req = new Request(targetUrl, {
-          method: 'GET',
+          method: 'POST',
           headers: { authorization: token ? \`Bearer \${token}\` : '', 'x-internal-cron': 'true' }
         });
         const res = await server.respond(req, {
