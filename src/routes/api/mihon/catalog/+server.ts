@@ -10,12 +10,11 @@ export const GET = async ({ request, url }) => {
   const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '24', 10)));
   const search = (url.searchParams.get('query') || url.searchParams.get('search') || '').trim();
   const status = url.searchParams.get('status')?.toUpperCase();
-  const tagSlug = url.searchParams.get('tag')?.trim();
 
   const db = privileged();
   let query = db
     .from('works')
-    .select('id, title, slug, cover_id, kind, status, content_rating, synopsis, updated_at', { count: 'exact' })
+    .select('id, title, aliases, slug, cover_id, kind, status, content_rating, synopsis, updated_at', { count: 'exact' })
     .eq('published', true);
 
   if (!allowAdult) {
@@ -23,7 +22,10 @@ export const GET = async ({ request, url }) => {
   }
 
   if (search) {
-    query = query.ilike('title', `%${search}%`);
+    // `search_text` is maintained by the works title/aliases trigger and has
+    // a trigram index.  This keeps native/romanized aliases searchable for
+    // Mihon without turning an alternate-title lookup into a table scan.
+    query = query.ilike('search_text', `%${search.replace(/[%_\\]/g, '')}%`);
   }
 
   if (status && (status === 'ONGOING' || status === 'COMPLETED' || status === 'HIATUS')) {
@@ -43,6 +45,7 @@ export const GET = async ({ request, url }) => {
   const items = (works || []).map((w) => ({
     id: w.id,
     title: w.title,
+    alternative_titles: w.aliases || [],
     slug: w.slug,
     kind: w.kind,
     status: w.status,
