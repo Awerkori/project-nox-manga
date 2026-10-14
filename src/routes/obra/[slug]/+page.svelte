@@ -42,6 +42,8 @@
     ascending = $state(false),
     search = $state(''),
     synopsisExpanded = $state(false),
+    aliasesExpanded = $state(false),
+    tagsExpanded = $state(false),
     showReportModal = $state(false);
 
   let downloadedChapterIds = new SvelteSet<string>();
@@ -54,7 +56,8 @@
       try {
         const offlineList = await getOfflineChapters();
         const currentWorkOffline = offlineList.filter((oc) => oc.workId === data.work.id);
-        downloadedChapterIds = new SvelteSet(currentWorkOffline.map((oc) => oc.chapterId));
+        downloadedChapterIds.clear();
+        for (const chapter of currentWorkOffline) downloadedChapterIds.add(chapter.chapterId);
       } catch (err) {
         console.error('Falha ao carregar capítulos offline:', err);
       }
@@ -70,9 +73,7 @@
     if (downloadedChapterIds.has(chapter.id)) {
       if (confirm(`Remover capítulo ${chapterIdentityLabel(chapter)} do armazenamento offline?`)) {
         await removeOfflineChapter(chapter.id);
-        const next = new SvelteSet(downloadedChapterIds);
-        next.delete(chapter.id);
-        downloadedChapterIds = next;
+        downloadedChapterIds.delete(chapter.id);
         notice = `Capítulo ${chapterIdentityLabel(chapter)} removido do armazenamento offline.`;
       }
       return;
@@ -95,9 +96,7 @@
         }
       );
 
-      const next = new SvelteSet(downloadedChapterIds);
-      next.add(chapter.id);
-      downloadedChapterIds = next;
+      downloadedChapterIds.add(chapter.id);
       notice = `Capítulo ${chapterIdentityLabel(chapter)} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
       notice = `Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}: ${err.message}`;
@@ -139,9 +138,7 @@
                 downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
               }
             );
-            const next = new SvelteSet(downloadedChapterIds);
-            next.add(chapter.id);
-            downloadedChapterIds = next;
+            downloadedChapterIds.add(chapter.id);
           }
         } catch (e: any) {
           console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
@@ -164,6 +161,27 @@
   }
 
   let isAdult = $derived(data.work.content_rating === 'ADULT_18');
+  let alternativeTitles = $derived.by(() => {
+    const primary = decodeHtmlEntities(data.work.title || '')
+      .normalize('NFKC')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase('pt-BR');
+    const seen = new SvelteSet<string>();
+
+    return (data.work.aliases || []).filter((alias: string) => {
+      const key = decodeHtmlEntities(alias || '')
+        .normalize('NFKC')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLocaleLowerCase('pt-BR');
+      if (!key || key === primary || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+  let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 3));
+  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 8));
   // Unblur automatically when visiting the individual work page per UX requirements
   let effectiveBlur = false;
 
@@ -250,6 +268,297 @@
   {@html data.structuredData}
 </svelte:head>
 
+<div class="work-redesign-backdrop" aria-hidden="true">
+  <img src={obraCover} alt="" />
+</div>
+
+<main class="container work-redesign spacer-bottom">
+  <nav class="work-breadcrumb" aria-label="Navegação estrutural">
+    <a href="/catalogo">Catálogo</a>
+    <span aria-hidden="true">/</span>
+    <span>{decodedTitle}</span>
+  </nav>
+
+  <section class="work-hero" aria-labelledby="work-title">
+    <div class="work-cover-frame">
+      <img
+        src={obraCover}
+        alt="Capa de {decodedTitle}"
+        width="320"
+        height="448"
+        class="work-cover-image"
+        class:blurred-cover={effectiveBlur}
+      />
+      {#if isAdult}<span class="work-adult-badge">+18</span>{/if}
+    </div>
+
+    <div class="work-hero-copy">
+      <div class="work-statuses" aria-label="Classificações da obra">
+        <span class="work-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
+        <span class="work-status">{statusLabels[data.work.status] || data.work.status}</span>
+        {#if data.work.featured}<span class="work-featured"><Sparkles size={13} /> Destaque</span>{/if}
+        {#if isAdult}<span class="work-rating">+18</span>{/if}
+      </div>
+
+      <h1 id="work-title">{decodedTitle}</h1>
+
+      {#if data.work.author || data.work.artist}
+        <dl class="creator-list">
+          {#if data.work.author}
+            <div><dt>Autor</dt><dd>{data.work.author}</dd></div>
+          {/if}
+          {#if data.work.artist}
+            <div><dt>Artista</dt><dd>{data.work.artist}</dd></div>
+          {/if}
+        </dl>
+      {/if}
+
+      <dl class="work-quick-stats" aria-label="Resumo da obra">
+        <div><dt>Capítulos</dt><dd>{data.chapters.length}</dd></div>
+        <div><dt>Leitores</dt><dd>{formatViews(data.metrics?.readers ?? 0)}</dd></div>
+        {#if data.work.year}<div><dt>Ano</dt><dd>{data.work.year}</dd></div>{/if}
+        {#if isAdult}<div><dt>Classificação</dt><dd>Adulto</dd></div>{:else if data.work.age_rating}<div><dt>Classificação</dt><dd>{data.work.age_rating} anos</dd></div>{/if}
+      </dl>
+
+      <div class="work-primary-actions">
+        {#if resume}
+          <a class="read-work-button" href="/ler/{resume}">
+            <BookOpen size={19} />
+            {data.progress.length ? 'Continuar leitura' : 'Começar a ler'}
+          </a>
+        {/if}
+        <button
+          type="button"
+          class="work-action"
+          class:is-active={data.library?.favorite}
+          onclick={() => library({ favorite: !data.library?.favorite })}
+          disabled={busy}
+        >
+          <Bookmark size={17} fill={data.library?.favorite ? 'currentColor' : 'none'} />
+          {data.library?.favorite ? 'Favoritado' : 'Favoritar'}
+        </button>
+        <button
+          type="button"
+          class="work-action icon-action"
+          class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
+          onclick={like}
+          disabled={busy}
+          aria-label={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Remover curtida' : 'Curtir obra'}
+        >
+          <Heart size={17} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
+          <span>{data.likes.length}</span>
+        </button>
+      </div>
+
+      <div class="work-secondary-actions">
+        <select
+          class="work-library-select"
+          aria-label="Organizar na biblioteca"
+          value={data.library?.status || ''}
+          onchange={(event) => library({ status: event.currentTarget.value })}
+        >
+          <option value="" disabled>Adicionar à biblioteca…</option>
+          <option value="READING">Lendo atualmente</option>
+          <option value="PLANNED">Quero ler</option>
+          <option value="COMPLETED">Concluído</option>
+        </select>
+        <button type="button" class="text-action" onclick={() => (showReportModal = true)}>
+          <Flag size={15} /> Reportar
+        </button>
+        {#if data.library}
+          <label class="notify-toggle">
+            <input
+              type="checkbox"
+              checked={data.library.following}
+              onchange={(event) => library({ following: event.currentTarget.checked })}
+            />
+            Avisar novos capítulos
+          </label>
+        {/if}
+      </div>
+    </div>
+  </section>
+
+  {#if notice}<div class="work-notice" role="status">{notice}</div>{/if}
+
+  <div class="work-information-layout">
+    <div class="work-reading-column">
+      {#if alternativeTitles.length}
+        <section class="work-panel aliases-panel" aria-labelledby="alternative-titles-heading">
+          <div class="section-heading-row">
+            <div>
+              <p class="eyebrow">Identidade</p>
+              <h2 id="alternative-titles-heading">Títulos alternativos</h2>
+            </div>
+            <span class="section-count">{alternativeTitles.length}</span>
+          </div>
+          <ul class="alias-list">
+            {#each visibleAliases as alias (alias)}
+              <li>{decodeHtmlEntities(alias)}</li>
+            {/each}
+          </ul>
+          {#if alternativeTitles.length > 3}
+            <button type="button" class="expand-text" onclick={() => (aliasesExpanded = !aliasesExpanded)} aria-expanded={aliasesExpanded}>
+              {aliasesExpanded ? 'Ver menos' : `Ver todos (${alternativeTitles.length})`}
+              {#if aliasesExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
+            </button>
+          {/if}
+        </section>
+      {/if}
+
+      {#if visibleTags.length}
+        <section class="work-panel tags-panel" aria-labelledby="work-tags-heading">
+          <div class="section-heading-row">
+            <div>
+              <p class="eyebrow">Classificação</p>
+              <h2 id="work-tags-heading">Gêneros e tags</h2>
+            </div>
+            <span class="section-count">{data.tags.filter(Boolean).length}</span>
+          </div>
+          <div class="work-tag-list">
+            {#each visibleTags as tag (tag.id)}
+              <a href="/catalogo?tag={tag.slug}">{tag.name}</a>
+            {/each}
+          </div>
+          {#if data.tags.filter(Boolean).length > 8}
+            <button type="button" class="expand-text" onclick={() => (tagsExpanded = !tagsExpanded)} aria-expanded={tagsExpanded}>
+              {tagsExpanded ? 'Ver menos' : 'Ver todas as tags'}
+              {#if tagsExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
+            </button>
+          {/if}
+        </section>
+      {/if}
+
+      {#if decodedSynopsis}
+        {@const synopsisIsLong = decodedSynopsis.length > 420}
+        <section class="work-panel synopsis-panel" aria-labelledby="synopsis-heading">
+          <p class="eyebrow">Sobre a obra</p>
+          <h2 id="synopsis-heading">Sinopse</h2>
+          <p class:clamped-synopsis={synopsisIsLong && !synopsisExpanded}>{decodedSynopsis}</p>
+          {#if synopsisIsLong}
+            <button type="button" class="expand-text" onclick={() => (synopsisExpanded = !synopsisExpanded)} aria-expanded={synopsisExpanded}>
+              {synopsisExpanded ? 'Ver menos' : 'Ler sinopse completa'}
+              {#if synopsisExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
+            </button>
+          {/if}
+        </section>
+      {/if}
+    </div>
+
+    <aside class="work-panel work-facts" aria-label="Informações da obra">
+      <p class="eyebrow">Ficha técnica</p>
+      <h2>Informações</h2>
+      <dl>
+        <div><dt>Tipo</dt><dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd></div>
+        <div><dt>Status</dt><dd>{statusLabels[data.work.status] || data.work.status}</dd></div>
+        {#if data.work.year}<div><dt>Lançamento</dt><dd>{data.work.year}</dd></div>{/if}
+        {#if data.work.author}<div><dt>Autor</dt><dd>{data.work.author}</dd></div>{/if}
+        {#if data.work.artist}<div><dt>Artista</dt><dd>{data.work.artist}</dd></div>{/if}
+        {#if data.scans?.length}
+          <div class="fact-scans">
+            <dt>{data.scans.length > 1 ? 'Scans parceiras' : 'Scan parceira'}</dt>
+            <dd>
+              {#each data.scans as scan, index (scan.id || scan.slug || index)}
+                <a href="/scans/{scan.slug}">{scan.name}</a>{#if index < data.scans.length - 1}<span> · </span>{/if}
+              {/each}
+            </dd>
+          </div>
+        {/if}
+      </dl>
+    </aside>
+  </div>
+
+  <section class="work-chapters" aria-labelledby="chapters-heading">
+    <div class="chapters-title-row">
+      <div>
+        <p class="eyebrow">Leitura</p>
+        <h2 id="chapters-heading">Capítulos</h2>
+        <p>{chapters.length} disponíveis · Atualizado em {date(data.work.updated_at)}</p>
+      </div>
+      {#if resume}
+        <a class="chapters-read-link" href="/ler/{resume}"><BookOpen size={17} /> {data.progress.length ? 'Continuar' : 'Ler agora'}</a>
+      {/if}
+    </div>
+
+    <div class="chapters-controls">
+      <input bind:value={search} placeholder="Buscar capítulo ou título" aria-label="Buscar capítulo" />
+      <button type="button" class="chapter-control" onclick={() => (ascending = !ascending)}>
+        {#if ascending}<ArrowUp size={16} /> Mais antigos{:else}<ArrowDown size={16} /> Mais recentes{/if}
+      </button>
+      <button
+        type="button"
+        class="chapter-control download-all"
+        class:is-busy={batchDownloading}
+        onclick={handleBatchDownload}
+        disabled={batchDownloading || !data.chapters.length}
+      >
+        {#if batchDownloading}<Loader2 size={16} class="spin" /> Baixando {batchProgress.current}/{batchProgress.total}{:else}<Download size={16} /> Offline{/if}
+      </button>
+    </div>
+
+    <div class="chapter-list" aria-live="polite">
+      {#each visibleChapters as chapter (chapter.id)}
+        {@const isRead = readChapterIds.has(chapter.id)}
+        {@const isNew = chapter.published_at && Date.now() - new Date(chapter.published_at).getTime() < 7 * 24 * 60 * 60 * 1000}
+        {@const isDownloaded = downloadedChapterIds.has(chapter.id)}
+        {@const downloadProgress = downloadingChapterIds[chapter.id]}
+        <div class="chapter-row" class:is-read={isRead}>
+          <a href="/ler/{chapter.id}" class="chapter-main-link">
+            <span class="chapter-index">{chapterIdentityLabel(chapter)}</span>
+            <span class="chapter-copy">
+              <span class="chapter-name">Capítulo {chapterIdentityLabel(chapter)}</span>
+              {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterIdentityLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
+                <span class="chapter-subtitle">{chapter.title}</span>
+              {/if}
+            </span>
+          </a>
+          <span class="chapter-details">
+            {#if isNew}<span class="new-chapter">Novo</span>{/if}
+            {#if isRead}<span class="chapter-read"><CheckCircle2 size={14} /> Lido</span>{/if}
+            {#if chapter.published_at}<time>{date(chapter.published_at)}</time>{/if}
+            <button
+              type="button"
+              class="chapter-download"
+              class:is-downloaded={isDownloaded}
+              onclick={(event) => handleToggleDownload(chapter, event)}
+              title={isDownloaded ? 'Remover do offline' : 'Baixar para leitura offline'}
+            >
+              {#if downloadProgress !== undefined}<Loader2 size={15} class="spin" /><span>{downloadProgress}%</span>{:else if isDownloaded}<CheckCircle2 size={15} /><span>Offline</span>{:else}<Download size={15} /><span>Offline</span>{/if}
+            </button>
+            <a href="/ler/{chapter.id}" class="chapter-open-link" aria-label="Ler capítulo {chapterIdentityLabel(chapter)}"><BookOpen size={17} class="chapter-open" /></a>
+          </span>
+        </div>
+      {/each}
+
+      {#if !search.trim() && chapters.length > visibleLimit}
+        <div class="chapter-more-actions">
+          <button type="button" onclick={() => (visibleLimit += 150)}>Carregar mais ({chapters.length - visibleLimit})</button>
+          <button type="button" class="secondary" onclick={() => (visibleLimit = chapters.length)}>Mostrar todos</button>
+        </div>
+      {/if}
+      {#if !chapters.length}
+        <div class="chapter-empty">{search ? `Nenhum capítulo encontrado para “${search}”.` : 'Nenhum capítulo disponível no momento.'}</div>
+      {/if}
+    </div>
+  </section>
+
+  <Comments comments={data.comments} workId={data.work.id} profile={data.profile} />
+
+  {#if showReportModal}
+    <ReportModal
+      targetType="WORK"
+      workId={data.work.id}
+      targetTitle={data.work.title}
+      onclose={() => (showReportModal = false)}
+      onsuccess={() => {
+        showReportModal = false;
+        notice = 'Denúncia enviada com sucesso para a moderação.';
+      }}
+    />
+  {/if}
+</main>
+
+{#if false}
 <!-- Cinematic Backdrop Banner -->
 <div class="work-backdrop" aria-hidden="true">
   <img src={obraCover} alt="" class="backdrop-img" />
@@ -760,6 +1069,8 @@
     />
   {/if}
 </div>
+
+{/if}
 
 <style>
   /* Cinematic Backdrop */
@@ -1887,5 +2198,283 @@
       align-items: flex-start;
       gap: 4px;
     }
+  }
+
+  /* Work page redesign: intentionally mobile-first. All selectors are scoped
+     to the new composition so the legacy markup above can be removed safely
+     after the rollout without changing the visual contract. */
+  .work-redesign-backdrop {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 380px;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+    background: #090a10;
+  }
+
+  .work-redesign-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(7, 8, 13, 0.38), #090a10 88%);
+  }
+
+  .work-redesign-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.38;
+    filter: blur(36px) saturate(1.15);
+    transform: scale(1.1);
+  }
+
+  .work-redesign {
+    position: relative;
+    z-index: 1;
+    padding-top: 1.25rem;
+    padding-bottom: 4rem;
+  }
+
+  .work-breadcrumb {
+    display: flex;
+    min-width: 0;
+    gap: 0.45rem;
+    overflow: hidden;
+    color: #aaa7b7;
+    font-size: 0.78rem;
+    margin-bottom: 1rem;
+  }
+
+  .work-breadcrumb a { color: #d1c6ff; text-decoration: none; white-space: nowrap; }
+  .work-breadcrumb a:hover { color: #fff; text-decoration: underline; }
+  .work-breadcrumb span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .work-hero,
+  .work-panel,
+  .chapter-list {
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(16, 17, 27, 0.78);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+  }
+
+  .work-hero {
+    display: grid;
+    grid-template-columns: minmax(105px, 31vw) minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0.9rem;
+    border-radius: 1.25rem;
+  }
+
+  .work-cover-frame {
+    position: relative;
+    align-self: start;
+    overflow: hidden;
+    border-radius: 0.9rem;
+    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.45);
+    aspect-ratio: 5 / 7;
+  }
+
+  .work-cover-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .work-adult-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 999px;
+    background: #be334d;
+    color: #fff;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.69rem;
+    font-weight: 800;
+  }
+
+  .work-hero-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+  .work-statuses, .work-primary-actions, .work-secondary-actions, .work-tag-list, .chapter-details, .chapter-more-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .work-statuses { margin-bottom: 0.7rem; }
+  .work-statuses > span, .new-chapter, .chapter-read, .section-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.66rem;
+    font-weight: 750;
+    line-height: 1;
+  }
+
+  .work-kind { color: #d5c8ff; background: rgba(149, 104, 255, 0.16); border: 1px solid rgba(149, 104, 255, 0.3); }
+  .work-status { color: #f6d795; background: rgba(210, 160, 63, 0.12); border: 1px solid rgba(210, 160, 63, 0.25); }
+  .work-featured { color: #fff; background: linear-gradient(135deg, #7b4ed4, #5730a8); }
+  .work-rating { color: #ffd1d8; background: rgba(222, 68, 93, 0.22); border: 1px solid rgba(239, 104, 125, 0.35); }
+
+  .work-hero h1 {
+    max-width: 22ch;
+    color: #fff;
+    font-size: clamp(1.45rem, 7vw, 3rem);
+    line-height: 1.06;
+    letter-spacing: -0.04em;
+    margin: 0 0 0.85rem;
+    overflow-wrap: anywhere;
+  }
+
+  .creator-list { display: flex; flex-wrap: wrap; gap: 0.55rem 1.25rem; margin: 0 0 0.85rem; }
+  .creator-list div { display: grid; gap: 0.1rem; }
+  .creator-list dt, .work-quick-stats dt, .work-facts dt, .eyebrow {
+    color: #8d899d;
+    font-size: 0.65rem;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .creator-list dd { margin: 0; color: #e9e6f1; font-size: 0.83rem; font-weight: 650; overflow-wrap: anywhere; }
+
+  .work-quick-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    margin: 0 0 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .work-quick-stats div { padding: 0.58rem 0.5rem; min-width: 0; }
+  .work-quick-stats div:nth-child(odd) { border-right: 1px solid rgba(255, 255, 255, 0.07); }
+  .work-quick-stats dd { color: #fff; font-size: 0.83rem; font-weight: 720; margin: 0.15rem 0 0; overflow-wrap: anywhere; }
+
+  .work-primary-actions { width: 100%; }
+  .read-work-button, .work-action, .chapter-control, .chapters-read-link, .chapter-more-actions button {
+    min-height: 2.55rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+  }
+  .read-work-button {
+    flex: 1 1 10rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.65rem 0.8rem;
+    color: #fff;
+    background: linear-gradient(135deg, #8153e7, #5a31b6);
+    border-color: rgba(216, 198, 255, 0.42);
+  }
+  .work-action { display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; padding: 0.55rem 0.7rem; color: #e9e6f1; background: rgba(255,255,255,0.045); }
+  .work-action.icon-action { min-width: 2.75rem; }
+  .work-action.is-active { color: #e0d3ff; border-color: rgba(173, 133, 255, 0.58); background: rgba(140, 89, 238, 0.16); }
+  .read-work-button:hover, .work-action:hover, .chapter-control:hover:not(:disabled), .chapters-read-link:hover, .chapter-more-actions button:hover { transform: translateY(-1px); border-color: rgba(197, 174, 255, 0.66); }
+  .work-action:focus-visible, .read-work-button:focus-visible, .chapter-control:focus-visible, .chapters-read-link:focus-visible, .chapter-main-link:focus-visible, .chapter-open-link:focus-visible, .work-tag-list a:focus-visible, .alias-list li:focus-visible { outline: 3px solid rgba(185, 154, 255, 0.55); outline-offset: 2px; }
+
+  .work-secondary-actions { width: 100%; margin-top: 0.65rem; }
+  .work-library-select, .text-action { min-height: 2.25rem; border: 0; background: transparent; color: #b9b4c9; font: inherit; font-size: 0.76rem; }
+  .work-library-select { max-width: 100%; padding: 0 0.1rem; }
+  .text-action { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  .text-action:hover { color: #fff; }
+  .notify-toggle { display: inline-flex; align-items: center; gap: 0.4rem; color: #aaa6b7; font-size: 0.74rem; cursor: pointer; }
+  .notify-toggle input { accent-color: #9568ff; }
+
+  .work-notice { margin: 0.9rem 0; padding: 0.75rem 0.9rem; border-radius: 0.75rem; border: 1px solid rgba(178, 150, 255, 0.35); color: #ddd2ff; background: rgba(116, 77, 197, 0.15); font-size: 0.82rem; }
+  .work-information-layout { display: grid; gap: 0.85rem; margin-top: 0.85rem; }
+  .work-reading-column { display: grid; gap: 0.85rem; }
+  .work-panel { border-radius: 1rem; padding: 1rem; }
+  .section-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+  .work-panel h2, .chapters-title-row h2 { margin: 0.15rem 0 0; color: #fff; font-size: 1.15rem; letter-spacing: -0.02em; }
+  .section-count { color: #c8b4ff; background: rgba(149, 104, 255, 0.13); }
+  .alias-list { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+  .alias-list li { padding: 0.45rem 0.6rem; border-radius: 0.55rem; color: #d7d3e2; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); font-size: 0.8rem; overflow-wrap: anywhere; }
+  .expand-text { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0; margin-top: 0.75rem; border: 0; background: none; color: #cbb9ff; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+  .expand-text:hover { color: #fff; text-decoration: underline; }
+  .work-tag-list a { padding: 0.38rem 0.6rem; border: 1px solid rgba(186, 162, 255, 0.22); border-radius: 999px; color: #d8cefb; background: rgba(126, 87, 212, 0.08); font-size: 0.76rem; text-decoration: none; }
+  .work-tag-list a:hover { color: #fff; background: rgba(135, 91, 233, 0.22); border-color: rgba(195, 174, 255, 0.55); }
+  .synopsis-panel > p:last-of-type { margin: 0.75rem 0 0; color: #c3c0ce; font-size: 0.88rem; line-height: 1.7; white-space: pre-line; }
+  .clamped-synopsis { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .work-facts dl { margin: 0.85rem 0 0; }
+  .work-facts dl > div { display: grid; grid-template-columns: minmax(5.5rem, 40%) minmax(0, 1fr); gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .work-facts dl > div:last-child { border-bottom: 0; padding-bottom: 0; }
+  .work-facts dd { margin: 0; color: #f1eff5; font-size: 0.82rem; font-weight: 600; overflow-wrap: anywhere; }
+  .fact-scans a { color: #ddc28e; text-decoration: none; }
+  .fact-scans a:hover { color: #fff0cc; text-decoration: underline; }
+
+  .work-chapters { margin-top: 2.1rem; }
+  .chapters-title-row { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 0.8rem; }
+  .chapters-title-row p:last-child { margin: 0.35rem 0 0; color: #9995a7; font-size: 0.77rem; }
+  .chapters-read-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 0.75rem; color: #f5f2ff; background: rgba(135, 89, 232, 0.2); white-space: nowrap; }
+  .chapters-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .chapters-controls input { min-width: 0; min-height: 2.6rem; border: 1px solid rgba(255,255,255,0.12); border-radius: 0.75rem; padding: 0 0.8rem; background: rgba(15,16,25,0.86); color: #fff; font: inherit; font-size: 0.82rem; }
+  .chapters-controls input:focus { outline: 0; border-color: #b99aff; box-shadow: 0 0 0 3px rgba(163,121,255,0.16); }
+  .chapter-control { display: inline-flex; align-items: center; justify-content: center; gap: 0.38rem; padding: 0.5rem 0.65rem; color: #d7d2e3; background: rgba(255,255,255,0.045); }
+  .chapter-control.download-all { grid-column: 1 / -1; }
+  .chapter-control:disabled { opacity: 0.55; cursor: not-allowed; }
+  .chapter-list { overflow: hidden; border-radius: 1rem; }
+  .chapter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.65rem; min-height: 4.4rem; padding: 0.68rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 150ms ease; }
+  .chapter-row:last-child { border-bottom: 0; }
+  .chapter-row:hover { background: rgba(148, 104, 237, 0.1); }
+  .chapter-row.is-read { background: rgba(91, 75, 136, 0.1); }
+  .chapter-main-link { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); align-items: center; gap: 0.65rem; min-width: 0; color: inherit; text-decoration: none; }
+  .chapter-index { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.7rem; color: #cbb9ff; background: rgba(151, 105, 248, 0.12); font-size: 0.72rem; font-weight: 800; }
+  .chapter-copy { min-width: 0; display: grid; gap: 0.15rem; }
+  .chapter-name { color: #f7f5fa; font-size: 0.87rem; font-weight: 720; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chapter-subtitle { color: #aaa6b8; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chapter-details { justify-content: flex-end; color: #9995a7; font-size: 0.7rem; }
+  .chapter-details time { display: none; }
+  .new-chapter { color: #ffe09d; background: rgba(221, 160, 47, 0.15); border: 1px solid rgba(221,160,47,0.28); text-transform: uppercase; }
+  .chapter-read { color: #bba1ff; }
+  .chapter-download { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.36rem 0.45rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.55rem; background: rgba(255,255,255,0.04); color: #bbb7c9; font: inherit; font-size: 0.7rem; font-weight: 650; cursor: pointer; }
+  .chapter-download:hover { color: #fff; border-color: rgba(190,165,255,0.55); }
+  .chapter-download.is-downloaded { color: #81e0ba; border-color: rgba(95,207,165,0.38); }
+  .chapter-open-link { display: inline-flex; color: #c2aaff; opacity: 0.76; }
+  .chapter-open-link:hover { color: #fff; opacity: 1; }
+  :global(.chapter-open) { color: currentColor; }
+  .chapter-more-actions { justify-content: center; padding: 1rem; border-top: 1px solid rgba(255,255,255,0.06); }
+  .chapter-more-actions button { padding: 0.55rem 0.8rem; color: #fff; background: #6f43cf; }
+  .chapter-more-actions .secondary { color: #d5cfdf; background: rgba(255,255,255,0.06); }
+  .chapter-empty { padding: 2.5rem 1rem; color: #aaa6b7; text-align: center; font-size: 0.84rem; }
+
+  @media (min-width: 600px) {
+    .work-hero { grid-template-columns: 180px minmax(0, 1fr); padding: 1.25rem; gap: 1.4rem; }
+    .work-quick-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .work-quick-stats div:nth-child(odd) { border-right: 0; }
+    .work-quick-stats div + div { border-left: 1px solid rgba(255, 255, 255, 0.07); }
+    .chapters-controls { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .chapter-control.download-all { grid-column: auto; }
+    .chapter-row { padding: 0.75rem 1rem; }
+    .chapter-main-link { grid-template-columns: 2.5rem minmax(0, 1fr); }
+    .chapter-details time { display: inline; }
+  }
+
+  @media (min-width: 900px) {
+    .work-redesign { padding-top: 2rem; }
+    .work-redesign-backdrop { height: 500px; }
+    .work-hero { grid-template-columns: 250px minmax(0, 1fr); padding: 1.5rem; gap: 2rem; border-radius: 1.5rem; }
+    .work-hero h1 { font-size: clamp(2rem, 4vw, 3.45rem); }
+    .work-information-layout { grid-template-columns: minmax(0, 1fr) minmax(15rem, 23rem); align-items: start; margin-top: 1rem; }
+    .work-facts { position: sticky; top: 5.5rem; }
+    .work-panel { padding: 1.25rem; }
+    .work-chapters { margin-top: 2.75rem; }
+    .chapter-row { min-height: 4.75rem; padding: 0.8rem 1.15rem; }
+  }
+
+  @media (max-width: 359px) {
+    .work-hero { grid-template-columns: 96px minmax(0, 1fr); padding: 0.7rem; gap: 0.7rem; }
+    .work-hero h1 { font-size: 1.3rem; }
+    .work-statuses { gap: 0.35rem; }
+    .work-statuses > span { font-size: 0.6rem; padding: 0.22rem 0.4rem; }
+    .work-quick-stats { font-size: 0.85rem; }
+    .chapter-row { gap: 0.45rem; padding: 0.65rem; }
+    .chapter-main-link { grid-template-columns: 2rem minmax(0, 1fr); gap: 0.45rem; }
+    .chapter-index { width: 2rem; height: 2rem; font-size: 0.65rem; }
+    .chapter-download span, :global(.chapter-open) { display: none; }
   }
 </style>
