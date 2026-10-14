@@ -68,6 +68,12 @@ function shouldBypassSharedCache(req) {
   return AUTHENTICATED_SESSION_COOKIE.test(cookie) || PERSONALIZED_HOME_COOKIE.test(cookie) || req.headers.has('authorization');
 }
 
+// APPLICATION_ROUTE_GUARD
+function isApplicationRoute(pathname, filename) {
+  if (pathname === '/' || pathname === '/api' || pathname.startsWith('/api/')) return true;
+  return !/\.[a-z0-9]{1,12}$/i.test(filename);
+}
+
 var worker_default = {
   async scheduled(event, env2, ctx) {
     ctx.waitUntil((async () => {
@@ -117,7 +123,7 @@ var worker_default = {
       is_static_asset = manifest.assets.has(filename) || manifest.assets.has(filename + "/index.html") || filename in manifest._.server_assets || filename + "/index.html" in manifest._.server_assets;
     }
     let location = pathname.at(-1) === "/" ? stripped_pathname : pathname + "/";
-    if (is_static_asset || prerendered.has(pathname) || pathname === version_file || pathname.startsWith(immutable)) {
+    if (!isApplicationRoute(pathname, filename) && (is_static_asset || prerendered.has(pathname) || pathname === version_file || pathname.startsWith(immutable))) {
       res = await env2.ASSETS.fetch(req);
       if (res.status >= 400) {
         // ASSET_ERROR_NO_STORE
