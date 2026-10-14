@@ -23,7 +23,7 @@
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
   import { decodeHtmlEntities } from '$lib/html-entities';
-  import { chapterIdentityLabel } from '$lib/chapter-identity';
+  import { chapterDisplayNumber, chapterIdentityLabel } from '$lib/chapter-identity';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import {
@@ -50,6 +50,17 @@
   let downloadingChapterIds = $state<Record<string, number>>({});
   let batchDownloading = $state(false);
   let batchProgress = $state({ current: 0, total: 0 });
+
+  // Reader identity keeps language and edition, but the public PT-BR list must
+  // not repeat the site's default language on every row. Keep non-default
+  // qualifiers visible so distinct editions/locales remain unambiguous.
+  function chapterPresentationLabel(chapter: any): string {
+    const qualifiers = [chapter.edition, chapter.language]
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => !['', 'default', 'und', 'pt-br'].includes(value.toLocaleLowerCase('pt-BR')));
+    const number = chapterDisplayNumber(chapter);
+    return qualifiers.length ? `${number} · ${qualifiers.join(' · ')}` : number;
+  }
 
   onMount(async () => {
     if (isOfflineSupported()) {
@@ -504,10 +515,10 @@
         {@const downloadProgress = downloadingChapterIds[chapter.id]}
         <div class="chapter-row" class:is-read={isRead}>
           <a href="/ler/{chapter.id}" class="chapter-main-link">
-            <span class="chapter-index">{chapterIdentityLabel(chapter)}</span>
+            <span class="chapter-index">{chapterPresentationLabel(chapter)}</span>
             <span class="chapter-copy">
-              <span class="chapter-name">Capítulo {chapterIdentityLabel(chapter)}</span>
-              {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterIdentityLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
+              <span class="chapter-name">Capítulo {chapterPresentationLabel(chapter)}</span>
+              {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterPresentationLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
                 <span class="chapter-subtitle">{chapter.title}</span>
               {/if}
             </span>
@@ -525,7 +536,7 @@
             >
               {#if downloadProgress !== undefined}<Loader2 size={15} class="spin" /><span>{downloadProgress}%</span>{:else if isDownloaded}<CheckCircle2 size={15} /><span>Offline</span>{:else}<Download size={15} /><span>Offline</span>{/if}
             </button>
-            <a href="/ler/{chapter.id}" class="chapter-open-link" aria-label="Ler capítulo {chapterIdentityLabel(chapter)}"><BookOpen size={17} class="chapter-open" /></a>
+            <a href="/ler/{chapter.id}" class="chapter-open-link" aria-label="Ler capítulo {chapterPresentationLabel(chapter)}"><BookOpen size={17} class="chapter-open" /></a>
           </span>
         </div>
       {/each}
