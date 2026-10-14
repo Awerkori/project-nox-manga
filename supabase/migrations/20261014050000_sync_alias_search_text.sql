@@ -12,7 +12,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.index_work_search() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.index_work_search() FROM PUBLIC;
 
 DROP TRIGGER IF EXISTS works_search_text ON public.works;
 CREATE TRIGGER works_search_text
