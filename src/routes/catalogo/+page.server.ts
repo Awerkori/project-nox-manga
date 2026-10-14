@@ -1,5 +1,6 @@
 import { WORK_FIELDS } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
+import { searchWorksFromYugabyte } from '$lib/server/yugabyte';
 
 
 let cachedTags: { timestamp: number; data: any[] } | null = null;
@@ -11,7 +12,7 @@ const COUNT_CACHE_TTL_MS = 60_000;
 let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; tags: any[] } | null = null;
 const CATALOGO_CACHE_TTL_MS = 60_000;
 
-export const load = async ({ locals, url, setHeaders }) => {
+export const load = async ({ locals, url, setHeaders, platform }) => {
   const q = (url.searchParams.get('q') || '').slice(0, 100),
     tag = url.searchParams.get('tag') || '',
     kind = url.searchParams.get('tipo') || '',
@@ -73,7 +74,7 @@ export const load = async ({ locals, url, setHeaders }) => {
     }
     tagsData = currentTags;
     const selected = currentTags.find((t: any) => t.slug === tag);
-    const ids = selected
+    const ids = selected && !q
       ? (
           await withTimeout(
             locals.db.from('work_tags').select('work_id').eq('tag_id', selected.id),
@@ -95,14 +96,28 @@ export const load = async ({ locals, url, setHeaders }) => {
           { data: cachedTags?.data || [] } as any,
           'catalogo_tags'
         ),
-    withTimeout(
-      query
-        .order(sort === 'titulo' ? 'title' : 'updated_at', { ascending: sort === 'titulo' })
-        .range((page - 1) * 20, page * 20 - 1),
-      6000,
-      { data: [], count: 0 } as any,
-      'catalogo_works'
-    )
+    q
+      ? withTimeout(
+          searchWorksFromYugabyte(q, {
+            limit: 20,
+            offset: (page - 1) * 20,
+            sort: sort === 'titulo' ? 'titulo' : 'recentes',
+            kind,
+            status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
+            tag: tag || undefined,
+          }, (platform as any)?.env).then(({ works, total }) => ({ data: works, count: total })),
+          6000,
+          { data: [], count: 0 } as any,
+          'catalogo_yugabyte_search'
+        )
+      : withTimeout(
+          query
+            .order(sort === 'titulo' ? 'title' : 'updated_at', { ascending: sort === 'titulo' })
+            .range((page - 1) * 20, page * 20 - 1),
+          6000,
+          { data: [], count: 0 } as any,
+          'catalogo_works'
+        )
 
   ]);
 
