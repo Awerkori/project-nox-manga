@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
-export const GET = async ({ locals, params, url }) => {
+import { fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, searchWorksFromYugabyte } from '$lib/server/yugabyte';
+export const GET = async ({ locals, params, url, platform }) => {
   const parts = params.path.split('/'),
     page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1))),
     limit = 30;
@@ -77,12 +78,23 @@ export const GET = async ({ locals, params, url }) => {
   } else if ((parts[0] === 'works' || parts[0] === 'catalog') && parts.length === 1) {
     let query = locals.db.from('works').select(`${WORK_FIELDS},views_total`, { count: 'exact' }).eq('published', true);
     const q = (url.searchParams.get('q') || '').slice(0, 100).replace(/[%_\\]/g, '');
-    if (q) query = query.ilike('search_text', `%${q}%`);
     const kind = url.searchParams.get('kind');
     if (kind) query = query.eq('kind', kind);
     const rating = url.searchParams.get('content_rating');
     if (rating) query = query.eq('content_rating', rating);
     const sort = url.searchParams.get('sort') || 'updated_at';
+    if (q) {
+      const search = await searchWorksFromYugabyte(q, {
+        limit,
+        offset: (page - 1) * limit,
+        sort: sort === 'views' ? 'views' : 'updated_at',
+        kind: kind || undefined,
+        contentRating: rating || undefined,
+      }, (platform as any)?.env);
+      return json({ data: search.works, page, per_page: limit, total: search.total }, {
+        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
+      });
+    }
     if (sort === 'views') {
       query = query.order('views_total', { ascending: false });
     } else {
@@ -90,12 +102,20 @@ export const GET = async ({ locals, params, url }) => {
     }
     result = await query.range((page - 1) * limit, page * limit - 1);
   } else if (parts[0] === 'works' && parts.length === 2) {
-    result = await locals.db
+    const work = await fetchWorkFromYugabyte(parts[1], (platform as any)?.env);
+    const legacyResult = await locals.db
       .from('works')
       .select(`${WORK_FIELDS},views_total,work_tags(tags(id,name,slug,kind)),work_scans(scans(id,name,slug,is_official))`)
       .eq('slug', parts[1])
       .eq('published', true)
       .maybeSingle();
+    if (work) {
+      const tags = await fetchWorkTagsFromYugabyte(work.id, (platform as any)?.env);
+      result = { data: { ...(legacyResult.data || {}), ...work,
+        work_tags: tags.map((tag) => ({ tags: tag })) }, error: null };
+    } else {
+      result = legacyResult;
+    }
   } else if (parts[0] === 'works' && parts[2] === 'chapters' && parts.length === 3) {
     const { data: work } = await locals.db
       .from('works')

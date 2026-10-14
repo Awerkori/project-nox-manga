@@ -448,6 +448,61 @@ export async function fetchWorkFromYugabyte(
   );
 }
 
+export interface YugabyteWorkSearchOptions {
+  limit: number;
+  offset: number;
+  sort?: 'recentes' | 'titulo' | 'views' | 'updated_at';
+  kind?: string;
+  status?: string;
+  contentRating?: string;
+  tag?: string;
+}
+
+/** Search the authoritative catalog, including aliases written by the importer. */
+export async function searchWorksFromYugabyte(
+  search: string,
+  options: YugabyteWorkSearchOptions,
+  platformEnv?: any
+): Promise<{ works: YugabyteWork[]; total: number }> {
+  const terms = search.trim().slice(0, 100).replace(/[%_\\]/g, '');
+  if (!terms) return { works: [], total: 0 };
+
+  const params: any[] = [`%${terms}%`];
+  const where = ['published = true', `search_text ILIKE $1`];
+  const addFilter = (column: string, value?: string) => {
+    if (!value) return;
+    params.push(value);
+    where.push(`${column} = $${params.length}`);
+  };
+  addFilter('kind', options.kind);
+  addFilter('status', options.status);
+  addFilter('content_rating', options.contentRating);
+  if (options.tag) {
+    params.push(options.tag);
+    where.push(`EXISTS (
+      SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+      WHERE wt.work_id=works.id AND t.slug=$${params.length}
+    )`);
+  }
+
+  const sortColumn = options.sort === 'titulo' ? 'title'
+    : options.sort === 'views' ? 'views_total' : 'updated_at';
+  params.push(Math.max(1, Math.min(100, Math.floor(options.limit))));
+  const limitParam = params.length;
+  params.push(Math.max(0, Math.floor(options.offset)));
+  const offsetParam = params.length;
+  const sql = `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+    FROM works WHERE ${where.join(' AND ')}
+    ORDER BY ${sortColumn} ${options.sort === 'titulo' ? 'ASC' : 'DESC'}, id ASC
+    LIMIT $${limitParam} OFFSET $${offsetParam}`;
+
+  const result = await executeYugabyteSql<YugabyteWork & { total_count: number }>(sql, params, platformEnv);
+  return {
+    works: result.rows.map(({ total_count: _total, ...work }) => work),
+    total: Number(result.rows[0]?.total_count || 0),
+  };
+}
+
 /**
  * Fetch chapters for a given work from Yugabyte.
  */
