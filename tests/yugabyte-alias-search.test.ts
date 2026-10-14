@@ -43,6 +43,26 @@ describe('Yugabyte alias search', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it('falls back to persisted title and aliases when the derived search index is stale', async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({
+      rows: [{ id: 'work-2', slug: 'cheer-love', title: 'Cheer Love!', aliases: ['Viva o Amor!'], total_count: 1 }],
+      rowCount: 1
+    });
+
+    const result = await searchWorksFromYugabyte('Viva o Amor!', {
+      limit: 20, offset: 0
+    }, { HYPERDRIVE: { connectionString: 'postgres://test' } });
+
+    expect(result).toEqual({
+      works: [{ id: 'work-2', slug: 'cheer-love', title: 'Cheer Love!', aliases: ['Viva o Amor!'] }],
+      total: 1
+    });
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[0][0]).toContain('search_text ILIKE $1');
+    expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR EXISTS');
+    expect(query.mock.calls[1][0]).toContain('unnest(COALESCE(works.aliases');
+  });
+
   it('serves public API alias searches from the authoritative catalog', async () => {
     query.mockResolvedValue({
       rows: [{ id: 'work-1', slug: 'solo-leveling', title: 'Solo Leveling', aliases: ['나 혼자만 레벨업'], total_count: 1 }],
