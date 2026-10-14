@@ -468,7 +468,7 @@ export async function searchWorksFromYugabyte(
   if (!terms) return { works: [], total: 0 };
 
   const params: any[] = [`%${terms}%`];
-  const where = ['published = true', `search_text ILIKE $1`];
+  const where = ['published = true'];
   const addFilter = (column: string, value?: string) => {
     if (!value) return;
     params.push(value);
@@ -491,15 +491,27 @@ export async function searchWorksFromYugabyte(
   const limitParam = params.length;
   params.push(Math.max(0, Math.floor(options.offset)));
   const offsetParam = params.length;
-  const sql = `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
-    FROM works WHERE ${where.join(' AND ')}
+  const selectSql = (searchPredicate: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+    FROM works WHERE ${[...where.slice(0, 1), searchPredicate, ...where.slice(1)].join(' AND ')}
     ORDER BY ${sortColumn} ${options.sort === 'titulo' ? 'ASC' : 'DESC'}, id ASC
     LIMIT $${limitParam} OFFSET $${offsetParam}`;
 
+  const sql = selectSql('search_text ILIKE $1');
   const result = await executeYugabyteSql<YugabyteWork & { total_count: number }>(sql, params, platformEnv);
+  // search_text is indexed and remains the fast path. A small number of older
+  // rows can have aliases persisted while their derived search index is stale;
+  // only pay for the direct alias scan when the indexed search found nothing.
+  const fallback = result.rows.length === 0
+    ? await executeYugabyteSql<YugabyteWork & { total_count: number }>(
+      selectSql(`(title ILIKE $1 OR EXISTS (
+        SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
+        WHERE work_alias.alias_text ILIKE $1
+      ))`), params, platformEnv)
+    : null;
+  const matchingRows = result.rows.length > 0 ? result.rows : fallback?.rows || [];
   return {
-    works: result.rows.map(({ total_count: _total, ...work }) => work),
-    total: Number(result.rows[0]?.total_count || 0),
+    works: matchingRows.map(({ total_count: _total, ...work }) => work),
+    total: Number(matchingRows[0]?.total_count || 0),
   };
 }
 
