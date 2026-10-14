@@ -35,6 +35,32 @@ var worker_default = {`;
     );
   }
 
+  // Dynamic SvelteKit routes must not fall through to the static asset
+  // binding: its 404 is a plain "Not found" and bypasses application routing.
+  // Keep asset requests on the fast path while explicitly routing extensionless
+  // public/API paths through SvelteKit.
+  if (!content.includes('APPLICATION_ROUTE_GUARD')) {
+    const routeGuardMarker = 'var worker_default = {';
+    const routeGuard = `// APPLICATION_ROUTE_GUARD
+function isApplicationRoute(pathname, filename) {
+  if (pathname === '/' || pathname === '/api' || pathname.startsWith('/api/')) return true;
+  return !/\\.[a-z0-9]{1,12}$/i.test(filename);
+}
+
+var worker_default = {`;
+    if (!content.includes(routeGuardMarker)) throw new Error('Worker route handler changed; inspect adapter output');
+    content = content.replace(routeGuardMarker, routeGuard);
+  }
+
+  const assetRouteCondition = 'if (is_static_asset || prerendered.has(pathname) || pathname === version_file || pathname.startsWith(immutable)) {';
+  if (!content.includes('!isApplicationRoute(pathname, filename)')) {
+    if (!content.includes(assetRouteCondition)) throw new Error('Worker asset route condition changed; inspect adapter output');
+    content = content.replace(
+      assetRouteCondition,
+      'if (!isApplicationRoute(pathname, filename) && (is_static_asset || prerendered.has(pathname) || pathname === version_file || pathname.startsWith(immutable))) {'
+    );
+  }
+
   // Missing immutable assets must not get the one-year cache directive.
   const assetFetch = 'res = await env2.ASSETS.fetch(req);';
   if (!content.includes('ASSET_ERROR_NO_STORE')) {
