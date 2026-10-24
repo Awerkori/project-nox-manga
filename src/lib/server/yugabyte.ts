@@ -687,11 +687,6 @@ export async function searchWorksFromYugabyte(
   options: YugabyteWorkSearchOptions,
   platformEnv?: any
 ): Promise<{ works: YugabyteWork[]; total: number }> {
-export async function searchWorksFromYugabyte(
-  search: string,
-  options: YugabyteWorkSearchOptions,
-  platformEnv?: any
-): Promise<{ works: YugabyteWork[]; total: number }> {
   return fetchCatalogFromYugabyte({ ...options, q: search }, platformEnv);
 }
 
