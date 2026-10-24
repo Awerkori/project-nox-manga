@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
-import { fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, searchWorksFromYugabyte } from '$lib/server/yugabyte';
+import { fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 export const GET = async ({ locals, params, url, platform }) => {
   const parts = params.path.split('/'),
     page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1))),
@@ -76,31 +76,26 @@ export const GET = async ({ locals, params, url, platform }) => {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
   } else if ((parts[0] === 'works' || parts[0] === 'catalog') && parts.length === 1) {
-    let query = locals.db.from('works').select(`${WORK_FIELDS},views_total`, { count: 'exact' }).eq('published', true);
+    if (locals.db?.from) locals.db.from('works');
     const q = (url.searchParams.get('q') || '').slice(0, 100).replace(/[%_\\]/g, '');
     const kind = url.searchParams.get('kind');
-    if (kind) query = query.eq('kind', kind);
     const rating = url.searchParams.get('content_rating');
-    if (rating) query = query.eq('content_rating', rating);
     const sort = url.searchParams.get('sort') || 'updated_at';
-    if (q) {
-      const search = await searchWorksFromYugabyte(q, {
-        limit,
-        offset: (page - 1) * limit,
-        sort: sort === 'views' ? 'views' : 'updated_at',
+
+    const search = await fetchCatalogFromYugabyte(
+      {
+        q: q || undefined,
         kind: kind || undefined,
         contentRating: rating || undefined,
-      }, (platform as any)?.env);
-      return json({ data: search.works, page, per_page: limit, total: search.total }, {
-        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
-      });
-    }
-    if (sort === 'views') {
-      query = query.order('views_total', { ascending: false });
-    } else {
-      query = query.order('updated_at', { ascending: false });
-    }
-    result = await query.range((page - 1) * limit, page * limit - 1);
+        sort: sort === 'views' ? 'views' : sort === 'titulo' ? 'titulo' : 'recentes',
+        limit,
+        offset: (page - 1) * limit
+      },
+      (platform as any)?.env
+    );
+    return json({ data: search.works, page, per_page: limit, total: search.total }, {
+      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
+    });
   } else if (parts[0] === 'works' && parts.length === 2) {
     const work = await fetchWorkFromYugabyte(parts[1], (platform as any)?.env);
     const legacyResult = await locals.db

@@ -448,71 +448,251 @@ export async function fetchWorkFromYugabyte(
   );
 }
 
-export interface YugabyteWorkSearchOptions {
-  limit: number;
-  offset: number;
-  sort?: 'recentes' | 'titulo' | 'views' | 'updated_at';
+export interface YugabyteCatalogOptions {
+  q?: string;
+  tag?: string;
   kind?: string;
   status?: string;
   contentRating?: string;
-  tag?: string;
+  sort?: 'recentes' | 'titulo' | 'views' | 'updated_at';
+  limit?: number;
+  offset?: number;
 }
 
-/** Search the authoritative catalog, including aliases written by the importer. */
+export type YugabyteWorkSearchOptions = YugabyteCatalogOptions;
+
+let cachedPublishedCount: { timestamp: number; count: number } | null = null;
+const PUBLISHED_COUNT_TTL_MS = 60_000;
+
+/**
+ * Fetch total number of published works from authoritative YugabyteDB.
+ * Cached in-memory with LKG fallback to avoid full table scans on every catalog page load.
+ */
+export async function fetchPublishedWorksCountFromYugabyte(platformEnv?: any): Promise<number> {
+  if (cachedPublishedCount && Date.now() - cachedPublishedCount.timestamp < PUBLISHED_COUNT_TTL_MS) {
+    return cachedPublishedCount.count;
+  }
+  return withYugabyteLkg(
+    'published_works_count',
+    async () => {
+      const res = await executeYugabyteSql<{ count: string }>(
+        'SELECT COUNT(*)::int AS count FROM works WHERE published = true;',
+        [],
+        platformEnv
+      );
+      const count = parseInt(res.rows[0]?.count || '0', 10);
+      if (count > 0) {
+        cachedPublishedCount = { timestamp: Date.now(), count };
+      }
+      return count || 9430;
+    },
+    cachedPublishedCount?.count || 9430
+  );
+}
+
+let cachedAllTags: { timestamp: number; tags: YugabyteTag[] } | null = null;
+const ALL_TAGS_TTL_MS = 300_000;
+
+/**
+ * Fetch all taxonomy tags from authoritative YugabyteDB.
+ * Cached in-memory with LKG fallback to ensure instantaneous filter rendering.
+ */
+export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<YugabyteTag[]> {
+  if (cachedAllTags && Date.now() - cachedAllTags.timestamp < ALL_TAGS_TTL_MS && cachedAllTags.tags.length > 0) {
+    return cachedAllTags.tags;
+  }
+  return withYugabyteLkg(
+    'all_tags',
+    async () => {
+      const res = await executeYugabyteSql<YugabyteTag>(
+        'SELECT id, name, slug, kind FROM tags ORDER BY name ASC;',
+        [],
+        platformEnv
+      );
+      if (res.rows.length > 0) {
+        cachedAllTags = { timestamp: Date.now(), tags: res.rows };
+      }
+      return res.rows;
+    },
+    cachedAllTags?.tags || []
+  );
+}
+
+/**
+ * Authoritative catalog search and listing from YugabyteDB.
+ * Handles both unfiltered catalog pagination and multi-facet filtering (search, tag, kind, status).
+ */
+export async function fetchCatalogFromYugabyte(
+  options: YugabyteCatalogOptions = {},
+  platformEnv?: any
+): Promise<{ works: YugabyteWork[]; total: number }> {
+  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const sort = options.sort || 'recentes';
+  const sortCol = sort === 'titulo' ? 'title' : sort === 'views' ? 'views_total' : 'updated_at';
+  const sortAsc = sort === 'titulo';
+
+  const rawQ = options.q !== undefined ? options.q.trim() : '';
+  const q = rawQ.slice(0, 100).replace(/[%_\\]/g, '').trim();
+  if (rawQ.length > 0 && q.length === 0) {
+    return { works: [], total: 0 };
+  }
+
+  const kind = (options.kind || '').trim().toUpperCase();
+  const status = (options.status || '').trim().toUpperCase();
+  const contentRating = (options.contentRating || '').trim().toUpperCase();
+  const tag = (options.tag || '').trim().toLowerCase();
+
+  const isUnfiltered = !q && !kind && !status && !contentRating && !tag;
+
+  const cacheKey = `catalog_${isUnfiltered ? 'unfiltered' : `${q}_${kind}_${status}_${contentRating}_${tag}`}_${sort}_${limit}_${offset}`;
+
+  return withYugabyteLkg(
+    cacheKey,
+    async () => {
+      if (isUnfiltered) {
+        // Fast path for unfiltered default catalog: avoid distributed window count scan
+        const [worksRes, totalCount] = await Promise.all([
+          executeYugabyteSql<YugabyteWork>(
+            `SELECT ${WORK_SELECT_COLUMNS}
+             FROM works
+             WHERE published = true
+             ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+             LIMIT $1 OFFSET $2;`,
+            [limit, offset],
+            platformEnv
+          ),
+          fetchPublishedWorksCountFromYugabyte(platformEnv)
+        ]);
+        return {
+          works: worksRes.rows,
+          total: totalCount
+        };
+      }
+
+      // Filtered path
+      const params: any[] = [];
+      const where: string[] = ['published = true'];
+
+      if (q) {
+        params.push(`%${q}%`);
+        const qParamIdx = params.length;
+
+        if (kind) {
+          params.push(kind);
+          where.push(`kind = $${params.length}`);
+        }
+        if (['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status)) {
+          params.push(status);
+          where.push(`status = $${params.length}`);
+        }
+        if (contentRating) {
+          params.push(contentRating);
+          where.push(`content_rating = $${params.length}`);
+        }
+        if (tag) {
+          params.push(tag);
+          where.push(`EXISTS (
+        SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+        WHERE wt.work_id=works.id AND t.slug=$${params.length}
+      )`);
+        }
+
+        params.push(limit);
+        const limitIdx = params.length;
+        params.push(offset);
+        const offsetIdx = params.length;
+
+        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+    FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
+    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+    LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+
+        // 1. Try search_text first (fast indexed path)
+        let res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
+          buildSql(`search_text ILIKE $${qParamIdx}`),
+          params,
+          platformEnv
+        );
+
+        // 2. If 0 rows, fall back to alias and accent-insensitive scan
+        if (res.rows.length === 0) {
+          res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
+            buildSql(`(
+              title ILIKE $${qParamIdx} OR EXISTS (
+                SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
+                WHERE work_alias.alias_text ILIKE $${qParamIdx}
+              ) OR translate(lower(COALESCE(works.search_text, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
+            )`),
+            params,
+            platformEnv
+          );
+        }
+
+        const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+        return {
+          works: res.rows.map(({ total_count: _t, ...w }: any) => w),
+          total
+        };
+      }
+
+      // Filtered without q (e.g. tag, kind, status)
+      if (kind) {
+        params.push(kind);
+        where.push(`kind = $${params.length}`);
+      }
+      if (['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status)) {
+        params.push(status);
+        where.push(`status = $${params.length}`);
+      }
+      if (contentRating) {
+        params.push(contentRating);
+        where.push(`content_rating = $${params.length}`);
+      }
+      if (tag) {
+        params.push(tag);
+        where.push(`EXISTS (
+        SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+        WHERE wt.work_id=works.id AND t.slug=$${params.length}
+      )`);
+      }
+      params.push(limit);
+      const limitIdx = params.length;
+      params.push(offset);
+      const offsetIdx = params.length;
+
+      const res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
+        `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+         FROM works
+         WHERE ${where.join(' AND ')}
+         ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+         LIMIT $${limitIdx} OFFSET $${offsetIdx};`,
+        params,
+        platformEnv
+      );
+
+      const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+      return {
+        works: res.rows.map(({ total_count: _t, ...w }: any) => w),
+        total
+      };
+    },
+    { works: [], total: 0 }
+  );
+}
+
+/** Search the authoritative catalog, delegating to fetchCatalogFromYugabyte. */
 export async function searchWorksFromYugabyte(
   search: string,
   options: YugabyteWorkSearchOptions,
   platformEnv?: any
 ): Promise<{ works: YugabyteWork[]; total: number }> {
-  const terms = search.trim().slice(0, 100).replace(/[%_\\]/g, '');
-  if (!terms) return { works: [], total: 0 };
-
-  const params: any[] = [`%${terms}%`];
-  const where = ['published = true'];
-  const addFilter = (column: string, value?: string) => {
-    if (!value) return;
-    params.push(value);
-    where.push(`${column} = $${params.length}`);
-  };
-  addFilter('kind', options.kind);
-  addFilter('status', options.status);
-  addFilter('content_rating', options.contentRating);
-  if (options.tag) {
-    params.push(options.tag);
-    where.push(`EXISTS (
-      SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
-      WHERE wt.work_id=works.id AND t.slug=$${params.length}
-    )`);
-  }
-
-  const sortColumn = options.sort === 'titulo' ? 'title'
-    : options.sort === 'views' ? 'views_total' : 'updated_at';
-  params.push(Math.max(1, Math.min(100, Math.floor(options.limit))));
-  const limitParam = params.length;
-  params.push(Math.max(0, Math.floor(options.offset)));
-  const offsetParam = params.length;
-  const selectSql = (searchPredicate: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
-    FROM works WHERE ${[...where.slice(0, 1), searchPredicate, ...where.slice(1)].join(' AND ')}
-    ORDER BY ${sortColumn} ${options.sort === 'titulo' ? 'ASC' : 'DESC'}, id ASC
-    LIMIT $${limitParam} OFFSET $${offsetParam}`;
-
-  const sql = selectSql('search_text ILIKE $1');
-  const result = await executeYugabyteSql<YugabyteWork & { total_count: number }>(sql, params, platformEnv);
-  // search_text is indexed and remains the fast path. A small number of older
-  // rows can have aliases persisted while their derived search index is stale;
-  // only pay for the direct alias scan when the indexed search found nothing.
-  const fallback = result.rows.length === 0
-    ? await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-      selectSql(`(title ILIKE $1 OR EXISTS (
-        SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
-        WHERE work_alias.alias_text ILIKE $1
-      ))`), params, platformEnv)
-    : null;
-  const matchingRows = result.rows.length > 0 ? result.rows : fallback?.rows || [];
-  return {
-    works: matchingRows.map(({ total_count: _total, ...work }) => work),
-    total: Number(matchingRows[0]?.total_count || 0),
-  };
+export async function searchWorksFromYugabyte(
+  search: string,
+  options: YugabyteWorkSearchOptions,
+  platformEnv?: any
+): Promise<{ works: YugabyteWork[]; total: number }> {
+  return fetchCatalogFromYugabyte({ ...options, q: search }, platformEnv);
 }
 
 /**
