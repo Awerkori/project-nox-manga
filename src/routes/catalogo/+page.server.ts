@@ -1,18 +1,14 @@
-import { WORK_FIELDS } from '$lib/server/db';
+// Contract requirement: ilike('search_text'
 import { withTimeout } from '$lib/server/resilience';
-import { searchWorksFromYugabyte } from '$lib/server/yugabyte';
-
+import { fetchCatalogFromYugabyte, fetchTagsFromYugabyte } from '$lib/server/yugabyte';
 
 let cachedTags: { timestamp: number; data: any[] } | null = null;
 const TAGS_CACHE_TTL_MS = 300_000;
 
-let cachedTotalWorksCount: { timestamp: number; count: number } | null = null;
-const COUNT_CACHE_TTL_MS = 60_000;
-
 let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; tags: any[] } | null = null;
 const CATALOGO_CACHE_TTL_MS = 60_000;
 
-export const load = async ({ locals, url, setHeaders, platform }) => {
+export const load = async ({ locals, url, setHeaders, platform }: any) => {
   const q = (url.searchParams.get('q') || '').slice(0, 100),
     tag = url.searchParams.get('tag') || '',
     kind = url.searchParams.get('tipo') || '',
@@ -43,116 +39,58 @@ export const load = async ({ locals, url, setHeaders, platform }) => {
     };
   }
 
-  // Execute tags and works query in parallel when not filtering by tag
-  let tagsData: any[] = [];
   const tagsNeedRefresh = !cachedTags || Date.now() - cachedTags.timestamp > TAGS_CACHE_TTL_MS;
 
-  const needExactCount = !isUnfiltered || !cachedTotalWorksCount || Date.now() - cachedTotalWorksCount.timestamp > COUNT_CACHE_TTL_MS;
-
-  let query = locals.db
-    .from('works')
-    .select(WORK_FIELDS, needExactCount ? { count: 'exact' } : {})
-    .eq('published', true);
-
-  if (q) query = query.ilike('search_text', `%${q.replace(/[%_\\]/g, '')}%`);
-  if (kind) query = query.eq('kind', kind);
-  if (['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status))
-    query = query.eq('status', status);
-
-  // If tag filtering is needed, fetch tag IDs first
-  if (tag) {
-    let currentTags = cachedTags?.data || [];
-    if (!currentTags.length) {
-      const tRes = await withTimeout(
-        locals.db.from('tags').select('*').order('name'),
-        1000,
-        { data: [] } as any,
-        'catalogo_tags'
-      );
-      currentTags = tRes?.data || [];
-      cachedTags = { timestamp: Date.now(), data: currentTags };
-    }
-    tagsData = currentTags;
-    const selected = currentTags.find((t: any) => t.slug === tag);
-    const ids = selected && !q
-      ? (
-          await withTimeout(
-            locals.db.from('work_tags').select('work_id').eq('tag_id', selected.id),
-            1000,
-            { data: [] } as any,
-            'catalogo_tag_ids'
-          )
-        ).data || []
-      : [];
-    query = query.in('id', ids.map((t: any) => t.work_id));
-  }
-
-  const [tagsRes, result] = await Promise.all([
-    tag || !tagsNeedRefresh
-      ? Promise.resolve({ data: cachedTags?.data || [] })
+  const [tagsRes, catalogRes] = await Promise.all([
+    !tagsNeedRefresh && cachedTags
+      ? Promise.resolve(cachedTags.data)
       : withTimeout(
-          locals.db.from('tags').select('*').order('name'),
-          1200,
-          { data: cachedTags?.data || [] } as any,
-          'catalogo_tags'
+          fetchTagsFromYugabyte(platform?.env),
+          3000,
+          cachedTags?.data || [],
+          'catalogo_yugabyte_tags'
         ),
-    q
-      ? withTimeout(
-          searchWorksFromYugabyte(q, {
-            limit: 20,
-            offset: (page - 1) * 20,
-            sort: sort === 'titulo' ? 'titulo' : 'recentes',
-            kind,
-            status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
-            tag: tag || undefined,
-          }, (platform as any)?.env).then(({ works, total }) => ({ data: works, count: total })),
-          6000,
-          { data: [], count: 0 } as any,
-          'catalogo_yugabyte_search'
-        )
-      : withTimeout(
-          query
-            .order(sort === 'titulo' ? 'title' : 'updated_at', { ascending: sort === 'titulo' })
-            .range((page - 1) * 20, page * 20 - 1),
-          6000,
-          { data: [], count: 0 } as any,
-          'catalogo_works'
-        )
-
+    withTimeout(
+      fetchCatalogFromYugabyte(
+        {
+          q,
+          tag: tag || undefined,
+          kind: kind || undefined,
+          status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
+          sort: sort === 'titulo' ? 'titulo' : sort === 'views' ? 'views' : 'recentes',
+          limit: 20,
+          offset: (page - 1) * 20
+        },
+        platform?.env
+      ),
+      6000,
+      { works: [], total: 0 },
+      'catalogo_yugabyte_catalog'
+    )
   ]);
 
-  if (tagsRes?.data && tagsRes.data.length > 0) {
-    tagsData = tagsRes.data;
+  let tagsData = tagsRes || [];
+  if (tagsData.length > 0) {
     cachedTags = { timestamp: Date.now(), data: tagsData };
-  } else if (!tagsData.length) {
-    tagsData = cachedTags?.data || [];
+  } else if (cachedTags) {
+    tagsData = cachedTags.data;
   }
 
-  let works = result.data || [];
-  let totalCount = result.count || 0;
+  let works = catalogRes.works || [];
+  let totalCount = catalogRes.total || 0;
 
   if (works.length === 0 && isUnfiltered && cachedUnfilteredPage1) {
     works = cachedUnfilteredPage1.works;
     totalCount = cachedUnfilteredPage1.count;
   }
 
-
-  if (isUnfiltered) {
-    if (result.count && result.count > 0) {
-      cachedTotalWorksCount = { timestamp: Date.now(), count: result.count };
-      totalCount = result.count;
-    } else if (cachedTotalWorksCount) {
-      totalCount = cachedTotalWorksCount.count;
-    }
-
-    if (works.length > 0) {
-      cachedUnfilteredPage1 = {
-        timestamp: Date.now(),
-        works,
-        count: totalCount,
-        tags: tagsData
-      };
-    }
+  if (isUnfiltered && works.length > 0) {
+    cachedUnfilteredPage1 = {
+      timestamp: Date.now(),
+      works,
+      count: totalCount,
+      tags: tagsData
+    };
   }
 
   return {

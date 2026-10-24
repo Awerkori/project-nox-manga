@@ -1,35 +1,28 @@
 import { json } from '@sveltejs/kit';
-import { WORK_FIELDS, privileged } from '$lib/server/db';
+import { fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 
-export const GET = async ({ url, locals }) => {
-  const db = locals.db || privileged();
-  const sort = url.searchParams.get('sort') || 'latest';
+export const GET = async ({ url, platform }: any) => {
+  const sortParam = url.searchParams.get('sort') || 'latest';
+  const q = (url.searchParams.get('q') || url.searchParams.get('search') || '').trim();
   const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
   const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '8', 10)));
 
-  const selectFields = `${WORK_FIELDS}, work_scans(is_primary, status, scans(id, name, slug, logo_id, is_official))`;
+  const sort = sortParam === 'most_read' || sortParam === 'popular' ? 'views'
+    : sortParam === 'titulo' ? 'titulo' : 'recentes';
 
-  let query = db
-    .from('works')
-    .select(selectFields)
-    .eq('published', true);
-
-  if (sort === 'most_read' || sort === 'popular') {
-    query = query
-      .order('views_total', { ascending: false })
-      .order('updated_at', { ascending: false });
-  } else {
-    query = query.order('updated_at', { ascending: false });
-  }
-
-  const { data, error } = await query.range(offset, offset + limit - 1);
-
-  if (error) {
-    return json({ works: [], error: error.message }, { status: 500 });
-  }
+  const result = await fetchCatalogFromYugabyte(
+    {
+      q: q || undefined,
+      sort,
+      limit,
+      offset
+    },
+    platform?.env
+  );
 
   return json({
-    works: data || [],
-    hasMore: (data || []).length === limit
+    works: result.works,
+    total: result.total,
+    hasMore: offset + result.works.length < result.total
   });
 };

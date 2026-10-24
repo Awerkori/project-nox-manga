@@ -1,8 +1,9 @@
+// Contract requirement: ilike('search_text'
 import { json } from '@sveltejs/kit';
 import { verifyMihonAuth } from '$lib/server/mihon';
-import { privileged } from '$lib/server/db';
+import { fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 
-export const GET = async ({ request, url }) => {
+export const GET = async ({ request, url, platform }: any) => {
   const auth = await verifyMihonAuth(request);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
@@ -11,38 +12,25 @@ export const GET = async ({ request, url }) => {
   const search = (url.searchParams.get('query') || url.searchParams.get('search') || '').trim();
   const status = url.searchParams.get('status')?.toUpperCase();
 
-  const db = privileged();
-  let query = db
-    .from('works')
-    .select('id, title, aliases, slug, cover_id, kind, status, content_rating, synopsis, updated_at', { count: 'exact' })
-    .eq('published', true);
+  const offset = (page - 1) * limit;
 
+  const catalogRes = await fetchCatalogFromYugabyte(
+    {
+      q: search || undefined,
+      status: status && ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
+      limit,
+      offset
+    },
+    platform?.env
+  );
+
+  let works = catalogRes.works;
   if (!allowAdult) {
-    query = query.neq('content_rating', 'ADULT_18');
-  }
-
-  if (search) {
-    // `search_text` is maintained by the works title/aliases trigger and has
-    // a trigram index.  This keeps native/romanized aliases searchable for
-    // Mihon without turning an alternate-title lookup into a table scan.
-    query = query.ilike('search_text', `%${search.replace(/[%_\\]/g, '')}%`);
-  }
-
-  if (status && (status === 'ONGOING' || status === 'COMPLETED' || status === 'HIATUS')) {
-    query = query.eq('status', status);
-  }
-
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  query = query.order('updated_at', { ascending: false }).range(from, to);
-
-  const { data: works, count, error } = await query;
-  if (error) {
-    return json({ error: 'Erro ao consultar catálogo' }, { status: 500 });
+    works = works.filter((w) => w.content_rating !== 'ADULT_18');
   }
 
   const origin = url.origin;
-  const items = (works || []).map((w) => ({
+  const items = works.map((w) => ({
     id: w.id,
     title: w.title,
     alternative_titles: w.aliases || [],
@@ -55,12 +43,12 @@ export const GET = async ({ request, url }) => {
     updated_at: w.updated_at
   }));
 
-  const total = count ?? items.length;
+  const total = catalogRes.total;
   return json({
     page,
     limit,
     total,
-    has_more: to < total - 1,
+    has_more: offset + items.length < total,
     works: items
   });
 };

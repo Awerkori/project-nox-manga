@@ -708,8 +708,20 @@
 
         <h1 class="work-title">{decodedTitle}</h1>
 
-        {#if data.work.aliases.length}
-          <p class="aliases"><strong>Títulos alternativos:</strong> {data.work.aliases.join(' · ')}</p>
+        {#if alternativeTitles.length}
+          <p class="aliases">
+            <strong>Títulos alternativos:</strong> {visibleAliases.map((a: string) => decodeHtmlEntities(a)).join(' · ')}
+            {#if alternativeTitles.length > 3}
+              <button
+                type="button"
+                class="btn-toggle-aliases"
+                onclick={() => (aliasesExpanded = !aliasesExpanded)}
+                aria-expanded={aliasesExpanded}
+              >
+                {aliasesExpanded ? 'Ver menos' : `Ver todos (${alternativeTitles.length})`}
+              </button>
+            {/if}
+          </p>
         {/if}
 
         {#if data.work.author || data.work.artist}
@@ -1348,6 +1360,28 @@
   .aliases strong {
     color: #c2bed4;
     font-weight: 650;
+  }
+
+  .btn-toggle-aliases {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    color: #c084fc;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: all 0.15s ease;
+  }
+
+  .btn-toggle-aliases:hover {
+    background: rgba(168, 85, 247, 0.22);
+    border-color: rgba(168, 85, 247, 0.45);
+    color: #e9d5ff;
   }
 
   .author-artist-line {
