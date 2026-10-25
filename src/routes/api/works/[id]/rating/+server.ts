@@ -86,8 +86,8 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
   const body = await request.json().catch(() => ({}));
   const rating = body.rating;
 
-  if (rating === undefined || rating === null || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 0 || rating > 5) {
-    return json({ error: 'A avaliação deve ser um número inteiro de 0 a 5 estrelas.' }, { status: 400 });
+  if (rating === undefined || rating === null || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return json({ error: 'A avaliação deve ser um número inteiro de 1 a 5 estrelas.' }, { status: 400 });
   }
 
   try {

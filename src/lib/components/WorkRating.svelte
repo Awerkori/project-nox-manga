@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Star, X, Check, Loader2, BarChart3 } from '@lucide/svelte';
+  import { Star, X, Check, Loader2, BarChart3, Ellipsis, Trash2 } from '@lucide/svelte';
   import type { RatingSummary } from '$lib/server/ratings';
 
   type Props = {
@@ -15,14 +15,14 @@
   let hoverScore = $state<number | null>(null);
   let isVoting = $state(false);
   let showBreakdownModal = $state(false);
+  let showOptionsDropdown = $state(false);
 
   const RATING_LABELS: Record<number, string> = {
-    0: '0 - Péssimo',
     1: '1 - Muito ruim',
-    2: '2 - Regular',
-    3: '3 - Bom',
+    2: '2 - Ruim',
+    3: '3 - Regular',
     4: '4 - Muito bom',
-    5: '5 - Obra-prima'
+    5: '5 - Excelente'
   };
 
   let displayAvg = $derived(
@@ -31,7 +31,12 @@
       : null
   );
 
-  let userVoted = $derived(rating?.userRating !== null && rating?.userRating !== undefined);
+  let userVoted = $derived(
+    rating?.userRating !== null &&
+    rating?.userRating !== undefined &&
+    rating.userRating >= 1 &&
+    rating.userRating <= 5
+  );
   let userScore = $derived(rating?.userRating);
 
   // Client-side fresh check to ensure visitor rating is verified without edge-cache contamination
@@ -50,26 +55,26 @@
         }
       }
     } catch (err) {
-      // Ignore background verification failure on mount
       void err;
     }
   });
 
   async function handleVote(score: number) {
-    if (isVoting) return;
+    if (isVoting || score < 1 || score > 5) return;
     isVoting = true;
+    showOptionsDropdown = false;
 
     // Optimistic calculation
     const prevRating = { ...rating };
     const prevScore = rating.userRating;
-    const isNewVote = prevScore === null || prevScore === undefined;
+    const isNewVote = prevScore === null || prevScore === undefined || prevScore < 1;
     const newCount = isNewVote ? rating.count + 1 : rating.count;
     const currentSum = (rating.average || 0) * rating.count;
     const newSum = isNewVote ? currentSum + score : currentSum - (prevScore || 0) + score;
     const newAvg = newCount > 0 ? Math.round((newSum / newCount) * 10) / 10 : null;
 
-    const newDist = { ...(rating.distribution || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }) };
-    if (!isNewVote && prevScore !== null && prevScore !== undefined && newDist[prevScore] > 0) {
+    const newDist = { ...(rating.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }) };
+    if (!isNewVote && prevScore && newDist[prevScore] > 0) {
       newDist[prevScore]--;
     }
     newDist[score] = (newDist[score] || 0) + 1;
@@ -98,11 +103,9 @@
         userRating: data.userRating,
         distribution: data.distribution || rating.distribution
       };
-      if (onNotice) {
-        onNotice(score === 0 ? 'Avaliação registrada: 0 estrelas.' : `Avaliação de ${score} estrelas registrada!`);
-      }
+      // Notice Requirement 3: NO success toast/pop-up on normal voting!
     } catch (err: any) {
-      // Revert optimistic update on error
+      // Revert optimistic update only on error, and inform user of real failure
       rating = prevRating;
       if (onNotice) onNotice(err.message || 'Falha ao salvar avaliação.');
     } finally {
@@ -114,6 +117,7 @@
   async function handleRemoveVote() {
     if (isVoting || !userVoted) return;
     isVoting = true;
+    showOptionsDropdown = false;
 
     const prevRating = { ...rating };
     const prevScore = rating.userRating!;
@@ -122,7 +126,7 @@
     const newSum = Math.max(0, currentSum - prevScore);
     const newAvg = newCount > 0 ? Math.round((newSum / newCount) * 10) / 10 : null;
 
-    const newDist = { ...(rating.distribution || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }) };
+    const newDist = { ...(rating.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }) };
     if (newDist[prevScore] > 0) newDist[prevScore]--;
 
     rating = {
@@ -147,7 +151,6 @@
         userRating: null,
         distribution: data.distribution || rating.distribution
       };
-      if (onNotice) onNotice('Sua avaliação foi removida.');
     } catch (err: any) {
       rating = prevRating;
       if (onNotice) onNotice(err.message || 'Falha ao remover avaliação.');
@@ -164,15 +167,22 @@
   }
 </script>
 
+<svelte:window onclick={(e) => {
+  // Close discrete options popover on click outside
+  if (showOptionsDropdown && !(e.target as HTMLElement)?.closest?.('.user-vote-chip-group')) {
+    showOptionsDropdown = false;
+  }
+}} />
+
 <div class="rating-widget" aria-label="Avaliações dos leitores">
-  <!-- Top Summary Line: Average Score & Reviews Count -->
+  <!-- Top Summary Line: Average Score & Total Count -->
   <div class="rating-summary-row">
     <button
       type="button"
       class="rating-score-box"
       onclick={() => (showBreakdownModal = true)}
-      title="Ver detalhes da distribuição de votos"
-      aria-label="Ver detalhes e distribuição de avaliações"
+      title="Ver detalhes e distribuição de votos"
+      aria-label="Ver detalhes e distribuição de votos"
     >
       {#if displayAvg !== null}
         <span class="rating-number">{displayAvg}</span>
@@ -180,19 +190,19 @@
           {#each [1, 2, 3, 4, 5] as starIndex (starIndex)}
             {@const activeRatio = Math.max(0, Math.min(1, (rating.average || 0) - (starIndex - 1)))}
             <div class="star-wrapper">
-              <Star size={18} class="star-bg" />
+              <Star size={17} class="star-bg" />
               <div class="star-fill" style="width: {activeRatio * 100}%">
-                <Star size={18} class="star-fg" fill="currentColor" />
+                <Star size={17} class="star-fg" fill="currentColor" />
               </div>
             </div>
           {/each}
         </div>
       {:else}
-        <span class="rating-empty-badge">Sem avaliações</span>
+        <span class="rating-empty-badge">Ainda não avaliado</span>
       {/if}
 
-      <span class="btn-breakdown-hint" title="Ver distribuição">
-        <BarChart3 size={15} />
+      <span class="btn-breakdown-hint" title="Ver distribuição de notas">
+        <BarChart3 size={14} />
       </span>
     </button>
 
@@ -204,32 +214,50 @@
       {/if}
 
       {#if userVoted}
-        <span class="user-score-chip" class:zero-score={userScore === 0}>
-          <Check size={12} />
-          {userScore === 0 ? 'Sua nota: 0 ★' : `Sua nota: ${userScore} ★`}
-        </span>
+        <div class="user-vote-chip-group">
+          <span class="user-score-chip">
+            <Check size={12} />
+            <span>Sua nota: {userScore} ★</span>
+          </span>
+
+          <!-- Discrete removal menu button (Requirement 2: not permanently cluttering the bar) -->
+          <button
+            type="button"
+            class="btn-rating-options"
+            onclick={(e) => {
+              e.stopPropagation();
+              showOptionsDropdown = !showOptionsDropdown;
+            }}
+            title="Opções da avaliação"
+            aria-label="Opções da avaliação"
+            aria-expanded={showOptionsDropdown}
+          >
+            <Ellipsis size={14} />
+          </button>
+
+          {#if showOptionsDropdown}
+            <div class="rating-options-popover" role="menu">
+              <button
+                type="button"
+                class="btn-popover-remove"
+                onclick={handleRemoveVote}
+                disabled={isVoting}
+              >
+                <Trash2 size={13} />
+                <span>Remover avaliação</span>
+              </button>
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
   </div>
 
-  <!-- Interactive Rating Controls: DIRECTLY VISIBLE ON BOTH DESKTOP AND MOBILE -->
+  <!-- Interactive Rating Row: 1 to 5 Stars only (DIRECTLY ACCESSIBLE) -->
   <div class="rating-interactive-row">
     <span class="rate-prompt">Avaliar obra:</span>
 
-    <!-- Dedicated 0-star button (distinguishing 0 from absence of vote) -->
-    <button
-      type="button"
-      class="btn-zero-star"
-      class:is-active={userScore === 0}
-      onclick={() => handleVote(0)}
-      title="Avaliar com nota zero (0 estrelas)"
-      aria-label="Avaliar com nota zero (0 estrelas)"
-      disabled={isVoting}
-    >
-      0★
-    </button>
-
-    <!-- 1 to 5 Stars: Large touch targets on mobile (min 44x44px hitboxes) -->
+    <!-- 1 to 5 Stars: Comfortable touch targets on mobile (min 44x44px) -->
     <div class="interactive-stars" role="radiogroup" aria-label="Avaliar de 1 a 5 estrelas">
       {#each [1, 2, 3, 4, 5] as starValue (starValue)}
         {@const isHovered = hoverScore !== null && starValue <= hoverScore}
@@ -247,34 +275,23 @@
           aria-label="{starValue} de 5 estrelas: {RATING_LABELS[starValue]}"
           disabled={isVoting}
         >
-          <Star size={24} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
+          <Star size={23} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
         </button>
       {/each}
     </div>
 
-    <!-- Active Hover or User Score Feedback -->
+    <!-- Active Hover or Subtle Feedback -->
     {#if hoverScore !== null}
       <span class="rating-tooltip-label">{RATING_LABELS[hoverScore]}</span>
-    {:else if userVoted}
-      <button
-        type="button"
-        class="btn-remove-rating"
-        onclick={handleRemoveVote}
-        disabled={isVoting}
-        title="Remover minha avaliação"
-        aria-label="Remover minha avaliação"
-      >
-        <X size={13} /> Remover
-      </button>
     {/if}
 
     {#if isVoting}
-      <Loader2 size={16} class="spin voting-spinner" />
+      <Loader2 size={15} class="spin voting-spinner" />
     {/if}
   </div>
 </div>
 
-<!-- Detailed Distribution / Stats Modal (Accessible by clicking score box) -->
+<!-- Detailed Distribution Modal (Accessed when clicking score box or chart icon) -->
 {#if showBreakdownModal}
   <div class="rating-modal-backdrop" onclick={() => (showBreakdownModal = false)} role="presentation">
     <div
@@ -318,14 +335,14 @@
         {#if userVoted}
           <div class="modal-user-vote-banner">
             <span>Sua avaliação registrada:</span>
-            <strong>{userScore === 0 ? '0 Estrelas (0★)' : `${userScore} Estrelas (${userScore}★)`}</strong>
+            <strong>{userScore} {userScore === 1 ? 'Estrela' : 'Estrelas'} ({userScore}★)</strong>
           </div>
         {/if}
       </div>
 
-      <!-- Rating Distribution Bars (5 down to 0) -->
+      <!-- Rating Distribution Bars: 5 down to 1 only -->
       <div class="distribution-bars">
-        {#each [5, 4, 3, 2, 1, 0] as score (score)}
+        {#each [5, 4, 3, 2, 1] as score (score)}
           {@const count = rating.distribution?.[score] || 0}
           {@const pct = rating.count > 0 ? Math.round((count / rating.count) * 100) : 0}
           {@const isMyVote = userScore === score}
@@ -361,7 +378,8 @@
           }}
           disabled={isVoting}
         >
-          <X size={16} /> Remover minha avaliação
+          <Trash2 size={15} />
+          <span>Remover minha avaliação</span>
         </button>
       {/if}
     </div>
@@ -372,44 +390,43 @@
   .rating-widget {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 14px 18px;
-    background: rgba(14, 12, 24, 0.7);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    border-radius: 14px;
-    backdrop-filter: blur(12px);
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(14, 12, 24, 0.5);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
     margin: 8px 0;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   }
 
   .rating-summary-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
     flex-wrap: wrap;
   }
 
   .rating-score-box {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     background: none;
     border: none;
     padding: 0;
     cursor: pointer;
     text-align: left;
     color: inherit;
-    border-radius: 8px;
+    border-radius: 6px;
     transition: opacity 0.15s ease;
   }
 
   .rating-score-box:hover {
-    opacity: 0.92;
+    opacity: 0.9;
   }
 
   .rating-number {
-    font-size: 1.85rem;
+    font-size: 1.75rem;
     font-weight: 800;
     line-height: 1;
     color: #ffd154;
@@ -418,18 +435,18 @@
   }
 
   .rating-empty-badge {
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: rgba(226, 232, 240, 0.6);
-    background: rgba(255, 255, 255, 0.05);
-    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 3px 8px;
     border-radius: 999px;
   }
 
   .rating-stars-display {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
   }
 
   .star-wrapper {
@@ -437,12 +454,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
   }
 
   :global(.star-bg) {
-    color: rgba(181, 154, 245, 0.25);
+    color: rgba(181, 154, 245, 0.22);
   }
 
   .star-fill {
@@ -460,91 +477,121 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 6px;
-    background: rgba(181, 154, 245, 0.08);
-    color: rgba(181, 154, 245, 0.65);
+    background: rgba(181, 154, 245, 0.06);
+    color: rgba(181, 154, 245, 0.6);
     transition: all 0.15s ease;
   }
 
   .rating-score-box:hover .btn-breakdown-hint {
-    background: rgba(181, 154, 245, 0.18);
+    background: rgba(181, 154, 245, 0.15);
     color: #c4b5fd;
   }
 
   .rating-meta-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
   .rating-count {
-    font-size: 0.86rem;
-    color: rgba(226, 232, 240, 0.7);
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.65);
     font-weight: 500;
+  }
+
+  /* User Vote Chip & Discrete Removal Popover */
+  .user-vote-chip-group {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
   }
 
   .user-score-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 700;
     color: #c4b5fd;
-    background: rgba(167, 139, 250, 0.16);
-    border: 1px solid rgba(167, 139, 250, 0.35);
-    padding: 3px 9px;
+    background: rgba(167, 139, 250, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    padding: 2px 8px;
     border-radius: 999px;
-    letter-spacing: 0.01em;
   }
 
-  .user-score-chip.zero-score {
+  .btn-rating-options {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(181, 154, 245, 0.15);
+    border-radius: 50%;
+    color: rgba(226, 232, 240, 0.6);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-rating-options:hover {
+    color: #ffffff;
+    background: rgba(181, 154, 245, 0.15);
+  }
+
+  .rating-options-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    background: #141220;
+    border: 1px solid rgba(181, 154, 245, 0.2);
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    z-index: 50;
+    white-space: nowrap;
+  }
+
+  .btn-popover-remove {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    background: none;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 600;
     color: #f87171;
-    background: rgba(248, 113, 113, 0.14);
-    border-color: rgba(248, 113, 113, 0.35);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+  }
+
+  .btn-popover-remove:hover {
+    background: rgba(248, 113, 113, 0.12);
   }
 
   /* Interactive Rating Controls */
   .rating-interactive-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(181, 154, 245, 0.1);
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(181, 154, 245, 0.08);
     flex-wrap: wrap;
   }
 
   .rate-prompt {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.75);
-    white-space: nowrap;
-  }
-
-  .btn-zero-star {
-    min-width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.78rem;
-    font-weight: 800;
     color: rgba(226, 232, 240, 0.7);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    border-radius: 8px;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: all 0.2s ease;
-  }
-
-  .btn-zero-star:hover,
-  .btn-zero-star.is-active {
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.16);
-    border-color: rgba(248, 113, 113, 0.45);
+    white-space: nowrap;
   }
 
   .interactive-stars {
@@ -554,8 +601,8 @@
   }
 
   .star-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -564,7 +611,7 @@
     padding: 0;
     color: rgba(181, 154, 245, 0.28);
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     touch-action: manipulation;
     transition: transform 0.15s ease, color 0.15s ease;
   }
@@ -575,37 +622,15 @@
 
   .star-btn.is-active {
     color: #ffd154;
-    filter: drop-shadow(0 0 6px rgba(255, 209, 84, 0.45));
+    filter: drop-shadow(0 0 5px rgba(255, 209, 84, 0.4));
   }
 
   .rating-tooltip-label {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: #ffd154;
     margin-left: 4px;
     white-space: nowrap;
-  }
-
-  .btn-remove-rating {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 34px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.08);
-    border: 1px solid rgba(248, 113, 113, 0.25);
-    cursor: pointer;
-    touch-action: manipulation;
-    margin-left: 6px;
-    padding: 4px 10px;
-    border-radius: 8px;
-    transition: background 0.15s;
-  }
-
-  .btn-remove-rating:hover {
-    background: rgba(248, 113, 113, 0.18);
   }
 
   .voting-spinner {
@@ -613,27 +638,19 @@
     margin-left: 4px;
   }
 
-  /* Mobile Responsive Tweaks: Comfortable Touch Targets */
+  /* Mobile Responsive Tweaks: Comfortable Touch Targets (44px min) */
   @media (max-width: 768px) {
     .rating-widget {
-      padding: 12px 14px;
+      padding: 10px 12px;
       margin: 6px 0;
     }
 
     .rating-summary-row {
-      gap: 10px;
+      gap: 8px;
     }
 
     .rating-interactive-row {
-      justify-content: flex-start;
-      gap: 6px;
-    }
-
-    /* 44px min touch target on mobile */
-    .btn-zero-star {
-      min-width: 44px;
-      height: 44px;
-      font-size: 0.85rem;
+      gap: 4px;
     }
 
     .star-btn {
@@ -642,13 +659,7 @@
     }
 
     .star-btn:active {
-      transform: scale(1.2);
-    }
-
-    .btn-remove-rating {
-      min-height: 40px;
-      padding: 6px 12px;
-      font-size: 0.8rem;
+      transform: scale(1.18);
     }
   }
 
@@ -657,7 +668,7 @@
     position: fixed;
     inset: 0;
     background: rgba(4, 5, 10, 0.8);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(8px);
     z-index: 9999;
     display: flex;
     align-items: flex-end;
@@ -668,32 +679,32 @@
   .rating-modal-sheet {
     position: relative;
     width: 100%;
-    max-width: 480px;
+    max-width: 460px;
     background: #0d0f17;
-    border: 1px solid rgba(181, 154, 245, 0.25);
-    border-radius: 20px 20px 0 0;
-    padding: 16px 20px 28px;
+    border: 1px solid rgba(181, 154, 245, 0.22);
+    border-radius: 18px 18px 0 0;
+    padding: 16px 20px max(28px, calc(16px + env(safe-area-inset-bottom, 0px)));
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .sheet-handle {
-    width: 40px;
+    width: 36px;
     height: 4px;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 999px;
-    margin: 0 auto 14px;
+    margin: 0 auto 12px;
   }
 
   .sheet-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
 
   .sheet-header h3 {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: #f8fafc;
     margin: 0;
@@ -703,8 +714,8 @@
     background: rgba(255, 255, 255, 0.08);
     border: none;
     color: #94a3b8;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -716,23 +727,23 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px;
+    padding: 12px 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(181, 154, 245, 0.1);
-    border-radius: 12px;
-    margin-bottom: 16px;
+    border-radius: 10px;
+    margin-bottom: 14px;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
   }
 
   .modal-score-big {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .modal-avg {
-    font-size: 1.8rem;
+    font-size: 1.7rem;
     font-weight: 800;
     color: #ffd154;
   }
@@ -744,7 +755,7 @@
   }
 
   .modal-total-count {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: rgba(226, 232, 240, 0.6);
   }
 
@@ -752,30 +763,30 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: rgba(226, 232, 240, 0.6);
   }
 
   .modal-user-vote-banner strong {
     color: #c4b5fd;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
   }
 
   .distribution-bars {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
+    gap: 6px;
+    margin-bottom: 14px;
   }
 
   .dist-row-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(181, 154, 245, 0.08);
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 7px 10px;
     color: #e2e8f0;
     cursor: pointer;
     touch-action: manipulation;
@@ -793,15 +804,15 @@
   }
 
   .dist-score-lbl {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    min-width: 24px;
+    min-width: 22px;
     color: #ffd154;
   }
 
   .dist-track {
     flex: 1;
-    height: 8px;
+    height: 7px;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 999px;
     overflow: hidden;
@@ -815,17 +826,17 @@
   }
 
   .dist-pct {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #cbd5e1;
-    min-width: 34px;
+    min-width: 32px;
     text-align: right;
   }
 
   .dist-count {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: rgba(226, 232, 240, 0.5);
-    min-width: 28px;
+    min-width: 26px;
   }
 
   .dist-check-icon {
@@ -834,18 +845,17 @@
 
   .btn-sheet-remove {
     width: 100%;
-    min-height: 46px;
+    min-height: 42px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    margin-top: 8px;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: #f87171;
     background: rgba(248, 113, 113, 0.08);
-    border: 1px solid rgba(248, 113, 113, 0.25);
-    border-radius: 12px;
+    border: 1px solid rgba(248, 113, 113, 0.22);
+    border-radius: 10px;
     cursor: pointer;
     touch-action: manipulation;
   }

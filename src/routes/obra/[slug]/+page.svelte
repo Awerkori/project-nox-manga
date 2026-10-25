@@ -455,28 +455,31 @@
         onNotice={(msg) => (notice = msg)}
       />
 
-      <!-- Metrics Chips Bar (Unique Views, Readers, Chapters, Likes) -->
-      <div class="work-metrics-bar" aria-label="Estatísticas da obra">
-        <div class="metric-chip" title="{data.work.views_total || 0} visualizações totais auditadas">
-          <Eye size={15} class="metric-icon" />
-          <span class="metric-val">{formatViews(data.work.views_total || 0)}</span>
+      <!-- Essential Metrics Inline (Clean, unbloated, high-contrast) -->
+      <div class="work-metrics-inline" aria-label="Estatísticas da obra">
+        <span class="metric-inline-item" title="{data.work.views_total || 0} visualizações totais auditadas">
+          <Eye size={14} class="metric-icon" />
+          <strong>{formatViews(data.work.views_total || 0)}</strong>
           <span class="metric-lbl">views</span>
-        </div>
-        <div class="metric-chip" title="{data.metrics?.readers || 0} leitores que concluíram capítulos">
-          <Users size={15} class="metric-icon" />
-          <span class="metric-val">{formatViews(data.metrics?.readers || 0)}</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.metrics?.readers || 0} leitores que concluíram capítulos">
+          <Users size={14} class="metric-icon" />
+          <strong>{formatViews(data.metrics?.readers || 0)}</strong>
           <span class="metric-lbl">leitores</span>
-        </div>
-        <div class="metric-chip" title="{data.chapters.length} capítulos disponíveis">
-          <BookOpen size={15} class="metric-icon" />
-          <span class="metric-val">{data.chapters.length}</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.chapters.length} capítulos disponíveis">
+          <BookOpen size={14} class="metric-icon" />
+          <strong>{data.chapters.length}</strong>
           <span class="metric-lbl">caps</span>
-        </div>
-        <div class="metric-chip" title="{data.likes.length} curtidas na comunidade">
-          <Heart size={15} class="metric-icon" />
-          <span class="metric-val">{data.likes.length}</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.likes.length} curtidas na comunidade">
+          <Heart size={14} class="metric-icon" />
+          <strong>{data.likes.length}</strong>
           <span class="metric-lbl">curtidas</span>
-        </div>
+        </span>
       </div>
 
       <!-- Mobile Dedicated CTAs (Full Width Touch Target) -->
@@ -546,77 +549,23 @@
         </div>
       </div>
 
-      <!-- Synopsis Section -->
+      <!-- Synopsis Section (Integrated, editorial readability, without heavy box) -->
       {#if decodedSynopsis}
-        {@const synopsisIsLong = decodedSynopsis.length > 380}
-        <div class="work-section-block synopsis-block">
-          <h2 class="section-block-title">Sinopse</h2>
-          <p class="synopsis-text" class:clamped={synopsisIsLong && !synopsisExpanded}>
+        {@const synopsisIsLong = decodedSynopsis.length > 360}
+        <div class="work-synopsis-clean">
+          <h2 class="synopsis-heading">Sinopse</h2>
+          <p class="synopsis-paragraph" class:clamped={synopsisIsLong && !synopsisExpanded}>
             {decodedSynopsis}
           </p>
           {#if synopsisIsLong}
             <button
               type="button"
-              class="btn-expand"
+              class="btn-expand-synopsis"
               onclick={() => (synopsisExpanded = !synopsisExpanded)}
               aria-expanded={synopsisExpanded}
             >
               <span>{synopsisExpanded ? 'Ler menos' : 'Ler sinopse completa'}</span>
-              {#if synopsisExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
-            </button>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Genres and Tags -->
-      {#if visibleTags.length}
-        <div class="work-section-block tags-block">
-          <div class="section-title-with-count">
-            <h2 class="section-block-title">Gêneros e Tags</h2>
-            <span class="count-pill">{data.tags.filter(Boolean).length}</span>
-          </div>
-          <div class="tags-cloud">
-            {#each visibleTags as tag (tag.id)}
-              <a href="/catalogo?tag={tag.slug}" class="tag-pill">
-                {tag.name}
-              </a>
-            {/each}
-          </div>
-          {#if data.tags.filter(Boolean).length > 8}
-            <button
-              type="button"
-              class="btn-expand"
-              onclick={() => (tagsExpanded = !tagsExpanded)}
-              aria-expanded={tagsExpanded}
-            >
-              <span>{tagsExpanded ? 'Ver menos tags' : `Ver todas as ${data.tags.filter(Boolean).length} tags`}</span>
-              {#if tagsExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
-            </button>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Alternative Titles (Aliases) -->
-      {#if alternativeTitles.length}
-        <div class="work-section-block aliases-block">
-          <div class="section-title-with-count">
-            <h2 class="section-block-title">Títulos Alternativos</h2>
-            <span class="count-pill">{alternativeTitles.length}</span>
-          </div>
-          <ul class="aliases-list">
-            {#each visibleAliases as alias (alias)}
-              <li class="alias-item">{decodeHtmlEntities(alias)}</li>
-            {/each}
-          </ul>
-          {#if alternativeTitles.length > 3}
-            <button
-              type="button"
-              class="btn-expand"
-              onclick={() => (aliasesExpanded = !aliasesExpanded)}
-              aria-expanded={aliasesExpanded}
-            >
-              <span>{aliasesExpanded ? 'Ver menos' : `Ver todos (${alternativeTitles.length})`}</span>
-              {#if aliasesExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
+              {#if synopsisExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
             </button>
           {/if}
         </div>
@@ -634,10 +583,138 @@
     </div>
   {/if}
 
-  <!-- Main Content Layout (Chapters on Left / Ficha Técnica on Right Desktop) -->
-  <div class="work-content-grid">
-    <!-- Chapter List Section (Primary Interaction) -->
-    <section class="work-chapters-section" aria-labelledby="chapters-heading">
+  <!-- Unified Editorial Ficha Técnica & Metadados (Positioned BEFORE chapters on Desktop AND Mobile) -->
+  <section class="work-specs-editorial work-sidebar" aria-label="Ficha técnica da obra">
+    <div class="specs-editorial-header">
+      <div class="specs-editorial-title">
+        <Layers size={17} class="icon-violet" />
+        <h2>Ficha Técnica & Detalhes</h2>
+      </div>
+      {#if data.scans && data.scans.length > 0}
+        <div class="specs-scans-chips">
+          {#each data.scans as scan (scan.id || scan.slug)}
+            <a href="/scans/{scan.slug}" class="scan-editorial-chip" title="Scan parceira oficial">
+              <Users size={12} />
+              <span>{scan.name}</span>
+            </a>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Cohesive Editorial Grid -->
+    <div class="specs-editorial-grid">
+      <!-- Publicação & Formato -->
+      <div class="specs-group">
+        <h3 class="specs-group-title">Publicação</h3>
+        <dl class="specs-list">
+          <div class="spec-item">
+            <dt>Tipo</dt>
+            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
+          </div>
+          <div class="spec-item">
+            <dt>Status</dt>
+            <dd>{statusLabels[data.work.status] || data.work.status}</dd>
+          </div>
+          {#if data.work.year}
+            <div class="spec-item">
+              <dt>Lançamento</dt>
+              <dd>{data.work.year}</dd>
+            </div>
+          {/if}
+          <div class="spec-item">
+            <dt>Classificação</dt>
+            <dd>{isAdult ? '+18 Adulto' : (data.work.age_rating ? `${data.work.age_rating} anos` : 'Livre')}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Produção & Autoria -->
+      <div class="specs-group">
+        <h3 class="specs-group-title">Produção</h3>
+        <dl class="specs-list">
+          <div class="spec-item">
+            <dt>Roteiro</dt>
+            <dd>{data.work.author || 'Não informado'}</dd>
+          </div>
+          {#if data.work.artist && data.work.artist !== data.work.author}
+            <div class="spec-item">
+              <dt>Arte</dt>
+              <dd>{data.work.artist}</dd>
+            </div>
+          {/if}
+          {#if data.scans && data.scans.length > 0}
+            <div class="spec-item">
+              <dt>{data.scans.length > 1 ? 'Scans Parceiras' : 'Scan Parceira'}</dt>
+              <dd class="scans-inline-list">
+                {#each data.scans as scan, i (scan.id || scan.slug || i)}
+                  <a href="/scans/{scan.slug}" class="scan-link">{scan.name}</a>
+                  {#if i < data.scans.length - 1}<span class="sep">·</span>{/if}
+                {/each}
+              </dd>
+            </div>
+          {/if}
+        </dl>
+      </div>
+
+      <!-- Gêneros e Tags (Integrado) -->
+      {#if visibleTags.length}
+        <div class="specs-group tags-group">
+          <div class="specs-group-header-row">
+            <h3 class="specs-group-title">Gêneros & Tags</h3>
+            <span class="count-badge">{data.tags.filter(Boolean).length}</span>
+          </div>
+          <div class="editorial-tags-cloud">
+            {#each visibleTags as tag (tag.id)}
+              <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
+                {tag.name}
+              </a>
+            {/each}
+          </div>
+          {#if data.tags.filter(Boolean).length > 8}
+            <button
+              type="button"
+              class="btn-expand-editorial"
+              onclick={() => (tagsExpanded = !tagsExpanded)}
+              aria-expanded={tagsExpanded}
+            >
+              <span>{tagsExpanded ? 'Menos tags' : `Todas as ${data.tags.filter(Boolean).length} tags`}</span>
+              {#if tagsExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Títulos Alternativos integrado na base da Ficha Técnica -->
+    {#if alternativeTitles.length}
+      <div class="specs-aliases-subrow">
+        <div class="aliases-header-row">
+          <span class="aliases-title">Títulos Alternativos ({alternativeTitles.length})</span>
+          {#if alternativeTitles.length > 3}
+            <button
+              type="button"
+              class="btn-expand-aliases"
+              onclick={() => (aliasesExpanded = !aliasesExpanded)}
+              aria-expanded={aliasesExpanded}
+            >
+              <span>{aliasesExpanded ? 'Recolher' : 'Expandir todos'}</span>
+              {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+            </button>
+          {/if}
+        </div>
+        <div class="aliases-inline-wrap">
+          {#each visibleAliases as alias, i (alias)}
+            <span class="alias-pill-text">{decodeHtmlEntities(alias)}</span>
+            {#if i < visibleAliases.length - 1}<span class="alias-sep">·</span>{/if}
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </section>
+
+  <!-- Chapter List Section (Wide, Full-Width Reading Area) -->
+  <section class="work-chapters-section" aria-labelledby="chapters-heading">
       <div class="chapters-header">
         <div>
           <h2 id="chapters-heading" class="chapters-title">Capítulos</h2>
@@ -810,61 +887,6 @@
       </div>
     </section>
 
-    <!-- Right Sidebar on Desktop: Technical Ficha Técnica -->
-    <aside class="work-sidebar" aria-label="Ficha técnica da obra">
-      <div class="sidebar-card">
-        <h3 class="sidebar-title">
-          <Layers size={16} />
-          <span>Ficha Técnica</span>
-        </h3>
-
-        <dl class="sidebar-specs">
-          <div class="spec-row">
-            <dt>Tipo</dt>
-            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
-          </div>
-          <div class="spec-row">
-            <dt>Status</dt>
-            <dd>{statusLabels[data.work.status] || data.work.status}</dd>
-          </div>
-          {#if data.work.year}
-            <div class="spec-row">
-              <dt>Lançamento</dt>
-              <dd>{data.work.year}</dd>
-            </div>
-          {/if}
-          <div class="spec-row">
-            <dt>Classificação</dt>
-            <dd>{isAdult ? '+18 Adulto' : (data.work.age_rating ? `${data.work.age_rating} anos` : 'Livre')}</dd>
-          </div>
-          {#if data.work.author}
-            <div class="spec-row">
-              <dt>Roteiro</dt>
-              <dd>{data.work.author}</dd>
-            </div>
-          {/if}
-          {#if data.work.artist}
-            <div class="spec-row">
-              <dt>Arte</dt>
-              <dd>{data.work.artist}</dd>
-            </div>
-          {/if}
-          {#if data.scans && data.scans.length > 0}
-            <div class="spec-row scans-spec">
-              <dt>{data.scans.length > 1 ? 'Scans Parceiras' : 'Scan Parceira'}</dt>
-              <dd class="scans-links">
-                {#each data.scans as scan, i (scan.id || scan.slug || i)}
-                  <a href="/scans/{scan.slug}" class="scan-link">{scan.name}</a>
-                  {#if i < data.scans.length - 1}<span class="sep">·</span>{/if}
-                {/each}
-              </dd>
-            </div>
-          {/if}
-        </dl>
-      </div>
-    </aside>
-  </div>
-
   <!-- Comments Section -->
   <Comments comments={data.comments} workId={data.work.id} profile={data.profile} />
 
@@ -919,7 +941,6 @@
   /* Page Root */
   .work-page-root {
     position: relative;
-    z-index: 1;
     padding-top: 1.25rem;
   }
 
@@ -1239,76 +1260,54 @@
     color: rgba(181, 154, 245, 0.3);
   }
 
-  /* Metrics Bar */
-  .work-metrics-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin: 4px 0;
-  }
-
-  .metric-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: rgba(18, 14, 28, 0.65);
-    border: 1px solid rgba(181, 154, 245, 0.12);
-    border-radius: 10px;
-    font-size: 0.85rem;
-  }
-
-  :global(.metric-icon) {
-    color: #a78bfa;
-  }
-
-  .metric-val {
-    font-weight: 700;
-    color: #f1f5f9;
-  }
-
-  .metric-lbl {
-    color: rgba(226, 232, 240, 0.55);
-  }
-
-  /* Section Blocks */
-  .work-section-block {
-    background: rgba(14, 16, 26, 0.65);
-    border: 1px solid rgba(181, 154, 245, 0.12);
-    border-radius: 14px;
-    padding: 16px 20px;
-  }
-
-  .section-block-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin: 0 0 10px;
-    letter-spacing: -0.01em;
-  }
-
-  .section-title-with-count {
+  /* Inline Essential Metrics (Clean, unbloated, high-contrast) */
+  .work-metrics-inline {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    flex-wrap: wrap;
+    margin: 6px 0 10px;
   }
 
-  .section-title-with-count .section-block-title {
-    margin: 0;
+  .metric-inline-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.7);
   }
 
-  .count-pill {
-    font-size: 0.72rem;
+  .metric-inline-item strong {
+    color: #f1f5f9;
+    font-weight: 700;
+  }
+
+  .metric-inline-item .metric-lbl {
+    color: rgba(226, 232, 240, 0.5);
+    font-size: 0.78rem;
+  }
+
+  .metric-dot {
+    color: rgba(181, 154, 245, 0.35);
+    font-size: 0.8rem;
+  }
+
+  /* Clean Integrated Synopsis (No heavy box) */
+  .work-synopsis-clean {
+    margin-top: 14px;
+    text-align: left;
+  }
+
+  .synopsis-heading {
+    font-size: 0.82rem;
     font-weight: 700;
     color: #a78bfa;
-    background: rgba(167, 139, 250, 0.14);
-    padding: 1px 7px;
-    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 6px;
   }
 
-  .synopsis-text {
+  .synopsis-paragraph {
     font-size: 0.92rem;
     line-height: 1.65;
     color: rgba(226, 232, 240, 0.82);
@@ -1316,18 +1315,18 @@
     white-space: pre-line;
   }
 
-  .synopsis-text.clamped {
+  .synopsis-paragraph.clamped {
     display: -webkit-box;
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  .btn-expand {
+  .btn-expand-synopsis {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    margin-top: 10px;
+    margin-top: 8px;
     font-size: 0.82rem;
     font-weight: 700;
     color: #a78bfa;
@@ -1338,49 +1337,8 @@
     transition: color 0.15s;
   }
 
-  .btn-expand:hover {
+  .btn-expand-synopsis:hover {
     color: #c4b5fd;
-  }
-
-  .tags-cloud {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .tag-pill {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: rgba(226, 232, 240, 0.8);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(181, 154, 245, 0.14);
-    padding: 4px 10px;
-    border-radius: 8px;
-    text-decoration: none;
-    transition: all 0.15s;
-  }
-
-  .tag-pill:hover {
-    color: #ffffff;
-    background: rgba(167, 139, 250, 0.16);
-    border-color: rgba(167, 139, 250, 0.4);
-  }
-
-  .aliases-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .alias-item {
-    font-size: 0.85rem;
-    color: rgba(226, 232, 240, 0.7);
-    line-height: 1.4;
-    padding-left: 10px;
-    border-left: 2px solid rgba(167, 139, 250, 0.3);
   }
 
   /* Notice Bar */
@@ -1395,31 +1353,269 @@
     color: #f1f5f9;
     font-size: 0.9rem;
     font-weight: 500;
-    margin-bottom: 24px;
+    margin: 20px 0;
   }
 
-  .btn-notice-dismiss {
+  /* Unified Editorial Ficha Técnica & Metadados (Positioned BEFORE chapters on Desktop AND Mobile) */
+  .work-specs-editorial {
+    margin: 30px 0 38px;
+    padding: 22px 26px;
+    background: rgba(14, 12, 24, 0.45);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+  }
+
+  .specs-editorial-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  .specs-editorial-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .specs-editorial-title h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  :global(.icon-violet) {
+    color: #a78bfa;
+  }
+
+  .specs-scans-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .scan-editorial-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #c4b5fd;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.22);
+    border-radius: 6px;
+    padding: 3px 8px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .scan-editorial-chip:hover {
+    background: rgba(167, 139, 250, 0.2);
+    color: #ffffff;
+  }
+
+  .specs-editorial-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px;
+    align-items: start;
+  }
+
+  .specs-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .specs-group-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .specs-group-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #a78bfa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+  }
+
+  .count-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #c4b5fd;
+    background: rgba(167, 139, 250, 0.14);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .specs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .spec-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(181, 154, 245, 0.07);
+  }
+
+  .spec-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .spec-item dt {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(226, 232, 240, 0.55);
+    margin: 0;
+  }
+
+  .spec-item dd {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin: 0;
+    text-align: right;
+  }
+
+  .scans-inline-list {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .scan-link {
+    color: #a78bfa;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .scan-link:hover {
+    color: #c4b5fd;
+    text-decoration: underline;
+  }
+
+  .editorial-tags-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .editorial-tag-pill {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: rgba(226, 232, 240, 0.85);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.14);
+    padding: 4px 9px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .editorial-tag-pill:hover {
+    color: #ffffff;
+    background: rgba(167, 139, 250, 0.16);
+    border-color: rgba(167, 139, 250, 0.35);
+  }
+
+  .btn-expand-editorial {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #a78bfa;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 1.25rem;
+    padding: 0;
     cursor: pointer;
-    line-height: 1;
+    transition: color 0.15s;
   }
 
-  /* Content Grid */
-  .work-content-grid {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 36px;
-    align-items: start;
-    margin-bottom: 48px;
+  .btn-expand-editorial:hover {
+    color: #c4b5fd;
   }
 
-  /* Chapters Section */
+  .specs-aliases-subrow {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(181, 154, 245, 0.08);
+  }
+
+  .aliases-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .aliases-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #a78bfa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .btn-expand-aliases {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: rgba(226, 232, 240, 0.6);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .btn-expand-aliases:hover {
+    color: #a78bfa;
+  }
+
+  .aliases-inline-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .alias-pill-text {
+    font-size: 0.8rem;
+    color: rgba(226, 232, 240, 0.7);
+  }
+
+  .alias-sep {
+    color: rgba(181, 154, 245, 0.3);
+  }
+
+  /* Chapters Section (Full Width, Reading Centered) */
   .work-chapters-section {
+    width: 100%;
     min-width: 0;
     contain: layout style;
+    margin-bottom: 48px;
   }
 
   .chapters-header {
@@ -1781,130 +1977,19 @@
     color: rgba(181, 154, 245, 0.3);
   }
 
-  /* Right Sidebar (Ficha Técnica) */
-  .work-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    position: sticky;
-    top: 90px;
-  }
-
-  .sidebar-card {
-    background: rgba(14, 16, 26, 0.7);
-    border: 1px solid rgba(181, 154, 245, 0.14);
-    border-radius: 16px;
-    padding: 20px;
-  }
-
-  .sidebar-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin: 0 0 16px;
-  }
-
-  .sidebar-specs {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 0;
-  }
-
-  .spec-row {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    border-bottom: 1px solid rgba(181, 154, 245, 0.06);
-    padding-bottom: 10px;
-  }
-
-  .spec-row:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-
-  .spec-row dt {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: rgba(226, 232, 240, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .spec-row dd {
-    margin: 0;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: #e2e8f0;
-  }
-
-  .scans-links {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .scan-link {
-    color: #a78bfa;
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-
-  .scan-link:hover {
-    color: #c4b5fd;
-    text-decoration: underline;
-  }
-
-  .sep {
-    color: rgba(255, 255, 255, 0.3);
-  }
-
   /* ========================================================================= */
   /* RESPONSIVE DESIGN: TABLET & MOBILE REORGANIZATION */
   /* ========================================================================= */
 
   @media (max-width: 1024px) {
-    .work-content-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
+    .specs-editorial-grid {
+      grid-template-columns: 1fr;
+      gap: 22px;
     }
 
-    /* Requirement 2: Ficha Técnica MUST appear strictly ABOVE chapters on mobile */
-    .work-sidebar {
-      order: 1;
-      width: 100%;
-      position: static;
-      margin-top: 0;
-    }
-
-    .work-chapters-section {
-      order: 2;
-      width: 100%;
-      min-width: 0;
-    }
-
-    /* Responsive specs matrix on tablet/mobile: sleek multi-column layout */
-    .sidebar-specs {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 12px 16px;
-    }
-
-    .spec-row {
-      border-bottom: none;
-      border-left: 2px solid rgba(181, 154, 245, 0.25);
-      padding-left: 10px;
-      padding-bottom: 0;
-    }
-
-    .spec-row.scans-spec {
-      grid-column: 1 / -1;
+    .work-specs-editorial {
+      padding: 20px 22px;
+      margin: 24px 0 32px;
     }
   }
 

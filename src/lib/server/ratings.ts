@@ -54,7 +54,7 @@ export async function getWorkRating(
   return withYugabyteLkg(
     `rating_${workId}`,
     async () => {
-      // 1. Aggregate stats
+      // 1. Aggregate stats (only valid 1 to 5 stars ratings, safely ignoring legacy 0 ratings)
       const aggRes = await executeYugabyteSql<{
         avg_rating: string | null;
         total_count: string;
@@ -63,7 +63,7 @@ export async function getWorkRating(
           ROUND(AVG(rating)::numeric, 1) as avg_rating,
           COUNT(*)::int as total_count
         FROM public.work_ratings
-        WHERE work_id = $1;`,
+        WHERE work_id = $1 AND rating >= 1 AND rating <= 5;`,
         [workId],
         platformEnv
       );
@@ -83,24 +83,32 @@ export async function getWorkRating(
           [workId, visitorId || '', userId || null],
           platformEnv
         );
-        if (userRes.rows.length > 0 && userRes.rows[0].rating !== null && userRes.rows[0].rating !== undefined) {
+        if (
+          userRes.rows.length > 0 &&
+          userRes.rows[0].rating !== null &&
+          userRes.rows[0].rating !== undefined &&
+          userRes.rows[0].rating >= 1 &&
+          userRes.rows[0].rating <= 5
+        ) {
           userRating = userRes.rows[0].rating;
         }
       }
 
-      // 3. Distribution
+      // 3. Distribution (1 to 5 stars)
       const distRes = await executeYugabyteSql<{ rating: number; cnt: string }>(
         `SELECT rating, COUNT(*)::int as cnt
          FROM public.work_ratings
-         WHERE work_id = $1
+         WHERE work_id = $1 AND rating >= 1 AND rating <= 5
          GROUP BY rating;`,
         [workId],
         platformEnv
       );
 
-      const distribution: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
       for (const row of distRes.rows) {
-        distribution[row.rating] = parseInt(row.cnt, 10);
+        if (row.rating >= 1 && row.rating <= 5) {
+          distribution[row.rating] = parseInt(row.cnt, 10);
+        }
       }
 
       const summary: RatingSummary = {
@@ -117,7 +125,7 @@ export async function getWorkRating(
       average: null,
       count: 0,
       userRating: null,
-      distribution: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
     }
   );
 }
@@ -129,8 +137,8 @@ export async function setWorkRating(
   userId?: string,
   platformEnv?: any
 ): Promise<RatingSummary> {
-  if (rating < 0 || rating > 5 || !Number.isInteger(rating)) {
-    throw new Error('A avaliação deve ser um número inteiro de 0 a 5 estrelas.');
+  if (rating < 1 || rating > 5 || !Number.isInteger(rating)) {
+    throw new Error('A avaliação deve ser um número inteiro de 1 a 5 estrelas.');
   }
 
   await ensureWorkRatingsTable(platformEnv);
