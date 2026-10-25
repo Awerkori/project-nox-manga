@@ -62,11 +62,11 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Density: 75 particles desktop, 36 mobile, reduced if low-end
-      let count = mobile ? 36 : 75;
-      if (lowEnd) count = Math.floor(count * 0.6);
+      // Density: 140 particles desktop, 60 mobile, reduced if low-end
+      let count = mobile ? 60 : 140;
+      if (lowEnd) count = Math.floor(count * 0.55);
 
-      if (particles.length === 0 || Math.abs(particles.length - count) > 8) {
+      if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
       }
     }
@@ -84,17 +84,17 @@
       let baseSpeedY: number;
 
       if (depth === 0) {
-        radius = mobile ? 0.6 + Math.random() * 0.5 : 0.8 + Math.random() * 0.6;
-        baseAlpha = 0.15 + Math.random() * 0.25;
-        baseSpeedY = (mobile ? 0.08 : 0.12) + Math.random() * 0.15;
+        radius = mobile ? 0.7 + Math.random() * 0.5 : 0.9 + Math.random() * 0.6;
+        baseAlpha = 0.2 + Math.random() * 0.3;
+        baseSpeedY = (mobile ? 0.09 : 0.13) + Math.random() * 0.16;
       } else if (depth === 1) {
-        radius = mobile ? 0.9 + Math.random() * 0.7 : 1.2 + Math.random() * 0.9;
-        baseAlpha = 0.3 + Math.random() * 0.35;
-        baseSpeedY = (mobile ? 0.16 : 0.22) + Math.random() * 0.25;
+        radius = mobile ? 1.1 + Math.random() * 0.8 : 1.4 + Math.random() * 1.0;
+        baseAlpha = 0.38 + Math.random() * 0.35;
+        baseSpeedY = (mobile ? 0.18 : 0.24) + Math.random() * 0.28;
       } else {
-        radius = mobile ? 1.4 + Math.random() * 0.9 : 1.9 + Math.random() * 1.3;
-        baseAlpha = 0.5 + Math.random() * 0.4;
-        baseSpeedY = (mobile ? 0.24 : 0.32) + Math.random() * 0.35;
+        radius = mobile ? 1.7 + Math.random() * 1.0 : 2.2 + Math.random() * 1.4;
+        baseAlpha = 0.6 + Math.random() * 0.35;
+        baseSpeedY = (mobile ? 0.28 : 0.36) + Math.random() * 0.38;
       }
 
       return {
@@ -329,16 +329,17 @@
     z-index: 0;
     overflow: hidden;
     contain: strict;
-    background: radial-gradient(circle at 50% 0%, #0d0a1c 0%, #06070c 55%, #040508 100%);
+    background: radial-gradient(circle at 50% 12%, #0e0b20 0%, #070810 50%, #040508 100%);
   }
 
   .ambient-mesh {
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at 20% 15%, rgba(139, 92, 246, 0.07) 0%, transparent 40%),
-      radial-gradient(circle at 85% 35%, rgba(59, 130, 246, 0.05) 0%, transparent 45%),
-      radial-gradient(circle at 50% 85%, rgba(109, 40, 217, 0.06) 0%, transparent 50%);
+      radial-gradient(circle at 25% 18%, rgba(139, 92, 246, 0.1) 0%, transparent 45%),
+      radial-gradient(circle at 80% 28%, rgba(59, 130, 246, 0.08) 0%, transparent 48%),
+      radial-gradient(circle at 50% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 55%),
+      radial-gradient(circle at 12% 75%, rgba(99, 102, 241, 0.07) 0%, transparent 45%);
     pointer-events: none;
   }
 

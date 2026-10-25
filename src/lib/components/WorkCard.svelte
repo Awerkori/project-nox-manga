@@ -183,7 +183,7 @@
   .card-media {
     position: relative;
     width: 100%;
-    aspect-ratio: 3 / 4;
+    aspect-ratio: 200 / 285;
     overflow: hidden;
     background: #090a12;
   }
@@ -393,14 +393,18 @@
   }
 
   .card-title {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 750;
     color: #f2f0f7;
     margin: 0;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: 1.35;
+    min-height: 2.7rem;
     transition: color 0.2s ease;
   }
 
