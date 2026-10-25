@@ -3,6 +3,8 @@
  * High-quality, verified, aesthetic items without placeholders or empty states.
  */
 
+import { CURATED_BANNER_BACKGROUNDS } from './cosmetic-banners';
+
 export interface CosmeticItem {
   id: string;
   name: string;
@@ -402,7 +404,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 22,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(ellipse at 70% 30%, rgba(139, 92, 246, 0.45) 0%, rgba(15, 12, 38, 0.95) 75%), linear-gradient(135deg, #090814 0%, #171033 50%, #06050d 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_nebulosa_vazio
     }
   },
   {
@@ -417,7 +419,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 23,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(ellipse at 30% 20%, rgba(16, 185, 129, 0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(6, 182, 212, 0.35) 0%, transparent 60%), linear-gradient(135deg, #041217 0%, #062326 50%, #020a0d 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_aurora_astral
     }
   },
   {
@@ -432,7 +434,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 24,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.4) 0%, rgba(30, 27, 75, 0.8) 55%, #070712 100%), linear-gradient(90deg, #1e1b4b 0%, #311042 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_energia_arcana
     }
   },
   {
@@ -447,7 +449,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 25,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(circle at 65% 50%, rgba(239, 68, 68, 0.5) 0%, rgba(185, 28, 28, 0.3) 35%, transparent 70%), linear-gradient(135deg, #1c0508 0%, #2b080d 50%, #0d0204 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_eclipse_cosmico
     }
   },
   {
@@ -462,7 +464,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 26,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(ellipse at 50% 0%, rgba(251, 191, 36, 0.35) 0%, transparent 65%), linear-gradient(135deg, #171104 0%, #2e2007 50%, #0d0a02 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_biblioteca_estrelas
     }
   },
   {
@@ -477,7 +479,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     order_index: 27,
     asset_url: '',
     style_data: {
-      background: 'radial-gradient(circle at 25% 40%, rgba(192, 132, 252, 0.45) 0%, transparent 50%), radial-gradient(circle at 75% 60%, rgba(56, 189, 248, 0.4) 0%, transparent 50%), linear-gradient(135deg, #110524 0%, #07192e 50%, #04020a 100%)'
+      background: CURATED_BANNER_BACKGROUNDS.banner_runas_primordiais
     }
   }
 ];
