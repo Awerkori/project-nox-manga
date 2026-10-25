@@ -478,12 +478,11 @@
         </span>
       </div>
 
-      <!-- Synopsis Section (Highlighted Premium Editorial Card) -->
+      <!-- Synopsis Section (Editorial Refined Presentation) -->
       {#if decodedSynopsis}
         {@const synopsisIsLong = decodedSynopsis.length > 320}
         <div class="work-synopsis-card" aria-label="Sinopse da obra">
           <div class="synopsis-card-header">
-            <BookOpen size={16} class="synopsis-header-icon" />
             <h2 class="synopsis-heading">Sinopse</h2>
           </div>
           <div class="synopsis-body">
@@ -498,7 +497,7 @@
                 aria-expanded={synopsisExpanded}
               >
                 <span>{synopsisExpanded ? 'Recolher sinopse' : 'Ler sinopse completa'}</span>
-                {#if synopsisExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
+                {#if synopsisExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
               </button>
             {/if}
           </div>
@@ -1277,42 +1276,35 @@
     font-size: 0.8rem;
   }
 
-  /* Highlighted Premium Synopsis Card */
+  /* Editorial Refined Synopsis */
   .work-synopsis-card {
-    background: rgba(18, 16, 32, 0.65);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    border-radius: 14px;
-    padding: 18px 22px;
-    backdrop-filter: blur(10px);
-    margin-top: 6px;
+    background: rgba(13, 11, 24, 0.42);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    backdrop-filter: blur(6px);
+    margin-top: 4px;
     transition: border-color 0.2s ease, background 0.2s ease;
   }
 
   .work-synopsis-card:hover {
-    border-color: rgba(181, 154, 245, 0.26);
-    background: rgba(22, 19, 40, 0.72);
+    border-color: rgba(181, 154, 245, 0.16);
+    background: rgba(16, 13, 30, 0.52);
   }
 
   .synopsis-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
-  }
-
-  :global(.synopsis-header-icon) {
-    color: #a78bfa;
-    flex-shrink: 0;
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   .synopsis-heading {
-    font-size: 0.86rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: #c4b5fd;
+    color: #a78bfa;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     margin: 0;
   }
 
@@ -1322,9 +1314,9 @@
   }
 
   .synopsis-paragraph {
-    font-size: 0.98rem;
-    line-height: 1.62;
-    color: #e2e8f0;
+    font-size: 0.96rem;
+    line-height: 1.64;
+    color: rgba(241, 245, 249, 0.9);
     margin: 0;
     white-space: pre-line;
     font-weight: 400;
@@ -1341,25 +1333,22 @@
   .btn-expand-synopsis {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 12px;
+    gap: 4px;
+    margin-top: 8px;
     align-self: flex-start;
-    font-size: 0.84rem;
-    font-weight: 700;
-    color: #c4b5fd;
-    background: rgba(167, 139, 250, 0.12);
-    border: 1px solid rgba(167, 139, 250, 0.22);
-    border-radius: 8px;
-    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #a78bfa;
+    background: none;
+    border: none;
+    padding: 0;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease;
   }
 
   .btn-expand-synopsis:hover {
-    color: #ffffff;
-    background: rgba(167, 139, 250, 0.22);
-    border-color: rgba(181, 154, 245, 0.45);
-    transform: translateY(-1px);
+    color: #c4b5fd;
+    text-decoration: underline;
   }
 
   /* Notice Bar */
@@ -1625,29 +1614,28 @@
     font-weight: 400;
   }
 
-  /* Genres Tags Wrap (Balanced Distribution Across Subpanel Height) */
+  /* Genres Tags Wrap (Naturally Grouped at Top with Compact Uniform Gaps) */
   .editorial-tags-wrap {
-    flex: 1;
     display: flex;
     flex-wrap: wrap;
-    align-content: space-around;
-    align-items: center;
-    gap: 12px 10px;
-    margin: 4px 0 0;
+    align-content: flex-start;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 2px 0 0;
   }
 
   .editorial-tag-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 32px;
-    padding: 0 14px;
-    font-size: 0.84rem;
+    height: 30px;
+    padding: 0 12px;
+    font-size: 0.82rem;
     font-weight: 600;
     line-height: 1;
     color: #e2e8f0;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(181, 154, 245, 0.16);
+    border: 1px solid rgba(181, 154, 245, 0.14);
     border-radius: 8px;
     text-decoration: none;
     white-space: nowrap;
@@ -2210,19 +2198,18 @@
 
   @media (max-width: 991px) {
     .work-synopsis-card {
-      padding: 15px 16px;
-      border-radius: 12px;
+      padding: 13px 15px;
+      border-radius: 10px;
       margin-top: 4px;
     }
 
     .synopsis-paragraph {
-      font-size: 0.94rem;
+      font-size: 0.93rem;
       line-height: 1.6;
     }
 
     .editorial-tags-wrap {
-      align-content: flex-start;
-      gap: 8px 8px;
+      gap: 7px;
     }
 
     .specs-unified-panel {

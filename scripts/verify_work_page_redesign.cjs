@@ -1,6 +1,6 @@
 /**
  * scripts/verify_work_page_redesign.cjs
- * Comprehensive Round 4.5 verification of the redesigned work page on Preview:
+ * Comprehensive Round 4.6 verification of the redesigned work page on Preview:
  * https://home-preview-manga.project-nox-awerkori.workers.dev
  */
 
@@ -60,12 +60,13 @@ async function dismissModals(page) {
 }
 
 async function run() {
-  console.log('=== STARTING WORK PAGE ROUND 4.5 VERIFICATION ===');
+  console.log('=== STARTING WORK PAGE ROUND 4.6 VERIFICATION ===');
   console.log('Target Preview URL:', PREVIEW_BASE);
 
   const report = {
     testedAt: new Date().toISOString(),
     previewUrl: PREVIEW_BASE,
+    ratingWidgetCheck: {},
     synopsisCheck: {},
     genresDistributionCheck: {},
     gridSymmetryCheck: {},
@@ -75,9 +76,157 @@ async function run() {
   const browser = await chromium.launch({ headless: true });
 
   // =========================================================================
-  // 1. SYNOPSIS CARD PROMINENCE & TYPOGRAPHY TEST (Round 4.5)
+  // 1. RATING WIDGET REFINEMENT & VOTING TEST (Round 4.6)
   // =========================================================================
-  console.log('\n--- 1. Testing Synopsis Card Visual Prominence & Typography (Round 4.5) ---');
+  console.log('\n--- 1. Testing Rating Widget Refinement & Interaction (Round 4.6) ---');
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      isMobile: false,
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+    });
+    await bypassAgeGate(ctx);
+    const page = await ctx.newPage();
+    await page.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
+    await dismissModals(page);
+    await page.waitForTimeout(600);
+
+    const initialRatingEval = await page.evaluate(() => {
+      const widget = document.querySelector('.rating-widget');
+      const stars = Array.from(document.querySelectorAll('.star-btn'));
+      const prompt = document.querySelector('.rate-prompt');
+      const widgetStyle = widget ? window.getComputedStyle(widget) : null;
+
+      return {
+        hasWidget: !!widget,
+        backgroundColor: widgetStyle ? widgetStyle.backgroundColor : null,
+        borderColor: widgetStyle ? widgetStyle.borderColor : null,
+        boxShadow: widgetStyle ? widgetStyle.boxShadow : null,
+        starsCount: stars.length,
+        promptText: prompt ? prompt.textContent.trim() : null
+      };
+    });
+
+    console.log('Initial Rating Widget Metrics:', initialRatingEval);
+    report.ratingWidgetCheck.initial = initialRatingEval;
+
+    const ratingWidgetEl = await page.$('.rating-widget');
+    if (ratingWidgetEl) {
+      await ratingWidgetEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_rating_widget_initial.png') });
+    }
+
+    // Test voting: click 5th star
+    const star5 = await page.$('.star-btn[aria-label*="5 de 5"]');
+    if (star5) {
+      console.log('Clicking 5-star rating button...');
+      await star5.click();
+      await page.waitForTimeout(400);
+
+      const afterVoteEval = await page.evaluate(() => {
+        const chip = document.querySelector('.user-score-chip');
+        const prompt = document.querySelector('.rate-prompt');
+        const optionsBtn = document.querySelector('.btn-rating-options');
+        return {
+          hasChip: !!chip,
+          chipText: chip ? chip.textContent.trim() : null,
+          promptText: prompt ? prompt.textContent.trim() : null,
+          hasOptionsBtn: !!optionsBtn
+        };
+      });
+
+      console.log('Rating Widget After Vote:', afterVoteEval);
+      report.ratingWidgetCheck.afterVote = afterVoteEval;
+
+      if (ratingWidgetEl) {
+        await ratingWidgetEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_rating_widget_voted.png') });
+      }
+
+      // Test removal menu
+      const optionsBtn = await page.$('.btn-rating-options');
+      if (optionsBtn) {
+        console.log('Opening rating options popover...');
+        await optionsBtn.click();
+        await page.waitForTimeout(300);
+
+        const popoverOpen = await page.evaluate(() => {
+          const popover = document.querySelector('.rating-options-popover');
+          const removeBtn = document.querySelector('.btn-popover-remove');
+          return {
+            hasPopover: !!popover,
+            hasRemoveBtn: !!removeBtn,
+            removeBtnText: removeBtn ? removeBtn.textContent.trim() : null
+          };
+        });
+        console.log('Options popover state:', popoverOpen);
+        report.ratingWidgetCheck.popover = popoverOpen;
+
+        const removeBtn = await page.$('.btn-popover-remove');
+        if (removeBtn) {
+          console.log('Clicking remove vote button...');
+          await removeBtn.click();
+          await page.waitForTimeout(400);
+
+          const afterRemoveEval = await page.evaluate(() => {
+            const chip = document.querySelector('.user-score-chip');
+            const prompt = document.querySelector('.rate-prompt');
+            return {
+              hasChip: !!chip,
+              promptText: prompt ? prompt.textContent.trim() : null
+            };
+          });
+          console.log('Rating Widget After Remove:', afterRemoveEval);
+          report.ratingWidgetCheck.afterRemove = afterRemoveEval;
+
+          if (ratingWidgetEl) {
+            await ratingWidgetEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_rating_widget_unvoted.png') });
+          }
+        }
+      }
+    }
+
+    await ctx.close();
+  }
+
+  // =========================================================================
+  // 2. MOBILE RATING TOUCH HITBOX TEST (44x44px min)
+  // =========================================================================
+  console.log('\n--- 2. Testing Mobile Rating Touch Hitbox (Round 4.6) ---');
+  {
+    const mobileCtx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+    });
+    await bypassAgeGate(mobileCtx);
+    const mPage = await mobileCtx.newPage();
+    await mPage.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
+    await dismissModals(mPage);
+    await mPage.waitForTimeout(500);
+
+    const touchHitboxEval = await mPage.evaluate(() => {
+      const starBtns = Array.from(document.querySelectorAll('.star-btn'));
+      return starBtns.map((b, idx) => {
+        const r = b.getBoundingClientRect();
+        return {
+          star: idx + 1,
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+          validTouchTarget: r.width >= 40 && r.height >= 40
+        };
+      });
+    });
+
+    console.log('Mobile Star Hitboxes (>= 40px touch zone):', touchHitboxEval);
+    report.ratingWidgetCheck.mobileHitboxes = touchHitboxEval;
+
+    await mobileCtx.close();
+  }
+
+  // =========================================================================
+  // 3. REFINED EDITORIAL SYNOPSIS TEST (Round 4.6)
+  // =========================================================================
+  console.log('\n--- 3. Testing Refined Editorial Synopsis Card (Round 4.6) ---');
   {
     const ctx = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
@@ -99,6 +248,7 @@ async function run() {
 
       const cardStyle = card ? window.getComputedStyle(card) : null;
       const pStyle = p ? window.getComputedStyle(p) : null;
+      const btnStyle = btn ? window.getComputedStyle(btn) : null;
       const rCard = card ? card.getBoundingClientRect() : null;
 
       return {
@@ -110,9 +260,12 @@ async function run() {
         fontSizePx: pStyle ? parseFloat(pStyle.fontSize) : 0,
         lineHeight: pStyle ? pStyle.lineHeight : null,
         color: pStyle ? pStyle.color : null,
+        headingText: heading ? heading.textContent.trim() : null,
         hasHeading: !!heading,
         hasIcon: !!icon,
         hasExpandBtn: !!btn,
+        btnBg: btnStyle ? btnStyle.backgroundColor : null,
+        btnBorder: btnStyle ? btnStyle.border : null,
         isClampedInitial: p ? p.classList.contains('clamped') : false
       };
     });
@@ -120,10 +273,9 @@ async function run() {
     console.log('Desktop Synopsis Card Metrics:', synopsisEval);
     report.synopsisCheck.desktop = synopsisEval;
 
-    // Screenshot of the synopsis card
     const synopsisCardEl = await page.$('.work-synopsis-card');
     if (synopsisCardEl) {
-      await synopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_synopsis_desktop.png') });
+      await synopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_synopsis_desktop.png') });
     }
 
     // Test expand synopsis
@@ -144,7 +296,6 @@ async function run() {
       console.log('Synopsis After Expand:', afterExpand);
       report.synopsisCheck.afterExpand = afterExpand;
 
-      // Click to collapse again
       await expandBtn.click();
       await page.waitForTimeout(200);
     }
@@ -153,15 +304,15 @@ async function run() {
   }
 
   // =========================================================================
-  // 2. MOBILE SYNOPSIS PROMINENCE TEST
+  // 4. MOBILE SYNOPSIS PROMINENCE TEST
   // =========================================================================
-  console.log('\n--- 2. Testing Mobile Synopsis Presentation (390x844) ---');
+  console.log('\n--- 4. Testing Mobile Synopsis Presentation (390x844) ---');
   {
     const mobileCtx = await browser.newContext({
       viewport: { width: 390, height: 844 },
       isMobile: true,
       hasTouch: true,
-      userAgent: 'Mozilla/5.0 (Android 14; Mobile; rv:132.0) Gecko/132.0 Firefox/132.0'
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
     });
     await bypassAgeGate(mobileCtx);
     const mPage = await mobileCtx.newPage();
@@ -175,16 +326,16 @@ async function run() {
 
     const mSynopsisCardEl = await mPage.$('.work-synopsis-card');
     if (mSynopsisCardEl) {
-      await mSynopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_synopsis_mobile.png') });
+      await mSynopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_synopsis_mobile.png') });
     }
 
     await mobileCtx.close();
   }
 
   // =========================================================================
-  // 3. GENRES & TEMAS TAGS DISTRIBUTION TEST (Round 4.5)
+  // 5. COMPACT GENRES & TEMAS TAGS DISTRIBUTION TEST (Round 4.6)
   // =========================================================================
-  console.log('\n--- 3. Testing Genres & Temas Tags Distribution (Round 4.5) ---');
+  console.log('\n--- 5. Testing Compact Genres & Temas Tags (Round 4.6) ---');
   {
     const ctx = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
@@ -205,11 +356,20 @@ async function run() {
 
       const rCard = genresCard ? genresCard.getBoundingClientRect() : null;
       const rAliases = aliasesCard ? aliasesCard.getBoundingClientRect() : null;
-      const rWrap = tagsWrap ? tagsWrap.getBoundingClientRect() : null;
+      const wrapStyle = tagsWrap ? window.getComputedStyle(tagsWrap) : null;
 
-      // Calculate row groups by comparing pill top coordinates
+      const firstPill = pills[0];
+      const pillStyle = firstPill ? window.getComputedStyle(firstPill) : null;
+
+      // Group pills into rows based on top position
       const rowTops = [...new Set(pills.map(p => Math.round(p.getBoundingClientRect().top)))];
       const rowsCount = rowTops.length;
+
+      // Row gaps calculation
+      const rowGaps = [];
+      for (let i = 1; i < rowTops.length; i++) {
+        rowGaps.push(rowTops[i] - rowTops[i - 1]);
+      }
 
       // Distance from bottom of last pill to bottom of card
       let bottomSpace = 0;
@@ -222,29 +382,33 @@ async function run() {
         cardHeight: rCard ? Math.round(rCard.height) : 0,
         aliasesCardHeight: rAliases ? Math.round(rAliases.height) : 0,
         heightDifferenceWithAliases: rCard && rAliases ? Math.abs(Math.round(rCard.height - rAliases.height)) : 0,
+        alignContent: wrapStyle ? wrapStyle.alignContent : null,
+        gap: wrapStyle ? wrapStyle.gap : null,
+        pillHeight: pillStyle ? pillStyle.height : null,
+        pillFontSize: pillStyle ? pillStyle.fontSize : null,
+        pillPadding: pillStyle ? pillStyle.padding : null,
         tagsCount: pills.length,
         rowsCount,
-        bottomPaddingAndSpace: bottomSpace,
-        wrapHeight: rWrap ? Math.round(rWrap.height) : 0
+        rowGaps,
+        bottomPaddingAndSpace: bottomSpace
       };
     });
 
-    console.log('Genres Distribution in Card 3:', genresDistribution);
+    console.log('Compact Genres & Tags Metrics in Card 3:', genresDistribution);
     report.genresDistributionCheck = genresDistribution;
 
-    // Screenshot of the 2x2 Ficha Técnica showing the balanced tags
     const fichaSection = await page.$('.work-specs-section');
     if (fichaSection) {
-      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_ficha_desktop.png') });
+      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_6_ficha_desktop.png') });
     }
 
     await ctx.close();
   }
 
   // =========================================================================
-  // 4. MULTI-WORK & MULTI-VIEWPORT AUDIT (28 audits total)
+  // 6. MULTI-WORK & MULTI-VIEWPORT AUDIT (28 audits total)
   // =========================================================================
-  console.log('\n--- 4. Multi-Viewport & Multi-Work Validation (Round 4.5) ---');
+  console.log('\n--- 6. Multi-Viewport & Multi-Work Validation (Round 4.6) ---');
   for (const work of TEST_WORKS) {
     const workUrl = `${PREVIEW_BASE}/obra/${work.slug}`;
     console.log(`\nAuditing Work: ${work.slug} (${work.desc})`);
@@ -272,8 +436,8 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round4_5_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round4_5_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_6_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_6_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
@@ -283,6 +447,9 @@ async function run() {
         const evaluation = await page.evaluate((isDesktop) => {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
+
+          // Rating
+          const ratingWidget = document.querySelector('.rating-widget');
 
           // Synopsis
           const synopsisCard = document.querySelector('.work-synopsis-card');
@@ -327,6 +494,7 @@ async function run() {
             clientWidth: docW,
             scrollWidth: scrollW,
             noOverflow: scrollW <= docW,
+            hasRatingWidget: !!ratingWidget,
             hasSynopsisCard: !!synopsisCard,
             synopsisFontSize,
             row1Aligned,
@@ -338,7 +506,7 @@ async function run() {
           };
         }, !vp.isMobile && vp.width >= 992);
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | synopsisCard=${evaluation.hasSynopsisCard} (font=${evaluation.synopsisFontSize}px) | row1Aligned=${evaluation.row1Aligned} (h=${evaluation.hRow1}px) | row2Aligned=${evaluation.row2Aligned} (h=${evaluation.hRow2}px) | author="${evaluation.authorVal}"`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | rating=${evaluation.hasRatingWidget} | synopsis=${evaluation.hasSynopsisCard} (${evaluation.synopsisFontSize}px) | row1Aligned=${evaluation.row1Aligned} (${evaluation.hRow1}px) | row2Aligned=${evaluation.row2Aligned} (${evaluation.hRow2}px) | author="${evaluation.authorVal}"`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -358,12 +526,12 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round4_5_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_6_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 4.5 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_5_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4.6 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_6_work_page_audit.json')}`);
 }
 
 async function pageEvaluateSynopsis(page) {

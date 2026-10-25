@@ -242,9 +242,9 @@
       <span class="rating-tooltip-label">{RATING_LABELS[hoverScore]}</span>
     {:else if userVoted}
       <div class="user-vote-chip-group">
-        <span class="user-score-chip">
+        <span class="user-score-chip" title="Avaliação de {userScore} estrelas registrada">
           <Check size={11} />
-          <span>Sua nota: {userScore} ★</span>
+          <span>Salvo</span>
         </span>
 
         <!-- Discrete removal menu button -->
@@ -383,25 +383,25 @@
   .rating-widget {
     display: inline-flex;
     align-items: center;
-    gap: 16px;
-    min-height: 48px;
-    padding: 8px 18px;
-    background: rgba(15, 12, 28, 0.72);
-    border: 1px solid rgba(181, 154, 245, 0.22);
-    border-radius: 12px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), 0 0 10px rgba(139, 92, 246, 0.1);
-    backdrop-filter: blur(10px);
-    margin: 4px 0 12px;
+    gap: 14px;
+    min-height: 44px;
+    padding: 6px 16px;
+    background: rgba(14, 12, 26, 0.45);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    margin: 4px 0 10px;
     width: fit-content;
     max-width: 100%;
     flex-wrap: wrap;
     box-sizing: border-box;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s ease, background 0.2s ease;
   }
 
   .rating-widget:hover {
-    border-color: rgba(181, 154, 245, 0.35);
-    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.35), 0 0 14px rgba(139, 92, 246, 0.18);
+    border-color: rgba(181, 154, 245, 0.22);
+    background: rgba(18, 15, 32, 0.55);
   }
 
   .rating-score-box {
@@ -478,8 +478,8 @@
 
   .rating-divider {
     width: 1px;
-    height: 24px;
-    background: rgba(181, 154, 245, 0.24);
+    height: 20px;
+    background: rgba(181, 154, 245, 0.14);
   }
 
   .rating-interactive-row {
@@ -563,12 +563,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.76rem;
-    font-weight: 700;
+    font-size: 0.74rem;
+    font-weight: 600;
     color: #c4b5fd;
-    background: rgba(167, 139, 250, 0.14);
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    padding: 2px 8px;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    padding: 2px 7px;
     border-radius: 999px;
   }
 
