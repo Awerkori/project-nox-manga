@@ -280,16 +280,11 @@
               {/if}
             </div>
 
-            <!-- Title & Author with Fixed Min-Height to Guarantee Uniform Layout -->
+            <!-- Title Only (Author removed for cleaner, artwork-focused home) -->
             <div class="card-info">
               <strong class="card-work-title" title={titleText}>
                 {titleText}
               </strong>
-              {#if work.author}
-                <span class="card-author" title={decodeHtmlEntities(work.author)}>
-                  {decodeHtmlEntities(work.author)}
-                </span>
-              {/if}
             </div>
           </a>
         {/each}
@@ -678,8 +673,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    margin-top: 0.85rem;
-    min-height: 4.2rem;
+    margin-top: 0.75rem;
+    min-height: 2.7rem;
     min-width: 0;
     max-width: 100%;
     width: 100%;
@@ -687,7 +682,7 @@
 
   .card-work-title {
     color: #f1f5f9;
-    font-size: 0.96rem;
+    font-size: 0.94rem;
     font-weight: 750;
     line-height: 1.35;
     min-height: 2.6rem;
@@ -704,18 +699,7 @@
   }
 
   .shelf-card:hover .card-work-title {
-    color: #dfc28d;
-  }
-
-  .card-author {
-    display: block;
-    min-width: 0;
-    max-width: 100%;
-    color: #8c93a8;
-    font-size: 0.8rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    color: #c084fc;
   }
 
 
