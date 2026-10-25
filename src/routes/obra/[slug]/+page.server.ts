@@ -6,7 +6,23 @@ import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFrom
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-export const load = async ({ locals, params, url, cookies, platform }: any) => {
+type ObraAuxCacheEntry = {
+  timestamp: number;
+  comments: any[];
+  likes: any[];
+  metrics: any;
+  workScans: any[];
+};
+const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
+const OBRA_AUX_CACHE_TTL_MS = 60_000;
+
+export const load = async ({ locals, params, url, cookies, platform, setHeaders }: any) => {
+  if (!locals.user && setHeaders) {
+    setHeaders({
+      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
+    });
+  }
+
   const isTargetUuid = isUuid(params.slug);
 
   // 1. Authoritative lookup in YugabyteDB
@@ -69,84 +85,113 @@ export const load = async ({ locals, params, url, cookies, platform }: any) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
 
-  // Fetch canonical live chapters from YugabyteDB
-  let chaptersList: any[] = await fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env);
+  // Check in-memory aux cache for public comments, likes, metrics and scans
+  const cachedAuxEntry = obraAuxCache.get(work.id);
+  const isAuxFresh = cachedAuxEntry && Date.now() - cachedAuxEntry.timestamp < OBRA_AUX_CACHE_TTL_MS;
 
-  // Fallback to Supabase if Yugabyte returned empty
-  if (!chaptersList || chaptersList.length === 0) {
-    let chaptersQuery = locals.db
-      .from('chapters')
-      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
-      .eq('work_id', work.id)
-      .order('chapter_order_key', { ascending: false, nullsFirst: false })
-      .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
-      .order('id', { ascending: false });
+  const publicAuxPromise = isAuxFresh
+    ? Promise.resolve({
+        comments: cachedAuxEntry.comments,
+        likes: cachedAuxEntry.likes,
+        metrics: cachedAuxEntry.metrics,
+        workScans: cachedAuxEntry.workScans
+      })
+    : withTimeout(
+        Promise.all([
+          locals.db
+            .from('comments')
+            .select(
+              'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
+            )
+            .eq('work_id', work.id)
+            .eq('removed', false)
+            .is('chapter_id', null)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          locals.db.from('likes').select('user_id').eq('work_id', work.id),
+          locals.db.rpc('work_metrics', { p_work: work.id }),
+          locals.db
+            .from('work_scans')
+            .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
+            .eq('work_id', work.id)
+        ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
+          const entry = {
+            timestamp: Date.now(),
+            comments: commentsRes?.data || [],
+            likes: likesRes?.data || [],
+            metrics: metricsRes?.data?.[0] || null,
+            workScans: scansRes?.data || []
+          };
+          if (obraAuxCache.size >= 200) {
+            const oldest = obraAuxCache.keys().next().value;
+            if (oldest) obraAuxCache.delete(oldest);
+          }
+          obraAuxCache.set(work.id, entry);
+          return entry;
+        }),
+        3500,
+        {
+          comments: cachedAuxEntry?.comments || [],
+          likes: cachedAuxEntry?.likes || [],
+          metrics: cachedAuxEntry?.metrics || null,
+          workScans: cachedAuxEntry?.workScans || []
+        },
+        'obra_public_aux'
+      );
 
-    if (!preview) {
-      chaptersQuery = chaptersQuery.not('published_at', 'is', null);
-    }
-
-    const chaptersRes = await withTimeout(
-      chaptersQuery,
-      4000,
-      { data: [] } as any,
-      'obra_chapters'
-    );
-    chaptersList = chaptersRes?.data || [];
-  }
-
-  const chaptersPromise = Promise.resolve({ data: chaptersList });
-  // Editorial tags live in Yugabyte with the work itself. Keeping this out of
-  // locals.db prevents an empty legacy Supabase relation from erasing imported
-  // source genres in the SSR response.
-  const tagsPromise = fetchWorkTagsFromYugabyte(work.id, platform?.env);
-
-  const auxPromise = withTimeout(
-    Promise.all([
-      locals.db
-        .from('comments')
-        .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_title_id),comment_likes(user_id)'
-        )
-        .eq('work_id', work.id)
-        .eq('removed', false)
-        .is('chapter_id', null)
-        .order('created_at', { ascending: false })
-        .limit(100),
-      locals.user
-        ? locals.db
+  const personalPromise = locals.user
+    ? withTimeout(
+        Promise.all([
+          locals.db
             .from('library')
             .select('*')
             .eq('user_id', locals.user.id)
             .eq('work_id', work.id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      locals.db.from('likes').select('user_id').eq('work_id', work.id),
-      locals.user
-        ? locals.db
+            .maybeSingle(),
+          locals.db
             .from('reading')
             .select('chapter_id,page,completed_at,chapters!inner(work_id)')
             .eq('chapters.work_id', work.id)
             .order('updated_at', { ascending: false })
-        : Promise.resolve({ data: [] }),
-      locals.db.rpc('work_metrics', { p_work: work.id }),
-      locals.db
-        .from('work_scans')
-        .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
-        .eq('work_id', work.id)
-    ]),
-    4000,
-    [{ data: [] }, { data: null }, { data: [] }, { data: [] }, { data: null }, { data: [] }] as any,
-    'obra_aux_details'
-  );
+        ]),
+        2500,
+        [{ data: null }, { data: [] }] as any,
+        'obra_personal_data'
+      )
+    : Promise.resolve([{ data: null }, { data: [] }]);
 
-  const [chapters, tags, [comments, library, likes, progress, metrics, workScans]] = await Promise.all([
-    chaptersPromise,
-    tagsPromise,
-    auxPromise
+  // Concurrently fetch chapters, tags, public auxiliary data and personal data
+  const [chaptersList, publicTags, publicAux, [libraryRes, progressRes]] = await Promise.all([
+    fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
+      if (list && list.length > 0) return list;
+      // Resilient fallback to Supabase if Yugabyte chapters empty
+      let chaptersQuery = locals.db
+        .from('chapters')
+        .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
+        .eq('work_id', work.id)
+        .order('chapter_order_key', { ascending: false, nullsFirst: false })
+        .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
+
+      if (!preview) {
+        chaptersQuery = chaptersQuery.not('published_at', 'is', null);
+      }
+
+      const res = await withTimeout(chaptersQuery, 3000, { data: [] } as any, 'obra_chapters_fallback');
+      return res?.data || [];
+    }),
+    fetchWorkTagsFromYugabyte(work.id, platform?.env),
+    publicAuxPromise,
+    personalPromise
   ]);
-  const publicTags = tags || [];
-  const scansList = (workScans.data || []).map((ws: any) => ws.scans).filter(Boolean);
+
+  const comments = publicAux.comments || [];
+  const likes = publicAux.likes || [];
+  const metrics = publicAux.metrics;
+  const scansList = (publicAux.workScans || []).map((ws: any) => ws.scans).filter(Boolean);
+  const library = libraryRes?.data || null;
+  const progress = progressRes?.data || [];
+  const tagsList = publicTags || [];
   const isAdult = (work as any).content_rating === 'ADULT_18';
   const coverUrl = work.cover_id
     ? work.cover_id.startsWith('/') || work.cover_id.startsWith('http')
@@ -158,20 +203,17 @@ export const load = async ({ locals, params, url, cookies, platform }: any) => {
     ? `${url.origin}/brand/nox-symbol-256.webp`
     : coverUrl || `${url.origin}/brand/nox-symbol-256.webp`;
 
-  chaptersList = chapters.data || [];
-
-
   return {
     work,
     chapters: chaptersList,
-    tags: publicTags,
+    tags: tagsList,
     scans: scansList,
-    structuredData: structuredDataScript(workStructuredData(work, publicTags, url.origin)),
-    comments: comments.data || [],
-    library: library.data,
-    likes: likes.data || [],
-    progress: progress.data || [],
-    metrics: metrics.data?.[0] || null,
+    structuredData: structuredDataScript(workStructuredData(work, tagsList, url.origin)),
+    comments,
+    library,
+    likes,
+    progress,
+    metrics,
     canonical: `${url.origin}/obra/${work.slug}`,
     coverUrl,
     metaImage,

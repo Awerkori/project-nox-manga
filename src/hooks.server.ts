@@ -211,24 +211,41 @@ export const handle: Handle = async ({ event, resolve }) => {
       !user &&
       !hasAuthCookie &&
       !hasHomePreference;
-    if (
-      (isHtml && !isSharedAnonymousHome) ||
+
+    const isPrivateArea =
       user ||
       hasAuthCookie ||
       event.url.pathname.startsWith('/admin') ||
       event.url.pathname.startsWith('/auth') ||
       event.url.pathname.startsWith('/me') ||
-      event.url.pathname.startsWith('/scan')
-    ) {
+      event.url.pathname.startsWith('/scan') ||
+      event.url.pathname.startsWith('/perfil') ||
+      event.url.pathname.startsWith('/biblioteca') ||
+      event.url.pathname.startsWith('/favoritos') ||
+      event.url.pathname.startsWith('/historico') ||
+      event.url.pathname.startsWith('/notificacoes');
+
+    const existingCacheControl = response.headers.get('Cache-Control') || '';
+    const isExplicitlyPublic = existingCacheControl.includes('public');
+
+    if (isPrivateArea) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Cookie, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
+    } else if (isExplicitlyPublic) {
+      // Preserve explicit public caching configured by public routes (+page.server.ts)
+      response.headers.set('Vary', 'Accept');
     } else if (isSharedAnonymousHome) {
       response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60');
       response.headers.set('Vary', 'Accept');
     } else if (response.status >= 400) {
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+    } else if (isHtml) {
+      response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('Vary', 'Cookie, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
     }
