@@ -78,6 +78,7 @@ export async function getWorkRating(
         const userRes = await executeYugabyteSql<{ rating: number }>(
           `SELECT rating FROM public.work_ratings
            WHERE work_id = $1 AND (visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL))
+           ORDER BY user_id NULLS LAST
            LIMIT 1;`,
           [workId, visitorId || '', userId || null],
           platformEnv

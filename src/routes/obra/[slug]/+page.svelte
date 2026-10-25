@@ -733,17 +733,25 @@
                 {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterPresentationLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
                   <span class="chapter-sub-title">{chapter.title}</span>
                 {/if}
+
+                <!-- Restored Chapter Views & Date Meta Line -->
+                <div class="chapter-card-meta">
+                  <span class="chapter-meta-views" title="{(chapter.views_total ?? 0)} visualizações">
+                    <Eye size={12} />
+                    <span>{formatViews(chapter.views_total ?? 0)}</span>
+                  </span>
+                  {#if chapter.published_at}
+                    <span class="meta-dot" aria-hidden="true">·</span>
+                    <time class="chapter-meta-date" datetime={chapter.published_at}>
+                      <Calendar size={12} />
+                      <span>{date(chapter.published_at)}</span>
+                    </time>
+                  {/if}
+                </div>
               </div>
             </a>
 
             <div class="chapter-actions-col">
-              {#if chapter.published_at}
-                <time class="chapter-release-date" datetime={chapter.published_at}>
-                  <Calendar size={13} />
-                  <span>{date(chapter.published_at)}</span>
-                </time>
-              {/if}
-
               <!-- Offline Download Button -->
               <button
                 type="button"
@@ -1644,18 +1652,37 @@
   .chapter-actions-col {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-shrink: 0;
     margin-left: 8px;
   }
 
-  .chapter-release-date {
+  .chapter-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    color: rgba(226, 232, 240, 0.55);
+    margin-top: 2px;
+  }
+
+  .chapter-meta-views {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.78rem;
+    color: #c4b5fd;
+    font-weight: 600;
+  }
+
+  .chapter-meta-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     color: rgba(226, 232, 240, 0.5);
-    white-space: nowrap;
+  }
+
+  .meta-dot {
+    color: rgba(181, 154, 245, 0.35);
   }
 
   .btn-chapter-download {
@@ -1843,12 +1870,41 @@
 
   @media (max-width: 1024px) {
     .work-content-grid {
-      grid-template-columns: 1fr;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
     }
 
+    /* Requirement 2: Ficha Técnica MUST appear strictly ABOVE chapters on mobile */
     .work-sidebar {
+      order: 1;
+      width: 100%;
       position: static;
-      margin-top: 20px;
+      margin-top: 0;
+    }
+
+    .work-chapters-section {
+      order: 2;
+      width: 100%;
+      min-width: 0;
+    }
+
+    /* Responsive specs matrix on tablet/mobile: sleek multi-column layout */
+    .sidebar-specs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px 16px;
+    }
+
+    .spec-row {
+      border-bottom: none;
+      border-left: 2px solid rgba(181, 154, 245, 0.25);
+      padding-left: 10px;
+      padding-bottom: 0;
+    }
+
+    .spec-row.scans-spec {
+      grid-column: 1 / -1;
     }
   }
 
@@ -1958,10 +2014,6 @@
 
     .chapter-card {
       padding: 8px 10px;
-    }
-
-    .chapter-release-date {
-      display: none; /* Hide date on very tight mobile rows to prevent overlap */
     }
   }
 
