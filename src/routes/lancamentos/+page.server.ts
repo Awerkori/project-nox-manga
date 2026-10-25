@@ -3,7 +3,7 @@ import { fetchRecentReleaseTimelineFromYugabyte } from "$lib/server/yugabyte";
 export const load = async ({ url, platform, setHeaders }: any) => {
   if (setHeaders) {
     setHeaders({
-      "cache-control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300"
+      "cache-control": "public, max-age=5, s-maxage=10, stale-while-revalidate=30"
     });
   }
 

@@ -17,12 +17,6 @@ const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
 const OBRA_AUX_CACHE_TTL_MS = 60_000;
 
 export const load = async ({ locals, params, url, cookies, platform, setHeaders }: any) => {
-  if (!locals.user && setHeaders) {
-    setHeaders({
-      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
-    });
-  }
-
   const isTargetUuid = isUuid(params.slug);
 
   // 1. Authoritative lookup in YugabyteDB
@@ -69,7 +63,21 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     redirect(301, `/obra/${work.slug}`);
   }
 
-  if ((work as any).content_rating === 'ADULT_18') {
+  const isAdultWork = (work as any).content_rating === 'ADULT_18';
+  if (!locals.user && setHeaders) {
+    if (isAdultWork) {
+      // Adult content is strictly kept private from edge cache to enforce the minor age gate on every request
+      setHeaders({
+        'cache-control': 'private, no-cache, no-store, must-revalidate'
+      });
+    } else {
+      setHeaders({
+        'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
+      });
+    }
+  }
+
+  if (isAdultWork) {
     const rawAgeCookie = cookies.get('nox-age-status');
     let ageStatus = rawAgeCookie;
     if (locals.sessionCache?.profile?.age_status) {

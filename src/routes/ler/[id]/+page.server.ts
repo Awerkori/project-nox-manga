@@ -53,8 +53,11 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         userProgress = pRes?.data || null;
       } else {
         const link = firstPagePreloadHeader(cached.pages);
+        const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
-          'cache-control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'cache-control': isAdultCached
+            ? 'private, no-cache, no-store, must-revalidate'
+            : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
           ...(link ? { link } : {})
         });
       }
@@ -238,9 +241,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   }
 
   const link = firstPagePreloadHeader(pagesData);
+  const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+      'cache-control': isAdultChapter
+        ? 'private, no-cache, no-store, must-revalidate'
+        : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
       ...(link ? { link } : {})
     });
   } else if (link) {
