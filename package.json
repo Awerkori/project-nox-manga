@@ -34,6 +34,7 @@
     "fast-png": "^8.0.0",
     "fflate": "latest",
     "jpeg-js": "^0.4.4",
+    "page-flip": "^2.0.7",
     "pg": "^8.23.0",
     "zod": "latest"
   },
