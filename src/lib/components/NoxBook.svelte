@@ -27,7 +27,7 @@
 
   let { works = [], continueReading = [] }: Props = $props();
 
-  // Active indices
+  // Active state
   let currentIndex = $state(0);
   let nextIndex = $state(0);
   let isFlipping = $state(false);
@@ -36,25 +36,46 @@
   let prefersReducedMotion = $state(false);
 
   // Timing configuration
-  const READING_TIME_MS = 3000; // 3.0s display per work
-  const FLIP_DURATION_MS = 750; // 750ms smooth realistic page turn
+  const READING_TIME_MS = 3000; // Exactly 3.0s display per work
+  const FLIP_DURATION_MS = 700; // 700ms smooth realistic page turn
 
   let timerStartTime = 0;
   let remainingTime = READING_TIME_MS;
   let timerId: ReturnType<typeof setTimeout> | null = null;
-  let animProgress = $state(0); // 0.0 to 1.0 for progress dot
 
-  // Active, Next & Prev works
+  // Active works
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
   let targetWork = $derived(works.length > 0 ? works[nextIndex % works.length] : null);
   let prevIndexCalc = $derived((currentIndex - 1 + works.length) % works.length);
   let nextIndexCalc = $derived((currentIndex + 1) % works.length);
 
-  // Touch tracking for mobile swipe
+  // Pointer & Touch Gestures
   let touchStartX = 0;
   let touchStartY = 0;
   let touchDeltaX = 0;
   let touchDeltaY = 0;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+
+  function handlePointerDown(e: PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointerStartX = e.clientX;
+    pointerStartY = e.clientY;
+    pauseReadingTimer();
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    const deltaX = e.clientX - pointerStartX;
+    const deltaY = e.clientY - pointerStartY;
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
+      if (deltaX < 0) {
+        flipPage('forward', true);
+      } else {
+        flipPage('backward', true);
+      }
+    }
+    resumeReadingTimer();
+  }
 
   function fallbackCover(node: HTMLImageElement) {
     const onError = () => {
@@ -96,10 +117,11 @@
     );
   }
 
-  // Timer controls
+  // Timer Controls
   function startReadingTimer(duration = READING_TIME_MS) {
     clearReadingTimer();
-    if (works.length <= 1 || isPaused || document.hidden) return;
+    if (works.length <= 1 || isPaused) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
 
     timerStartTime = Date.now();
     remainingTime = duration;
@@ -123,7 +145,7 @@
     isPaused = true;
     if (timerId !== null) {
       const elapsed = Date.now() - timerStartTime;
-      remainingTime = Math.max(200, remainingTime - elapsed);
+      remainingTime = Math.max(300, remainingTime - elapsed);
       clearReadingTimer();
     }
   }
@@ -145,7 +167,7 @@
     nextIndex = direction === 'forward' ? nextIndexCalc : prevIndexCalc;
     isFlipping = true;
 
-    // Dispatch custom event to notify ParticleBackground for subtle cosmic resonance
+    // Trigger subtle cosmic shimmer in background
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('nox:book-flip', {
@@ -204,7 +226,7 @@
     }, FLIP_DURATION_MS);
   }
 
-  // Keyboard navigation
+  // Keyboard Navigation
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'ArrowRight') {
       flipPage('forward', true);
@@ -213,7 +235,7 @@
     }
   }
 
-  // Touch gestures for mobile swipe
+  // Touch Swipe on Mobile
   function handleTouchStart(e: TouchEvent) {
     if (e.touches.length !== 1) return;
     touchStartX = e.touches[0].clientX;
@@ -231,14 +253,12 @@
 
   function handleTouchEnd() {
     const isHorizontalSwipe =
-      Math.abs(touchDeltaX) > 45 && Math.abs(touchDeltaX) > Math.abs(touchDeltaY) * 1.3;
+      Math.abs(touchDeltaX) > 40 && Math.abs(touchDeltaX) > Math.abs(touchDeltaY) * 1.25;
 
     if (isHorizontalSwipe) {
       if (touchDeltaX < 0) {
-        // Swiped left -> advance to next work
         flipPage('forward', true);
       } else {
-        // Swiped right -> return to previous work
         flipPage('backward', true);
       }
     }
@@ -246,17 +266,19 @@
   }
 
   function handleVisibilityChange() {
-    if (document.hidden) {
+    if (typeof document !== 'undefined' && document.hidden) {
       clearReadingTimer();
     } else if (!isPaused && !isFlipping) {
       startReadingTimer(remainingTime);
     }
   }
 
-  // Strict CSP Action Helpers (avoids inline event handlers in SSR HTML)
+  // Action Helpers for CSP & Event Binding
   function bindBookEvents(node: HTMLElement) {
     node.addEventListener('mouseenter', pauseReadingTimer);
     node.addEventListener('mouseleave', resumeReadingTimer);
+    node.addEventListener('pointerdown', handlePointerDown);
+    node.addEventListener('pointerup', handlePointerUp);
     node.addEventListener('touchstart', handleTouchStart, { passive: true });
     node.addEventListener('touchmove', handleTouchMove, { passive: true });
     node.addEventListener('touchend', handleTouchEnd, { passive: true });
@@ -265,6 +287,8 @@
       destroy() {
         node.removeEventListener('mouseenter', pauseReadingTimer);
         node.removeEventListener('mouseleave', resumeReadingTimer);
+        node.removeEventListener('pointerdown', handlePointerDown);
+        node.removeEventListener('pointerup', handlePointerUp);
         node.removeEventListener('touchstart', handleTouchStart);
         node.removeEventListener('touchmove', handleTouchMove);
         node.removeEventListener('touchend', handleTouchEnd);
@@ -307,204 +331,289 @@
 
 <section
   class="nox-book-section"
-  aria-label="Nox Book — Vitrine Interativa de Obras 3D"
+  aria-label="Nox Book — Vitrine Editorial Interativa"
   use:bindBookEvents
 >
-  <!-- Ambient Cosmic Glow behind Book -->
+  <!-- Ambient Cosmic Aura behind Book -->
   <div class="book-ambient-glow" aria-hidden="true"></div>
 
-  <!-- Outer Navigation Arrows -->
+  <!-- Outer Navigation Arrows (Desktop) -->
   <button
+    type="button"
     class="book-nav-btn prev-btn"
     use:bindClick={() => flipPage('backward', true)}
     disabled={isFlipping}
-    aria-label="Obra anterior do livro"
+    aria-label="Obra anterior"
   >
     <ChevronLeft size={22} />
   </button>
 
   <button
+    type="button"
     class="book-nav-btn next-btn"
     use:bindClick={() => flipPage('forward', true)}
     disabled={isFlipping}
-    aria-label="Próxima obra do livro"
+    aria-label="Próxima obra"
   >
     <ChevronRight size={22} />
   </button>
 
-  <!-- 3D BOOK STAGE -->
-  <div class="nox-book-stage">
+  <!-- ========================================================
+       DESKTOP EDITORIAL BOOK (Visible >= 768px)
+       ======================================================== -->
+  <div class="nox-book-stage desktop-stage">
     <div class="nox-book" class:flipping={isFlipping}>
-      <!-- Hardcover Backing Frame & Stacked Page Edges -->
-      <div class="book-cover-frame" aria-hidden="true">
-        <div class="page-stack page-stack-left"></div>
-        <div class="page-stack page-stack-right"></div>
-        <div class="spine-hinge">
-          <div class="spine-thread"></div>
-          <div class="spine-charm">
-            <Sparkles size={11} class="charm-icon" />
-          </div>
-        </div>
+      <!-- Hardcover Outer Shell & Stacked Paper Layers -->
+      <div class="book-shell" aria-hidden="true">
+        <div class="edge-stack edge-left"></div>
+        <div class="edge-stack edge-right"></div>
+        <div class="spine-binding"></div>
       </div>
 
-      <!-- DESKTOP SPREAD (Visible >= 768px) -->
-      <div class="book-spread desktop-only">
-        <!-- STATIC LEFT PAGE (Underneath / Base) -->
-        <div class="book-page left-page static-left">
+      <!-- DESKTOP SPREAD (Two connected pages) -->
+      <div class="book-spread">
+        <!-- STATIC LEFT PAGE (Underneath / Base Artwork) -->
+        <div class="book-page left-page">
           {#if isFlipping && flipDirection === 'backward' && targetWork}
-            <!-- Revealing target work on backward flip -->
-            {@render pageArtwork(targetWork)}
+            {@render desktopArtwork(targetWork)}
           {:else if currentWork}
-            <!-- Showing current work artwork -->
-            {@render pageArtwork(currentWork)}
+            {@render desktopArtwork(currentWork)}
           {/if}
-          <div class="crease-shadow crease-shadow-left"></div>
+          <div class="spine-crease-shadow crease-left"></div>
         </div>
 
-        <!-- STATIC RIGHT PAGE (Underneath / Base) -->
-        <div class="book-page right-page static-right">
+        <!-- STATIC RIGHT PAGE (Underneath / Base Chronicle) -->
+        <div class="book-page right-page">
           {#if isFlipping && flipDirection === 'forward' && targetWork}
-            <!-- Revealing target work on forward flip -->
-            {@render pageChronicle(targetWork)}
+            {@render desktopChronicle(targetWork)}
           {:else if currentWork}
-            <!-- Showing current work chronicle -->
-            {@render pageChronicle(currentWork)}
+            {@render desktopChronicle(currentWork)}
           {/if}
-          <div class="crease-shadow crease-shadow-right"></div>
+          <div class="spine-crease-shadow crease-right"></div>
           {#if isFlipping && flipDirection === 'forward'}
-            <div class="under-leaf-cast-shadow forward"></div>
+            <div class="cast-under-shadow"></div>
           {/if}
         </div>
 
-        <!-- THE 3D TURNING LEAF (Active when flipping) -->
+        <!-- 3D TURNING LEAF (Active when flipping forward or backward) -->
         {#if isFlipping}
           {#if flipDirection === 'forward'}
-            <!-- Forward turning leaf: turns from right to left (0deg to -180deg) -->
-            <div class="flipper-leaf forward-flipper">
-              <!-- Front Face: Current Work Chronicle (turns away) -->
+            <div class="turning-leaf leaf-forward">
+              <!-- Front Face: Current Chronicle (turns away) -->
               <div class="leaf-face front-face">
                 {#if currentWork}
-                  {@render pageChronicle(currentWork)}
+                  {@render desktopChronicle(currentWork)}
                 {/if}
-                <div class="dynamic-curl-shadow front"></div>
+                <div class="leaf-sweep-shadow sweep-front"></div>
               </div>
 
-              <!-- Back Face: Next Work Artwork (lands on left) -->
+              <!-- Back Face: Target Artwork (lands on left) -->
               <div class="leaf-face back-face">
                 {#if targetWork}
-                  {@render pageArtwork(targetWork)}
+                  {@render desktopArtwork(targetWork)}
                 {/if}
-                <div class="dynamic-curl-shadow back"></div>
+                <div class="leaf-sweep-shadow sweep-back"></div>
               </div>
             </div>
           {:else}
-            <!-- Backward turning leaf: turns from left to right (0deg to 180deg) -->
-            <div class="flipper-leaf backward-flipper">
-              <!-- Front Face: Current Work Artwork (turns away) -->
+            <div class="turning-leaf leaf-backward">
+              <!-- Front Face: Current Artwork (turns away) -->
               <div class="leaf-face front-face">
                 {#if currentWork}
-                  {@render pageArtwork(currentWork)}
+                  {@render desktopArtwork(currentWork)}
                 {/if}
-                <div class="dynamic-curl-shadow front"></div>
+                <div class="leaf-sweep-shadow sweep-front"></div>
               </div>
 
-              <!-- Back Face: Target Work Chronicle (lands on right) -->
+              <!-- Back Face: Target Chronicle (lands on right) -->
               <div class="leaf-face back-face">
                 {#if targetWork}
-                  {@render pageChronicle(targetWork)}
+                  {@render desktopChronicle(targetWork)}
                 {/if}
-                <div class="dynamic-curl-shadow back"></div>
+                <div class="leaf-sweep-shadow sweep-back"></div>
               </div>
             </div>
           {/if}
         {/if}
       </div>
-
-      <!-- MOBILE FOLIO (Visible < 768px) -->
-      <div class="book-folio mobile-only">
-        <div
-          class="mobile-folio-card"
-          class:mobile-flipping-forward={isFlipping && flipDirection === 'forward'}
-          class:mobile-flipping-backward={isFlipping && flipDirection === 'backward'}
-        >
-          {#if currentWork}
-            <!-- Upper Section: Cover Artwork with luminous frame -->
-            <div class="mobile-art-wrapper">
-              {@render pageArtwork(currentWork, true)}
-            </div>
-
-            <!-- Lower Section: Essential Info & Action CTA -->
-            <div class="mobile-chronicle-wrapper">
-              {@render pageChronicle(currentWork, true)}
-            </div>
-          {/if}
-        </div>
-      </div>
     </div>
   </div>
 
-  <!-- BOOK FOOTER CONTROLS & FOLIO PAGINATION -->
+  <!-- ========================================================
+       MOBILE EDITORIAL FOLIO (Visible < 768px)
+       Rock-solid layout: Zero 3D stacking bugs, zero blank screen.
+       ======================================================== -->
+  <div class="mobile-stage">
+    {#if currentWork}
+      {@const mobileContItem = getContinueItem(currentWork)}
+      <div
+        class="mobile-card"
+        class:mobile-flip-out-left={isFlipping && flipDirection === 'forward'}
+        class:mobile-flip-out-right={isFlipping && flipDirection === 'backward'}
+      >
+        <!-- Top Half: Large Artwork Hero -->
+        <div class="mobile-cover-box">
+          <img
+            src={getCover(currentWork, 'hero')}
+            alt={currentWork.title}
+            class="mobile-cover-image"
+            class:nsfw-blur={getIsAdult(currentWork) && (page.data?.blurNsfw ?? true)}
+            use:fallbackCover
+            loading="eager"
+            decoding="async"
+          />
+          <div class="mobile-cover-vignette"></div>
+
+          <!-- Mobile Quick Nav Arrows on Cover -->
+          <button
+            type="button"
+            class="mobile-cover-arrow cover-arrow-prev"
+            use:bindClick={() => flipPage('backward', true)}
+            aria-label="Obra anterior"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            type="button"
+            class="mobile-cover-arrow cover-arrow-next"
+            use:bindClick={() => flipPage('forward', true)}
+            aria-label="Próxima obra"
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          <!-- Top Overlay Badges -->
+          <div class="mobile-top-badges">
+            {#if currentWork.kind}
+              <span class="editorial-badge kind-badge">
+                {kindLabels[currentWork.kind] || currentWork.kind}
+              </span>
+            {/if}
+            {#if getIsAdult(currentWork)}
+              <span class="editorial-badge adult-badge">
+                <AlertTriangle size={11} />
+                <span>+18</span>
+              </span>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Bottom Half: Editorial Info & Action -->
+        <div class="mobile-info-box">
+          <div class="mobile-header-meta">
+            <span class="meta-brand">
+              <Sparkles size={12} class="accent-star" />
+              <span>Project Nox</span>
+            </span>
+            <span class="meta-views">
+              <Eye size={12} />
+              <span>{formatViews(currentWork.views)} leituras</span>
+            </span>
+          </div>
+
+          <h2 class="mobile-title">
+            <a href="/obra/{currentWork.slug}">{currentWork.title}</a>
+          </h2>
+
+          <div class="mobile-pills">
+            {#if currentWork.status}
+              <span class="editorial-pill status-pill">
+                {currentWork.status === 'COMPLETED' ? 'Concluído' : 'Em Lançamento'}
+              </span>
+            {/if}
+            {#if (currentWork as any).total_chapters || (currentWork as any).chapters_count}
+              <span class="editorial-pill">
+                {(currentWork as any).total_chapters || (currentWork as any).chapters_count} Caps
+              </span>
+            {/if}
+          </div>
+
+          <p class="mobile-synopsis">
+            {#if currentWork.synopsis}
+              {decodeHtmlEntities(currentWork.synopsis)}
+            {:else}
+              Acompanhe esta jornada exclusiva com leitura contínua e qualidade no Project Nox.
+            {/if}
+          </p>
+
+          <div class="mobile-actions">
+            <a
+              href={mobileContItem ? mobileContItem.destinationUrl : `/obra/${currentWork.slug}`}
+              class="editorial-btn btn-solid"
+            >
+              <BookOpen size={16} />
+              <span>{mobileContItem ? 'Continuar Leitura' : 'Ler Agora'}</span>
+            </a>
+            <a href="/obra/{currentWork.slug}" class="editorial-btn btn-outline">
+              <span>Detalhes</span>
+              <ArrowRight size={14} />
+            </a>
+          </div>
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- ========================================================
+       BOOK FOOTER & FOLIO INDICATORS
+       ======================================================== -->
   <div class="book-footer">
-    <div class="book-folio-index">
-      <Compass size={13} class="folio-compass-icon" />
-      <span class="folio-text">
+    <div class="footer-left-info">
+      <Compass size={13} class="compass-icon" />
+      <span class="folio-count">
         Folha <strong class="current-folio">{String(currentIndex + 1).padStart(2, '0')}</strong> de {works.length}
       </span>
-      <span class="auto-advance-indicator" class:paused={isPaused} title={isPaused ? 'Pausado ao interagir' : 'Virada automática a cada 3s'}>
-        <span class="pulse-dot"></span>
-        <span class="indicator-label">{isPaused ? 'Pausado' : 'Folheando'}</span>
+      <span class="status-indicator" class:paused={isPaused}>
+        <span class="pulse-beacon"></span>
+        <span class="status-text">{isPaused ? 'Pausado' : 'Folheando'}</span>
       </span>
     </div>
 
     <!-- Quick Indicator Pips -->
-    <div class="folio-pips" role="tablist" aria-label="Navegar entre as 10 obras do livro">
+    <div class="footer-pips" role="tablist" aria-label="Navegar pelas 10 obras do livro">
       {#each works as w, idx}
         <button
-          class="pip-btn"
+          type="button"
+          class="pip-button"
           class:active={idx === currentIndex}
           use:bindClick={() => goToWork(idx)}
           aria-label="Ir para obra {idx + 1}: {w.title}"
           role="tab"
           aria-selected={idx === currentIndex}
         >
-          <span class="pip-inner"></span>
+          <span class="pip-line"></span>
         </button>
       {/each}
     </div>
   </div>
 </section>
 
-<!-- SNIPPET: Page Artwork (Left Page on Desktop / Top on Mobile) -->
-{#snippet pageArtwork(work: Work, isMobile = false)}
-  <div class="artwork-canvas" class:is-mobile={isMobile}>
-    <div class="art-frame">
-      <div class="art-inner-glow"></div>
+<!-- ========================================================
+     SNIPPET: Desktop Artwork (Left Page)
+     Gallery-quality prominence with clean modern frame.
+     ======================================================== -->
+{#snippet desktopArtwork(work: Work)}
+  <div class="desktop-art-canvas">
+    <div class="cover-art-wrapper">
+      <div class="art-ambient-drop"></div>
       <img
         src={getCover(work, 'hero')}
         alt={work.title}
-        class="work-cover-img"
+        class="cover-image-art"
         class:nsfw-blur={getIsAdult(work) && (page.data?.blurNsfw ?? true)}
         use:fallbackCover
         loading="eager"
         decoding="async"
       />
-
-      <!-- Gilded Grimoire Corner Details -->
-      <div class="grimoire-corner corner-tl"></div>
-      <div class="grimoire-corner corner-tr"></div>
-      <div class="grimoire-corner corner-bl"></div>
-      <div class="grimoire-corner corner-br"></div>
-
-      <!-- Badges on Cover -->
-      <div class="cover-badges-overlay">
+      <!-- Clean editorial badges -->
+      <div class="cover-badge-row">
         {#if work.kind}
-          <span class="badge badge-kind">
+          <span class="editorial-badge kind-badge">
             {kindLabels[work.kind] || work.kind}
           </span>
         {/if}
-
         {#if getIsAdult(work)}
-          <span class="badge badge-adult">
+          <span class="editorial-badge adult-badge">
             <AlertTriangle size={11} />
             <span>+18</span>
           </span>
@@ -514,74 +623,71 @@
   </div>
 {/snippet}
 
-<!-- SNIPPET: Page Chronicle / Info (Right Page on Desktop / Bottom on Mobile) -->
-{#snippet pageChronicle(work: Work, isMobile = false)}
-  {@const continueItem = getContinueItem(work)}
-  <div class="chronicle-canvas" class:is-mobile={isMobile}>
-    <!-- Book Header Ribbon -->
-    <div class="chronicle-header">
-      <span class="grimoire-tag">
-        <Sparkles size={12} class="sparkle-icon" />
-        <span>Projeto Nox • Vitrine de Obras</span>
+<!-- ========================================================
+     SNIPPET: Desktop Chronicle (Right Page)
+     Modern editorial typography and clear action hierarchy.
+     ======================================================== -->
+{#snippet desktopChronicle(work: Work)}
+  {@const contItem = getContinueItem(work)}
+  <div class="desktop-chronicle-canvas">
+    <div class="chronicle-top-bar">
+      <span class="brand-eyebrow">
+        <Sparkles size={12} class="accent-star" />
+        <span>PROJECT NOX • VITRINE DO ACERVO</span>
       </span>
-      <span class="work-views-stat">
+      <span class="stats-views">
         <Eye size={12} />
         <span>{formatViews(work.views)} leituras</span>
       </span>
     </div>
 
-    <!-- Title -->
-    <h1 class="chronicle-title">
+    <h1 class="chronicle-main-title">
       <a href="/obra/{work.slug}" title={work.title}>
         {work.title}
       </a>
     </h1>
 
-    <!-- Meta Tags / Attributes -->
-    <div class="chronicle-meta">
+    <div class="chronicle-tags-row">
       {#if work.status}
-        <span class="meta-pill status-pill">
+        <span class="editorial-pill status-pill">
           {work.status === 'COMPLETED' ? 'Concluído' : 'Em Lançamento'}
         </span>
       {/if}
       {#if (work as any).total_chapters || (work as any).chapters_count}
-        <span class="meta-pill">
+        <span class="editorial-pill">
           {(work as any).total_chapters || (work as any).chapters_count} Capítulos
         </span>
       {/if}
     </div>
 
-    <!-- Synopsis -->
-    <div class="chronicle-synopsis-box">
-      <p class="chronicle-synopsis">
+    <div class="synopsis-wrapper">
+      <p class="synopsis-paragraph">
         {#if work.synopsis}
           {decodeHtmlEntities(work.synopsis)}
         {:else}
-          Acompanhe esta fascinante jornada digital no Project Nox com leitura contínua e imersão total.
+          Mergulhe em uma narrativa envolvente e de alta qualidade visual, com leitura contínua no Project Nox.
         {/if}
       </p>
     </div>
 
-    <!-- Continue reading notice if authenticated user stopped here -->
-    {#if continueItem}
-      <div class="continue-reading-ribbon">
-        <BookOpen size={13} class="continue-icon" />
+    {#if contItem}
+      <div class="reading-progress-pill">
+        <BookOpen size={13} />
         <span>Você tem leitura em andamento nesta obra</span>
       </div>
     {/if}
 
-    <!-- Call to Action Buttons -->
-    <div class="chronicle-actions">
+    <div class="chronicle-actions-row">
       <a
-        href={continueItem ? continueItem.destinationUrl : `/obra/${work.slug}`}
-        class="action-btn btn-primary"
+        href={contItem ? contItem.destinationUrl : `/obra/${work.slug}`}
+        class="editorial-btn btn-solid"
       >
         <BookOpen size={16} />
-        <span>{continueItem ? 'Continuar Leitura' : 'Ler Agora'}</span>
+        <span>{contItem ? 'Continuar Leitura' : 'Ler Agora'}</span>
       </a>
 
-      <a href="/obra/{work.slug}" class="action-btn btn-secondary">
-        <span>Ver Detalhes</span>
+      <a href="/obra/{work.slug}" class="editorial-btn btn-outline">
+        <span>Detalhes da Obra</span>
         <ArrowRight size={14} />
       </a>
     </div>
@@ -590,22 +696,22 @@
 
 <style>
   /* -------------------------------------------------------------
-     1. NOX BOOK SECTION & CONTAINER
+     1. MAIN SECTION & AMBIENT BACKDROP
      ------------------------------------------------------------- */
   .nox-book-section {
     position: relative;
     width: 100%;
     max-width: 1240px;
     margin: 0 auto;
-    padding: 2.2rem 1.5rem 1.8rem;
+    padding: 2.2rem 1.5rem 1.6rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    user-select: none;
+    box-sizing: border-box;
     z-index: 10;
+    user-select: none;
   }
 
-  /* Atmospheric Cosmic Backing Behind the Book */
   .book-ambient-glow {
     position: absolute;
     top: 50%;
@@ -626,7 +732,7 @@
   }
 
   /* -------------------------------------------------------------
-     2. NAVIGATION ARROWS
+     2. NAVIGATION ARROWS (DESKTOP)
      ------------------------------------------------------------- */
   .book-nav-btn {
     position: absolute;
@@ -635,7 +741,7 @@
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: rgba(15, 14, 25, 0.82);
+    background: rgba(14, 12, 24, 0.85);
     border: 1px solid rgba(139, 92, 246, 0.28);
     color: #e2e8f0;
     display: flex;
@@ -644,24 +750,20 @@
     cursor: pointer;
     z-index: 30;
     transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(8px);
   }
 
   .book-nav-btn:hover:not(:disabled) {
-    background: rgba(139, 92, 246, 0.24);
+    background: rgba(139, 92, 246, 0.25);
     border-color: rgba(168, 85, 247, 0.65);
     color: #ffffff;
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.45);
     transform: translateY(-50%) scale(1.08);
   }
 
-  .book-nav-btn:active:not(:disabled) {
-    transform: translateY(-50%) scale(0.96);
-  }
-
   .book-nav-btn:disabled {
-    opacity: 0.35;
+    opacity: 0.3;
     cursor: not-allowed;
   }
 
@@ -674,15 +776,14 @@
   }
 
   /* -------------------------------------------------------------
-     3. 3D BOOK STAGE & HARDCOVER FRAME
+     3. DESKTOP STAGE & 3D BOOK
      ------------------------------------------------------------- */
-  .nox-book-stage {
-    position: relative;
-    width: 100%;
+  .desktop-stage {
     display: flex;
+    width: 100%;
     justify-content: center;
     align-items: center;
-    perspective: 2400px;
+    perspective: 2200px;
     perspective-origin: center center;
     z-index: 10;
   }
@@ -695,8 +796,8 @@
     transform-style: preserve-3d;
   }
 
-  /* Hardcover Binding, Stacked Pages & Spine */
-  .book-cover-frame {
+  /* Hardcover Shell & Layered Pages */
+  .book-shell {
     position: absolute;
     inset: -6px;
     border-radius: 12px;
@@ -710,96 +811,53 @@
     z-index: 1;
   }
 
-  /* Stacked Page Edges (giving the illusion of 200+ physical pages) */
-  .page-stack {
+  .edge-stack {
     position: absolute;
-    top: 10px;
-    bottom: 10px;
-    width: 10px;
+    top: 12px;
+    bottom: 12px;
+    width: 8px;
     background: repeating-linear-gradient(
       to bottom,
       #131122 0px,
       #131122 1px,
-      #242038 1px,
-      #242038 2px
+      #221e35 1px,
+      #221e35 2px
     );
-    opacity: 0.75;
+    opacity: 0.8;
   }
 
-  .page-stack-left {
-    left: -4px;
+  .edge-left {
+    left: -3px;
     border-radius: 4px 0 0 4px;
-    box-shadow: inset 1px 0 2px rgba(0, 0, 0, 0.75);
+    box-shadow: inset 1px 0 2px rgba(0, 0, 0, 0.8);
   }
 
-  .page-stack-right {
-    right: -4px;
+  .edge-right {
+    right: -3px;
     border-radius: 0 4px 4px 0;
-    box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.75);
+    box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.8);
   }
 
-  /* Center Spine Hinge & Bookmark */
-  .spine-hinge {
-    position: absolute;
-    top: -2px;
-    bottom: -2px;
-    left: calc(50% - 14px);
-    width: 28px;
-    background: linear-gradient(
-      to right,
-      rgba(7, 6, 14, 0.95) 0%,
-      rgba(24, 18, 42, 0.98) 45%,
-      rgba(40, 28, 70, 0.98) 50%,
-      rgba(24, 18, 42, 0.98) 55%,
-      rgba(7, 6, 14, 0.95) 100%
-    );
-    border-left: 1px solid rgba(0, 0, 0, 0.85);
-    border-right: 1px solid rgba(0, 0, 0, 0.85);
-    z-index: 15;
-    box-shadow:
-      inset 0 0 6px rgba(0, 0, 0, 0.9),
-      0 0 10px rgba(124, 58, 237, 0.12);
-  }
-
-  .spine-thread {
+  .spine-binding {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 3px;
-    background: linear-gradient(
-      to bottom,
-      #a855f7 0%,
-      #6366f1 50%,
-      #7c3aed 100%
-    );
-    opacity: 0.85;
-    box-shadow: 0 0 6px rgba(168, 85, 247, 0.5);
-  }
-
-  .spine-charm {
-    position: absolute;
-    bottom: -10px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: calc(50% - 10px);
     width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #110e20;
-    border: 1px solid rgba(168, 85, 247, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.55);
-  }
-
-  :global(.charm-icon) {
-    color: #c084fc;
+    background: linear-gradient(
+      to right,
+      rgba(7, 6, 14, 0.95) 0%,
+      rgba(24, 18, 42, 0.98) 50%,
+      rgba(7, 6, 14, 0.95) 100%
+    );
+    border-left: 1px solid rgba(0, 0, 0, 0.9);
+    border-right: 1px solid rgba(0, 0, 0, 0.9);
+    z-index: 15;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.9);
   }
 
   /* -------------------------------------------------------------
-     4. DESKTOP BOOK SPREAD (TWO CONNECTED PAGES)
+     4. DESKTOP SPREAD (TWO CONNECTED PAGES)
      ------------------------------------------------------------- */
   .book-spread {
     position: relative;
@@ -814,7 +872,7 @@
     position: relative;
     width: 50%;
     height: 100%;
-    background: #0f0d1a;
+    background: #0e0c19;
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -822,48 +880,46 @@
   .left-page {
     border-top-left-radius: 8px;
     border-bottom-left-radius: 8px;
-    background: linear-gradient(to right, #0e0c19 0%, #121022 92%, #0a0814 100%);
+    background: linear-gradient(to right, #0e0c18 0%, #121021 92%, #090812 100%);
     box-shadow: inset -8px 0 16px -6px rgba(0, 0, 0, 0.85);
   }
 
   .right-page {
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
-    background: linear-gradient(to left, #0e0c19 0%, #131024 92%, #0a0814 100%);
+    background: linear-gradient(to left, #0e0c18 0%, #131024 92%, #090812 100%);
     box-shadow: inset 8px 0 16px -6px rgba(0, 0, 0, 0.85);
   }
 
-  /* Center Crease Shadows */
-  .crease-shadow {
+  .spine-crease-shadow {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 38px;
+    width: 32px;
     pointer-events: none;
     z-index: 8;
   }
 
-  .crease-shadow-left {
+  .crease-left {
     right: 0;
-    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.75));
+    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.85));
   }
 
-  .crease-shadow-right {
+  .crease-right {
     left: 0;
-    background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.75));
+    background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.85));
   }
 
-  /* Under-leaf cast shadow (cast on static right page as leaf lifts) */
-  .under-leaf-cast-shadow {
+  .cast-under-shadow {
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 7;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.75) 0%, transparent 45%);
-    animation: castShadowFade 750ms ease-out forwards;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.8) 0%, transparent 45%);
+    animation: castDissolve 700ms ease-out forwards;
   }
 
-  @keyframes castShadowFade {
+  @keyframes castDissolve {
     0% {
       opacity: 0.9;
     }
@@ -876,9 +932,9 @@
   }
 
   /* -------------------------------------------------------------
-     5. 3D TURNING LEAF (FORWARD & BACKWARD FLIP)
+     5. 3D TURNING LEAF (PHYSICS ARCS)
      ------------------------------------------------------------- */
-  .flipper-leaf {
+  .turning-leaf {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -889,49 +945,48 @@
     pointer-events: none;
   }
 
-  .forward-flipper {
+  .leaf-forward {
     left: 50%;
     transform-origin: left center;
-    animation: flipForwardCurl 750ms cubic-bezier(0.25, 0.92, 0.35, 1) forwards;
+    animation: forwardFlipCurl 700ms cubic-bezier(0.28, 0.95, 0.35, 1) forwards;
   }
 
-  .backward-flipper {
+  .leaf-backward {
     left: 0;
     transform-origin: right center;
-    animation: flipBackwardCurl 750ms cubic-bezier(0.25, 0.92, 0.35, 1) forwards;
+    animation: backwardFlipCurl 700ms cubic-bezier(0.28, 0.95, 0.35, 1) forwards;
   }
 
-  /* Realistic Curvature & Physics Keyframes */
-  @keyframes flipForwardCurl {
+  @keyframes forwardFlipCurl {
     0% {
       transform: rotateY(0deg) skewY(0deg) translateZ(0px);
     }
     30% {
-      transform: rotateY(-50deg) skewY(-1.8deg) translateZ(28px);
+      transform: rotateY(-50deg) skewY(-2deg) translateZ(30px);
     }
     55% {
-      transform: rotateY(-95deg) skewY(0deg) translateZ(38px);
+      transform: rotateY(-95deg) skewY(0deg) translateZ(40px);
     }
     80% {
-      transform: rotateY(-145deg) skewY(1.8deg) translateZ(18px);
+      transform: rotateY(-145deg) skewY(2deg) translateZ(20px);
     }
     100% {
       transform: rotateY(-180deg) skewY(0deg) translateZ(0px);
     }
   }
 
-  @keyframes flipBackwardCurl {
+  @keyframes backwardFlipCurl {
     0% {
       transform: rotateY(0deg) skewY(0deg) translateZ(0px);
     }
     30% {
-      transform: rotateY(50deg) skewY(1.8deg) translateZ(28px);
+      transform: rotateY(50deg) skewY(2deg) translateZ(30px);
     }
     55% {
-      transform: rotateY(95deg) skewY(0deg) translateZ(38px);
+      transform: rotateY(95deg) skewY(0deg) translateZ(40px);
     }
     80% {
-      transform: rotateY(145deg) skewY(-1.8deg) translateZ(18px);
+      transform: rotateY(145deg) skewY(-2deg) translateZ(20px);
     }
     100% {
       transform: rotateY(180deg) skewY(0deg) translateZ(0px);
@@ -945,7 +1000,7 @@
     height: 100%;
     backface-visibility: hidden;
     overflow: hidden;
-    background: #0f0d1a;
+    background: #0e0c19;
   }
 
   .front-face {
@@ -960,23 +1015,22 @@
     border-bottom-left-radius: 8px;
   }
 
-  /* Dynamic Moving Shadow Overlays on the Turning Leaf */
-  .dynamic-curl-shadow {
+  .leaf-sweep-shadow {
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 10;
   }
 
-  .dynamic-curl-shadow.front {
-    animation: frontShadowSweep 750ms ease-out forwards;
+  .sweep-front {
+    animation: sweepFrontKeyframe 700ms ease-out forwards;
   }
 
-  .dynamic-curl-shadow.back {
-    animation: backShadowSweep 750ms ease-out forwards;
+  .sweep-back {
+    animation: sweepBackKeyframe 700ms ease-out forwards;
   }
 
-  @keyframes frontShadowSweep {
+  @keyframes sweepFrontKeyframe {
     0% {
       background: linear-gradient(to right, rgba(0, 0, 0, 0.4), transparent 60%);
       opacity: 0.2;
@@ -985,7 +1039,7 @@
       background: linear-gradient(
         to right,
         rgba(0, 0, 0, 0.75) 0%,
-        rgba(255, 255, 255, 0.12) 40%,
+        rgba(255, 255, 255, 0.15) 45%,
         rgba(0, 0, 0, 0.85) 100%
       );
       opacity: 0.85;
@@ -996,7 +1050,7 @@
     }
   }
 
-  @keyframes backShadowSweep {
+  @keyframes sweepBackKeyframe {
     0% {
       background: linear-gradient(to left, rgba(0, 0, 0, 0.95), transparent);
       opacity: 1;
@@ -1005,7 +1059,7 @@
       background: linear-gradient(
         to left,
         rgba(0, 0, 0, 0.75) 0%,
-        rgba(255, 255, 255, 0.12) 40%,
+        rgba(255, 255, 255, 0.15) 45%,
         rgba(0, 0, 0, 0.85) 100%
       );
       opacity: 0.8;
@@ -1017,9 +1071,9 @@
   }
 
   /* -------------------------------------------------------------
-     6. LEFT PAGE CONTENT: ARTWORK CANVAS
+     6. DESKTOP ARTWORK CANVAS (LEFT PAGE)
      ------------------------------------------------------------- */
-  .artwork-canvas {
+  .desktop-art-canvas {
     position: relative;
     width: 100%;
     height: 100%;
@@ -1030,33 +1084,32 @@
     box-sizing: border-box;
   }
 
-  .art-frame {
+  .cover-art-wrapper {
     position: relative;
-    width: 250px;
-    height: 380px;
+    width: 260px;
+    height: 385px;
     border-radius: 8px;
     overflow: hidden;
     box-shadow:
-      0 18px 42px -10px rgba(0, 0, 0, 0.88),
-      0 0 30px rgba(139, 92, 246, 0.18),
-      0 0 0 1px rgba(139, 92, 246, 0.3);
-    background: #080710;
+      0 20px 45px -10px rgba(0, 0, 0, 0.9),
+      0 0 32px rgba(139, 92, 246, 0.16),
+      0 0 0 1px rgba(139, 92, 246, 0.28);
+    background: #090812;
   }
 
-  .work-cover-img {
+  .cover-image-art {
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center top;
     display: block;
-    transition: transform 0.4s ease;
   }
 
-  .work-cover-img.nsfw-blur {
+  .cover-image-art.nsfw-blur {
     filter: blur(14px);
   }
 
-  .art-inner-glow {
+  .art-ambient-drop {
     position: absolute;
     inset: 0;
     box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.55);
@@ -1064,45 +1117,7 @@
     z-index: 2;
   }
 
-  /* Grimoire Gilded Corner Details */
-  .grimoire-corner {
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    pointer-events: none;
-    z-index: 4;
-    border: 2px solid rgba(168, 85, 247, 0.6);
-  }
-
-  .corner-tl {
-    top: 6px;
-    left: 6px;
-    border-right: none;
-    border-bottom: none;
-  }
-
-  .corner-tr {
-    top: 6px;
-    right: 6px;
-    border-left: none;
-    border-bottom: none;
-  }
-
-  .corner-bl {
-    bottom: 6px;
-    left: 6px;
-    border-right: none;
-    border-top: none;
-  }
-
-  .corner-br {
-    bottom: 6px;
-    right: 6px;
-    border-left: none;
-    border-top: none;
-  }
-
-  .cover-badges-overlay {
+  .cover-badge-row {
     position: absolute;
     top: 12px;
     left: 12px;
@@ -1114,7 +1129,7 @@
     pointer-events: none;
   }
 
-  .badge {
+  .editorial-badge {
     padding: 0.28rem 0.6rem;
     border-radius: 4px;
     font-size: 0.68rem;
@@ -1125,14 +1140,14 @@
     backdrop-filter: blur(6px);
   }
 
-  .badge-kind {
-    background: rgba(139, 92, 246, 0.88);
+  .kind-badge {
+    background: rgba(139, 92, 246, 0.9);
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
-  .badge-adult {
-    background: rgba(225, 29, 72, 0.9);
+  .adult-badge {
+    background: rgba(225, 29, 72, 0.92);
     color: #ffffff;
     display: inline-flex;
     align-items: center;
@@ -1140,13 +1155,13 @@
   }
 
   /* -------------------------------------------------------------
-     7. RIGHT PAGE CONTENT: CHRONICLE / INFO
+     7. DESKTOP CHRONICLE CANVAS (RIGHT PAGE)
      ------------------------------------------------------------- */
-  .chronicle-canvas {
+  .desktop-chronicle-canvas {
     position: relative;
     width: 100%;
     height: 100%;
-    padding: 2.6rem 2.8rem;
+    padding: 2.8rem 2.8rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1154,14 +1169,14 @@
     color: #f1f5f9;
   }
 
-  .chronicle-header {
+  .chronicle-top-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.9rem;
+    margin-bottom: 0.8rem;
   }
 
-  .grimoire-tag {
+  .brand-eyebrow {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -1172,11 +1187,11 @@
     color: #c084fc;
   }
 
-  :global(.sparkle-icon) {
+  :global(.accent-star) {
     color: #a855f7;
   }
 
-  .work-views-stat {
+  .stats-views {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -1184,11 +1199,11 @@
     color: #94a3b8;
   }
 
-  .chronicle-title {
-    margin: 0 0 0.8rem 0;
+  .chronicle-main-title {
+    margin: 0 0 0.85rem 0;
     font-size: 1.85rem;
     font-weight: 800;
-    line-height: 1.22;
+    line-height: 1.24;
     letter-spacing: -0.02em;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -1196,24 +1211,24 @@
     overflow: hidden;
   }
 
-  .chronicle-title a {
+  .chronicle-main-title a {
     color: #ffffff;
     text-decoration: none;
     transition: color 0.2s ease;
   }
 
-  .chronicle-title a:hover {
+  .chronicle-main-title a:hover {
     color: #c084fc;
   }
 
-  .chronicle-meta {
+  .chronicle-tags-row {
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
     margin-bottom: 1.1rem;
   }
 
-  .meta-pill {
+  .editorial-pill {
     padding: 0.22rem 0.65rem;
     border-radius: 4px;
     font-size: 0.72rem;
@@ -1229,16 +1244,16 @@
     color: #34d399;
   }
 
-  .chronicle-synopsis-box {
-    margin-bottom: 1.4rem;
+  .synopsis-wrapper {
+    margin-bottom: 1.3rem;
     max-height: 110px;
     overflow: hidden;
   }
 
-  .chronicle-synopsis {
+  .synopsis-paragraph {
     margin: 0;
     font-size: 0.88rem;
-    line-height: 1.55;
+    line-height: 1.6;
     color: #94a3b8;
     display: -webkit-box;
     -webkit-line-clamp: 4;
@@ -1247,7 +1262,7 @@
     text-overflow: ellipsis;
   }
 
-  .continue-reading-ribbon {
+  .reading-progress-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -1260,17 +1275,13 @@
     color: #93c5fd;
   }
 
-  :global(.continue-icon) {
-    color: #60a5fa;
-  }
-
-  .chronicle-actions {
+  .chronicle-actions-row {
     display: flex;
     align-items: center;
     gap: 0.85rem;
   }
 
-  .action-btn {
+  .editorial-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1283,38 +1294,229 @@
     transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .btn-primary {
+  .btn-solid {
     background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
     color: #ffffff;
     box-shadow: 0 4px 18px rgba(124, 58, 237, 0.38);
     border: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  .btn-primary:hover {
+  .btn-solid:hover {
     background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);
     box-shadow: 0 6px 24px rgba(124, 58, 237, 0.55);
     transform: translateY(-1px);
   }
 
-  .btn-secondary {
+  .btn-outline {
     background: rgba(22, 19, 36, 0.8);
     border: 1px solid rgba(139, 92, 246, 0.3);
     color: #e2e8f0;
   }
 
-  .btn-secondary:hover {
+  .btn-outline:hover {
     background: rgba(139, 92, 246, 0.15);
     border-color: rgba(168, 85, 247, 0.6);
     color: #ffffff;
   }
 
   /* -------------------------------------------------------------
-     8. BOOK FOOTER & FOLIO PAGINATION
+     8. MOBILE STAGE & CARD (ROCK SOLID VISIBILITY ON ALL MOBILES)
+     ------------------------------------------------------------- */
+  .mobile-stage {
+    display: none; /* Desktop default */
+    width: 100%;
+    max-width: 440px;
+    box-sizing: border-box;
+  }
+
+  .mobile-card {
+    position: relative;
+    width: 100%;
+    background: #0f0d1a;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 16px 40px -10px rgba(0, 0, 0, 0.95),
+      0 0 25px rgba(124, 58, 237, 0.12);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease;
+  }
+
+  .mobile-flip-out-left {
+    transform: translateX(-15px) scale(0.97);
+    opacity: 0.65;
+  }
+
+  .mobile-flip-out-right {
+    transform: translateX(15px) scale(0.97);
+    opacity: 0.65;
+  }
+
+  .mobile-cover-box {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    background: #07060e;
+    overflow: hidden;
+  }
+
+  .mobile-cover-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    display: block;
+  }
+
+  .mobile-cover-image.nsfw-blur {
+    filter: blur(14px);
+  }
+
+  .mobile-cover-vignette {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(15, 13, 26, 0.1) 0%,
+      rgba(15, 13, 26, 0.35) 60%,
+      #0f0d1a 100%
+    );
+    pointer-events: none;
+  }
+
+  .mobile-top-badges {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .mobile-cover-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(14, 12, 24, 0.78);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 6;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(6px);
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .mobile-cover-arrow:active {
+    transform: translateY(-50%) scale(0.92);
+  }
+
+  .cover-arrow-prev {
+    left: 10px;
+  }
+
+  .cover-arrow-next {
+    right: 10px;
+  }
+
+  .mobile-info-box {
+    position: relative;
+    width: 100%;
+    padding: 1.1rem 1.25rem 1.35rem;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  .mobile-header-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .meta-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c084fc;
+  }
+
+  .meta-views {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  .mobile-title {
+    margin: 0 0 0.6rem 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-title a {
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  .mobile-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .mobile-synopsis {
+    margin: 0 0 1.15rem 0;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: #94a3b8;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .mobile-actions .editorial-btn {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  /* -------------------------------------------------------------
+     9. BOOK FOOTER & PAGINATION CONTROLS
      ------------------------------------------------------------- */
   .book-footer {
     width: 100%;
     max-width: 1060px;
-    margin-top: 1.2rem;
+    margin-top: 1.25rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1322,7 +1524,7 @@
     box-sizing: border-box;
   }
 
-  .book-folio-index {
+  .footer-left-info {
     display: flex;
     align-items: center;
     gap: 0.55rem;
@@ -1330,7 +1532,7 @@
     color: #94a3b8;
   }
 
-  :global(.folio-compass-icon) {
+  :global(.compass-icon) {
     color: #a855f7;
   }
 
@@ -1339,12 +1541,12 @@
     font-weight: 700;
   }
 
-  .auto-advance-indicator {
+  .status-indicator {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     margin-left: 0.8rem;
-    padding: 0.18rem 0.5rem;
+    padding: 0.18rem 0.55rem;
     border-radius: 9999px;
     background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.25);
@@ -1353,26 +1555,26 @@
     transition: all 0.2s ease;
   }
 
-  .auto-advance-indicator.paused {
+  .status-indicator.paused {
     background: rgba(234, 179, 8, 0.12);
     border-color: rgba(234, 179, 8, 0.3);
     color: #facc15;
   }
 
-  .pulse-dot {
+  .pulse-beacon {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: #a855f7;
-    animation: dotPulse 1.8s infinite;
+    animation: beaconBlink 1.8s infinite;
   }
 
-  .auto-advance-indicator.paused .pulse-dot {
+  .status-indicator.paused .pulse-beacon {
     background: #eab308;
     animation: none;
   }
 
-  @keyframes dotPulse {
+  @keyframes beaconBlink {
     0%, 100% {
       opacity: 0.4;
       transform: scale(0.9);
@@ -1383,13 +1585,13 @@
     }
   }
 
-  .folio-pips {
+  .footer-pips {
     display: flex;
     align-items: center;
     gap: 0.35rem;
   }
 
-  .pip-btn {
+  .pip-button {
     width: 24px;
     height: 18px;
     display: flex;
@@ -1401,7 +1603,7 @@
     padding: 0;
   }
 
-  .pip-inner {
+  .pip-line {
     width: 14px;
     height: 4px;
     border-radius: 2px;
@@ -1409,165 +1611,42 @@
     transition: all 0.25s ease;
   }
 
-  .pip-btn.active .pip-inner {
+  .pip-button.active .pip-line {
     width: 28px;
     background: linear-gradient(90deg, #a855f7, #6366f1);
     box-shadow: 0 0 8px rgba(168, 85, 247, 0.65);
   }
 
-  .pip-btn:hover:not(.active) .pip-inner {
+  .pip-button:hover:not(.active) .pip-line {
     background: rgba(168, 85, 247, 0.5);
   }
 
   /* -------------------------------------------------------------
-     9. MOBILE RESPONSIVE FOLIO (< 768px)
+     10. RESPONSIVE BREAKPOINT (< 768px)
      ------------------------------------------------------------- */
-  .desktop-only {
-    display: flex;
-  }
-
-  .mobile-only {
-    display: none;
-  }
-
   @media (max-width: 768px) {
     .nox-book-section {
-      padding: 1.2rem 0.75rem 1.2rem;
+      padding: 1.2rem 0.85rem 1.2rem;
     }
 
     .book-ambient-glow {
       width: 95%;
-      height: 80%;
+      height: 75%;
       filter: blur(28px);
     }
 
     .book-nav-btn {
-      display: none; /* Mobile uses swipe gestures & pip buttons */
+      display: none; /* Mobile uses swipe gestures & bottom pips */
     }
 
-    .desktop-only {
-      display: none;
+    .desktop-stage {
+      display: none !important;
     }
 
-    .mobile-only {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .nox-book {
-      height: auto;
-      min-height: 570px;
-      max-width: 440px;
-    }
-
-    .spine-hinge,
-    .page-stack {
-      display: none;
-    }
-
-    .book-folio-card {
-      position: relative;
-      width: 100%;
-      background: #0f0d1a;
-      border-radius: 10px;
-      overflow: hidden;
+    .mobile-stage {
       display: flex;
       flex-direction: column;
-      box-shadow:
-        0 14px 35px -8px rgba(0, 0, 0, 0.9),
-        0 0 25px rgba(124, 58, 237, 0.12);
-      border: 1px solid rgba(139, 92, 246, 0.26);
-      transform-origin: left center;
-    }
-
-    /* Mobile 3D Page Flip Keyframes */
-    .mobile-folio-card.mobile-flipping-forward {
-      animation: mobileFlipForward 700ms cubic-bezier(0.25, 0.9, 0.3, 1) forwards;
-    }
-
-    .mobile-folio-card.mobile-flipping-backward {
-      animation: mobileFlipBackward 700ms cubic-bezier(0.25, 0.9, 0.3, 1) forwards;
-    }
-
-    @keyframes mobileFlipForward {
-      0% {
-        transform: rotateY(0deg) scale(1);
-        opacity: 1;
-      }
-      45% {
-        transform: rotateY(-70deg) scale(0.96);
-        opacity: 0.6;
-      }
-      100% {
-        transform: rotateY(0deg) scale(1);
-        opacity: 1;
-      }
-    }
-
-    @keyframes mobileFlipBackward {
-      0% {
-        transform: rotateY(0deg) scale(1);
-        opacity: 1;
-      }
-      45% {
-        transform: rotateY(70deg) scale(0.96);
-        opacity: 0.6;
-      }
-      100% {
-        transform: rotateY(0deg) scale(1);
-        opacity: 1;
-      }
-    }
-
-    .mobile-art-wrapper {
-      width: 100%;
-      height: 290px;
-      position: relative;
-    }
-
-    .artwork-canvas.is-mobile {
-      padding: 1.2rem;
-    }
-
-    .artwork-canvas.is-mobile .art-frame {
-      width: 175px;
-      height: 255px;
-    }
-
-    .mobile-chronicle-wrapper {
-      width: 100%;
-      padding: 0 1.25rem 1.4rem;
-      box-sizing: border-box;
-    }
-
-    .chronicle-canvas.is-mobile {
-      padding: 0;
-    }
-
-    .chronicle-canvas.is-mobile .chronicle-title {
-      font-size: 1.35rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .chronicle-canvas.is-mobile .chronicle-synopsis-box {
-      max-height: 70px;
-      margin-bottom: 1rem;
-    }
-
-    .chronicle-canvas.is-mobile .chronicle-synopsis {
-      font-size: 0.8rem;
-      -webkit-line-clamp: 3;
-    }
-
-    .chronicle-canvas.is-mobile .action-btn {
-      width: 100%;
-      padding: 0.65rem 1rem;
-    }
-
-    .chronicle-canvas.is-mobile .chronicle-actions {
-      flex-direction: column;
-      gap: 0.5rem;
+      align-items: center;
     }
 
     .book-footer {
@@ -1579,13 +1658,12 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .forward-flipper,
-    .backward-flipper,
-    .mobile-folio-card.mobile-flipping-forward,
-    .mobile-folio-card.mobile-flipping-backward,
-    .dynamic-curl-shadow.front,
-    .dynamic-curl-shadow.back,
-    .under-leaf-cast-shadow {
+    .leaf-forward,
+    .leaf-backward,
+    .mobile-card,
+    .sweep-front,
+    .sweep-back,
+    .cast-under-shadow {
       animation: none !important;
       transform: none !important;
     }
