@@ -205,8 +205,8 @@
     });
   });
 
-  let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 4));
-  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 10));
+  let previewAliases = $derived(alternativeTitles.slice(0, 3));
+  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 8));
 
   let legitimateAuthor = $derived.by(() => {
     const author = (data.work.author || '').trim();
@@ -522,168 +522,197 @@
       <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
     </div>
 
-    <!-- Single Unified Panel with 2 Independent Columns on Desktop -->
+    <!-- Single Unified Panel with True 2x2 Grid on Desktop -->
     <div class="specs-unified-panel">
-      <!-- Coluna 1 (Desktop Esquerda): Informações da Obra & Gêneros e Temas -->
-      <div class="specs-column">
-        <!-- Subseção 1: Informações da Obra -->
-        <div class="specs-subpanel" id="subpanel-info">
-          <div class="subpanel-header">
-            <BookOpen size={16} class="subpanel-icon" />
-            <h3 class="subpanel-title">Informações da Obra</h3>
-          </div>
-          <dl class="specs-table">
-            <div class="specs-row">
-              <dt>Formato</dt>
-              <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
-            </div>
-            <div class="specs-row">
-              <dt>Status de Publicação</dt>
-              <dd>
-                <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
-                {statusLabels[data.work.status] || data.work.status}
-              </dd>
-            </div>
-            {#if data.work.year}
-              <div class="specs-row">
-                <dt>Ano de Lançamento</dt>
-                <dd>{data.work.year}</dd>
-              </div>
-            {/if}
-            <div class="specs-row">
-              <dt>Classificação Indicativa</dt>
-              <dd>
-                {#if isAdult}
-                  <span class="age-pill adult">+18 Adulto</span>
-                {:else if data.work.age_rating}
-                  <span class="age-pill">{data.work.age_rating} anos</span>
-                {:else}
-                  <span class="age-pill free">Livre</span>
-                {/if}
-              </dd>
-            </div>
-            <div class="specs-row">
-              <dt>Capítulos Catalogados</dt>
-              <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
-            </div>
-          </dl>
+      <!-- Subseção 1 (Row 1, Col 1): Informações da Obra -->
+      <div class="specs-subpanel" id="subpanel-info">
+        <div class="subpanel-header">
+          <BookOpen size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Informações da Obra</h3>
         </div>
-
-        <!-- Subseção 3: Gêneros & Temas (Altura baseada no próprio conteúdo, sem espaço vazio) -->
-        <div class="specs-subpanel" id="subpanel-genres">
-          <div class="subpanel-header">
-            <Tag size={16} class="subpanel-icon" />
-            <h3 class="subpanel-title">Gêneros & Temas</h3>
-            {#if data.tags?.length}
-              <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
-            {/if}
+        <dl class="specs-table">
+          <div class="specs-row">
+            <dt>Formato</dt>
+            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
           </div>
-          {#if visibleTags.length}
-            <div class="editorial-tags-wrap">
-              {#each visibleTags as tag (tag.id)}
-                <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
-                  {tag.name}
-                </a>
-              {/each}
+          <div class="specs-row">
+            <dt>Status de Publicação</dt>
+            <dd>
+              <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
+              {statusLabels[data.work.status] || data.work.status}
+            </dd>
+          </div>
+          {#if data.work.year}
+            <div class="specs-row">
+              <dt>Ano de Lançamento</dt>
+              <dd>{data.work.year}</dd>
             </div>
-            {#if data.tags.filter(Boolean).length > 10}
-              <button
-                type="button"
-                class="btn-toggle-subpanel"
-                onclick={() => (tagsExpanded = !tagsExpanded)}
-                aria-expanded={tagsExpanded}
-              >
-                <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
-                {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-              </button>
-            {/if}
-          {:else}
-            <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
           {/if}
-        </div>
+          <div class="specs-row">
+            <dt>Classificação Indicativa</dt>
+            <dd>
+              {#if isAdult}
+                <span class="age-pill adult">+18 Adulto</span>
+              {:else if data.work.age_rating}
+                <span class="age-pill">{data.work.age_rating} anos</span>
+              {:else}
+                <span class="age-pill free">Livre</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Capítulos Catalogados</dt>
+            <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
+          </div>
+        </dl>
       </div>
 
-      <!-- Coluna 2 (Desktop Direita): Equipe & Créditos & Títulos Alternativos -->
-      <div class="specs-column">
-        <!-- Subseção 2: Equipe & Créditos -->
-        <div class="specs-subpanel" id="subpanel-credits">
-          <div class="subpanel-header">
-            <Users size={16} class="subpanel-icon" />
-            <h3 class="subpanel-title">Equipe & Créditos</h3>
-          </div>
-          <dl class="specs-table">
-            <div class="specs-row">
-              <dt>Roteiro / História</dt>
-              <dd>
-                {#if legitimateAuthor}
-                  <strong>{legitimateAuthor}</strong>
-                {:else}
-                  <span class="unassigned-spec" title="Autor não identificado">?</span>
-                {/if}
-              </dd>
-            </div>
-            {#if legitimateArtist && legitimateArtist !== legitimateAuthor}
-              <div class="specs-row">
-                <dt>Arte / Ilustração</dt>
-                <dd><strong>{legitimateArtist}</strong></dd>
-              </div>
-            {/if}
-            <div class="specs-row scans-row">
-              <dt>Tradução / Scanlator</dt>
-              <dd class="scans-chips-wrap">
-                {#if data.scans && data.scans.length > 0}
-                  {#each data.scans as scan (scan.id || scan.slug)}
-                    <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
-                      <Users size={12} />
-                      <span>{scan.name}</span>
-                    </a>
-                  {/each}
-                {:else}
-                  <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
-                {/if}
-              </dd>
-            </div>
-            <div class="specs-row">
-              <dt>Idioma</dt>
-              <dd>Português (Brasil)</dd>
-            </div>
-          </dl>
+      <!-- Subseção 2 (Row 1, Col 2): Equipe & Créditos -->
+      <div class="specs-subpanel" id="subpanel-credits">
+        <div class="subpanel-header">
+          <Users size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Equipe & Créditos</h3>
         </div>
-
-        <!-- Subseção 4: Títulos Alternativos (Cresce de forma independente) -->
-        <div class="specs-subpanel" id="subpanel-aliases">
-          <div class="subpanel-header">
-            <Languages size={16} class="subpanel-icon" />
-            <h3 class="subpanel-title">Títulos Alternativos</h3>
-            {#if alternativeTitles.length}
-              <span class="subpanel-count-badge">{alternativeTitles.length}</span>
-            {/if}
+        <dl class="specs-table">
+          <div class="specs-row">
+            <dt>Roteiro / História</dt>
+            <dd>
+              {#if legitimateAuthor}
+                <strong>{legitimateAuthor}</strong>
+              {:else}
+                <span class="unassigned-spec" title="Autor não identificado">?</span>
+              {/if}
+            </dd>
           </div>
+          <div class="specs-row">
+            <dt>Arte / Ilustração</dt>
+            <dd>
+              {#if legitimateArtist}
+                <strong>{legitimateArtist}</strong>
+              {:else if legitimateAuthor}
+                <span>{legitimateAuthor}</span>
+              {:else}
+                <span class="unassigned-spec" title="Artista não identificado">?</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row scans-row">
+            <dt>Tradução / Scanlator</dt>
+            <dd class="scans-chips-wrap">
+              {#if data.scans && data.scans.length > 0}
+                {#each data.scans as scan (scan.id || scan.slug)}
+                  <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
+                    <Users size={12} />
+                    <span>{scan.name}</span>
+                  </a>
+                {/each}
+              {:else}
+                <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Idioma</dt>
+            <dd>Português (Brasil)</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Subseção 3 (Row 2, Col 1): Gêneros & Temas -->
+      <div class="specs-subpanel" id="subpanel-genres">
+        <div class="subpanel-header">
+          <Tag size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Gêneros & Temas</h3>
+          {#if data.tags?.length}
+            <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
+          {/if}
+        </div>
+        {#if visibleTags.length}
+          <div class="editorial-tags-wrap">
+            {#each visibleTags as tag (tag.id)}
+              <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
+                {tag.name}
+              </a>
+            {/each}
+          </div>
+          {#if data.tags.filter(Boolean).length > 8}
+            <button
+              type="button"
+              class="btn-toggle-subpanel"
+              onclick={() => (tagsExpanded = !tagsExpanded)}
+              aria-expanded={tagsExpanded}
+            >
+              <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
+              {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+            </button>
+          {/if}
+        {:else}
+          <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
+        {/if}
+      </div>
+
+      <!-- Subseção 4 (Row 2, Col 2): Títulos Alternativos (Prévia Compacta de 3) -->
+      <div class="specs-subpanel" id="subpanel-aliases">
+        <div class="subpanel-header">
+          <Languages size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Títulos Alternativos</h3>
           {#if alternativeTitles.length}
-            <ul class="aliases-editorial-list">
-              {#each visibleAliases as alias, i (alias)}
-                <li class="alias-editorial-row">
-                  <span class="alias-index-num">#{i + 1}</span>
-                  <span class="alias-text">{decodeHtmlEntities(alias)}</span>
-                </li>
-              {/each}
-            </ul>
-            {#if alternativeTitles.length > 4}
-              <button
-                type="button"
-                class="btn-toggle-subpanel"
-                onclick={() => (aliasesExpanded = !aliasesExpanded)}
-                aria-expanded={aliasesExpanded}
-              >
-                <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos alternativos`}</span>
-                {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-              </button>
-            {/if}
-          {:else}
-            <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
+            <span class="subpanel-count-badge">{alternativeTitles.length}</span>
           {/if}
         </div>
+        {#if alternativeTitles.length}
+          <ul class="aliases-editorial-list">
+            {#each previewAliases as alias, i (alias)}
+              <li class="alias-editorial-row">
+                <span class="alias-index-num">#{i + 1}</span>
+                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+              </li>
+            {/each}
+          </ul>
+          {#if alternativeTitles.length > 3}
+            <button
+              type="button"
+              class="btn-toggle-subpanel"
+              onclick={() => (aliasesExpanded = !aliasesExpanded)}
+              aria-expanded={aliasesExpanded}
+            >
+              <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos`}</span>
+              {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+            </button>
+          {/if}
+        {:else}
+          <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
+        {/if}
       </div>
+
+      <!-- Subseção 5: Painel Expansível de Largura Total (Row 3, Spans 1 / -1) -->
+      {#if aliasesExpanded && alternativeTitles.length > 3}
+        <div class="specs-aliases-drawer" id="aliases-expanded-drawer">
+          <div class="drawer-header">
+            <div class="drawer-title-wrap">
+              <Languages size={15} class="drawer-icon" />
+              <h4 class="drawer-title">Todos os {alternativeTitles.length} Títulos Alternativos</h4>
+            </div>
+            <button
+              type="button"
+              class="btn-drawer-close"
+              onclick={() => (aliasesExpanded = false)}
+              aria-label="Recolher lista de títulos alternativos"
+            >
+              <span>Recolher</span>
+              <ChevronUp size={14} />
+            </button>
+          </div>
+          <div class="drawer-aliases-grid">
+            {#each alternativeTitles as alias, i (alias)}
+              <div class="drawer-alias-item">
+                <span class="alias-index-num">#{i + 1}</span>
+                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   </section>
 
@@ -1344,24 +1373,18 @@
     color: rgba(226, 232, 240, 0.55);
   }
 
-  /* Single Unified Editorial Panel */
+  /* Single Unified Editorial Panel (True 2x2 Grid on Desktop) */
   .specs-unified-panel {
-    display: flex;
-    gap: 18px;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
     background: rgba(11, 13, 24, 0.65);
     border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 16px;
-    padding: 20px;
+    padding: 22px;
     backdrop-filter: blur(10px);
-  }
-
-  .specs-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   /* Subpanel: Defined internal identity with subtle contrast & discrete border */
@@ -1372,12 +1395,34 @@
     border: 1px solid rgba(181, 154, 245, 0.12);
     border-radius: 12px;
     padding: 20px 22px;
+    min-height: 0;
+    box-sizing: border-box;
     transition: border-color 0.2s ease, background 0.2s ease;
   }
 
   .specs-subpanel:hover {
     border-color: rgba(181, 154, 245, 0.24);
     background: rgba(22, 19, 40, 0.65);
+  }
+
+  #subpanel-info {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #subpanel-credits {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #subpanel-genres {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  #subpanel-aliases {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .subpanel-header {
@@ -1617,21 +1662,119 @@
   .btn-toggle-subpanel {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    margin-top: 14px;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 12px;
     align-self: flex-start;
     font-size: 0.82rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #a78bfa;
     background: none;
     border: none;
-    padding: 0;
+    padding-left: 0;
+    padding-right: 0;
     cursor: pointer;
     transition: color 0.15s ease;
   }
 
   .btn-toggle-subpanel:hover {
     color: #c4b5fd;
+  }
+
+  /* Full-width aliases drawer below the 2x2 grid */
+  .specs-aliases-drawer {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    background: rgba(16, 14, 30, 0.75);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 12px;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: drawerFadeIn 0.2s ease-out;
+  }
+
+  @keyframes drawerFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  .drawer-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.drawer-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .drawer-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+
+  .btn-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-drawer-close:hover {
+    background: rgba(167, 139, 250, 0.2);
+    color: #ffffff;
+  }
+
+  .drawer-aliases-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  @media (min-width: 1200px) {
+    .drawer-aliases-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .drawer-alias-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 8px;
+    min-width: 0;
   }
 
   .empty-spec-text {
@@ -2025,13 +2168,10 @@
 
   @media (max-width: 991px) {
     .specs-unified-panel {
+      display: flex;
       flex-direction: column;
       gap: 14px;
       padding: 14px;
-    }
-
-    .specs-column {
-      display: contents;
     }
 
     .specs-subpanel {
@@ -2052,6 +2192,16 @@
 
     #subpanel-aliases {
       order: 4;
+    }
+
+    .specs-aliases-drawer {
+      order: 5;
+      padding: 14px;
+    }
+
+    .drawer-aliases-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
     }
   }
 

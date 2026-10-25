@@ -1,58 +1,66 @@
 /**
  * scripts/verify_work_page_redesign.cjs
- * Comprehensive Round 4.3 verification of the redesigned work page on Preview:
+ * Comprehensive Round 4.4 verification of the redesigned work page on Preview:
  * https://home-preview-manga.project-nox-awerkori.workers.dev
  */
 
 const { chromium } = require('playwright');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
 const PREVIEW_BASE = 'https://home-preview-manga.project-nox-awerkori.workers.dev';
 const ARTIFACTS_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
 
 const TEST_WORKS = [
-  { slug: 'aparencias', desc: '546-chapters-many-tags' },
-  { slug: 'shinkon-dakedo-captain-no-kanojo-to-wa-mada-yarenai', desc: 'long-title-adult' },
-  { slug: 'the-mysterious-world-s-greatest-martial-artist-little-prince', desc: 'very-long-title' },
-  { slug: 'o-restaurante-do-arquimago', desc: 'medium-158-caps' }
+  { slug: 'aparencias', desc: '546-chapters-16-aliases-many-tags' },
+  { slug: 'shinkon-dakedo-captain-no-kanojo-to-wa-mada-yarenai', desc: 'manga-with-aliases' },
+  { slug: 'the-mysterious-world-s-greatest-martial-artist-little-prince', desc: 'scan-as-author-case' },
+  { slug: 'o-restaurante-do-arquimago', desc: 'standard-manhwa' }
 ];
 
 const VIEWPORTS = [
   { name: 'desktop_1920x1080', width: 1920, height: 1080, isMobile: false, hasTouch: false },
   { name: 'desktop_1600x900', width: 1600, height: 900, isMobile: false, hasTouch: false },
   { name: 'desktop_1366x768', width: 1366, height: 768, isMobile: false, hasTouch: false },
-  { name: 'tablet_768x1024', width: 768, height: 1024, isMobile: true, hasTouch: true },
+  { name: 'tablet_768x1024', width: 768, height: 1024, isMobile: false, hasTouch: true },
   { name: 'mobile_412x915', width: 412, height: 915, isMobile: true, hasTouch: true },
   { name: 'mobile_390x844', width: 390, height: 844, isMobile: true, hasTouch: true },
   { name: 'mobile_360x800', width: 360, height: 800, isMobile: true, hasTouch: true }
 ];
 
-async function bypassAgeGate(ctx) {
-  try {
-    await ctx.addCookies([
-      {
-        name: 'nox-age-status',
-        value: 'ADULT',
-        domain: 'home-preview-manga.project-nox-awerkori.workers.dev',
-        path: '/'
-      }
-    ]);
-  } catch (e) {}
+async function bypassAgeGate(context) {
+  await context.addCookies([
+    {
+      name: 'nox-age-status',
+      value: 'ADULT',
+      domain: 'home-preview-manga.project-nox-awerkori.workers.dev',
+      path: '/'
+    },
+    {
+      name: 'nox-blur-nsfw',
+      value: 'false',
+      domain: 'home-preview-manga.project-nox-awerkori.workers.dev',
+      path: '/'
+    }
+  ]);
 }
 
 async function dismissModals(page) {
   try {
-    const ageBtn = await page.$('button:has-text("Sim"), button:has-text("Continuar"), button:has-text("Entrar"), .age-gate-btn-confirm');
-    if (ageBtn) {
-      await ageBtn.click({ force: true });
-      await page.waitForTimeout(400);
-    }
-  } catch (e) {}
+    await page.evaluate(() => {
+      try {
+        localStorage.setItem('nox-age-status', 'ADULT');
+        localStorage.setItem('nox-blur-nsfw', 'false');
+      } catch {}
+      const backdrop = document.querySelector('.age-gate-backdrop');
+      if (backdrop) backdrop.remove();
+    });
+    await page.waitForTimeout(200);
+  } catch {}
 }
 
 async function run() {
-  console.log('=== STARTING WORK PAGE ROUND 4.3 VERIFICATION ===');
+  console.log('=== STARTING WORK PAGE ROUND 4.4 VERIFICATION ===');
   console.log('Target Preview URL:', PREVIEW_BASE);
 
   const report = {
@@ -60,20 +68,21 @@ async function run() {
     previewUrl: PREVIEW_BASE,
     desktopRatingCheck: {},
     mobileRatingCheck: {},
+    drawerExpansionTest: {},
     works: []
   };
 
   const browser = await chromium.launch({ headless: true });
 
   // =========================================================================
-  // 1. DESKTOP RATING PROMINENCE TEST (Round 4.3)
+  // 1. DESKTOP RATING PROMINENCE TEST (Round 4.3 Preservation)
   // =========================================================================
-  console.log('\n--- 1. Testing Desktop Rating Prominence (Round 4.3) ---');
+  console.log('\n--- 1. Testing Desktop Rating Prominence (Preserved from 4.3) ---');
   {
     const ctx = await browser.newContext({
       viewport: { width: 1366, height: 768 },
       isMobile: false,
-      hasTouch: false
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
     });
     await bypassAgeGate(ctx);
     const page = await ctx.newPage();
@@ -99,13 +108,6 @@ async function run() {
     });
     console.log('Desktop Rating Dimensions & Prompt:', desktopRating);
     report.desktopRatingCheck = desktopRating;
-
-    // Screenshot of desktop rating widget & hero actions
-    const heroActionsEl = await page.$('.work-details-column');
-    if (heroActionsEl) {
-      await heroActionsEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_3_rating_desktop.png') });
-    }
-
     await ctx.close();
   }
 
@@ -135,19 +137,151 @@ async function run() {
     });
     console.log('Mobile Star Hitboxes (>= 44px):', mobileHitboxes);
     report.mobileRatingCheck.mobileHitboxes = mobileHitboxes;
-
-    await mPage.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'round4_3_rating_mobile.png'),
-      clip: { x: 0, y: 300, width: 390, height: 350 }
-    });
-
     await mobileCtx.close();
   }
 
   // =========================================================================
-  // 3. MULTI-WORK & MULTI-VIEWPORT AUDIT (Independent Column Heights & Credit Rules)
+  // 3. DESKTOP 2x2 GRID SYMMETRY & DRAWER INTERACTION TEST (Round 4.4)
   // =========================================================================
-  console.log('\n--- 3. Multi-Viewport & Multi-Work Validation (Round 4.3 Polish) ---');
+  console.log('\n--- 3. Testing Desktop 2x2 Grid Symmetry & Full-Width Drawer (Round 4.4) ---');
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      isMobile: false,
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+    });
+    await bypassAgeGate(ctx);
+    const page = await ctx.newPage();
+    await page.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
+    await dismissModals(page);
+    await page.waitForTimeout(600);
+
+    // Initial symmetry check on Aparências (16 aliases)
+    const initialGridCheck = await page.evaluate(() => {
+      const panel = document.querySelector('.specs-unified-panel');
+      const info = document.querySelector('#subpanel-info');
+      const credits = document.querySelector('#subpanel-credits');
+      const genres = document.querySelector('#subpanel-genres');
+      const aliases = document.querySelector('#subpanel-aliases');
+
+      const rInfo = info.getBoundingClientRect();
+      const rCredits = credits.getBoundingClientRect();
+      const rGenres = genres.getBoundingClientRect();
+      const rAliases = aliases.getBoundingClientRect();
+
+      const aliasItemsInCard = document.querySelectorAll('#subpanel-aliases .alias-editorial-row');
+      const toggleBtn = document.querySelector('#subpanel-aliases .btn-toggle-subpanel');
+
+      return {
+        row1: {
+          infoTop: Math.round(rInfo.top),
+          creditsTop: Math.round(rCredits.top),
+          infoBottom: Math.round(rInfo.bottom),
+          creditsBottom: Math.round(rCredits.bottom),
+          infoHeight: Math.round(rInfo.height),
+          creditsHeight: Math.round(rCredits.height),
+          alignedTop: Math.abs(rInfo.top - rCredits.top) <= 1,
+          alignedBottom: Math.abs(rInfo.bottom - rCredits.bottom) <= 1,
+          sameHeight: Math.abs(rInfo.height - rCredits.height) <= 1
+        },
+        row2: {
+          genresTop: Math.round(rGenres.top),
+          aliasesTop: Math.round(rAliases.top),
+          genresBottom: Math.round(rGenres.bottom),
+          aliasesBottom: Math.round(rAliases.bottom),
+          genresHeight: Math.round(rGenres.height),
+          aliasesHeight: Math.round(rAliases.height),
+          alignedTop: Math.abs(rGenres.top - rAliases.top) <= 1,
+          alignedBottom: Math.abs(rGenres.bottom - rAliases.bottom) <= 1,
+          sameHeight: Math.abs(rGenres.height - rAliases.height) <= 1
+        },
+        columns: {
+          infoLeft: Math.round(rInfo.left),
+          genresLeft: Math.round(rGenres.left),
+          creditsRight: Math.round(rCredits.right),
+          aliasesRight: Math.round(rAliases.right),
+          infoWidth: Math.round(rInfo.width),
+          creditsWidth: Math.round(rCredits.width),
+          col1AlignedLeft: Math.abs(rInfo.left - rGenres.left) <= 1,
+          col2AlignedRight: Math.abs(rCredits.right - rAliases.right) <= 1,
+          equalWidth: Math.abs(rInfo.width - rCredits.width) <= 2
+        },
+        aliasesPreviewCount: aliasItemsInCard.length,
+        hasToggleBtn: !!toggleBtn,
+        toggleBtnText: toggleBtn ? toggleBtn.textContent.trim() : null
+      };
+    });
+
+    console.log('Initial 2x2 Grid Symmetry Check:', JSON.stringify(initialGridCheck, null, 2));
+    report.drawerExpansionTest.initialGrid = initialGridCheck;
+
+    // Screenshot initial state of ficha técnica
+    const fichaSection = await page.$('.work-specs-section');
+    if (fichaSection) {
+      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_4_ficha_desktop_initial.png') });
+    }
+
+    // Now click the toggle button to open full-width drawer
+    console.log('Clicking "Ver todos os 16 títulos" to open full-width drawer...');
+    const toggleBtnEl = await page.$('#subpanel-aliases .btn-toggle-subpanel');
+    if (toggleBtnEl) {
+      await toggleBtnEl.click();
+      await page.waitForTimeout(400);
+    }
+
+    const afterDrawerOpen = await page.evaluate(() => {
+      const drawer = document.querySelector('#aliases-expanded-drawer');
+      const rDrawer = drawer ? drawer.getBoundingClientRect() : null;
+      const drawerItems = document.querySelectorAll('.drawer-alias-item');
+      const panel = document.querySelector('.specs-unified-panel');
+      const rPanel = panel ? panel.getBoundingClientRect() : null;
+
+      const genres = document.querySelector('#subpanel-genres');
+      const aliases = document.querySelector('#subpanel-aliases');
+      const rGenres = genres.getBoundingClientRect();
+      const rAliases = aliases.getBoundingClientRect();
+
+      return {
+        drawerExists: !!drawer,
+        drawerItemsCount: drawerItems.length,
+        drawerWidth: rDrawer ? Math.round(rDrawer.width) : 0,
+        panelInnerWidth: rPanel ? Math.round(rPanel.width - 44) : 0, // padding 22px each side
+        drawerSpansFullWidth: rDrawer && rPanel ? Math.abs(rDrawer.width - (rPanel.width - 44)) <= 4 : false,
+        row2StillAligned: Math.abs(rGenres.height - rAliases.height) <= 1,
+        genresHeight: Math.round(rGenres.height),
+        aliasesHeight: Math.round(rAliases.height)
+      };
+    });
+
+    console.log('After Drawer Open State:', afterDrawerOpen);
+    report.drawerExpansionTest.afterOpen = afterDrawerOpen;
+
+    if (fichaSection) {
+      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_4_ficha_desktop_drawer_expanded.png') });
+    }
+
+    // Click Recolher to close
+    console.log('Clicking "Recolher" to close drawer...');
+    const closeBtn = await page.$('.btn-drawer-close');
+    if (closeBtn) {
+      await closeBtn.click();
+      await page.waitForTimeout(300);
+    }
+
+    const afterDrawerClose = await page.evaluate(() => {
+      const drawer = document.querySelector('#aliases-expanded-drawer');
+      return { drawerClosed: !drawer };
+    });
+    console.log('After Drawer Close State:', afterDrawerClose);
+    report.drawerExpansionTest.afterClose = afterDrawerClose;
+
+    await ctx.close();
+  }
+
+  // =========================================================================
+  // 4. MULTI-WORK & MULTI-VIEWPORT AUDIT (28 audits total)
+  // =========================================================================
+  console.log('\n--- 4. Multi-Viewport & Multi-Work Validation (Round 4.4 Symmetry & Proportions) ---');
   for (const work of TEST_WORKS) {
     const workUrl = `${PREVIEW_BASE}/obra/${work.slug}`;
     console.log(`\nAuditing Work: ${work.slug} (${work.desc})`);
@@ -175,15 +309,15 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round4_3_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round4_3_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_4_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_4_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
           clip: { x: 0, y: 0, width: vp.width, height: Math.min(850, vp.height) }
         });
 
-        const evaluation = await page.evaluate(() => {
+        const evaluation = await page.evaluate((isDesktop) => {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
 
@@ -199,27 +333,37 @@ async function run() {
           const chaptersPrimaryCta = document.querySelector('.chapters-header .btn-read-primary');
           const readingCtaInChapters = !!chaptersPrimaryCta;
 
-          // 4. Subpanel Heights Check: Gêneros must NOT stretch to match Aliases on Desktop
-          const genresSubpanel = document.querySelector('#subpanel-genres');
-          const aliasesSubpanel = document.querySelector('#subpanel-aliases');
-          const hGenres = genresSubpanel ? Math.round(genresSubpanel.getBoundingClientRect().height) : 0;
-          const hAliases = aliasesSubpanel ? Math.round(aliasesSubpanel.getBoundingClientRect().height) : 0;
-          // In desktop, if aliases has many items, genres is significantly more compact
-          const noForcedStretch = hGenres <= hAliases;
+          // 4. Subpanels Alignment & Symmetry Check
+          const info = document.querySelector('#subpanel-info');
+          const credits = document.querySelector('#subpanel-credits');
+          const genres = document.querySelector('#subpanel-genres');
+          const aliases = document.querySelector('#subpanel-aliases');
 
-          // 5. Single Unified Editorial Panel with 4 distinct subpanels
-          const unifiedPanels = document.querySelectorAll('.specs-unified-panel');
-          const subpanels = document.querySelectorAll('.specs-subpanel');
-          const isSingleUnifiedPanel = unifiedPanels.length === 1 && subpanels.length === 4;
+          let row1Aligned = true;
+          let row2Aligned = true;
+          let hRow1 = 0;
+          let hRow2 = 0;
 
-          // 6. Hierarchy
+          if (isDesktop && info && credits && genres && aliases) {
+            const rInfo = info.getBoundingClientRect();
+            const rCredits = credits.getBoundingClientRect();
+            const rGenres = genres.getBoundingClientRect();
+            const rAliases = aliases.getBoundingClientRect();
+
+            row1Aligned = Math.abs(rInfo.height - rCredits.height) <= 1 && Math.abs(rInfo.top - rCredits.top) <= 1;
+            row2Aligned = Math.abs(rGenres.height - rAliases.height) <= 1 && Math.abs(rGenres.top - rAliases.top) <= 1;
+            hRow1 = Math.round(rInfo.height);
+            hRow2 = Math.round(rGenres.height);
+          }
+
+          // 5. Hierarchy
           const specs = document.querySelector('.work-specs-section');
           const chapters = document.querySelector('.work-chapters-section');
           const specsY = specs ? specs.getBoundingClientRect().top + window.scrollY : null;
           const chaptersY = chapters ? chapters.getBoundingClientRect().top + window.scrollY : null;
           const isFichaAboveChapters = specsY !== null && chaptersY !== null ? specsY < chaptersY : null;
 
-          // 7. Credits: Scan must NEVER be shown as Author/Roteirista
+          // 6. Credits: Scan must NEVER be shown as Author/Roteirista
           const rows = Array.from(document.querySelectorAll('.specs-row')).map(r => ({
             dt: r.querySelector('dt')?.textContent?.trim(),
             dd: r.querySelector('dd')?.textContent?.trim()
@@ -229,7 +373,7 @@ async function run() {
           const authorIsScan = /\b(scan|scans|scanlator|scanlation)\b/i.test(authorVal) || /(scan|scans|scanlator)$/i.test(authorVal);
           const creditsAttributionValid = !authorIsScan;
 
-          // 8. No fake community attribution
+          // 7. No fake community attribution
           const hasFakeTranslation = document.body.innerText.includes('Comunidade Project Nox');
 
           return {
@@ -239,18 +383,18 @@ async function run() {
             coverOnlyOnLeft,
             bylineRemoved,
             readingCtaInChapters,
-            isSingleUnifiedPanel,
-            hGenres,
-            hAliases,
-            noForcedStretch,
+            row1Aligned,
+            row2Aligned,
+            hRow1,
+            hRow2,
             isFichaAboveChapters,
             authorVal,
             creditsAttributionValid,
             hasFakeTranslation
           };
-        });
+        }, !vp.isMobile && vp.width >= 992);
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | hGenres=${evaluation.hGenres}px vs hAliases=${evaluation.hAliases}px (noStretch=${evaluation.noForcedStretch}) | author="${evaluation.authorVal}" (valid=${evaluation.creditsAttributionValid}) | fakeTrans=${evaluation.hasFakeTranslation}`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | row1Aligned=${evaluation.row1Aligned} (h=${evaluation.hRow1}px) | row2Aligned=${evaluation.row2Aligned} (h=${evaluation.hRow2}px) | author="${evaluation.authorVal}" (valid=${evaluation.creditsAttributionValid})`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -270,12 +414,12 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round4_3_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_4_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 4.3 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_3_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4.4 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_4_work_page_audit.json')}`);
 }
 
 run().catch(err => {
