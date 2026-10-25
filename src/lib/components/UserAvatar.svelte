@@ -55,11 +55,15 @@
 <div
   class="user-avatar-root {className}"
   class:has-frame={!!frameId || !!frameUrl}
-  class:frame-aurora={frameId === 'frame_aurora_mystic'}
+  class:frame-cosmic={frameId === 'frame_cosmic_nox'}
   class:frame-cyber={frameId === 'frame_cyber_neon'}
+  class:frame-emerald={frameId === 'frame_emerald_veil'}
+  class:frame-solar={frameId === 'frame_solar_flare'}
+  class:frame-stardust={frameId === 'frame_particle_stardust'}
+  class:frame-aurora={frameId === 'frame_aurora_mystic'}
   class:frame-void={frameId === 'frame_void_nebula'}
   class:frame-crimson={frameId === 'frame_crimson_eclipse'}
-  class:frame-celestial={frameId === 'frame_celestial_gold'}
+  class:frame-celestial={frameId === 'frame_celestial_sovereign' || frameId === 'frame_celestial_gold'}
   style="--avatar-size: {size}px;"
 >
   <div class="avatar-inner">
@@ -147,17 +151,41 @@
     z-index: 2;
   }
 
-  /* Frames Styling (Discord-inspired) */
-  .frame-aurora .avatar-frame-overlay {
-    border: 2px solid #8b5cf6;
-    box-shadow: 0 0 14px rgba(139, 92, 246, 0.75);
-    animation: framePulse 3s ease-in-out infinite;
+  /* Curated Premium Cosmic Frames */
+  .frame-cosmic .avatar-frame-overlay {
+    border: 2px solid #a78bfa;
+    box-shadow: 0 0 10px rgba(167, 139, 250, 0.65), inset 0 0 4px rgba(139, 92, 246, 0.4);
+    transition: transform 0.2s ease;
   }
 
   .frame-cyber .avatar-frame-overlay {
-    border: 2px dashed #06b6d4;
-    border-radius: 28%;
-    box-shadow: 0 0 12px rgba(6, 182, 212, 0.7);
+    border: 2px solid #06b6d4;
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.75), inset 0 0 6px rgba(8, 145, 178, 0.45);
+    animation: cyberPulse 2.8s ease-in-out infinite;
+  }
+
+  .frame-emerald .avatar-frame-overlay {
+    border: 2.5px solid #10b981;
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.7), inset 0 0 6px rgba(52, 211, 153, 0.4);
+    animation: emeraldBreathe 3.5s ease-in-out infinite;
+  }
+
+  .frame-solar .avatar-frame-overlay {
+    border: 2.5px solid #f59e0b;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.85), inset 0 0 8px rgba(251, 191, 36, 0.5);
+    animation: solarRotate 4s linear infinite;
+  }
+
+  .frame-stardust .avatar-frame-overlay {
+    border: 2px dashed #818cf8;
+    box-shadow: 0 0 16px rgba(129, 140, 248, 0.8), inset 0 0 8px rgba(192, 132, 252, 0.5);
+    animation: stardustSpin 6s linear infinite;
+  }
+
+  .frame-aurora .avatar-frame-overlay {
+    border: 3px solid #8b5cf6;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.85), inset 0 0 10px rgba(6, 182, 212, 0.6);
+    animation: auroraWave 3.5s ease-in-out infinite;
   }
 
   .frame-void .avatar-frame-overlay {
@@ -167,26 +195,77 @@
   }
 
   .frame-crimson .avatar-frame-overlay {
-    border: 3px solid #ef4444;
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.9);
-    animation: crimsonFlicker 2s ease-in-out infinite;
+    border: 3.5px solid #ef4444;
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.9), inset 0 0 10px rgba(220, 38, 38, 0.6);
+    animation: crimsonPulse 2.2s ease-in-out infinite;
   }
 
   .frame-celestial .avatar-frame-overlay {
-    border: 3px solid #f59e0b;
-    box-shadow: 0 0 22px rgba(245, 158, 11, 0.95), inset 0 0 8px rgba(253, 224, 71, 0.5);
-    animation: celestialShine 4s ease-in-out infinite;
+    border: 3.5px solid #fbbf24;
+    box-shadow: 0 0 28px rgba(251, 191, 36, 0.95), 0 0 14px rgba(192, 132, 252, 0.7), inset 0 0 10px rgba(255, 255, 255, 0.8);
+    animation: celestialShimmer 4s ease-in-out infinite;
   }
 
-  @keyframes framePulse {
+  @keyframes cyberPulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 4px #06b6d4);
+      opacity: 0.9;
+    }
+    50% {
+      filter: drop-shadow(0 0 12px #22d3ee);
+      opacity: 1;
+    }
+  }
+
+  @keyframes emeraldBreathe {
     0%, 100% {
       opacity: 0.85;
       transform: scale(1);
     }
     50% {
       opacity: 1;
-      transform: scale(1.04);
-      filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.9));
+      transform: scale(1.02);
+      filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8));
+    }
+  }
+
+  @keyframes solarRotate {
+    0% {
+      transform: rotate(0deg);
+      filter: drop-shadow(0 0 6px #f59e0b);
+    }
+    50% {
+      filter: drop-shadow(0 0 14px #fbbf24);
+    }
+    100% {
+      transform: rotate(360deg);
+      filter: drop-shadow(0 0 6px #f59e0b);
+    }
+  }
+
+  @keyframes stardustSpin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes auroraWave {
+    0%, 100% {
+      opacity: 0.9;
+      transform: scale(1);
+      border-color: #8b5cf6;
+      box-shadow: 0 0 18px rgba(139, 92, 246, 0.85);
+    }
+    33% {
+      border-color: #06b6d4;
+      box-shadow: 0 0 22px rgba(6, 182, 212, 0.85);
+    }
+    66% {
+      border-color: #10b981;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.85);
     }
   }
 
@@ -199,21 +278,25 @@
     }
   }
 
-  @keyframes crimsonFlicker {
+  @keyframes crimsonPulse {
     0%, 100% {
-      filter: drop-shadow(0 0 6px #ef4444);
+      filter: drop-shadow(0 0 8px #ef4444);
+      transform: scale(1);
     }
     50% {
-      filter: drop-shadow(0 0 16px #dc2626);
+      filter: drop-shadow(0 0 20px #dc2626);
+      transform: scale(1.03);
     }
   }
 
-  @keyframes celestialShine {
+  @keyframes celestialShimmer {
     0%, 100% {
-      filter: drop-shadow(0 0 8px #f59e0b);
+      filter: drop-shadow(0 0 10px #fbbf24);
+      transform: scale(1);
     }
     50% {
-      filter: drop-shadow(0 0 20px #fbbf24);
+      filter: drop-shadow(0 0 24px #fef08a) drop-shadow(0 0 14px #c084fc);
+      transform: scale(1.03);
     }
   }
 </style>

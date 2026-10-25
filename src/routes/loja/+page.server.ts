@@ -1,4 +1,5 @@
 import { withTimeout } from '$lib/server/resilience';
+import { CURATED_COSMETIC_ITEMS, ARCHIVED_SHOP_ITEM_IDS } from '$lib/cosmetics-catalog';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
 const SHOP_CACHE_TTL_MS = 120_000;
@@ -15,17 +16,22 @@ export const load = async ({ locals, setHeaders }) => {
         .eq('is_active', true)
         .order('order_index', { ascending: true }),
       2500,
-      { data: cachedShopItems?.data || [] } as any,
+      { data: [] } as any,
       'shop_items'
     );
-    if (res?.data && res.data.length > 0) {
-      items = res.data;
-      cachedShopItems = { timestamp: Date.now(), data: items };
-    } else if (cachedShopItems?.data && cachedShopItems.data.length > 0) {
-      items = cachedShopItems.data;
+
+    const dbItems = res?.data || [];
+    const hasCuratedInDb = dbItems.some((it: any) =>
+      it.id === 'frame_cosmic_nox' || it.id === 'color_cosmic_violet' || it.id === 'title_viajante_estelar'
+    );
+
+    if (hasCuratedInDb) {
+      items = dbItems.filter((it: any) => !ARCHIVED_SHOP_ITEM_IDS.has(it.id));
     } else {
-      items = [];
+      items = CURATED_COSMETIC_ITEMS;
     }
+
+    cachedShopItems = { timestamp: Date.now(), data: items };
   }
 
 

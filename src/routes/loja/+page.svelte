@@ -35,6 +35,33 @@
   let previewFrame = $state<string | null>(null);
   let previewColor = $state<string | null>(null);
   let previewTitle = $state<string | null>(null);
+  let previewBanner = $state<string | null>(null);
+
+  let isTestDriving = $derived(
+    previewFrame !== null || previewColor !== null || previewTitle !== null || previewBanner !== null
+  );
+
+  function applyToLivePreview(item: any) {
+    if (item.kind === 'AVATAR_FRAME') {
+      previewFrame = item.id;
+    } else if (item.kind === 'NAME_COLOR') {
+      const style = getStyle(item);
+      previewColor = style.color || style.backgroundImage;
+    } else if (item.kind === 'TITLE') {
+      previewTitle = item.name;
+    } else if (item.kind === 'PROFILE_BANNER') {
+      previewBanner = item.id;
+    }
+    showToast(`Testando "${item.name}" no provador do topo!`, 'success');
+  }
+
+  function resetLivePreview() {
+    previewFrame = null;
+    previewColor = null;
+    previewTitle = null;
+    previewBanner = null;
+    showToast('Provador restaurado para o seu perfil original.', 'success');
+  }
 
   let currentXp = $derived(data.profile?.xp ?? 0);
   let userLevel = $derived(Math.floor(Math.sqrt(1 + currentXp / 50)));
@@ -45,6 +72,14 @@
   let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
 
   let inventorySet = $derived(new Set(data.inventory || []));
+
+  let categoryCounts = $derived({
+    ALL: (data.items || []).length,
+    AVATAR_FRAME: (data.items || []).filter((i: any) => i.kind === 'AVATAR_FRAME').length,
+    NAME_COLOR: (data.items || []).filter((i: any) => i.kind === 'NAME_COLOR').length,
+    TITLE: (data.items || []).filter((i: any) => i.kind === 'TITLE').length,
+    PROFILE_BANNER: (data.items || []).filter((i: any) => i.kind === 'PROFILE_BANNER').length
+  });
 
   const RARITY_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
     COMUM: { label: 'Comum', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.12)', border: 'rgba(148, 163, 184, 0.3)' },
@@ -91,8 +126,8 @@
     if (!item) return false;
     const style = getStyle(item);
     if (item.kind === 'AVATAR_FRAME') return equippedFrame === item.id;
-    if (item.kind === 'NAME_COLOR') return equippedColor === (style.color || style.backgroundImage);
-    if (item.kind === 'TITLE') return equippedTitle === item.name;
+    if (item.kind === 'NAME_COLOR') return equippedColor === item.id || equippedColor === (style.color || style.backgroundImage);
+    if (item.kind === 'TITLE') return equippedTitle === item.id || equippedTitle === item.name;
     if (item.kind === 'PROFILE_BANNER') return equippedBanner === item.id;
     return false;
   }
@@ -194,7 +229,7 @@
         </div>
         <h1 class="shop-title">Loja Cósmica</h1>
         <p class="shop-desc">
-          Troque o XP acumulado durante suas leituras por molduras animadas estilo Discord, banners de alta
+          Troque o XP acumulado durante suas leituras por molduras animadas exclusivas, banners astrais em alta
           definição, títulos honorários e cores dinâmicas para seu perfil e comentários.
         </p>
 
@@ -218,9 +253,23 @@
         </div>
       </div>
 
-      <!-- Live Identity Preview -->
+      <!-- Live Identity Preview / Provador ao Vivo -->
       <aside class="hero-preview-box">
-        <span class="preview-title">Sua Identidade Atual</span>
+        <div class="preview-box-header">
+          <span class="preview-title">{isTestDriving ? 'Provador Ativo' : 'Sua Identidade'}</span>
+          {#if isTestDriving}
+            <button
+              type="button"
+              class="btn-reset-preview"
+              onclick={resetLivePreview}
+              title="Restaurar visual original do perfil"
+            >
+              <X size={12} />
+              <span>Restaurar</span>
+            </button>
+          {/if}
+        </div>
+
         <div class="preview-avatar-wrap">
           <UserAvatar
             avatarId={data.profile?.avatar_id}
@@ -240,6 +289,13 @@
             <span class="preview-title-badge">{previewTitle || equippedTitle}</span>
           {/if}
         </div>
+
+        {#if isTestDriving}
+          <div class="test-drive-indicator">
+            <span class="pulse-dot"></span>
+            <span>Pré-visualização provisória</span>
+          </div>
+        {/if}
       </aside>
     </header>
 
@@ -253,6 +309,7 @@
       >
         <ShoppingBag size={16} />
         <span>Todos os Itens</span>
+        <span class="cat-count">{categoryCounts.ALL}</span>
       </button>
 
       <button
@@ -262,7 +319,8 @@
         onclick={() => (activeTab = 'AVATAR_FRAME')}
       >
         <Shield size={16} />
-        <span>Molduras de Avatar</span>
+        <span>Molduras</span>
+        <span class="cat-count">{categoryCounts.AVATAR_FRAME}</span>
       </button>
 
       <button
@@ -273,6 +331,7 @@
       >
         <Palette size={16} />
         <span>Cores de Nome</span>
+        <span class="cat-count">{categoryCounts.NAME_COLOR}</span>
       </button>
 
       <button
@@ -282,7 +341,8 @@
         onclick={() => (activeTab = 'TITLE')}
       >
         <Tag size={16} />
-        <span>Títulos Cósmicos</span>
+        <span>Títulos</span>
+        <span class="cat-count">{categoryCounts.TITLE}</span>
       </button>
 
       <button
@@ -293,6 +353,7 @@
       >
         <ImageIcon size={16} />
         <span>Banners</span>
+        <span class="cat-count">{categoryCounts.PROFILE_BANNER}</span>
       </button>
     </nav>
 
@@ -457,6 +518,16 @@
 
               <!-- Action Buttons -->
               <div class="card-actions">
+                <button
+                  type="button"
+                  class="btn-action-test"
+                  onclick={() => applyToLivePreview(item)}
+                  title="Testar este item no provador acima"
+                >
+                  <Eye size={14} />
+                  <span>Testar</span>
+                </button>
+
                 {#if isEquipped}
                   <button
                     type="button"
@@ -485,12 +556,12 @@
                   >
                     {#if !meetsLevel}
                       <Lock size={14} />
-                      <span>Nível {item.min_level} Necessário</span>
+                      <span>Nível {item.min_level}</span>
                     {:else if !canAfford}
                       <span>Faltam {formatXp(item.price_xp - currentXp)} XP</span>
                     {:else}
                       <Sparkles size={14} />
-                      <span>{isBusy ? 'Comprando...' : `Adquirir por ${formatXp(item.price_xp)} XP`}</span>
+                      <span>{isBusy ? 'Comprando...' : 'Adquirir'}</span>
                     {/if}
                   </button>
                 {/if}
@@ -701,6 +772,16 @@
 
               <!-- Modal Actions -->
               <div class="modal-actions-wrap">
+                <button
+                  type="button"
+                  class="btn-modal-test"
+                  onclick={() => { applyToLivePreview(item); closePreviewModal(); }}
+                  title="Testar este cosmético no provador do topo da página"
+                >
+                  <Eye size={16} />
+                  <span>Aplicar ao Provador do Topo</span>
+                </button>
+
                 {#if isEquipped}
                   <button
                     type="button"
@@ -755,7 +836,7 @@
   }
 
   .shop-container {
-    max-width: 1440px;
+    max-width: 1280px;
     margin: 0 auto;
     position: relative;
   }
@@ -865,7 +946,7 @@
   }
 
   :global(.xp-icon) {
-    color: #dfc28d;
+    color: #fbbf24;
   }
 
   :global(.lvl-icon) {
@@ -875,7 +956,7 @@
   .xp-amount {
     font-size: 1.35rem;
     font-weight: 800;
-    color: #dfc28d;
+    color: #fbbf24;
   }
 
   .lvl-amount {
@@ -899,6 +980,15 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
+    position: relative;
+  }
+
+  .preview-box-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
   }
 
   .preview-title {
@@ -907,7 +997,27 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 700;
-    margin-bottom: 1rem;
+    margin: 0;
+  }
+
+  .btn-reset-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    border-radius: 9999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-reset-preview:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #ffffff;
   }
 
   .preview-avatar-wrap {
@@ -929,12 +1039,40 @@
 
   .preview-title-badge {
     padding: 0.2rem 0.6rem;
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.4);
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.4);
     border-radius: 9999px;
-    color: #dfc28d;
+    color: #c4b5fd;
     font-size: 0.72rem;
     font-weight: 700;
+  }
+
+  .test-drive-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+  }
+
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #38bdf8;
+    box-shadow: 0 0 8px #38bdf8;
+    animation: pulseDot 1.5s infinite;
+  }
+
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.75); }
   }
 
   /* Categories Bar */
@@ -968,8 +1106,25 @@
   }
 
   .cat-btn.active {
-    color: #dfc28d;
-    border-bottom-color: #dfc28d;
+    color: #c4b5fd;
+    border-bottom-color: #a78bfa;
+  }
+
+  .cat-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+  }
+
+  .cat-btn.active .cat-count {
+    background: rgba(167, 139, 250, 0.25);
+    color: #e9d5ff;
   }
 
   /* Controls Bar */
@@ -1029,9 +1184,9 @@
   }
 
   .rarity-pill.active {
-    border-color: #dfc28d;
-    color: #dfc28d;
-    background: rgba(223, 194, 141, 0.12);
+    border-color: #a78bfa;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.15);
   }
 
   .sort-wrap {
@@ -1059,8 +1214,8 @@
   /* Items Grid */
   .items-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
   }
 
   .empty-shop {
@@ -1262,15 +1417,15 @@
   }
 
   .status-pill.equipped {
-    background: rgba(223, 194, 141, 0.2);
-    color: #dfc28d;
-    border: 1px solid rgba(223, 194, 141, 0.4);
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.45);
   }
 
   .status-pill.owned {
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: rgba(56, 189, 248, 0.15);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.35);
   }
 
   .item-desc {
@@ -1296,7 +1451,7 @@
     gap: 0.35rem;
     font-size: 0.95rem;
     font-weight: 700;
-    color: #dfc28d;
+    color: #fbbf24;
   }
 
   .xp-price.cant-afford {
@@ -1313,19 +1468,52 @@
     color: #f87171;
   }
 
-  .btn-action {
-    width: 100%;
-    padding: 0.75rem 1rem;
+  .card-actions {
+    display: flex;
+    gap: 0.45rem;
+    margin-top: auto;
+  }
+
+  .btn-action-test {
+    padding: 0.7rem 0.85rem;
     border-radius: 10px;
-    font-size: 0.88rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #c4b5fd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .btn-action-test:hover {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #ffffff;
+  }
+
+  .btn-action {
+    flex: 1;
+    min-width: 0;
+    padding: 0.7rem 0.85rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
     font-weight: 700;
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0.35rem;
     transition: all 0.2s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .btn-action.buy {
@@ -1345,13 +1533,13 @@
   }
 
   .btn-action.equip {
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #6ee7b7;
   }
 
   .btn-action.equip:hover {
-    background: rgba(223, 194, 141, 0.25);
+    background: rgba(16, 185, 129, 0.28);
   }
 
   .btn-action.unequip {
@@ -1772,7 +1960,7 @@
   }
 
   .calc-val.price {
-    color: #dfc28d;
+    color: #fbbf24;
   }
 
   .calc-divider {
@@ -1789,7 +1977,7 @@
   .calc-val.final {
     font-size: 1.05rem;
     font-weight: 800;
-    color: #dfc28d;
+    color: #fbbf24;
   }
 
   .calc-val.deficient {
@@ -1799,6 +1987,30 @@
   }
 
   /* Modal Actions */
+  .btn-modal-test {
+    width: 100%;
+    padding: 0.8rem 1.25rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+    transition: all 0.2s ease;
+  }
+
+  .btn-modal-test:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.55);
+    color: #ffffff;
+  }
+
   .btn-modal-action {
     width: 100%;
     padding: 0.9rem 1.25rem;
@@ -1834,13 +2046,13 @@
   }
 
   .btn-modal-action.equip {
-    background: rgba(223, 194, 141, 0.2);
-    border: 1px solid rgba(223, 194, 141, 0.5);
-    color: #dfc28d;
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #6ee7b7;
   }
 
   .btn-modal-action.equip:hover {
-    background: rgba(223, 194, 141, 0.3);
+    background: rgba(16, 185, 129, 0.3);
   }
 
   .btn-modal-action.unequip {
@@ -1853,6 +2065,12 @@
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.3);
     color: #fca5a5;
+  }
+
+  @media (max-width: 1200px) {
+    .items-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
   }
 
   @media (max-width: 900px) {
@@ -1877,6 +2095,77 @@
 
     .modal-details-col {
       padding: 2rem 1.5rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .shop-page {
+      padding: 1.5rem 1rem 4rem;
+    }
+
+    .items-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .controls-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.85rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .rarity-filters {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 0.35rem;
+      flex-wrap: nowrap;
+    }
+
+    .rarity-pill-group {
+      flex-wrap: nowrap;
+    }
+
+    .sort-wrap {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .sort-select {
+      flex: 1;
+      max-width: 200px;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .items-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .balance-card {
+      width: 100%;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 1rem;
+    }
+
+    .shop-title {
+      font-size: 1.85rem;
+    }
+
+    .modal-backdrop {
+      padding: 0.75rem;
+    }
+
+    .modal-card {
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-stage-col,
+    .modal-details-col {
+      padding: 1.5rem 1rem;
     }
   }
 </style>
