@@ -21,7 +21,8 @@
     Share2,
     Tag,
     Languages,
-    SlidersHorizontal
+    SlidersHorizontal,
+    X
   } from '@lucide/svelte';
   import { invalidateAll, goto } from '$app/navigation';
   import { action } from '$lib/actions';
@@ -36,7 +37,10 @@
     getOfflineChapters,
     saveChapterOffline,
     removeOfflineChapter,
-    isOfflineSupported
+    isOfflineSupported,
+    registerDownloadController,
+    unregisterDownloadController,
+    cancelChapterDownload
   } from '$lib/offline-storage';
 
   let { data } = $props();
@@ -66,6 +70,7 @@
   let downloadingChapterIds = $state<Record<string, number>>({});
   let batchDownloading = $state(false);
   let batchProgress = $state({ current: 0, total: 0 });
+  let batchAbortController: AbortController | null = null;
 
   function chapterPresentationLabel(chapter: any): string {
     const qualifiers = [chapter.edition, chapter.language]
@@ -92,7 +97,12 @@
     e.preventDefault();
     e.stopPropagation();
 
-    if (downloadingChapterIds[chapter.id] !== undefined) return;
+    // If already downloading, clicking cancels the download immediately
+    if (downloadingChapterIds[chapter.id] !== undefined) {
+      cancelChapterDownload(chapter.id);
+      notice = `Download do capítulo ${chapterPresentationLabel(chapter)} cancelado.`;
+      return;
+    }
 
     if (downloadedChapterIds.has(chapter.id)) {
       if (confirm(`Remover capítulo ${chapterIdentityLabel(chapter)} do armazenamento offline?`)) {
@@ -103,9 +113,12 @@
       return;
     }
 
+    const controller = new AbortController();
+    registerDownloadController(chapter.id, controller);
+
     try {
       downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
-      const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+      const res = await fetch(`/api/chapters/${chapter.id}/pages`, { signal: controller.signal });
       if (!res.ok) throw new Error('Não foi possível obter páginas do capítulo');
       const payload = await res.json();
       if (!payload.pages || !payload.pages.length) throw new Error('Capítulo não contém páginas');
@@ -117,22 +130,50 @@
         (loaded, total) => {
           const pct = Math.round((loaded / total) * 100);
           downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
-        }
+        },
+        controller.signal
       );
 
       downloadedChapterIds.add(chapter.id);
-      notice = `Capítulo ${chapterIdentityLabel(chapter)} salvo com sucesso para leitura offline!`;
+      notice = `Capítulo ${chapterPresentationLabel(chapter)} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
-      notice = `Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}: ${err.message}`;
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        notice = `Download do capítulo ${chapterPresentationLabel(chapter)} cancelado.`;
+        await removeOfflineChapter(chapter.id).catch(() => {});
+        downloadedChapterIds.delete(chapter.id);
+      } else {
+        notice = `Erro ao baixar capítulo ${chapterPresentationLabel(chapter)}: ${err.message}`;
+      }
     } finally {
+      unregisterDownloadController(chapter.id);
       const copy = { ...downloadingChapterIds };
       delete copy[chapter.id];
       downloadingChapterIds = copy;
     }
   }
 
+  function handleCancelBatchDownload(e?: MouseEvent) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (batchAbortController) {
+      batchAbortController.abort();
+      for (const chId of Object.keys(downloadingChapterIds)) {
+        cancelChapterDownload(chId);
+        removeOfflineChapter(chId).catch(() => {});
+      }
+      notice = 'Download em lote cancelado.';
+      batchDownloading = false;
+    }
+  }
+
   async function handleBatchDownload() {
-    if (batchDownloading || !data.chapters.length) return;
+    if (batchDownloading) {
+      handleCancelBatchDownload();
+      return;
+    }
+    if (!data.chapters.length) return;
     const toDownload = data.chapters.filter((c) => !downloadedChapterIds.has(c.id));
     if (!toDownload.length) {
       notice = 'Todos os capítulos já estão disponíveis offline!';
@@ -140,16 +181,25 @@
     }
 
     batchDownloading = true;
+    batchAbortController = new AbortController();
     batchProgress = { current: 0, total: toDownload.length };
 
     try {
       for (let i = 0; i < toDownload.length; i++) {
+        if (batchAbortController.signal.aborted) break;
+
         const chapter = toDownload[i];
         batchProgress = { current: i + 1, total: toDownload.length };
         downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
 
+        const chapterController = new AbortController();
+        registerDownloadController(chapter.id, chapterController);
+
+        const onBatchAbort = () => chapterController.abort();
+        batchAbortController.signal.addEventListener('abort', onBatchAbort, { once: true });
+
         try {
-          const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+          const res = await fetch(`/api/chapters/${chapter.id}/pages`, { signal: chapterController.signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const payload = await res.json();
           if (payload.pages && payload.pages.length) {
@@ -160,23 +210,40 @@
               (loaded, total) => {
                 const pct = Math.round((loaded / total) * 100);
                 downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
-              }
+              },
+              chapterController.signal
             );
             downloadedChapterIds.add(chapter.id);
           }
         } catch (e: any) {
-          console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
+          if (e?.name === 'AbortError' || chapterController.signal.aborted || batchAbortController.signal.aborted) {
+            await removeOfflineChapter(chapter.id).catch(() => {});
+            downloadedChapterIds.delete(chapter.id);
+            break;
+          } else {
+            console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
+          }
         } finally {
+          batchAbortController.signal.removeEventListener('abort', onBatchAbort);
+          unregisterDownloadController(chapter.id);
           const copy = { ...downloadingChapterIds };
           delete copy[chapter.id];
           downloadingChapterIds = copy;
         }
       }
-      notice = 'Download dos capítulos concluído!';
+
+      if (!batchAbortController.signal.aborted) {
+        notice = 'Download dos capítulos concluído!';
+      }
     } catch (err: any) {
-      notice = `Erro no download em lote: ${err.message}`;
+      if (err?.name === 'AbortError' || batchAbortController?.signal.aborted) {
+        notice = 'Download em lote cancelado.';
+      } else {
+        notice = `Erro no download em lote: ${err.message}`;
+      }
     } finally {
       batchDownloading = false;
+      batchAbortController = null;
     }
   }
 
@@ -338,7 +405,7 @@
 
   <!-- Hero Presentation Section -->
   <section class="work-hero-section" aria-labelledby="work-title">
-    <!-- Left Column on Desktop / Centered Top on Mobile: Cover Only -->
+    <!-- Left Column on Desktop / Centered Top on Mobile: Cover + Classification Badges -->
     <div class="work-cover-column">
       <div class="work-cover-wrapper">
         <img
@@ -357,25 +424,27 @@
           </span>
         {/if}
       </div>
+
+      <!-- Integrated Indicators Group Directly Below Cover -->
+      <div class="cover-indicators-group" aria-label="Classificações da obra">
+        <span class="indicator-badge badge-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
+        <span class="indicator-badge badge-status">{statusLabels[data.work.status] || data.work.status}</span>
+        {#if data.work.year}
+          <span class="indicator-badge badge-year">{data.work.year}</span>
+        {/if}
+        {#if isAdult}
+          <span class="indicator-badge badge-rating-adult">+18 Adulto</span>
+        {:else if data.work.age_rating}
+          <span class="indicator-badge badge-rating-age">{data.work.age_rating} anos</span>
+        {:else}
+          <span class="indicator-badge badge-rating-free">Livre</span>
+        {/if}
+      </div>
     </div>
 
     <!-- Right Column on Desktop / Below Cover on Mobile: Full Work Details -->
     <div class="work-details-column">
-      <!-- Badges Row -->
-      <div class="work-badges-row" aria-label="Classificações da obra">
-        <span class="badge-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
-        <span class="badge-status">{statusLabels[data.work.status] || data.work.status}</span>
-        {#if data.work.year}
-          <span class="badge-year">{data.work.year}</span>
-        {/if}
-        {#if isAdult}
-          <span class="badge-rating-adult">+18 Adulto</span>
-        {:else if data.work.age_rating}
-          <span class="badge-rating-age">{data.work.age_rating} anos</span>
-        {/if}
-      </div>
-
-      <!-- Main Title -->
+      <!-- Main Title (Top aligned with cover) -->
       <h1 id="work-title" class="work-title">{decodedTitle}</h1>
 
       <!-- Star Rating Component (1 to 5 Stars) -->
@@ -526,170 +595,178 @@
       <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
     </div>
 
-    <!-- Single Unified Panel with True 2x2 Grid on Desktop -->
+    <!-- Single Unified Panel with 2 Independent Columns on Desktop -->
     <div class="specs-unified-panel">
-      <!-- Subseção 1 (Row 1, Col 1): Informações da Obra -->
-      <div class="specs-subpanel" id="subpanel-info">
-        <div class="subpanel-header">
-          <BookOpen size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Informações da Obra</h3>
-        </div>
-        <dl class="specs-table">
-          <div class="specs-row">
-            <dt>Formato</dt>
-            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
-          </div>
-          <div class="specs-row">
-            <dt>Status de Publicação</dt>
-            <dd>
-              <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
-              {statusLabels[data.work.status] || data.work.status}
-            </dd>
-          </div>
-          {#if data.work.year}
-            <div class="specs-row">
-              <dt>Ano de Lançamento</dt>
-              <dd>{data.work.year}</dd>
+      <div class="specs-columns-grid">
+        <!-- Coluna Esquerda: Informações da Obra + Gêneros & Temas -->
+        <div class="specs-column left-col">
+          <!-- Subseção 1: Informações da Obra -->
+          <div class="specs-subpanel" id="subpanel-info">
+            <div class="subpanel-header">
+              <BookOpen size={16} class="subpanel-icon" />
+              <h3 class="subpanel-title">Informações da Obra</h3>
             </div>
-          {/if}
-          <div class="specs-row">
-            <dt>Classificação Indicativa</dt>
-            <dd>
-              {#if isAdult}
-                <span class="age-pill adult">+18 Adulto</span>
-              {:else if data.work.age_rating}
-                <span class="age-pill">{data.work.age_rating} anos</span>
-              {:else}
-                <span class="age-pill free">Livre</span>
+            <dl class="specs-table">
+              <div class="specs-row">
+                <dt>Formato</dt>
+                <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
+              </div>
+              <div class="specs-row">
+                <dt>Status de Publicação</dt>
+                <dd>
+                  <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
+                  {statusLabels[data.work.status] || data.work.status}
+                </dd>
+              </div>
+              {#if data.work.year}
+                <div class="specs-row">
+                  <dt>Ano de Lançamento</dt>
+                  <dd>{data.work.year}</dd>
+                </div>
               {/if}
-            </dd>
+              <div class="specs-row">
+                <dt>Classificação Indicativa</dt>
+                <dd>
+                  {#if isAdult}
+                    <span class="age-pill adult">+18 Adulto</span>
+                  {:else if data.work.age_rating}
+                    <span class="age-pill">{data.work.age_rating} anos</span>
+                  {:else}
+                    <span class="age-pill free">Livre</span>
+                  {/if}
+                </dd>
+              </div>
+              <div class="specs-row">
+                <dt>Capítulos Catalogados</dt>
+                <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
+              </div>
+            </dl>
           </div>
-          <div class="specs-row">
-            <dt>Capítulos Catalogados</dt>
-            <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
-          </div>
-        </dl>
-      </div>
 
-      <!-- Subseção 2 (Row 1, Col 2): Equipe & Créditos -->
-      <div class="specs-subpanel" id="subpanel-credits">
-        <div class="subpanel-header">
-          <Users size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Equipe & Créditos</h3>
-        </div>
-        <dl class="specs-table">
-          <div class="specs-row">
-            <dt>Roteiro / História</dt>
-            <dd>
-              {#if legitimateAuthor}
-                <strong>{legitimateAuthor}</strong>
-              {:else}
-                <span class="unassigned-spec" title="Autor não identificado">?</span>
+          <!-- Subseção 2: Gêneros & Temas (Altura natural, sem espaços vazios) -->
+          <div class="specs-subpanel" id="subpanel-genres">
+            <div class="subpanel-header">
+              <Tag size={16} class="subpanel-icon" />
+              <h3 class="subpanel-title">Gêneros & Temas</h3>
+              {#if data.tags?.length}
+                <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
               {/if}
-            </dd>
-          </div>
-          <div class="specs-row">
-            <dt>Arte / Ilustração</dt>
-            <dd>
-              {#if legitimateArtist}
-                <strong>{legitimateArtist}</strong>
-              {:else if legitimateAuthor}
-                <span>{legitimateAuthor}</span>
-              {:else}
-                <span class="unassigned-spec" title="Artista não identificado">?</span>
-              {/if}
-            </dd>
-          </div>
-          <div class="specs-row scans-row">
-            <dt>Tradução / Scanlator</dt>
-            <dd class="scans-chips-wrap">
-              {#if data.scans && data.scans.length > 0}
-                {#each data.scans as scan (scan.id || scan.slug)}
-                  <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
-                    <Users size={12} />
-                    <span>{scan.name}</span>
+            </div>
+            {#if visibleTags.length}
+              <div class="editorial-tags-wrap">
+                {#each visibleTags as tag (tag.id)}
+                  <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
+                    {tag.name}
                   </a>
                 {/each}
-              {:else}
-                <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+              </div>
+              {#if data.tags.filter(Boolean).length > 9}
+                <button
+                  type="button"
+                  class="btn-toggle-subpanel"
+                  onclick={() => (tagsExpanded = !tagsExpanded)}
+                  aria-expanded={tagsExpanded}
+                >
+                  <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
+                  {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+                </button>
               {/if}
-            </dd>
+            {:else}
+              <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
+            {/if}
           </div>
-          <div class="specs-row">
-            <dt>Idioma</dt>
-            <dd>Português (Brasil)</dd>
-          </div>
-        </dl>
-      </div>
-
-      <!-- Subseção 3 (Row 2, Col 1): Gêneros & Temas -->
-      <div class="specs-subpanel" id="subpanel-genres">
-        <div class="subpanel-header">
-          <Tag size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Gêneros & Temas</h3>
-          {#if data.tags?.length}
-            <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
-          {/if}
         </div>
-        {#if visibleTags.length}
-          <div class="editorial-tags-wrap">
-            {#each visibleTags as tag (tag.id)}
-              <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
-                {tag.name}
-              </a>
-            {/each}
+
+        <!-- Coluna Direita: Equipe & Créditos + Títulos Alternativos -->
+        <div class="specs-column right-col">
+          <!-- Subseção 3: Equipe & Créditos -->
+          <div class="specs-subpanel" id="subpanel-credits">
+            <div class="subpanel-header">
+              <Users size={16} class="subpanel-icon" />
+              <h3 class="subpanel-title">Equipe & Créditos</h3>
+            </div>
+            <dl class="specs-table">
+              <div class="specs-row">
+                <dt>Roteiro / História</dt>
+                <dd>
+                  {#if legitimateAuthor}
+                    <strong>{legitimateAuthor}</strong>
+                  {:else}
+                    <span class="unassigned-spec" title="Autor não identificado">?</span>
+                  {/if}
+                </dd>
+              </div>
+              <div class="specs-row">
+                <dt>Arte / Ilustração</dt>
+                <dd>
+                  {#if legitimateArtist}
+                    <strong>{legitimateArtist}</strong>
+                  {:else if legitimateAuthor}
+                    <span>{legitimateAuthor}</span>
+                  {:else}
+                    <span class="unassigned-spec" title="Artista não identificado">?</span>
+                  {/if}
+                </dd>
+              </div>
+              <div class="specs-row scans-row">
+                <dt>Tradução / Scanlator</dt>
+                <dd class="scans-chips-wrap">
+                  {#if data.scans && data.scans.length > 0}
+                    {#each data.scans as scan (scan.id || scan.slug)}
+                      <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
+                        <Users size={12} />
+                        <span>{scan.name}</span>
+                      </a>
+                    {/each}
+                  {:else}
+                    <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+                  {/if}
+                </dd>
+              </div>
+              <div class="specs-row">
+                <dt>Idioma</dt>
+                <dd>Português (Brasil)</dd>
+              </div>
+            </dl>
           </div>
-          {#if data.tags.filter(Boolean).length > 9}
-            <button
-              type="button"
-              class="btn-toggle-subpanel"
-              onclick={() => (tagsExpanded = !tagsExpanded)}
-              aria-expanded={tagsExpanded}
-            >
-              <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
-              {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-            </button>
-          {/if}
-        {:else}
-          <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
-        {/if}
-      </div>
 
-      <!-- Subseção 4 (Row 2, Col 2): Títulos Alternativos (Prévia Compacta de 3) -->
-      <div class="specs-subpanel" id="subpanel-aliases">
-        <div class="subpanel-header">
-          <Languages size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Títulos Alternativos</h3>
-          {#if alternativeTitles.length}
-            <span class="subpanel-count-badge">{alternativeTitles.length}</span>
-          {/if}
+          <!-- Subseção 4: Títulos Alternativos (Prévia Compacta de 3) -->
+          <div class="specs-subpanel" id="subpanel-aliases">
+            <div class="subpanel-header">
+              <Languages size={16} class="subpanel-icon" />
+              <h3 class="subpanel-title">Títulos Alternativos</h3>
+              {#if alternativeTitles.length}
+                <span class="subpanel-count-badge">{alternativeTitles.length}</span>
+              {/if}
+            </div>
+            {#if alternativeTitles.length}
+              <ul class="aliases-editorial-list">
+                {#each previewAliases as alias, i (alias)}
+                  <li class="alias-editorial-row">
+                    <span class="alias-index-num">#{i + 1}</span>
+                    <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+                  </li>
+                {/each}
+              </ul>
+              {#if alternativeTitles.length > 3}
+                <button
+                  type="button"
+                  class="btn-toggle-subpanel"
+                  onclick={() => (aliasesExpanded = !aliasesExpanded)}
+                  aria-expanded={aliasesExpanded}
+                >
+                  <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos`}</span>
+                  {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+                </button>
+              {/if}
+            {:else}
+              <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
+            {/if}
+          </div>
         </div>
-        {#if alternativeTitles.length}
-          <ul class="aliases-editorial-list">
-            {#each previewAliases as alias, i (alias)}
-              <li class="alias-editorial-row">
-                <span class="alias-index-num">#{i + 1}</span>
-                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
-              </li>
-            {/each}
-          </ul>
-          {#if alternativeTitles.length > 3}
-            <button
-              type="button"
-              class="btn-toggle-subpanel"
-              onclick={() => (aliasesExpanded = !aliasesExpanded)}
-              aria-expanded={aliasesExpanded}
-            >
-              <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos`}</span>
-              {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-            </button>
-          {/if}
-        {:else}
-          <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
-        {/if}
       </div>
 
-      <!-- Subseção 5: Painel Expansível de Largura Total (Row 3, Spans 1 / -1) -->
+      <!-- Subseção 5: Painel Expansível de Largura Total -->
       {#if aliasesExpanded && alternativeTitles.length > 3}
         <div class="specs-aliases-drawer" id="aliases-expanded-drawer">
           <div class="drawer-header">
@@ -774,13 +851,15 @@
             type="button"
             class="btn-toolbar download-batch-btn"
             class:is-busy={batchDownloading}
-            onclick={handleBatchDownload}
-            disabled={batchDownloading || !data.chapters.length}
-            title="Baixar todos os capítulos para leitura offline"
+            onclick={batchDownloading ? handleCancelBatchDownload : handleBatchDownload}
+            disabled={!data.chapters.length}
+            title={batchDownloading ? 'Clique para cancelar download em lote' : 'Baixar todos os capítulos para leitura offline'}
+            aria-label={batchDownloading ? 'Cancelar download em lote' : 'Baixar todos os capítulos offline'}
           >
             {#if batchDownloading}
-              <Loader2 size={16} class="spin" />
-              <span>{batchProgress.current}/{batchProgress.total}</span>
+              <Loader2 size={16} class="spin batch-spinner" />
+              <span>Cancelar ({batchProgress.current}/{batchProgress.total})</span>
+              <X size={15} class="batch-cancel-x" />
             {:else}
               <Download size={16} />
               <span>Offline</span>
@@ -836,18 +915,30 @@
             </a>
 
             <div class="chapter-actions-col">
-              <!-- Offline Download Button -->
+              <!-- Offline Download Button (with active download cancellation support) -->
               <button
                 type="button"
                 class="btn-chapter-download"
                 class:is-downloaded={isDownloaded}
+                class:is-downloading={downloadProgress !== undefined}
                 onclick={(e) => handleToggleDownload(chapter, e)}
-                title={isDownloaded ? 'Remover do armazenamento offline' : 'Baixar para ler offline'}
-                aria-label="{isDownloaded ? 'Remover' : 'Baixar'} capítulo {chapterPresentationLabel(chapter)} offline"
+                title={downloadProgress !== undefined
+                  ? `Cancelar download (${downloadProgress}%)`
+                  : isDownloaded
+                    ? 'Remover do armazenamento offline'
+                    : 'Baixar para ler offline'}
+                aria-label={downloadProgress !== undefined
+                  ? `Cancelar download do capítulo ${chapterPresentationLabel(chapter)} (${downloadProgress}%)`
+                  : isDownloaded
+                    ? `Remover capítulo ${chapterPresentationLabel(chapter)} do armazenamento offline`
+                    : `Baixar capítulo ${chapterPresentationLabel(chapter)} para ler offline`}
               >
                 {#if downloadProgress !== undefined}
-                  <Loader2 size={15} class="spin" />
-                  <span class="download-pct">{downloadProgress}%</span>
+                  <span class="download-active-wrap">
+                    <Loader2 size={13} class="spin icon-loading" />
+                    <X size={14} class="icon-cancel-hover" />
+                    <span class="download-pct">{downloadProgress}%</span>
+                  </span>
                 {:else if isDownloaded}
                   <CheckCircle2 size={16} class="icon-downloaded" />
                 {:else}
@@ -992,16 +1083,19 @@
     grid-template-columns: 280px 1fr;
     gap: 36px;
     align-items: start;
-    margin-bottom: 40px;
+    margin-bottom: 28px;
   }
 
   /* Cover Column */
   .work-cover-column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    align-items: center;
+    gap: 12px;
     position: sticky;
     top: 90px;
+    max-width: 280px;
+    width: 100%;
   }
 
   .work-cover-wrapper {
@@ -1011,6 +1105,7 @@
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(181, 154, 245, 0.18);
     background: #090b14;
     aspect-ratio: 280 / 392;
+    width: 100%;
   }
 
   .work-cover-img {
@@ -1055,96 +1150,82 @@
     box-shadow: 0 4px 12px rgba(167, 139, 250, 0.4);
   }
 
+  /* Integrated Indicators Group Below Cover (Aligned within 280px) */
+  .cover-indicators-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 280px;
+    margin-top: 2px;
+  }
+
+  .indicator-badge {
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 7px;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .indicator-badge.badge-kind {
+    color: #e2e8f0;
+    background: rgba(167, 139, 250, 0.16);
+    border: 1px solid rgba(167, 139, 250, 0.32);
+  }
+
+  .indicator-badge.badge-status {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.14);
+    border: 1px solid rgba(52, 211, 153, 0.28);
+  }
+
+  .indicator-badge.badge-year {
+    color: rgba(226, 232, 240, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .indicator-badge.badge-rating-adult {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .indicator-badge.badge-rating-age {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+
+  .indicator-badge.badge-rating-free {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+  }
+
   /* Details Column */
   .work-details-column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
     min-width: 0;
   }
 
-  /* Badges Row */
-  .work-badges-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .badge-kind {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #e2e8f0;
-    background: rgba(167, 139, 250, 0.16);
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    padding: 3px 9px;
-    border-radius: 6px;
-  }
-
-  .badge-status {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #34d399;
-    background: rgba(52, 211, 153, 0.12);
-    border: 1px solid rgba(52, 211, 153, 0.25);
-    padding: 3px 9px;
-    border-radius: 6px;
-  }
-
-  .badge-year {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: rgba(226, 232, 240, 0.65);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 3px 9px;
-    border-radius: 6px;
-  }
-
-  .badge-rating-adult {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.28);
-    padding: 3px 9px;
-    border-radius: 6px;
-  }
-
-  .badge-rating-age {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.12);
-    border: 1px solid rgba(251, 191, 36, 0.25);
-    padding: 3px 9px;
-    border-radius: 6px;
-  }
-
-  .badge-scan-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #a78bfa;
-    background: rgba(167, 139, 250, 0.08);
-    border: 1px solid rgba(167, 139, 250, 0.2);
-    padding: 3px 9px;
-    border-radius: 6px;
-    text-decoration: none;
-    transition: background 0.15s;
-  }
-
-  .badge-scan-chip:hover {
-    background: rgba(167, 139, 250, 0.18);
-  }
-
-  /* Title */
+  /* Title (Starts directly at top of right column) */
   .work-title {
     font-size: clamp(1.75rem, 3.2vw, 2.5rem);
     font-weight: 800;
-    line-height: 1.18;
+    line-height: 1.16;
     color: #f8fafc;
     letter-spacing: -0.02em;
     margin: 0;
@@ -1366,9 +1447,9 @@
     margin: 20px 0;
   }
 
-  /* Redesigned Thematic Editorial Ficha Técnica (4 Balanced Thematic Cards) */
+  /* Redesigned Thematic Editorial Ficha Técnica (Balanced 2 Columns on Desktop) */
   .work-specs-section {
-    margin: 32px 0 42px;
+    margin: 28px 0 38px;
   }
 
   .specs-section-header {
@@ -1403,11 +1484,10 @@
     color: rgba(226, 232, 240, 0.55);
   }
 
-  /* Single Unified Editorial Panel (True 2x2 Grid on Desktop) */
+  /* Single Unified Editorial Panel */
   .specs-unified-panel {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
     background: rgba(11, 13, 24, 0.65);
     border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 16px;
@@ -1417,7 +1497,23 @@
     box-sizing: border-box;
   }
 
-  /* Subpanel: Defined internal identity with subtle contrast & discrete border */
+  /* 2-Column Grid Layout with Natural Independent Card Heights */
+  .specs-columns-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
+    width: 100%;
+  }
+
+  .specs-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  /* Subpanel: Defined internal identity with natural height and compact gaps */
   .specs-subpanel {
     display: flex;
     flex-direction: column;
@@ -1426,6 +1522,7 @@
     border-radius: 12px;
     padding: 20px 22px;
     min-height: 0;
+    height: auto;
     box-sizing: border-box;
     transition: border-color 0.2s ease, background 0.2s ease;
   }
@@ -1433,26 +1530,6 @@
   .specs-subpanel:hover {
     border-color: rgba(181, 154, 245, 0.24);
     background: rgba(22, 19, 40, 0.65);
-  }
-
-  #subpanel-info {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  #subpanel-credits {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  #subpanel-genres {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  #subpanel-aliases {
-    grid-column: 2;
-    grid-row: 2;
   }
 
   .subpanel-header {
@@ -1711,10 +1788,11 @@
     color: #c4b5fd;
   }
 
-  /* Full-width aliases drawer below the 2x2 grid */
+  /* Full-width aliases drawer below the columns */
   .specs-aliases-drawer {
-    grid-column: 1 / -1;
-    grid-row: 3;
+    margin-top: 20px;
+    width: 100%;
+    box-sizing: border-box;
     background: rgba(16, 14, 30, 0.75);
     border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 12px;
@@ -1954,6 +2032,32 @@
     color: #ffffff;
   }
 
+  .btn-toolbar.download-batch-btn.is-busy {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.14);
+    border-color: rgba(251, 191, 36, 0.35);
+    cursor: pointer;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+
+  .batch-cancel-x {
+    display: none;
+    margin-left: 2px;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover .batch-spinner {
+    display: none;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover .batch-cancel-x {
+    display: inline-block;
+  }
+
   /* Chapter Cards */
   .chapter-list-wrap {
     display: flex;
@@ -2097,9 +2201,10 @@
   }
 
   .btn-chapter-download {
-    width: 34px;
+    min-width: 34px;
     height: 34px;
-    display: flex;
+    padding: 0 6px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.04);
@@ -2107,18 +2212,61 @@
     border-radius: 8px;
     color: rgba(226, 232, 240, 0.6);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
   }
 
   .btn-chapter-download:hover {
     color: #ffffff;
     background: rgba(167, 139, 250, 0.16);
+    border-color: rgba(167, 139, 250, 0.3);
   }
 
   .btn-chapter-download.is-downloaded {
     color: #34d399;
     border-color: rgba(52, 211, 153, 0.3);
     background: rgba(52, 211, 153, 0.1);
+  }
+
+  .btn-chapter-download.is-downloaded:hover {
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.12);
+  }
+
+  .btn-chapter-download.is-downloading {
+    min-width: 62px;
+    width: auto;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.35);
+    padding: 0 8px;
+  }
+
+  .btn-chapter-download.is-downloading:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+
+  .download-active-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .btn-chapter-download .icon-cancel-hover {
+    display: none;
+  }
+
+  .btn-chapter-download.is-downloading:hover .icon-loading {
+    display: none;
+  }
+
+  .btn-chapter-download.is-downloading:hover .icon-cancel-hover {
+    display: inline-block;
   }
 
   .btn-chapter-read-icon {
@@ -2213,35 +2361,26 @@
     }
 
     .specs-unified-panel {
+      padding: 14px;
+    }
+
+    .specs-columns-grid {
       display: flex;
       flex-direction: column;
       gap: 14px;
-      padding: 14px;
+    }
+
+    .specs-column {
+      gap: 14px;
     }
 
     .specs-subpanel {
       padding: 16px 16px;
     }
 
-    #subpanel-info {
-      order: 1;
-    }
-
-    #subpanel-credits {
-      order: 2;
-    }
-
-    #subpanel-genres {
-      order: 3;
-    }
-
-    #subpanel-aliases {
-      order: 4;
-    }
-
     .specs-aliases-drawer {
-      order: 5;
       padding: 14px;
+      margin-top: 14px;
     }
 
     .drawer-aliases-grid {
@@ -2258,14 +2397,16 @@
     /* Transform Hero to Single Vertical Flow */
     .work-hero-section {
       grid-template-columns: 1fr;
-      gap: 20px;
-      margin-bottom: 24px;
+      gap: 18px;
+      margin-bottom: 22px;
       text-align: center;
     }
 
     .work-cover-column {
       position: static;
       align-items: center;
+      max-width: 100%;
+      margin: 0 auto;
     }
 
     /* Centered, proportional cover on mobile */
@@ -2274,6 +2415,19 @@
       height: 224px;
       aspect-ratio: auto;
       margin: 0 auto;
+    }
+
+    /* Integrated Indicators below cover on mobile */
+    .cover-indicators-group {
+      max-width: 260px;
+      margin: 2px auto 0;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .indicator-badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
     }
 
     /* Hero actions on mobile: full width, comfortable touch targets >= 44px */
@@ -2322,11 +2476,7 @@
       font-size: 0.9rem;
     }
 
-    /* Center badges, title, metrics on mobile */
-    .work-badges-row {
-      justify-content: center;
-    }
-
+    /* Center title, metrics on mobile */
     .work-title {
       font-size: 1.55rem;
       line-height: 1.25;
