@@ -268,7 +268,7 @@ export async function fetchHomeWorksFromYugabyte(platformEnv?: any): Promise<Yug
         FROM works
         WHERE published = true
         ORDER BY updated_at DESC
-        LIMIT 16;
+        LIMIT 24;
       `;
       const res = await executeYugabyteSql<YugabyteWork>(sql, [], platformEnv);
       return res.rows;
@@ -289,7 +289,7 @@ export async function fetchMostReadFromYugabyte(platformEnv?: any): Promise<Yuga
         FROM works
         WHERE published = true
         ORDER BY views_total DESC
-        LIMIT 16;
+        LIMIT 24;
       `;
       const res = await executeYugabyteSql<YugabyteWork>(sql, [], platformEnv);
       return res.rows;

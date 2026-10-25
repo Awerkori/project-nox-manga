@@ -342,7 +342,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     mostReadWorks = mostReadRes.data;
   } else {
     console.warn('[MAIS_LIDOS_FALLBACK] mostReadRes empty or error, falling back to works slice:', mostReadRes?.error);
-    mostReadWorks = works.slice(0, 16);
+    mostReadWorks = works.slice(0, 24);
   }
 
   let isStale = false;
