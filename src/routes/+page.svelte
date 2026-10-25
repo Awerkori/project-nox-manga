@@ -4,6 +4,7 @@
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
   import { resolveOriginalCoverUrl } from '$lib/covers';
+  import { decodeHtmlEntities } from '$lib/html-entities';
 
   let { data } = $props();
 
@@ -68,7 +69,10 @@
       <section class="section-block continue-section">
         <div class="section-header">
           <div class="title-cluster">
-            <h2 class="section-title">Continuar Lendo</h2>
+            <h2 class="section-title">
+              <span class="title-accent-bar"></span>
+              <span>Continuar Lendo</span>
+            </h2>
             <span class="section-subtitle">De onde você parou</span>
           </div>
 
@@ -129,7 +133,9 @@
                 {/if}
               </div>
               <div class="continue-meta">
-                <strong class="continue-work-title">{item.workTitle}</strong>
+                <strong class="continue-work-title" title={decodeHtmlEntities(item.workTitle)}>
+                  {decodeHtmlEntities(item.workTitle)}
+                </strong>
                 <span class="continue-ch-info">{item.progressText}</span>
                 <span class="continue-cta">{item.actionLabel}</span>
               </div>
@@ -203,11 +209,22 @@
 
   .section-title {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
     font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1.6rem;
-    font-weight: 800;
+    font-size: 1.65rem;
+    font-weight: 850;
     color: #ffffff;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
+  }
+
+  .title-accent-bar {
+    width: 4px;
+    height: 1.35rem;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #dfc28d 0%, #b89552 100%);
+    box-shadow: 0 0 10px rgba(223, 194, 141, 0.4);
   }
 
   .section-subtitle {
