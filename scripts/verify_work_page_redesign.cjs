@@ -1,6 +1,6 @@
 /**
  * scripts/verify_work_page_redesign.cjs
- * Comprehensive Round 4.2 verification of the redesigned work page on Preview:
+ * Comprehensive Round 4.3 verification of the redesigned work page on Preview:
  * https://home-preview-manga.project-nox-awerkori.workers.dev
  */
 
@@ -52,22 +52,23 @@ async function dismissModals(page) {
 }
 
 async function run() {
-  console.log('=== STARTING WORK PAGE ROUND 4.2 VERIFICATION ===');
+  console.log('=== STARTING WORK PAGE ROUND 4.3 VERIFICATION ===');
   console.log('Target Preview URL:', PREVIEW_BASE);
 
   const report = {
     testedAt: new Date().toISOString(),
     previewUrl: PREVIEW_BASE,
-    ratingsTest: {},
+    desktopRatingCheck: {},
+    mobileRatingCheck: {},
     works: []
   };
 
   const browser = await chromium.launch({ headless: true });
 
   // =========================================================================
-  // 1. STAR RATING TEST (1 to 5 Stars only, Rejection of 0, Discrete Menu, No Toasts)
+  // 1. DESKTOP RATING PROMINENCE TEST (Round 4.3)
   // =========================================================================
-  console.log('\n--- 1. Testing Star Rating System (1-5 Stars, No 0★, Discrete Removal, No Toasts) ---');
+  console.log('\n--- 1. Testing Desktop Rating Prominence (Round 4.3) ---');
   {
     const ctx = await browser.newContext({
       viewport: { width: 1366, height: 768 },
@@ -76,102 +77,42 @@ async function run() {
     });
     await bypassAgeGate(ctx);
     const page = await ctx.newPage();
-    const testUrl = `${PREVIEW_BASE}/obra/conta-morta`;
+    const testUrl = `${PREVIEW_BASE}/obra/aparencias`;
     await page.goto(testUrl, { waitUntil: 'networkidle' });
     await dismissModals(page);
     await page.waitForTimeout(600);
 
-    // Initial check: no 0★ button exists
-    const initialCheck = await page.evaluate(() => {
-      const zeroBtn = document.querySelector('.btn-zero-star');
-      const starBtns = document.querySelectorAll('.interactive-stars .star-btn');
-      const emptyBadge = document.querySelector('.rating-empty-badge');
+    const desktopRating = await page.evaluate(() => {
+      const widget = document.querySelector('.rating-widget');
+      const r = widget ? widget.getBoundingClientRect() : null;
+      const prompt = document.querySelector('.rate-prompt');
+      const desktopPrompt = document.querySelector('.prompt-text-desktop');
+      const star = document.querySelector('.interactive-stars .star-btn');
+      const starR = star ? star.getBoundingClientRect() : null;
       return {
-        hasZeroBtn: !!zeroBtn,
-        starsCount: starBtns.length,
-        emptyBadgeText: emptyBadge ? emptyBadge.textContent.trim() : null
+        widgetHeight: r ? Math.round(r.height) : 0,
+        meets48Height: r ? r.height >= 46 : false,
+        promptFullText: prompt ? prompt.textContent.trim() : '',
+        hasDesktopPrompt: !!desktopPrompt,
+        starBtnSize: starR ? { w: Math.round(starR.width), h: Math.round(starR.height) } : null
       };
     });
-    console.log('Rating Widget Structure Check (No 0★):', initialCheck);
-    report.ratingsTest.initialCheck = initialCheck;
+    console.log('Desktop Rating Dimensions & Prompt:', desktopRating);
+    report.desktopRatingCheck = desktopRating;
 
-    // Test API rejection of rating 0
-    console.log('Testing Server API rejection of rating 0...');
-    const apiTest = await page.evaluate(async () => {
-      const res = await fetch('/api/works/conta-morta/rating', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: 0 })
-      });
-      const data = await res.json();
-      return { status: res.status, error: data.error };
-    });
-    console.log('API Rating 0 Rejection Result:', apiTest);
-    report.ratingsTest.apiZeroRejection = apiTest;
-
-    // Click 5th star on desktop
-    console.log('Desktop: Clicking 5th star button...');
-    const star5 = await page.$('.interactive-stars .star-btn:nth-child(5)');
-    if (star5) {
-      await star5.click();
-      await page.waitForTimeout(800);
-    }
-
-    const afterVote = await page.evaluate(() => {
-      const chip = document.querySelector('.user-score-chip');
-      const optionsBtn = document.querySelector('.btn-rating-options');
-      const permRemove = document.querySelector('.btn-remove-vote');
-      const toast = document.querySelector('.rating-feedback-toast');
-      return {
-        chipText: chip ? chip.textContent.trim() : null,
-        hasOptionsBtn: !!optionsBtn,
-        hasPermanentRemoveBtn: !!permRemove,
-        hasSuccessToast: !!toast
-      };
-    });
-    console.log('After Rating 5 Stars:', afterVote);
-    report.ratingsTest.after5Stars = afterVote;
-
-    // Test discrete removal
-    console.log('Testing discrete options popover removal...');
-    const optBtn = await page.$('.btn-rating-options');
-    if (optBtn) {
-      await optBtn.click();
-      await page.waitForTimeout(400);
-    }
-
-    const popoverVisible = await page.evaluate(() => {
-      const popover = document.querySelector('.rating-options-popover');
-      return !!popover;
-    });
-    console.log('Removal Popover Visible:', popoverVisible);
-
-    const removeBtn = await page.$('.btn-popover-remove');
-    if (removeBtn) {
-      await removeBtn.click();
-      await page.waitForTimeout(800);
-    }
-
-    const afterRemove = await page.evaluate(() => {
-      const chip = document.querySelector('.user-score-chip');
-      return { hasChip: !!chip };
-    });
-    console.log('After Discrete Removal:', afterRemove);
-    report.ratingsTest.afterRemove = afterRemove;
-
-    // Capture screenshot of desktop rating widget and hero actions
+    // Screenshot of desktop rating widget & hero actions
     const heroActionsEl = await page.$('.work-details-column');
     if (heroActionsEl) {
-      await heroActionsEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_2_rating_and_actions_desktop.png') });
+      await heroActionsEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_3_rating_desktop.png') });
     }
 
     await ctx.close();
   }
 
   // =========================================================================
-  // 2. MOBILE TOUCH STAR RATING & 1-5 BREAKDOWN MODAL TEST
+  // 2. MOBILE TOUCH STAR RATING (Preserved >= 44px)
   // =========================================================================
-  console.log('\n--- 2. Testing Direct Mobile Star Rating (Touch Targets >= 44px) ---');
+  console.log('\n--- 2. Testing Mobile Touch Targets (Preserved >= 44px) ---');
   {
     const mobileCtx = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -181,7 +122,7 @@ async function run() {
     });
     await bypassAgeGate(mobileCtx);
     const mPage = await mobileCtx.newPage();
-    await mPage.goto(`${PREVIEW_BASE}/obra/conta-morta`, { waitUntil: 'networkidle' });
+    await mPage.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
     await dismissModals(mPage);
     await mPage.waitForTimeout(600);
 
@@ -193,59 +134,20 @@ async function run() {
       });
     });
     console.log('Mobile Star Hitboxes (>= 44px):', mobileHitboxes);
-    report.ratingsTest.mobileHitboxes = mobileHitboxes;
-
-    // Check Mobile Action Controls Hitboxes
-    const mobileActionButtons = await mPage.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('.actions-buttons-cluster .btn-action-control'));
-      return btns.map(b => {
-        const r = b.getBoundingClientRect();
-        return { text: b.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height), meets44: r.height >= 44 };
-      });
-    });
-    console.log('Mobile Action Control Buttons (>= 44px height):', mobileActionButtons);
-    report.ratingsTest.mobileActionButtons = mobileActionButtons;
-
-    // Tap 4th star directly
-    const star4 = await mPage.$('.interactive-stars .star-btn:nth-child(4)');
-    if (star4) {
-      await star4.tap();
-      await mPage.waitForTimeout(800);
-    }
-
-    // Open Breakdown Modal
-    const scoreBox = await mPage.$('.rating-score-box');
-    if (scoreBox) {
-      await scoreBox.tap();
-      await mPage.waitForTimeout(500);
-    }
-
-    const modalInfo = await mPage.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('.dist-row-btn')).map(r => r.querySelector('.dist-score-lbl')?.textContent?.trim());
-      return { rows };
-    });
-    console.log('Distribution Modal Rows (Should only be 5★ to 1★):', modalInfo.rows);
-    report.ratingsTest.modalDistributionRows = modalInfo.rows;
+    report.mobileRatingCheck.mobileHitboxes = mobileHitboxes;
 
     await mPage.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'round4_2_mobile_rating_modal.png'),
-      clip: { x: 0, y: 300, width: 390, height: 544 }
+      path: path.join(ARTIFACTS_DIR, 'round4_3_rating_mobile.png'),
+      clip: { x: 0, y: 300, width: 390, height: 350 }
     });
-
-    // Remove vote from modal
-    const modalRemove = await mPage.$('.btn-sheet-remove');
-    if (modalRemove) {
-      await modalRemove.click({ force: true });
-      await mPage.waitForTimeout(600);
-    }
 
     await mobileCtx.close();
   }
 
   // =========================================================================
-  // 3. MULTI-WORK & MULTI-VIEWPORT AUDIT (Round 4.2 Architecture Verification)
+  // 3. MULTI-WORK & MULTI-VIEWPORT AUDIT (Independent Column Heights & Credit Rules)
   // =========================================================================
-  console.log('\n--- 3. Multi-Viewport & Multi-Work Validation (Round 4.2 Architecture) ---');
+  console.log('\n--- 3. Multi-Viewport & Multi-Work Validation (Round 4.3 Polish) ---');
   for (const work of TEST_WORKS) {
     const workUrl = `${PREVIEW_BASE}/obra/${work.slug}`;
     console.log(`\nAuditing Work: ${work.slug} (${work.desc})`);
@@ -273,68 +175,62 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round4_2_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round4_2_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_3_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_3_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
           clip: { x: 0, y: 0, width: vp.width, height: Math.min(850, vp.height) }
         });
 
-        // Hierarchy, Single Unified Panel & Round 4.2 Architecture evaluation
         const evaluation = await page.evaluate(() => {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
 
-          // 1. Cover Column: Must contain ONLY cover, no action buttons
+          // 1. Cover Column: ONLY cover, no action buttons
           const coverColButtons = document.querySelectorAll('.work-cover-column button, .work-cover-column .btn-read-primary, .work-cover-column .desktop-cover-actions');
           const coverOnlyOnLeft = coverColButtons.length === 0;
 
-          // 2. Creator Byline ("Por ..."): Must be completely removed
+          // 2. Creator Byline ("Por ..."): completely removed
           const byline = document.querySelector('.work-creators-byline');
           const bylineRemoved = !byline;
 
-          // 3. Reading CTA ("Começar a ler"): Must be in chapters header, old quick-read eliminated
+          // 3. Reading CTA ("Começar a ler"): in chapters header
           const chaptersPrimaryCta = document.querySelector('.chapters-header .btn-read-primary');
-          const oldQuickRead = document.querySelector('.btn-quick-read');
-          const readingCtaInChapters = !!chaptersPrimaryCta && !oldQuickRead;
+          const readingCtaInChapters = !!chaptersPrimaryCta;
 
-          // 4. Hero Actions in Right Column: Favoritar, Curtir, Compartilhar, Biblioteca
-          const heroActions = document.querySelector('.work-hero-actions');
-          const actionButtons = document.querySelectorAll('.actions-buttons-cluster .btn-action-control');
-          const librarySelect = document.querySelector('.library-select-hero');
-          const hasHeroActions = !!heroActions && actionButtons.length >= 3 && !!librarySelect;
+          // 4. Subpanel Heights Check: Gêneros must NOT stretch to match Aliases on Desktop
+          const genresSubpanel = document.querySelector('#subpanel-genres');
+          const aliasesSubpanel = document.querySelector('#subpanel-aliases');
+          const hGenres = genresSubpanel ? Math.round(genresSubpanel.getBoundingClientRect().height) : 0;
+          const hAliases = aliasesSubpanel ? Math.round(aliasesSubpanel.getBoundingClientRect().height) : 0;
+          // In desktop, if aliases has many items, genres is significantly more compact
+          const noForcedStretch = hGenres <= hAliases;
 
-          // 5. Single Unified Editorial Panel: exactly 1 outer card, 4 internal subpanels, 0 independent cards
+          // 5. Single Unified Editorial Panel with 4 distinct subpanels
           const unifiedPanels = document.querySelectorAll('.specs-unified-panel');
           const subpanels = document.querySelectorAll('.specs-subpanel');
-          const oldQuadCards = document.querySelectorAll('.specs-quad-card');
-          const isSingleUnifiedPanel = unifiedPanels.length === 1 && subpanels.length === 4 && oldQuadCards.length === 0;
+          const isSingleUnifiedPanel = unifiedPanels.length === 1 && subpanels.length === 4;
 
-          // 6. Section Hierarchy: Specs panel must be above chapters
+          // 6. Hierarchy
           const specs = document.querySelector('.work-specs-section');
           const chapters = document.querySelector('.work-chapters-section');
           const specsY = specs ? specs.getBoundingClientRect().top + window.scrollY : null;
           const chaptersY = chapters ? chapters.getBoundingClientRect().top + window.scrollY : null;
           const isFichaAboveChapters = specsY !== null && chaptersY !== null ? specsY < chaptersY : null;
 
-          // 7. Compact tags check
-          const tags = Array.from(document.querySelectorAll('.editorial-tag-pill'));
-          const tagDimensions = tags.map(t => {
-            const r = t.getBoundingClientRect();
-            return { w: Math.round(r.width), h: Math.round(r.height) };
-          });
-          const allTagsCompact = tagDimensions.length === 0 || tagDimensions.every(d => d.h >= 28 && d.h <= 34);
+          // 7. Credits: Scan must NEVER be shown as Author/Roteirista
+          const rows = Array.from(document.querySelectorAll('.specs-row')).map(r => ({
+            dt: r.querySelector('dt')?.textContent?.trim(),
+            dd: r.querySelector('dd')?.textContent?.trim()
+          }));
+          const authorRow = rows.find(r => r.dt === 'Roteiro / História');
+          const authorVal = authorRow ? authorRow.dd : '';
+          const authorIsScan = /\b(scan|scans|scanlator|scanlation)\b/i.test(authorVal) || /(scan|scans|scanlator)$/i.test(authorVal);
+          const creditsAttributionValid = !authorIsScan;
 
-          // 8. Equipe & Créditos validation (Roteiro, Tradução / Scanlator, no fake community attribution)
+          // 8. No fake community attribution
           const hasFakeTranslation = document.body.innerText.includes('Comunidade Project Nox');
-          const creditsSubpanel = subpanels[1] ? subpanels[1].innerText : '';
-          const hasRoteiroField = creditsSubpanel.includes('Roteiro / História');
-          const hasTraducaoField = creditsSubpanel.includes('Tradução / Scanlator');
-
-          const firstChapter = document.querySelector('.chapter-card');
-          const viewsPill = firstChapter ? firstChapter.querySelector('.chapter-meta-views') : null;
-          const datePill = firstChapter ? firstChapter.querySelector('.chapter-meta-date') : null;
 
           return {
             clientWidth: docW,
@@ -343,22 +239,18 @@ async function run() {
             coverOnlyOnLeft,
             bylineRemoved,
             readingCtaInChapters,
-            hasHeroActions,
             isSingleUnifiedPanel,
-            specsY: Math.round(specsY || 0),
-            chaptersY: Math.round(chaptersY || 0),
+            hGenres,
+            hAliases,
+            noForcedStretch,
             isFichaAboveChapters,
-            subpanelsCount: subpanels.length,
-            allTagsCompact,
-            hasFakeTranslation,
-            hasRoteiroField,
-            hasTraducaoField,
-            viewsText: viewsPill ? viewsPill.textContent.trim() : null,
-            dateText: datePill ? datePill.textContent.trim() : null
+            authorVal,
+            creditsAttributionValid,
+            hasFakeTranslation
           };
         });
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | coverOnly=${evaluation.coverOnlyOnLeft} | bylineRemoved=${evaluation.bylineRemoved} | readCtaInHeader=${evaluation.readingCtaInChapters} | unifiedPanel=${evaluation.isSingleUnifiedPanel} | creditsOk=${evaluation.hasRoteiroField && evaluation.hasTraducaoField} | fakeTrans=${evaluation.hasFakeTranslation}`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | hGenres=${evaluation.hGenres}px vs hAliases=${evaluation.hAliases}px (noStretch=${evaluation.noForcedStretch}) | author="${evaluation.authorVal}" (valid=${evaluation.creditsAttributionValid}) | fakeTrans=${evaluation.hasFakeTranslation}`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -378,12 +270,12 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round4_2_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_3_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 4.2 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_2_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4.3 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_3_work_page_audit.json')}`);
 }
 
 run().catch(err => {

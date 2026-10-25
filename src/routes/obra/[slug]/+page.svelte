@@ -208,6 +208,25 @@
   let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 4));
   let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 10));
 
+  let legitimateAuthor = $derived.by(() => {
+    const author = (data.work.author || '').trim();
+    if (!author) return null;
+    // Check if author looks like a scan team (ends with scan/scans/scanlator or contains scan)
+    if (/\b(scan|scans|scanlator|scanlation)\b/i.test(author) || /(scan|scans|scanlator)$/i.test(author)) {
+      return null;
+    }
+    return author;
+  });
+
+  let legitimateArtist = $derived.by(() => {
+    const artist = (data.work.artist || '').trim();
+    if (!artist) return null;
+    if (/\b(scan|scans|scanlator|scanlation)\b/i.test(artist) || /(scan|scans|scanlator)$/i.test(artist)) {
+      return null;
+    }
+    return artist;
+  });
+
   let chapters = $derived(
     (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
       const term = search.trim().toLowerCase();
@@ -503,161 +522,167 @@
       <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
     </div>
 
-    <!-- Single Unified Panel with 4 Internal Subsections -->
+    <!-- Single Unified Panel with 2 Independent Columns on Desktop -->
     <div class="specs-unified-panel">
-      <!-- Subseção 1: Informações da Obra -->
-      <div class="specs-subpanel">
-        <div class="subpanel-header">
-          <BookOpen size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Informações da Obra</h3>
-        </div>
-        <dl class="specs-table">
-          <div class="specs-row">
-            <dt>Formato</dt>
-            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
+      <!-- Coluna 1 (Desktop Esquerda): Informações da Obra & Gêneros e Temas -->
+      <div class="specs-column">
+        <!-- Subseção 1: Informações da Obra -->
+        <div class="specs-subpanel" id="subpanel-info">
+          <div class="subpanel-header">
+            <BookOpen size={16} class="subpanel-icon" />
+            <h3 class="subpanel-title">Informações da Obra</h3>
           </div>
-          <div class="specs-row">
-            <dt>Status de Publicação</dt>
-            <dd>
-              <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
-              {statusLabels[data.work.status] || data.work.status}
-            </dd>
-          </div>
-          {#if data.work.year}
+          <dl class="specs-table">
             <div class="specs-row">
-              <dt>Ano de Lançamento</dt>
-              <dd>{data.work.year}</dd>
+              <dt>Formato</dt>
+              <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
             </div>
-          {/if}
-          <div class="specs-row">
-            <dt>Classificação Indicativa</dt>
-            <dd>
-              {#if isAdult}
-                <span class="age-pill adult">+18 Adulto</span>
-              {:else if data.work.age_rating}
-                <span class="age-pill">{data.work.age_rating} anos</span>
-              {:else}
-                <span class="age-pill free">Livre</span>
-              {/if}
-            </dd>
-          </div>
-          <div class="specs-row">
-            <dt>Capítulos Catalogados</dt>
-            <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <!-- Subseção 2: Equipe & Créditos -->
-      <div class="specs-subpanel">
-        <div class="subpanel-header">
-          <Users size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Equipe & Créditos</h3>
-        </div>
-        <dl class="specs-table">
-          <div class="specs-row">
-            <dt>Roteiro / História</dt>
-            <dd>
-              {#if data.work.author && data.work.author.trim()}
-                <strong>{data.work.author}</strong>
-              {:else}
-                <span class="unassigned-spec" title="Autor não identificado">?</span>
-              {/if}
-            </dd>
-          </div>
-          {#if data.work.artist && data.work.artist.trim() && data.work.artist !== data.work.author}
             <div class="specs-row">
-              <dt>Arte / Ilustração</dt>
-              <dd><strong>{data.work.artist}</strong></dd>
+              <dt>Status de Publicação</dt>
+              <dd>
+                <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
+                {statusLabels[data.work.status] || data.work.status}
+              </dd>
             </div>
-          {/if}
-          <div class="specs-row scans-row">
-            <dt>Tradução / Scanlator</dt>
-            <dd class="scans-chips-wrap">
-              {#if data.scans && data.scans.length > 0}
-                {#each data.scans as scan (scan.id || scan.slug)}
-                  <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
-                    <Users size={12} />
-                    <span>{scan.name}</span>
-                  </a>
-                {/each}
-              {:else}
-                <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
-              {/if}
-            </dd>
-          </div>
-          <div class="specs-row">
-            <dt>Idioma</dt>
-            <dd>Português (Brasil)</dd>
-          </div>
-        </dl>
-      </div>
+            {#if data.work.year}
+              <div class="specs-row">
+                <dt>Ano de Lançamento</dt>
+                <dd>{data.work.year}</dd>
+              </div>
+            {/if}
+            <div class="specs-row">
+              <dt>Classificação Indicativa</dt>
+              <dd>
+                {#if isAdult}
+                  <span class="age-pill adult">+18 Adulto</span>
+                {:else if data.work.age_rating}
+                  <span class="age-pill">{data.work.age_rating} anos</span>
+                {:else}
+                  <span class="age-pill free">Livre</span>
+                {/if}
+              </dd>
+            </div>
+            <div class="specs-row">
+              <dt>Capítulos Catalogados</dt>
+              <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
+            </div>
+          </dl>
+        </div>
 
-      <!-- Subseção 3: Gêneros & Temas -->
-      <div class="specs-subpanel">
-        <div class="subpanel-header">
-          <Tag size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Gêneros & Temas</h3>
-          {#if data.tags?.length}
-            <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
+        <!-- Subseção 3: Gêneros & Temas (Altura baseada no próprio conteúdo, sem espaço vazio) -->
+        <div class="specs-subpanel" id="subpanel-genres">
+          <div class="subpanel-header">
+            <Tag size={16} class="subpanel-icon" />
+            <h3 class="subpanel-title">Gêneros & Temas</h3>
+            {#if data.tags?.length}
+              <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
+            {/if}
+          </div>
+          {#if visibleTags.length}
+            <div class="editorial-tags-wrap">
+              {#each visibleTags as tag (tag.id)}
+                <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
+                  {tag.name}
+                </a>
+              {/each}
+            </div>
+            {#if data.tags.filter(Boolean).length > 10}
+              <button
+                type="button"
+                class="btn-toggle-subpanel"
+                onclick={() => (tagsExpanded = !tagsExpanded)}
+                aria-expanded={tagsExpanded}
+              >
+                <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
+                {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+              </button>
+            {/if}
+          {:else}
+            <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
           {/if}
         </div>
-        {#if visibleTags.length}
-          <div class="editorial-tags-wrap">
-            {#each visibleTags as tag (tag.id)}
-              <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
-                {tag.name}
-              </a>
-            {/each}
-          </div>
-          {#if data.tags.filter(Boolean).length > 10}
-            <button
-              type="button"
-              class="btn-toggle-subpanel"
-              onclick={() => (tagsExpanded = !tagsExpanded)}
-              aria-expanded={tagsExpanded}
-            >
-              <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
-              {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-            </button>
-          {/if}
-        {:else}
-          <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
-        {/if}
       </div>
 
-      <!-- Subseção 4: Títulos Alternativos -->
-      <div class="specs-subpanel">
-        <div class="subpanel-header">
-          <Languages size={16} class="subpanel-icon" />
-          <h3 class="subpanel-title">Títulos Alternativos</h3>
+      <!-- Coluna 2 (Desktop Direita): Equipe & Créditos & Títulos Alternativos -->
+      <div class="specs-column">
+        <!-- Subseção 2: Equipe & Créditos -->
+        <div class="specs-subpanel" id="subpanel-credits">
+          <div class="subpanel-header">
+            <Users size={16} class="subpanel-icon" />
+            <h3 class="subpanel-title">Equipe & Créditos</h3>
+          </div>
+          <dl class="specs-table">
+            <div class="specs-row">
+              <dt>Roteiro / História</dt>
+              <dd>
+                {#if legitimateAuthor}
+                  <strong>{legitimateAuthor}</strong>
+                {:else}
+                  <span class="unassigned-spec" title="Autor não identificado">?</span>
+                {/if}
+              </dd>
+            </div>
+            {#if legitimateArtist && legitimateArtist !== legitimateAuthor}
+              <div class="specs-row">
+                <dt>Arte / Ilustração</dt>
+                <dd><strong>{legitimateArtist}</strong></dd>
+              </div>
+            {/if}
+            <div class="specs-row scans-row">
+              <dt>Tradução / Scanlator</dt>
+              <dd class="scans-chips-wrap">
+                {#if data.scans && data.scans.length > 0}
+                  {#each data.scans as scan (scan.id || scan.slug)}
+                    <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
+                      <Users size={12} />
+                      <span>{scan.name}</span>
+                    </a>
+                  {/each}
+                {:else}
+                  <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+                {/if}
+              </dd>
+            </div>
+            <div class="specs-row">
+              <dt>Idioma</dt>
+              <dd>Português (Brasil)</dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- Subseção 4: Títulos Alternativos (Cresce de forma independente) -->
+        <div class="specs-subpanel" id="subpanel-aliases">
+          <div class="subpanel-header">
+            <Languages size={16} class="subpanel-icon" />
+            <h3 class="subpanel-title">Títulos Alternativos</h3>
+            {#if alternativeTitles.length}
+              <span class="subpanel-count-badge">{alternativeTitles.length}</span>
+            {/if}
+          </div>
           {#if alternativeTitles.length}
-            <span class="subpanel-count-badge">{alternativeTitles.length}</span>
+            <ul class="aliases-editorial-list">
+              {#each visibleAliases as alias, i (alias)}
+                <li class="alias-editorial-row">
+                  <span class="alias-index-num">#{i + 1}</span>
+                  <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+                </li>
+              {/each}
+            </ul>
+            {#if alternativeTitles.length > 4}
+              <button
+                type="button"
+                class="btn-toggle-subpanel"
+                onclick={() => (aliasesExpanded = !aliasesExpanded)}
+                aria-expanded={aliasesExpanded}
+              >
+                <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos alternativos`}</span>
+                {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+              </button>
+            {/if}
+          {:else}
+            <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
           {/if}
         </div>
-        {#if alternativeTitles.length}
-          <ul class="aliases-editorial-list">
-            {#each visibleAliases as alias, i (alias)}
-              <li class="alias-editorial-row">
-                <span class="alias-index-num">#{i + 1}</span>
-                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
-              </li>
-            {/each}
-          </ul>
-          {#if alternativeTitles.length > 4}
-            <button
-              type="button"
-              class="btn-toggle-subpanel"
-              onclick={() => (aliasesExpanded = !aliasesExpanded)}
-              aria-expanded={aliasesExpanded}
-            >
-              <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos alternativos`}</span>
-              {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
-            </button>
-          {/if}
-        {:else}
-          <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
-        {/if}
       </div>
     </div>
   </section>
@@ -1321,40 +1346,38 @@
 
   /* Single Unified Editorial Panel */
   .specs-unified-panel {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    background: rgba(13, 15, 26, 0.65);
-    border: 1px solid rgba(181, 154, 245, 0.15);
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    background: rgba(11, 13, 24, 0.65);
+    border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 16px;
+    padding: 20px;
     backdrop-filter: blur(10px);
-    overflow: hidden;
-    position: relative;
   }
 
+  .specs-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+  }
+
+  /* Subpanel: Defined internal identity with subtle contrast & discrete border */
   .specs-subpanel {
     display: flex;
     flex-direction: column;
-    padding: 24px 28px;
-    position: relative;
-    background: transparent;
+    background: rgba(18, 16, 32, 0.55);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 12px;
+    padding: 20px 22px;
+    transition: border-color 0.2s ease, background 0.2s ease;
   }
 
-  /* Internal subtle dividers on Desktop (2-column grid) */
-  .specs-subpanel:nth-child(1) {
-    border-right: 1px solid rgba(181, 154, 245, 0.1);
-    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
-  }
-
-  .specs-subpanel:nth-child(2) {
-    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
-  }
-
-  .specs-subpanel:nth-child(3) {
-    border-right: 1px solid rgba(181, 154, 245, 0.1);
-  }
-
-  .specs-subpanel:nth-child(4) {
-    border: none;
+  .specs-subpanel:hover {
+    border-color: rgba(181, 154, 245, 0.24);
+    background: rgba(22, 19, 40, 0.65);
   }
 
   .subpanel-header {
@@ -2002,22 +2025,33 @@
 
   @media (max-width: 991px) {
     .specs-unified-panel {
-      grid-template-columns: 1fr;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .specs-column {
+      display: contents;
     }
 
     .specs-subpanel {
-      padding: 20px 20px;
+      padding: 16px 16px;
     }
 
-    .specs-subpanel:nth-child(1),
-    .specs-subpanel:nth-child(2),
-    .specs-subpanel:nth-child(3) {
-      border-right: none;
-      border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+    #subpanel-info {
+      order: 1;
     }
 
-    .specs-subpanel:nth-child(4) {
-      border: none;
+    #subpanel-credits {
+      order: 2;
+    }
+
+    #subpanel-genres {
+      order: 3;
+    }
+
+    #subpanel-aliases {
+      order: 4;
     }
   }
 

@@ -209,7 +209,8 @@
       {#if userVoted}
         Sua nota:
       {:else}
-        Avaliar:
+        <span class="prompt-text-desktop">Avalie esta obra:</span>
+        <span class="prompt-text-mobile">Avaliar:</span>
       {/if}
     </span>
 
@@ -382,24 +383,31 @@
   .rating-widget {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
-    min-height: 44px;
-    padding: 6px 16px;
-    background: rgba(14, 12, 26, 0.6);
-    border: 1px solid rgba(181, 154, 245, 0.16);
+    gap: 16px;
+    min-height: 48px;
+    padding: 8px 18px;
+    background: rgba(15, 12, 28, 0.72);
+    border: 1px solid rgba(181, 154, 245, 0.22);
     border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), 0 0 10px rgba(139, 92, 246, 0.1);
     backdrop-filter: blur(10px);
-    margin: 4px 0 10px;
+    margin: 4px 0 12px;
     width: fit-content;
     max-width: 100%;
     flex-wrap: wrap;
     box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .rating-widget:hover {
+    border-color: rgba(181, 154, 245, 0.35);
+    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.35), 0 0 14px rgba(139, 92, 246, 0.18);
   }
 
   .rating-score-box {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     background: none;
     border: none;
     padding: 0;
@@ -418,10 +426,11 @@
     display: flex;
     align-items: center;
     color: #ffd154;
+    filter: drop-shadow(0 0 6px rgba(255, 209, 84, 0.45));
   }
 
   .rating-number {
-    font-size: 1.25rem;
+    font-size: 1.35rem;
     font-weight: 800;
     line-height: 1;
     color: #ffd154;
@@ -430,24 +439,24 @@
   }
 
   .rating-scale {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.45);
+    color: rgba(226, 232, 240, 0.5);
   }
 
   .rating-empty-badge {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.65);
-    background: rgba(255, 255, 255, 0.05);
-    padding: 3px 8px;
+    color: rgba(226, 232, 240, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 9px;
     border-radius: 999px;
   }
 
   .rating-count {
-    font-size: 0.82rem;
-    color: rgba(226, 232, 240, 0.6);
-    font-weight: 500;
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.65);
+    font-weight: 600;
   }
 
   .btn-breakdown-hint {
@@ -469,24 +478,33 @@
 
   .rating-divider {
     width: 1px;
-    height: 22px;
-    background: rgba(181, 154, 245, 0.18);
+    height: 24px;
+    background: rgba(181, 154, 245, 0.24);
   }
 
   .rating-interactive-row {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding-top: 0;
     border-top: none;
     flex-wrap: wrap;
   }
 
   .rate-prompt {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: rgba(226, 232, 240, 0.7);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.01em;
     white-space: nowrap;
+  }
+
+  .prompt-text-desktop {
+    display: inline;
+  }
+
+  .prompt-text-mobile {
+    display: none;
   }
 
   .interactive-stars {
@@ -496,15 +514,15 @@
   }
 
   .star-btn {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: none;
     border: none;
     padding: 0;
-    color: rgba(181, 154, 245, 0.28);
+    color: rgba(181, 154, 245, 0.38);
     cursor: pointer;
     border-radius: 6px;
     touch-action: manipulation;
@@ -512,17 +530,18 @@
   }
 
   .star-btn:hover {
-    transform: scale(1.15);
+    transform: scale(1.2);
+    color: #ffd154;
   }
 
   .star-btn.is-active {
     color: #ffd154;
-    filter: drop-shadow(0 0 4px rgba(255, 209, 84, 0.35));
+    filter: drop-shadow(0 0 6px rgba(255, 209, 84, 0.5));
   }
 
   .rating-tooltip-label {
-    font-size: 0.76rem;
-    font-weight: 600;
+    font-size: 0.8rem;
+    font-weight: 700;
     color: #ffd154;
     white-space: nowrap;
   }
@@ -611,9 +630,15 @@
     .rating-widget {
       width: 100%;
       justify-content: space-between;
-      padding: 8px 12px;
+      min-height: 44px;
+      padding: 6px 12px;
       gap: 8px;
       margin: 4px 0 8px;
+      box-shadow: none;
+    }
+
+    .rating-number {
+      font-size: 1.2rem;
     }
 
     .rating-divider {
@@ -624,7 +649,15 @@
       gap: 4px;
     }
 
+    .rate-prompt {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(226, 232, 240, 0.7);
+    }
+
     .star-btn {
+      min-width: 44px;
+      min-height: 44px;
       width: 44px;
       height: 44px;
     }
