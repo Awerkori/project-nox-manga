@@ -206,7 +206,7 @@
   });
 
   let previewAliases = $derived(alternativeTitles.slice(0, 3));
-  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 8));
+  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 9));
 
   let legitimateAuthor = $derived.by(() => {
     const author = (data.work.author || '').trim();
@@ -478,25 +478,30 @@
         </span>
       </div>
 
-      <!-- Synopsis Section (Integrated, editorial readability, without heavy box) -->
+      <!-- Synopsis Section (Highlighted Premium Editorial Card) -->
       {#if decodedSynopsis}
-        {@const synopsisIsLong = decodedSynopsis.length > 360}
-        <div class="work-synopsis-clean">
-          <h2 class="synopsis-heading">Sinopse</h2>
-          <p class="synopsis-paragraph" class:clamped={synopsisIsLong && !synopsisExpanded}>
-            {decodedSynopsis}
-          </p>
-          {#if synopsisIsLong}
-            <button
-              type="button"
-              class="btn-expand-synopsis"
-              onclick={() => (synopsisExpanded = !synopsisExpanded)}
-              aria-expanded={synopsisExpanded}
-            >
-              <span>{synopsisExpanded ? 'Ler menos' : 'Ler sinopse completa'}</span>
-              {#if synopsisExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
-            </button>
-          {/if}
+        {@const synopsisIsLong = decodedSynopsis.length > 320}
+        <div class="work-synopsis-card" aria-label="Sinopse da obra">
+          <div class="synopsis-card-header">
+            <BookOpen size={16} class="synopsis-header-icon" />
+            <h2 class="synopsis-heading">Sinopse</h2>
+          </div>
+          <div class="synopsis-body">
+            <p class="synopsis-paragraph" class:clamped={synopsisIsLong && !synopsisExpanded}>
+              {decodedSynopsis}
+            </p>
+            {#if synopsisIsLong}
+              <button
+                type="button"
+                class="btn-expand-synopsis"
+                onclick={() => (synopsisExpanded = !synopsisExpanded)}
+                aria-expanded={synopsisExpanded}
+              >
+                <span>{synopsisExpanded ? 'Recolher sinopse' : 'Ler sinopse completa'}</span>
+                {#if synopsisExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
+              </button>
+            {/if}
+          </div>
         </div>
       {/if}
     </div>
@@ -635,7 +640,7 @@
               </a>
             {/each}
           </div>
-          {#if data.tags.filter(Boolean).length > 8}
+          {#if data.tags.filter(Boolean).length > 9}
             <button
               type="button"
               class="btn-toggle-subpanel"
@@ -1272,27 +1277,58 @@
     font-size: 0.8rem;
   }
 
-  /* Clean Integrated Synopsis (No heavy box) */
-  .work-synopsis-clean {
-    margin-top: 14px;
-    text-align: left;
+  /* Highlighted Premium Synopsis Card */
+  .work-synopsis-card {
+    background: rgba(18, 16, 32, 0.65);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 14px;
+    padding: 18px 22px;
+    backdrop-filter: blur(10px);
+    margin-top: 6px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .work-synopsis-card:hover {
+    border-color: rgba(181, 154, 245, 0.26);
+    background: rgba(22, 19, 40, 0.72);
+  }
+
+  .synopsis-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  :global(.synopsis-header-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
   }
 
   .synopsis-heading {
-    font-size: 0.82rem;
+    font-size: 0.86rem;
     font-weight: 700;
-    color: #a78bfa;
+    color: #c4b5fd;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin: 0 0 6px;
+    margin: 0;
+  }
+
+  .synopsis-body {
+    display: flex;
+    flex-direction: column;
   }
 
   .synopsis-paragraph {
-    font-size: 0.92rem;
-    line-height: 1.65;
-    color: rgba(226, 232, 240, 0.82);
+    font-size: 0.98rem;
+    line-height: 1.62;
+    color: #e2e8f0;
     margin: 0;
     white-space: pre-line;
+    font-weight: 400;
+    letter-spacing: 0.01em;
   }
 
   .synopsis-paragraph.clamped {
@@ -1305,20 +1341,25 @@
   .btn-expand-synopsis {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-top: 8px;
-    font-size: 0.82rem;
+    gap: 6px;
+    margin-top: 12px;
+    align-self: flex-start;
+    font-size: 0.84rem;
     font-weight: 700;
-    color: #a78bfa;
-    background: none;
-    border: none;
-    padding: 0;
+    color: #c4b5fd;
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.22);
+    border-radius: 8px;
+    padding: 6px 14px;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: all 0.15s ease;
   }
 
   .btn-expand-synopsis:hover {
-    color: #c4b5fd;
+    color: #ffffff;
+    background: rgba(167, 139, 250, 0.22);
+    border-color: rgba(181, 154, 245, 0.45);
+    transform: translateY(-1px);
   }
 
   /* Notice Bar */
@@ -1584,23 +1625,24 @@
     font-weight: 400;
   }
 
-  /* Genres Tags Wrap */
+  /* Genres Tags Wrap (Balanced Distribution Across Subpanel Height) */
   .editorial-tags-wrap {
+    flex: 1;
     display: flex;
     flex-wrap: wrap;
-    align-content: flex-start;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 2px 0 8px;
+    align-content: space-around;
+    align-items: center;
+    gap: 12px 10px;
+    margin: 4px 0 0;
   }
 
   .editorial-tag-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 30px;
-    padding: 0 12px;
-    font-size: 0.82rem;
+    height: 32px;
+    padding: 0 14px;
+    font-size: 0.84rem;
     font-weight: 600;
     line-height: 1;
     color: #e2e8f0;
@@ -2167,6 +2209,22 @@
   /* ========================================================================= */
 
   @media (max-width: 991px) {
+    .work-synopsis-card {
+      padding: 15px 16px;
+      border-radius: 12px;
+      margin-top: 4px;
+    }
+
+    .synopsis-paragraph {
+      font-size: 0.94rem;
+      line-height: 1.6;
+    }
+
+    .editorial-tags-wrap {
+      align-content: flex-start;
+      gap: 8px 8px;
+    }
+
     .specs-unified-panel {
       display: flex;
       flex-direction: column;

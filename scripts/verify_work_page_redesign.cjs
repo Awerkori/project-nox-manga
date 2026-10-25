@@ -1,6 +1,6 @@
 /**
  * scripts/verify_work_page_redesign.cjs
- * Comprehensive Round 4.4 verification of the redesigned work page on Preview:
+ * Comprehensive Round 4.5 verification of the redesigned work page on Preview:
  * https://home-preview-manga.project-nox-awerkori.workers.dev
  */
 
@@ -12,7 +12,7 @@ const PREVIEW_BASE = 'https://home-preview-manga.project-nox-awerkori.workers.de
 const ARTIFACTS_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
 
 const TEST_WORKS = [
-  { slug: 'aparencias', desc: '546-chapters-16-aliases-many-tags' },
+  { slug: 'aparencias', desc: '546-chapters-many-tags-long-synopsis' },
   { slug: 'shinkon-dakedo-captain-no-kanojo-to-wa-mada-yarenai', desc: 'manga-with-aliases' },
   { slug: 'the-mysterious-world-s-greatest-martial-artist-little-prince', desc: 'scan-as-author-case' },
   { slug: 'o-restaurante-do-arquimago', desc: 'standard-manhwa' }
@@ -60,61 +60,102 @@ async function dismissModals(page) {
 }
 
 async function run() {
-  console.log('=== STARTING WORK PAGE ROUND 4.4 VERIFICATION ===');
+  console.log('=== STARTING WORK PAGE ROUND 4.5 VERIFICATION ===');
   console.log('Target Preview URL:', PREVIEW_BASE);
 
   const report = {
     testedAt: new Date().toISOString(),
     previewUrl: PREVIEW_BASE,
-    desktopRatingCheck: {},
-    mobileRatingCheck: {},
-    drawerExpansionTest: {},
+    synopsisCheck: {},
+    genresDistributionCheck: {},
+    gridSymmetryCheck: {},
     works: []
   };
 
   const browser = await chromium.launch({ headless: true });
 
   // =========================================================================
-  // 1. DESKTOP RATING PROMINENCE TEST (Round 4.3 Preservation)
+  // 1. SYNOPSIS CARD PROMINENCE & TYPOGRAPHY TEST (Round 4.5)
   // =========================================================================
-  console.log('\n--- 1. Testing Desktop Rating Prominence (Preserved from 4.3) ---');
+  console.log('\n--- 1. Testing Synopsis Card Visual Prominence & Typography (Round 4.5) ---');
   {
     const ctx = await browser.newContext({
-      viewport: { width: 1366, height: 768 },
+      viewport: { width: 1920, height: 1080 },
       isMobile: false,
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
     });
     await bypassAgeGate(ctx);
     const page = await ctx.newPage();
-    const testUrl = `${PREVIEW_BASE}/obra/aparencias`;
-    await page.goto(testUrl, { waitUntil: 'networkidle' });
+    await page.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
     await dismissModals(page);
     await page.waitForTimeout(600);
 
-    const desktopRating = await page.evaluate(() => {
-      const widget = document.querySelector('.rating-widget');
-      const r = widget ? widget.getBoundingClientRect() : null;
-      const prompt = document.querySelector('.rate-prompt');
-      const desktopPrompt = document.querySelector('.prompt-text-desktop');
-      const star = document.querySelector('.interactive-stars .star-btn');
-      const starR = star ? star.getBoundingClientRect() : null;
+    const synopsisEval = await page.evaluate(() => {
+      const card = document.querySelector('.work-synopsis-card');
+      const p = document.querySelector('.synopsis-paragraph');
+      const heading = document.querySelector('.synopsis-heading');
+      const icon = document.querySelector('.synopsis-header-icon');
+      const btn = document.querySelector('.btn-expand-synopsis');
+
+      const cardStyle = card ? window.getComputedStyle(card) : null;
+      const pStyle = p ? window.getComputedStyle(p) : null;
+      const rCard = card ? card.getBoundingClientRect() : null;
+
       return {
-        widgetHeight: r ? Math.round(r.height) : 0,
-        meets48Height: r ? r.height >= 46 : false,
-        promptFullText: prompt ? prompt.textContent.trim() : '',
-        hasDesktopPrompt: !!desktopPrompt,
-        starBtnSize: starR ? { w: Math.round(starR.width), h: Math.round(starR.height) } : null
+        hasCard: !!card,
+        cardHeight: rCard ? Math.round(rCard.height) : 0,
+        backgroundColor: cardStyle ? cardStyle.backgroundColor : null,
+        borderColor: cardStyle ? cardStyle.borderColor : null,
+        borderRadius: cardStyle ? cardStyle.borderRadius : null,
+        fontSizePx: pStyle ? parseFloat(pStyle.fontSize) : 0,
+        lineHeight: pStyle ? pStyle.lineHeight : null,
+        color: pStyle ? pStyle.color : null,
+        hasHeading: !!heading,
+        hasIcon: !!icon,
+        hasExpandBtn: !!btn,
+        isClampedInitial: p ? p.classList.contains('clamped') : false
       };
     });
-    console.log('Desktop Rating Dimensions & Prompt:', desktopRating);
-    report.desktopRatingCheck = desktopRating;
+
+    console.log('Desktop Synopsis Card Metrics:', synopsisEval);
+    report.synopsisCheck.desktop = synopsisEval;
+
+    // Screenshot of the synopsis card
+    const synopsisCardEl = await page.$('.work-synopsis-card');
+    if (synopsisCardEl) {
+      await synopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_synopsis_desktop.png') });
+    }
+
+    // Test expand synopsis
+    if (synopsisEval.hasExpandBtn) {
+      console.log('Testing Synopsis Expand/Collapse...');
+      const expandBtn = await page.$('.btn-expand-synopsis');
+      await expandBtn.click();
+      await page.waitForTimeout(300);
+
+      const afterExpand = await page.evaluate(() => {
+        const p = document.querySelector('.synopsis-paragraph');
+        const btn = document.querySelector('.btn-expand-synopsis');
+        return {
+          isClamped: p ? p.classList.contains('clamped') : true,
+          btnText: btn ? btn.textContent.trim() : null
+        };
+      });
+      console.log('Synopsis After Expand:', afterExpand);
+      report.synopsisCheck.afterExpand = afterExpand;
+
+      // Click to collapse again
+      await expandBtn.click();
+      await page.waitForTimeout(200);
+    }
+
     await ctx.close();
   }
 
   // =========================================================================
-  // 2. MOBILE TOUCH STAR RATING (Preserved >= 44px)
+  // 2. MOBILE SYNOPSIS PROMINENCE TEST
   // =========================================================================
-  console.log('\n--- 2. Testing Mobile Touch Targets (Preserved >= 44px) ---');
+  console.log('\n--- 2. Testing Mobile Synopsis Presentation (390x844) ---');
   {
     const mobileCtx = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -128,22 +169,22 @@ async function run() {
     await dismissModals(mPage);
     await mPage.waitForTimeout(600);
 
-    const mobileHitboxes = await mPage.evaluate(() => {
-      const stars = Array.from(document.querySelectorAll('.interactive-stars .star-btn'));
-      return stars.map(s => {
-        const r = s.getBoundingClientRect();
-        return { w: Math.round(r.width), h: Math.round(r.height), meets44: r.width >= 44 && r.height >= 44 };
-      });
-    });
-    console.log('Mobile Star Hitboxes (>= 44px):', mobileHitboxes);
-    report.mobileRatingCheck.mobileHitboxes = mobileHitboxes;
+    const mSynopsisEval = await pageEvaluateSynopsis(mPage);
+    console.log('Mobile Synopsis Metrics:', mSynopsisEval);
+    report.synopsisCheck.mobile = mSynopsisEval;
+
+    const mSynopsisCardEl = await mPage.$('.work-synopsis-card');
+    if (mSynopsisCardEl) {
+      await mSynopsisCardEl.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_synopsis_mobile.png') });
+    }
+
     await mobileCtx.close();
   }
 
   // =========================================================================
-  // 3. DESKTOP 2x2 GRID SYMMETRY & DRAWER INTERACTION TEST (Round 4.4)
+  // 3. GENRES & TEMAS TAGS DISTRIBUTION TEST (Round 4.5)
   // =========================================================================
-  console.log('\n--- 3. Testing Desktop 2x2 Grid Symmetry & Full-Width Drawer (Round 4.4) ---');
+  console.log('\n--- 3. Testing Genres & Temas Tags Distribution (Round 4.5) ---');
   {
     const ctx = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
@@ -156,124 +197,46 @@ async function run() {
     await dismissModals(page);
     await page.waitForTimeout(600);
 
-    // Initial symmetry check on Aparências (16 aliases)
-    const initialGridCheck = await page.evaluate(() => {
-      const panel = document.querySelector('.specs-unified-panel');
-      const info = document.querySelector('#subpanel-info');
-      const credits = document.querySelector('#subpanel-credits');
-      const genres = document.querySelector('#subpanel-genres');
-      const aliases = document.querySelector('#subpanel-aliases');
+    const genresDistribution = await page.evaluate(() => {
+      const genresCard = document.querySelector('#subpanel-genres');
+      const tagsWrap = document.querySelector('.editorial-tags-wrap');
+      const pills = Array.from(document.querySelectorAll('.editorial-tag-pill'));
+      const aliasesCard = document.querySelector('#subpanel-aliases');
 
-      const rInfo = info.getBoundingClientRect();
-      const rCredits = credits.getBoundingClientRect();
-      const rGenres = genres.getBoundingClientRect();
-      const rAliases = aliases.getBoundingClientRect();
+      const rCard = genresCard ? genresCard.getBoundingClientRect() : null;
+      const rAliases = aliasesCard ? aliasesCard.getBoundingClientRect() : null;
+      const rWrap = tagsWrap ? tagsWrap.getBoundingClientRect() : null;
 
-      const aliasItemsInCard = document.querySelectorAll('#subpanel-aliases .alias-editorial-row');
-      const toggleBtn = document.querySelector('#subpanel-aliases .btn-toggle-subpanel');
+      // Calculate row groups by comparing pill top coordinates
+      const rowTops = [...new Set(pills.map(p => Math.round(p.getBoundingClientRect().top)))];
+      const rowsCount = rowTops.length;
+
+      // Distance from bottom of last pill to bottom of card
+      let bottomSpace = 0;
+      if (pills.length > 0 && rCard) {
+        const lastPill = pills[pills.length - 1];
+        bottomSpace = Math.round(rCard.bottom - lastPill.getBoundingClientRect().bottom);
+      }
 
       return {
-        row1: {
-          infoTop: Math.round(rInfo.top),
-          creditsTop: Math.round(rCredits.top),
-          infoBottom: Math.round(rInfo.bottom),
-          creditsBottom: Math.round(rCredits.bottom),
-          infoHeight: Math.round(rInfo.height),
-          creditsHeight: Math.round(rCredits.height),
-          alignedTop: Math.abs(rInfo.top - rCredits.top) <= 1,
-          alignedBottom: Math.abs(rInfo.bottom - rCredits.bottom) <= 1,
-          sameHeight: Math.abs(rInfo.height - rCredits.height) <= 1
-        },
-        row2: {
-          genresTop: Math.round(rGenres.top),
-          aliasesTop: Math.round(rAliases.top),
-          genresBottom: Math.round(rGenres.bottom),
-          aliasesBottom: Math.round(rAliases.bottom),
-          genresHeight: Math.round(rGenres.height),
-          aliasesHeight: Math.round(rAliases.height),
-          alignedTop: Math.abs(rGenres.top - rAliases.top) <= 1,
-          alignedBottom: Math.abs(rGenres.bottom - rAliases.bottom) <= 1,
-          sameHeight: Math.abs(rGenres.height - rAliases.height) <= 1
-        },
-        columns: {
-          infoLeft: Math.round(rInfo.left),
-          genresLeft: Math.round(rGenres.left),
-          creditsRight: Math.round(rCredits.right),
-          aliasesRight: Math.round(rAliases.right),
-          infoWidth: Math.round(rInfo.width),
-          creditsWidth: Math.round(rCredits.width),
-          col1AlignedLeft: Math.abs(rInfo.left - rGenres.left) <= 1,
-          col2AlignedRight: Math.abs(rCredits.right - rAliases.right) <= 1,
-          equalWidth: Math.abs(rInfo.width - rCredits.width) <= 2
-        },
-        aliasesPreviewCount: aliasItemsInCard.length,
-        hasToggleBtn: !!toggleBtn,
-        toggleBtnText: toggleBtn ? toggleBtn.textContent.trim() : null
+        cardHeight: rCard ? Math.round(rCard.height) : 0,
+        aliasesCardHeight: rAliases ? Math.round(rAliases.height) : 0,
+        heightDifferenceWithAliases: rCard && rAliases ? Math.abs(Math.round(rCard.height - rAliases.height)) : 0,
+        tagsCount: pills.length,
+        rowsCount,
+        bottomPaddingAndSpace: bottomSpace,
+        wrapHeight: rWrap ? Math.round(rWrap.height) : 0
       };
     });
 
-    console.log('Initial 2x2 Grid Symmetry Check:', JSON.stringify(initialGridCheck, null, 2));
-    report.drawerExpansionTest.initialGrid = initialGridCheck;
+    console.log('Genres Distribution in Card 3:', genresDistribution);
+    report.genresDistributionCheck = genresDistribution;
 
-    // Screenshot initial state of ficha técnica
+    // Screenshot of the 2x2 Ficha Técnica showing the balanced tags
     const fichaSection = await page.$('.work-specs-section');
     if (fichaSection) {
-      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_4_ficha_desktop_initial.png') });
+      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_5_ficha_desktop.png') });
     }
-
-    // Now click the toggle button to open full-width drawer
-    console.log('Clicking "Ver todos os 16 títulos" to open full-width drawer...');
-    const toggleBtnEl = await page.$('#subpanel-aliases .btn-toggle-subpanel');
-    if (toggleBtnEl) {
-      await toggleBtnEl.click();
-      await page.waitForTimeout(400);
-    }
-
-    const afterDrawerOpen = await page.evaluate(() => {
-      const drawer = document.querySelector('#aliases-expanded-drawer');
-      const rDrawer = drawer ? drawer.getBoundingClientRect() : null;
-      const drawerItems = document.querySelectorAll('.drawer-alias-item');
-      const panel = document.querySelector('.specs-unified-panel');
-      const rPanel = panel ? panel.getBoundingClientRect() : null;
-
-      const genres = document.querySelector('#subpanel-genres');
-      const aliases = document.querySelector('#subpanel-aliases');
-      const rGenres = genres.getBoundingClientRect();
-      const rAliases = aliases.getBoundingClientRect();
-
-      return {
-        drawerExists: !!drawer,
-        drawerItemsCount: drawerItems.length,
-        drawerWidth: rDrawer ? Math.round(rDrawer.width) : 0,
-        panelInnerWidth: rPanel ? Math.round(rPanel.width - 44) : 0, // padding 22px each side
-        drawerSpansFullWidth: rDrawer && rPanel ? Math.abs(rDrawer.width - (rPanel.width - 44)) <= 4 : false,
-        row2StillAligned: Math.abs(rGenres.height - rAliases.height) <= 1,
-        genresHeight: Math.round(rGenres.height),
-        aliasesHeight: Math.round(rAliases.height)
-      };
-    });
-
-    console.log('After Drawer Open State:', afterDrawerOpen);
-    report.drawerExpansionTest.afterOpen = afterDrawerOpen;
-
-    if (fichaSection) {
-      await fichaSection.screenshot({ path: path.join(ARTIFACTS_DIR, 'round4_4_ficha_desktop_drawer_expanded.png') });
-    }
-
-    // Click Recolher to close
-    console.log('Clicking "Recolher" to close drawer...');
-    const closeBtn = await page.$('.btn-drawer-close');
-    if (closeBtn) {
-      await closeBtn.click();
-      await page.waitForTimeout(300);
-    }
-
-    const afterDrawerClose = await page.evaluate(() => {
-      const drawer = document.querySelector('#aliases-expanded-drawer');
-      return { drawerClosed: !drawer };
-    });
-    console.log('After Drawer Close State:', afterDrawerClose);
-    report.drawerExpansionTest.afterClose = afterDrawerClose;
 
     await ctx.close();
   }
@@ -281,7 +244,7 @@ async function run() {
   // =========================================================================
   // 4. MULTI-WORK & MULTI-VIEWPORT AUDIT (28 audits total)
   // =========================================================================
-  console.log('\n--- 4. Multi-Viewport & Multi-Work Validation (Round 4.4 Symmetry & Proportions) ---');
+  console.log('\n--- 4. Multi-Viewport & Multi-Work Validation (Round 4.5) ---');
   for (const work of TEST_WORKS) {
     const workUrl = `${PREVIEW_BASE}/obra/${work.slug}`;
     console.log(`\nAuditing Work: ${work.slug} (${work.desc})`);
@@ -309,8 +272,8 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round4_4_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round4_4_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_5_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_5_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
@@ -321,19 +284,13 @@ async function run() {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
 
-          // 1. Cover Column: ONLY cover, no action buttons
-          const coverColButtons = document.querySelectorAll('.work-cover-column button, .work-cover-column .btn-read-primary, .work-cover-column .desktop-cover-actions');
-          const coverOnlyOnLeft = coverColButtons.length === 0;
+          // Synopsis
+          const synopsisCard = document.querySelector('.work-synopsis-card');
+          const p = document.querySelector('.synopsis-paragraph');
+          const pStyle = p ? window.getComputedStyle(p) : null;
+          const synopsisFontSize = pStyle ? parseFloat(pStyle.fontSize) : 0;
 
-          // 2. Creator Byline ("Por ..."): completely removed
-          const byline = document.querySelector('.work-creators-byline');
-          const bylineRemoved = !byline;
-
-          // 3. Reading CTA ("Começar a ler"): in chapters header
-          const chaptersPrimaryCta = document.querySelector('.chapters-header .btn-read-primary');
-          const readingCtaInChapters = !!chaptersPrimaryCta;
-
-          // 4. Subpanels Alignment & Symmetry Check
+          // Ficha 2x2
           const info = document.querySelector('#subpanel-info');
           const credits = document.querySelector('#subpanel-credits');
           const genres = document.querySelector('#subpanel-genres');
@@ -356,14 +313,7 @@ async function run() {
             hRow2 = Math.round(rGenres.height);
           }
 
-          // 5. Hierarchy
-          const specs = document.querySelector('.work-specs-section');
-          const chapters = document.querySelector('.work-chapters-section');
-          const specsY = specs ? specs.getBoundingClientRect().top + window.scrollY : null;
-          const chaptersY = chapters ? chapters.getBoundingClientRect().top + window.scrollY : null;
-          const isFichaAboveChapters = specsY !== null && chaptersY !== null ? specsY < chaptersY : null;
-
-          // 6. Credits: Scan must NEVER be shown as Author/Roteirista
+          // Credits check
           const rows = Array.from(document.querySelectorAll('.specs-row')).map(r => ({
             dt: r.querySelector('dt')?.textContent?.trim(),
             dd: r.querySelector('dd')?.textContent?.trim()
@@ -373,28 +323,22 @@ async function run() {
           const authorIsScan = /\b(scan|scans|scanlator|scanlation)\b/i.test(authorVal) || /(scan|scans|scanlator)$/i.test(authorVal);
           const creditsAttributionValid = !authorIsScan;
 
-          // 7. No fake community attribution
-          const hasFakeTranslation = document.body.innerText.includes('Comunidade Project Nox');
-
           return {
             clientWidth: docW,
             scrollWidth: scrollW,
             noOverflow: scrollW <= docW,
-            coverOnlyOnLeft,
-            bylineRemoved,
-            readingCtaInChapters,
+            hasSynopsisCard: !!synopsisCard,
+            synopsisFontSize,
             row1Aligned,
             row2Aligned,
             hRow1,
             hRow2,
-            isFichaAboveChapters,
             authorVal,
-            creditsAttributionValid,
-            hasFakeTranslation
+            creditsAttributionValid
           };
         }, !vp.isMobile && vp.width >= 992);
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | row1Aligned=${evaluation.row1Aligned} (h=${evaluation.hRow1}px) | row2Aligned=${evaluation.row2Aligned} (h=${evaluation.hRow2}px) | author="${evaluation.authorVal}" (valid=${evaluation.creditsAttributionValid})`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | synopsisCard=${evaluation.hasSynopsisCard} (font=${evaluation.synopsisFontSize}px) | row1Aligned=${evaluation.row1Aligned} (h=${evaluation.hRow1}px) | row2Aligned=${evaluation.row2Aligned} (h=${evaluation.hRow2}px) | author="${evaluation.authorVal}"`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -414,12 +358,29 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round4_4_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_5_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 4.4 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_4_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4.5 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_5_work_page_audit.json')}`);
+}
+
+async function pageEvaluateSynopsis(page) {
+  return await page.evaluate(() => {
+    const card = document.querySelector('.work-synopsis-card');
+    const p = document.querySelector('.synopsis-paragraph');
+    const pStyle = p ? window.getComputedStyle(p) : null;
+    const rCard = card ? card.getBoundingClientRect() : null;
+
+    return {
+      hasCard: !!card,
+      cardHeight: rCard ? Math.round(rCard.height) : 0,
+      fontSizePx: pStyle ? parseFloat(pStyle.fontSize) : 0,
+      lineHeight: pStyle ? pStyle.lineHeight : null,
+      color: pStyle ? pStyle.color : null
+    };
+  });
 }
 
 run().catch(err => {
