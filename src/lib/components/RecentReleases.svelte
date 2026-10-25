@@ -1,6 +1,14 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { ArrowRight, BookOpen, Clock, AlertTriangle, RefreshCw } from '@lucide/svelte';
+  import {
+    ArrowRight,
+    BookOpen,
+    Clock,
+    AlertTriangle,
+    RefreshCw,
+    Loader2,
+    ChevronDown
+  } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
@@ -39,16 +47,23 @@
   let { releases = [], loadError = false, isStale = false }: Props = $props();
 
   let currentReleases = $state<ReleaseItem[]>(releases);
-  let expandedCards = $state<Record<string, boolean>>({});
-
-  function toggleCardExpand(workId: string) {
-    expandedCards[workId] = !expandedCards[workId];
-  }
+  let loadingMore = $state(false);
+  let hasMore = $state(true);
+  let nextCursorTime = $state<string | null>(null);
+  let nextCursorId = $state<string | null>(null);
+  let activeDropdownWorkId = $state<string | null>(null);
 
   $effect(() => {
     const current = untrack(() => currentReleases);
     if (releases && releases.length > 0 && releases[0] !== current[0]) {
       currentReleases = [...releases];
+      // Seed initial cursor from the last item
+      const last = releases[releases.length - 1];
+      if (last) {
+        nextCursorTime = last.latestPublishedAt;
+        const lastCh = last.chapters[last.chapters.length - 1];
+        nextCursorId = lastCh?.id || null;
+      }
     }
   });
 
@@ -69,18 +84,69 @@
       }
     };
   }
+
+  function toggleDropdown(workId: string, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    activeDropdownWorkId = activeDropdownWorkId === workId ? null : workId;
+  }
+
+  function closeDropdown() {
+    activeDropdownWorkId = null;
+  }
+
+  async function loadMoreReleases() {
+    if (loadingMore || !hasMore) return;
+    loadingMore = true;
+
+    try {
+      const url = new URL('/api/releases', window.location.origin);
+      url.searchParams.set('limit', '9');
+      if (nextCursorTime) url.searchParams.set('cursorTime', nextCursorTime);
+      if (nextCursorId) url.searchParams.set('cursorId', nextCursorId);
+
+      const res = await fetch(url.toString(), {
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!res.ok) throw new Error('Falha ao carregar lançamentos');
+      const data = await res.json();
+      const newItems: ReleaseItem[] = data.releases || [];
+
+      if (newItems.length === 0) {
+        hasMore = false;
+      } else {
+        const existingIds = new Set(currentReleases.map((r) => r.workId));
+        const unique = newItems.filter((r) => !existingIds.has(r.workId));
+        if (unique.length === 0 || !data.hasMore) {
+          hasMore = false;
+        }
+        currentReleases = [...currentReleases, ...unique];
+        nextCursorTime = data.nextCursorTime || null;
+        nextCursorId = data.nextCursorId || null;
+      }
+    } catch (err) {
+      console.error('Erro ao carregar mais lançamentos:', err);
+    } finally {
+      loadingMore = false;
+    }
+  }
 </script>
+
+<svelte:window onclick={closeDropdown} />
 
 <section id="lancamentos" class="releases-section">
   <div class="releases-header">
     <div class="title-cluster">
-      <h2 class="releases-title">Lançamentos</h2>
-      <span class="releases-subtitle">Capítulos recém-publicados</span>
+      <h2 class="releases-title">
+        <span class="title-accent-bar"></span>
+        <span>Lançamentos</span>
+      </h2>
+      <span class="releases-subtitle">Capítulos recém-publicados pelos scans e tradutores</span>
     </div>
 
     <div class="header-right-tools">
       <a href="/lancamentos" class="view-all-link">
-        <span>Ver mais lançamentos</span>
+        <span>Ver todos os lançamentos</span>
         <ArrowRight size={14} />
       </a>
     </div>
@@ -93,17 +159,19 @@
     </div>
   {/if}
 
-  {#if releases.length > 0}
+  {#if currentReleases.length > 0}
     <div class="releases-grid">
       {#each currentReleases as rel, i (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => compareChapterIdentity(b, a))}
-        {@const isExpanded = Boolean(expandedCards[rel.workId])}
-        {@const visibleChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
-        {@const remainingCount = sortedChapters.length - 3}
+        {@const visibleChapters = sortedChapters.slice(0, 3)}
+        {@const extraChapters = sortedChapters.slice(3)}
         {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
         {@const isEager = i < 3}
+        {@const titleDecoded = decodeHtmlEntities(rel.workTitle)}
+        {@const isDropdownOpen = activeDropdownWorkId === rel.workId}
+
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
           <a href="/obra/{rel.workSlug}" class="cover-thumb-link" tabindex="-1">
@@ -112,11 +180,11 @@
                 use:fallbackCover
                 use:deferImage={{ src: isEager ? null : thumbCover }}
                 src={isEager ? thumbCover : undefined}
-                alt={rel.workTitle}
+                alt={titleDecoded}
                 class="thumb-img"
                 class:blurred-cover={effectiveBlur}
-                width="64"
-                height="90"
+                width="68"
+                height="94"
                 loading={isEager ? "eager" : "lazy"}
                 fetchpriority={isEager ? "high" : "auto"}
                 decoding="async"
@@ -129,16 +197,17 @@
 
           <!-- Details & Interactive Chapter Pills -->
           <div class="release-main">
+            <!-- Top Row: Title, Kind Tag & Timestamp -->
             <div class="release-top-row">
               <div class="work-title-group">
-                <a href="/obra/{rel.workSlug}" class="work-link" title={decodeHtmlEntities(rel.workTitle)}>
-                  {decodeHtmlEntities(rel.workTitle)}
+                <a href="/obra/{rel.workSlug}" class="work-link" title={titleDecoded}>
+                  {titleDecoded}
                 </a>
                 <span class="kind-tag">{rel.kind}</span>
               </div>
 
               <!-- Relative Update Time -->
-              <div class="timestamp-box">
+              <div class="timestamp-box" title={new Date(rel.latestPublishedAt).toLocaleString('pt-BR')}>
                 <Clock size={11} class="time-clock" />
                 <time datetime={rel.latestPublishedAt}>
                   {relativeTime(rel.latestPublishedAt)}
@@ -147,37 +216,97 @@
             </div>
 
             <!-- Clickable Chapter Pills List (Newest to Oldest) -->
-            <div class="chapter-pills-list">
+            <div class="chapter-pills-row">
               {#each visibleChapters as ch, idx (ch.id)}
+                {@const chNum = chapterDisplayNumber(ch)}
+                {@const chTitle = ch.title ? decodeHtmlEntities(ch.title) : ''}
                 <a
                   href="/ler/{ch.id}"
                   class="chapter-pill"
                   class:latest-pill={idx === 0}
-                  title={`Ler Capítulo ${chapterDisplayNumber(ch)}${ch.title ? ` — ${decodeHtmlEntities(ch.title)}` : ''}`}
+                  title={`Ler Capítulo ${chNum}${chTitle ? ` — ${chTitle}` : ''}`}
                 >
-                  <span class="ch-text">Cap. {chapterDisplayNumber(ch)}</span>
+                  {#if idx === 0}
+                    <span class="pill-dot"></span>
+                  {/if}
+                  <span class="ch-text">Cap. {chNum}</span>
                 </a>
               {/each}
-              {#if sortedChapters.length > 3}
-                <button
-                  type="button"
-                  class="chapter-pill expand-pill"
-                  onclick={(e) => { e.preventDefault(); toggleCardExpand(rel.workId); }}
-                  title={isExpanded ? "Mostrar menos capítulos" : `Ver mais ${remainingCount} capítulos lançados`}
-                >
-                  <span class="ch-text">{isExpanded ? "Menos" : `+${remainingCount} caps`}</span>
-                </button>
+
+              <!-- Extra chapters dropdown pill (Doesn't break row heights!) -->
+              {#if extraChapters.length > 0}
+                <div class="extra-chapters-anchor">
+                  <button
+                    type="button"
+                    class="chapter-pill expand-pill"
+                    class:active={isDropdownOpen}
+                    onclick={(e) => toggleDropdown(rel.workId, e)}
+                    title={`Ver mais ${extraChapters.length} capítulos deste lançamento`}
+                  >
+                    <span class="ch-text">+{extraChapters.length} caps</span>
+                    <span class="expand-chevron" class:flipped={isDropdownOpen}>
+                      <ChevronDown size={12} />
+                    </span>
+                  </button>
+
+                  {#if isDropdownOpen}
+                    <div class="chapters-dropdown-popover" onclick={(e) => e.stopPropagation()}>
+                      <div class="dropdown-header">
+                        <span>Mais capítulos de {titleDecoded}</span>
+                      </div>
+                      <div class="dropdown-list">
+                        {#each extraChapters as ch (ch.id)}
+                          {@const chNum = chapterDisplayNumber(ch)}
+                          <a href="/ler/{ch.id}" class="dropdown-item">
+                            <span class="dropdown-ch">Capítulo {chNum}</span>
+                            <span class="dropdown-cta">Ler ↗</span>
+                          </a>
+                        {/each}
+                      </div>
+                      <a href="/obra/{rel.workSlug}" class="dropdown-all-link">
+                        Ver todos os capítulos na obra
+                      </a>
+                    </div>
+                  {/if}
+                </div>
               {/if}
             </div>
           </div>
         </article>
       {/each}
     </div>
+
+    <!-- Progressive Load More Section Aligned with Releases Grid -->
+    <div class="releases-footer-tools">
+      {#if hasMore}
+        <button
+          type="button"
+          class="btn-load-releases"
+          onclick={loadMoreReleases}
+          disabled={loadingMore}
+        >
+          {#if loadingMore}
+            <Loader2 size={16} class="spin" />
+            <span>Carregando mais lançamentos...</span>
+          {:else}
+            <span>Carregar mais lançamentos</span>
+            <ArrowRight size={15} />
+          {/if}
+        </button>
+      {:else}
+        <span class="all-loaded-text">Todos os lançamentos recentes foram carregados.</span>
+      {/if}
+
+      <a href="/lancamentos" class="btn-all-releases">
+        <span>Ir para página de Lançamentos</span>
+        <ArrowRight size={15} />
+      </a>
+    </div>
   {:else if loadError}
     <div class="degraded-releases-alert" role="alert">
       <AlertTriangle size={36} class="alert-icon" />
       <h3>Não foi possível carregar os lançamentos agora</h3>
-      <p>O catálogo e os capítulos continuam preservados no banco de dados, mas ocorreu uma lentidão temporária na conexão. Tente recarregar.</p>
+      <p>O catálogo continua preservado. Ocorreu uma lentidão temporária. Tente recarregar.</p>
       <button type="button" class="btn-retry" onclick={() => window.location.reload()}>
         <RefreshCw size={16} />
         <span>Recarregar lançamentos</span>
@@ -195,7 +324,7 @@
 <style>
   .releases-section {
     position: relative;
-    margin-bottom: 3rem;
+    margin-bottom: 3.5rem;
     width: 100%;
   }
 
@@ -204,9 +333,9 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 1.35rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .title-cluster {
@@ -217,17 +346,28 @@
 
   .releases-title {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
     font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1.6rem;
-    font-weight: 800;
+    font-size: 1.65rem;
+    font-weight: 850;
     color: #ffffff;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
+  }
+
+  .title-accent-bar {
+    width: 4px;
+    height: 1.35rem;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #dfc28d 0%, #b89552 100%);
+    box-shadow: 0 0 10px rgba(223, 194, 141, 0.4);
   }
 
   .releases-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.86rem;
     font-weight: 500;
-    color: #8c93a8;
+    color: #94a3b8;
   }
 
   .header-right-tools {
@@ -242,73 +382,75 @@
     gap: 0.4rem;
     font-size: 0.88rem;
     font-weight: 600;
-    color: #8e95a5;
+    color: #94a3b8;
     text-decoration: none;
     transition: color 0.2s ease;
-    background: transparent;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-family: inherit;
   }
 
-  .view-all-link:hover:not(:disabled) {
+  .view-all-link:hover {
     color: #dfc28d;
   }
-  
-  .view-all-link:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+
+  .stale-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    background: rgba(223, 194, 141, 0.1);
+    border: 1px solid rgba(223, 194, 141, 0.25);
+    color: #dfc28d;
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
   }
 
-  /* Grid Feed - 3 columns on desktop, 2 on tablet, 1 on mobile */
+  /* Grid Feed: 3 columns on desktop, 2 on tablet, 1 on mobile */
   .releases-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1.15rem;
     width: 100%;
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1100px) {
     .releases-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
+  @media (max-width: 680px) {
+    .releases-grid {
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+  }
+
+  /* Release Card Anatomy with Fixed Proportional Structure */
   .release-row-card {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: #0e111d;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
+    padding: 0.85rem 1.1rem;
+    background: #0d101d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    min-height: 102px;
+    min-height: 108px;
     width: 100%;
     box-sizing: border-box;
   }
 
-  .spin {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   .release-row-card:hover {
-    background: rgba(20, 24, 38, 0.9);
-    border-color: rgba(223, 194, 141, 0.3);
-    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.7), 0 0 16px -2px rgba(223, 194, 141, 0.1);
-    transform: translateY(-2px);
+    background: rgba(18, 22, 36, 0.95);
+    border-color: rgba(223, 194, 141, 0.35);
+    box-shadow:
+      0 10px 28px -6px rgba(0, 0, 0, 0.75),
+      0 0 16px -2px rgba(223, 194, 141, 0.15);
+    transform: translateY(-3px);
   }
 
+  /* Cover Thumbnail */
   .cover-thumb-link {
     flex-shrink: 0;
     text-decoration: none;
@@ -317,13 +459,14 @@
 
   .thumb-wrap {
     position: relative;
-    width: 64px;
-    height: 88px;
-    aspect-ratio: 64 / 88;
-    border-radius: 8px;
+    width: 66px;
+    height: 92px;
+    aspect-ratio: 66 / 92;
+    border-radius: 9px;
     overflow: hidden;
-    background: #11131c;
+    background: #111422;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   }
 
   .thumb-img {
@@ -331,12 +474,11 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.2s ease;
+    transition: transform 0.25s ease;
   }
 
-  .blurred-cover {
-    filter: blur(14px) brightness(0.65);
-    transform: scale(1.15);
+  .release-row-card:hover .thumb-img {
+    transform: scale(1.05);
   }
 
   .adult-badge-mini {
@@ -345,59 +487,49 @@
     left: 4px;
     background: #dc2626;
     color: #ffffff;
-    font-size: 9px;
-    font-weight: 800;
+    font-size: 8px;
+    font-weight: 850;
     padding: 1px 4px;
     border-radius: 3px;
     letter-spacing: 0.04em;
     z-index: 2;
   }
 
-  .thumb-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #151828;
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-  }
-
+  /* Release Main */
   .release-main {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.55rem;
   }
 
   .release-top-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.6rem;
   }
 
   .work-title-group {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     min-width: 0;
-    flex-wrap: wrap;
+    flex: 1;
   }
 
+  /* Title: Fix Truncation Bug! Uses full available space with ellipsis */
   .work-link {
-    font-size: 0.92rem;
-    font-weight: 700;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.94rem;
+    font-weight: 750;
     color: #f1f5f9;
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 180px;
     transition: color 0.15s ease;
   }
 
@@ -406,15 +538,16 @@
   }
 
   .kind-tag {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: #b59af5;
-    background: rgba(181, 154, 245, 0.1);
-    border: 1px solid rgba(181, 154, 245, 0.2);
+    color: #d8b4fe;
+    background: rgba(181, 154, 245, 0.12);
+    border: 1px solid rgba(181, 154, 245, 0.25);
     padding: 1px 5px;
     border-radius: 4px;
+    flex-shrink: 0;
   }
 
   .timestamp-box {
@@ -427,106 +560,249 @@
     flex-shrink: 0;
   }
 
-  .timestamp-box :global(svg) {
-    color: #71717a;
-  }
-
-  .chapter-pills-list {
+  /* Chapter Pills List */
+  .chapter-pills-row {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
     flex-wrap: wrap;
   }
 
   .chapter-pill {
     display: inline-flex;
     align-items: center;
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
+    gap: 0.35rem;
+    padding: 0.28rem 0.65rem;
+    border-radius: 7px;
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: 700;
     text-decoration: none;
     color: #cbd5e1;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    transition: all 0.15s ease;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    transition: all 0.2s ease;
   }
 
   .chapter-pill:hover {
-    background: rgba(223, 194, 141, 0.12);
-    border-color: rgba(223, 194, 141, 0.3);
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
     color: #dfc28d;
     transform: translateY(-1px);
   }
 
-  .chapter-pill.expand-pill {
-    cursor: pointer;
-    background: rgba(223, 194, 141, 0.1);
-    border-color: rgba(223, 194, 141, 0.3);
+  .latest-pill {
+    background: rgba(223, 194, 141, 0.12);
+    border-color: rgba(223, 194, 141, 0.35);
     color: #dfc28d;
+    font-weight: 750;
+  }
+
+  .pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+  }
+
+  /* Extra Chapters Dropdown / Popover */
+  .extra-chapters-anchor {
+    position: relative;
+    display: inline-block;
+  }
+
+  .expand-pill {
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    color: #94a3b8;
+  }
+
+  .expand-pill:hover,
+  .expand-pill.active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+  }
+
+  .expand-chevron {
+    transition: transform 0.2s ease;
+  }
+
+  .expand-chevron.flipped {
+    transform: rotate(180deg);
+  }
+
+  .chapters-dropdown-popover {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 240px;
+    max-height: 250px;
+    overflow-y: auto;
+    background: #0e111d;
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
+    padding: 0.6rem;
+    z-index: 50;
+    animation: popoverFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes popoverFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .dropdown-header {
     font-size: 0.74rem;
+    font-weight: 750;
+    color: #dfc28d;
+    padding: 0.2rem 0.4rem 0.4rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .chapter-pill.expand-pill:hover {
-    background: rgba(223, 194, 141, 0.22);
-    border-color: rgba(223, 194, 141, 0.5);
-    color: #fff;
+  .dropdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
-  .chapter-pill.latest-pill {
-    background: rgba(139, 92, 246, 0.12);
-    border-color: rgba(139, 92, 246, 0.28);
-    color: #c4b5fd;
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+  }
+
+  .dropdown-cta {
+    font-size: 0.72rem;
+    color: #dfc28d;
+  }
+
+  .dropdown-all-link {
+    display: block;
+    margin-top: 0.5rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.74rem;
     font-weight: 700;
+    color: #94a3b8;
+    text-align: center;
+    text-decoration: none;
   }
 
-  .chapter-pill.latest-pill:hover {
-    background: rgba(139, 92, 246, 0.22);
-    border-color: #8b5cf6;
+  .dropdown-all-link:hover {
+    color: #dfc28d;
+  }
+
+  /* Progressive Load More Section */
+  .releases-footer-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    margin-top: 2.25rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    flex-wrap: wrap;
+  }
+
+  .btn-load-releases {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.75rem 1.6rem;
+    border-radius: 12px;
+    background: rgba(223, 194, 141, 0.14);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    font-size: 0.88rem;
+    font-weight: 750;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-load-releases:hover:not(:disabled) {
+    background: rgba(223, 194, 141, 0.25);
+    border-color: #dfc28d;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(223, 194, 141, 0.2);
+  }
+
+  .btn-all-releases {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.75rem 1.4rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 0.88rem;
+    font-weight: 650;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-all-releases:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
     color: #ffffff;
   }
 
-  .stale-notice {
-    margin-bottom: 1rem;
-    padding: 0.5rem 0.85rem;
-    background: rgba(234, 179, 8, 0.08);
-    border: 1px solid rgba(234, 179, 8, 0.2);
-    border-radius: 8px;
-    font-size: 0.82rem;
-    color: #fde047;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .all-loaded-text {
+    font-size: 0.85rem;
+    color: #71717a;
+    font-style: italic;
   }
 
-  .degraded-releases-alert {
+  /* Degraded / Empty States */
+  .degraded-releases-alert,
+  .empty-releases {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 3.5rem 1.5rem;
+    padding: 3rem 2rem;
+    background: #0d101d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
     text-align: center;
-    background: rgba(239, 68, 68, 0.04);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 12px;
+    gap: 0.75rem;
   }
 
-  .degraded-releases-alert :global(.alert-icon) {
-    color: #f87171;
+  .alert-icon {
+    color: #f59e0b;
   }
 
-  .degraded-releases-alert h3 {
+  .degraded-releases-alert h3,
+  .empty-releases h3 {
     margin: 0;
+    color: #f1f5f9;
     font-size: 1.15rem;
-    font-weight: 700;
-    color: #f87171;
+    font-weight: 750;
   }
 
-  .degraded-releases-alert p {
+  .degraded-releases-alert p,
+  .empty-releases p {
     margin: 0;
+    color: #8c93a8;
     font-size: 0.88rem;
-    color: #94a3b8;
     max-width: 480px;
   }
 
@@ -534,36 +810,28 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 0.5rem;
     padding: 0.6rem 1.25rem;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 8px;
-    color: #fca5a5;
-    font-size: 0.88rem;
-    font-weight: 600;
+    background: rgba(223, 194, 141, 0.15);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    font-size: 0.84rem;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    margin-top: 0.5rem;
   }
 
-  .btn-retry:hover {
-    background: rgba(239, 68, 68, 0.25);
-    color: #ffffff;
+  :global(.spin) {
+    animation: spinAnimation 1s linear infinite;
   }
 
-  .empty-releases {
-    padding: 3rem 1.5rem;
-    text-align: center;
-    color: #71717a;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+  @keyframes spinAnimation {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
-  @media (max-width: 640px) {
-    .releases-grid {
-      grid-template-columns: 1fr;
-      gap: 0.75rem;
-    }
+  .blurred-cover {
+    filter: blur(14px) brightness(0.65);
+    transform: scale(1.15);
   }
 </style>
