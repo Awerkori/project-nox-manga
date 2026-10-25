@@ -333,6 +333,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    contain: layout style;
   }
 
   .shelf-header {
@@ -763,7 +764,7 @@
 
   @media (max-width: 640px) {
     .shelf-section {
-      margin-bottom: 2.75rem;
+      margin-bottom: 2.5rem;
     }
 
     .shelf-header {
@@ -773,6 +774,10 @@
 
     .shelf-title {
       font-size: 1.35rem;
+    }
+
+    .shelf-subtitle {
+      font-size: 0.8rem;
     }
 
     .shelf-actions {
@@ -788,22 +793,97 @@
       display: none;
     }
 
+    .shelf-scroll-container {
+      padding: 0.35rem 0.15rem 0.85rem;
+      margin: 0 -0.15rem;
+    }
+
+    .shelf-track {
+      gap: 0.85rem;
+    }
+
     .shelf-card {
-      width: 155px;
+      width: 140px;
     }
 
     .card-cover-box {
-      width: 155px;
-      height: 220px;
+      width: 140px;
+      height: 200px;
+      aspect-ratio: 140 / 200;
+      border-radius: 10px;
+    }
+
+    .card-views-badge {
+      top: 6px;
+      left: 6px;
+      padding: 0.18rem 0.42rem;
+      font-size: 0.64rem;
+      border-radius: 5px;
+    }
+
+    .card-kind-badge {
+      top: 6px;
+      right: 6px;
+      padding: 0.18rem 0.45rem;
+      font-size: 0.62rem;
+      border-radius: 5px;
+    }
+
+    .adult-badge-bottom-left {
+      bottom: 6px;
+      left: 6px;
+      padding: 0.16rem 0.42rem;
+      font-size: 0.62rem;
+    }
+
+    .card-scan-badge {
+      bottom: 6px;
+      right: 6px;
+      padding: 0.16rem 0.45rem;
+      font-size: 0.62rem;
+      max-width: 85px;
     }
 
     .card-info {
-      min-height: 3.8rem;
+      margin-top: 0.5rem;
+      min-height: 2.6rem;
+      gap: 0.2rem;
     }
 
     .card-work-title {
-      font-size: 0.88rem;
-      min-height: 2.4rem;
+      font-size: 0.86rem;
+      line-height: 1.3;
+      min-height: 2.25rem;
+    }
+
+    .shelf-track.is-expanded {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .shelf-track.is-expanded .shelf-card {
+      width: 100%;
+    }
+
+    .shelf-track.is-expanded .card-cover-box {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 140 / 200;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .shelf-card {
+      width: 130px;
+    }
+
+    .card-cover-box {
+      width: 130px;
+      height: 185px;
+    }
+
+    .card-work-title {
+      font-size: 0.82rem;
     }
   }
 

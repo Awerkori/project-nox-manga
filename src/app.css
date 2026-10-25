@@ -1141,24 +1141,51 @@ td {
   }
   .mobile-bottom {
     display: flex;
+    align-items: center;
     justify-content: space-around;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: #121019f5;
-    backdrop-filter: blur(14px);
-    border-top: 1px solid #302739;
-    padding: 11px 0 max(12px, env(safe-area-inset-bottom));
-    z-index: 30;
+    background: rgba(9, 11, 20, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(181, 154, 245, 0.16);
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.7);
+    padding: 6px 4px max(8px, env(safe-area-inset-bottom));
+    z-index: 45;
   }
   .mobile-bottom a {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    font-size: 9px;
-    color: #b3a9c5;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 2px;
+    min-height: 48px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #8c889f;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-bottom a:hover {
+    color: #c2bed4;
+  }
+  .mobile-bottom a.active {
+    color: #e2d9f8;
+    font-weight: 750;
+    background: rgba(181, 154, 245, 0.08);
+  }
+  .mobile-bottom a.active :global(svg) {
+    color: #b59af5;
+    filter: drop-shadow(0 0 8px rgba(181, 154, 245, 0.65));
+    transform: scale(1.08);
   }
   .page-top {
     padding: 32px 0 23px;

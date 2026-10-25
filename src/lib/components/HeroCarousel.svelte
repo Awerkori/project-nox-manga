@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     BookOpen,
     ChevronLeft,
@@ -34,8 +35,11 @@
 
   // Smooth continuous progress & auto-advance (3.8s per slide: 3.5 - 4.0s target)
   const SLIDE_DURATION_MS = 3800;
-  let progressRatio = $state(0); // 0.0 to 1.0
+  let progressRatio = 0; // Pure animation variable (zero Svelte reactivity tick thrashing)
+  let progressFillEl: HTMLElement | null = $state(null);
   let animFrameId: number | null = null;
+  let carouselSection: HTMLElement | null = $state(null);
+  let isIntersecting = $state(true);
   let lastTimestamp = 0;
 
   // 3D Card Interactive Tilt
@@ -65,7 +69,7 @@
   let prevCover = $derived(
     prevWork
       ? resolveCoverUrl(prevWork.cover_id || (prevWork as any).coverId, prevWork.slug, prevWork.id, {
-          size: 'thumb'
+          size: 'hero'
         })
       : ''
   );
@@ -73,7 +77,7 @@
   let nextCover = $derived(
     nextWork
       ? resolveCoverUrl(nextWork.cover_id || (nextWork as any).coverId, nextWork.slug, nextWork.id, {
-          size: 'thumb'
+          size: 'hero'
         })
       : ''
   );
@@ -115,11 +119,37 @@
     };
   }
 
+  const preloadedCovers = new SvelteSet<string>();
+
+  function preloadCover(work: Work | null | undefined) {
+    if (!work || typeof window === 'undefined') return;
+    const url = resolveCoverUrl(work.cover_id || (work as any).coverId, work.slug, work.id, { size: 'hero' });
+    if (url && !preloadedCovers.has(url) && typeof Image !== 'undefined') {
+      preloadedCovers.add(url);
+      const img = new Image();
+      img.src = url;
+    }
+  }
+
+  function preloadWindow(index: number) {
+    if (!works || works.length === 0) return;
+    // 1. Preload active work
+    preloadCover(works[index % works.length]);
+    // 2. Preload upcoming work in sequence
+    preloadCover(works[(index + 1) % works.length]);
+    // 3. On desktop, preload previous work in 3D deck
+    if (typeof window !== 'undefined' && window.innerWidth >= 768 && works.length > 2) {
+      preloadCover(works[(index - 1 + works.length) % works.length]);
+    }
+  }
+
   function nextSlide(userTriggered = true) {
     if (works.length <= 1) return;
     currentIndex = (currentIndex + 1) % works.length;
     resetCardTilt();
     progressRatio = 0;
+    if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
+    preloadWindow(currentIndex);
     if (userTriggered && typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
@@ -130,17 +160,9 @@
     currentIndex = (currentIndex - 1 + works.length) % works.length;
     resetCardTilt();
     progressRatio = 0;
+    if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
+    preloadWindow(currentIndex);
     if (userTriggered && typeof performance !== 'undefined') {
-      lastTimestamp = performance.now();
-    }
-  }
-
-  function goToSlide(index: number) {
-    if (currentIndex === index) return;
-    currentIndex = index;
-    resetCardTilt();
-    progressRatio = 0;
-    if (typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
   }
@@ -197,10 +219,16 @@
     const delta = timestamp - lastTimestamp;
     lastTimestamp = timestamp;
 
-    if (!isPaused && !prefersReducedMotion && works.length > 1 && typeof document !== 'undefined' && !document.hidden) {
+    if (!isPaused && isIntersecting && !prefersReducedMotion && works.length > 1 && typeof document !== 'undefined' && !document.hidden) {
       progressRatio = Math.min(1, progressRatio + delta / SLIDE_DURATION_MS);
+      if (progressFillEl) {
+        progressFillEl.style.transform = `scaleX(${progressRatio})`;
+      }
       if (progressRatio >= 1) {
         progressRatio = 0;
+        if (progressFillEl) {
+          progressFillEl.style.transform = 'scaleX(0)';
+        }
         nextSlide(false);
       }
     }
@@ -234,9 +262,23 @@
     }
   }
 
+  let carouselObserver: IntersectionObserver | null = null;
+
   onMount(() => {
+    preloadWindow(currentIndex);
     prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    if (typeof IntersectionObserver !== 'undefined' && carouselSection) {
+      carouselObserver = new IntersectionObserver(
+        (entries) => {
+          isIntersecting = entries[0].isIntersecting;
+        },
+        { threshold: 0.05 }
+      );
+      carouselObserver.observe(carouselSection);
+    }
+
     if (!prefersReducedMotion && works.length > 1) {
       lastTimestamp = performance.now();
       animFrameId = requestAnimationFrame(animationLoop);
@@ -244,6 +286,10 @@
   });
 
   onDestroy(() => {
+    if (carouselObserver) {
+      carouselObserver.disconnect();
+      carouselObserver = null;
+    }
     if (animFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
       cancelAnimationFrame(animFrameId);
       animFrameId = null;
@@ -258,11 +304,15 @@
   {#if heroCover}
     <link rel="preload" as="image" href={heroCover} fetchpriority="high" />
   {/if}
+  {#if nextCover}
+    <link rel="preload" as="image" href={nextCover} />
+  {/if}
 </svelte:head>
 
 {#if currentWork}
   <section
     class="hero-carousel"
+    bind:this={carouselSection}
     aria-label="Destaques da Plataforma"
     tabindex="0"
     role="region"
@@ -304,8 +354,8 @@
                 src={prevCover}
                 alt={decodeHtmlEntities(prevWork.title)}
                 class="deck-img"
-                loading="lazy"
-                decoding="async"
+                loading="eager"
+                decoding="sync"
                 use:fallbackCover
               />
               <div class="deck-shadow-veil"></div>
@@ -313,62 +363,64 @@
           {/if}
 
           <!-- ACTIVE FEATURED COVER (Foreground Center) -->
-          <div
-            class="deck-card deck-active"
-            onmousemove={handleCardMouseMove}
-            onmouseleave={handleCardMouseLeave}
-            style="--tilt-x: {cardTiltX}deg; --tilt-y: {cardTiltY}deg;"
-          >
-            <a
-              href="/obra/{currentWork.slug}"
-              class="active-card-inner"
-              tabindex="-1"
-              aria-label={`Ler obra em destaque: ${decodeHtmlEntities(currentWork.title)}`}
+          {#key currentWork.id}
+            <div
+              class="deck-card deck-active hero-active-card"
+              onmousemove={handleCardMouseMove}
+              onmouseleave={handleCardMouseLeave}
+              style="--tilt-x: {cardTiltX}deg; --tilt-y: {cardTiltY}deg;"
             >
-              <img
-                src={heroCover}
-                alt={decodeHtmlEntities(currentWork.title)}
-                class="cover-img"
-                class:blurred-cover={effectiveBlur}
-                width="325"
-                height="465"
-                loading="eager"
-                fetchpriority="high"
-                decoding="async"
-                use:fallbackCover
-              />
+              <a
+                href="/obra/{currentWork.slug}"
+                class="active-card-inner"
+                tabindex="-1"
+                aria-label={`Ler obra em destaque: ${decodeHtmlEntities(currentWork.title)}`}
+              >
+                <img
+                  src={heroCover}
+                  alt={decodeHtmlEntities(currentWork.title)}
+                  class="cover-img"
+                  class:blurred-cover={effectiveBlur}
+                  width="325"
+                  height="465"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="sync"
+                  use:fallbackCover
+                />
 
-              <!-- Glare Overlay -->
-              <div
-                class="cover-glare"
-                style="--glare-x: {glareX}%; --glare-y: {glareY}%; --glare-opacity: {glareOpacity};"
-              ></div>
+                <!-- Glare Overlay -->
+                <div
+                  class="cover-glare"
+                  style="--glare-x: {glareX}%; --glare-y: {glareY}%; --glare-opacity: {glareOpacity};"
+                ></div>
 
-              <!-- Badges on Cover -->
-              {#if isAdult}
-                <span class="adult-badge-hero">+18</span>
-              {/if}
+                <!-- Badges on Cover -->
+                {#if isAdult}
+                  <span class="adult-badge-hero">+18</span>
+                {/if}
 
-              {#if effectiveBlur}
-                <div class="nsfw-overlay-hero">
-                  <div class="nsfw-tag-hero">
-                    <AlertTriangle size={15} />
-                    <span>CONTEÚDO +18</span>
+                {#if effectiveBlur}
+                  <div class="nsfw-overlay-hero">
+                    <div class="nsfw-tag-hero">
+                      <AlertTriangle size={15} />
+                      <span>CONTEÚDO +18</span>
+                    </div>
                   </div>
-                </div>
-              {/if}
+                {/if}
 
-              {#if currentWork.views_total}
-                <div class="cover-views-badge" title="{currentWork.views_total} visualizações">
-                  <Eye size={12} />
-                  <span>{formatViews(currentWork.views_total)}</span>
-                </div>
-              {/if}
+                {#if currentWork.views_total}
+                  <div class="cover-views-badge" title="{currentWork.views_total} visualizações">
+                    <Eye size={12} />
+                    <span>{formatViews(currentWork.views_total)}</span>
+                  </div>
+                {/if}
 
-              <div class="cover-edge-accent"></div>
-              <div class="cover-gloss"></div>
-            </a>
-          </div>
+                <div class="cover-edge-accent"></div>
+                <div class="cover-gloss"></div>
+              </a>
+            </div>
+          {/key}
 
           {#if nextWork && works.length > 1}
             <!-- NEXT COVER (Background Right) -->
@@ -382,8 +434,8 @@
                 src={nextCover}
                 alt={decodeHtmlEntities(nextWork.title)}
                 class="deck-img"
-                loading="lazy"
-                decoding="async"
+                loading="eager"
+                decoding="sync"
                 use:fallbackCover
               />
               <div class="deck-shadow-veil"></div>
@@ -391,82 +443,65 @@
           {/if}
         </div>
 
-        <!-- RIGHT: Editorial Info, Badges, Title, Synopsis, and CTAs -->
-        <div class="hero-info-col" key={currentWork.id}>
-          <!-- Badges Cluster -->
-          <div class="badges-row">
-            <span class="badge-destaque">
-              <Sparkles size={13} class="sparkle-anim" />
-              <span>EM DESTAQUE</span>
-            </span>
+        <!-- RIGHT: Editorial Info, Badges, Title, Synopsis, and CTAs (Atomically Keyed to Work) -->
+        {#key currentWork.id}
+          <div class="hero-info-col">
+            <!-- Badges Cluster -->
+            <div class="badges-row">
+              <span class="badge-destaque">
+                <Sparkles size={13} class="sparkle-anim" />
+                <span>EM DESTAQUE</span>
+              </span>
 
-            <span class="badge-kind">
-              {kindLabels[currentWork.kind] || currentWork.kind || 'Mangá'}
-            </span>
+              <span class="badge-kind">
+                {kindLabels[currentWork.kind] || currentWork.kind || 'Mangá'}
+              </span>
 
-            <span class="badge-status">
-              <span class="status-dot"></span>
-              {currentWork.status === 'ONGOING' ? 'Em andamento' : 'Completo'}
-            </span>
+              <span class="badge-status">
+                <span class="status-dot"></span>
+                {currentWork.status === 'ONGOING' ? 'Em andamento' : 'Completo'}
+              </span>
 
-            {#if currentWork.year}
-              <span class="badge-year">{currentWork.year}</span>
-            {/if}
-          </div>
-
-          <!-- Hero Title -->
-          <h1 class="hero-title">
-            <a href="/obra/{currentWork.slug}" title={decodeHtmlEntities(currentWork.title)}>
-              {decodeHtmlEntities(currentWork.title)}
-            </a>
-          </h1>
-
-          <!-- Authors / Metadata -->
-          {#if currentWork.author || currentWork.artist}
-            <div class="hero-authors">
-              {#if currentWork.author}
-                <span class="meta-item">
-                  <span class="meta-label">Roteiro:</span>
-                  <span class="meta-val">{decodeHtmlEntities(currentWork.author)}</span>
-                </span>
-              {/if}
-              {#if currentWork.artist && currentWork.artist !== currentWork.author}
-                <span class="meta-sep">·</span>
-                <span class="meta-item">
-                  <span class="meta-label">Arte:</span>
-                  <span class="meta-val">{decodeHtmlEntities(currentWork.artist)}</span>
-                </span>
+              {#if currentWork.year}
+                <span class="badge-year">{currentWork.year}</span>
               {/if}
             </div>
-          {/if}
 
-          <!-- Synopsis -->
-          {#if currentWork.synopsis}
-            <p class="hero-synopsis">
-              {decodeHtmlEntities(currentWork.synopsis)}
-            </p>
-          {/if}
+            <!-- Hero Title -->
+            <h1 class="hero-title">
+              <a href="/obra/{currentWork.slug}" title={decodeHtmlEntities(currentWork.title)}>
+                {decodeHtmlEntities(currentWork.title)}
+              </a>
+            </h1>
 
-          <!-- Action CTAs -->
-          <div class="hero-actions">
-            {#if progressItem}
-              <a href={progressItem.destinationUrl} class="btn-primary-hero">
-                <BookOpen size={18} />
-                <span>Continuar Leitura</span>
-              </a>
-            {:else}
-              <a href="/obra/{currentWork.slug}" class="btn-primary-hero">
-                <BookOpen size={18} />
-                <span>Começar a Ler</span>
-              </a>
+            <!-- Synopsis (Directly below title, authors removed) -->
+            {#if currentWork.synopsis}
+              <p class="hero-synopsis">
+                {decodeHtmlEntities(currentWork.synopsis)}
+              </p>
             {/if}
 
-            <a href="/obra/{currentWork.slug}" class="btn-secondary-hero">
-              <Info size={17} />
-              <span>Ver Detalhes</span>
-            </a>
+            <!-- Action CTAs -->
+            <div class="hero-actions">
+              {#if progressItem}
+                <a href={progressItem.destinationUrl} class="btn-primary-hero">
+                  <BookOpen size={18} />
+                  <span>Continuar Leitura</span>
+                </a>
+              {:else}
+                <a href="/obra/{currentWork.slug}" class="btn-primary-hero">
+                  <BookOpen size={18} />
+                  <span>Começar a Ler</span>
+                </a>
+              {/if}
+
+              <a href="/obra/{currentWork.slug}" class="btn-secondary-hero">
+                <Info size={17} />
+                <span>Ver Detalhes</span>
+              </a>
+            </div>
           </div>
-        </div>
+        {/key}
       </div>
 
       <!-- Cinematic Minimalist Progress & Navigation Controls -->
@@ -477,14 +512,13 @@
             class="progress-track-wrapper"
             role="progressbar"
             aria-label="Tempo restante da obra atual"
-            aria-valuenow={Math.round(progressRatio * 100)}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <div class="progress-track">
               <div
+                bind:this={progressFillEl}
                 class="progress-fill"
-                style="transform: scaleX({progressRatio});"
                 class:paused={isPaused}
               ></div>
             </div>
@@ -525,6 +559,7 @@
     background: transparent;
     display: flex;
     align-items: center;
+    contain: layout style;
   }
 
   /* Full-Bleed Atmospheric Backdrop */
@@ -925,32 +960,19 @@
     text-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
   }
 
-  /* Authors */
-  .hero-authors {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.88rem;
-    color: #94a3b8;
-    flex-wrap: wrap;
+  .hero-active-card {
+    animation: activeCoverIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
-  .meta-item {
-    display: inline-flex;
-    gap: 0.35rem;
-  }
-
-  .meta-label {
-    color: #64748b;
-  }
-
-  .meta-val {
-    color: #e2e8f0;
-    font-weight: 600;
-  }
-
-  .meta-sep {
-    color: #475569;
+  @keyframes activeCoverIn {
+    from {
+      opacity: 0.75;
+      transform: translateZ(30px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateZ(40px) scale(1);
+    }
   }
 
   /* Synopsis */
@@ -1139,93 +1161,157 @@
   }
 
   @media (max-width: 768px) {
+    .backdrop-img {
+      display: none; /* CRITICAL GECKO PERF: Disables heavy 80px Gaussian blur layer on mobile */
+    }
+
     .hero-carousel {
       min-height: auto;
-      padding: 1.25rem 0;
+      padding: 1.25rem 0 0.85rem;
+      overflow: hidden;
+    }
+
+    .hero-container {
+      padding: 0 1rem;
+      gap: 1.15rem;
     }
 
     .hero-stage {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1.25rem;
       min-height: auto;
       text-align: center;
+      width: 100%;
     }
 
     .hero-cover-stage {
       width: 100%;
-      max-width: 330px;
-      height: 310px;
-      perspective: 750px;
+      max-width: 260px;
+      height: 315px;
+      perspective: none;
       margin: 0 auto;
+      position: relative;
+    }
+
+    .deck-card {
+      transform-style: flat;
+      will-change: auto;
+    }
+
+    .deck-prev,
+    .deck-next {
+      display: none; /* Removes compressed side peeks on narrow mobile screens */
     }
 
     .deck-active {
+      position: relative;
       width: 215px;
-      height: 305px;
-    }
-
-    .deck-prev {
-      left: 4px;
-      width: 160px;
-      height: 230px;
-      transform: translateX(-18px) translateZ(-90px) rotateY(22deg);
-      opacity: 0.35;
-    }
-
-    .deck-next {
-      right: 4px;
-      width: 160px;
-      height: 230px;
-      transform: translateX(18px) translateZ(-90px) rotateY(-22deg);
-      opacity: 0.35;
+      height: 310px;
+      transform: none !important;
+      margin: 0 auto;
+      border-radius: 14px;
+      box-shadow:
+        0 14px 34px -4px rgba(0, 0, 0, 0.85),
+        0 0 24px rgba(139, 92, 246, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.12);
     }
 
     .hero-info-col {
       align-items: center;
-      gap: 0.9rem;
+      gap: 0.75rem;
       max-width: 100%;
+      width: 100%;
     }
 
     .badges-row {
       justify-content: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .hero-active-card {
+      animation: activeCoverInMobile 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes activeCoverInMobile {
+      from {
+        opacity: 0.8;
+        transform: scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
     }
 
     .hero-title {
-      font-size: 1.65rem;
-    }
-
-    .hero-authors {
-      justify-content: center;
+      font-size: 1.48rem;
+      line-height: 1.25;
+      font-weight: 850;
+      margin: 0.1rem 0;
+      max-width: 95%;
     }
 
     .hero-synopsis {
-      font-size: 0.88rem;
+      font-size: 0.86rem;
+      line-height: 1.55;
       -webkit-line-clamp: 2;
       line-clamp: 2;
+      color: #94a3b8;
+      max-width: 94%;
+      margin: 0;
     }
 
     .hero-actions {
-      justify-content: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
       width: 100%;
+      max-width: 320px;
+      margin-top: 0.35rem;
     }
 
-    .btn-primary-hero,
+    .btn-primary-hero {
+      width: 100%;
+      justify-content: center;
+      padding: 0.8rem 1.4rem;
+      min-height: 44px;
+      font-size: 0.94rem;
+      font-weight: 750;
+      box-sizing: border-box;
+    }
+
     .btn-secondary-hero {
       width: 100%;
       justify-content: center;
+      padding: 0.75rem 1.4rem;
+      min-height: 42px;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
 
     .carousel-cinematic-bar {
-      flex-direction: column;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
       gap: 1rem;
-      padding-top: 0.75rem;
+      padding-top: 0.5rem;
+      width: 100%;
+      max-width: 320px;
+      margin: 0 auto;
     }
 
     .progress-track-wrapper {
-      width: 100%;
-      max-width: 260px;
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .nav-arrow-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
     }
   }
 
