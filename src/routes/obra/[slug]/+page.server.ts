@@ -3,6 +3,7 @@ import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
+import { getWorkRating } from '$lib/server/ratings';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -168,8 +169,24 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       )
     : Promise.resolve([{ data: null }, { data: [] }]);
 
-  // Concurrently fetch chapters, tags, public auxiliary data and personal data
-  const [chaptersList, publicTags, publicAux, [libraryRes, progressRes]] = await Promise.all([
+  let visitorId = locals.user?.id;
+  if (!visitorId) {
+    visitorId = cookies?.get?.('nox-vid');
+    if (!visitorId && cookies?.set) {
+      visitorId = crypto.randomUUID();
+      cookies.set('nox-vid', visitorId, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 31536000
+      });
+    }
+  }
+
+  const ratingPromise = getWorkRating(work.id, visitorId, locals.user?.id, platform?.env);
+
+  // Concurrently fetch chapters, tags, public auxiliary data, personal data and rating
+  const [chaptersList, publicTags, publicAux, [libraryRes, progressRes], ratingRes] = await Promise.all([
     fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
       if (list && list.length > 0) return list;
       // Resilient fallback to Supabase if Yugabyte chapters empty
@@ -190,7 +207,8 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     }),
     fetchWorkTagsFromYugabyte(work.id, platform?.env),
     publicAuxPromise,
-    personalPromise
+    personalPromise,
+    ratingPromise
   ]);
 
   const comments = publicAux.comments || [];
@@ -222,6 +240,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     likes,
     progress,
     metrics,
+    rating: ratingRes,
     canonical: `${url.origin}/obra/${work.slug}`,
     coverUrl,
     metaImage,
