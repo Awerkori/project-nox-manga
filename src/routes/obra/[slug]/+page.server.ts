@@ -78,7 +78,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   }
 
   if (isAdultWork) {
-    const rawAgeCookie = cookies.get('nox-age-status');
+    const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
     let ageStatus = rawAgeCookie;
     if (locals.sessionCache?.profile?.age_status) {
       ageStatus = locals.sessionCache.profile.age_status;

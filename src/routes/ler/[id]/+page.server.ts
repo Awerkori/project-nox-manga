@@ -27,7 +27,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
   const canAccessUnpublished = isStaff && isPreviewRequested;
 
-  const rawAgeCookie = cookies.get('nox-age-status');
+  const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
   const userAgeStatus = locals.sessionCache?.profile?.age_status || rawAgeCookie;
 
   // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
@@ -139,7 +139,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
 
   if ((chapter.works as any)?.content_rating === 'ADULT_18') {
-    const rawAgeCookie = cookies.get('nox-age-status');
+    const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
     let ageStatus = rawAgeCookie;
     if (locals.sessionCache?.profile?.age_status) {
       ageStatus = locals.sessionCache.profile.age_status;

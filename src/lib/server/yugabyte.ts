@@ -633,7 +633,7 @@ export async function fetchCatalogFromYugabyte(
 
         const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
     FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
-    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}
+    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
     LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
         // 1. Try search_text first (fast indexed path)
@@ -693,7 +693,7 @@ export async function fetchCatalogFromYugabyte(
         `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
          FROM works
          WHERE ${where.join(' AND ')}
-         ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}
+         ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
          LIMIT $${limitIdx} OFFSET $${offsetIdx};`,
         params,
         platformEnv
