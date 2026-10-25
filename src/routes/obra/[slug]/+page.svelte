@@ -627,12 +627,12 @@
         </dl>
       </div>
 
-      <!-- Card 2: Equipe & Tradução -->
+      <!-- Card 2: Equipe & Créditos -->
       <div class="specs-quad-card">
         <div class="card-top-header">
           <div class="card-icon-title">
             <Users size={16} class="card-icon" />
-            <h3 class="card-title">Equipe & Tradução</h3>
+            <h3 class="card-title">Equipe & Créditos</h3>
           </div>
         </div>
         <dl class="specs-table">
@@ -659,11 +659,6 @@
                   </a>
                 {/each}
               </dd>
-            </div>
-          {:else}
-            <div class="specs-row">
-              <dt>Tradução</dt>
-              <dd><span class="muted-spec">Comunidade Project Nox</span></dd>
             </div>
           {/if}
           <div class="specs-row">
@@ -949,6 +944,9 @@
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
+    opacity: 0.35;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
   }
 
   .backdrop-img {
@@ -956,8 +954,8 @@
     height: 100%;
     object-fit: cover;
     object-position: center 20%;
-    filter: blur(56px) brightness(0.2) saturate(1.4);
-    transform: scale(1.15);
+    filter: blur(60px) brightness(0.35) saturate(1.3);
+    transform: scale(1.2);
   }
 
   .backdrop-gradient {
@@ -965,9 +963,9 @@
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(6, 7, 12, 0.45) 0%,
-      rgba(6, 7, 12, 0.85) 60%,
-      #06070c 100%
+      rgba(13, 10, 28, 0.35) 0%,
+      rgba(7, 6, 17, 0.55) 60%,
+      transparent 100%
     );
   }
 
@@ -1607,28 +1605,37 @@
   .editorial-tags-wrap {
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: flex-start;
     gap: 8px;
-    flex: 1;
+    margin: 2px 0 8px;
   }
 
   .editorial-tag-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
     font-size: 0.82rem;
     font-weight: 600;
+    line-height: 1;
     color: #e2e8f0;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(181, 154, 245, 0.15);
-    padding: 6px 12px;
+    border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 8px;
     text-decoration: none;
+    white-space: nowrap;
+    width: auto;
+    flex: 0 0 auto;
+    box-sizing: border-box;
     transition: all 0.15s ease;
   }
 
   .editorial-tag-pill:hover {
     color: #ffffff;
-    background: rgba(167, 139, 250, 0.18);
-    border-color: rgba(167, 139, 250, 0.4);
+    background: rgba(167, 139, 250, 0.2);
+    border-color: rgba(167, 139, 250, 0.45);
     transform: translateY(-1px);
   }
 

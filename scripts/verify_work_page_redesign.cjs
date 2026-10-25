@@ -259,15 +259,15 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round4_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round4_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_1_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_1_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
           clip: { x: 0, y: 0, width: vp.width, height: Math.min(850, vp.height) }
         });
 
-        // Hierarchy evaluation: Ficha Técnica MUST be strictly above Chapters on ALL viewports
+        // Hierarchy and Round 4.1 fixes evaluation
         const evaluation = await page.evaluate(() => {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
@@ -281,6 +281,17 @@ async function run() {
           const quadCards = document.querySelectorAll('.specs-quad-card');
           const byline = document.querySelector('.work-creators-byline');
           const aliasItems = document.querySelectorAll('.alias-editorial-row');
+
+          // Tag height check (28-34px)
+          const tags = Array.from(document.querySelectorAll('.editorial-tag-pill'));
+          const tagDimensions = tags.map(t => {
+            const r = t.getBoundingClientRect();
+            return { w: Math.round(r.width), h: Math.round(r.height) };
+          });
+          const allTagsCompact = tagDimensions.length > 0 && tagDimensions.every(d => d.h >= 28 && d.h <= 34);
+
+          // Translation attribution check (must NOT have "Comunidade Project Nox")
+          const hasFakeTranslation = document.body.innerText.includes('Comunidade Project Nox');
 
           const firstChapter = document.querySelector('.chapter-card');
           const viewsPill = firstChapter ? firstChapter.querySelector('.chapter-meta-views') : null;
@@ -296,12 +307,15 @@ async function run() {
             quadCardsCount: quadCards.length,
             hasByline: !!byline,
             aliasItemsCount: aliasItems.length,
+            tagDimensions: tagDimensions.slice(0, 4),
+            allTagsCompact,
+            hasFakeTranslation,
             viewsText: viewsPill ? viewsPill.textContent.trim() : null,
             dateText: datePill ? datePill.textContent.trim() : null
           };
         });
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | FichaAboveChapters=${evaluation.isFichaAboveChapters} (specsY: ${evaluation.specsY} vs chaptersY: ${evaluation.chaptersY}) | quadCards: ${evaluation.quadCardsCount} | 1stViews: "${evaluation.viewsText}"`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | FichaAboveChapters=${evaluation.isFichaAboveChapters} | tagsCompact=${evaluation.allTagsCompact} (first: ${JSON.stringify(evaluation.tagDimensions[0])}) | hasFakeTranslation=${evaluation.hasFakeTranslation} | 1stViews: "${evaluation.viewsText}"`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -321,12 +335,12 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round4_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_1_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 4 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4.1 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_1_work_page_audit.json')}`);
 }
 
 run().catch(err => {
