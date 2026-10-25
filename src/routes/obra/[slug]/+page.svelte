@@ -15,10 +15,16 @@
     Eye,
     Users,
     Download,
-    Loader2
+    Loader2,
+    Search,
+    Calendar,
+    Share2,
+    Tag,
+    Languages,
+    SlidersHorizontal,
+    X
   } from '@lucide/svelte';
-  import { invalidateAll } from '$app/navigation';
-  import { goto } from '$app/navigation';
+  import { invalidateAll, goto } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
@@ -26,17 +32,23 @@
   import { chapterDisplayNumber, chapterIdentityLabel } from '$lib/chapter-identity';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
+  import WorkRating from '$lib/components/WorkRating.svelte';
   import {
     getOfflineChapters,
     saveChapterOffline,
     removeOfflineChapter,
-    isOfflineSupported
+    isOfflineSupported,
+    registerDownloadController,
+    unregisterDownloadController,
+    cancelChapterDownload
   } from '$lib/offline-storage';
 
   let { data } = $props();
+
   let decodedTitle = $derived(decodeHtmlEntities(data.work.title));
-  let decodedSynopsis = $derived(decodeHtmlEntities(data.work.synopsis || data.work.description));
+  let decodedSynopsis = $derived(decodeHtmlEntities(data.work.synopsis || data.work.description || ''));
   let obraCover = $derived(resolveCoverUrl(data.work.cover_id, data.work.slug, data.work.id));
+
   let notice = $state(''),
     busy = $state(false),
     ascending = $state(false),
@@ -46,14 +58,20 @@
     tagsExpanded = $state(false),
     showReportModal = $state(false);
 
+  // Bindable rating state initialized from SSR
+  let currentRating = $state(data.rating || {
+    average: null,
+    count: 0,
+    userRating: null,
+    distribution: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  });
+
   let downloadedChapterIds = new SvelteSet<string>();
   let downloadingChapterIds = $state<Record<string, number>>({});
   let batchDownloading = $state(false);
   let batchProgress = $state({ current: 0, total: 0 });
+  let batchAbortController: AbortController | null = null;
 
-  // Reader identity keeps language and edition, but the public PT-BR list must
-  // not repeat the site's default language on every row. Keep non-default
-  // qualifiers visible so distinct editions/locales remain unambiguous.
   function chapterPresentationLabel(chapter: any): string {
     const qualifiers = [chapter.edition, chapter.language]
       .map((value) => String(value ?? '').trim())
@@ -79,7 +97,12 @@
     e.preventDefault();
     e.stopPropagation();
 
-    if (downloadingChapterIds[chapter.id] !== undefined) return;
+    // If already downloading, clicking cancels the download immediately
+    if (downloadingChapterIds[chapter.id] !== undefined) {
+      cancelChapterDownload(chapter.id);
+      notice = `Download do capítulo ${chapterPresentationLabel(chapter)} cancelado.`;
+      return;
+    }
 
     if (downloadedChapterIds.has(chapter.id)) {
       if (confirm(`Remover capítulo ${chapterIdentityLabel(chapter)} do armazenamento offline?`)) {
@@ -90,9 +113,12 @@
       return;
     }
 
+    const controller = new AbortController();
+    registerDownloadController(chapter.id, controller);
+
     try {
       downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
-      const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+      const res = await fetch(`/api/chapters/${chapter.id}/pages`, { signal: controller.signal });
       if (!res.ok) throw new Error('Não foi possível obter páginas do capítulo');
       const payload = await res.json();
       if (!payload.pages || !payload.pages.length) throw new Error('Capítulo não contém páginas');
@@ -104,22 +130,50 @@
         (loaded, total) => {
           const pct = Math.round((loaded / total) * 100);
           downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
-        }
+        },
+        controller.signal
       );
 
       downloadedChapterIds.add(chapter.id);
-      notice = `Capítulo ${chapterIdentityLabel(chapter)} salvo com sucesso para leitura offline!`;
+      notice = `Capítulo ${chapterPresentationLabel(chapter)} salvo com sucesso para leitura offline!`;
     } catch (err: any) {
-      notice = `Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}: ${err.message}`;
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        notice = `Download do capítulo ${chapterPresentationLabel(chapter)} cancelado.`;
+        await removeOfflineChapter(chapter.id).catch(() => {});
+        downloadedChapterIds.delete(chapter.id);
+      } else {
+        notice = `Erro ao baixar capítulo ${chapterPresentationLabel(chapter)}: ${err.message}`;
+      }
     } finally {
+      unregisterDownloadController(chapter.id);
       const copy = { ...downloadingChapterIds };
       delete copy[chapter.id];
       downloadingChapterIds = copy;
     }
   }
 
+  function handleCancelBatchDownload(e?: MouseEvent) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (batchAbortController) {
+      batchAbortController.abort();
+      for (const chId of Object.keys(downloadingChapterIds)) {
+        cancelChapterDownload(chId);
+        removeOfflineChapter(chId).catch(() => {});
+      }
+      notice = 'Download em lote cancelado.';
+      batchDownloading = false;
+    }
+  }
+
   async function handleBatchDownload() {
-    if (batchDownloading || !data.chapters.length) return;
+    if (batchDownloading) {
+      handleCancelBatchDownload();
+      return;
+    }
+    if (!data.chapters.length) return;
     const toDownload = data.chapters.filter((c) => !downloadedChapterIds.has(c.id));
     if (!toDownload.length) {
       notice = 'Todos os capítulos já estão disponíveis offline!';
@@ -127,16 +181,25 @@
     }
 
     batchDownloading = true;
+    batchAbortController = new AbortController();
     batchProgress = { current: 0, total: toDownload.length };
 
     try {
       for (let i = 0; i < toDownload.length; i++) {
+        if (batchAbortController.signal.aborted) break;
+
         const chapter = toDownload[i];
         batchProgress = { current: i + 1, total: toDownload.length };
         downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: 0 };
 
+        const chapterController = new AbortController();
+        registerDownloadController(chapter.id, chapterController);
+
+        const onBatchAbort = () => chapterController.abort();
+        batchAbortController.signal.addEventListener('abort', onBatchAbort, { once: true });
+
         try {
-          const res = await fetch(`/api/chapters/${chapter.id}/pages`);
+          const res = await fetch(`/api/chapters/${chapter.id}/pages`, { signal: chapterController.signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const payload = await res.json();
           if (payload.pages && payload.pages.length) {
@@ -147,23 +210,40 @@
               (loaded, total) => {
                 const pct = Math.round((loaded / total) * 100);
                 downloadingChapterIds = { ...downloadingChapterIds, [chapter.id]: pct };
-              }
+              },
+              chapterController.signal
             );
             downloadedChapterIds.add(chapter.id);
           }
         } catch (e: any) {
-          console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
+          if (e?.name === 'AbortError' || chapterController.signal.aborted || batchAbortController.signal.aborted) {
+            await removeOfflineChapter(chapter.id).catch(() => {});
+            downloadedChapterIds.delete(chapter.id);
+            break;
+          } else {
+            console.error(`Erro ao baixar capítulo ${chapterIdentityLabel(chapter)}:`, e);
+          }
         } finally {
+          batchAbortController.signal.removeEventListener('abort', onBatchAbort);
+          unregisterDownloadController(chapter.id);
           const copy = { ...downloadingChapterIds };
           delete copy[chapter.id];
           downloadingChapterIds = copy;
         }
       }
-      notice = 'Download dos capítulos concluído!';
+
+      if (!batchAbortController.signal.aborted) {
+        notice = 'Download dos capítulos concluído!';
+      }
     } catch (err: any) {
-      notice = `Erro no download em lote: ${err.message}`;
+      if (err?.name === 'AbortError' || batchAbortController?.signal.aborted) {
+        notice = 'Download em lote cancelado.';
+      } else {
+        notice = `Erro no download em lote: ${err.message}`;
+      }
     } finally {
       batchDownloading = false;
+      batchAbortController = null;
     }
   }
 
@@ -191,10 +271,28 @@
       return true;
     });
   });
-  let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 3));
-  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 8));
-  // Unblur automatically when visiting the individual work page per UX requirements
-  let effectiveBlur = false;
+
+  let previewAliases = $derived(alternativeTitles.slice(0, 3));
+  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 9));
+
+  let legitimateAuthor = $derived.by(() => {
+    const author = (data.work.author || '').trim();
+    if (!author) return null;
+    // Check if author looks like a scan team (ends with scan/scans/scanlator or contains scan)
+    if (/\b(scan|scans|scanlator|scanlation)\b/i.test(author) || /(scan|scans|scanlator)$/i.test(author)) {
+      return null;
+    }
+    return author;
+  });
+
+  let legitimateArtist = $derived.by(() => {
+    const artist = (data.work.artist || '').trim();
+    if (!artist) return null;
+    if (/\b(scan|scans|scanlator|scanlation)\b/i.test(artist) || /(scan|scans|scanlator)$/i.test(artist)) {
+      return null;
+    }
+    return artist;
+  });
 
   let chapters = $derived(
     (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
@@ -232,7 +330,7 @@
         ...update
       });
       await invalidateAll();
-      notice = 'Biblioteca atualizada.';
+      notice = 'Biblioteca atualizada com sucesso.';
     } catch (e) {
       notice = (e as Error).message;
     } finally {
@@ -256,19 +354,31 @@
       busy = false;
     }
   }
+
+  function handleShare() {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({
+        title: decodedTitle,
+        url: window.location.href
+      }).catch(() => {});
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href);
+      notice = 'Link copiado para a área de transferência!';
+    }
+  }
 </script>
 
 <svelte:head>
   <title>{decodedTitle} — Ler na Project Nox</title>
-  <meta name="description" content={decodedSynopsis.slice(0, 160)} />
+  <meta name="description" content={decodedSynopsis ? decodedSynopsis.slice(0, 160) : `Leia ${decodedTitle} online na Project Nox.`} />
   <meta property="og:title" content={decodedTitle} />
-  <meta property="og:description" content={decodedSynopsis.slice(0, 200)} />
+  <meta property="og:description" content={decodedSynopsis ? decodedSynopsis.slice(0, 200) : `Leia ${decodedTitle} online na Project Nox.`} />
   <meta property="og:image" content={data.metaImage} />
   <meta property="og:image:alt" content="Capa de {decodedTitle}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content={data.metaImage} />
   <meta name="twitter:title" content="{decodedTitle} — Ler na Project Nox" />
-  <meta name="twitter:description" content={decodedSynopsis.slice(0, 200)} />
+  <meta name="twitter:description" content={decodedSynopsis ? decodedSynopsis.slice(0, 200) : `Leia ${decodedTitle} online na Project Nox.`} />
   <link rel="canonical" href={data.canonical} />
   <meta property="og:url" content={data.canonical} />
   <meta property="og:type" content="book" />
@@ -279,282 +389,599 @@
   {@html data.structuredData}
 </svelte:head>
 
-<div class="work-redesign-backdrop" aria-hidden="true">
-  <img src={obraCover} alt="" />
+<!-- Cinematic Ambient Backdrop -->
+<div class="work-backdrop" aria-hidden="true">
+  <img src={obraCover} alt="" class="backdrop-img" />
+  <div class="backdrop-gradient"></div>
 </div>
 
-<main class="container work-redesign spacer-bottom">
+<main class="container work-page-root spacer-bottom">
+  <!-- Breadcrumb Navigation -->
   <nav class="work-breadcrumb" aria-label="Navegação estrutural">
     <a href="/catalogo">Catálogo</a>
-    <span aria-hidden="true">/</span>
-    <span>{decodedTitle}</span>
+    <span class="crumb-separator" aria-hidden="true">/</span>
+    <span class="crumb-current">{decodedTitle}</span>
   </nav>
 
-  <section class="work-hero" aria-labelledby="work-title">
-    <div class="work-cover-frame">
-      <img
-        src={obraCover}
-        alt="Capa de {decodedTitle}"
-        width="320"
-        height="448"
-        class="work-cover-image"
-        class:blurred-cover={effectiveBlur}
-      />
-      {#if isAdult}<span class="work-adult-badge">+18</span>{/if}
+  <!-- Hero Presentation Section -->
+  <section class="work-hero-section" aria-labelledby="work-title">
+    <!-- Left Column on Desktop / Centered Top on Mobile: Cover + Classification Badges -->
+    <div class="work-cover-column">
+      <div class="work-cover-wrapper">
+        <img
+          src={obraCover}
+          alt="Capa de {decodedTitle}"
+          width="280"
+          height="392"
+          class="work-cover-img"
+        />
+        {#if isAdult}
+          <span class="badge-adult-seal">+18</span>
+        {/if}
+        {#if data.work.featured}
+          <span class="badge-featured-seal">
+            <Sparkles size={13} /> Destaque
+          </span>
+        {/if}
+      </div>
+
+      <!-- Integrated Indicators Group Directly Below Cover -->
+      <div class="cover-indicators-group" aria-label="Classificações da obra">
+        <span class="indicator-badge badge-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
+        <span class="indicator-badge badge-status">{statusLabels[data.work.status] || data.work.status}</span>
+        {#if isAdult}
+          <span class="indicator-badge badge-rating-adult">+18 Adulto</span>
+        {:else if data.work.age_rating}
+          <span class="indicator-badge badge-rating-age">{data.work.age_rating} anos</span>
+        {:else}
+          <span class="indicator-badge badge-rating-free">Livre</span>
+        {/if}
+      </div>
     </div>
 
-    <div class="work-hero-copy">
-      <div class="work-statuses" aria-label="Classificações da obra">
-        <span class="work-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
-        <span class="work-status">{statusLabels[data.work.status] || data.work.status}</span>
-        {#if data.work.featured}<span class="work-featured"><Sparkles size={13} /> Destaque</span>{/if}
-        {#if isAdult}<span class="work-rating">+18</span>{/if}
+    <!-- Right Column on Desktop / Below Cover on Mobile: Full Work Details -->
+    <div class="work-details-column">
+      <!-- Main Title (Top aligned with cover) -->
+      <h1 id="work-title" class="work-title">{decodedTitle}</h1>
+
+      <!-- Star Rating Component (1 to 5 Stars) -->
+      <WorkRating
+        workId={data.work.id}
+        bind:rating={currentRating}
+        profile={data.profile}
+        onNotice={(msg) => (notice = msg)}
+      />
+
+      <!-- Interactive Controls Group (40-44px Height Reference) -->
+      <div class="work-hero-actions" aria-label="Controles de interação">
+        <div class="actions-buttons-cluster">
+          <button
+            type="button"
+            class="btn-action-control"
+            class:is-active={data.library?.favorite}
+            onclick={() => library({ favorite: !data.library?.favorite })}
+            disabled={busy}
+            title={data.library?.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+          >
+            <Bookmark size={18} fill={data.library?.favorite ? 'currentColor' : 'none'} />
+            <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control btn-like"
+            class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
+            onclick={like}
+            disabled={busy}
+            title={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Descurtir obra' : 'Curtir obra'}
+          >
+            <Heart size={18} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
+            <span>{data.likes.length}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control"
+            onclick={handleShare}
+            title="Compartilhar obra"
+          >
+            <Share2 size={18} />
+            <span class="btn-text-desktop">Compartilhar</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control btn-report"
+            onclick={() => (showReportModal = true)}
+            title="Reportar problema nesta obra"
+          >
+            <Flag size={18} />
+            <span class="btn-text-desktop">Reportar</span>
+          </button>
+        </div>
+
+        <!-- Library Status Selector -->
+        <div class="library-dropdown-wrap">
+          <select
+            class="library-select-hero"
+            aria-label="Organizar na biblioteca"
+            value={data.library?.status || ''}
+            onchange={(e) => library({ status: e.currentTarget.value })}
+            disabled={busy}
+          >
+            <option value="" disabled>Adicionar à biblioteca…</option>
+            <option value="READING">Lendo atualmente</option>
+            <option value="PLANNED">Quero ler</option>
+            <option value="COMPLETED">Concluído</option>
+          </select>
+        </div>
       </div>
 
-      <h1 id="work-title">{decodedTitle}</h1>
+      <!-- Essential Metrics Inline (Clean, unbloated, high-contrast) -->
+      <div class="work-metrics-inline" aria-label="Estatísticas da obra">
+        <span class="metric-inline-item" title="{data.work.views_total || 0} visualizações totais auditadas">
+          <Eye size={14} class="metric-icon" />
+          <strong>{formatViews(data.work.views_total || 0)}</strong>
+          <span class="metric-lbl">views</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.metrics?.readers || 0} leitores que concluíram capítulos">
+          <Users size={14} class="metric-icon" />
+          <strong>{formatViews(data.metrics?.readers || 0)}</strong>
+          <span class="metric-lbl">leitores</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.chapters.length} capítulos disponíveis">
+          <BookOpen size={14} class="metric-icon" />
+          <strong>{data.chapters.length}</strong>
+          <span class="metric-lbl">caps</span>
+        </span>
+        <span class="metric-dot" aria-hidden="true">•</span>
+        <span class="metric-inline-item" title="{data.likes.length} curtidas na comunidade">
+          <Heart size={14} class="metric-icon" />
+          <strong>{data.likes.length}</strong>
+          <span class="metric-lbl">curtidas</span>
+        </span>
+      </div>
 
-      {#if data.work.author || data.work.artist}
-        <dl class="creator-list">
-          {#if data.work.author}
-            <div><dt>Autor</dt><dd>{data.work.author}</dd></div>
-          {/if}
-          {#if data.work.artist}
-            <div><dt>Artista</dt><dd>{data.work.artist}</dd></div>
-          {/if}
-        </dl>
+      <!-- Synopsis Section (Editorial Refined Presentation) -->
+      {#if decodedSynopsis}
+        {@const synopsisIsLong = decodedSynopsis.length > 320}
+        <div class="work-synopsis-card" aria-label="Sinopse da obra">
+          <div class="synopsis-card-header">
+            <h2 class="synopsis-heading">Sinopse</h2>
+          </div>
+          <div class="synopsis-body">
+            <p class="synopsis-paragraph" class:clamped={synopsisIsLong && !synopsisExpanded}>
+              {decodedSynopsis}
+            </p>
+            {#if synopsisIsLong}
+              <button
+                type="button"
+                class="btn-expand-synopsis"
+                onclick={() => (synopsisExpanded = !synopsisExpanded)}
+                aria-expanded={synopsisExpanded}
+              >
+                <span>{synopsisExpanded ? 'Recolher sinopse' : 'Ler sinopse completa'}</span>
+                {#if synopsisExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+              </button>
+            {/if}
+          </div>
+        </div>
       {/if}
-
-      <dl class="work-quick-stats" aria-label="Resumo da obra">
-        <div><dt>Capítulos</dt><dd>{data.chapters.length}</dd></div>
-        <div><dt>Leitores</dt><dd>{formatViews(data.metrics?.readers ?? 0)}</dd></div>
-        {#if data.work.year}<div><dt>Ano</dt><dd>{data.work.year}</dd></div>{/if}
-        {#if isAdult}<div><dt>Classificação</dt><dd>Adulto</dd></div>{:else if data.work.age_rating}<div><dt>Classificação</dt><dd>{data.work.age_rating} anos</dd></div>{/if}
-      </dl>
-
-      <div class="work-primary-actions">
-        {#if resume}
-          <a class="read-work-button" href="/ler/{resume}">
-            <BookOpen size={19} />
-            {data.progress.length ? 'Continuar leitura' : 'Começar a ler'}
-          </a>
-        {/if}
-        <button
-          type="button"
-          class="work-action"
-          class:is-active={data.library?.favorite}
-          onclick={() => library({ favorite: !data.library?.favorite })}
-          disabled={busy}
-        >
-          <Bookmark size={17} fill={data.library?.favorite ? 'currentColor' : 'none'} />
-          {data.library?.favorite ? 'Favoritado' : 'Favoritar'}
-        </button>
-        <button
-          type="button"
-          class="work-action icon-action"
-          class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
-          onclick={like}
-          disabled={busy}
-          aria-label={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Remover curtida' : 'Curtir obra'}
-        >
-          <Heart size={17} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
-          <span>{data.likes.length}</span>
-        </button>
-      </div>
-
-      <div class="work-secondary-actions">
-        <select
-          class="work-library-select"
-          aria-label="Organizar na biblioteca"
-          value={data.library?.status || ''}
-          onchange={(event) => library({ status: event.currentTarget.value })}
-        >
-          <option value="" disabled>Adicionar à biblioteca…</option>
-          <option value="READING">Lendo atualmente</option>
-          <option value="PLANNED">Quero ler</option>
-          <option value="COMPLETED">Concluído</option>
-        </select>
-        <button type="button" class="text-action" onclick={() => (showReportModal = true)}>
-          <Flag size={15} /> Reportar
-        </button>
-        {#if data.library}
-          <label class="notify-toggle">
-            <input
-              type="checkbox"
-              checked={data.library.following}
-              onchange={(event) => library({ following: event.currentTarget.checked })}
-            />
-            Avisar novos capítulos
-          </label>
-        {/if}
-      </div>
     </div>
   </section>
 
-  {#if notice}<div class="work-notice" role="status">{notice}</div>{/if}
+  <!-- Notice Feedback Toast -->
+  {#if notice}
+    <div class="work-notice-bar" role="status">
+      <span>{notice}</span>
+      <button type="button" class="btn-notice-dismiss" onclick={() => (notice = '')} aria-label="Fechar aviso">
+        ×
+      </button>
+    </div>
+  {/if}
 
-  <div class="work-information-layout">
-    <div class="work-reading-column">
-      {#if alternativeTitles.length}
-        <section class="work-panel aliases-panel" aria-labelledby="alternative-titles-heading">
-          <div class="section-heading-row">
-            <div>
-              <p class="eyebrow">Identidade</p>
-              <h2 id="alternative-titles-heading">Títulos alternativos</h2>
-            </div>
-            <span class="section-count">{alternativeTitles.length}</span>
+  <!-- Redesigned Editorial Ficha Técnica (Single Unified Panel) -->
+  <section class="work-specs-section work-specs-editorial work-sidebar" aria-label="Ficha técnica e detalhes da obra">
+    <div class="specs-section-header">
+      <div class="specs-heading-wrap">
+        <SlidersHorizontal size={18} class="specs-header-icon" />
+        <h2 class="specs-main-title">Ficha Técnica & Detalhes</h2>
+      </div>
+      <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
+    </div>
+
+    <!-- Single Unified Panel with True 2x2 Symmetric Grid on Desktop -->
+    <div class="specs-unified-panel">
+      <!-- Subseção 1 (Row 1, Col 1): Informações da Obra -->
+      <div class="specs-subpanel" id="subpanel-info">
+        <div class="subpanel-header">
+          <BookOpen size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Informações da Obra</h3>
+        </div>
+        <dl class="specs-table">
+          <div class="specs-row">
+            <dt>Formato</dt>
+            <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
           </div>
-          <ul class="alias-list">
-            {#each visibleAliases as alias (alias)}
-              <li>{decodeHtmlEntities(alias)}</li>
+          <div class="specs-row">
+            <dt>Status de Publicação</dt>
+            <dd>
+              <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
+              {statusLabels[data.work.status] || data.work.status}
+            </dd>
+          </div>
+          {#if data.work.year}
+            <div class="specs-row">
+              <dt>Ano de Lançamento</dt>
+              <dd>{data.work.year}</dd>
+            </div>
+          {/if}
+          <div class="specs-row">
+            <dt>Classificação Indicativa</dt>
+            <dd>
+              {#if isAdult}
+                <span class="age-pill adult">+18 Adulto</span>
+              {:else if data.work.age_rating}
+                <span class="age-pill">{data.work.age_rating} anos</span>
+              {:else}
+                <span class="age-pill free">Livre</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Capítulos Catalogados</dt>
+            <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Subseção 2 (Row 1, Col 2): Equipe & Créditos -->
+      <div class="specs-subpanel" id="subpanel-credits">
+        <div class="subpanel-header">
+          <Users size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Equipe & Créditos</h3>
+        </div>
+        <dl class="specs-table">
+          <div class="specs-row">
+            <dt>Roteiro / História</dt>
+            <dd>
+              {#if legitimateAuthor}
+                <strong>{legitimateAuthor}</strong>
+              {:else}
+                <span class="unassigned-spec" title="Autor não identificado">?</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Arte / Ilustração</dt>
+            <dd>
+              {#if legitimateArtist}
+                <strong>{legitimateArtist}</strong>
+              {:else if legitimateAuthor}
+                <span>{legitimateAuthor}</span>
+              {:else}
+                <span class="unassigned-spec" title="Artista não identificado">?</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row scans-row">
+            <dt>Tradução / Scanlator</dt>
+            <dd class="scans-chips-wrap">
+              {#if data.scans && data.scans.length > 0}
+                {#each data.scans as scan (scan.id || scan.slug)}
+                  <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
+                    <Users size={12} />
+                    <span>{scan.name}</span>
+                  </a>
+                {/each}
+              {:else}
+                <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Idioma</dt>
+            <dd>Português (Brasil)</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Subseção 3 (Row 2, Col 1): Gêneros & Temas (Equilibrado e Simétrico com Aliases) -->
+      <div class="specs-subpanel" id="subpanel-genres">
+        <div class="subpanel-header">
+          <Tag size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Gêneros & Temas</h3>
+          {#if data.tags?.length}
+            <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
+          {/if}
+        </div>
+        {#if visibleTags.length}
+          <div class="genres-card-body" class:is-sparse={visibleTags.length <= 5}>
+            <div class="editorial-tags-wrap">
+              {#each visibleTags as tag (tag.id)}
+                <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
+                  {tag.name}
+                </a>
+              {/each}
+            </div>
+            {#if data.tags.filter(Boolean).length > 9}
+              <button
+                type="button"
+                class="btn-toggle-subpanel"
+                onclick={() => (tagsExpanded = !tagsExpanded)}
+                aria-expanded={tagsExpanded}
+              >
+                <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos os ${data.tags.filter(Boolean).length} gêneros`}</span>
+                {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+              </button>
+            {/if}
+          </div>
+        {:else}
+          <div class="genres-empty-wrap">
+            <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Subseção 4 (Row 2, Col 2): Títulos Alternativos (Prévia Compacta de 3) -->
+      <div class="specs-subpanel" id="subpanel-aliases">
+        <div class="subpanel-header">
+          <Languages size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Títulos Alternativos</h3>
+          {#if alternativeTitles.length}
+            <span class="subpanel-count-badge">{alternativeTitles.length}</span>
+          {/if}
+        </div>
+        {#if alternativeTitles.length}
+          <ul class="aliases-editorial-list">
+            {#each previewAliases as alias, i (alias)}
+              <li class="alias-editorial-row">
+                <span class="alias-index-num">#{i + 1}</span>
+                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+              </li>
             {/each}
           </ul>
           {#if alternativeTitles.length > 3}
-            <button type="button" class="expand-text" onclick={() => (aliasesExpanded = !aliasesExpanded)} aria-expanded={aliasesExpanded}>
-              {aliasesExpanded ? 'Ver menos' : `Ver todos (${alternativeTitles.length})`}
-              {#if aliasesExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
-            </button>
-          {/if}
-        </section>
-      {/if}
-
-      {#if visibleTags.length}
-        <section class="work-panel tags-panel" aria-labelledby="work-tags-heading">
-          <div class="section-heading-row">
-            <div>
-              <p class="eyebrow">Classificação</p>
-              <h2 id="work-tags-heading">Gêneros e tags</h2>
-            </div>
-            <span class="section-count">{data.tags.filter(Boolean).length}</span>
-          </div>
-          <div class="work-tag-list">
-            {#each visibleTags as tag (tag.id)}
-              <a href="/catalogo?tag={tag.slug}">{tag.name}</a>
-            {/each}
-          </div>
-          {#if data.tags.filter(Boolean).length > 8}
-            <button type="button" class="expand-text" onclick={() => (tagsExpanded = !tagsExpanded)} aria-expanded={tagsExpanded}>
-              {tagsExpanded ? 'Ver menos' : 'Ver todas as tags'}
-              {#if tagsExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
-            </button>
-          {/if}
-        </section>
-      {/if}
-
-      {#if decodedSynopsis}
-        {@const synopsisIsLong = decodedSynopsis.length > 420}
-        <section class="work-panel synopsis-panel" aria-labelledby="synopsis-heading">
-          <p class="eyebrow">Sobre a obra</p>
-          <h2 id="synopsis-heading">Sinopse</h2>
-          <p class:clamped-synopsis={synopsisIsLong && !synopsisExpanded}>{decodedSynopsis}</p>
-          {#if synopsisIsLong}
-            <button type="button" class="expand-text" onclick={() => (synopsisExpanded = !synopsisExpanded)} aria-expanded={synopsisExpanded}>
-              {synopsisExpanded ? 'Ver menos' : 'Ler sinopse completa'}
-              {#if synopsisExpanded}<ChevronUp size={15} />{:else}<ChevronDown size={15} />{/if}
-            </button>
-          {/if}
-        </section>
-      {/if}
-    </div>
-
-    <aside class="work-panel work-facts" aria-label="Informações da obra">
-      <p class="eyebrow">Ficha técnica</p>
-      <h2>Informações</h2>
-      <dl>
-        <div><dt>Tipo</dt><dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd></div>
-        <div><dt>Status</dt><dd>{statusLabels[data.work.status] || data.work.status}</dd></div>
-        {#if data.work.year}<div><dt>Lançamento</dt><dd>{data.work.year}</dd></div>{/if}
-        {#if data.work.author}<div><dt>Autor</dt><dd>{data.work.author}</dd></div>{/if}
-        {#if data.work.artist}<div><dt>Artista</dt><dd>{data.work.artist}</dd></div>{/if}
-        {#if data.scans?.length}
-          <div class="fact-scans">
-            <dt>{data.scans.length > 1 ? 'Scans parceiras' : 'Scan parceira'}</dt>
-            <dd>
-              {#each data.scans as scan, index (scan.id || scan.slug || index)}
-                <a href="/scans/{scan.slug}">{scan.name}</a>{#if index < data.scans.length - 1}<span> · </span>{/if}
-              {/each}
-            </dd>
-          </div>
-        {/if}
-      </dl>
-    </aside>
-  </div>
-
-  <section class="work-chapters" aria-labelledby="chapters-heading">
-    <div class="chapters-title-row">
-      <div>
-        <p class="eyebrow">Leitura</p>
-        <h2 id="chapters-heading">Capítulos</h2>
-        <p>{chapters.length} disponíveis · Atualizado em {date(data.work.updated_at)}</p>
-      </div>
-      {#if resume}
-        <a class="chapters-read-link" href="/ler/{resume}"><BookOpen size={17} /> {data.progress.length ? 'Continuar' : 'Ler agora'}</a>
-      {/if}
-    </div>
-
-    <div class="chapters-controls">
-      <input bind:value={search} placeholder="Buscar capítulo ou título" aria-label="Buscar capítulo" />
-      <button type="button" class="chapter-control" onclick={() => (ascending = !ascending)}>
-        {#if ascending}<ArrowUp size={16} /> Mais antigos{:else}<ArrowDown size={16} /> Mais recentes{/if}
-      </button>
-      <button
-        type="button"
-        class="chapter-control download-all"
-        class:is-busy={batchDownloading}
-        onclick={handleBatchDownload}
-        disabled={batchDownloading || !data.chapters.length}
-      >
-        {#if batchDownloading}<Loader2 size={16} class="spin" /> Baixando {batchProgress.current}/{batchProgress.total}{:else}<Download size={16} /> Offline{/if}
-      </button>
-    </div>
-
-    <div class="chapter-list" aria-live="polite">
-      {#each visibleChapters as chapter (chapter.id)}
-        {@const isRead = readChapterIds.has(chapter.id)}
-        {@const isNew = chapter.published_at && Date.now() - new Date(chapter.published_at).getTime() < 7 * 24 * 60 * 60 * 1000}
-        {@const isDownloaded = downloadedChapterIds.has(chapter.id)}
-        {@const downloadProgress = downloadingChapterIds[chapter.id]}
-        <div class="chapter-row" class:is-read={isRead}>
-          <a href="/ler/{chapter.id}" class="chapter-main-link">
-            <span class="chapter-index">{chapterPresentationLabel(chapter)}</span>
-            <span class="chapter-copy">
-              <span class="chapter-name">Capítulo {chapterPresentationLabel(chapter)}</span>
-              {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterPresentationLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
-                <span class="chapter-subtitle">{chapter.title}</span>
-              {/if}
-            </span>
-          </a>
-          <span class="chapter-details">
-            {#if isNew}<span class="new-chapter">Novo</span>{/if}
-            {#if isRead}<span class="chapter-read"><CheckCircle2 size={14} /> Lido</span>{/if}
-            {#if chapter.published_at}<time>{date(chapter.published_at)}</time>{/if}
             <button
               type="button"
-              class="chapter-download"
-              class:is-downloaded={isDownloaded}
-              onclick={(event) => handleToggleDownload(chapter, event)}
-              title={isDownloaded ? 'Remover do offline' : 'Baixar para leitura offline'}
+              class="btn-toggle-subpanel"
+              onclick={() => (aliasesExpanded = !aliasesExpanded)}
+              aria-expanded={aliasesExpanded}
             >
-              {#if downloadProgress !== undefined}<Loader2 size={15} class="spin" /><span>{downloadProgress}%</span>{:else if isDownloaded}<CheckCircle2 size={15} /><span>Offline</span>{:else}<Download size={15} /><span>Offline</span>{/if}
+              <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos`}</span>
+              {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
             </button>
-            <a href="/ler/{chapter.id}" class="chapter-open-link" aria-label="Ler capítulo {chapterPresentationLabel(chapter)}"><BookOpen size={17} class="chapter-open" /></a>
-          </span>
-        </div>
-      {/each}
+          {/if}
+        {:else}
+          <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
+        {/if}
+      </div>
 
-      {#if !search.trim() && chapters.length > visibleLimit}
-        <div class="chapter-more-actions">
-          <button type="button" onclick={() => (visibleLimit += 150)}>Carregar mais ({chapters.length - visibleLimit})</button>
-          <button type="button" class="secondary" onclick={() => (visibleLimit = chapters.length)}>Mostrar todos</button>
+      <!-- Subseção 5: Painel Expansível de Largura Total -->
+      {#if aliasesExpanded && alternativeTitles.length > 3}
+        <div class="specs-aliases-drawer" id="aliases-expanded-drawer">
+          <div class="drawer-header">
+            <div class="drawer-title-wrap">
+              <Languages size={15} class="drawer-icon" />
+              <h4 class="drawer-title">Todos os {alternativeTitles.length} Títulos Alternativos</h4>
+            </div>
+            <button
+              type="button"
+              class="btn-drawer-close"
+              onclick={() => (aliasesExpanded = false)}
+              aria-label="Recolher lista de títulos alternativos"
+            >
+              <span>Recolher</span>
+              <ChevronUp size={14} />
+            </button>
+          </div>
+          <div class="drawer-aliases-grid">
+            {#each alternativeTitles as alias, i (alias)}
+              <div class="drawer-alias-item">
+                <span class="alias-index-num">#{i + 1}</span>
+                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+              </div>
+            {/each}
+          </div>
         </div>
-      {/if}
-      {#if !chapters.length}
-        <div class="chapter-empty">{search ? `Nenhum capítulo encontrado para “${search}”.` : 'Nenhum capítulo disponível no momento.'}</div>
       {/if}
     </div>
   </section>
 
+  <!-- Chapter List Section (Wide, Full-Width Reading Area) -->
+  <section class="work-chapters-section" aria-labelledby="chapters-heading">
+      <div class="chapters-header">
+        <div class="chapters-title-wrap">
+          <h2 id="chapters-heading" class="chapters-title">Capítulos</h2>
+          <p class="chapters-subtitle">
+            {chapters.length} disponíveis · Atualizado em {date(data.work.updated_at)}
+          </p>
+        </div>
+        {#if resume}
+          <a class="btn-read-primary" href="/ler/{resume}">
+            <BookOpen size={18} />
+            <span>{data.progress.length ? 'Continuar leitura' : 'Começar a ler'}</span>
+          </a>
+        {/if}
+      </div>
+
+      <!-- Chapter Search & Filter Controls -->
+      <div class="chapters-toolbar">
+        <div class="search-input-wrap">
+          <Search size={16} class="search-icon" />
+          <input
+            bind:value={search}
+            placeholder="Buscar número ou título do capítulo…"
+            aria-label="Buscar capítulo"
+            class="chapters-search-input"
+          />
+          {#if search}
+            <button type="button" class="btn-clear-search" onclick={() => (search = '')} aria-label="Limpar busca">
+              ×
+            </button>
+          {/if}
+        </div>
+
+        <div class="toolbar-buttons">
+          <button
+            type="button"
+            class="btn-toolbar"
+            onclick={() => (ascending = !ascending)}
+            title="Alternar ordem dos capítulos"
+          >
+            {#if ascending}
+              <ArrowUp size={16} />
+              <span>Mais antigos</span>
+            {:else}
+              <ArrowDown size={16} />
+              <span>Mais recentes</span>
+            {/if}
+          </button>
+
+          <button
+            type="button"
+            class="btn-toolbar download-batch-btn"
+            class:is-busy={batchDownloading}
+            onclick={batchDownloading ? handleCancelBatchDownload : handleBatchDownload}
+            disabled={!data.chapters.length}
+            title={batchDownloading ? 'Clique para cancelar download em lote' : 'Baixar todos os capítulos para leitura offline'}
+            aria-label={batchDownloading ? 'Cancelar download em lote' : 'Baixar todos os capítulos offline'}
+          >
+            {#if batchDownloading}
+              <Loader2 size={16} class="spin batch-spinner" />
+              <span>Cancelar ({batchProgress.current}/{batchProgress.total})</span>
+              <X size={15} class="batch-cancel-x" />
+            {:else}
+              <Download size={16} />
+              <span>Offline</span>
+            {/if}
+          </button>
+        </div>
+      </div>
+
+      <!-- Chapter Cards List -->
+      <div class="chapter-list-wrap" aria-live="polite">
+        {#each visibleChapters as chapter (chapter.id)}
+          {@const isRead = readChapterIds.has(chapter.id)}
+          {@const isNew = chapter.published_at && Date.now() - new Date(chapter.published_at).getTime() < 7 * 24 * 60 * 60 * 1000}
+          {@const isDownloaded = downloadedChapterIds.has(chapter.id)}
+          {@const downloadProgress = downloadingChapterIds[chapter.id]}
+
+          <div class="chapter-card" class:is-read={isRead}>
+            <a href="/ler/{chapter.id}" class="chapter-card-link">
+              <span class="chapter-number-badge">
+                {chapterPresentationLabel(chapter)}
+              </span>
+
+              <div class="chapter-info-col">
+                <div class="chapter-name-line">
+                  <span class="chapter-label">Capítulo {chapterPresentationLabel(chapter)}</span>
+                  {#if isNew}
+                    <span class="badge-new-pill">Novo</span>
+                  {/if}
+                  {#if isRead}
+                    <span class="badge-read-pill"><CheckCircle2 size={12} /> Lido</span>
+                  {/if}
+                </div>
+
+                {#if chapter.title && chapter.title.trim() && chapter.title.trim().toLocaleLowerCase('pt-BR') !== `capítulo ${chapterPresentationLabel(chapter)}`.toLocaleLowerCase('pt-BR')}
+                  <span class="chapter-sub-title">{chapter.title}</span>
+                {/if}
+
+                <!-- Restored Chapter Views & Date Meta Line -->
+                <div class="chapter-card-meta">
+                  <span class="chapter-meta-views" title="{(chapter.views_total ?? 0)} visualizações">
+                    <Eye size={12} />
+                    <span>{formatViews(chapter.views_total ?? 0)}</span>
+                  </span>
+                  {#if chapter.published_at}
+                    <span class="meta-dot" aria-hidden="true">·</span>
+                    <time class="chapter-meta-date" datetime={chapter.published_at}>
+                      <Calendar size={12} />
+                      <span>{date(chapter.published_at)}</span>
+                    </time>
+                  {/if}
+                </div>
+              </div>
+            </a>
+
+            <div class="chapter-actions-col">
+              <!-- Offline Download Button (with active download cancellation support) -->
+              <button
+                type="button"
+                class="btn-chapter-download"
+                class:is-downloaded={isDownloaded}
+                class:is-downloading={downloadProgress !== undefined}
+                onclick={(e) => handleToggleDownload(chapter, e)}
+                title={downloadProgress !== undefined
+                  ? `Cancelar download (${downloadProgress}%)`
+                  : isDownloaded
+                    ? 'Remover do armazenamento offline'
+                    : 'Baixar para ler offline'}
+                aria-label={downloadProgress !== undefined
+                  ? `Cancelar download do capítulo ${chapterPresentationLabel(chapter)} (${downloadProgress}%)`
+                  : isDownloaded
+                    ? `Remover capítulo ${chapterPresentationLabel(chapter)} do armazenamento offline`
+                    : `Baixar capítulo ${chapterPresentationLabel(chapter)} para ler offline`}
+              >
+                {#if downloadProgress !== undefined}
+                  <span class="download-active-wrap">
+                    <Loader2 size={13} class="spin icon-loading" />
+                    <X size={14} class="icon-cancel-hover" />
+                    <span class="download-pct">{downloadProgress}%</span>
+                  </span>
+                {:else if isDownloaded}
+                  <CheckCircle2 size={16} class="icon-downloaded" />
+                {:else}
+                  <Download size={16} class="icon-download" />
+                {/if}
+              </button>
+
+              <a
+                href="/ler/{chapter.id}"
+                class="btn-chapter-read-icon"
+                aria-label="Ler capítulo {chapterPresentationLabel(chapter)}"
+              >
+                <BookOpen size={17} />
+              </a>
+            </div>
+          </div>
+        {/each}
+
+        {#if !search.trim() && chapters.length > visibleLimit}
+          <div class="chapter-pagination-actions">
+            <button
+              type="button"
+              class="btn-load-more"
+              onclick={() => (visibleLimit += 150)}
+            >
+              Carregar mais ({chapters.length - visibleLimit} restantes)
+            </button>
+            <button
+              type="button"
+              class="btn-show-all"
+              onclick={() => (visibleLimit = chapters.length)}
+            >
+              Mostrar todos os {chapters.length}
+            </button>
+          </div>
+        {/if}
+
+        {#if !chapters.length}
+          <div class="chapter-empty-state">
+            <BookOpen size={36} class="empty-icon" />
+            <p>{search ? `Nenhum capítulo encontrado para “${search}”.` : 'Nenhum capítulo disponível no momento.'}</p>
+          </div>
+        {/if}
+      </div>
+    </section>
+
+  <!-- Comments Section -->
   <Comments comments={data.comments} workId={data.work.id} profile={data.profile} />
 
+  <!-- Report Modal -->
   {#if showReportModal}
     <ReportModal
       targetType="WORK"
@@ -569,1957 +996,1568 @@
   {/if}
 </main>
 
-{#if false}
-<!-- Cinematic Backdrop Banner -->
-<div class="work-backdrop" aria-hidden="true">
-  <img src={obraCover} alt="" class="backdrop-img" />
-  <div class="backdrop-mask"></div>
-</div>
-
-<div class="container work-page-container spacer-bottom">
-  <div class="page-top">
-    <nav class="breadcrumb" aria-label="Navegação estrutural">
-      <a href="/catalogo">Catálogo</a>
-      <span>/</span>
-      <span class="active-crumb">{decodedTitle}</span>
-    </nav>
-  </div>
-
-  <div class="kuro-layout-grid">
-    <!-- LEFT SIDEBAR: Cover + INFORMAÇÕES (Under Cover on Desktop) -->
-    <aside class="kuro-sidebar">
-      <div class="work-cover-wrap">
-        <img
-          src={obraCover}
-          alt="Capa de {decodedTitle}"
-          width="320"
-          height="440"
-          class="work-cover"
-          class:blurred-cover={effectiveBlur}
-        />
-        {#if isAdult}
-          <span class="adult-badge-work">+18</span>
-        {/if}
-        {#if data.scans && data.scans.length > 0}
-          <div class="cover-scan-seal">
-            <Users size={12} />
-            {#each data.scans as scan, i (scan.id || scan.slug || i)}
-              {#if i > 0}<span class="seal-sep">×</span>{/if}
-              <a href="/scans/{scan.slug}" class="seal-link" title="Ver perfil de {scan.name}">{scan.name}</a>
-            {/each}
-          </div>
-        {/if}
-      </div>
-
-      <!-- INFORMAÇÕES Card (Under Cover on Desktop) -->
-      <div class="work-metadata-card sidebar-info desktop-only">
-        <h3 class="metadata-heading">INFORMAÇÕES</h3>
-        <div class="metadata-grid">
-          <div class="meta-item">
-            <span class="meta-label">Tipo</span>
-            <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Status</span>
-            <span class="meta-value meta-status">{statusLabels[data.work.status] || data.work.status}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Capítulos</span>
-            <span class="meta-value">{data.chapters.length}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Leitores</span>
-            <span class="meta-value">{data.metrics?.readers ?? 0}</span>
-          </div>
-          {#if data.work.year}
-            <div class="meta-item">
-              <span class="meta-label">Lançamento</span>
-              <span class="meta-value">{data.work.year}</span>
-            </div>
-          {/if}
-          {#if isAdult}
-            <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-              <span class="meta-label">Classificação</span>
-              <span class="meta-value adult-meta-val">+18 Adulto</span>
-            </div>
-          {:else if data.work.age_rating}
-            <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-              <span class="meta-label">Classificação</span>
-              <span class="meta-value">{data.work.age_rating} anos</span>
-            </div>
-          {/if}
-          {#if data.work.author}
-            <div class="meta-item full-width row-style">
-              <span class="meta-label">Autor</span>
-              <span class="meta-value">{data.work.author}</span>
-            </div>
-          {/if}
-          {#if data.work.artist}
-            <div class="meta-item full-width row-style">
-              <span class="meta-label">Arte</span>
-              <span class="meta-value">{data.work.artist}</span>
-            </div>
-          {/if}
-          {#if data.scans && data.scans.length > 0}
-            <div class="meta-item full-width row-style">
-              <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
-              <div class="meta-scans-val">
-                {#each data.scans as scan, i (scan.id || scan.slug || i)}
-                  {#if i > 0}<span class="scan-comma">·</span>{/if}
-                  <a href="/scans/{scan.slug}" class="meta-scan-link">
-                    {#if scan.logo_id}
-                      <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
-                    {/if}
-                    <span>{scan.name}</span>
-                  </a>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-      </div>
-    </aside>
-
-    <!-- RIGHT MAIN CONTENT: Badges + Title + Author/Artist + Tags + Sinopse + Actions + Chapters -->
-    <main class="kuro-main">
-      <div class="work-header-details">
-        <div class="work-type-badges">
-          <span class="badge-kind">{kindLabels[data.work.kind] || 'Mangá'}</span>
-          <span class="badge-status">{statusLabels[data.work.status] || data.work.status}</span>
-          {#if data.work.featured}
-            <span class="badge-featured"><Sparkles size={12} /> Destaque</span>
-          {/if}
-          {#if isAdult}
-            <span class="badge-adult">+18 Adulto</span>
-          {/if}
-          {#if data.scans && data.scans.length > 0}
-            {#each data.scans as scan (scan.id || scan.slug)}
-              <a
-                href="/scans/{scan.slug}"
-                class="badge-scan-partner"
-                title="Scan {scan.is_official ? 'Oficial' : 'Parceira'}: {scan.name}"
-              >
-                <Users size={11} />
-                <span>{scan.name}</span>
-              </a>
-            {/each}
-          {/if}
-        </div>
-
-        <h1 class="work-title">{decodedTitle}</h1>
-
-        {#if alternativeTitles.length}
-          <p class="aliases">
-            <strong>Títulos alternativos:</strong> {visibleAliases.map((a: string) => decodeHtmlEntities(a)).join(' · ')}
-            {#if alternativeTitles.length > 3}
-              <button
-                type="button"
-                class="btn-toggle-aliases"
-                onclick={() => (aliasesExpanded = !aliasesExpanded)}
-                aria-expanded={aliasesExpanded}
-              >
-                {aliasesExpanded ? 'Ver menos' : `Ver todos (${alternativeTitles.length})`}
-              </button>
-            {/if}
-          </p>
-        {/if}
-
-        {#if data.work.author || data.work.artist}
-          <div class="author-artist-line">
-            {#if data.work.author}
-              <span><strong>Autor:</strong> {data.work.author}</span>
-            {/if}
-            {#if data.work.author && data.work.artist}
-              <span class="meta-dot">·</span>
-            {/if}
-            {#if data.work.artist}
-              <span><strong>Arte:</strong> {data.work.artist}</span>
-            {/if}
-          </div>
-        {/if}
-
-        <!-- Tags Row -->
-        <div class="chips-row">
-          {#each data.tags as tag (tag?.id)}
-            {#if tag}
-              <a class="chip-glass" href="/catalogo?tag={tag.slug}">{tag.name}</a>
-            {/if}
-          {/each}
-        </div>
-
-        <!-- Sinopse (collapsible Ver mais / Ver menos) -->
-        {#if decodedSynopsis}
-          {@const fullText = decodedSynopsis}
-          {@const isLong = fullText.length > 280}
-          <div class="synopsis-box">
-            <h3 class="synopsis-heading">Sinopse</h3>
-            <p class="synopsis-text" class:clamped={isLong && !synopsisExpanded}>
-              {fullText}
-            </p>
-            {#if isLong}
-              <button
-                type="button"
-                class="btn-toggle-synopsis"
-                onclick={() => (synopsisExpanded = !synopsisExpanded)}
-                aria-expanded={synopsisExpanded}
-              >
-                <span>{synopsisExpanded ? 'Ver menos' : 'Ver mais'}</span>
-                {#if synopsisExpanded}
-                  <ChevronUp size={14} />
-                {:else}
-                  <ChevronDown size={14} />
-                {/if}
-              </button>
-            {/if}
-          </div>
-        {/if}
-
-        <!-- INFORMAÇÕES Card (Mobile between Synopsis and Actions) -->
-        <div class="work-metadata-card mobile-info mobile-only">
-          <h3 class="metadata-heading">INFORMAÇÕES</h3>
-          <div class="metadata-grid">
-            <div class="meta-item">
-              <span class="meta-label">Tipo</span>
-              <span class="meta-value">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Status</span>
-              <span class="meta-value meta-status">{statusLabels[data.work.status] || data.work.status}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Capítulos</span>
-              <span class="meta-value">{data.chapters.length}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Leitores</span>
-              <span class="meta-value">{data.metrics?.readers ?? 0}</span>
-            </div>
-            {#if data.work.year}
-              <div class="meta-item">
-                <span class="meta-label">Lançamento</span>
-                <span class="meta-value">{data.work.year}</span>
-              </div>
-            {/if}
-            {#if isAdult}
-              <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-                <span class="meta-label">Classificação</span>
-                <span class="meta-value adult-meta-val">+18 Adulto</span>
-              </div>
-            {:else if data.work.age_rating}
-              <div class="meta-item" class:full-width={!data.work.year} class:row-style={!data.work.year}>
-                <span class="meta-label">Classificação</span>
-                <span class="meta-value">{data.work.age_rating} anos</span>
-              </div>
-            {/if}
-            {#if data.work.author}
-              <div class="meta-item full-width row-style">
-                <span class="meta-label">Autor</span>
-                <span class="meta-value">{data.work.author}</span>
-              </div>
-            {/if}
-            {#if data.work.artist}
-              <div class="meta-item full-width row-style">
-                <span class="meta-label">Arte</span>
-                <span class="meta-value">{data.work.artist}</span>
-              </div>
-            {/if}
-            {#if data.scans && data.scans.length > 0}
-              <div class="meta-item full-width row-style">
-                <span class="meta-label">Scan {data.scans.length > 1 ? 'Parceiras' : 'Parceira'}</span>
-                <div class="meta-scans-val">
-                  {#each data.scans as scan, i (scan.id || scan.slug || i)}
-                    {#if i > 0}<span class="scan-comma">·</span>{/if}
-                    <a href="/scans/{scan.slug}" class="meta-scan-link">
-                      {#if scan.logo_id}
-                        <img src="/media/{scan.logo_id}" alt={scan.name} class="scan-meta-thumb" />
-                      {/if}
-                      <span>{scan.name}</span>
-                    </a>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="work-actions-block">
-          <div class="actions-secondary-row">
-            <button
-              class="btn-glass-action"
-              class:is-active={data.library?.favorite}
-              onclick={() => library({ favorite: !data.library?.favorite })}
-              disabled={busy}
-            >
-              <Bookmark size={18} fill={data.library?.favorite ? 'currentColor' : 'none'} />
-              <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
-            </button>
-
-            <button
-              class="btn-glass-action btn-like"
-              class:is-active={data.likes.some((l) => l.user_id === data.profile?.id)}
-              onclick={like}
-              disabled={busy}
-              aria-label={data.likes.some((l) => l.user_id === data.profile?.id)
-                ? 'Remover curtida da obra'
-                : 'Curtir obra'}
-            >
-              <Heart
-                size={18}
-                fill={data.likes.some((l) => l.user_id === data.profile?.id) ? 'currentColor' : 'none'}
-              />
-              <span>{data.likes.length}</span>
-            </button>
-
-            <select
-              class="library-dropdown"
-              aria-label="Organizar na biblioteca"
-              value={data.library?.status || ''}
-              onchange={(e) => library({ status: e.currentTarget.value })}
-            >
-              <option value="" disabled>Biblioteca…</option>
-              <option value="READING">Lendo atualmente</option>
-              <option value="PLANNED">Quero ler</option>
-              <option value="COMPLETED">Concluído</option>
-            </select>
-
-            <button
-              type="button"
-              class="btn-glass-action btn-report"
-              onclick={() => (showReportModal = true)}
-              title="Reportar problema nesta obra"
-            >
-              <Flag size={18} />
-              <span>Reportar</span>
-            </button>
-          </div>
-
-          {#if resume}
-            <a class="btn-read-hero mobile-only" href="/ler/{resume}">
-              <BookOpen size={20} />
-              <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
-            </a>
-          {/if}
-
-          {#if data.library}
-            <label class="notification-check">
-              <input
-                type="checkbox"
-                checked={data.library.following}
-                onchange={(e) => library({ following: e.currentTarget.checked })}
-              />
-              <span>Avisar sobre novos capítulos</span>
-            </label>
-          {/if}
-        </div>
-      </div>
-
-      {#if notice}
-        <div class="notice" role="status">{notice}</div>
-      {/if}
-
-      <!-- Chapters Section -->
-      <section class="chapters-section">
-        <div class="chapters-header">
-          <div class="chapters-header-info">
-            <span class="badge-mini">CONTEÚDO</span>
-            <h2 class="chapters-heading">Capítulos Disponíveis ({chapters.length})</h2>
-          </div>
-          <div class="chapters-header-right">
-            {#if resume}
-              <a class="btn-read-chapters-desktop desktop-only" href="/ler/{resume}">
-                <BookOpen size={18} />
-                <span>{data.progress.length ? 'Continuar Leitura' : 'Começar a Ler'}</span>
-              </a>
-            {/if}
-            <span class="small muted">Atualizado em {date(data.work.updated_at)}</span>
-          </div>
-        </div>
-
-        <div class="chapters-toolbar">
-          <input
-            class="search-chapters-input"
-            bind:value={search}
-            placeholder="Buscar por número ou título…"
-            aria-label="Buscar capítulo"
-          />
-          <div class="toolbar-actions">
-            <button class="btn-sort" onclick={() => (ascending = !ascending)}>
-              {#if ascending}<ArrowUp size={16} />{:else}<ArrowDown size={16} />{/if}
-              <span>{ascending ? 'Mais antigos' : 'Mais recentes'}</span>
-            </button>
-            <button
-              class="btn-batch-dl"
-              class:is-busy={batchDownloading}
-              onclick={handleBatchDownload}
-              disabled={batchDownloading || !data.chapters.length}
-              title="Baixar todos os capítulos para leitura offline"
-            >
-              {#if batchDownloading}
-                <Loader2 size={15} class="spin" />
-                <span>Baixando ({batchProgress.current}/{batchProgress.total})</span>
-              {:else}
-                <Download size={15} />
-                <span>Baixar Todos</span>
-              {/if}
-            </button>
-          </div>
-        </div>
-
-        <div class="chapters-list-card">
-          {#each visibleChapters as chapter (chapter.id)}
-            {@const isRead = readChapterIds.has(chapter.id)}
-            {@const isNew = chapter.published_at && (Date.now() - new Date(chapter.published_at).getTime()) < 7 * 24 * 60 * 60 * 1000}
-            {@const scanLabel = (chapter.chapter_scans || []).map((cs: any) => cs.scans?.name).filter(Boolean).join(' × ') || (data.scans?.length ? data.scans.map((s: any) => s.name).join(' × ') : '')}
-            {@const isDl = downloadedChapterIds.has(chapter.id)}
-            {@const dlProgress = downloadingChapterIds[chapter.id]}
-            <a href="/ler/{chapter.id}" class="chapter-item" class:is-read={isRead}>
-              <div class="chapter-left">
-                <div class="chapter-primary-row">
-                  <span class="chapter-num">Cap. {chapterIdentityLabel(chapter)}</span>
-                  {#if isNew}
-                    <span class="chapter-badge-new">NOVO</span>
-                  {/if}
-                  {#if chapter.title}
-                    <span class="chapter-title">{chapter.title}</span>
-                  {/if}
-                </div>
-                <div class="chapter-meta-row">
-                  <span class="chapter-meta-views"><Eye size={12} /> {formatViews(chapter.views_total || 0)}</span>
-                  {#if scanLabel}
-                    {@const chScanSlug = (chapter.chapter_scans?.[0]?.scans?.slug) || (data.scans?.[0]?.slug) || null}
-                    <span class="chapter-meta-dot">·</span>
-                    {#if chScanSlug}
-                      <button
-                        type="button"
-                        class="chapter-meta-scan-btn"
-                        title="Ver perfil da scan {scanLabel}"
-                        onclick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          window.location.href = `/scans/${chScanSlug}`;
-                        }}
-                      >
-                        {scanLabel}
-                      </button>
-                    {:else}
-                      <span class="chapter-meta-scan">{scanLabel}</span>
-                    {/if}
-                  {/if}
-                  {#if chapter.published_at}
-                    <span class="chapter-meta-dot">·</span>
-                    <time class="chapter-meta-date">{date(chapter.published_at)}</time>
-                  {/if}
-                </div>
-              </div>
-              <div class="chapter-right">
-                <button
-                  type="button"
-                  class="btn-chapter-dl"
-                  class:is-downloaded={isDl}
-                  class:is-downloading={dlProgress !== undefined}
-                  onclick={(e) => handleToggleDownload(chapter, e)}
-                  title={isDl ? 'Disponível offline (clique para remover)' : 'Baixar capítulo'}
-                >
-                  {#if dlProgress !== undefined}
-                    <Loader2 size={13} class="spin" />
-                    <span>{dlProgress}%</span>
-                  {:else if isDl}
-                    <CheckCircle2 size={13} class="icon-success" />
-                    <span>Baixado</span>
-                  {:else}
-                    <Download size={13} />
-                    <span>Baixar</span>
-                  {/if}
-                </button>
-
-                {#if isRead}
-                  <span class="read-indicator">
-                    <CheckCircle2 size={14} />
-                    <span>Lido</span>
-                  </span>
-                {/if}
-                <BookOpen size={16} class="read-arrow" />
-              </div>
-            </a>
-          {/each}
-
-          {#if !search.trim() && chapters.length > visibleLimit}
-            <div class="chapters-load-more-bar">
-              <button
-                type="button"
-                class="btn-load-more"
-                onclick={() => (visibleLimit += 150)}
-              >
-                Carregar mais capítulos ({chapters.length - visibleLimit} restantes)
-              </button>
-              <button
-                type="button"
-                class="btn-load-all"
-                onclick={() => (visibleLimit = chapters.length)}
-              >
-                Mostrar todos ({chapters.length})
-              </button>
-            </div>
-          {/if}
-
-          {#if !chapters.length}
-            <div class="empty-chapters">
-              {#if search}
-                <p>Nenhum capítulo encontrado para "{search}".</p>
-              {:else}
-                <p>Nenhum capítulo disponível no momento.</p>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </section>
-
-      <Comments comments={data.comments} workId={data.work.id} profile={data.profile} />
-    </main>
-  </div>
-
-  {#if showReportModal}
-    <ReportModal
-      targetType="WORK"
-      workId={data.work.id}
-      targetTitle={data.work.title}
-      onclose={() => (showReportModal = false)}
-      onsuccess={() => {
-        showReportModal = false;
-        notice = 'Denúncia enviada com sucesso para a moderação.';
-      }}
-    />
-  {/if}
-</div>
-
-{/if}
-
 <style>
-  /* Cinematic Backdrop */
+  /* Ambient Cinematic Backdrop */
   .work-backdrop {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 480px;
+    height: 520px;
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
+    opacity: 0.35;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
   }
 
   .backdrop-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center top;
-    filter: blur(48px) brightness(0.25) saturate(1.4);
-    transform: scale(1.1);
+    object-position: center 20%;
+    filter: blur(60px) brightness(0.35) saturate(1.3);
+    transform: scale(1.2);
   }
 
-  .backdrop-mask {
+  .backdrop-gradient {
     position: absolute;
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(6, 7, 12, 0.4) 0%,
-      rgba(6, 7, 12, 0.85) 60%,
-      #06070c 100%
+      rgba(13, 10, 28, 0.35) 0%,
+      rgba(7, 6, 17, 0.55) 60%,
+      transparent 100%
     );
   }
 
-  .work-page-container {
+  /* Page Root */
+  .work-page-root {
     position: relative;
-    z-index: 1;
+    max-width: 1220px;
+    margin: 0 auto;
+    padding-top: 1.25rem;
   }
 
-  .kuro-layout-grid {
+  /* Breadcrumb */
+  .work-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: rgba(226, 232, 240, 0.6);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .work-breadcrumb a {
+    color: rgba(226, 232, 240, 0.7);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .work-breadcrumb a:hover {
+    color: #a78bfa;
+  }
+
+  .crumb-separator {
+    color: rgba(181, 154, 245, 0.3);
+  }
+
+  .crumb-current {
+    color: #f1f5f9;
+    font-weight: 500;
+  }
+
+  /* Hero Section */
+  .work-hero-section {
     display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 48px;
+    grid-template-columns: 280px 1fr;
+    gap: 36px;
     align-items: start;
-    margin-top: 16px;
+    margin-bottom: 28px;
   }
 
-  .kuro-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    position: sticky;
-    top: 90px;
-  }
-
-  .kuro-main {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .work-cover-wrap {
-    position: relative;
+  /* Cover Column */
+  .work-cover-column {
     display: flex;
     flex-direction: column;
     align-items: center;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(181, 154, 245, 0.12);
+    gap: 12px;
+    position: sticky;
+    top: 90px;
+    max-width: 280px;
+    width: 100%;
   }
 
-  .work-cover {
+  .work-cover-wrapper {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(181, 154, 245, 0.18);
+    background: #090b14;
+    aspect-ratio: 280 / 392;
     width: 100%;
-    height: auto;
-    aspect-ratio: 5 / 7;
+  }
+
+  .work-cover-img {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
     display: block;
-    border: 1px solid rgba(181, 154, 245, 0.25);
-    border-radius: 18px;
+    transition: transform 0.3s ease;
   }
 
-  .adult-badge-work {
+  .work-cover-wrapper:hover .work-cover-img {
+    transform: scale(1.025);
+  }
+
+  .badge-adult-seal {
     position: absolute;
     top: 12px;
     left: 12px;
-    background: rgba(239, 68, 68, 0.9);
-    backdrop-filter: blur(4px);
-    color: #fff;
-    font-size: 11px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.75rem;
     font-weight: 800;
     padding: 3px 8px;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    z-index: 2;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
   }
 
-  .nsfw-overlay-work {
+  .badge-featured-seal {
     position: absolute;
-    inset: 0;
+    top: 12px;
+    right: 12px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 2;
+    gap: 4px;
+    background: rgba(167, 139, 250, 0.85);
+    backdrop-filter: blur(8px);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(167, 139, 250, 0.4);
   }
 
-  .nsfw-tag-work {
+  /* Integrated Indicators Group Below Cover (Balanced Distribution across 280px) */
+  .cover-indicators-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    max-width: 280px;
+    margin-top: 10px;
+    box-sizing: border-box;
+  }
+
+  .indicator-badge {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    border-radius: 8px;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+    letter-spacing: 0.015em;
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(239, 68, 68, 0.9);
-    backdrop-filter: blur(6px);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 6px 12px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
 
-  .work-cover-fallback {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 5 / 7;
-    background: #111422;
-    border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .indicator-badge.badge-kind {
+    color: #f1f5f9;
+    background: rgba(167, 139, 250, 0.22);
+    border: 1px solid rgba(167, 139, 250, 0.45);
+  }
+
+  .indicator-badge.badge-status {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(52, 211, 153, 0.42);
+  }
+
+  .indicator-badge.badge-rating-adult {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.48);
+  }
+
+  .indicator-badge.badge-rating-age {
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.18);
+    border: 1px solid rgba(251, 191, 36, 0.42);
+  }
+
+  .indicator-badge.badge-rating-free {
+    color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.42);
+  }
+
+  /* Details Column */
+  .work-details-column {
     display: flex;
     flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  /* Title (Starts directly at top of right column) */
+  .work-title {
+    font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+    font-weight: 800;
+    line-height: 1.16;
+    color: #f8fafc;
+    letter-spacing: -0.02em;
+    margin: 0;
+    word-break: break-word;
+  }
+
+  /* Interactions Row: Height 42px reference, balanced and elegant */
+  .work-hero-actions {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 4px 0 12px;
   }
 
-  .cover-scan-seal {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #dfc28d;
-    background: rgba(8, 10, 18, 0.92);
-    backdrop-filter: blur(10px);
-    padding: 4px 14px;
-    border-radius: 999px;
-    white-space: nowrap;
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
-    z-index: 3;
-  }
-
-  .cover-scan-seal .seal-link {
-    color: #dfc28d;
-    text-decoration: none;
-    transition: color 0.15s ease, text-shadow 0.15s ease;
-  }
-
-  .cover-scan-seal .seal-link:hover {
-    color: #f7e0b5;
-    text-shadow: 0 0 8px rgba(223, 194, 141, 0.6);
-  }
-
-  .cover-scan-seal .seal-sep {
-    opacity: 0.6;
-    margin: 0 1px;
-  }
-
-  .work-type-badges {
+  .actions-buttons-cluster {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
     flex-wrap: wrap;
   }
 
-  .badge-scan-partner {
+  .btn-action-control {
+    height: 42px;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-decoration: none;
+    box-sizing: border-box;
+  }
+
+  .btn-action-control:hover:not(:disabled) {
+    background: rgba(181, 154, 245, 0.12);
+    border-color: rgba(181, 154, 245, 0.35);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .btn-action-control:focus-visible {
+    outline: 2px solid #a78bfa;
+    outline-offset: 2px;
+  }
+
+  .btn-action-control.is-active {
+    color: #ffd154;
+    background: rgba(255, 209, 84, 0.12);
+    border-color: rgba(255, 209, 84, 0.38);
+  }
+
+  .btn-action-control.btn-like.is-active {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.38);
+  }
+
+  .library-dropdown-wrap {
+    min-width: 190px;
+    flex: 1;
+    max-width: 250px;
+  }
+
+  .library-select-hero {
+    width: 100%;
+    height: 42px;
+    min-height: 42px;
+    padding: 0 14px;
+    background: rgba(18, 14, 28, 0.85);
+    border: 1px solid rgba(181, 154, 245, 0.18);
+    border-radius: 10px;
+    color: #e2e8f0;
+    font-size: 0.86rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    box-sizing: border-box;
+  }
+
+  .library-select-hero:hover:not(:disabled) {
+    border-color: rgba(181, 154, 245, 0.35);
+  }
+
+  .library-select-hero:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.25);
+  }
+
+  /* Inline Essential Metrics (Clean, unbloated, high-contrast) */
+  .work-metrics-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 6px 0 10px;
+  }
+
+  .metric-inline-item {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.7);
+  }
+
+  .metric-inline-item strong {
+    color: #f1f5f9;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    color: #dfc28d;
-    background: rgba(223, 194, 141, 0.12);
-    border: 1px solid rgba(223, 194, 141, 0.35);
-    padding: 3px 9px;
-    border-radius: 6px;
-    text-decoration: none;
-    transition: all 0.2s ease;
   }
 
-  .badge-scan-partner:hover {
-    background: rgba(223, 194, 141, 0.22);
-    border-color: rgba(223, 194, 141, 0.65);
-    color: #fff;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 10px rgba(223, 194, 141, 0.2);
+  .metric-inline-item .metric-lbl {
+    color: rgba(226, 232, 240, 0.5);
+    font-size: 0.78rem;
   }
 
-  .badge-kind {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    color: #b59af5;
-    background: rgba(181, 154, 245, 0.12);
-    border: 1px solid rgba(181, 154, 245, 0.25);
-    padding: 4px 10px;
-    border-radius: 6px;
-    text-transform: uppercase;
+  .metric-dot {
+    color: rgba(181, 154, 245, 0.35);
+    font-size: 0.8rem;
   }
 
-  .badge-status {
-    font-size: 11px;
-    font-weight: 600;
-    color: #c9aa73;
-    background: rgba(201, 170, 115, 0.12);
-    border: 1px solid rgba(201, 170, 115, 0.25);
-    padding: 4px 10px;
-    border-radius: 6px;
-  }
-
-  .badge-featured {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #ffffff;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(109, 40, 217, 0.85));
-    padding: 4px 10px;
-    border-radius: 6px;
-  }
-
-  .badge-adult {
-    font-size: 11px;
-    font-weight: 700;
-    color: #fca5a5;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    padding: 4px 10px;
-    border-radius: 6px;
-  }
-
-  .work-title {
-    font-size: clamp(32px, 4vw, 48px);
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    margin: 0 0 10px;
-    color: #ffffff;
-    line-height: 1.15;
-  }
-
-  .aliases {
-    font-size: 13px;
-    color: #8c899a;
-    margin: 0 0 14px;
-  }
-
-  .aliases strong {
-    color: #c2bed4;
-    font-weight: 650;
-  }
-
-  .btn-toggle-aliases {
-    display: inline-flex;
-    align-items: center;
-    background: rgba(168, 85, 247, 0.12);
-    border: 1px solid rgba(168, 85, 247, 0.25);
-    color: #c084fc;
-    font-size: 11px;
-    font-weight: 600;
-    border-radius: 4px;
-    padding: 1px 6px;
-    margin-left: 6px;
-    cursor: pointer;
-    vertical-align: middle;
-    transition: all 0.15s ease;
-  }
-
-  .btn-toggle-aliases:hover {
-    background: rgba(168, 85, 247, 0.22);
-    border-color: rgba(168, 85, 247, 0.45);
-    color: #e9d5ff;
-  }
-
-  .author-artist-line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: #c2bed4;
-    margin-bottom: 14px;
-  }
-
-  .author-artist-line strong {
-    color: #ffffff;
-  }
-
-  .meta-dot {
-    color: #635f73;
-  }
-
-  .chips-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-  }
-
-  .chip-glass {
-    font-size: 12px;
-    padding: 5px 12px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #c2bed4;
-    transition: all 0.2s ease;
-  }
-
-  .chip-glass:hover {
-    background: rgba(181, 154, 245, 0.15);
-    border-color: rgba(181, 154, 245, 0.35);
-    color: #ffffff;
-  }
-
-  /* Synopsis Box (Collapsible) */
-  .synopsis-box {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
+  /* Editorial Refined Synopsis */
+  .work-synopsis-card {
+    background: rgba(13, 11, 24, 0.42);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 12px;
     padding: 16px 20px;
-    margin-bottom: 24px;
+    backdrop-filter: blur(6px);
+    margin-top: 4px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .work-synopsis-card:hover {
+    border-color: rgba(181, 154, 245, 0.16);
+    background: rgba(16, 13, 30, 0.52);
+  }
+
+  .synopsis-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   .synopsis-heading {
-    font-size: 12px;
+    font-size: 0.8rem;
     font-weight: 700;
+    color: #a78bfa;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #b59af5;
-    margin: 0 0 8px;
+    letter-spacing: 0.06em;
+    margin: 0;
   }
 
-  .synopsis-text {
-    font-size: 14px;
-    line-height: 1.65;
-    color: #b3afc2;
+  .synopsis-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .synopsis-paragraph {
+    font-size: 0.96rem;
+    line-height: 1.64;
+    color: rgba(241, 245, 249, 0.9);
     margin: 0;
     white-space: pre-line;
+    font-weight: 400;
+    letter-spacing: 0.01em;
   }
 
-  .synopsis-text.clamped {
+  .synopsis-paragraph.clamped {
     display: -webkit-box;
     -webkit-line-clamp: 4;
-    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  .btn-toggle-synopsis {
+  .btn-expand-synopsis {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 10px;
-    padding: 0;
+    gap: 4px;
+    margin-top: 8px;
+    align-self: flex-start;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #a78bfa;
     background: none;
     border: none;
-    color: #b59af5;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 0;
     cursor: pointer;
+    transition: color 0.15s ease;
   }
 
-  .btn-toggle-synopsis:hover {
+  .btn-expand-synopsis:hover {
+    color: #c4b5fd;
     text-decoration: underline;
   }
 
+  /* Notice Bar */
+  .work-notice-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: rgba(124, 58, 237, 0.2);
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    border-radius: 12px;
+    color: #f1f5f9;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin: 20px 0;
+  }
 
-  /* Work Actions Block */
-  .work-actions-block {
+  /* Redesigned Thematic Editorial Ficha Técnica (Balanced 2 Columns on Desktop) */
+  .work-specs-section {
+    margin: 28px 0 38px;
+  }
+
+  .specs-section-header {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    margin-bottom: 24px;
+    gap: 4px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
   }
 
-  .btn-read-hero {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 16px 36px;
-    border-radius: 14px;
-    font-size: 16px;
-    font-weight: 750;
-    color: #ffffff;
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    box-shadow: 0 8px 32px rgba(109, 40, 217, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    text-decoration: none;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    width: fit-content;
-  }
-
-  .btn-read-hero:hover {
-    transform: translateY(-2px);
-    background: linear-gradient(135deg, #9333ea, #7c3aed);
-    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.4);
-  }
-
-  .actions-secondary-row {
+  .specs-heading-wrap {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .btn-glass-action {
-    display: inline-flex;
-    align-items: center;
     gap: 8px;
-    padding: 12px 18px;
-    border-radius: 12px;
-    font-size: 13.5px;
-    font-weight: 600;
-    color: #d1cde0;
-    background: rgba(18, 22, 36, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(14px);
-    cursor: pointer;
-    transition: all 0.2s ease;
   }
 
-  .btn-glass-action:hover {
-    background: rgba(28, 33, 54, 0.8);
-    color: #ffffff;
-    border-color: rgba(181, 154, 245, 0.3);
+  :global(.specs-header-icon) {
+    color: #a78bfa;
   }
 
-  .btn-glass-action.is-active {
-    color: #b59af5;
-    border-color: rgba(181, 154, 245, 0.5);
-    background: rgba(181, 154, 245, 0.12);
-  }
-
-  .btn-like.is-active {
-    color: #ff4d6d;
-    border-color: rgba(255, 77, 109, 0.4);
-    background: rgba(255, 77, 109, 0.12);
-  }
-
-  .library-dropdown {
-    padding: 11px 16px;
-    border-radius: 12px;
-    background: rgba(13, 16, 26, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #d1cde0;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    outline: none;
-  }
-
-  .library-dropdown:focus {
-    border-color: #b59af5;
-  }
-
-  .notification-check {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: #8c899a;
-    cursor: pointer;
-  }
-
-  .desktop-only {
-    display: block;
-  }
-
-  .mobile-only {
-    display: none;
-  }
-
-  /* Metadata Card (INFORMAÇÕES) */
-  .work-metadata-card {
-    padding: 18px 22px;
-    border-radius: 14px;
-    background: rgba(13, 16, 26, 0.6);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    backdrop-filter: blur(16px);
-    box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.5);
-  }
-
-  .sidebar-info {
-    width: 100%;
-    max-width: none;
-    margin-bottom: 0;
-  }
-
-  .mobile-info {
-    width: 100%;
-    max-width: 620px;
-    margin: 0 0 24px;
-  }
-
-  .adult-meta-val {
-    color: #f87171 !important;
-    font-weight: 700 !important;
-  }
-
-  .metadata-heading {
-    font-size: 11px;
+  .specs-main-title {
+    font-size: 1.15rem;
     font-weight: 800;
-    letter-spacing: 0.16em;
-    color: #dfc28d;
-    margin: 0 0 14px;
-    text-transform: uppercase;
+    color: #f8fafc;
+    margin: 0;
+    letter-spacing: -0.01em;
   }
 
-  .metadata-grid {
+  .specs-subtext {
+    font-size: 0.82rem;
+    color: rgba(226, 232, 240, 0.55);
+  }
+
+  /* Single Unified Editorial Panel (True 2x2 Symmetric Grid on Desktop) */
+  .specs-unified-panel {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    background: rgba(11, 13, 24, 0.65);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 16px;
+    padding: 22px;
+    backdrop-filter: blur(10px);
+    width: 100%;
+    box-sizing: border-box;
     align-items: stretch;
   }
 
-  .meta-item {
+  /* Subpanel: Defined internal identity with symmetric equal height on rows */
+  .specs-subpanel {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-    min-width: 0;
-    padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
+    background: rgba(18, 16, 32, 0.55);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 12px;
+    padding: 20px 22px;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, background 0.2s ease;
   }
 
-  .meta-item.full-width {
-    grid-column: 1 / -1;
+  .specs-subpanel:hover {
+    border-color: rgba(181, 154, 245, 0.24);
+    background: rgba(22, 19, 40, 0.65);
   }
 
-  .meta-item.row-style {
-    flex-direction: row;
-    justify-content: space-between;
+  #subpanel-info {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #subpanel-credits {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #subpanel-genres {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  #subpanel-aliases {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .subpanel-header {
+    display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.08);
   }
 
-  .meta-label {
-    font-size: 10.5px;
+  :global(.subpanel-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .subpanel-title {
+    font-size: 0.88rem;
     font-weight: 700;
+    color: #f1f5f9;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #8c899e;
+    letter-spacing: 0.04em;
+    margin: 0;
   }
 
-  .meta-value {
-    font-size: 13.5px;
+  .subpanel-count-badge {
+    margin-left: auto;
+    font-size: 0.72rem;
     font-weight: 700;
-    color: #f2f0f7;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
-    line-height: 1.35;
+    color: #c4b5fd;
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    padding: 1px 7px;
+    border-radius: 999px;
   }
 
-  .meta-status {
-    color: #dfc28d;
-  }
-
-  .meta-scans-val {
+  .unassigned-spec {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(226, 232, 240, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+  }
+
+  .specs-table {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    flex: 1;
+  }
+
+  .specs-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(181, 154, 245, 0.08);
+  }
+
+  .specs-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .specs-row dt {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: #94a3b8;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .specs-row dd {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0;
+    text-align: right;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+    display: inline-block;
+  }
+
+  .status-indicator-dot.is-ongoing {
+    background: #60a5fa;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.6);
+  }
+
+  .age-pill {
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+  }
+
+  .age-pill.adult {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .age-pill.free {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .scans-chips-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .scan-pill-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c4b5fd;
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.24);
+    padding: 2px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .scan-pill-link:hover {
+    background: rgba(167, 139, 250, 0.22);
+    color: #ffffff;
+  }
+
+  .muted-spec {
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.5);
+    font-weight: 400;
+  }
+
+  /* Genres Card Body & Balanced Tags Distribution */
+  .genres-card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
+  .genres-card-body.is-sparse {
+    justify-content: center;
+  }
+
+  .genres-empty-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+  }
+
+  .editorial-tags-wrap {
+    display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    margin: 2px 0 0;
   }
 
-  .meta-scan-link {
+  .editorial-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 35px;
+    height: 35px;
+    padding: 0 15px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(181, 154, 245, 0.15);
+    border-radius: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+    width: auto;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+  }
+
+  .editorial-tag-pill:hover {
+    color: #ffffff;
+    background: rgba(167, 139, 250, 0.2);
+    border-color: rgba(167, 139, 250, 0.45);
+    transform: translateY(-1px);
+  }
+
+  /* Alternative Titles List (Prominent, High Legibility) */
+  .aliases-editorial-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+  }
+
+  .alias-editorial-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 8px;
+  }
+
+  .alias-index-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #a78bfa;
+    font-family: monospace;
+    flex-shrink: 0;
+  }
+
+  .alias-text {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #f1f5f9;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  .btn-toggle-subpanel {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #dfc28d;
-    text-decoration: none;
-    font-size: 13.5px;
-    font-weight: 700;
-    transition: color 0.15s ease, text-decoration 0.15s ease;
+    margin-top: auto;
+    padding-top: 12px;
+    align-self: flex-start;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #a78bfa;
+    background: none;
+    border: none;
+    padding-left: 0;
+    padding-right: 0;
+    cursor: pointer;
+    transition: color 0.15s ease;
   }
 
-  .meta-scan-link:hover {
-    color: #f7e0b5;
-    text-decoration: underline;
+  .btn-toggle-subpanel:hover {
+    color: #c4b5fd;
   }
 
-  .scan-meta-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-    object-fit: cover;
-    border: 1px solid rgba(223, 194, 141, 0.4);
-  }
-
-  .scan-comma {
-    color: #7b788a;
-    font-size: 12px;
-  }
-
-
-
-  /* Chapters List */
-  .chapters-section {
-    margin-top: 56px;
+  /* Full-width aliases drawer below the 2x2 grid */
+  .specs-aliases-drawer {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    background: rgba(16, 14, 30, 0.75);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 12px;
+    padding: 18px 22px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
+    animation: drawerFadeIn 0.2s ease-out;
+  }
+
+  @keyframes drawerFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  .drawer-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.drawer-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .drawer-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+
+  .btn-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-drawer-close:hover {
+    background: rgba(167, 139, 250, 0.2);
+    color: #ffffff;
+  }
+
+  .drawer-aliases-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  @media (min-width: 1200px) {
+    .drawer-aliases-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .drawer-alias-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 8px;
+    min-width: 0;
+  }
+
+  .empty-spec-text {
+    font-size: 0.85rem;
+    color: rgba(226, 232, 240, 0.45);
+    font-style: italic;
+    margin: 0;
+  }
+
+  /* Chapters Section (Full Width, Reading Centered) */
+  .work-chapters-section {
+    width: 100%;
+    min-width: 0;
+    contain: layout style;
+    margin-bottom: 48px;
   }
 
   .chapters-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
-  }
-
-  .chapters-header-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .btn-read-chapters-desktop {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 750;
-    color: #ffffff;
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    box-shadow: 0 4px 16px rgba(109, 40, 217, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    text-decoration: none;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    white-space: nowrap;
-  }
-
-  .btn-read-chapters-desktop:hover {
-    transform: translateY(-2px);
-    background: linear-gradient(135deg, #9333ea, #7c3aed);
-    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.4);
-  }
-
-  .badge-mini {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    color: #b59af5;
-  }
-
-  .chapters-heading {
-    font-size: 24px;
-    font-weight: 750;
-    color: #ffffff;
-    margin: 4px 0 0;
-  }
-
-  .chapters-toolbar {
-    display: flex;
     gap: 12px;
-    flex-wrap: wrap;
   }
 
-  .search-chapters-input {
-    flex: 1;
-    min-width: 220px;
-    padding: 12px 18px;
-    border-radius: 12px;
-    background: rgba(13, 16, 26, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    font-size: 14px;
-  }
-
-  .search-chapters-input:focus {
-    outline: none;
-    border-color: #b59af5;
-  }
-
-  .btn-sort {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    border-radius: 12px;
-    background: rgba(18, 22, 36, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #d1cde0;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-sort:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #ffffff;
-  }
-
-  .toolbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .btn-batch-dl {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 18px;
-    border-radius: 12px;
-    background: rgba(139, 92, 246, 0.12);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #c4b5fd;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-batch-dl:hover:not(:disabled) {
-    background: rgba(139, 92, 246, 0.22);
-    border-color: rgba(139, 92, 246, 0.5);
-    color: #ffffff;
-  }
-
-  .btn-batch-dl:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn-chapter-dl {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 10px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #a7a3b8;
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    z-index: 2;
-  }
-
-  .btn-chapter-dl:hover {
-    background: rgba(181, 154, 245, 0.15);
-    border-color: rgba(181, 154, 245, 0.35);
-    color: #ffffff;
-  }
-
-  .btn-chapter-dl.is-downloaded {
-    background: rgba(52, 211, 153, 0.12);
-    border-color: rgba(52, 211, 153, 0.35);
-    color: #34d399;
-  }
-
-  .btn-chapter-dl.is-downloading {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.4);
-    color: #c4b5fd;
-  }
-
-  :global(.icon-success) {
-    color: #34d399;
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .chapters-list-card {
-    border-radius: 16px;
-    background: rgba(13, 16, 26, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-    backdrop-filter: blur(12px);
-  }
-
-  .chapter-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    text-decoration: none;
-    transition: all 0.2s ease;
-  }
-
-  .chapter-item:last-child {
-    border-bottom: none;
-  }
-
-  .chapter-item:hover {
-    background: rgba(181, 154, 245, 0.08);
-  }
-
-  .chapter-left {
+  .chapters-title-wrap {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
   }
 
-  .chapter-primary-row {
-    display: flex;
+  .chapters-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .chapters-subtitle {
+    font-size: 0.82rem;
+    color: rgba(226, 232, 240, 0.55);
+    margin: 0;
+  }
+
+  .btn-read-primary {
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
+    min-height: 44px;
+    padding: 10px 22px;
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-radius: 12px;
+    text-decoration: none;
+    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+
+  .btn-read-primary:hover {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    box-shadow: 0 10px 28px rgba(124, 58, 237, 0.48);
+    transform: translateY(-1px);
+  }
+
+  /* Chapters Toolbar */
+  .chapters-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
   }
 
-  .chapter-num {
-    font-size: 15px;
-    font-weight: 700;
-    color: #ffffff;
+  .search-input-wrap {
+    flex: 1;
+    min-width: 220px;
+    position: relative;
+    display: flex;
+    align-items: center;
   }
 
-  .chapter-title {
-    font-size: 13.5px;
-    color: #b5b1c7;
+  :global(.search-icon) {
+    position: absolute;
+    left: 12px;
+    color: rgba(226, 232, 240, 0.4);
+    pointer-events: none;
   }
 
-  .chapter-meta-row {
+  .chapters-search-input {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 36px 8px 36px;
+    background: rgba(18, 14, 28, 0.8);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 10px;
+    color: #f1f5f9;
+    font-size: 0.88rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .chapters-search-input:focus {
+    border-color: #a78bfa;
+  }
+
+  .btn-clear-search {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .toolbar-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-toolbar {
+    min-height: 42px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    color: #8c899a;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.14);
+    border-radius: 10px;
+    color: #cbd5e1;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-toolbar:hover {
+    background: rgba(181, 154, 245, 0.12);
+    color: #ffffff;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.14);
+    border-color: rgba(251, 191, 36, 0.35);
+    cursor: pointer;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+
+  .batch-cancel-x {
+    display: none;
+    margin-left: 2px;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover .batch-spinner {
+    display: none;
+  }
+
+  .btn-toolbar.download-batch-btn.is-busy:hover .batch-cancel-x {
+    display: inline-block;
+  }
+
+  /* Chapter Cards */
+  .chapter-list-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .chapter-card {
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: rgba(14, 16, 26, 0.6);
+    border: 1px solid rgba(181, 154, 245, 0.1);
+    border-radius: 12px;
+    transition: all 0.15s ease;
+  }
+
+  .chapter-card:hover {
+    background: rgba(22, 25, 40, 0.8);
+    border-color: rgba(167, 139, 250, 0.25);
+    transform: translateX(2px);
+  }
+
+  .chapter-card.is-read {
+    opacity: 0.72;
+    background: rgba(10, 11, 18, 0.4);
+  }
+
+  .chapter-card-link {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    min-width: 0;
+  }
+
+  .chapter-number-badge {
+    min-width: 44px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+    border-radius: 8px;
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+
+  .chapter-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .chapter-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .chapter-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+
+  .badge-new-pill {
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 1px 6px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .badge-read-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: rgba(226, 232, 240, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .chapter-sub-title {
+    font-size: 0.78rem;
+    color: rgba(226, 232, 240, 0.55);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chapter-actions-col {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .chapter-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    color: rgba(226, 232, 240, 0.55);
+    margin-top: 2px;
   }
 
   .chapter-meta-views {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    color: #a78bfa;
+    gap: 4px;
+    color: #c4b5fd;
     font-weight: 600;
-  }
-
-  .chapter-meta-scan {
-    color: #dfc28d;
-    font-weight: 600;
-  }
-
-  .chapter-meta-scan-btn {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: 600;
-    color: #dfc28d;
-    cursor: pointer;
-    transition: color 0.15s ease, text-decoration 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .chapter-meta-scan-btn:hover {
-    color: #f7e0b5;
-    text-decoration: underline;
   }
 
   .chapter-meta-date {
-    color: #7b788a;
-  }
-
-  .chapter-meta-dot {
-    color: #4b4859;
-  }
-
-  .chapter-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .read-indicator {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #b59af5;
+    color: rgba(226, 232, 240, 0.5);
   }
 
-  .chapter-right time {
-    font-size: 12px;
-    color: #676475;
+  .meta-dot {
+    color: rgba(181, 154, 245, 0.35);
   }
 
-  :global(.read-arrow) {
-    color: #b59af5;
-    opacity: 0.6;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-  }
-
-  .chapter-item:hover :global(.read-arrow) {
-    transform: translateX(3px);
-    opacity: 1;
-  }
-
-  .chapter-badge-new {
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: #dfc28d;
-    background: rgba(201, 170, 115, 0.15);
-    border: 1px solid rgba(201, 170, 115, 0.35);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .chapters-load-more-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    justify-content: center;
-    padding: 20px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  .btn-load-more,
-  .btn-load-all {
+  .btn-chapter-download {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.12);
+    border-radius: 8px;
+    color: rgba(226, 232, 240, 0.6);
     cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .btn-chapter-download:hover {
+    color: #ffffff;
+    background: rgba(167, 139, 250, 0.16);
+    border-color: rgba(167, 139, 250, 0.3);
+  }
+
+  .btn-chapter-download.is-downloaded {
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.1);
+  }
+
+  .btn-chapter-download.is-downloaded:hover {
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.12);
+  }
+
+  .btn-chapter-download.is-downloading {
+    min-width: 62px;
+    width: auto;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.35);
+    padding: 0 8px;
+  }
+
+  .btn-chapter-download.is-downloading:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.45);
+  }
+
+  .download-active-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .btn-chapter-download .icon-cancel-hover {
+    display: none;
+  }
+
+  .btn-chapter-download.is-downloading:hover .icon-loading {
+    display: none;
+  }
+
+  .btn-chapter-download.is-downloading:hover .icon-cancel-hover {
+    display: inline-block;
+  }
+
+  .btn-chapter-read-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    border-radius: 8px;
+    color: #c4b5fd;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+
+  .btn-chapter-read-icon:hover {
+    background: rgba(167, 139, 250, 0.25);
+    color: #ffffff;
+  }
+
+  .chapter-pagination-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
   }
 
   .btn-load-more {
-    background: #a855f7;
-    color: #ffffff;
+    flex: 1;
+    min-height: 44px;
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    border-radius: 10px;
+    color: #e2e8f0;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
   }
 
   .btn-load-more:hover {
-    background: #9333ea;
-  }
-
-  .btn-load-all {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .btn-load-all:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(167, 139, 250, 0.22);
     color: #ffffff;
   }
 
-  .empty-chapters {
-    padding: 32px;
+  .btn-show-all {
+    min-height: 44px;
+    padding: 0 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.14);
+    border-radius: 10px;
+    color: rgba(226, 232, 240, 0.7);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .chapter-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 20px;
+    background: rgba(14, 16, 26, 0.4);
+    border-radius: 12px;
+    color: rgba(226, 232, 240, 0.6);
     text-align: center;
-    color: #7b788a;
   }
 
-  @media (max-width: 860px) {
-    .desktop-only {
-      display: none !important;
-    }
-
-    .mobile-only {
-      display: block !important;
-    }
-
-    .kuro-layout-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-    }
-
-    .kuro-sidebar {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      position: static;
-      gap: 0;
-    }
-
-    .work-cover-wrap {
-      max-width: 240px;
-      margin: 0 auto;
-    }
-
-    .kuro-main {
-      width: 100%;
-    }
-
-    .work-header-details {
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .author-artist-line {
-      justify-content: center;
-    }
-
-    .chips-row {
-      justify-content: center;
-    }
-
-    .work-actions-block {
-      align-items: center;
-    }
-
-    .actions-secondary-row {
-      justify-content: center;
-    }
-
-    .chapter-item {
-      padding: 14px 18px;
-    }
+  :global(.empty-icon) {
+    color: rgba(181, 154, 245, 0.3);
   }
 
-  @media (max-width: 680px) {
-    .kuro-layout-grid {
-      gap: 20px;
+  /* ========================================================================= */
+  /* RESPONSIVE DESIGN: TABLET & MOBILE REORGANIZATION */
+  /* ========================================================================= */
+
+  @media (max-width: 991px) {
+    .work-synopsis-card {
+      padding: 13px 15px;
+      border-radius: 10px;
+      margin-top: 4px;
     }
 
-    .kuro-sidebar {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      margin: 0 auto;
+    .synopsis-paragraph {
+      font-size: 0.93rem;
+      line-height: 1.6;
     }
 
-    .work-cover-wrap {
-      max-width: 170px;
-      width: 170px;
-      margin: 0 auto 16px auto;
-      display: flex;
-      justify-content: center;
-      align-self: center;
-    }
-
-    .work-cover {
-      width: 100%;
-      margin: 0 auto;
-      display: block;
-    }
-
-    .work-title {
-      font-size: 25px;
-      line-height: 1.15;
-    }
-
-    .work-type-badges {
-      justify-content: center;
-      margin-bottom: 8px;
-    }
-
-    .chips-row {
-      justify-content: center;
-      margin-bottom: 16px;
-    }
-
-    .work-actions-block {
-      width: 100%;
-      margin-bottom: 24px;
-      gap: 12px;
-    }
-
-    .actions-secondary-row {
-      width: 100%;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+    .editorial-tags-wrap {
       gap: 8px;
     }
 
-    .btn-glass-action {
-      width: 100%;
-      justify-content: center;
-      padding: 12px 14px;
-      font-size: 13px;
+    .specs-unified-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px;
     }
 
-    .library-dropdown {
-      width: 100%;
+    .specs-subpanel {
+      padding: 16px 16px;
+      height: auto;
+    }
+
+    #subpanel-info {
+      order: 1;
+    }
+
+    #subpanel-credits {
+      order: 2;
+    }
+
+    #subpanel-genres {
+      order: 3;
+    }
+
+    #subpanel-aliases {
+      order: 4;
+    }
+
+    .specs-aliases-drawer {
+      order: 5;
+      padding: 14px;
+    }
+
+    .drawer-aliases-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .work-page-root {
+      padding-top: 0.5rem;
+    }
+
+    /* Transform Hero to Single Vertical Flow */
+    .work-hero-section {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-bottom: 22px;
       text-align: center;
-      padding: 12px 14px;
-      font-size: 13px;
     }
 
-    .btn-read-hero {
+    .work-cover-column {
+      position: static;
+      align-items: center;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Centered, proportional cover on mobile */
+    .work-cover-wrapper {
+      width: 160px;
+      height: 224px;
+      aspect-ratio: auto;
+      margin: 0 auto;
+    }
+
+    /* Integrated Indicators below cover on mobile */
+    .cover-indicators-group {
       width: 100%;
-      padding: 16px 20px;
-      font-size: 16px;
-      font-weight: 800;
+      max-width: 260px;
+      margin: 8px auto 0;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .indicator-badge {
+      min-height: 30px;
+      font-size: 0.77rem;
+      padding: 4px 6px;
+      border-radius: 7px;
+    }
+
+    /* Hero actions on mobile: full width, comfortable touch targets >= 44px */
+    .work-hero-actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      margin: 12px 0 14px;
+    }
+
+    .actions-buttons-cluster {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn-action-control {
+      min-height: 48px;
+      height: 48px;
+      padding: 0 4px;
+      font-size: 0.74rem;
+      gap: 4px;
+      flex-direction: column;
+    }
+
+    .btn-action-control :global(svg) {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-text-desktop {
+      display: block;
+      font-size: 0.7rem;
+    }
+
+    .library-dropdown-wrap {
+      width: 100%;
+      max-width: 100%;
+      min-width: 100%;
+    }
+
+    .library-select-hero {
+      height: 46px;
+      min-height: 46px;
+      font-size: 0.9rem;
+    }
+
+    /* Center title, metrics on mobile */
+    .work-title {
+      font-size: 1.55rem;
+      line-height: 1.25;
+      text-align: center;
+    }
+
+    .work-metrics-inline {
       justify-content: center;
-      margin-top: 4px;
-      box-shadow: 0 8px 30px -4px rgba(139, 92, 246, 0.55);
     }
 
-    .sidebar-info {
-      width: 100%;
-      padding: 16px;
-      margin-bottom: 20px;
-    }
-
-    .sidebar-info .metadata-grid {
-      grid-template-columns: repeat(2, 1fr);
+    /* Chapter Header adjustments */
+    .chapters-header {
+      flex-direction: column;
+      align-items: stretch;
       gap: 12px;
     }
 
-    .chapter-left {
+    .btn-read-primary {
+      width: 100%;
+      justify-content: center;
+    }
+
+    /* Chapter list adjustments */
+    .chapters-toolbar {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
+    }
+
+    .toolbar-buttons {
+      width: 100%;
+    }
+
+    .toolbar-buttons .btn-toolbar {
+      flex: 1;
+      justify-content: center;
+    }
+
+    .chapter-card {
+      padding: 8px 10px;
     }
   }
 
-  /* Work page redesign: intentionally mobile-first. All selectors are scoped
-     to the new composition so the legacy markup above can be removed safely
-     after the rollout without changing the visual contract. */
-  .work-redesign-backdrop {
-    position: absolute;
-    inset: 0 0 auto;
-    height: 380px;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: 0;
-    background: #090a10;
-  }
+  @media (max-width: 380px) {
+    .work-cover-wrapper {
+      width: 140px;
+      height: 196px;
+    }
 
-  .work-redesign-backdrop::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(7, 8, 13, 0.38), #090a10 88%);
-  }
+    .work-title {
+      font-size: 1.35rem;
+    }
 
-  .work-redesign-backdrop img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0.38;
-    filter: blur(36px) saturate(1.15);
-    transform: scale(1.1);
-  }
-
-  .work-redesign {
-    position: relative;
-    z-index: 1;
-    padding-top: 1.25rem;
-    padding-bottom: 4rem;
-  }
-
-  .work-breadcrumb {
-    display: flex;
-    min-width: 0;
-    gap: 0.45rem;
-    overflow: hidden;
-    color: #aaa7b7;
-    font-size: 0.78rem;
-    margin-bottom: 1rem;
-  }
-
-  .work-breadcrumb a { color: #d1c6ff; text-decoration: none; white-space: nowrap; }
-  .work-breadcrumb a:hover { color: #fff; text-decoration: underline; }
-  .work-breadcrumb span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  .work-hero,
-  .work-panel,
-  .chapter-list {
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    background: rgba(16, 17, 27, 0.78);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
-  }
-
-  .work-hero {
-    display: grid;
-    grid-template-columns: minmax(105px, 31vw) minmax(0, 1fr);
-    gap: 1rem;
-    padding: 0.9rem;
-    border-radius: 1.25rem;
-  }
-
-  .work-cover-frame {
-    position: relative;
-    align-self: start;
-    overflow: hidden;
-    border-radius: 0.9rem;
-    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.45);
-    aspect-ratio: 5 / 7;
-  }
-
-  .work-cover-image { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .work-adult-badge {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.34);
-    border-radius: 999px;
-    background: #be334d;
-    color: #fff;
-    padding: 0.2rem 0.45rem;
-    font-size: 0.69rem;
-    font-weight: 800;
-  }
-
-  .work-hero-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
-  .work-statuses, .work-primary-actions, .work-secondary-actions, .work-tag-list, .chapter-details, .chapter-more-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .work-statuses { margin-bottom: 0.7rem; }
-  .work-statuses > span, .new-chapter, .chapter-read, .section-count {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    border-radius: 999px;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.66rem;
-    font-weight: 750;
-    line-height: 1;
-  }
-
-  .work-kind { color: #d5c8ff; background: rgba(149, 104, 255, 0.16); border: 1px solid rgba(149, 104, 255, 0.3); }
-  .work-status { color: #f6d795; background: rgba(210, 160, 63, 0.12); border: 1px solid rgba(210, 160, 63, 0.25); }
-  .work-featured { color: #fff; background: linear-gradient(135deg, #7b4ed4, #5730a8); }
-  .work-rating { color: #ffd1d8; background: rgba(222, 68, 93, 0.22); border: 1px solid rgba(239, 104, 125, 0.35); }
-
-  .work-hero h1 {
-    max-width: 22ch;
-    color: #fff;
-    font-size: clamp(1.45rem, 7vw, 3rem);
-    line-height: 1.06;
-    letter-spacing: -0.04em;
-    margin: 0 0 0.85rem;
-    overflow-wrap: anywhere;
-  }
-
-  .creator-list { display: flex; flex-wrap: wrap; gap: 0.55rem 1.25rem; margin: 0 0 0.85rem; }
-  .creator-list div { display: grid; gap: 0.1rem; }
-  .creator-list dt, .work-quick-stats dt, .work-facts dt, .eyebrow {
-    color: #8d899d;
-    font-size: 0.65rem;
-    font-weight: 750;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .creator-list dd { margin: 0; color: #e9e6f1; font-size: 0.83rem; font-weight: 650; overflow-wrap: anywhere; }
-
-  .work-quick-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-    margin: 0 0 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  }
-  .work-quick-stats div { padding: 0.58rem 0.5rem; min-width: 0; }
-  .work-quick-stats div:nth-child(odd) { border-right: 1px solid rgba(255, 255, 255, 0.07); }
-  .work-quick-stats dd { color: #fff; font-size: 0.83rem; font-weight: 720; margin: 0.15rem 0 0; overflow-wrap: anywhere; }
-
-  .work-primary-actions { width: 100%; }
-  .read-work-button, .work-action, .chapter-control, .chapters-read-link, .chapter-more-actions button {
-    min-height: 2.55rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
-  }
-  .read-work-button {
-    flex: 1 1 10rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    padding: 0.65rem 0.8rem;
-    color: #fff;
-    background: linear-gradient(135deg, #8153e7, #5a31b6);
-    border-color: rgba(216, 198, 255, 0.42);
-  }
-  .work-action { display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; padding: 0.55rem 0.7rem; color: #e9e6f1; background: rgba(255,255,255,0.045); }
-  .work-action.icon-action { min-width: 2.75rem; }
-  .work-action.is-active { color: #e0d3ff; border-color: rgba(173, 133, 255, 0.58); background: rgba(140, 89, 238, 0.16); }
-  .read-work-button:hover, .work-action:hover, .chapter-control:hover:not(:disabled), .chapters-read-link:hover, .chapter-more-actions button:hover { transform: translateY(-1px); border-color: rgba(197, 174, 255, 0.66); }
-  .work-action:focus-visible, .read-work-button:focus-visible, .chapter-control:focus-visible, .chapters-read-link:focus-visible, .chapter-main-link:focus-visible, .chapter-open-link:focus-visible, .work-tag-list a:focus-visible, .alias-list li:focus-visible { outline: 3px solid rgba(185, 154, 255, 0.55); outline-offset: 2px; }
-
-  .work-secondary-actions { width: 100%; margin-top: 0.65rem; }
-  .work-library-select, .text-action { min-height: 2.25rem; border: 0; background: transparent; color: #b9b4c9; font: inherit; font-size: 0.76rem; }
-  .work-library-select { max-width: 100%; padding: 0 0.1rem; }
-  .text-action { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
-  .text-action:hover { color: #fff; }
-  .notify-toggle { display: inline-flex; align-items: center; gap: 0.4rem; color: #aaa6b7; font-size: 0.74rem; cursor: pointer; }
-  .notify-toggle input { accent-color: #9568ff; }
-
-  .work-notice { margin: 0.9rem 0; padding: 0.75rem 0.9rem; border-radius: 0.75rem; border: 1px solid rgba(178, 150, 255, 0.35); color: #ddd2ff; background: rgba(116, 77, 197, 0.15); font-size: 0.82rem; }
-  .work-information-layout { display: grid; gap: 0.85rem; margin-top: 0.85rem; }
-  .work-reading-column { display: grid; gap: 0.85rem; }
-  .work-panel { border-radius: 1rem; padding: 1rem; }
-  .section-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
-  .work-panel h2, .chapters-title-row h2 { margin: 0.15rem 0 0; color: #fff; font-size: 1.15rem; letter-spacing: -0.02em; }
-  .section-count { color: #c8b4ff; background: rgba(149, 104, 255, 0.13); }
-  .alias-list { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
-  .alias-list li { padding: 0.45rem 0.6rem; border-radius: 0.55rem; color: #d7d3e2; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); font-size: 0.8rem; overflow-wrap: anywhere; }
-  .expand-text { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0; margin-top: 0.75rem; border: 0; background: none; color: #cbb9ff; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-  .expand-text:hover { color: #fff; text-decoration: underline; }
-  .work-tag-list a { padding: 0.38rem 0.6rem; border: 1px solid rgba(186, 162, 255, 0.22); border-radius: 999px; color: #d8cefb; background: rgba(126, 87, 212, 0.08); font-size: 0.76rem; text-decoration: none; }
-  .work-tag-list a:hover { color: #fff; background: rgba(135, 91, 233, 0.22); border-color: rgba(195, 174, 255, 0.55); }
-  .synopsis-panel > p:last-of-type { margin: 0.75rem 0 0; color: #c3c0ce; font-size: 0.88rem; line-height: 1.7; white-space: pre-line; }
-  .clamped-synopsis { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
-
-  .work-facts dl { margin: 0.85rem 0 0; }
-  .work-facts dl > div { display: grid; grid-template-columns: minmax(5.5rem, 40%) minmax(0, 1fr); gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
-  .work-facts dl > div:last-child { border-bottom: 0; padding-bottom: 0; }
-  .work-facts dd { margin: 0; color: #f1eff5; font-size: 0.82rem; font-weight: 600; overflow-wrap: anywhere; }
-  .fact-scans a { color: #ddc28e; text-decoration: none; }
-  .fact-scans a:hover { color: #fff0cc; text-decoration: underline; }
-
-  .work-chapters { margin-top: 2.1rem; }
-  .chapters-title-row { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 0.8rem; }
-  .chapters-title-row p:last-child { margin: 0.35rem 0 0; color: #9995a7; font-size: 0.77rem; }
-  .chapters-read-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 0.75rem; color: #f5f2ff; background: rgba(135, 89, 232, 0.2); white-space: nowrap; }
-  .chapters-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin-bottom: 0.75rem; }
-  .chapters-controls input { min-width: 0; min-height: 2.6rem; border: 1px solid rgba(255,255,255,0.12); border-radius: 0.75rem; padding: 0 0.8rem; background: rgba(15,16,25,0.86); color: #fff; font: inherit; font-size: 0.82rem; }
-  .chapters-controls input:focus { outline: 0; border-color: #b99aff; box-shadow: 0 0 0 3px rgba(163,121,255,0.16); }
-  .chapter-control { display: inline-flex; align-items: center; justify-content: center; gap: 0.38rem; padding: 0.5rem 0.65rem; color: #d7d2e3; background: rgba(255,255,255,0.045); }
-  .chapter-control.download-all { grid-column: 1 / -1; }
-  .chapter-control:disabled { opacity: 0.55; cursor: not-allowed; }
-  .chapter-list { overflow: hidden; border-radius: 1rem; }
-  .chapter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.65rem; min-height: 4.4rem; padding: 0.68rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 150ms ease; }
-  .chapter-row:last-child { border-bottom: 0; }
-  .chapter-row:hover { background: rgba(148, 104, 237, 0.1); }
-  .chapter-row.is-read { background: rgba(91, 75, 136, 0.1); }
-  .chapter-main-link { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); align-items: center; gap: 0.65rem; min-width: 0; color: inherit; text-decoration: none; }
-  .chapter-index { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.7rem; color: #cbb9ff; background: rgba(151, 105, 248, 0.12); font-size: 0.72rem; font-weight: 800; }
-  .chapter-copy { min-width: 0; display: grid; gap: 0.15rem; }
-  .chapter-name { color: #f7f5fa; font-size: 0.87rem; font-weight: 720; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chapter-subtitle { color: #aaa6b8; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chapter-details { justify-content: flex-end; color: #9995a7; font-size: 0.7rem; }
-  .chapter-details time { display: none; }
-  .new-chapter { color: #ffe09d; background: rgba(221, 160, 47, 0.15); border: 1px solid rgba(221,160,47,0.28); text-transform: uppercase; }
-  .chapter-read { color: #bba1ff; }
-  .chapter-download { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.36rem 0.45rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.55rem; background: rgba(255,255,255,0.04); color: #bbb7c9; font: inherit; font-size: 0.7rem; font-weight: 650; cursor: pointer; }
-  .chapter-download:hover { color: #fff; border-color: rgba(190,165,255,0.55); }
-  .chapter-download.is-downloaded { color: #81e0ba; border-color: rgba(95,207,165,0.38); }
-  .chapter-open-link { display: inline-flex; color: #c2aaff; opacity: 0.76; }
-  .chapter-open-link:hover { color: #fff; opacity: 1; }
-  :global(.chapter-open) { color: currentColor; }
-  .chapter-more-actions { justify-content: center; padding: 1rem; border-top: 1px solid rgba(255,255,255,0.06); }
-  .chapter-more-actions button { padding: 0.55rem 0.8rem; color: #fff; background: #6f43cf; }
-  .chapter-more-actions .secondary { color: #d5cfdf; background: rgba(255,255,255,0.06); }
-  .chapter-empty { padding: 2.5rem 1rem; color: #aaa6b7; text-align: center; font-size: 0.84rem; }
-
-  @media (min-width: 600px) {
-    .work-hero { grid-template-columns: 180px minmax(0, 1fr); padding: 1.25rem; gap: 1.4rem; }
-    .work-quick-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .work-quick-stats div:nth-child(odd) { border-right: 0; }
-    .work-quick-stats div + div { border-left: 1px solid rgba(255, 255, 255, 0.07); }
-    .chapters-controls { grid-template-columns: minmax(0, 1fr) auto auto; }
-    .chapter-control.download-all { grid-column: auto; }
-    .chapter-row { padding: 0.75rem 1rem; }
-    .chapter-main-link { grid-template-columns: 2.5rem minmax(0, 1fr); }
-    .chapter-details time { display: inline; }
-  }
-
-  @media (min-width: 900px) {
-    .work-redesign { padding-top: 2rem; }
-    .work-redesign-backdrop { height: 500px; }
-    .work-hero { grid-template-columns: 250px minmax(0, 1fr); padding: 1.5rem; gap: 2rem; border-radius: 1.5rem; }
-    .work-hero h1 { font-size: clamp(2rem, 4vw, 3.45rem); }
-    .work-information-layout { grid-template-columns: minmax(0, 1fr) minmax(15rem, 23rem); align-items: start; margin-top: 1rem; }
-    .work-facts { position: sticky; top: 5.5rem; }
-    .work-panel { padding: 1.25rem; }
-    .work-chapters { margin-top: 2.75rem; }
-    .chapter-row { min-height: 4.75rem; padding: 0.8rem 1.15rem; }
-  }
-
-  @media (max-width: 359px) {
-    .work-hero { grid-template-columns: 96px minmax(0, 1fr); padding: 0.7rem; gap: 0.7rem; }
-    .work-hero h1 { font-size: 1.3rem; }
-    .work-statuses { gap: 0.35rem; }
-    .work-statuses > span { font-size: 0.6rem; padding: 0.22rem 0.4rem; }
-    .work-quick-stats { font-size: 0.85rem; }
-    .chapter-row { gap: 0.45rem; padding: 0.65rem; }
-    .chapter-main-link { grid-template-columns: 2rem minmax(0, 1fr); gap: 0.45rem; }
-    .chapter-index { width: 2rem; height: 2rem; font-size: 0.65rem; }
-    .chapter-download span, :global(.chapter-open) { display: none; }
+    .actions-buttons-cluster {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 </style>

@@ -2,13 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { SvelteSet } from 'svelte/reactivity';
-  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download, CheckCircle2 } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, Settings2, Maximize, ChevronUp, ChevronDown, Sparkles, Flag, List, X, BookOpen, Download, CheckCircle2, Loader2 } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import { action } from '$lib/actions';
   import { readPreference, savePreference } from '$lib/preferences';
-  import { saveChapterOffline, getOfflineChapter } from '$lib/offline-storage';
+  import { saveChapterOffline, getOfflineChapter, registerDownloadController, unregisterDownloadController } from '$lib/offline-storage';
   import { chapterIdentityLabel } from '$lib/chapter-identity';
   import type { PageData } from '../../routes/ler/[id]/$types';
   let { data }: { data: PageData } = $props();
@@ -90,27 +90,46 @@
 
   let downloadingOffline = $state(false);
   let isDownloadedOffline = $state(false);
+  let downloadController: AbortController | null = null;
 
   async function handleDownloadChapter() {
     if (downloadingOffline || !data.chapter || !data.pages?.length) return;
     downloadingOffline = true;
-    notice = 'Iniciando download do capítulo...';
+    downloadController = new AbortController();
+    registerDownloadController(data.chapter.id, downloadController);
+    notice = 'Iniciando download do capítulo... (clique no botão para cancelar)';
+
     try {
       await saveChapterOffline(
         data.chapter,
         data.chapter.works || { title: 'Obra', slug: '' },
         data.pages,
         (loaded, total) => {
-          notice = `Baixando para offline: ${loaded}/${total} páginas...`;
-        }
+          notice = `Baixando para offline: ${loaded}/${total} páginas... (clique para cancelar)`;
+        },
+        downloadController.signal
       );
       isDownloadedOffline = true;
       notice = '✓ Capítulo salvo com sucesso para leitura offline!';
       setTimeout(() => { notice = ''; }, 4000);
-    } catch (err) {
-      notice = (err as Error).message || 'Falha ao salvar capítulo para leitura offline.';
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || downloadController?.signal.aborted) {
+        notice = 'Download cancelado com sucesso.';
+      } else {
+        notice = err?.message || 'Falha ao salvar capítulo para leitura offline.';
+      }
+      setTimeout(() => { notice = ''; }, 3500);
     } finally {
+      if (data.chapter) unregisterDownloadController(data.chapter.id);
       downloadingOffline = false;
+      downloadController = null;
+    }
+  }
+
+  function handleCancelDownload() {
+    if (downloadController) {
+      notice = 'Cancelando download...';
+      downloadController.abort();
     }
   }
 
@@ -521,12 +540,14 @@
       <button
         class="icon-button"
         class:is-downloaded={isDownloadedOffline}
-        aria-label={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
-        title={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
-        onclick={handleDownloadChapter}
-        disabled={downloadingOffline}
+        class:is-downloading={downloadingOffline}
+        aria-label={downloadingOffline ? 'Cancelar download do capítulo' : isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
+        title={downloadingOffline ? 'Cancelar download' : isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler offline'}
+        onclick={downloadingOffline ? handleCancelDownload : handleDownloadChapter}
       >
-        {#if isDownloadedOffline}
+        {#if downloadingOffline}
+          <Loader2 size={18} class="spin text-amber-400" />
+        {:else if isDownloadedOffline}
           <CheckCircle2 size={18} class="text-emerald-400" />
         {:else}
           <Download size={18} />

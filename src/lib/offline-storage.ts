@@ -61,30 +61,87 @@ export function isOfflineSupported(): boolean {
   return typeof window !== 'undefined' && !!window.indexedDB;
 }
 
+// In-memory registry of active download controllers to support real-time cancellation
+const activeDownloadControllers = new Map<string, AbortController>();
+
+export function registerDownloadController(chapterId: string, controller: AbortController): void {
+  activeDownloadControllers.set(chapterId, controller);
+}
+
+export function cancelChapterDownload(chapterId: string): boolean {
+  const controller = activeDownloadControllers.get(chapterId);
+  if (controller) {
+    controller.abort();
+    activeDownloadControllers.delete(chapterId);
+    return true;
+  }
+  return false;
+}
+
+export function unregisterDownloadController(chapterId: string): void {
+  activeDownloadControllers.delete(chapterId);
+}
+
+export function isDownloadActive(chapterId: string): boolean {
+  return activeDownloadControllers.has(chapterId);
+}
+
 export async function saveChapterOffline(
   chapter: { id: string; work_id: string; number: number | string; title: string | null },
   work: { title: string; slug: string; cover_id?: string | null },
   pages: Array<{ position: number; media_id: string }>,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<void> {
+  if (signal?.aborted) {
+    throw new DOMException('Download cancelado pelo usuário', 'AbortError');
+  }
+
   const db = await openDb();
 
-  // Fetch all media blobs concurrently with controlled throttle
+  // Fetch all media blobs with abort support
   const fetchedPages: OfflineChapter['pages'] = [];
   let completed = 0;
 
   for (const page of pages) {
+    if (signal?.aborted) {
+      await removeOfflineChapter(chapter.id).catch(() => {});
+      throw new DOMException('Download cancelado pelo usuário', 'AbortError');
+    }
+
     try {
-      const res = await fetch(`/media/${page.media_id}`);
+      const res = await fetch(`/media/${page.media_id}`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
+
+      if (signal?.aborted) {
+        await removeOfflineChapter(chapter.id).catch(() => {});
+        throw new DOMException('Download cancelado pelo usuário', 'AbortError');
+      }
+
       const reader = new FileReader();
       const base64Data = await new Promise<string>((resolve, reject) => {
+        const onAbort = () => {
+          try {
+            reader.abort();
+          } catch (_e) {
+            void _e;
+          }
+          reject(new DOMException('Download cancelado pelo usuário', 'AbortError'));
+        };
+
+        if (signal?.aborted) return onAbort();
+        signal?.addEventListener('abort', onAbort, { once: true });
+
         reader.onloadend = () => {
+          signal?.removeEventListener('abort', onAbort);
           if (reader.result) resolve(reader.result as string);
           else reject(new Error('Falha ao ler blob da imagem'));
         };
-        reader.onerror = () => reject(reader.error);
+        reader.onerror = () => {
+          signal?.removeEventListener('abort', onAbort);
+          reject(reader.error);
+        };
         reader.readAsDataURL(blob);
       });
 
@@ -93,13 +150,22 @@ export async function saveChapterOffline(
         mediaId: page.media_id,
         blobUrl: base64Data
       });
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        await removeOfflineChapter(chapter.id).catch(() => {});
+        throw new DOMException('Download cancelado pelo usuário', 'AbortError');
+      }
       // Strict rule: Any page failure aborts the download and prevents saving incomplete chapters
-      throw new Error(`Falha ao baixar a página ${page.position}. Download incompleto não foi salvo.`);
+      throw new Error(`Falha ao baixar a página ${page.position}. Download incompleto não foi salvo.`, { cause: err });
     }
 
     completed++;
     onProgress?.(completed, pages.length);
+  }
+
+  if (signal?.aborted) {
+    await removeOfflineChapter(chapter.id).catch(() => {});
+    throw new DOMException('Download cancelado pelo usuário', 'AbortError');
   }
 
   const record: OfflineChapter = {
