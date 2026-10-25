@@ -364,6 +364,178 @@ export async function fetchRecentReleasesFromYugabyte(
   );
 }
 
+export interface PaginatedReleaseItem {
+  workId: string;
+  workSlug: string;
+  workTitle: string;
+  coverId: string | null;
+  kind: string;
+  contentRating: string | null;
+  latestPublishedAt: string;
+  chapters: Array<{
+    id: string;
+    number: number | string | null;
+    display_number?: string | null;
+    canonical_chapter_key?: string | null;
+    chapter_order_key?: string | null;
+    chapter_kind?: string | null;
+    edition?: string | null;
+    language?: string | null;
+    title: string | null;
+    publishedAt: string;
+  }>;
+}
+
+export interface PaginatedReleasesResponse {
+  releases: PaginatedReleaseItem[];
+  totalWorks: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
+
+/**
+ * Fetch paginated releases grouped by work with latest chapters.
+ * Guaranteed deterministic pagination: page 1 = newest releases, page 2 = earlier releases.
+ */
+export async function fetchPaginatedReleasesFromYugabyte(
+  page = 1,
+  pageSize = 24,
+  chaptersPerWork = 4,
+  platformEnv?: any,
+  kind?: string | null
+): Promise<PaginatedReleasesResponse> {
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.min(48, Math.max(1, pageSize));
+  const offset = (safePage - 1) * safePageSize;
+
+  const opKey = `paginated_releases_${safePage}_${safePageSize}_${chaptersPerWork}_${kind || 'all'}`;
+
+  return withYugabyteLkg(
+    opKey,
+    async () => {
+      let kindClause = '';
+      const paramsCount: any[] = [];
+      if (kind && kind.toUpperCase() !== 'ALL') {
+        paramsCount.push(kind.toUpperCase());
+        kindClause = `AND UPPER(w.kind) = $1`;
+      }
+
+      // 1. Total works count
+      const countSql = `
+        SELECT COUNT(*)::int AS total
+        FROM works w
+        WHERE w.latest_chapter_published_at IS NOT NULL
+          AND w.published = true
+          ${kindClause};
+      `;
+      const countRes = await executeYugabyteSql<{ total: number }>(countSql, paramsCount, platformEnv);
+      const totalWorks = countRes.rows[0]?.total ?? 0;
+      const totalPages = Math.max(1, Math.ceil(totalWorks / safePageSize));
+
+      if (totalWorks === 0 || safePage > totalPages) {
+        return {
+          releases: [],
+          totalWorks,
+          totalPages,
+          currentPage: safePage,
+          pageSize: safePageSize
+        };
+      }
+
+      // 2. Fetch page works and their latest chapters
+      const paramsQuery: any[] = [safePageSize, offset, chaptersPerWork];
+      let pageKindClause = '';
+      if (kind && kind.toUpperCase() !== 'ALL') {
+        paramsQuery.push(kind.toUpperCase());
+        pageKindClause = `AND UPPER(w.kind) = $4`;
+      }
+
+      const sql = `
+        WITH page_works AS (
+          SELECT w.id AS work_id, w.slug AS work_slug, w.title AS work_title,
+                 w.cover_id AS work_cover_id, w.kind AS work_kind,
+                 w.content_rating AS work_content_rating,
+                 w.latest_chapter_published_at AS latest_published_at
+          FROM works w
+          WHERE w.latest_chapter_published_at IS NOT NULL
+            AND w.published = true
+            ${pageKindClause}
+          ORDER BY w.latest_chapter_published_at DESC, w.id DESC
+          LIMIT $1 OFFSET $2
+        )
+        SELECT pw.work_id, pw.work_slug, pw.work_title, pw.work_cover_id,
+               pw.work_kind, pw.work_content_rating, pw.latest_published_at,
+               c.id AS chapter_id, c.number AS chapter_number,
+               c.display_number AS chapter_display_number,
+               c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+               c.edition AS chapter_edition, c.language AS chapter_language,
+               c.title AS chapter_title, c.published_at AS chapter_published_at
+        FROM page_works pw
+        LEFT JOIN LATERAL (
+          SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                 chapter_kind, edition, language, title, published_at
+          FROM chapters
+          WHERE work_id = pw.work_id AND published_at IS NOT NULL
+          ORDER BY published_at DESC, id DESC
+          LIMIT $3
+        ) c ON true
+        ORDER BY pw.latest_published_at DESC, pw.work_id DESC, c.published_at DESC NULLS LAST, c.id DESC NULLS LAST;
+      `;
+
+      const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, paramsQuery, platformEnv);
+
+      // Group rows into PaginatedReleaseItem objects preserving work order
+      const releasesMap = new Map<string, PaginatedReleaseItem>();
+      for (const row of res.rows) {
+        if (!row.work_id) continue;
+        if (!releasesMap.has(row.work_id)) {
+          releasesMap.set(row.work_id, {
+            workId: row.work_id,
+            workSlug: row.work_slug || '',
+            workTitle: row.work_title || '',
+            coverId: row.work_cover_id || null,
+            kind: row.work_kind || 'UNKNOWN',
+            contentRating: row.work_content_rating || null,
+            latestPublishedAt: row.latest_published_at || '',
+            chapters: []
+          });
+        }
+        if (row.chapter_id) {
+          const group = releasesMap.get(row.work_id)!;
+          group.chapters.push({
+            id: row.chapter_id,
+            number: row.chapter_number,
+            display_number: row.chapter_display_number,
+            canonical_chapter_key: row.canonical_chapter_key,
+            chapter_order_key: row.chapter_order_key,
+            chapter_kind: row.chapter_kind,
+            edition: row.chapter_edition,
+            language: row.chapter_language,
+            title: row.chapter_title,
+            publishedAt: row.chapter_published_at || ''
+          });
+        }
+      }
+
+      return {
+        releases: Array.from(releasesMap.values()),
+        totalWorks,
+        totalPages,
+        currentPage: safePage,
+        pageSize: safePageSize
+      };
+    },
+    {
+      releases: [],
+      totalWorks: 0,
+      totalPages: 1,
+      currentPage: safePage,
+      pageSize: safePageSize
+    }
+  );
+}
+
 /**
  * Fetch the public releases timeline by chapter rather than by work.
  *

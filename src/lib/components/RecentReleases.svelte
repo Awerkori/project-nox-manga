@@ -5,8 +5,7 @@
     BookOpen,
     Clock,
     AlertTriangle,
-    RefreshCw,
-    Loader2
+    RefreshCw
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
@@ -46,22 +45,11 @@
   let { releases = [], loadError = false, isStale = false }: Props = $props();
 
   let currentReleases = $state<ReleaseItem[]>(releases);
-  let loadingMore = $state(false);
-  let hasMore = $state(true);
-  let nextCursorTime = $state<string | null>(null);
-  let nextCursorId = $state<string | null>(null);
 
   $effect(() => {
     const current = untrack(() => currentReleases);
     if (releases && releases.length > 0 && releases[0] !== current[0]) {
       currentReleases = [...releases];
-      // Seed initial cursor from the last item
-      const last = releases[releases.length - 1];
-      if (last) {
-        nextCursorTime = last.latestPublishedAt;
-        const lastCh = last.chapters[last.chapters.length - 1];
-        nextCursorId = lastCh?.id || null;
-      }
     }
   });
 
@@ -81,42 +69,6 @@
         node.removeEventListener('error', onError);
       }
     };
-  }
-
-  async function loadMoreReleases() {
-    if (loadingMore || !hasMore) return;
-    loadingMore = true;
-
-    try {
-      const url = new URL('/api/releases', window.location.origin);
-      url.searchParams.set('limit', '9');
-      if (nextCursorTime) url.searchParams.set('cursorTime', nextCursorTime);
-      if (nextCursorId) url.searchParams.set('cursorId', nextCursorId);
-
-      const res = await fetch(url.toString(), {
-        headers: { 'Cache-Control': 'no-cache' }
-      });
-      if (!res.ok) throw new Error('Falha ao carregar lançamentos');
-      const data = await res.json();
-      const newItems: ReleaseItem[] = data.releases || [];
-
-      if (newItems.length === 0) {
-        hasMore = false;
-      } else {
-        const existingIds = new Set(currentReleases.map((r) => r.workId));
-        const unique = newItems.filter((r) => !existingIds.has(r.workId));
-        if (unique.length === 0 || !data.hasMore) {
-          hasMore = false;
-        }
-        currentReleases = [...currentReleases, ...unique];
-        nextCursorTime = data.nextCursorTime || null;
-        nextCursorId = data.nextCursorId || null;
-      }
-    } catch (err) {
-      console.error('Erro ao carregar mais lançamentos:', err);
-    } finally {
-      loadingMore = false;
-    }
   }
 </script>
 
@@ -220,28 +172,6 @@
         </article>
       {/each}
     </div>
-
-    <!-- Progressive Load More Section Aligned with Releases Grid -->
-    <div class="releases-footer-tools">
-      {#if hasMore}
-        <button
-          type="button"
-          class="btn-load-releases"
-          onclick={loadMoreReleases}
-          disabled={loadingMore}
-        >
-          {#if loadingMore}
-            <Loader2 size={16} class="spin" />
-            <span>Carregando mais lançamentos...</span>
-          {:else}
-            <span>Carregar mais lançamentos</span>
-            <ArrowRight size={15} />
-          {/if}
-        </button>
-      {:else}
-        <span class="all-loaded-text">Todos os lançamentos recentes foram carregados.</span>
-      {/if}
-    </div>
   {:else if loadError}
     <div class="degraded-releases-alert" role="alert">
       <AlertTriangle size={36} class="alert-icon" />
@@ -301,8 +231,8 @@
     width: 4px;
     height: 1.35rem;
     border-radius: 2px;
-    background: linear-gradient(180deg, #dfc28d 0%, #b89552 100%);
-    box-shadow: 0 0 10px rgba(223, 194, 141, 0.4);
+    background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+    box-shadow: 0 0 10px rgba(167, 139, 250, 0.4);
   }
 
   .releases-subtitle {
@@ -325,11 +255,11 @@
     font-weight: 600;
     color: #94a3b8;
     text-decoration: none;
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
   }
 
   .view-all-link:hover {
-    color: #dfc28d;
+    color: #a78bfa;
   }
 
   .stale-notice {
@@ -338,9 +268,9 @@
     gap: 0.5rem;
     padding: 0.55rem 1rem;
     border-radius: 8px;
-    background: rgba(223, 194, 141, 0.1);
-    border: 1px solid rgba(223, 194, 141, 0.25);
-    color: #dfc28d;
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    color: #c4b5fd;
     font-size: 0.82rem;
     margin-bottom: 1.25rem;
   }
@@ -371,10 +301,10 @@
 
   .release-row-card:hover {
     background: rgba(18, 22, 36, 0.95);
-    border-color: rgba(223, 194, 141, 0.35);
+    border-color: rgba(167, 139, 250, 0.35);
     box-shadow:
       0 10px 28px -6px rgba(0, 0, 0, 0.75),
-      0 0 16px -2px rgba(223, 194, 141, 0.15);
+      0 0 16px -2px rgba(124, 58, 237, 0.18);
     transform: translateY(-3px);
   }
 
@@ -462,7 +392,7 @@
   }
 
   .work-link:hover {
-    color: #dfc28d;
+    color: #a78bfa;
   }
 
   .kind-tag {
@@ -513,16 +443,16 @@
   }
 
   .chapter-pill:hover {
-    background: rgba(223, 194, 141, 0.15);
-    border-color: rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
+    background: rgba(124, 58, 237, 0.22);
+    border-color: rgba(167, 139, 250, 0.45);
+    color: #ffffff;
     transform: translateY(-1px);
   }
 
   .latest-pill {
-    background: rgba(223, 194, 141, 0.12);
-    border-color: rgba(223, 194, 141, 0.35);
-    color: #dfc28d;
+    background: rgba(124, 58, 237, 0.14);
+    border-color: rgba(139, 92, 246, 0.35);
+    color: #e2e8f0;
     font-weight: 750;
   }
 
@@ -532,48 +462,6 @@
     border-radius: 50%;
     background: #10b981;
     box-shadow: 0 0 6px #10b981;
-  }
-
-  /* Progressive Load More Section */
-  .releases-footer-tools {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    margin-top: 2.25rem;
-    padding-top: 1.5rem;
-    border-top: 1px dashed rgba(255, 255, 255, 0.08);
-    flex-wrap: wrap;
-  }
-
-  .btn-load-releases {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.75rem 1.6rem;
-    border-radius: 12px;
-    background: rgba(223, 194, 141, 0.14);
-    border: 1px solid rgba(223, 194, 141, 0.35);
-    color: #dfc28d;
-    font-size: 0.88rem;
-    font-weight: 750;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-load-releases:hover:not(:disabled) {
-    background: rgba(223, 194, 141, 0.25);
-    border-color: #dfc28d;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(223, 194, 141, 0.2);
-  }
-
-
-
-  .all-loaded-text {
-    font-size: 0.85rem;
-    color: #71717a;
-    font-style: italic;
   }
 
   @media (max-width: 1100px) {
@@ -682,13 +570,6 @@
       font-weight: 750;
       border-radius: 8px;
     }
-
-    .btn-load-releases {
-      width: 100%;
-      justify-content: center;
-      padding: 0.85rem 1.4rem;
-      font-size: 0.92rem;
-    }
   }
 
   @media (max-width: 380px) {
@@ -750,9 +631,9 @@
     gap: 0.5rem;
     padding: 0.6rem 1.25rem;
     border-radius: 8px;
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.35);
-    color: #dfc28d;
+    background: rgba(124, 58, 237, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
     font-size: 0.84rem;
     font-weight: 700;
     cursor: pointer;
