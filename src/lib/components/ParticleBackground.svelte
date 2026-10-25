@@ -67,8 +67,8 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Adaptive particle density: 85 desktop, 30 mobile / low-end
-      const count = mobile || lowEnd ? 30 : 85;
+      // Adaptive particle density: 85 desktop, 18 mobile, 25 low-end
+      const count = mobile ? 18 : lowEnd ? 25 : 85;
 
       if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
@@ -261,8 +261,13 @@
       mouseY = -9999;
     }
 
-    // Mobile Device Tilt / Orientation
+    // Mobile Device Tilt / Orientation (Throttled for high-refresh rate mobile sensors)
+    let lastTiltTimestamp = 0;
     function onDeviceOrientation(e: DeviceOrientationEvent) {
+      const now = performance.now();
+      if (now - lastTiltTimestamp < 80) return;
+      lastTiltTimestamp = now;
+
       if (e.gamma !== null && Math.abs(e.gamma) > 1) {
         // Clamp gamma between -30 and 30 deg, scale to -1.2 to 1.2 px drift
         const clamped = Math.max(-30, Math.min(30, e.gamma));

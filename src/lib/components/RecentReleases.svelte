@@ -352,19 +352,6 @@
     width: 100%;
   }
 
-  @media (max-width: 1100px) {
-    .releases-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 680px) {
-    .releases-grid {
-      grid-template-columns: 1fr;
-      gap: 0.85rem;
-    }
-  }
-
   /* Release Card Anatomy with Fixed Proportional Structure */
   .release-row-card {
     position: relative;
@@ -512,9 +499,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.28rem 0.65rem;
+    padding: 0.34rem 0.72rem;
+    min-height: 32px;
     border-radius: 7px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
     text-decoration: none;
     color: #cbd5e1;
@@ -585,6 +573,139 @@
     font-size: 0.85rem;
     color: #71717a;
     font-style: italic;
+  }
+
+  @media (max-width: 1100px) {
+    .releases-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 680px) {
+    .releases-section {
+      margin-bottom: 2.75rem;
+    }
+
+    .releases-header {
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .releases-title {
+      font-size: 1.35rem;
+    }
+
+    .releases-subtitle {
+      font-size: 0.8rem;
+    }
+
+    .view-all-link {
+      font-size: 0.8rem;
+    }
+
+    .releases-grid {
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+      gap: 0.85rem;
+    }
+
+    .release-row-card {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 0.85rem;
+      gap: 0.9rem;
+      align-items: flex-start;
+      min-height: auto;
+      border-radius: 14px;
+    }
+
+    .thumb-wrap {
+      width: 72px;
+      height: 104px;
+      min-width: 72px;
+      aspect-ratio: 72 / 104;
+      border-radius: 10px;
+    }
+
+    .release-main {
+      gap: 0.45rem;
+    }
+
+    .release-top-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.35rem;
+    }
+
+    .work-title-group {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .work-link {
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.32;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+
+    .kind-tag {
+      font-size: 0.68rem;
+      padding: 2px 6px;
+    }
+
+    .timestamp-box {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .chapter-pills-row {
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+    }
+
+    .chapter-pill {
+      min-height: 38px;
+      padding: 0.42rem 0.8rem;
+      font-size: 0.84rem;
+      font-weight: 750;
+      border-radius: 8px;
+    }
+
+    .btn-load-releases {
+      width: 100%;
+      justify-content: center;
+      padding: 0.85rem 1.4rem;
+      font-size: 0.92rem;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .thumb-wrap {
+      width: 66px;
+      height: 94px;
+      min-width: 66px;
+    }
+
+    .work-link {
+      font-size: 0.94rem;
+    }
+
+    .chapter-pill {
+      min-height: 36px;
+      padding: 0.38rem 0.65rem;
+      font-size: 0.8rem;
+    }
   }
 
   /* Degraded / Empty States */

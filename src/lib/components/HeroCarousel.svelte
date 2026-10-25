@@ -36,6 +36,8 @@
   const SLIDE_DURATION_MS = 3800;
   let progressRatio = $state(0); // 0.0 to 1.0
   let animFrameId: number | null = null;
+  let carouselSection: HTMLElement | null = $state(null);
+  let isIntersecting = $state(true);
   let lastTimestamp = 0;
 
   // 3D Card Interactive Tilt
@@ -197,7 +199,7 @@
     const delta = timestamp - lastTimestamp;
     lastTimestamp = timestamp;
 
-    if (!isPaused && !prefersReducedMotion && works.length > 1 && typeof document !== 'undefined' && !document.hidden) {
+    if (!isPaused && isIntersecting && !prefersReducedMotion && works.length > 1 && typeof document !== 'undefined' && !document.hidden) {
       progressRatio = Math.min(1, progressRatio + delta / SLIDE_DURATION_MS);
       if (progressRatio >= 1) {
         progressRatio = 0;
@@ -234,9 +236,22 @@
     }
   }
 
+  let carouselObserver: IntersectionObserver | null = null;
+
   onMount(() => {
     prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    if (typeof IntersectionObserver !== 'undefined' && carouselSection) {
+      carouselObserver = new IntersectionObserver(
+        (entries) => {
+          isIntersecting = entries[0].isIntersecting;
+        },
+        { threshold: 0.05 }
+      );
+      carouselObserver.observe(carouselSection);
+    }
+
     if (!prefersReducedMotion && works.length > 1) {
       lastTimestamp = performance.now();
       animFrameId = requestAnimationFrame(animationLoop);
@@ -244,6 +259,10 @@
   });
 
   onDestroy(() => {
+    if (carouselObserver) {
+      carouselObserver.disconnect();
+      carouselObserver = null;
+    }
     if (animFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
       cancelAnimationFrame(animFrameId);
       animFrameId = null;
@@ -263,6 +282,7 @@
 {#if currentWork}
   <section
     class="hero-carousel"
+    bind:this={carouselSection}
     aria-label="Destaques da Plataforma"
     tabindex="0"
     role="region"
@@ -1139,93 +1159,147 @@
   }
 
   @media (max-width: 768px) {
+    .backdrop-img {
+      display: none; /* CRITICAL GECKO PERF: Disables heavy 80px Gaussian blur layer on mobile */
+    }
+
     .hero-carousel {
       min-height: auto;
-      padding: 1.25rem 0;
+      padding: 1.25rem 0 0.85rem;
+      overflow: hidden;
+    }
+
+    .hero-container {
+      padding: 0 1rem;
+      gap: 1.15rem;
     }
 
     .hero-stage {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1.25rem;
       min-height: auto;
       text-align: center;
+      width: 100%;
     }
 
     .hero-cover-stage {
       width: 100%;
-      max-width: 330px;
-      height: 310px;
-      perspective: 750px;
+      max-width: 260px;
+      height: 315px;
+      perspective: none;
       margin: 0 auto;
+      position: relative;
+    }
+
+    .deck-card {
+      transform-style: flat;
+      will-change: auto;
+    }
+
+    .deck-prev,
+    .deck-next {
+      display: none; /* Removes compressed side peeks on narrow mobile screens */
     }
 
     .deck-active {
+      position: relative;
       width: 215px;
-      height: 305px;
-    }
-
-    .deck-prev {
-      left: 4px;
-      width: 160px;
-      height: 230px;
-      transform: translateX(-18px) translateZ(-90px) rotateY(22deg);
-      opacity: 0.35;
-    }
-
-    .deck-next {
-      right: 4px;
-      width: 160px;
-      height: 230px;
-      transform: translateX(18px) translateZ(-90px) rotateY(-22deg);
-      opacity: 0.35;
+      height: 310px;
+      transform: none !important;
+      margin: 0 auto;
+      border-radius: 14px;
+      box-shadow:
+        0 14px 34px -4px rgba(0, 0, 0, 0.85),
+        0 0 24px rgba(139, 92, 246, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.12);
     }
 
     .hero-info-col {
       align-items: center;
-      gap: 0.9rem;
+      gap: 0.75rem;
       max-width: 100%;
+      width: 100%;
     }
 
     .badges-row {
       justify-content: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
     }
 
     .hero-title {
-      font-size: 1.65rem;
+      font-size: 1.48rem;
+      line-height: 1.25;
+      font-weight: 850;
+      margin: 0.1rem 0;
+      max-width: 95%;
     }
 
     .hero-authors {
       justify-content: center;
+      font-size: 0.8rem;
     }
 
     .hero-synopsis {
-      font-size: 0.88rem;
+      font-size: 0.86rem;
+      line-height: 1.55;
       -webkit-line-clamp: 2;
       line-clamp: 2;
+      color: #94a3b8;
+      max-width: 94%;
+      margin: 0;
     }
 
     .hero-actions {
-      justify-content: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
       width: 100%;
+      max-width: 320px;
+      margin-top: 0.35rem;
     }
 
-    .btn-primary-hero,
+    .btn-primary-hero {
+      width: 100%;
+      justify-content: center;
+      padding: 0.8rem 1.4rem;
+      min-height: 44px;
+      font-size: 0.94rem;
+      font-weight: 750;
+      box-sizing: border-box;
+    }
+
     .btn-secondary-hero {
       width: 100%;
       justify-content: center;
+      padding: 0.75rem 1.4rem;
+      min-height: 42px;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
 
     .carousel-cinematic-bar {
-      flex-direction: column;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
       gap: 1rem;
-      padding-top: 0.75rem;
+      padding-top: 0.5rem;
+      width: 100%;
+      max-width: 320px;
+      margin: 0 auto;
     }
 
     .progress-track-wrapper {
-      width: 100%;
-      max-width: 260px;
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .nav-arrow-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
     }
   }
 
