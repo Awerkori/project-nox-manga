@@ -203,7 +203,7 @@
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
   >
-    <!-- Full-Bleed Atmospheric Backdrop with Smooth Crossfade -->
+    <!-- Subtle Atmospheric Backdrop without Blocking Canvas Particles -->
     <div class="backdrop-wrapper" aria-hidden="true">
       <img
         src={heroCover}
@@ -215,10 +215,7 @@
         decoding="async"
         use:fallbackCover
       />
-      <div class="backdrop-gradient-v"></div>
-      <div class="backdrop-gradient-h"></div>
       <div class="backdrop-radial-glow"></div>
-      <div class="backdrop-noise"></div>
     </div>
 
     <div class="hero-container">
@@ -358,61 +355,54 @@
         </div>
       </div>
 
-      <!-- Navigation & Preview Mini-Cards Strip -->
+      <!-- Cinematic Progress & Navigation Controls -->
       {#if works.length > 1}
-        <div class="carousel-bottom-bar">
-          <!-- Chevron Navigation -->
-          <div class="carousel-nav-arrows">
-            <button
-              type="button"
-              class="arrow-btn"
-              onclick={prevSlide}
-              aria-label="Obra anterior em destaque"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              type="button"
-              class="arrow-btn"
-              onclick={nextSlide}
-              aria-label="Próxima obra em destaque"
-            >
-              <ChevronRight size={20} />
-            </button>
+        <div class="carousel-cinematic-bar">
+          <!-- Slide Counter -->
+          <div class="slide-counter">
+            <span class="curr-num">{String(currentIndex + 1).padStart(2, '0')}</span>
+            <span class="counter-sep">/</span>
+            <span class="total-num">{String(works.length).padStart(2, '0')}</span>
           </div>
 
-          <!-- Mini Deck Strip: Clickable Thumbnails of Featured Works -->
-          <div class="featured-mini-deck" role="tablist" aria-label="Navegação dos destaques">
+          <!-- Slide Progress Indicators -->
+          <div class="slider-indicators" role="tablist" aria-label="Indicadores dos destaques">
             {#each works as item, idx (item?.id || idx)}
               {@const isSelected = idx === currentIndex}
-              {@const thumbUrl = resolveCoverUrl(item.cover_id || (item as any).coverId, item.slug, item.id, { size: 'thumb' })}
               <button
                 type="button"
-                class="mini-deck-item"
+                class="indicator-pill"
                 class:active={isSelected}
                 onclick={() => goToSlide(idx)}
                 role="tab"
                 aria-selected={isSelected}
-                aria-label={`Ver destaque ${idx + 1}: ${decodeHtmlEntities(item.title)}`}
+                aria-label={`Ir para destaque ${idx + 1}: ${decodeHtmlEntities(item.title)}`}
               >
-                <div class="mini-thumb-box">
-                  <img
-                    src={thumbUrl}
-                    alt=""
-                    class="mini-thumb-img"
-                    loading="lazy"
-                    decoding="async"
-                    use:fallbackCover
-                  />
-                  {#if isSelected && !isPaused}
-                    <div class="progress-bar-fill"></div>
-                  {/if}
-                </div>
-                <div class="mini-meta">
-                  <span class="mini-title">{decodeHtmlEntities(item.title)}</span>
-                </div>
+                {#if isSelected && !isPaused}
+                  <div class="indicator-progress-fill"></div>
+                {/if}
               </button>
             {/each}
+          </div>
+
+          <!-- Glass Chevron Navigation -->
+          <div class="slider-nav-arrows">
+            <button
+              type="button"
+              class="nav-arrow-btn"
+              onclick={prevSlide}
+              aria-label="Obra anterior em destaque"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              class="nav-arrow-btn"
+              onclick={nextSlide}
+              aria-label="Próxima obra em destaque"
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       {/if}
@@ -424,11 +414,10 @@
   .hero-carousel {
     position: relative;
     width: 100%;
-    min-height: 540px;
-    padding: 2.5rem 0 2rem;
+    min-height: 520px;
+    padding: 2.2rem 0 2rem;
     overflow: hidden;
-    background: #06070c;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
     display: flex;
     align-items: center;
   }
@@ -444,60 +433,32 @@
 
   .backdrop-img {
     position: absolute;
-    top: -20%;
+    top: -15%;
     left: -10%;
     width: 120%;
-    height: 140%;
+    height: 130%;
     object-fit: cover;
-    filter: blur(72px) brightness(0.28) saturate(1.5);
-    transform: scale(1.12);
-    opacity: 0.9;
+    filter: blur(80px) brightness(0.24) saturate(1.4);
+    transform: scale(1.1);
+    opacity: 0.35;
+    mask-image: radial-gradient(ellipse at 35% 45%, rgba(0, 0, 0, 1) 20%, rgba(0, 0, 0, 0) 70%);
+    -webkit-mask-image: radial-gradient(ellipse at 35% 45%, rgba(0, 0, 0, 1) 20%, rgba(0, 0, 0, 0) 70%);
     transition: opacity 0.6s ease;
-  }
-
-  .backdrop-gradient-v {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(6, 7, 12, 0.4) 0%,
-      rgba(6, 7, 12, 0.82) 65%,
-      #06070c 100%
-    );
-  }
-
-  .backdrop-gradient-h {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      rgba(6, 7, 12, 0.75) 0%,
-      rgba(6, 7, 12, 0.45) 45%,
-      rgba(6, 7, 12, 0.9) 100%
-    );
   }
 
   .backdrop-radial-glow {
     position: absolute;
-    top: 20%;
-    left: 25%;
-    width: 600px;
-    height: 600px;
+    top: 15%;
+    left: 20%;
+    width: 650px;
+    height: 650px;
     background: radial-gradient(
       circle,
-      rgba(223, 194, 141, 0.09) 0%,
-      rgba(139, 92, 246, 0.08) 45%,
+      rgba(139, 92, 246, 0.12) 0%,
+      rgba(223, 194, 141, 0.05) 45%,
       transparent 70%
     );
     pointer-events: none;
-  }
-
-  .backdrop-noise {
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(rgba(223, 194, 141, 0.035) 1px, transparent 0);
-    background-size: 24px 24px;
-    opacity: 0.5;
   }
 
   /* Container */
@@ -879,134 +840,111 @@
     transform: translateY(-2px);
   }
 
-  /* Bottom Bar with Mini Deck & Controls */
-  .carousel-bottom-bar {
+  /* Cinematic Progress & Navigation Controls */
+  .carousel-cinematic-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 2rem;
+    padding-top: 1.5rem;
+    margin-top: 0.5rem;
   }
 
-  .carousel-nav-arrows {
+  .slide-counter {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-family: 'Manrope', -apple-system, sans-serif;
+    font-weight: 800;
+  }
+
+  .curr-num {
+    font-size: 1.35rem;
+    color: #dfc28d;
+    letter-spacing: -0.02em;
+  }
+
+  .counter-sep {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.25);
+    margin: 0 2px;
+  }
+
+  .total-num {
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .slider-indicators {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
+    gap: 8px;
+    flex: 1;
+    max-width: 440px;
   }
 
-  .arrow-btn {
+  .indicator-pill {
+    position: relative;
+    height: 4px;
+    flex: 1;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    transition: background 0.25s ease, transform 0.2s ease;
+  }
+
+  .indicator-pill:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scaleY(1.4);
+  }
+
+  .indicator-pill.active {
+    background: rgba(223, 194, 141, 0.25);
+  }
+
+  .indicator-progress-fill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #dfc28d, #fef08a);
+    box-shadow: 0 0 8px rgba(223, 194, 141, 0.7);
+    animation: indicatorFillAnim 7.5s linear forwards;
+  }
+
+  @keyframes indicatorFillAnim {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0%); }
+  }
+
+  .slider-nav-arrows {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .nav-arrow-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #cbd5e1;
     cursor: pointer;
     backdrop-filter: blur(8px);
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .arrow-btn:hover {
+  .nav-arrow-btn:hover {
     background: rgba(223, 194, 141, 0.15);
-    border-color: rgba(223, 194, 141, 0.4);
+    border-color: rgba(223, 194, 141, 0.45);
     color: #dfc28d;
     transform: translateY(-1px);
-  }
-
-  /* Featured Mini Deck */
-  .featured-mini-deck {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    padding: 4px 0;
-  }
-
-  .featured-mini-deck::-webkit-scrollbar {
-    display: none;
-  }
-
-  .mini-deck-item {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.35rem 0.75rem 0.35rem 0.35rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 10px;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-    max-width: 200px;
-  }
-
-  .mini-deck-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-  }
-
-  .mini-deck-item.active {
-    background: rgba(223, 194, 141, 0.1);
-    border-color: rgba(223, 194, 141, 0.45);
-    box-shadow: 0 2px 12px rgba(223, 194, 141, 0.15);
-  }
-
-  .mini-thumb-box {
-    position: relative;
-    width: 28px;
-    height: 40px;
-    border-radius: 5px;
-    overflow: hidden;
-    background: #111422;
-    flex-shrink: 0;
-  }
-
-  .mini-thumb-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .progress-bar-fill {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 3px;
-    background: #dfc28d;
-    box-shadow: 0 0 6px #dfc28d;
-    animation: progressBarAnim 7.5s linear forwards;
-  }
-
-  @keyframes progressBarAnim {
-    from { width: 0%; }
-    to { width: 100%; }
-  }
-
-  .mini-meta {
-    overflow: hidden;
-  }
-
-  .mini-title {
-    display: block;
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #94a3b8;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: color 0.15s ease;
-  }
-
-  .mini-deck-item.active .mini-title {
-    color: #dfc28d;
+    box-shadow: 0 4px 14px rgba(223, 194, 141, 0.2);
   }
 
   /* Responsive Breakpoints */
@@ -1084,14 +1022,15 @@
       justify-content: center;
     }
 
-    .carousel-bottom-bar {
+    .carousel-cinematic-bar {
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.25rem;
+      padding-top: 1rem;
     }
 
-    .featured-mini-deck {
+    .slider-indicators {
       width: 100%;
-      justify-content: flex-start;
+      max-width: 280px;
     }
   }
 

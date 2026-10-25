@@ -249,8 +249,8 @@
 
   .catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 22px;
   }
 
   .pagination-bar {
@@ -266,7 +266,14 @@
     color: #a6a3b8;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 1200px) {
+    .catalog-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+    }
+  }
+
+  @media (max-width: 768px) {
     .filters-selects-group {
       flex-direction: column;
       align-items: stretch;
@@ -281,8 +288,8 @@
     }
 
     .catalog-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
   }
 </style>

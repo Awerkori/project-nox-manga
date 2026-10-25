@@ -18,7 +18,6 @@
     title: string;
     subtitle?: string;
     badge?: string;
-    viewAllUrl?: string;
     loadMoreSort?: 'latest' | 'most_read';
     works: Work[];
     shelfIndex?: number;
@@ -28,7 +27,6 @@
     title,
     subtitle,
     badge,
-    viewAllUrl,
     loadMoreSort,
     works = [],
     shelfIndex = 1
@@ -178,24 +176,19 @@
             class="expand-inline-btn"
             onclick={toggleExpand}
             disabled={loadingMore}
-            aria-label={isExpanded ? 'Recolher estante' : 'Expandir e ver mais obras em grade'}
+            aria-label={isExpanded ? `Recolher ${title.toLowerCase()}` : `Expandir ${title.toLowerCase()}`}
           >
             {#if loadingMore}
               <Loader2 size={14} class="spin" />
               <span>Carregando...</span>
             {:else if isExpanded}
-              <span>Recolher</span>
+              <span>Recolher {title.toLowerCase()}</span>
             {:else}
-              <span>Expandir grade</span>
+              <span>Expandir {title.toLowerCase()}</span>
               <ArrowRight size={13} />
             {/if}
           </button>
         {/if}
-
-        <a href={viewAllUrl || (loadMoreSort === 'most_read' ? '/catalogo?sort=most_read' : '/catalogo')} class="view-all-link">
-          <span>Ver catálogo</span>
-          <ArrowRight size={14} />
-        </a>
 
         {#if !isExpanded}
           <div class="shelf-nav-arrows">
@@ -301,34 +294,6 @@
           </a>
         {/each}
 
-        <!-- Clean End-Cap Card for Horizontal Scroll (When not expanded) -->
-        {#if !isExpanded && loadMoreSort && hasMore}
-          <button
-            type="button"
-            class="shelf-card-view-more btn-reset"
-            onclick={handleLoadMore}
-            disabled={loadingMore}
-            title="Carregar mais obras e expandir grade"
-          >
-            <div class="view-more-box">
-              <div class="view-more-icon-circle">
-                {#if loadingMore}
-                  <Loader2 size={20} class="spin" />
-                {:else}
-                  <ArrowRight size={20} />
-                {/if}
-              </div>
-              <span class="view-more-text">
-                {#if loadingMore}
-                  Carregando...
-                {:else}
-                  Ver Mais
-                {/if}
-              </span>
-              <span class="view-more-sub">Expandir grade</span>
-            </div>
-          </button>
-        {/if}
       </div>
     </div>
 
@@ -344,14 +309,14 @@
           >
             {#if loadingMore}
               <Loader2 size={16} class="spin" />
-              <span>Carregando mais obras...</span>
+              <span>Carregando...</span>
             {:else}
-              <span>Carregar mais obras</span>
+              <span>Carregar mais em {title}</span>
               <ArrowRight size={16} />
             {/if}
           </button>
         {:else}
-          <span class="all-loaded-text">Todas as obras desta seção foram carregadas.</span>
+          <span class="all-loaded-text">Todas as obras de {title.toLowerCase()} foram carregadas.</span>
         {/if}
 
         <button
@@ -359,7 +324,7 @@
           class="btn-collapse"
           onclick={() => (isExpanded = false)}
         >
-          Recolher estante ↑
+          Recolher {title.toLowerCase()} ↑
         </button>
       </div>
     {/if}

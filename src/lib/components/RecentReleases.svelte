@@ -51,7 +51,7 @@
   let hasMore = $state(true);
   let nextCursorTime = $state<string | null>(null);
   let nextCursorId = $state<string | null>(null);
-  let activeDropdownWorkId = $state<string | null>(null);
+  let expandedWorkIds = $state<string[]>([]);
 
   $effect(() => {
     const current = untrack(() => currentReleases);
@@ -85,14 +85,12 @@
     };
   }
 
-  function toggleDropdown(workId: string, e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    activeDropdownWorkId = activeDropdownWorkId === workId ? null : workId;
-  }
-
-  function closeDropdown() {
-    activeDropdownWorkId = null;
+  function toggleExpandWork(workId: string) {
+    if (expandedWorkIds.includes(workId)) {
+      expandedWorkIds = expandedWorkIds.filter((id) => id !== workId);
+    } else {
+      expandedWorkIds = [...expandedWorkIds, workId];
+    }
   }
 
   async function loadMoreReleases() {
@@ -132,8 +130,6 @@
   }
 </script>
 
-<svelte:window onclick={closeDropdown} />
-
 <section id="lancamentos" class="releases-section">
   <div class="releases-header">
     <div class="title-cluster">
@@ -165,12 +161,12 @@
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
         {@const sortedChapters = rel.chapters.slice().sort((a, b) => compareChapterIdentity(b, a))}
-        {@const visibleChapters = sortedChapters.slice(0, 3)}
+        {@const isExpanded = expandedWorkIds.includes(rel.workId)}
+        {@const displayedChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
         {@const extraChapters = sortedChapters.slice(3)}
         {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
         {@const isEager = i < 3}
         {@const titleDecoded = decodeHtmlEntities(rel.workTitle)}
-        {@const isDropdownOpen = activeDropdownWorkId === rel.workId}
 
         <article class="release-row-card">
           <!-- Mini Cover Thumbnail -->
@@ -217,7 +213,7 @@
 
             <!-- Clickable Chapter Pills List (Newest to Oldest) -->
             <div class="chapter-pills-row">
-              {#each visibleChapters as ch, idx (ch.id)}
+              {#each displayedChapters as ch, idx (ch.id)}
                 {@const chNum = chapterDisplayNumber(ch)}
                 {@const chTitle = ch.title ? decodeHtmlEntities(ch.title) : ''}
                 <a
@@ -233,42 +229,30 @@
                 </a>
               {/each}
 
-              <!-- Extra chapters dropdown pill (Doesn't break row heights!) -->
+              <!-- Inline toggle for extra chapters -->
               {#if extraChapters.length > 0}
-                <div class="extra-chapters-anchor">
+                {#if !isExpanded}
                   <button
                     type="button"
                     class="chapter-pill expand-pill"
-                    class:active={isDropdownOpen}
-                    onclick={(e) => toggleDropdown(rel.workId, e)}
+                    onclick={() => toggleExpandWork(rel.workId)}
                     title={`Ver mais ${extraChapters.length} capítulos deste lançamento`}
                   >
                     <span class="ch-text">+{extraChapters.length} caps</span>
-                    <span class="expand-chevron" class:flipped={isDropdownOpen}>
+                    <span class="expand-chevron">
                       <ChevronDown size={12} />
                     </span>
                   </button>
-
-                  {#if isDropdownOpen}
-                    <div class="chapters-dropdown-popover" onclick={(e) => e.stopPropagation()}>
-                      <div class="dropdown-header">
-                        <span>Mais capítulos de {titleDecoded}</span>
-                      </div>
-                      <div class="dropdown-list">
-                        {#each extraChapters as ch (ch.id)}
-                          {@const chNum = chapterDisplayNumber(ch)}
-                          <a href="/ler/{ch.id}" class="dropdown-item">
-                            <span class="dropdown-ch">Capítulo {chNum}</span>
-                            <span class="dropdown-cta">Ler ↗</span>
-                          </a>
-                        {/each}
-                      </div>
-                      <a href="/obra/{rel.workSlug}" class="dropdown-all-link">
-                        Ver todos os capítulos na obra
-                      </a>
-                    </div>
-                  {/if}
-                </div>
+                {:else}
+                  <button
+                    type="button"
+                    class="chapter-pill collapse-pill"
+                    onclick={() => toggleExpandWork(rel.workId)}
+                    title="Recolher capítulos extras"
+                  >
+                    <span class="ch-text">Recolher</span>
+                  </button>
+                {/if}
               {/if}
             </div>
           </div>
@@ -296,11 +280,6 @@
       {:else}
         <span class="all-loaded-text">Todos os lançamentos recentes foram carregados.</span>
       {/if}
-
-      <a href="/lancamentos" class="btn-all-releases">
-        <span>Ir para página de Lançamentos</span>
-        <ArrowRight size={15} />
-      </a>
     </div>
   {:else if loadError}
     <div class="degraded-releases-alert" role="alert">
@@ -605,109 +584,25 @@
     box-shadow: 0 0 6px #10b981;
   }
 
-  /* Extra Chapters Dropdown / Popover */
-  .extra-chapters-anchor {
-    position: relative;
-    display: inline-block;
-  }
-
-  .expand-pill {
+  /* Extra Chapters Expand / Collapse Pills */
+  .expand-pill,
+  .collapse-pill {
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.16);
     color: #94a3b8;
   }
 
   .expand-pill:hover,
-  .expand-pill.active {
-    background: rgba(255, 255, 255, 0.08);
+  .collapse-pill:hover {
+    background: rgba(223, 194, 141, 0.12);
     border-color: rgba(223, 194, 141, 0.4);
     color: #dfc28d;
   }
 
   .expand-chevron {
-    transition: transform 0.2s ease;
-  }
-
-  .expand-chevron.flipped {
-    transform: rotate(180deg);
-  }
-
-  .chapters-dropdown-popover {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    width: 240px;
-    max-height: 250px;
-    overflow-y: auto;
-    background: #0e111d;
-    border: 1px solid rgba(223, 194, 141, 0.35);
-    border-radius: 12px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
-    padding: 0.6rem;
-    z-index: 50;
-    animation: popoverFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @keyframes popoverFadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .dropdown-header {
-    font-size: 0.74rem;
-    font-weight: 750;
-    color: #dfc28d;
-    padding: 0.2rem 0.4rem 0.4rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    margin-bottom: 0.4rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .dropdown-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .dropdown-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.4rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    color: #e2e8f0;
-    text-decoration: none;
-    transition: background 0.15s ease;
-  }
-
-  .dropdown-item:hover {
-    background: rgba(223, 194, 141, 0.15);
-    color: #dfc28d;
-  }
-
-  .dropdown-cta {
-    font-size: 0.72rem;
-    color: #dfc28d;
-  }
-
-  .dropdown-all-link {
-    display: block;
-    margin-top: 0.5rem;
-    padding-top: 0.4rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.74rem;
-    font-weight: 700;
-    color: #94a3b8;
-    text-align: center;
-    text-decoration: none;
-  }
-
-  .dropdown-all-link:hover {
-    color: #dfc28d;
   }
 
   /* Progressive Load More Section */
@@ -744,26 +639,7 @@
     box-shadow: 0 4px 16px rgba(223, 194, 141, 0.2);
   }
 
-  .btn-all-releases {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.75rem 1.4rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #cbd5e1;
-    font-size: 0.88rem;
-    font-weight: 650;
-    text-decoration: none;
-    transition: all 0.2s ease;
-  }
 
-  .btn-all-releases:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
-  }
 
   .all-loaded-text {
     font-size: 0.85rem;
