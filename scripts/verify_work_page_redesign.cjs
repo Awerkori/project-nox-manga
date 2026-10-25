@@ -20,6 +20,7 @@ const TEST_WORKS = [
 
 const VIEWPORTS = [
   { name: 'desktop_1920x1080', width: 1920, height: 1080, isMobile: false, hasTouch: false },
+  { name: 'desktop_1600x900', width: 1600, height: 900, isMobile: false, hasTouch: false },
   { name: 'desktop_1366x768', width: 1366, height: 768, isMobile: false, hasTouch: false },
   { name: 'tablet_768x1024', width: 768, height: 1024, isMobile: true, hasTouch: true },
   { name: 'mobile_412x915', width: 412, height: 915, isMobile: true, hasTouch: true },
@@ -258,8 +259,8 @@ async function run() {
         await page.waitForTimeout(500);
 
         // Screenshots
-        const fullImg = `round3_${work.slug}_${vp.name}_full.png`;
-        const heroImg = `round3_${work.slug}_${vp.name}_hero.png`;
+        const fullImg = `round4_${work.slug}_${vp.name}_full.png`;
+        const heroImg = `round4_${work.slug}_${vp.name}_hero.png`;
         await page.screenshot({ path: path.join(ARTIFACTS_DIR, fullImg), fullPage: true });
         await page.screenshot({
           path: path.join(ARTIFACTS_DIR, heroImg),
@@ -271,11 +272,15 @@ async function run() {
           const docW = document.documentElement.clientWidth;
           const scrollW = document.documentElement.scrollWidth;
 
-          const specs = document.querySelector('.work-specs-editorial, .work-sidebar');
+          const specs = document.querySelector('.work-specs-section, .work-specs-editorial, .work-sidebar');
           const chapters = document.querySelector('.work-chapters-section');
           const specsY = specs ? specs.getBoundingClientRect().top + window.scrollY : null;
           const chaptersY = chapters ? chapters.getBoundingClientRect().top + window.scrollY : null;
           const isFichaAboveChapters = specsY !== null && chaptersY !== null ? specsY < chaptersY : null;
+
+          const quadCards = document.querySelectorAll('.specs-quad-card');
+          const byline = document.querySelector('.work-creators-byline');
+          const aliasItems = document.querySelectorAll('.alias-editorial-row');
 
           const firstChapter = document.querySelector('.chapter-card');
           const viewsPill = firstChapter ? firstChapter.querySelector('.chapter-meta-views') : null;
@@ -288,12 +293,15 @@ async function run() {
             specsY: Math.round(specsY || 0),
             chaptersY: Math.round(chaptersY || 0),
             isFichaAboveChapters,
+            quadCardsCount: quadCards.length,
+            hasByline: !!byline,
+            aliasItemsCount: aliasItems.length,
             viewsText: viewsPill ? viewsPill.textContent.trim() : null,
             dateText: datePill ? datePill.textContent.trim() : null
           };
         });
 
-        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | FichaAboveChapters=${evaluation.isFichaAboveChapters} (specsY: ${evaluation.specsY} vs chaptersY: ${evaluation.chaptersY}) | 1stViews: "${evaluation.viewsText}"`);
+        console.log(`  [${vp.name}] noOverflow=${evaluation.noOverflow} | FichaAboveChapters=${evaluation.isFichaAboveChapters} (specsY: ${evaluation.specsY} vs chaptersY: ${evaluation.chaptersY}) | quadCards: ${evaluation.quadCardsCount} | 1stViews: "${evaluation.viewsText}"`);
 
         workData.viewports[vp.name] = {
           fullImg,
@@ -313,12 +321,12 @@ async function run() {
   await browser.close();
 
   fs.writeFileSync(
-    path.join(ARTIFACTS_DIR, 'round3_work_page_audit.json'),
+    path.join(ARTIFACTS_DIR, 'round4_work_page_audit.json'),
     JSON.stringify(report, null, 2)
   );
 
-  console.log('\n=== ROUND 3 VERIFICATION COMPLETE ===');
-  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round3_work_page_audit.json')}`);
+  console.log('\n=== ROUND 4 VERIFICATION COMPLETE ===');
+  console.log(`Audit report saved to: ${path.join(ARTIFACTS_DIR, 'round4_work_page_audit.json')}`);
 }
 
 run().catch(err => {

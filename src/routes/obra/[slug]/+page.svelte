@@ -19,7 +19,9 @@
     Search,
     Calendar,
     Share2,
-    Layers
+    Tag,
+    Languages,
+    SlidersHorizontal
   } from '@lucide/svelte';
   import { invalidateAll, goto } from '$app/navigation';
   import { action } from '$lib/actions';
@@ -203,8 +205,8 @@
     });
   });
 
-  let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 3));
-  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 8));
+  let visibleAliases = $derived(aliasesExpanded ? alternativeTitles : alternativeTitles.slice(0, 4));
+  let visibleTags = $derived(tagsExpanded ? data.tags.filter(Boolean) : data.tags.filter(Boolean).slice(0, 10));
 
   let chapters = $derived(
     (ascending ? [...data.chapters].reverse() : data.chapters).filter((c) => {
@@ -413,36 +415,22 @@
         {:else if data.work.age_rating}
           <span class="badge-rating-age">{data.work.age_rating} anos</span>
         {/if}
-        {#if data.scans && data.scans.length > 0}
-          {#each data.scans as scan (scan.id || scan.slug)}
-            <a href="/scans/{scan.slug}" class="badge-scan-chip">
-              <Users size={12} />
-              <span>{scan.name}</span>
-            </a>
-          {/each}
-        {/if}
       </div>
 
       <!-- Main Title -->
       <h1 id="work-title" class="work-title">{decodedTitle}</h1>
 
-      <!-- Creators Attribution -->
+      <!-- Clean Creators Byline (No duplicated boxes) -->
       {#if data.work.author || data.work.artist}
-        <div class="work-creators">
+        <div class="work-creators-byline">
+          <span class="byline-label">Por</span>
           {#if data.work.author}
-            <span class="creator-item">
-              <span class="creator-label">Roteiro:</span>
-              <strong class="creator-name">{data.work.author}</strong>
-            </span>
+            <strong class="byline-author">{data.work.author}</strong>
           {/if}
           {#if data.work.author && data.work.artist && data.work.author !== data.work.artist}
-            <span class="creator-sep" aria-hidden="true">•</span>
-          {/if}
-          {#if data.work.artist && data.work.author !== data.work.artist}
-            <span class="creator-item">
-              <span class="creator-label">Arte:</span>
-              <strong class="creator-name">{data.work.artist}</strong>
-            </span>
+            <span class="byline-bullet" aria-hidden="true">•</span>
+            <span class="byline-label">Arte:</span>
+            <strong class="byline-artist">{data.work.artist}</strong>
           {/if}
         </div>
       {/if}
@@ -583,134 +571,179 @@
     </div>
   {/if}
 
-  <!-- Unified Editorial Ficha Técnica & Metadados (Positioned BEFORE chapters on Desktop AND Mobile) -->
-  <section class="work-specs-editorial work-sidebar" aria-label="Ficha técnica da obra">
-    <div class="specs-editorial-header">
-      <div class="specs-editorial-title">
-        <Layers size={17} class="icon-violet" />
-        <h2>Ficha Técnica & Detalhes</h2>
+  <!-- Redesigned Editorial Ficha Técnica (Thematic 2x2 Grid) -->
+  <section class="work-specs-section work-specs-editorial work-sidebar" aria-label="Ficha técnica e detalhes da obra">
+    <div class="specs-section-header">
+      <div class="specs-heading-wrap">
+        <SlidersHorizontal size={18} class="specs-header-icon" />
+        <h2 class="specs-main-title">Ficha Técnica & Detalhes</h2>
       </div>
-      {#if data.scans && data.scans.length > 0}
-        <div class="specs-scans-chips">
-          {#each data.scans as scan (scan.id || scan.slug)}
-            <a href="/scans/{scan.slug}" class="scan-editorial-chip" title="Scan parceira oficial">
-              <Users size={12} />
-              <span>{scan.name}</span>
-            </a>
-          {/each}
-        </div>
-      {/if}
+      <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
     </div>
 
-    <!-- Cohesive Editorial Grid -->
-    <div class="specs-editorial-grid">
-      <!-- Publicação & Formato -->
-      <div class="specs-group">
-        <h3 class="specs-group-title">Publicação</h3>
-        <dl class="specs-list">
-          <div class="spec-item">
-            <dt>Tipo</dt>
+    <div class="specs-quad-grid">
+      <!-- Card 1: Informações da Obra -->
+      <div class="specs-quad-card">
+        <div class="card-top-header">
+          <div class="card-icon-title">
+            <BookOpen size={16} class="card-icon" />
+            <h3 class="card-title">Informações da Obra</h3>
+          </div>
+        </div>
+        <dl class="specs-table">
+          <div class="specs-row">
+            <dt>Formato</dt>
             <dd>{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</dd>
           </div>
-          <div class="spec-item">
-            <dt>Status</dt>
-            <dd>{statusLabels[data.work.status] || data.work.status}</dd>
+          <div class="specs-row">
+            <dt>Status de Publicação</dt>
+            <dd>
+              <span class="status-indicator-dot" class:is-ongoing={data.work.status !== 'COMPLETED'}></span>
+              {statusLabels[data.work.status] || data.work.status}
+            </dd>
           </div>
           {#if data.work.year}
-            <div class="spec-item">
-              <dt>Lançamento</dt>
+            <div class="specs-row">
+              <dt>Ano de Lançamento</dt>
               <dd>{data.work.year}</dd>
             </div>
           {/if}
-          <div class="spec-item">
-            <dt>Classificação</dt>
-            <dd>{isAdult ? '+18 Adulto' : (data.work.age_rating ? `${data.work.age_rating} anos` : 'Livre')}</dd>
+          <div class="specs-row">
+            <dt>Classificação Indicativa</dt>
+            <dd>
+              {#if isAdult}
+                <span class="age-pill adult">+18 Adulto</span>
+              {:else if data.work.age_rating}
+                <span class="age-pill">{data.work.age_rating} anos</span>
+              {:else}
+                <span class="age-pill free">Livre</span>
+              {/if}
+            </dd>
+          </div>
+          <div class="specs-row">
+            <dt>Capítulos Catalogados</dt>
+            <dd>{data.chapters.length} {data.chapters.length === 1 ? 'capítulo' : 'capítulos'}</dd>
           </div>
         </dl>
       </div>
 
-      <!-- Produção & Autoria -->
-      <div class="specs-group">
-        <h3 class="specs-group-title">Produção</h3>
-        <dl class="specs-list">
-          <div class="spec-item">
-            <dt>Roteiro</dt>
-            <dd>{data.work.author || 'Não informado'}</dd>
+      <!-- Card 2: Equipe & Tradução -->
+      <div class="specs-quad-card">
+        <div class="card-top-header">
+          <div class="card-icon-title">
+            <Users size={16} class="card-icon" />
+            <h3 class="card-title">Equipe & Tradução</h3>
           </div>
+        </div>
+        <dl class="specs-table">
+          {#if data.work.author}
+            <div class="specs-row">
+              <dt>Roteiro / História</dt>
+              <dd><strong>{data.work.author}</strong></dd>
+            </div>
+          {/if}
           {#if data.work.artist && data.work.artist !== data.work.author}
-            <div class="spec-item">
-              <dt>Arte</dt>
-              <dd>{data.work.artist}</dd>
+            <div class="specs-row">
+              <dt>Arte / Ilustração</dt>
+              <dd><strong>{data.work.artist}</strong></dd>
             </div>
           {/if}
           {#if data.scans && data.scans.length > 0}
-            <div class="spec-item">
+            <div class="specs-row scans-row">
               <dt>{data.scans.length > 1 ? 'Scans Parceiras' : 'Scan Parceira'}</dt>
-              <dd class="scans-inline-list">
-                {#each data.scans as scan, i (scan.id || scan.slug || i)}
-                  <a href="/scans/{scan.slug}" class="scan-link">{scan.name}</a>
-                  {#if i < data.scans.length - 1}<span class="sep">·</span>{/if}
+              <dd class="scans-chips-wrap">
+                {#each data.scans as scan (scan.id || scan.slug)}
+                  <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
+                    <Users size={12} />
+                    <span>{scan.name}</span>
+                  </a>
                 {/each}
               </dd>
             </div>
+          {:else}
+            <div class="specs-row">
+              <dt>Tradução</dt>
+              <dd><span class="muted-spec">Comunidade Project Nox</span></dd>
+            </div>
           {/if}
+          <div class="specs-row">
+            <dt>Idioma</dt>
+            <dd>Português (Brasil)</dd>
+          </div>
         </dl>
       </div>
 
-      <!-- Gêneros e Tags (Integrado) -->
-      {#if visibleTags.length}
-        <div class="specs-group tags-group">
-          <div class="specs-group-header-row">
-            <h3 class="specs-group-title">Gêneros & Tags</h3>
-            <span class="count-badge">{data.tags.filter(Boolean).length}</span>
+      <!-- Card 3: Gêneros & Temas -->
+      <div class="specs-quad-card">
+        <div class="card-top-header">
+          <div class="card-icon-title">
+            <Tag size={16} class="card-icon" />
+            <h3 class="card-title">Gêneros & Temas</h3>
           </div>
-          <div class="editorial-tags-cloud">
+          {#if data.tags?.length}
+            <span class="card-badge-count">{data.tags.filter(Boolean).length}</span>
+          {/if}
+        </div>
+        {#if visibleTags.length}
+          <div class="editorial-tags-wrap">
             {#each visibleTags as tag (tag.id)}
               <a href="/catalogo?tag={tag.slug}" class="editorial-tag-pill">
                 {tag.name}
               </a>
             {/each}
           </div>
-          {#if data.tags.filter(Boolean).length > 8}
+          {#if data.tags.filter(Boolean).length > 10}
             <button
               type="button"
-              class="btn-expand-editorial"
+              class="btn-toggle-quad"
               onclick={() => (tagsExpanded = !tagsExpanded)}
               aria-expanded={tagsExpanded}
             >
-              <span>{tagsExpanded ? 'Menos tags' : `Todas as ${data.tags.filter(Boolean).length} tags`}</span>
-              {#if tagsExpanded}<ChevronUp size={14} />{:else}<ChevronDown size={14} />{/if}
+              <span>{tagsExpanded ? 'Mostrar menos gêneros' : `Ver todos (${data.tags.filter(Boolean).length})`}</span>
+              {#if tagsExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
             </button>
           {/if}
-        </div>
-      {/if}
-    </div>
+        {:else}
+          <p class="empty-spec-text">Nenhum gênero catalogado para esta obra.</p>
+        {/if}
+      </div>
 
-    <!-- Títulos Alternativos integrado na base da Ficha Técnica -->
-    {#if alternativeTitles.length}
-      <div class="specs-aliases-subrow">
-        <div class="aliases-header-row">
-          <span class="aliases-title">Títulos Alternativos ({alternativeTitles.length})</span>
-          {#if alternativeTitles.length > 3}
+      <!-- Card 4: Títulos Alternativos (HIGH VISIBILITY & RICH LIST) -->
+      <div class="specs-quad-card">
+        <div class="card-top-header">
+          <div class="card-icon-title">
+            <Languages size={16} class="card-icon" />
+            <h3 class="card-title">Títulos Alternativos</h3>
+          </div>
+          {#if alternativeTitles.length}
+            <span class="card-badge-count">{alternativeTitles.length}</span>
+          {/if}
+        </div>
+        {#if alternativeTitles.length}
+          <ul class="aliases-editorial-list">
+            {#each visibleAliases as alias, i (alias)}
+              <li class="alias-editorial-row">
+                <span class="alias-index-num">#{i + 1}</span>
+                <span class="alias-text">{decodeHtmlEntities(alias)}</span>
+              </li>
+            {/each}
+          </ul>
+          {#if alternativeTitles.length > 4}
             <button
               type="button"
-              class="btn-expand-aliases"
+              class="btn-toggle-quad"
               onclick={() => (aliasesExpanded = !aliasesExpanded)}
               aria-expanded={aliasesExpanded}
             >
-              <span>{aliasesExpanded ? 'Recolher' : 'Expandir todos'}</span>
+              <span>{aliasesExpanded ? 'Recolher títulos' : `Ver todos os ${alternativeTitles.length} títulos alternativos`}</span>
               {#if aliasesExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
             </button>
           {/if}
-        </div>
-        <div class="aliases-inline-wrap">
-          {#each visibleAliases as alias, i (alias)}
-            <span class="alias-pill-text">{decodeHtmlEntities(alias)}</span>
-            {#if i < visibleAliases.length - 1}<span class="alias-sep">·</span>{/if}
-          {/each}
-        </div>
+        {:else}
+          <p class="empty-spec-text">Esta obra não possui outros títulos registrados.</p>
+        {/if}
       </div>
-    {/if}
+    </div>
   </section>
 
   <!-- Chapter List Section (Wide, Full-Width Reading Area) -->
@@ -941,6 +974,8 @@
   /* Page Root */
   .work-page-root {
     position: relative;
+    max-width: 1220px;
+    margin: 0 auto;
     padding-top: 1.25rem;
   }
 
@@ -1236,28 +1271,32 @@
     word-break: break-word;
   }
 
-  /* Creators Attribution */
-  .work-creators {
+  /* Clean Creators Byline */
+  .work-creators-byline {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.92rem;
-    color: rgba(226, 232, 240, 0.75);
+    gap: 6px;
+    font-size: 0.95rem;
+    color: #94a3b8;
+    margin: 2px 0 8px;
     flex-wrap: wrap;
   }
 
-  .creator-label {
-    color: rgba(226, 232, 240, 0.5);
-    margin-right: 4px;
+  .byline-label {
+    color: rgba(226, 232, 240, 0.55);
+    font-size: 0.88rem;
   }
 
-  .creator-name {
-    color: #e2e8f0;
+  .byline-author,
+  .byline-artist {
+    color: #f1f5f9;
     font-weight: 600;
   }
 
-  .creator-sep {
-    color: rgba(181, 154, 245, 0.3);
+  .byline-bullet {
+    color: rgba(181, 154, 245, 0.4);
+    font-size: 0.8rem;
+    margin: 0 2px;
   }
 
   /* Inline Essential Metrics (Clean, unbloated, high-contrast) */
@@ -1356,258 +1395,316 @@
     margin: 20px 0;
   }
 
-  /* Unified Editorial Ficha Técnica & Metadados (Positioned BEFORE chapters on Desktop AND Mobile) */
-  .work-specs-editorial {
-    margin: 30px 0 38px;
-    padding: 22px 26px;
-    background: rgba(14, 12, 24, 0.45);
-    border: 1px solid rgba(181, 154, 245, 0.12);
-    border-radius: 16px;
-    backdrop-filter: blur(12px);
+  /* Redesigned Thematic Editorial Ficha Técnica (4 Balanced Thematic Cards) */
+  .work-specs-section {
+    margin: 32px 0 42px;
   }
 
-  .specs-editorial-header {
+  .specs-section-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-direction: column;
+    gap: 4px;
     margin-bottom: 20px;
-    padding-bottom: 14px;
+    padding-bottom: 12px;
     border-bottom: 1px solid rgba(181, 154, 245, 0.1);
   }
 
-  .specs-editorial-title {
+  .specs-heading-wrap {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .specs-editorial-title h2 {
-    font-size: 1.05rem;
-    font-weight: 700;
+  :global(.specs-header-icon) {
+    color: #a78bfa;
+  }
+
+  .specs-main-title {
+    font-size: 1.15rem;
+    font-weight: 800;
     color: #f8fafc;
     margin: 0;
     letter-spacing: -0.01em;
   }
 
-  :global(.icon-violet) {
-    color: #a78bfa;
+  .specs-subtext {
+    font-size: 0.82rem;
+    color: rgba(226, 232, 240, 0.55);
   }
 
-  .specs-scans-chips {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .scan-editorial-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #c4b5fd;
-    background: rgba(167, 139, 250, 0.1);
-    border: 1px solid rgba(167, 139, 250, 0.22);
-    border-radius: 6px;
-    padding: 3px 8px;
-    text-decoration: none;
-    transition: all 0.15s ease;
-  }
-
-  .scan-editorial-chip:hover {
-    background: rgba(167, 139, 250, 0.2);
-    color: #ffffff;
-  }
-
-  .specs-editorial-grid {
+  /* 2x2 Thematic Grid on Desktop */
+  .specs-quad-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 28px;
-    align-items: start;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    align-items: stretch;
   }
 
-  .specs-group {
+  .specs-quad-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    background: rgba(13, 15, 26, 0.55);
+    border: 1px solid rgba(181, 154, 245, 0.14);
+    border-radius: 14px;
+    padding: 20px 22px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s ease, transform 0.2s ease;
   }
 
-  .specs-group-header-row {
+  .specs-quad-card:hover {
+    border-color: rgba(181, 154, 245, 0.26);
+  }
+
+  .card-top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(181, 154, 245, 0.08);
+  }
+
+  .card-icon-title {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .specs-group-title {
-    font-size: 0.78rem;
-    font-weight: 700;
+  :global(.card-icon) {
     color: #a78bfa;
+  }
+
+  .card-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f1f5f9;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     margin: 0;
   }
 
-  .count-badge {
-    font-size: 0.7rem;
+  .card-badge-count {
+    font-size: 0.72rem;
     font-weight: 700;
     color: #c4b5fd;
-    background: rgba(167, 139, 250, 0.14);
-    padding: 1px 6px;
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    padding: 1px 7px;
     border-radius: 999px;
   }
 
-  .specs-list {
+  .specs-table {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     margin: 0;
+    flex: 1;
   }
 
-  .spec-item {
+  .specs-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px dashed rgba(181, 154, 245, 0.07);
+    gap: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(181, 154, 245, 0.08);
   }
 
-  .spec-item:last-child {
+  .specs-row:last-child {
     border-bottom: none;
     padding-bottom: 0;
   }
 
-  .spec-item dt {
-    font-size: 0.8rem;
+  .specs-row dt {
+    font-size: 0.86rem;
     font-weight: 500;
-    color: rgba(226, 232, 240, 0.55);
+    color: #94a3b8;
     margin: 0;
+    white-space: nowrap;
   }
 
-  .spec-item dd {
-    font-size: 0.86rem;
+  .specs-row dd {
+    font-size: 0.92rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: #f1f5f9;
     margin: 0;
     text-align: right;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .scans-inline-list {
-    display: inline-flex;
+  .status-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+    display: inline-block;
+  }
+
+  .status-indicator-dot.is-ongoing {
+    background: #60a5fa;
+    box-shadow: 0 0 8px rgba(96, 165, 250, 0.6);
+  }
+
+  .age-pill {
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+  }
+
+  .age-pill.adult {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .age-pill.free {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .scans-chips-wrap {
+    display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
 
-  .scan-link {
-    color: #a78bfa;
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-
-  .scan-link:hover {
+  .scan-pill-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
     color: #c4b5fd;
-    text-decoration: underline;
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.24);
+    padding: 2px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.15s ease;
   }
 
-  .editorial-tags-cloud {
+  .scan-pill-link:hover {
+    background: rgba(167, 139, 250, 0.22);
+    color: #ffffff;
+  }
+
+  .muted-spec {
+    font-size: 0.84rem;
+    color: rgba(226, 232, 240, 0.5);
+    font-weight: 400;
+  }
+
+  /* Genres Tags Wrap */
+  .editorial-tags-wrap {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
+    flex: 1;
   }
 
   .editorial-tag-pill {
-    font-size: 0.76rem;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.82rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.85);
+    color: #e2e8f0;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(181, 154, 245, 0.14);
-    padding: 4px 9px;
-    border-radius: 6px;
+    border: 1px solid rgba(181, 154, 245, 0.15);
+    padding: 6px 12px;
+    border-radius: 8px;
     text-decoration: none;
     transition: all 0.15s ease;
   }
 
   .editorial-tag-pill:hover {
     color: #ffffff;
-    background: rgba(167, 139, 250, 0.16);
-    border-color: rgba(167, 139, 250, 0.35);
+    background: rgba(167, 139, 250, 0.18);
+    border-color: rgba(167, 139, 250, 0.4);
+    transform: translateY(-1px);
   }
 
-  .btn-expand-editorial {
+  /* Alternative Titles List (Prominent, High Legibility) */
+  .aliases-editorial-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+  }
+
+  .alias-editorial-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(181, 154, 245, 0.08);
+    border-radius: 8px;
+  }
+
+  .alias-index-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #a78bfa;
+    font-family: monospace;
+    flex-shrink: 0;
+  }
+
+  .alias-text {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #f1f5f9;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  .btn-toggle-quad {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-top: 4px;
-    font-size: 0.78rem;
+    gap: 5px;
+    margin-top: 14px;
+    align-self: flex-start;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #a78bfa;
     background: none;
     border: none;
     padding: 0;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color 0.15s ease;
   }
 
-  .btn-expand-editorial:hover {
+  .btn-toggle-quad:hover {
     color: #c4b5fd;
   }
 
-  .specs-aliases-subrow {
-    margin-top: 20px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(181, 154, 245, 0.08);
+  .empty-spec-text {
+    font-size: 0.85rem;
+    color: rgba(226, 232, 240, 0.45);
+    font-style: italic;
+    margin: 0;
   }
 
-  .aliases-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
+  @media (max-width: 991px) {
+    .specs-quad-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
 
-  .aliases-title {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #a78bfa;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .btn-expand-aliases {
-    font-size: 0.74rem;
-    font-weight: 600;
-    color: rgba(226, 232, 240, 0.6);
-    background: none;
-    border: none;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .btn-expand-aliases:hover {
-    color: #a78bfa;
-  }
-
-  .aliases-inline-wrap {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .alias-pill-text {
-    font-size: 0.8rem;
-    color: rgba(226, 232, 240, 0.7);
-  }
-
-  .alias-sep {
-    color: rgba(181, 154, 245, 0.3);
+    .specs-quad-card {
+      padding: 18px 18px;
+    }
   }
 
   /* Chapters Section (Full Width, Reading Centered) */
@@ -1981,15 +2078,14 @@
   /* RESPONSIVE DESIGN: TABLET & MOBILE REORGANIZATION */
   /* ========================================================================= */
 
-  @media (max-width: 1024px) {
-    .specs-editorial-grid {
+  @media (max-width: 991px) {
+    .specs-quad-grid {
       grid-template-columns: 1fr;
-      gap: 22px;
+      gap: 16px;
     }
 
-    .work-specs-editorial {
-      padding: 20px 22px;
-      margin: 24px 0 32px;
+    .specs-quad-card {
+      padding: 16px 18px;
     }
   }
 
@@ -2058,19 +2154,13 @@
       text-align: center;
     }
 
-    .work-creators {
+    .work-creators-byline {
       justify-content: center;
       font-size: 0.88rem;
     }
 
-    .work-metrics-bar {
+    .work-metrics-inline {
       justify-content: center;
-      gap: 8px;
-    }
-
-    .metric-chip {
-      padding: 5px 9px;
-      font-size: 0.8rem;
     }
 
     /* Synopsis and sections align naturally on mobile */

@@ -175,87 +175,43 @@
 }} />
 
 <div class="rating-widget" aria-label="Avaliações dos leitores">
-  <!-- Top Summary Line: Average Score & Total Count -->
-  <div class="rating-summary-row">
-    <button
-      type="button"
-      class="rating-score-box"
-      onclick={() => (showBreakdownModal = true)}
-      title="Ver detalhes e distribuição de votos"
-      aria-label="Ver detalhes e distribuição de votos"
-    >
-      {#if displayAvg !== null}
-        <span class="rating-number">{displayAvg}</span>
-        <div class="rating-stars-display" aria-hidden="true">
-          {#each [1, 2, 3, 4, 5] as starIndex (starIndex)}
-            {@const activeRatio = Math.max(0, Math.min(1, (rating.average || 0) - (starIndex - 1)))}
-            <div class="star-wrapper">
-              <Star size={17} class="star-bg" />
-              <div class="star-fill" style="width: {activeRatio * 100}%">
-                <Star size={17} class="star-fg" fill="currentColor" />
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <span class="rating-empty-badge">Ainda não avaliado</span>
-      {/if}
-
-      <span class="btn-breakdown-hint" title="Ver distribuição de notas">
-        <BarChart3 size={14} />
-      </span>
-    </button>
-
-    <div class="rating-meta-info">
-      {#if rating?.count > 0}
-        <span class="rating-count">{rating.count} {rating.count === 1 ? 'avaliação' : 'avaliações'}</span>
-      {:else}
-        <span class="rating-count">Seja o primeiro a avaliar</span>
-      {/if}
-
-      {#if userVoted}
-        <div class="user-vote-chip-group">
-          <span class="user-score-chip">
-            <Check size={12} />
-            <span>Sua nota: {userScore} ★</span>
-          </span>
-
-          <!-- Discrete removal menu button (Requirement 2: not permanently cluttering the bar) -->
-          <button
-            type="button"
-            class="btn-rating-options"
-            onclick={(e) => {
-              e.stopPropagation();
-              showOptionsDropdown = !showOptionsDropdown;
-            }}
-            title="Opções da avaliação"
-            aria-label="Opções da avaliação"
-            aria-expanded={showOptionsDropdown}
-          >
-            <Ellipsis size={14} />
-          </button>
-
-          {#if showOptionsDropdown}
-            <div class="rating-options-popover" role="menu">
-              <button
-                type="button"
-                class="btn-popover-remove"
-                onclick={handleRemoveVote}
-                disabled={isVoting}
-              >
-                <Trash2 size={13} />
-                <span>Remover avaliação</span>
-              </button>
-            </div>
-          {/if}
-        </div>
-      {/if}
+  <!-- Left Side: Average Score & Total Count (Clickable to open breakdown modal) -->
+  <button
+    type="button"
+    class="rating-score-box"
+    onclick={() => (showBreakdownModal = true)}
+    title="Ver detalhes e distribuição de notas"
+    aria-label="Ver detalhes e distribuição de votos"
+  >
+    <div class="score-star-wrap" aria-hidden="true">
+      <Star size={16} fill="#ffd154" class="score-star-icon" />
     </div>
-  </div>
 
-  <!-- Interactive Rating Row: 1 to 5 Stars only (DIRECTLY ACCESSIBLE) -->
+    {#if displayAvg !== null}
+      <span class="rating-number">{displayAvg}</span>
+      <span class="rating-scale">/ 5</span>
+    {:else}
+      <span class="rating-empty-badge">Sem nota</span>
+    {/if}
+
+    <span class="rating-count">({rating?.count || 0})</span>
+
+    <span class="btn-breakdown-hint" title="Ver distribuição de notas">
+      <BarChart3 size={13} />
+    </span>
+  </button>
+
+  <span class="rating-divider" aria-hidden="true"></span>
+
+  <!-- Right Side: Direct Interactive Rating (1 to 5 Stars only) -->
   <div class="rating-interactive-row">
-    <span class="rate-prompt">Avaliar obra:</span>
+    <span class="rate-prompt">
+      {#if userVoted}
+        Sua nota:
+      {:else}
+        Avaliar:
+      {/if}
+    </span>
 
     <!-- 1 to 5 Stars: Comfortable touch targets on mobile (min 44x44px) -->
     <div class="interactive-stars" role="radiogroup" aria-label="Avaliar de 1 a 5 estrelas">
@@ -275,7 +231,7 @@
           aria-label="{starValue} de 5 estrelas: {RATING_LABELS[starValue]}"
           disabled={isVoting}
         >
-          <Star size={23} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
+          <Star size={18} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
         </button>
       {/each}
     </div>
@@ -283,10 +239,46 @@
     <!-- Active Hover or Subtle Feedback -->
     {#if hoverScore !== null}
       <span class="rating-tooltip-label">{RATING_LABELS[hoverScore]}</span>
+    {:else if userVoted}
+      <div class="user-vote-chip-group">
+        <span class="user-score-chip">
+          <Check size={11} />
+          <span>Sua nota: {userScore} ★</span>
+        </span>
+
+        <!-- Discrete removal menu button -->
+        <button
+          type="button"
+          class="btn-rating-options"
+          onclick={(e) => {
+            e.stopPropagation();
+            showOptionsDropdown = !showOptionsDropdown;
+          }}
+          title="Opções da avaliação"
+          aria-label="Opções da avaliação"
+          aria-expanded={showOptionsDropdown}
+        >
+          <Ellipsis size={13} />
+        </button>
+
+        {#if showOptionsDropdown}
+          <div class="rating-options-popover" role="menu">
+            <button
+              type="button"
+              class="btn-popover-remove"
+              onclick={handleRemoveVote}
+              disabled={isVoting}
+            >
+              <Trash2 size={13} />
+              <span>Remover avaliação</span>
+            </button>
+          </div>
+        {/if}
+      </div>
     {/if}
 
     {#if isVoting}
-      <Loader2 size={15} class="spin voting-spinner" />
+      <Loader2 size={14} class="spin voting-spinner" />
     {/if}
   </div>
 </div>
@@ -388,29 +380,24 @@
 
 <style>
   .rating-widget {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
-    background: rgba(14, 12, 24, 0.5);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 14px;
+    background: rgba(14, 12, 24, 0.45);
     border: 1px solid rgba(181, 154, 245, 0.12);
     border-radius: 12px;
-    backdrop-filter: blur(10px);
-    margin: 8px 0;
-  }
-
-  .rating-summary-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    backdrop-filter: blur(8px);
+    margin: 4px 0 10px;
+    width: fit-content;
+    max-width: 100%;
     flex-wrap: wrap;
   }
 
   .rating-score-box {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background: none;
     border: none;
     padding: 0;
@@ -422,85 +409,125 @@
   }
 
   .rating-score-box:hover {
-    opacity: 0.9;
+    opacity: 0.85;
+  }
+
+  .score-star-wrap {
+    display: flex;
+    align-items: center;
+    color: #ffd154;
   }
 
   .rating-number {
-    font-size: 1.75rem;
+    font-size: 1.15rem;
     font-weight: 800;
     line-height: 1;
     color: #ffd154;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     font-variant-numeric: tabular-nums;
   }
 
+  .rating-scale {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: rgba(226, 232, 240, 0.45);
+  }
+
   .rating-empty-badge {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: rgba(226, 232, 240, 0.6);
-    background: rgba(255, 255, 255, 0.04);
-    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 7px;
     border-radius: 999px;
   }
 
-  .rating-stars-display {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .star-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 17px;
-    height: 17px;
-  }
-
-  :global(.star-bg) {
-    color: rgba(181, 154, 245, 0.22);
-  }
-
-  .star-fill {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    overflow: hidden;
-    color: #ffd154;
-    display: flex;
-    align-items: center;
+  .rating-count {
+    font-size: 0.78rem;
+    color: rgba(226, 232, 240, 0.55);
+    font-weight: 500;
   }
 
   .btn-breakdown-hint {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    background: rgba(181, 154, 245, 0.06);
-    color: rgba(181, 154, 245, 0.6);
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: rgba(181, 154, 245, 0.08);
+    color: rgba(181, 154, 245, 0.65);
     transition: all 0.15s ease;
   }
 
   .rating-score-box:hover .btn-breakdown-hint {
-    background: rgba(181, 154, 245, 0.15);
+    background: rgba(181, 154, 245, 0.2);
     color: #c4b5fd;
   }
 
-  .rating-meta-info {
-    display: flex;
+  .rating-divider {
+    width: 1px;
+    height: 18px;
+    background: rgba(181, 154, 245, 0.15);
+  }
+
+  .rating-interactive-row {
+    display: inline-flex;
     align-items: center;
     gap: 8px;
+    padding-top: 0;
+    border-top: none;
     flex-wrap: wrap;
   }
 
-  .rating-count {
-    font-size: 0.84rem;
+  .rate-prompt {
+    font-size: 0.78rem;
+    font-weight: 600;
     color: rgba(226, 232, 240, 0.65);
-    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .interactive-stars {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .star-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 0;
+    color: rgba(181, 154, 245, 0.28);
+    cursor: pointer;
+    border-radius: 6px;
+    touch-action: manipulation;
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+
+  .star-btn:hover {
+    transform: scale(1.15);
+  }
+
+  .star-btn.is-active {
+    color: #ffd154;
+    filter: drop-shadow(0 0 4px rgba(255, 209, 84, 0.35));
+  }
+
+  .rating-tooltip-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #ffd154;
+    white-space: nowrap;
+  }
+
+  .voting-spinner {
+    color: #a78bfa;
+    margin-left: 2px;
   }
 
   /* User Vote Chip & Discrete Removal Popover */
@@ -525,8 +552,8 @@
   }
 
   .btn-rating-options {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -577,76 +604,18 @@
     background: rgba(248, 113, 113, 0.12);
   }
 
-  /* Interactive Rating Controls */
-  .rating-interactive-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(181, 154, 245, 0.08);
-    flex-wrap: wrap;
-  }
-
-  .rate-prompt {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: rgba(226, 232, 240, 0.7);
-    white-space: nowrap;
-  }
-
-  .interactive-stars {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .star-btn {
-    width: 34px;
-    height: 34px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    padding: 0;
-    color: rgba(181, 154, 245, 0.28);
-    cursor: pointer;
-    border-radius: 6px;
-    touch-action: manipulation;
-    transition: transform 0.15s ease, color 0.15s ease;
-  }
-
-  .star-btn:hover {
-    transform: scale(1.15);
-  }
-
-  .star-btn.is-active {
-    color: #ffd154;
-    filter: drop-shadow(0 0 5px rgba(255, 209, 84, 0.4));
-  }
-
-  .rating-tooltip-label {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #ffd154;
-    margin-left: 4px;
-    white-space: nowrap;
-  }
-
-  .voting-spinner {
-    color: #a78bfa;
-    margin-left: 4px;
-  }
-
   /* Mobile Responsive Tweaks: Comfortable Touch Targets (44px min) */
   @media (max-width: 768px) {
     .rating-widget {
-      padding: 10px 12px;
-      margin: 6px 0;
+      width: 100%;
+      justify-content: space-between;
+      padding: 8px 12px;
+      gap: 8px;
+      margin: 4px 0 8px;
     }
 
-    .rating-summary-row {
-      gap: 8px;
+    .rating-divider {
+      display: none;
     }
 
     .rating-interactive-row {
