@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     ArrowRight,
-    ArrowLeft,
     BookOpen,
     Clock,
     AlertTriangle,
@@ -10,6 +9,7 @@
     ChevronRight,
     Home
   } from '@lucide/svelte';
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { relativeTime, kindLabels } from '$lib/types';
   import { page } from '$app/state';
   import { resolveCoverUrl, resolveOriginalCoverUrl } from '$lib/covers';
@@ -80,7 +80,7 @@
   }
 
   function getPageUrl(targetPage: number, targetKind?: string): string {
-    const params = new URLSearchParams();
+    const params = new SvelteURLSearchParams();
     const effectiveKind = targetKind !== undefined ? targetKind : (data.selectedKind || 'ALL');
     if (effectiveKind && effectiveKind !== 'ALL') {
       params.set('kind', effectiveKind);
