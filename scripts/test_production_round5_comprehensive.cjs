@@ -49,7 +49,7 @@ async function run() {
   await bypassAgeGate(context);
   const page = await context.newPage();
 
-  await page.goto(PREVIEW_URL, { waitUntil: 'networkidle', timeout: 35000 });
+  await page.goto(PROD_URL, { waitUntil: 'networkidle', timeout: 35000 });
   await dismissModals(page);
   await page.waitForTimeout(1000);
 

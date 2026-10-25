@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowRight, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import NoxBook from '$lib/components/NoxBook.svelte';
   import HeroCarousel from '$lib/components/HeroCarousel.svelte';
   import WorkShelf from '$lib/components/WorkShelf.svelte';
   import RecentReleases from '$lib/components/RecentReleases.svelte';
@@ -60,8 +61,8 @@
 </svelte:head>
 
 <div class="home-wrapper">
-  <!-- 1. Editorial Hero Carousel (Large Cover on Left + Full-Bleed Atmospheric Backdrop) -->
-  <HeroCarousel works={data.featuredList} continueReading={data.recent} />
+  <!-- 1. Nox Book: Interactive 3D Open Grimoire Book Showcase (Round 6) -->
+  <NoxBook works={data.featuredList} continueReading={data.recent} />
 
   <div class="home-content">
     <!-- 2. Continue Reading (Strictly for authenticated readers with active reading progress) -->
