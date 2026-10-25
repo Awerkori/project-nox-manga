@@ -570,12 +570,27 @@
     </div>
   </footer>
 
-  <nav class="mobile-bottom" aria-label="Atalhos" data-sveltekit-preload-data="tap">
-    <a href="/" class:active={currentPath === '/'}><BookOpen size={20} /><span>Início</span></a>
-    <a href="/catalogo" class:active={currentPath.startsWith('/catalogo')}><Search size={20} /><span>Explorar</span></a>
-    <a href="/scans" class:active={currentPath.startsWith('/scans')}><Users size={20} /><span>Scans</span></a>
-    <a href="/loja" class:active={currentPath.startsWith('/loja')}><ShoppingBag size={20} /><span>Loja</span></a>
-    <a href={profile || data.authState !== 'ANONYMOUS' ? '/me' : '/entrar'} class:active={currentPath.startsWith('/me') || currentPath.startsWith('/u/')}><UserRound size={20} /><span>{profile || data.authState !== 'ANONYMOUS' ? 'Espaço' : 'Entrar'}</span></a>
+  <nav class="mobile-bottom" aria-label="Navegação Principal" data-sveltekit-preload-data="tap">
+    <a href="/" class:active={currentPath === '/'}>
+      <BookOpen size={20} />
+      <span>Início</span>
+    </a>
+    <a href="/catalogo" class:active={currentPath.startsWith('/catalogo')}>
+      <Search size={20} />
+      <span>Catálogo</span>
+    </a>
+    <a href="/ranking" class:active={currentPath === '/ranking'}>
+      <Trophy size={20} />
+      <span>Ranking</span>
+    </a>
+    <a href="/scans" class:active={currentPath.startsWith('/scans')}>
+      <Users size={20} />
+      <span>Scans</span>
+    </a>
+    <a href="/loja" class:active={currentPath.startsWith('/loja')}>
+      <ShoppingBag size={20} />
+      <span>Loja</span>
+    </a>
   </nav>
 {/if}
 

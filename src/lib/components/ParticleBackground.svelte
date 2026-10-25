@@ -287,10 +287,12 @@
     }
 
     function onScroll() {
-      isScrolling = true;
-      if (animId !== null) {
-        cancelAnimationFrame(animId);
-        animId = null;
+      if (!isScrolling) {
+        isScrolling = true;
+        if (animId !== null) {
+          cancelAnimationFrame(animId);
+          animId = null;
+        }
       }
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
@@ -298,7 +300,7 @@
         if (!document.hidden && !reducedMotion && animId === null) {
           animId = requestAnimationFrame(loop);
         }
-      }, 100);
+      }, 120);
     }
 
     let resizeTimer: ReturnType<typeof setTimeout>;
@@ -393,6 +395,8 @@
     width: 100%;
     height: 100%;
     display: block;
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .ambient-glow {
