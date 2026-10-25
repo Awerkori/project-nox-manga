@@ -30,8 +30,13 @@
   let isPaused = $state(false);
   let touchStartX = $state(0);
   let touchEndX = $state(0);
-  let autoplayTimer: ReturnType<typeof setInterval> | null = null;
   let prefersReducedMotion = $state(false);
+
+  // Smooth continuous progress & auto-advance (7.5s per slide)
+  const SLIDE_DURATION_MS = 7500;
+  let progressRatio = $state(0); // 0.0 to 1.0
+  let animFrameId: number | null = null;
+  let lastTimestamp = 0;
 
   // 3D Card Interactive Tilt
   let cardTiltX = $state(3);
@@ -110,22 +115,42 @@
     };
   }
 
-  function nextSlide() {
+  function nextSlide(userTriggered = true) {
     if (works.length <= 1) return;
     currentIndex = (currentIndex + 1) % works.length;
     resetCardTilt();
+    progressRatio = 0;
+    if (userTriggered && typeof performance !== 'undefined') {
+      lastTimestamp = performance.now();
+    }
   }
 
-  function prevSlide() {
+  function prevSlide(userTriggered = true) {
     if (works.length <= 1) return;
     currentIndex = (currentIndex - 1 + works.length) % works.length;
     resetCardTilt();
+    progressRatio = 0;
+    if (userTriggered && typeof performance !== 'undefined') {
+      lastTimestamp = performance.now();
+    }
   }
 
   function goToSlide(index: number) {
     if (currentIndex === index) return;
     currentIndex = index;
     resetCardTilt();
+    progressRatio = 0;
+    if (typeof performance !== 'undefined') {
+      lastTimestamp = performance.now();
+    }
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'ArrowLeft') {
+      prevSlide(true);
+    } else if (e.key === 'ArrowRight') {
+      nextSlide(true);
+    }
   }
 
   function resetCardTilt() {
@@ -156,24 +181,36 @@
     resetCardTilt();
   }
 
-  function startAutoplay() {
-    if (autoplayTimer || works.length <= 1 || prefersReducedMotion) return;
-    autoplayTimer = setInterval(() => {
-      if (!isPaused) {
-        nextSlide();
-      }
-    }, 7500);
+  function pauseAutoplay() {
+    isPaused = true;
   }
 
-  function stopAutoplay() {
-    if (autoplayTimer) {
-      clearInterval(autoplayTimer);
-      autoplayTimer = null;
+  function resumeAutoplay() {
+    isPaused = false;
+    if (typeof performance !== 'undefined') {
+      lastTimestamp = performance.now();
     }
+  }
+
+  function animationLoop(timestamp: number) {
+    if (!lastTimestamp) lastTimestamp = timestamp;
+    const delta = timestamp - lastTimestamp;
+    lastTimestamp = timestamp;
+
+    if (!isPaused && !prefersReducedMotion && works.length > 1 && typeof document !== 'undefined' && !document.hidden) {
+      progressRatio = Math.min(1, progressRatio + delta / SLIDE_DURATION_MS);
+      if (progressRatio >= 1) {
+        progressRatio = 0;
+        nextSlide(false);
+      }
+    }
+
+    animFrameId = requestAnimationFrame(animationLoop);
   }
 
   function handleTouchStart(e: TouchEvent) {
     touchStartX = e.changedTouches[0].screenX;
+    pauseAutoplay();
   }
 
   function handleTouchEnd(e: TouchEvent) {
@@ -181,29 +218,36 @@
     const diff = touchStartX - touchEndX;
     if (Math.abs(diff) > 40) {
       if (diff > 0) {
-        nextSlide();
+        nextSlide(true);
       } else {
-        prevSlide();
+        prevSlide(true);
       }
     }
+    resumeAutoplay();
   }
 
   function handleVisibilityChange() {
     if (document.hidden) {
       isPaused = true;
     } else {
-      isPaused = false;
+      resumeAutoplay();
     }
   }
 
   onMount(() => {
     prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    startAutoplay();
+    if (!prefersReducedMotion && works.length > 1) {
+      lastTimestamp = performance.now();
+      animFrameId = requestAnimationFrame(animationLoop);
+    }
   });
 
   onDestroy(() => {
-    stopAutoplay();
+    if (animFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
@@ -220,8 +264,12 @@
   <section
     class="hero-carousel"
     aria-label="Destaques da Plataforma"
-    onmouseenter={() => (isPaused = true)}
-    onmouseleave={() => (isPaused = false)}
+    tabindex="0"
+    role="region"
+    aria-roledescription="carousel"
+    onkeydown={handleKeyDown}
+    onmouseenter={pauseAutoplay}
+    onmouseleave={resumeAutoplay}
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
   >
@@ -421,34 +469,25 @@
         </div>
       </div>
 
-      <!-- Cinematic Progress & Navigation Controls -->
+      <!-- Cinematic Minimalist Progress & Navigation Controls -->
       {#if works.length > 1}
         <div class="carousel-cinematic-bar">
-          <!-- Slide Counter -->
-          <div class="slide-counter">
-            <span class="curr-num">{String(currentIndex + 1).padStart(2, '0')}</span>
-            <span class="counter-sep">/</span>
-            <span class="total-num">{String(works.length).padStart(2, '0')}</span>
-          </div>
-
-          <!-- Slide Progress Indicators -->
-          <div class="slider-indicators" role="tablist" aria-label="Indicadores dos destaques">
-            {#each works as item, idx (item?.id || idx)}
-              {@const isSelected = idx === currentIndex}
-              <button
-                type="button"
-                class="indicator-pill"
-                class:active={isSelected}
-                onclick={() => goToSlide(idx)}
-                role="tab"
-                aria-selected={isSelected}
-                aria-label={`Ir para destaque ${idx + 1}: ${decodeHtmlEntities(item.title)}`}
-              >
-                {#if isSelected && !isPaused}
-                  <div class="indicator-progress-fill"></div>
-                {/if}
-              </button>
-            {/each}
+          <!-- Sleek Single Ambient Progress Track (Zero Number Clutter) -->
+          <div
+            class="progress-track-wrapper"
+            role="progressbar"
+            aria-label="Tempo restante da obra atual"
+            aria-valuenow={Math.round(progressRatio * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div class="progress-track">
+              <div
+                class="progress-fill"
+                style="transform: scaleX({progressRatio});"
+                class:paused={isPaused}
+              ></div>
+            </div>
           </div>
 
           <!-- Glass Chevron Navigation -->
@@ -456,7 +495,7 @@
             <button
               type="button"
               class="nav-arrow-btn"
-              onclick={prevSlide}
+              onclick={() => prevSlide(true)}
               aria-label="Obra anterior em destaque"
             >
               <ChevronLeft size={18} />
@@ -464,7 +503,7 @@
             <button
               type="button"
               class="nav-arrow-btn"
-              onclick={nextSlide}
+              onclick={() => nextSlide(true)}
               aria-label="Próxima obra em destaque"
             >
               <ChevronRight size={18} />
@@ -504,9 +543,9 @@
     width: 120%;
     height: 130%;
     object-fit: cover;
-    filter: blur(80px) brightness(0.24) saturate(1.4);
+    filter: blur(80px) brightness(0.15) saturate(1.1);
     transform: scale(1.1);
-    opacity: 0.35;
+    opacity: 0.16;
     mask-image: radial-gradient(ellipse at 35% 45%, rgba(0, 0, 0, 1) 20%, rgba(0, 0, 0, 0) 70%);
     -webkit-mask-image: radial-gradient(ellipse at 35% 45%, rgba(0, 0, 0, 1) 20%, rgba(0, 0, 0, 0) 70%);
     transition: opacity 0.6s ease;
@@ -520,8 +559,8 @@
     height: 650px;
     background: radial-gradient(
       circle,
-      rgba(139, 92, 246, 0.16) 0%,
-      rgba(99, 102, 241, 0.08) 45%,
+      rgba(139, 92, 246, 0.08) 0%,
+      rgba(99, 102, 241, 0.04) 45%,
       transparent 70%
     );
     pointer-events: none;
@@ -987,82 +1026,50 @@
     transform: translateY(-2px);
   }
 
-  /* Cinematic Progress & Navigation Controls */
+  /* Cinematic Minimalist Progress & Navigation Controls */
   .carousel-cinematic-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 2rem;
-    padding-top: 1.5rem;
-    margin-top: 0.5rem;
+    padding-top: 1.25rem;
+    margin-top: 0.25rem;
   }
 
-  .slide-counter {
-    display: flex;
-    align-items: baseline;
-    gap: 4px;
-    font-family: 'Manrope', -apple-system, sans-serif;
-    font-weight: 800;
-  }
-
-  .curr-num {
-    font-size: 1.35rem;
-    color: #c084fc;
-    letter-spacing: -0.02em;
-  }
-
-  .counter-sep {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.25);
-    margin: 0 2px;
-  }
-
-  .total-num {
-    font-size: 0.88rem;
-    color: rgba(255, 255, 255, 0.45);
-  }
-
-  .slider-indicators {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .progress-track-wrapper {
     flex: 1;
     max-width: 440px;
+    height: 24px;
+    display: flex;
+    align-items: center;
   }
 
-  .indicator-pill {
+  .progress-track {
     position: relative;
-    height: 4px;
-    flex: 1;
+    width: 100%;
+    height: 3px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    border: none;
-    padding: 0;
-    cursor: pointer;
+    background: rgba(255, 255, 255, 0.08);
     overflow: hidden;
-    transition: background 0.25s ease, transform 0.2s ease;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) inset;
   }
 
-  .indicator-pill:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scaleY(1.4);
-  }
-
-  .indicator-pill.active {
-    background: rgba(168, 85, 247, 0.4);
-  }
-
-  .indicator-progress-fill {
+  .progress-fill {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, #7c3aed, #a855f7);
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.7);
-    animation: indicatorFillAnim 7.5s linear forwards;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0% 50%;
+    background: linear-gradient(90deg, #6366f1, #a855f7, #c084fc);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+    border-radius: 999px;
+    will-change: transform;
+    transition: opacity 0.2s ease;
   }
 
-  @keyframes indicatorFillAnim {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(0%); }
+  .progress-fill.paused {
+    opacity: 0.85;
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.85);
   }
 
   .slider-nav-arrows {
@@ -1212,13 +1219,13 @@
 
     .carousel-cinematic-bar {
       flex-direction: column;
-      gap: 1.25rem;
-      padding-top: 1rem;
+      gap: 1rem;
+      padding-top: 0.75rem;
     }
 
-    .slider-indicators {
+    .progress-track-wrapper {
       width: 100%;
-      max-width: 280px;
+      max-width: 260px;
     }
   }
 

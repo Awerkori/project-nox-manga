@@ -6,8 +6,7 @@
     Clock,
     AlertTriangle,
     RefreshCw,
-    Loader2,
-    ChevronDown
+    Loader2
   } from '@lucide/svelte';
   import { relativeTime } from '$lib/types';
   import { page } from '$app/state';
@@ -51,7 +50,6 @@
   let hasMore = $state(true);
   let nextCursorTime = $state<string | null>(null);
   let nextCursorId = $state<string | null>(null);
-  let expandedWorkIds = $state<string[]>([]);
 
   $effect(() => {
     const current = untrack(() => currentReleases);
@@ -83,14 +81,6 @@
         node.removeEventListener('error', onError);
       }
     };
-  }
-
-  function toggleExpandWork(workId: string) {
-    if (expandedWorkIds.includes(workId)) {
-      expandedWorkIds = expandedWorkIds.filter((id) => id !== workId);
-    } else {
-      expandedWorkIds = [...expandedWorkIds, workId];
-    }
   }
 
   async function loadMoreReleases() {
@@ -160,10 +150,7 @@
       {#each currentReleases as rel, i (rel.workId)}
         {@const isAdult = rel.contentRating === 'ADULT_18'}
         {@const effectiveBlur = isAdult && (page.data?.blurNsfw ?? true)}
-        {@const sortedChapters = rel.chapters.slice().sort((a, b) => compareChapterIdentity(b, a))}
-        {@const isExpanded = expandedWorkIds.includes(rel.workId)}
-        {@const displayedChapters = isExpanded ? sortedChapters : sortedChapters.slice(0, 3)}
-        {@const extraChapters = sortedChapters.slice(3)}
+        {@const displayedChapters = rel.chapters.slice().sort((a, b) => compareChapterIdentity(b, a)).slice(0, 3)}
         {@const thumbCover = resolveCoverUrl(rel.coverId, rel.workSlug, rel.workId, { size: 'thumb' })}
         {@const isEager = i < 3}
         {@const titleDecoded = decodeHtmlEntities(rel.workTitle)}
@@ -228,32 +215,6 @@
                   <span class="ch-text">Cap. {chNum}</span>
                 </a>
               {/each}
-
-              <!-- Inline toggle for extra chapters -->
-              {#if extraChapters.length > 0}
-                {#if !isExpanded}
-                  <button
-                    type="button"
-                    class="chapter-pill expand-pill"
-                    onclick={() => toggleExpandWork(rel.workId)}
-                    title={`Ver mais ${extraChapters.length} capítulos deste lançamento`}
-                  >
-                    <span class="ch-text">+{extraChapters.length} caps</span>
-                    <span class="expand-chevron">
-                      <ChevronDown size={12} />
-                    </span>
-                  </button>
-                {:else}
-                  <button
-                    type="button"
-                    class="chapter-pill collapse-pill"
-                    onclick={() => toggleExpandWork(rel.workId)}
-                    title="Recolher capítulos extras"
-                  >
-                    <span class="ch-text">Recolher</span>
-                  </button>
-                {/if}
-              {/if}
             </div>
           </div>
         </article>
@@ -582,27 +543,6 @@
     border-radius: 50%;
     background: #10b981;
     box-shadow: 0 0 6px #10b981;
-  }
-
-  /* Extra Chapters Expand / Collapse Pills */
-  .expand-pill,
-  .collapse-pill {
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed rgba(255, 255, 255, 0.16);
-    color: #94a3b8;
-  }
-
-  .expand-pill:hover,
-  .collapse-pill:hover {
-    background: rgba(223, 194, 141, 0.12);
-    border-color: rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
-  }
-
-  .expand-chevron {
-    display: inline-flex;
-    align-items: center;
   }
 
   /* Progressive Load More Section */

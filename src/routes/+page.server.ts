@@ -332,9 +332,40 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     works = Array.from(derivedWorks.values());
   }
 
-  // Featured works for hero carousel (works marked featured, or newest published works up to 5)
-  const featuredCandidates = works.filter((w) => w.featured);
-  let featuredList = featuredCandidates.length > 0 ? featuredCandidates : works.slice(0, 5);
+  // Featured works for hero carousel: exactly 10 distinct eligible works with valid covers
+  const seenIds = new Set<string>();
+  let featuredList: typeof works = [];
+
+  // 1. Explicitly featured works
+  for (const w of works) {
+    if (w.featured && (w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
+      seenIds.add(w.id);
+      featuredList.push(w);
+      if (featuredList.length === 10) break;
+    }
+  }
+
+  // 2. Fill with top read works with valid covers
+  if (featuredList.length < 10) {
+    for (const w of (mostReadRes?.data || [])) {
+      if ((w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
+        seenIds.add(w.id);
+        featuredList.push(w);
+        if (featuredList.length === 10) break;
+      }
+    }
+  }
+
+  // 3. Fill with recent works with valid covers
+  if (featuredList.length < 10) {
+    for (const w of works) {
+      if ((w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
+        seenIds.add(w.id);
+        featuredList.push(w);
+        if (featuredList.length === 10) break;
+      }
+    }
+  }
 
   // Most Read works (from concurrent batch or derived from works)
   let mostReadWorks: typeof works;

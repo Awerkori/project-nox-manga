@@ -331,17 +331,17 @@
     z-index: 0;
     overflow: hidden;
     contain: strict;
-    background: radial-gradient(circle at 50% 12%, #0e0b20 0%, #070810 50%, #040508 100%);
+    background: radial-gradient(circle at 50% 12%, #07060e 0%, #040407 50%, #020204 100%);
   }
 
   .ambient-mesh {
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at 25% 18%, rgba(139, 92, 246, 0.1) 0%, transparent 45%),
-      radial-gradient(circle at 80% 28%, rgba(59, 130, 246, 0.08) 0%, transparent 48%),
-      radial-gradient(circle at 50% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 55%),
-      radial-gradient(circle at 12% 75%, rgba(99, 102, 241, 0.07) 0%, transparent 45%);
+      radial-gradient(circle at 25% 18%, rgba(139, 92, 246, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 80% 28%, rgba(59, 130, 246, 0.04) 0%, transparent 42%),
+      radial-gradient(circle at 50% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 45%),
+      radial-gradient(circle at 12% 75%, rgba(99, 102, 241, 0.035) 0%, transparent 40%);
     pointer-events: none;
   }
 
@@ -368,8 +368,8 @@
     height: 520px;
     background: radial-gradient(
       ellipse at center,
-      rgba(139, 92, 246, 0.16) 0%,
-      rgba(45, 55, 120, 0.08) 40%,
+      rgba(139, 92, 246, 0.08) 0%,
+      rgba(45, 55, 120, 0.03) 40%,
       transparent 70%
     );
   }
@@ -381,8 +381,8 @@
     height: 650px;
     background: radial-gradient(
       circle,
-      rgba(168, 85, 247, 0.09) 0%,
-      rgba(30, 41, 75, 0.05) 45%,
+      rgba(168, 85, 247, 0.05) 0%,
+      rgba(30, 41, 75, 0.02) 45%,
       transparent 72%
     );
   }
@@ -394,8 +394,8 @@
     height: 600px;
     background: radial-gradient(
       circle,
-      rgba(99, 102, 241, 0.08) 0%,
-      rgba(15, 23, 42, 0.04) 50%,
+      rgba(99, 102, 241, 0.04) 0%,
+      rgba(15, 23, 42, 0.02) 50%,
       transparent 72%
     );
   }
@@ -405,8 +405,8 @@
     inset: 0;
     background: radial-gradient(
       ellipse at center,
-      transparent 55%,
-      rgba(4, 5, 8, 0.7) 100%
+      transparent 45%,
+      rgba(2, 2, 4, 0.85) 100%
     );
     pointer-events: none;
   }
