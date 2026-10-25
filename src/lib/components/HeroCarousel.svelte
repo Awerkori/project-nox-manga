@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     BookOpen,
     ChevronLeft,
@@ -118,7 +119,7 @@
     };
   }
 
-  const preloadedCovers = new Set<string>();
+  const preloadedCovers = new SvelteSet<string>();
 
   function preloadCover(work: Work | null | undefined) {
     if (!work || typeof window === 'undefined') return;
@@ -162,18 +163,6 @@
     if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
     preloadWindow(currentIndex);
     if (userTriggered && typeof performance !== 'undefined') {
-      lastTimestamp = performance.now();
-    }
-  }
-
-  function goToSlide(index: number) {
-    if (currentIndex === index) return;
-    currentIndex = index;
-    resetCardTilt();
-    progressRatio = 0;
-    if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
-    preloadWindow(currentIndex);
-    if (typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
   }
