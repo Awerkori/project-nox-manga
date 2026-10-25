@@ -172,14 +172,6 @@
         </article>
       {/each}
     </div>
-
-    <!-- Link to Full Releases Page Aligned with Releases Grid -->
-    <div class="releases-footer-tools">
-      <a href="/lancamentos" class="btn-view-all-releases">
-        <span>Ver todos os lançamentos</span>
-        <ArrowRight size={16} />
-      </a>
-    </div>
   {:else if loadError}
     <div class="degraded-releases-alert" role="alert">
       <AlertTriangle size={36} class="alert-icon" />
@@ -472,50 +464,6 @@
     box-shadow: 0 0 6px #10b981;
   }
 
-  /* Footer Tools: View All Releases CTA */
-  .releases-footer-tools {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    margin-top: 2.25rem;
-    padding-top: 1.5rem;
-    border-top: 1px dashed rgba(255, 255, 255, 0.08);
-    flex-wrap: wrap;
-  }
-
-  .btn-view-all-releases {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.8rem 2rem;
-    border-radius: 12px;
-    background: rgba(124, 58, 237, 0.16);
-    border: 1px solid rgba(139, 92, 246, 0.35);
-    color: #e2e8f0;
-    font-size: 0.92rem;
-    font-weight: 750;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .btn-view-all-releases:hover {
-    background: #7c3aed;
-    border-color: #8b5cf6;
-    color: #ffffff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
-  }
-
-
-
-  .all-loaded-text {
-    font-size: 0.85rem;
-    color: #71717a;
-    font-style: italic;
-  }
-
   @media (max-width: 1100px) {
     .releases-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -621,13 +569,6 @@
       font-size: 0.84rem;
       font-weight: 750;
       border-radius: 8px;
-    }
-
-    .btn-view-all-releases {
-      width: 100%;
-      justify-content: center;
-      padding: 0.85rem 1.4rem;
-      font-size: 0.92rem;
     }
   }
 

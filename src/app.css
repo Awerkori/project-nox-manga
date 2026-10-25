@@ -88,6 +88,8 @@ svg {
   flex-shrink: 0;
 }
 main {
+  position: relative;
+  z-index: 1;
   min-height: 65vh;
 }
 .container {

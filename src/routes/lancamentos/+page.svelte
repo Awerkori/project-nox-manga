@@ -350,6 +350,8 @@
 
 <style>
   .lancamentos-wrapper {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     width: 100%;
