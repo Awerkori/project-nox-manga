@@ -32,8 +32,8 @@
   let touchEndX = $state(0);
   let prefersReducedMotion = $state(false);
 
-  // Smooth continuous progress & auto-advance (7.5s per slide)
-  const SLIDE_DURATION_MS = 7500;
+  // Smooth continuous progress & auto-advance (3.8s per slide: 3.5 - 4.0s target)
+  const SLIDE_DURATION_MS = 3800;
   let progressRatio = $state(0); // 0.0 to 1.0
   let animFrameId: number | null = null;
   let lastTimestamp = 0;

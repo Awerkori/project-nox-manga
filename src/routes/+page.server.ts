@@ -332,41 +332,6 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     works = Array.from(derivedWorks.values());
   }
 
-  // Featured works for hero carousel: exactly 10 distinct eligible works with valid covers
-  const seenIds = new Set<string>();
-  let featuredList: typeof works = [];
-
-  // 1. Explicitly featured works
-  for (const w of works) {
-    if (w.featured && (w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
-      seenIds.add(w.id);
-      featuredList.push(w);
-      if (featuredList.length === 10) break;
-    }
-  }
-
-  // 2. Fill with top read works with valid covers
-  if (featuredList.length < 10) {
-    for (const w of (mostReadRes?.data || [])) {
-      if ((w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
-        seenIds.add(w.id);
-        featuredList.push(w);
-        if (featuredList.length === 10) break;
-      }
-    }
-  }
-
-  // 3. Fill with recent works with valid covers
-  if (featuredList.length < 10) {
-    for (const w of works) {
-      if ((w.cover_id || (w as any).coverId) && !seenIds.has(w.id)) {
-        seenIds.add(w.id);
-        featuredList.push(w);
-        if (featuredList.length === 10) break;
-      }
-    }
-  }
-
   // Most Read works (from concurrent batch or derived from works)
   let mostReadWorks: typeof works;
   if (mostReadRes?.data && mostReadRes.data.length > 0) {
@@ -374,6 +339,94 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
   } else {
     console.warn('[MAIS_LIDOS_FALLBACK] mostReadRes empty or error, falling back to works slice:', mostReadRes?.error);
     mostReadWorks = works.slice(0, 24);
+  }
+
+  // --- DIVERSIFIED 10-ITEM HERO CAROUSEL SELECTION (ROUND 5) ---
+  // Target balance:
+  // ~3 Recém-adicionadas / Novidades
+  // ~3 Em alta / Atualizações Recentes (from recent releases)
+  // ~2 Populares / Mais Lidos
+  // ~2 Descoberta / Títulos do acervo (with periodic 3-hour deterministic rotation)
+  const seenIds = new Set<string>();
+  let featuredList: typeof works = [];
+
+  const tryAdd = (w?: any) => {
+    if (!w || !w.id || !w.title || seenIds.has(w.id)) return false;
+    const cover = w.cover_id || w.coverId;
+    if (!cover) return false;
+    seenIds.add(w.id);
+    featuredList.push(w);
+    return true;
+  };
+
+  // 1. Explicitly featured works take prime spots first
+  for (const w of works) {
+    if (w.featured) {
+      tryAdd(w);
+      if (featuredList.length >= 2) break;
+    }
+  }
+
+  // 2. Obras Recém-adicionadas (Novidades do catálogo) - target up to 3
+  let recentCount = 0;
+  for (const w of works) {
+    if (recentCount >= 3) break;
+    if (tryAdd(w)) recentCount++;
+  }
+
+  // 3. Obras em Alta (works that had recent releases/chapter updates) - target up to 3
+  let trendingCount = 0;
+  for (const rel of recentReleases) {
+    if (trendingCount >= 3) break;
+    const match = works.find((w) => w.id === rel.workId) || mostReadWorks.find((w) => w.id === rel.workId);
+    if (match) {
+      if (tryAdd(match)) trendingCount++;
+    } else if (rel.workId && rel.workTitle && rel.coverId) {
+      if (
+        tryAdd({
+          id: rel.workId,
+          slug: rel.workSlug,
+          title: rel.workTitle,
+          cover_id: rel.coverId,
+          kind: rel.kind,
+          content_rating: rel.contentRating,
+          published: true
+        })
+      )
+        trendingCount++;
+    }
+  }
+
+  // 4. Obras Populares (Top Mais Lidos) - target up to 2
+  let popularCount = 0;
+  for (const w of mostReadWorks) {
+    if (popularCount >= 2) break;
+    if (tryAdd(w)) popularCount++;
+  }
+
+  // 5. Obras de Descoberta (Títulos do acervo com rotação estável de 3 horas) - target up to 2
+  const rotationEpoch = Math.floor(Date.now() / (3 * 3600 * 1000));
+  const discoveryPool = works.filter((w) => !seenIds.has(w.id));
+  if (discoveryPool.length > 0) {
+    const offset = rotationEpoch % discoveryPool.length;
+    for (let i = 0; i < discoveryPool.length && featuredList.length < 10; i++) {
+      const idx = (offset + i) % discoveryPool.length;
+      tryAdd(discoveryPool[idx]);
+    }
+  }
+
+  // 6. Safety fill: ensure exactly 10 works if available
+  if (featuredList.length < 10) {
+    for (const w of works) {
+      tryAdd(w);
+      if (featuredList.length === 10) break;
+    }
+  }
+  if (featuredList.length < 10) {
+    for (const w of mostReadWorks) {
+      tryAdd(w);
+      if (featuredList.length === 10) break;
+    }
   }
 
   let isStale = false;

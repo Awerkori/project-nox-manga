@@ -39,6 +39,10 @@
     let mouseY = -9999;
     let targetTiltX = 0;
     let currentTiltX = 0;
+    let targetParallaxX = 0;
+    let targetParallaxY = 0;
+    let currentParallaxX = 0;
+    let currentParallaxY = 0;
 
     function isMobile() {
       return typeof window !== 'undefined' && window.innerWidth < 768;
@@ -63,8 +67,8 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Adaptive particle density: 110 desktop, 38 mobile / low-end
-      const count = mobile || lowEnd ? 38 : 110;
+      // Adaptive particle density: 85 desktop, 30 mobile / low-end
+      const count = mobile || lowEnd ? 30 : 85;
 
       if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
@@ -73,28 +77,31 @@
 
     function createParticle(randomY = false, mobile = false): Particle {
       // 3 depth tiers for depth-of-field effect:
-      // depth 0: small subtle background stars (40%)
-      // depth 1: mid floating ambient motes (40%)
-      // depth 2: glowing foreground snowflakes (20%)
+      // depth 0: small subtle background stars (45%)
+      // depth 1: mid floating ambient motes (38%)
+      // depth 2: refined foreground snowflakes (17%)
       const rand = Math.random();
-      const depth = rand < 0.45 ? 0 : rand < 0.82 ? 1 : 2;
+      const depth = rand < 0.45 ? 0 : rand < 0.83 ? 1 : 2;
 
       let radius: number;
       let baseAlpha: number;
       let baseSpeedY: number;
 
       if (depth === 0) {
-        radius = mobile ? 0.7 + Math.random() * 0.5 : 0.9 + Math.random() * 0.6;
+        // Micro background stars: 0.45 - 0.95px
+        radius = mobile ? 0.45 + Math.random() * 0.35 : 0.55 + Math.random() * 0.4;
         baseAlpha = 0.2 + Math.random() * 0.3;
-        baseSpeedY = (mobile ? 0.09 : 0.13) + Math.random() * 0.16;
+        baseSpeedY = (mobile ? 0.09 : 0.13) + Math.random() * 0.14;
       } else if (depth === 1) {
-        radius = mobile ? 1.1 + Math.random() * 0.8 : 1.4 + Math.random() * 1.0;
-        baseAlpha = 0.38 + Math.random() * 0.35;
-        baseSpeedY = (mobile ? 0.18 : 0.24) + Math.random() * 0.28;
+        // Mid-layer motes: 0.75 - 1.4px
+        radius = mobile ? 0.75 + Math.random() * 0.45 : 0.85 + Math.random() * 0.55;
+        baseAlpha = 0.35 + Math.random() * 0.3;
+        baseSpeedY = (mobile ? 0.17 : 0.22) + Math.random() * 0.24;
       } else {
-        radius = mobile ? 1.7 + Math.random() * 1.0 : 2.2 + Math.random() * 1.4;
-        baseAlpha = 0.6 + Math.random() * 0.35;
-        baseSpeedY = (mobile ? 0.28 : 0.36) + Math.random() * 0.38;
+        // Foreground snowflakes: refined, max 1.75px
+        radius = mobile ? 1.05 + Math.random() * 0.45 : 1.2 + Math.random() * 0.55;
+        baseAlpha = 0.55 + Math.random() * 0.35;
+        baseSpeedY = (mobile ? 0.26 : 0.32) + Math.random() * 0.32;
       }
 
       return {
@@ -108,8 +115,8 @@
         speedX: 0,
         angle: Math.random() * Math.PI * 2,
         angleSpeed: 0.006 + Math.random() * 0.012,
-        sway: (depth === 0 ? 0.1 : depth === 1 ? 0.22 : 0.38) * (0.8 + Math.random() * 0.4),
-        hue: Math.random() > 0.4 ? (Math.random() > 0.5 ? 265 : 240) : 210, // violet, indigo, or frosty white-blue
+        sway: (depth === 0 ? 0.1 : depth === 1 ? 0.2 : 0.34) * (0.8 + Math.random() * 0.4),
+        hue: Math.random() > 0.4 ? (Math.random() > 0.5 ? 268 : 242) : 212, // cosmic violet, indigo, or frosty white-blue
         depth
       };
     }
@@ -118,8 +125,34 @@
       if (!ctx || width === 0 || height === 0) return;
       ctx.clearRect(0, 0, width, height);
 
+      const mobile = isMobile();
+
+      // Cosmic aura following cursor on desktop (zero blur cost, pure radial gradient)
+      if (mouseX > -100 && mouseY > -100 && !mobile) {
+        const auraRadius = 170;
+        const aura = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, auraRadius);
+        aura.addColorStop(0, 'rgba(139, 92, 246, 0.045)');
+        aura.addColorStop(0.5, 'rgba(99, 102, 241, 0.018)');
+        aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = aura;
+        ctx.beginPath();
+        ctx.arc(mouseX, mouseY, auraRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       // Smooth mobile tilt interpolation
       currentTiltX += (targetTiltX - currentTiltX) * 0.05;
+
+      // Subtle parallax interpolation
+      if (mouseX > -100 && mouseY > -100 && !mobile) {
+        targetParallaxX = (mouseX - width * 0.5) * 0.015;
+        targetParallaxY = (mouseY - height * 0.5) * 0.012;
+      } else {
+        targetParallaxX = 0;
+        targetParallaxY = 0;
+      }
+      currentParallaxX += (targetParallaxX - currentParallaxX) * 0.05;
+      currentParallaxY += (targetParallaxY - currentParallaxY) * 0.05;
 
       const mouseRadius = 110;
       const mouseRadiusSq = mouseRadius * mouseRadius;
@@ -164,28 +197,32 @@
           p.alpha = p.baseAlpha * (0.85 + Math.sin(p.angle * 1.8) * 0.25);
         }
 
+        // Apply subtle parallax offset based on depth
+        const drawX = p.x + currentParallaxX * (p.depth + 0.4) * 0.5;
+        const drawY = p.y + currentParallaxY * (p.depth + 0.4) * 0.5;
+
         // Draw particle with pure GPU-accelerated paths (No shadowBlur to avoid Gecko/mobile CPU spikes)
         if (p.depth === 2) {
           // Foreground snowflakes: soft cosmic halo + luminous crisp core
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${p.alpha * 0.28})`;
+          ctx.arc(drawX, drawY, p.radius * 2.0, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${p.alpha * 0.24})`;
           ctx.fill();
 
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.alpha * 1.15)})`;
           ctx.fill();
         } else if (p.depth === 1) {
           // Mid motes: soft pastel star
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
           ctx.fillStyle = `hsla(${p.hue}, 65%, 85%, ${p.alpha * 0.85})`;
           ctx.fill();
         } else {
           // Background stars: tiny sharp points
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
           ctx.fillStyle = `hsla(${p.hue}, 40%, 85%, ${p.alpha * 0.65})`;
           ctx.fill();
         }
@@ -331,17 +368,17 @@
     z-index: 0;
     overflow: hidden;
     contain: strict;
-    background: radial-gradient(circle at 50% 12%, #07060e 0%, #040407 50%, #020204 100%);
+    background: radial-gradient(circle at 50% 15%, #0d0a1c 0%, #070611 40%, #030306 100%);
   }
 
   .ambient-mesh {
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at 25% 18%, rgba(139, 92, 246, 0.05) 0%, transparent 40%),
-      radial-gradient(circle at 80% 28%, rgba(59, 130, 246, 0.04) 0%, transparent 42%),
-      radial-gradient(circle at 50% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 45%),
-      radial-gradient(circle at 12% 75%, rgba(99, 102, 241, 0.035) 0%, transparent 40%);
+      radial-gradient(circle at 25% 18%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+      radial-gradient(circle at 80% 28%, rgba(99, 102, 241, 0.065) 0%, transparent 48%),
+      radial-gradient(circle at 50% 75%, rgba(124, 58, 237, 0.065) 0%, transparent 50%),
+      radial-gradient(circle at 12% 75%, rgba(147, 51, 234, 0.055) 0%, transparent 42%);
     pointer-events: none;
   }
 
@@ -356,46 +393,46 @@
   .ambient-glow {
     position: absolute;
     border-radius: 50%;
-    opacity: 0.65;
+    opacity: 0.72;
     pointer-events: none;
   }
 
   .glow-top {
-    top: -180px;
+    top: -160px;
     left: 50%;
     transform: translateX(-50%);
-    width: 950px;
-    height: 520px;
+    width: 1000px;
+    height: 560px;
     background: radial-gradient(
       ellipse at center,
-      rgba(139, 92, 246, 0.08) 0%,
-      rgba(45, 55, 120, 0.03) 40%,
+      rgba(139, 92, 246, 0.11) 0%,
+      rgba(99, 102, 241, 0.05) 38%,
       transparent 70%
     );
   }
 
   .glow-side {
     top: 30%;
-    right: -140px;
-    width: 650px;
-    height: 650px;
+    right: -120px;
+    width: 700px;
+    height: 700px;
     background: radial-gradient(
       circle,
-      rgba(168, 85, 247, 0.05) 0%,
-      rgba(30, 41, 75, 0.02) 45%,
+      rgba(147, 51, 234, 0.075) 0%,
+      rgba(79, 70, 229, 0.035) 45%,
       transparent 72%
     );
   }
 
   .glow-bottom-left {
     bottom: -100px;
-    left: -100px;
-    width: 600px;
-    height: 600px;
+    left: -80px;
+    width: 650px;
+    height: 650px;
     background: radial-gradient(
       circle,
-      rgba(99, 102, 241, 0.04) 0%,
-      rgba(15, 23, 42, 0.02) 50%,
+      rgba(124, 58, 237, 0.065) 0%,
+      rgba(30, 27, 75, 0.035) 50%,
       transparent 72%
     );
   }
@@ -406,18 +443,18 @@
     background: radial-gradient(
       ellipse at center,
       transparent 45%,
-      rgba(2, 2, 4, 0.85) 100%
+      rgba(3, 3, 6, 0.82) 100%
     );
     pointer-events: none;
   }
 
   @media (max-width: 768px) {
     .ambient-glow {
-      opacity: 0.45;
+      opacity: 0.5;
     }
     .glow-top {
       width: 100%;
-      height: 280px;
+      height: 300px;
     }
     .glow-side,
     .glow-bottom-left {
