@@ -494,7 +494,6 @@ const ALL_TAGS_TTL_MS = 600_000;
 const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v1';
 const CATALOG_TAGS_EDGE_TTL_S = 6 * 60 * 60;
 const CATALOG_TAG_MIN_WORKS = 10;
-let catalogTagsRefreshInFlight = false;
 
 async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[]> {
   try {

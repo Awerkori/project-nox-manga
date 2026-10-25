@@ -6,7 +6,7 @@ async function measureNavigation(page, actionName, actionFn, verifyFn) {
   const requests = [];
   let totalBytes = 0;
 
-  const onRequest = (req) => {
+  const onRequest = (_req) => {
     // track requests during this step
   };
   const onResponse = async (res) => {
@@ -21,7 +21,9 @@ async function measureNavigation(page, actionName, actionFn, verifyFn) {
         serverTiming: headers['server-timing'] || null,
         cacheControl: headers['cache-control'] || null
       });
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
   page.on('request', onRequest);

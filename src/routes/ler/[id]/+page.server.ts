@@ -28,7 +28,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   const canAccessUnpublished = isStaff && isPreviewRequested;
 
   const rawAgeCookie = cookies.get('nox-age-status');
-  let userAgeStatus = locals.sessionCache?.profile?.age_status || rawAgeCookie;
+  const userAgeStatus = locals.sessionCache?.profile?.age_status || rawAgeCookie;
 
   // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
   if (!isPreviewRequested && readerCache.has(params.id)) {
