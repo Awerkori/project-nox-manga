@@ -496,45 +496,36 @@
 
   .shelf-track.is-expanded {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 1.35rem;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1.25rem;
     width: 100%;
   }
 
-  @media (max-width: 1280px) {
+  @media (max-width: 1200px) {
     .shelf-track.is-expanded {
-      grid-template-columns: repeat(5, 1fr);
-    }
-  }
-
-  @media (max-width: 1024px) {
-    .shelf-track.is-expanded {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1rem;
     }
   }
 
   @media (max-width: 768px) {
     .shelf-track.is-expanded {
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-  }
-
-  @media (max-width: 520px) {
-    .shelf-track.is-expanded {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.85rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
     }
   }
 
   .shelf-track.is-expanded .shelf-card {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .shelf-track.is-expanded .card-cover-box {
     width: 100%;
+    max-width: 100%;
     height: auto;
-    aspect-ratio: 210 / 300;
+    aspect-ratio: 200 / 285;
   }
 
   /* Card Anatomy */
@@ -689,6 +680,9 @@
     gap: 0.35rem;
     margin-top: 0.85rem;
     min-height: 4.2rem;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
   }
 
   .card-work-title {
@@ -697,6 +691,8 @@
     font-weight: 750;
     line-height: 1.35;
     min-height: 2.6rem;
+    min-width: 0;
+    max-width: 100%;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -712,6 +708,9 @@
   }
 
   .card-author {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
     color: #8c93a8;
     font-size: 0.8rem;
     white-space: nowrap;
@@ -719,72 +718,7 @@
     text-overflow: ellipsis;
   }
 
-  /* End-Cap View More Card */
-  .btn-reset {
-    background: transparent;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-family: inherit;
-    text-align: inherit;
-  }
 
-  .shelf-card-view-more {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 155px;
-    scroll-snap-align: start;
-    flex-shrink: 0;
-  }
-
-  .view-more-box {
-    width: 100%;
-    height: 295px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.14);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.6rem;
-    color: #94a3b8;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .view-more-box:hover {
-    background: rgba(223, 194, 141, 0.08);
-    border-color: rgba(223, 194, 141, 0.45);
-    color: #dfc28d;
-    transform: translateY(-4px);
-  }
-
-  .view-more-icon-circle {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.25s ease;
-  }
-
-  .view-more-box:hover .view-more-icon-circle {
-    transform: translateX(4px);
-    background: rgba(223, 194, 141, 0.25);
-  }
-
-  .view-more-text {
-    font-size: 0.9rem;
-    font-weight: 750;
-  }
-
-  .view-more-sub {
-    font-size: 0.72rem;
-    color: #71717a;
-  }
 
   /* Expanded Footer */
   .expanded-footer {

@@ -48,7 +48,8 @@
       if (typeof navigator === 'undefined') return false;
       const cores = (navigator as any).hardwareConcurrency || 4;
       const memory = (navigator as any).deviceMemory || 4;
-      return cores <= 2 || memory <= 2;
+      const isFirefox = /Firefox/i.test(navigator.userAgent);
+      return cores <= 2 || memory <= 2 || (isFirefox && isMobile());
     }
 
     function initSize() {
@@ -62,9 +63,8 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Density: 140 particles desktop, 60 mobile, reduced if low-end
-      let count = mobile ? 60 : 140;
-      if (lowEnd) count = Math.floor(count * 0.55);
+      // Adaptive particle density: 110 desktop, 38 mobile / low-end
+      const count = mobile || lowEnd ? 38 : 110;
 
       if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
@@ -164,38 +164,40 @@
           p.alpha = p.baseAlpha * (0.85 + Math.sin(p.angle * 1.8) * 0.25);
         }
 
-        // Draw particle with soft glow
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-
+        // Draw particle with pure GPU-accelerated paths (No shadowBlur to avoid Gecko/mobile CPU spikes)
         if (p.depth === 2) {
-          // Foreground snowflakes: crisp white core with soft violet/blue halo
-          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.alpha * 1.1)})`;
-          ctx.shadowColor = `hsla(${p.hue}, 80%, 75%, ${p.alpha * 0.6})`;
-          ctx.shadowBlur = 6;
+          // Foreground snowflakes: soft cosmic halo + luminous crisp core
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius * 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${p.alpha * 0.28})`;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.alpha * 1.15)})`;
+          ctx.fill();
         } else if (p.depth === 1) {
           // Mid motes: soft pastel star
-          ctx.fillStyle = `hsla(${p.hue}, 60%, 90%, ${p.alpha})`;
-          ctx.shadowColor = `hsla(${p.hue}, 70%, 70%, ${p.alpha * 0.4})`;
-          ctx.shadowBlur = 3;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 65%, 85%, ${p.alpha * 0.85})`;
+          ctx.fill();
         } else {
           // Background stars: tiny sharp points
-          ctx.fillStyle = `hsla(${p.hue}, 40%, 85%, ${p.alpha})`;
-          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 40%, 85%, ${p.alpha * 0.65})`;
+          ctx.fill();
         }
-
-        ctx.fill();
       }
-
-      // Reset shadow for next frame
-      ctx.shadowBlur = 0;
     }
 
     function loop(timestamp: number) {
       if (document.hidden || isScrolling) return;
 
       const elapsed = timestamp - lastFrameTime;
-      const targetInterval = 1000 / 45; // 45 FPS target: silky smooth & battery efficient
+      const targetFps = isMobile() || isLowEndDevice() ? 30 : 45;
+      const targetInterval = 1000 / targetFps;
 
       if (elapsed >= targetInterval) {
         lastFrameTime = timestamp - (elapsed % targetInterval);
@@ -354,7 +356,6 @@
   .ambient-glow {
     position: absolute;
     border-radius: 50%;
-    filter: blur(120px);
     opacity: 0.65;
     pointer-events: none;
   }
@@ -367,8 +368,8 @@
     height: 520px;
     background: radial-gradient(
       ellipse at center,
-      rgba(139, 92, 246, 0.18) 0%,
-      rgba(45, 55, 120, 0.12) 45%,
+      rgba(139, 92, 246, 0.16) 0%,
+      rgba(45, 55, 120, 0.08) 40%,
       transparent 70%
     );
   }
@@ -380,9 +381,9 @@
     height: 650px;
     background: radial-gradient(
       circle,
-      rgba(168, 85, 247, 0.1) 0%,
-      rgba(30, 41, 75, 0.07) 50%,
-      transparent 75%
+      rgba(168, 85, 247, 0.09) 0%,
+      rgba(30, 41, 75, 0.05) 45%,
+      transparent 72%
     );
   }
 
@@ -393,9 +394,9 @@
     height: 600px;
     background: radial-gradient(
       circle,
-      rgba(99, 102, 241, 0.09) 0%,
-      rgba(15, 23, 42, 0.05) 55%,
-      transparent 75%
+      rgba(99, 102, 241, 0.08) 0%,
+      rgba(15, 23, 42, 0.04) 50%,
+      transparent 72%
     );
   }
 
@@ -412,7 +413,6 @@
 
   @media (max-width: 768px) {
     .ambient-glow {
-      filter: blur(80px);
       opacity: 0.45;
     }
     .glow-top {

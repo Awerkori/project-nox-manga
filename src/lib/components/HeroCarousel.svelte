@@ -40,13 +40,35 @@
   let glareX = $state(50);
   let glareY = $state(50);
 
-  // Active work
+  // Active work & adjacent works for multi-depth 3D stage
   let currentWork = $derived(works.length > 0 ? works[currentIndex % works.length] : null);
+  let prevWork = $derived(
+    works.length > 1 ? works[(currentIndex - 1 + works.length) % works.length] : null
+  );
+  let nextWork = $derived(
+    works.length > 1 ? works[(currentIndex + 1) % works.length] : null
+  );
 
   let heroCover = $derived(
     currentWork
       ? resolveCoverUrl(currentWork.cover_id || (currentWork as any).coverId, currentWork.slug, currentWork.id, {
           size: 'hero'
+        })
+      : ''
+  );
+
+  let prevCover = $derived(
+    prevWork
+      ? resolveCoverUrl(prevWork.cover_id || (prevWork as any).coverId, prevWork.slug, prevWork.id, {
+          size: 'thumb'
+        })
+      : ''
+  );
+
+  let nextCover = $derived(
+    nextWork
+      ? resolveCoverUrl(nextWork.cover_id || (nextWork as any).coverId, nextWork.slug, nextWork.id, {
+          size: 'thumb'
         })
       : ''
   );
@@ -220,24 +242,48 @@
 
     <div class="hero-container">
       <div class="hero-stage">
-        <!-- LEFT: 3D Perspective Cover Card with Hover Specular Glare -->
-        <div class="hero-cover-col">
-          <a
-            href="/obra/{currentWork.slug}"
-            class="cover-perspective-frame"
-            tabindex="-1"
+        <!-- LEFT: 3D Spatial Deck (Previous, Active, Next in 3D Depth) -->
+        <div class="hero-cover-stage" aria-label="Apresentação em profundidade 3D">
+          {#if prevWork && works.length > 2}
+            <!-- PREVIOUS COVER (Background Left) -->
+            <button
+              type="button"
+              class="deck-card deck-prev"
+              onclick={prevSlide}
+              aria-label={`Ver obra anterior: ${decodeHtmlEntities(prevWork.title)}`}
+            >
+              <img
+                src={prevCover}
+                alt={decodeHtmlEntities(prevWork.title)}
+                class="deck-img"
+                loading="lazy"
+                decoding="async"
+                use:fallbackCover
+              />
+              <div class="deck-shadow-veil"></div>
+            </button>
+          {/if}
+
+          <!-- ACTIVE FEATURED COVER (Foreground Center) -->
+          <div
+            class="deck-card deck-active"
             onmousemove={handleCardMouseMove}
             onmouseleave={handleCardMouseLeave}
             style="--tilt-x: {cardTiltX}deg; --tilt-y: {cardTiltY}deg;"
           >
-            <div class="cover-3d-card">
+            <a
+              href="/obra/{currentWork.slug}"
+              class="active-card-inner"
+              tabindex="-1"
+              aria-label={`Ler obra em destaque: ${decodeHtmlEntities(currentWork.title)}`}
+            >
               <img
                 src={heroCover}
                 alt={decodeHtmlEntities(currentWork.title)}
                 class="cover-img"
                 class:blurred-cover={effectiveBlur}
-                width="340"
-                height="485"
+                width="325"
+                height="465"
                 loading="eager"
                 fetchpriority="high"
                 decoding="async"
@@ -273,8 +319,28 @@
 
               <div class="cover-edge-accent"></div>
               <div class="cover-gloss"></div>
-            </div>
-          </a>
+            </a>
+          </div>
+
+          {#if nextWork && works.length > 1}
+            <!-- NEXT COVER (Background Right) -->
+            <button
+              type="button"
+              class="deck-card deck-next"
+              onclick={nextSlide}
+              aria-label={`Ver próxima obra: ${decodeHtmlEntities(nextWork.title)}`}
+            >
+              <img
+                src={nextCover}
+                alt={decodeHtmlEntities(nextWork.title)}
+                class="deck-img"
+                loading="lazy"
+                decoding="async"
+                use:fallbackCover
+              />
+              <div class="deck-shadow-veil"></div>
+            </button>
+          {/if}
         </div>
 
         <!-- RIGHT: Editorial Info, Badges, Title, Synopsis, and CTAs -->
@@ -454,8 +520,8 @@
     height: 650px;
     background: radial-gradient(
       circle,
-      rgba(139, 92, 246, 0.12) 0%,
-      rgba(223, 194, 141, 0.05) 45%,
+      rgba(139, 92, 246, 0.16) 0%,
+      rgba(99, 102, 241, 0.08) 45%,
       transparent 70%
     );
     pointer-events: none;
@@ -474,50 +540,131 @@
     gap: 2rem;
   }
 
-  /* Desktop Stage Layout: 3D Cover on LEFT, Editorial Info on RIGHT */
+  /* Desktop Stage Layout: 3D Spatial Deck on LEFT, Editorial Info on RIGHT */
   .hero-stage {
     display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 4.5rem;
+    grid-template-columns: 460px 1fr;
+    gap: 3.5rem;
     align-items: center;
     min-height: 485px;
   }
 
-  /* Left Cover Column with Interactive 3D Perspective */
-  .hero-cover-col {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .cover-perspective-frame {
-    perspective: 1100px;
-    text-decoration: none;
-    outline: none;
-    display: block;
-    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
-    transition: transform 0.15s ease-out;
-  }
-
-  .cover-3d-card {
+  /* 3D Multi-Depth Cover Stage */
+  .hero-cover-stage {
     position: relative;
-    width: 330px;
-    height: 475px;
+    width: 460px;
+    height: 485px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1200px;
+    perspective-origin: 50% 50%;
+  }
+
+  .deck-card {
+    position: absolute;
     border-radius: 18px;
     overflow: hidden;
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease, box-shadow 0.3s ease;
     transform-style: preserve-3d;
-    box-shadow:
-      -18px 26px 56px -8px rgba(0, 0, 0, 0.95),
-      0 0 38px -4px rgba(223, 194, 141, 0.25),
-      0 0 0 1px rgba(255, 255, 255, 0.1);
-    transition: box-shadow 0.3s ease;
+    backface-visibility: hidden;
+    will-change: transform, opacity;
   }
 
-  .cover-perspective-frame:hover .cover-3d-card {
+  /* PREVIOUS CARD (Tilted Left in 3D Depth) */
+  .deck-prev {
+    left: 10px;
+    width: 250px;
+    height: 365px;
+    transform: translateX(-40px) translateZ(-160px) rotateY(30deg);
+    opacity: 0.42;
+    z-index: 1;
+    cursor: pointer;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    box-shadow: -12px 18px 40px rgba(0, 0, 0, 0.85);
+    background: #090a14;
+    padding: 0;
+  }
+
+  .deck-prev:hover {
+    opacity: 0.78;
+    transform: translateX(-30px) translateZ(-110px) rotateY(22deg) scale(1.04);
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: -15px 22px 45px rgba(124, 58, 237, 0.35);
+  }
+
+  /* NEXT CARD (Tilted Right in 3D Depth) */
+  .deck-next {
+    right: 10px;
+    width: 250px;
+    height: 365px;
+    transform: translateX(40px) translateZ(-160px) rotateY(-30deg);
+    opacity: 0.42;
+    z-index: 1;
+    cursor: pointer;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    box-shadow: 12px 18px 40px rgba(0, 0, 0, 0.85);
+    background: #090a14;
+    padding: 0;
+  }
+
+  .deck-next:hover {
+    opacity: 0.78;
+    transform: translateX(30px) translateZ(-110px) rotateY(-22deg) scale(1.04);
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 15px 22px 45px rgba(124, 58, 237, 0.35);
+  }
+
+  .deck-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .deck-shadow-veil {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(6, 7, 12, 0.15) 0%, rgba(6, 7, 12, 0.75) 100%);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .deck-card:hover .deck-shadow-veil {
+    opacity: 0.3;
+  }
+
+  /* ACTIVE CARD (Center Foreground) */
+  .deck-active {
+    width: 325px;
+    height: 465px;
+    z-index: 10;
+    transform: translateZ(40px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+    transition: transform 0.15s ease-out, box-shadow 0.3s ease;
     box-shadow:
-      -22px 30px 65px -8px rgba(0, 0, 0, 0.98),
-      0 0 48px -2px rgba(223, 194, 141, 0.38),
-      0 0 0 1px rgba(223, 194, 141, 0.45);
+      -10px 24px 55px -6px rgba(0, 0, 0, 0.95),
+      0 0 45px -4px rgba(139, 92, 246, 0.28),
+      0 0 25px -2px rgba(99, 102, 241, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  .deck-active:hover {
+    box-shadow:
+      -14px 28px 65px -6px rgba(0, 0, 0, 0.98),
+      0 0 55px 0px rgba(168, 85, 247, 0.38),
+      0 0 35px 2px rgba(99, 102, 241, 0.28),
+      0 0 0 1px rgba(181, 154, 245, 0.45);
+  }
+
+  .active-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: block;
+    text-decoration: none;
+    outline: none;
+    border-radius: 18px;
+    overflow: hidden;
   }
 
   .cover-img {
@@ -605,7 +752,7 @@
     position: absolute;
     inset: 0;
     border-radius: 18px;
-    border: 1px solid rgba(223, 194, 141, 0.25);
+    border: 1px solid rgba(168, 85, 247, 0.35);
     pointer-events: none;
   }
 
@@ -652,18 +799,18 @@
     gap: 0.45rem;
     padding: 0.35rem 0.85rem;
     border-radius: 9999px;
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.5);
-    color: #dfc28d;
+    background: rgba(139, 92, 246, 0.18);
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    color: #c084fc;
     font-size: 0.74rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    box-shadow: 0 2px 14px rgba(223, 194, 141, 0.22);
+    box-shadow: 0 2px 14px rgba(139, 92, 246, 0.25);
   }
 
   .sparkle-anim {
-    color: #dfc28d;
+    color: #c084fc;
     animation: sparkleGlow 2.5s ease-in-out infinite alternate;
   }
 
@@ -735,8 +882,8 @@
   }
 
   .hero-title a:hover {
-    color: #dfc28d;
-    text-shadow: 0 0 24px rgba(223, 194, 141, 0.3);
+    color: #c084fc;
+    text-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
   }
 
   /* Authors */
@@ -797,14 +944,14 @@
     gap: 0.65rem;
     padding: 0.85rem 1.85rem;
     border-radius: 12px;
-    background: linear-gradient(135deg, #dfc28d 0%, #b89552 100%);
-    color: #06070c;
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    color: #ffffff;
     font-size: 0.96rem;
     font-weight: 800;
     letter-spacing: 0.02em;
     text-decoration: none;
     box-shadow:
-      0 6px 20px -2px rgba(223, 194, 141, 0.4),
+      0 6px 20px -2px rgba(124, 58, 237, 0.45),
       0 0 0 1px rgba(255, 255, 255, 0.2) inset;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -812,9 +959,9 @@
   .btn-primary-hero:hover {
     transform: translateY(-2px);
     box-shadow:
-      0 10px 28px -2px rgba(223, 194, 141, 0.55),
-      0 0 24px rgba(223, 194, 141, 0.4);
-    filter: brightness(1.08);
+      0 10px 28px -2px rgba(124, 58, 237, 0.65),
+      0 0 24px rgba(168, 85, 247, 0.5);
+    filter: brightness(1.12);
   }
 
   .btn-secondary-hero {
@@ -835,8 +982,8 @@
 
   .btn-secondary-hero:hover {
     background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(223, 194, 141, 0.45);
-    color: #dfc28d;
+    border-color: rgba(168, 85, 247, 0.5);
+    color: #c084fc;
     transform: translateY(-2px);
   }
 
@@ -860,7 +1007,7 @@
 
   .curr-num {
     font-size: 1.35rem;
-    color: #dfc28d;
+    color: #c084fc;
     letter-spacing: -0.02em;
   }
 
@@ -902,14 +1049,14 @@
   }
 
   .indicator-pill.active {
-    background: rgba(223, 194, 141, 0.25);
+    background: rgba(168, 85, 247, 0.4);
   }
 
   .indicator-progress-fill {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, #dfc28d, #fef08a);
-    box-shadow: 0 0 8px rgba(223, 194, 141, 0.7);
+    background: linear-gradient(90deg, #7c3aed, #a855f7);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.7);
     animation: indicatorFillAnim 7.5s linear forwards;
   }
 
@@ -940,23 +1087,43 @@
   }
 
   .nav-arrow-btn:hover {
-    background: rgba(223, 194, 141, 0.15);
-    border-color: rgba(223, 194, 141, 0.45);
-    color: #dfc28d;
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(168, 85, 247, 0.5);
+    color: #c084fc;
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(223, 194, 141, 0.2);
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3);
   }
 
   /* Responsive Breakpoints */
   @media (max-width: 1024px) {
     .hero-stage {
-      grid-template-columns: 280px 1fr;
-      gap: 3rem;
+      grid-template-columns: 360px 1fr;
+      gap: 2.5rem;
     }
 
-    .cover-3d-card {
-      width: 270px;
-      height: 390px;
+    .hero-cover-stage {
+      width: 360px;
+      height: 420px;
+      perspective: 1000px;
+    }
+
+    .deck-active {
+      width: 260px;
+      height: 380px;
+    }
+
+    .deck-prev {
+      left: 0;
+      width: 200px;
+      height: 295px;
+      transform: translateX(-25px) translateZ(-120px) rotateY(26deg);
+    }
+
+    .deck-next {
+      right: 0;
+      width: 200px;
+      height: 295px;
+      transform: translateX(25px) translateZ(-120px) rotateY(-26deg);
     }
 
     .hero-title {
@@ -967,30 +1134,51 @@
   @media (max-width: 768px) {
     .hero-carousel {
       min-height: auto;
-      padding: 1.5rem 0;
+      padding: 1.25rem 0;
     }
 
     .hero-stage {
-      grid-template-columns: 1fr;
-      gap: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
       min-height: auto;
       text-align: center;
     }
 
-    .hero-cover-col {
-      order: 1;
+    .hero-cover-stage {
+      width: 100%;
+      max-width: 330px;
+      height: 310px;
+      perspective: 750px;
+      margin: 0 auto;
     }
 
-    .cover-3d-card {
-      width: 200px;
-      height: 290px;
-      border-radius: 14px;
+    .deck-active {
+      width: 215px;
+      height: 305px;
+    }
+
+    .deck-prev {
+      left: 4px;
+      width: 160px;
+      height: 230px;
+      transform: translateX(-18px) translateZ(-90px) rotateY(22deg);
+      opacity: 0.35;
+    }
+
+    .deck-next {
+      right: 4px;
+      width: 160px;
+      height: 230px;
+      transform: translateX(18px) translateZ(-90px) rotateY(-22deg);
+      opacity: 0.35;
     }
 
     .hero-info-col {
-      order: 2;
       align-items: center;
-      gap: 1rem;
+      gap: 0.9rem;
+      max-width: 100%;
     }
 
     .badges-row {
