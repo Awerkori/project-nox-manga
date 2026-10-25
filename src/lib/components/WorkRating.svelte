@@ -184,7 +184,7 @@
     aria-label="Ver detalhes e distribuição de votos"
   >
     <div class="score-star-wrap" aria-hidden="true">
-      <Star size={16} fill="#ffd154" class="score-star-icon" />
+      <Star size={18} fill="#ffd154" class="score-star-icon" />
     </div>
 
     {#if displayAvg !== null}
@@ -197,7 +197,7 @@
     <span class="rating-count">({rating?.count || 0})</span>
 
     <span class="btn-breakdown-hint" title="Ver distribuição de notas">
-      <BarChart3 size={13} />
+      <BarChart3 size={14} />
     </span>
   </button>
 
@@ -231,7 +231,7 @@
           aria-label="{starValue} de 5 estrelas: {RATING_LABELS[starValue]}"
           disabled={isVoting}
         >
-          <Star size={18} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
+          <Star size={20} fill={isHovered || isSelected ? 'currentColor' : 'none'} />
         </button>
       {/each}
     </div>
@@ -382,22 +382,24 @@
   .rating-widget {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 14px;
-    background: rgba(14, 12, 24, 0.45);
-    border: 1px solid rgba(181, 154, 245, 0.12);
+    gap: 14px;
+    min-height: 44px;
+    padding: 6px 16px;
+    background: rgba(14, 12, 26, 0.6);
+    border: 1px solid rgba(181, 154, 245, 0.16);
     border-radius: 12px;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(10px);
     margin: 4px 0 10px;
     width: fit-content;
     max-width: 100%;
     flex-wrap: wrap;
+    box-sizing: border-box;
   }
 
   .rating-score-box {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     background: none;
     border: none;
     padding: 0;
@@ -419,7 +421,7 @@
   }
 
   .rating-number {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
     font-weight: 800;
     line-height: 1;
     color: #ffd154;
@@ -428,23 +430,23 @@
   }
 
   .rating-scale {
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: rgba(226, 232, 240, 0.45);
   }
 
   .rating-empty-badge {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.6);
+    color: rgba(226, 232, 240, 0.65);
     background: rgba(255, 255, 255, 0.05);
-    padding: 2px 7px;
+    padding: 3px 8px;
     border-radius: 999px;
   }
 
   .rating-count {
-    font-size: 0.78rem;
-    color: rgba(226, 232, 240, 0.55);
+    font-size: 0.82rem;
+    color: rgba(226, 232, 240, 0.6);
     font-weight: 500;
   }
 
@@ -452,9 +454,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     background: rgba(181, 154, 245, 0.08);
     color: rgba(181, 154, 245, 0.65);
     transition: all 0.15s ease;
@@ -467,8 +469,8 @@
 
   .rating-divider {
     width: 1px;
-    height: 18px;
-    background: rgba(181, 154, 245, 0.15);
+    height: 22px;
+    background: rgba(181, 154, 245, 0.18);
   }
 
   .rating-interactive-row {
@@ -481,21 +483,21 @@
   }
 
   .rate-prompt {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    color: rgba(226, 232, 240, 0.65);
+    color: rgba(226, 232, 240, 0.7);
     white-space: nowrap;
   }
 
   .interactive-stars {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
   }
 
   .star-btn {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;

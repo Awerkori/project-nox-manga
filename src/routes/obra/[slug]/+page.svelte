@@ -319,7 +319,7 @@
 
   <!-- Hero Presentation Section -->
   <section class="work-hero-section" aria-labelledby="work-title">
-    <!-- Left Column on Desktop / Centered Top on Mobile: Cover & Quick CTAs -->
+    <!-- Left Column on Desktop / Centered Top on Mobile: Cover Only -->
     <div class="work-cover-column">
       <div class="work-cover-wrapper">
         <img
@@ -337,67 +337,6 @@
             <Sparkles size={13} /> Destaque
           </span>
         {/if}
-      </div>
-
-      <!-- Desktop Under-Cover Action Buttons -->
-      <div class="desktop-cover-actions">
-        {#if resume}
-          <a class="btn-read-primary" href="/ler/{resume}">
-            <BookOpen size={18} />
-            <span>{data.progress.length ? 'Continuar leitura' : 'Começar a ler'}</span>
-          </a>
-        {/if}
-
-        <div class="desktop-action-row">
-          <button
-            type="button"
-            class="btn-action-pill"
-            class:is-active={data.library?.favorite}
-            onclick={() => library({ favorite: !data.library?.favorite })}
-            disabled={busy}
-            title={data.library?.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-          >
-            <Bookmark size={16} fill={data.library?.favorite ? 'currentColor' : 'none'} />
-            <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn-action-pill icon-only"
-            class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
-            onclick={like}
-            disabled={busy}
-            title={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Descurtir' : 'Curtir obra'}
-          >
-            <Heart size={16} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
-            <span>{data.likes.length}</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn-action-pill icon-only"
-            onclick={handleShare}
-            title="Compartilhar obra"
-          >
-            <Share2 size={16} />
-          </button>
-        </div>
-
-        <!-- Library Status Selector -->
-        <div class="library-dropdown-wrap">
-          <select
-            class="library-select"
-            aria-label="Organizar na biblioteca"
-            value={data.library?.status || ''}
-            onchange={(e) => library({ status: e.currentTarget.value })}
-            disabled={busy}
-          >
-            <option value="" disabled>Adicionar à biblioteca…</option>
-            <option value="READING">Lendo atualmente</option>
-            <option value="PLANNED">Quero ler</option>
-            <option value="COMPLETED">Concluído</option>
-          </select>
-        </div>
       </div>
     </div>
 
@@ -420,28 +359,78 @@
       <!-- Main Title -->
       <h1 id="work-title" class="work-title">{decodedTitle}</h1>
 
-      <!-- Clean Creators Byline (No duplicated boxes) -->
-      {#if data.work.author || data.work.artist}
-        <div class="work-creators-byline">
-          <span class="byline-label">Por</span>
-          {#if data.work.author}
-            <strong class="byline-author">{data.work.author}</strong>
-          {/if}
-          {#if data.work.author && data.work.artist && data.work.author !== data.work.artist}
-            <span class="byline-bullet" aria-hidden="true">•</span>
-            <span class="byline-label">Arte:</span>
-            <strong class="byline-artist">{data.work.artist}</strong>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Star Rating Component (0 to 5 Stars) -->
+      <!-- Star Rating Component (1 to 5 Stars) -->
       <WorkRating
         workId={data.work.id}
         bind:rating={currentRating}
         profile={data.profile}
         onNotice={(msg) => (notice = msg)}
       />
+
+      <!-- Interactive Controls Group (40-44px Height Reference) -->
+      <div class="work-hero-actions" aria-label="Controles de interação">
+        <div class="actions-buttons-cluster">
+          <button
+            type="button"
+            class="btn-action-control"
+            class:is-active={data.library?.favorite}
+            onclick={() => library({ favorite: !data.library?.favorite })}
+            disabled={busy}
+            title={data.library?.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+          >
+            <Bookmark size={18} fill={data.library?.favorite ? 'currentColor' : 'none'} />
+            <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control btn-like"
+            class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
+            onclick={like}
+            disabled={busy}
+            title={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Descurtir obra' : 'Curtir obra'}
+          >
+            <Heart size={18} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
+            <span>{data.likes.length}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control"
+            onclick={handleShare}
+            title="Compartilhar obra"
+          >
+            <Share2 size={18} />
+            <span class="btn-text-desktop">Compartilhar</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-action-control btn-report"
+            onclick={() => (showReportModal = true)}
+            title="Reportar problema nesta obra"
+          >
+            <Flag size={18} />
+            <span class="btn-text-desktop">Reportar</span>
+          </button>
+        </div>
+
+        <!-- Library Status Selector -->
+        <div class="library-dropdown-wrap">
+          <select
+            class="library-select-hero"
+            aria-label="Organizar na biblioteca"
+            value={data.library?.status || ''}
+            onchange={(e) => library({ status: e.currentTarget.value })}
+            disabled={busy}
+          >
+            <option value="" disabled>Adicionar à biblioteca…</option>
+            <option value="READING">Lendo atualmente</option>
+            <option value="PLANNED">Quero ler</option>
+            <option value="COMPLETED">Concluído</option>
+          </select>
+        </div>
+      </div>
 
       <!-- Essential Metrics Inline (Clean, unbloated, high-contrast) -->
       <div class="work-metrics-inline" aria-label="Estatísticas da obra">
@@ -468,73 +457,6 @@
           <strong>{data.likes.length}</strong>
           <span class="metric-lbl">curtidas</span>
         </span>
-      </div>
-
-      <!-- Mobile Dedicated CTAs (Full Width Touch Target) -->
-      <div class="mobile-cover-actions">
-        {#if resume}
-          <a class="btn-read-primary" href="/ler/{resume}">
-            <BookOpen size={19} />
-            <span>{data.progress.length ? 'Continuar leitura' : 'Começar a ler'}</span>
-          </a>
-        {/if}
-
-        <div class="mobile-actions-grid">
-          <button
-            type="button"
-            class="btn-action-pill"
-            class:is-active={data.library?.favorite}
-            onclick={() => library({ favorite: !data.library?.favorite })}
-            disabled={busy}
-          >
-            <Bookmark size={17} fill={data.library?.favorite ? 'currentColor' : 'none'} />
-            <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn-action-pill"
-            class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
-            onclick={like}
-            disabled={busy}
-          >
-            <Heart size={17} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
-            <span>{data.likes.length}</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn-action-pill"
-            onclick={handleShare}
-          >
-            <Share2 size={17} />
-            <span>Compartilhar</span>
-          </button>
-
-          <button
-            type="button"
-            class="btn-action-pill"
-            onclick={() => (showReportModal = true)}
-          >
-            <Flag size={17} />
-            <span>Reportar</span>
-          </button>
-        </div>
-
-        <div class="library-dropdown-wrap">
-          <select
-            class="library-select"
-            aria-label="Organizar na biblioteca"
-            value={data.library?.status || ''}
-            onchange={(e) => library({ status: e.currentTarget.value })}
-            disabled={busy}
-          >
-            <option value="" disabled>Adicionar à biblioteca…</option>
-            <option value="READING">Lendo atualmente</option>
-            <option value="PLANNED">Quero ler</option>
-            <option value="COMPLETED">Concluído</option>
-          </select>
-        </div>
       </div>
 
       <!-- Synopsis Section (Integrated, editorial readability, without heavy box) -->
@@ -571,7 +493,7 @@
     </div>
   {/if}
 
-  <!-- Redesigned Editorial Ficha Técnica (Thematic 2x2 Grid) -->
+  <!-- Redesigned Editorial Ficha Técnica (Single Unified Panel) -->
   <section class="work-specs-section work-specs-editorial work-sidebar" aria-label="Ficha técnica e detalhes da obra">
     <div class="specs-section-header">
       <div class="specs-heading-wrap">
@@ -581,14 +503,13 @@
       <span class="specs-subtext">Informações editoriais, créditos e catalogação da obra</span>
     </div>
 
-    <div class="specs-quad-grid">
-      <!-- Card 1: Informações da Obra -->
-      <div class="specs-quad-card">
-        <div class="card-top-header">
-          <div class="card-icon-title">
-            <BookOpen size={16} class="card-icon" />
-            <h3 class="card-title">Informações da Obra</h3>
-          </div>
+    <!-- Single Unified Panel with 4 Internal Subsections -->
+    <div class="specs-unified-panel">
+      <!-- Subseção 1: Informações da Obra -->
+      <div class="specs-subpanel">
+        <div class="subpanel-header">
+          <BookOpen size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Informações da Obra</h3>
         </div>
         <dl class="specs-table">
           <div class="specs-row">
@@ -627,40 +548,44 @@
         </dl>
       </div>
 
-      <!-- Card 2: Equipe & Créditos -->
-      <div class="specs-quad-card">
-        <div class="card-top-header">
-          <div class="card-icon-title">
-            <Users size={16} class="card-icon" />
-            <h3 class="card-title">Equipe & Créditos</h3>
-          </div>
+      <!-- Subseção 2: Equipe & Créditos -->
+      <div class="specs-subpanel">
+        <div class="subpanel-header">
+          <Users size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Equipe & Créditos</h3>
         </div>
         <dl class="specs-table">
-          {#if data.work.author}
-            <div class="specs-row">
-              <dt>Roteiro / História</dt>
-              <dd><strong>{data.work.author}</strong></dd>
-            </div>
-          {/if}
-          {#if data.work.artist && data.work.artist !== data.work.author}
+          <div class="specs-row">
+            <dt>Roteiro / História</dt>
+            <dd>
+              {#if data.work.author && data.work.author.trim()}
+                <strong>{data.work.author}</strong>
+              {:else}
+                <span class="unassigned-spec" title="Autor não identificado">?</span>
+              {/if}
+            </dd>
+          </div>
+          {#if data.work.artist && data.work.artist.trim() && data.work.artist !== data.work.author}
             <div class="specs-row">
               <dt>Arte / Ilustração</dt>
               <dd><strong>{data.work.artist}</strong></dd>
             </div>
           {/if}
-          {#if data.scans && data.scans.length > 0}
-            <div class="specs-row scans-row">
-              <dt>{data.scans.length > 1 ? 'Scans Parceiras' : 'Scan Parceira'}</dt>
-              <dd class="scans-chips-wrap">
+          <div class="specs-row scans-row">
+            <dt>Tradução / Scanlator</dt>
+            <dd class="scans-chips-wrap">
+              {#if data.scans && data.scans.length > 0}
                 {#each data.scans as scan (scan.id || scan.slug)}
                   <a href="/scans/{scan.slug}" class="scan-pill-link" title="Visitar perfil da scan parceira">
                     <Users size={12} />
                     <span>{scan.name}</span>
                   </a>
                 {/each}
-              </dd>
-            </div>
-          {/if}
+              {:else}
+                <span class="unassigned-spec" title="Tradução não atribuída a uma scan parceira">?</span>
+              {/if}
+            </dd>
+          </div>
           <div class="specs-row">
             <dt>Idioma</dt>
             <dd>Português (Brasil)</dd>
@@ -668,15 +593,13 @@
         </dl>
       </div>
 
-      <!-- Card 3: Gêneros & Temas -->
-      <div class="specs-quad-card">
-        <div class="card-top-header">
-          <div class="card-icon-title">
-            <Tag size={16} class="card-icon" />
-            <h3 class="card-title">Gêneros & Temas</h3>
-          </div>
+      <!-- Subseção 3: Gêneros & Temas -->
+      <div class="specs-subpanel">
+        <div class="subpanel-header">
+          <Tag size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Gêneros & Temas</h3>
           {#if data.tags?.length}
-            <span class="card-badge-count">{data.tags.filter(Boolean).length}</span>
+            <span class="subpanel-count-badge">{data.tags.filter(Boolean).length}</span>
           {/if}
         </div>
         {#if visibleTags.length}
@@ -690,7 +613,7 @@
           {#if data.tags.filter(Boolean).length > 10}
             <button
               type="button"
-              class="btn-toggle-quad"
+              class="btn-toggle-subpanel"
               onclick={() => (tagsExpanded = !tagsExpanded)}
               aria-expanded={tagsExpanded}
             >
@@ -703,15 +626,13 @@
         {/if}
       </div>
 
-      <!-- Card 4: Títulos Alternativos (HIGH VISIBILITY & RICH LIST) -->
-      <div class="specs-quad-card">
-        <div class="card-top-header">
-          <div class="card-icon-title">
-            <Languages size={16} class="card-icon" />
-            <h3 class="card-title">Títulos Alternativos</h3>
-          </div>
+      <!-- Subseção 4: Títulos Alternativos -->
+      <div class="specs-subpanel">
+        <div class="subpanel-header">
+          <Languages size={16} class="subpanel-icon" />
+          <h3 class="subpanel-title">Títulos Alternativos</h3>
           {#if alternativeTitles.length}
-            <span class="card-badge-count">{alternativeTitles.length}</span>
+            <span class="subpanel-count-badge">{alternativeTitles.length}</span>
           {/if}
         </div>
         {#if alternativeTitles.length}
@@ -726,7 +647,7 @@
           {#if alternativeTitles.length > 4}
             <button
               type="button"
-              class="btn-toggle-quad"
+              class="btn-toggle-subpanel"
               onclick={() => (aliasesExpanded = !aliasesExpanded)}
               aria-expanded={aliasesExpanded}
             >
@@ -744,16 +665,16 @@
   <!-- Chapter List Section (Wide, Full-Width Reading Area) -->
   <section class="work-chapters-section" aria-labelledby="chapters-heading">
       <div class="chapters-header">
-        <div>
+        <div class="chapters-title-wrap">
           <h2 id="chapters-heading" class="chapters-title">Capítulos</h2>
           <p class="chapters-subtitle">
             {chapters.length} disponíveis · Atualizado em {date(data.work.updated_at)}
           </p>
         </div>
         {#if resume}
-          <a class="btn-quick-read" href="/ler/{resume}">
-            <BookOpen size={16} />
-            <span>{data.progress.length ? 'Continuar lendo' : 'Ler agora'}</span>
+          <a class="btn-read-primary" href="/ler/{resume}">
+            <BookOpen size={18} />
+            <span>{data.progress.length ? 'Continuar leitura' : 'Começar a ler'}</span>
           </a>
         {/if}
       </div>
@@ -1076,103 +997,6 @@
     box-shadow: 0 4px 12px rgba(167, 139, 250, 0.4);
   }
 
-  /* Desktop Cover Actions */
-  .desktop-cover-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .btn-read-primary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    min-height: 46px;
-    padding: 10px 20px;
-    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 0.95rem;
-    border-radius: 12px;
-    text-decoration: none;
-    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35);
-    transition: all 0.2s ease;
-  }
-
-  .btn-read-primary:hover {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-    box-shadow: 0 10px 28px rgba(124, 58, 237, 0.48);
-    transform: translateY(-1px);
-  }
-
-  .desktop-action-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .btn-action-pill {
-    flex: 1;
-    min-height: 42px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #cbd5e1;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-action-pill:hover {
-    background: rgba(181, 154, 245, 0.12);
-    border-color: rgba(181, 154, 245, 0.3);
-    color: #ffffff;
-  }
-
-  .btn-action-pill.icon-only {
-    flex: 0 0 46px;
-    padding: 0 8px;
-  }
-
-  .btn-action-pill.is-active {
-    color: #ffd154;
-    background: rgba(255, 209, 84, 0.12);
-    border-color: rgba(255, 209, 84, 0.35);
-  }
-
-  .library-dropdown-wrap {
-    width: 100%;
-  }
-
-  .library-select {
-    width: 100%;
-    min-height: 40px;
-    padding: 8px 12px;
-    background: rgba(18, 14, 28, 0.8);
-    border: 1px solid rgba(181, 154, 245, 0.16);
-    border-radius: 10px;
-    color: #cbd5e1;
-    font-size: 0.85rem;
-    font-weight: 500;
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.2s;
-  }
-
-  .library-select:focus {
-    border-color: #a78bfa;
-  }
-
-  /* Mobile Actions (Hidden on Desktop) */
-  .mobile-cover-actions {
-    display: none;
-  }
-
   /* Details Column */
   .work-details-column {
     display: flex;
@@ -1269,32 +1093,97 @@
     word-break: break-word;
   }
 
-  /* Clean Creators Byline */
-  .work-creators-byline {
+  /* Interactions Row: Height 42px reference, balanced and elegant */
+  .work-hero-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.95rem;
-    color: #94a3b8;
-    margin: 2px 0 8px;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 4px 0 12px;
+  }
+
+  .actions-buttons-cluster {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
-  .byline-label {
-    color: rgba(226, 232, 240, 0.55);
+  .btn-action-control {
+    height: 42px;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
     font-size: 0.88rem;
-  }
-
-  .byline-author,
-  .byline-artist {
-    color: #f1f5f9;
     font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(181, 154, 245, 0.16);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-decoration: none;
+    box-sizing: border-box;
   }
 
-  .byline-bullet {
-    color: rgba(181, 154, 245, 0.4);
-    font-size: 0.8rem;
-    margin: 0 2px;
+  .btn-action-control:hover:not(:disabled) {
+    background: rgba(181, 154, 245, 0.12);
+    border-color: rgba(181, 154, 245, 0.35);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .btn-action-control:focus-visible {
+    outline: 2px solid #a78bfa;
+    outline-offset: 2px;
+  }
+
+  .btn-action-control.is-active {
+    color: #ffd154;
+    background: rgba(255, 209, 84, 0.12);
+    border-color: rgba(255, 209, 84, 0.38);
+  }
+
+  .btn-action-control.btn-like.is-active {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.38);
+  }
+
+  .library-dropdown-wrap {
+    min-width: 190px;
+    flex: 1;
+    max-width: 250px;
+  }
+
+  .library-select-hero {
+    width: 100%;
+    height: 42px;
+    min-height: 42px;
+    padding: 0 14px;
+    background: rgba(18, 14, 28, 0.85);
+    border: 1px solid rgba(181, 154, 245, 0.18);
+    border-radius: 10px;
+    color: #e2e8f0;
+    font-size: 0.86rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    box-sizing: border-box;
+  }
+
+  .library-select-hero:hover:not(:disabled) {
+    border-color: rgba(181, 154, 245, 0.35);
+  }
+
+  .library-select-hero:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.25);
   }
 
   /* Inline Essential Metrics (Clean, unbloated, high-contrast) */
@@ -1430,49 +1319,59 @@
     color: rgba(226, 232, 240, 0.55);
   }
 
-  /* 2x2 Thematic Grid on Desktop */
-  .specs-quad-grid {
+  /* Single Unified Editorial Panel */
+  .specs-unified-panel {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    align-items: stretch;
+    background: rgba(13, 15, 26, 0.65);
+    border: 1px solid rgba(181, 154, 245, 0.15);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    position: relative;
   }
 
-  .specs-quad-card {
+  .specs-subpanel {
     display: flex;
     flex-direction: column;
-    background: rgba(13, 15, 26, 0.55);
-    border: 1px solid rgba(181, 154, 245, 0.14);
-    border-radius: 14px;
-    padding: 20px 22px;
-    backdrop-filter: blur(8px);
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    padding: 24px 28px;
+    position: relative;
+    background: transparent;
   }
 
-  .specs-quad-card:hover {
-    border-color: rgba(181, 154, 245, 0.26);
+  /* Internal subtle dividers on Desktop (2-column grid) */
+  .specs-subpanel:nth-child(1) {
+    border-right: 1px solid rgba(181, 154, 245, 0.1);
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
   }
 
-  .card-top-header {
+  .specs-subpanel:nth-child(2) {
+    border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  .specs-subpanel:nth-child(3) {
+    border-right: 1px solid rgba(181, 154, 245, 0.1);
+  }
+
+  .specs-subpanel:nth-child(4) {
+    border: none;
+  }
+
+  .subpanel-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     margin-bottom: 16px;
     padding-bottom: 10px;
     border-bottom: 1px solid rgba(181, 154, 245, 0.08);
   }
 
-  .card-icon-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  :global(.card-icon) {
+  :global(.subpanel-icon) {
     color: #a78bfa;
+    flex-shrink: 0;
   }
 
-  .card-title {
+  .subpanel-title {
     font-size: 0.88rem;
     font-weight: 700;
     color: #f1f5f9;
@@ -1481,7 +1380,8 @@
     margin: 0;
   }
 
-  .card-badge-count {
+  .subpanel-count-badge {
+    margin-left: auto;
     font-size: 0.72rem;
     font-weight: 700;
     color: #c4b5fd;
@@ -1489,6 +1389,21 @@
     border: 1px solid rgba(167, 139, 250, 0.25);
     padding: 1px 7px;
     border-radius: 999px;
+  }
+
+  .unassigned-spec {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(226, 232, 240, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
   }
 
   .specs-table {
@@ -1676,7 +1591,7 @@
     word-break: break-word;
   }
 
-  .btn-toggle-quad {
+  .btn-toggle-subpanel {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -1692,7 +1607,7 @@
     transition: color 0.15s ease;
   }
 
-  .btn-toggle-quad:hover {
+  .btn-toggle-subpanel:hover {
     color: #c4b5fd;
   }
 
@@ -1701,17 +1616,6 @@
     color: rgba(226, 232, 240, 0.45);
     font-style: italic;
     margin: 0;
-  }
-
-  @media (max-width: 991px) {
-    .specs-quad-grid {
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    .specs-quad-card {
-      padding: 18px 18px;
-    }
   }
 
   /* Chapters Section (Full Width, Reading Centered) */
@@ -1731,6 +1635,12 @@
     gap: 12px;
   }
 
+  .chapters-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
   .chapters-title {
     font-size: 1.35rem;
     font-weight: 800;
@@ -1745,24 +1655,29 @@
     margin: 0;
   }
 
-  .btn-quick-read {
+  .btn-read-primary {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: rgba(167, 139, 250, 0.12);
-    border: 1px solid rgba(167, 139, 250, 0.28);
-    border-radius: 10px;
-    color: #c4b5fd;
-    font-size: 0.85rem;
-    font-weight: 600;
+    justify-content: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 22px;
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-radius: 12px;
     text-decoration: none;
-    transition: all 0.15s;
+    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-sizing: border-box;
   }
 
-  .btn-quick-read:hover {
-    background: rgba(167, 139, 250, 0.22);
-    color: #ffffff;
+  .btn-read-primary:hover {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    box-shadow: 0 10px 28px rgba(124, 58, 237, 0.48);
+    transform: translateY(-1px);
   }
 
   /* Chapters Toolbar */
@@ -2086,13 +2001,23 @@
   /* ========================================================================= */
 
   @media (max-width: 991px) {
-    .specs-quad-grid {
+    .specs-unified-panel {
       grid-template-columns: 1fr;
-      gap: 16px;
     }
 
-    .specs-quad-card {
-      padding: 16px 18px;
+    .specs-subpanel {
+      padding: 20px 20px;
+    }
+
+    .specs-subpanel:nth-child(1),
+    .specs-subpanel:nth-child(2),
+    .specs-subpanel:nth-child(3) {
+      border-right: none;
+      border-bottom: 1px solid rgba(181, 154, 245, 0.1);
+    }
+
+    .specs-subpanel:nth-child(4) {
+      border: none;
     }
   }
 
@@ -2122,35 +2047,53 @@
       margin: 0 auto;
     }
 
-    /* Hide desktop actions on mobile */
-    .desktop-cover-actions {
-      display: none;
-    }
-
-    /* Show mobile dedicated actions */
-    .mobile-cover-actions {
-      display: flex;
+    /* Hero actions on mobile: full width, comfortable touch targets >= 44px */
+    .work-hero-actions {
       flex-direction: column;
-      gap: 12px;
-      margin: 12px 0;
-      text-align: left;
+      align-items: stretch;
+      gap: 10px;
+      margin: 12px 0 14px;
     }
 
-    .mobile-actions-grid {
+    .actions-buttons-cluster {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
+      width: 100%;
     }
 
-    .mobile-actions-grid .btn-action-pill {
+    .btn-action-control {
       min-height: 48px;
-      flex-direction: column;
+      height: 48px;
+      padding: 0 4px;
+      font-size: 0.74rem;
       gap: 4px;
-      font-size: 0.72rem;
-      padding: 6px 4px;
+      flex-direction: column;
     }
 
-    /* Center badges, title, creators on mobile */
+    .btn-action-control :global(svg) {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-text-desktop {
+      display: block;
+      font-size: 0.7rem;
+    }
+
+    .library-dropdown-wrap {
+      width: 100%;
+      max-width: 100%;
+      min-width: 100%;
+    }
+
+    .library-select-hero {
+      height: 46px;
+      min-height: 46px;
+      font-size: 0.9rem;
+    }
+
+    /* Center badges, title, metrics on mobile */
     .work-badges-row {
       justify-content: center;
     }
@@ -2161,23 +2104,20 @@
       text-align: center;
     }
 
-    .work-creators-byline {
-      justify-content: center;
-      font-size: 0.88rem;
-    }
-
     .work-metrics-inline {
       justify-content: center;
     }
 
-    /* Synopsis and sections align naturally on mobile */
-    .work-section-block {
-      text-align: left;
-      padding: 14px 16px;
+    /* Chapter Header adjustments */
+    .chapters-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
     }
 
-    .tags-cloud {
-      justify-content: flex-start;
+    .btn-read-primary {
+      width: 100%;
+      justify-content: center;
     }
 
     /* Chapter list adjustments */
@@ -2209,7 +2149,7 @@
       font-size: 1.35rem;
     }
 
-    .mobile-actions-grid {
+    .actions-buttons-cluster {
       grid-template-columns: repeat(2, 1fr);
     }
   }
