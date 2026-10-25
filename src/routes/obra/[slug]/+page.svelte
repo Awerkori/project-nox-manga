@@ -429,9 +429,6 @@
       <div class="cover-indicators-group" aria-label="Classificações da obra">
         <span class="indicator-badge badge-kind">{kindLabels[data.work.kind] || data.work.kind || 'Mangá'}</span>
         <span class="indicator-badge badge-status">{statusLabels[data.work.status] || data.work.status}</span>
-        {#if data.work.year}
-          <span class="indicator-badge badge-year">{data.work.year}</span>
-        {/if}
         {#if isAdult}
           <span class="indicator-badge badge-rating-adult">+18 Adulto</span>
         {:else if data.work.age_rating}
@@ -1146,67 +1143,65 @@
     box-shadow: 0 4px 12px rgba(167, 139, 250, 0.4);
   }
 
-  /* Integrated Indicators Group Below Cover (Aligned within 280px) */
+  /* Integrated Indicators Group Below Cover (Balanced Distribution across 280px) */
   .cover-indicators-group {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
+    align-items: stretch;
+    gap: 8px;
     width: 100%;
     max-width: 280px;
-    margin-top: 2px;
+    margin-top: 10px;
+    box-sizing: border-box;
   }
 
   .indicator-badge {
-    font-size: 0.76rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.8125rem;
     font-weight: 700;
-    padding: 3px 9px;
-    border-radius: 7px;
+    border-radius: 8px;
     line-height: 1.25;
     text-align: center;
     white-space: nowrap;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.015em;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
 
   .indicator-badge.badge-kind {
-    color: #e2e8f0;
-    background: rgba(167, 139, 250, 0.16);
-    border: 1px solid rgba(167, 139, 250, 0.32);
+    color: #f1f5f9;
+    background: rgba(167, 139, 250, 0.22);
+    border: 1px solid rgba(167, 139, 250, 0.45);
   }
 
   .indicator-badge.badge-status {
-    color: #34d399;
-    background: rgba(52, 211, 153, 0.14);
-    border: 1px solid rgba(52, 211, 153, 0.28);
-  }
-
-  .indicator-badge.badge-year {
-    color: rgba(226, 232, 240, 0.7);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(52, 211, 153, 0.42);
   }
 
   .indicator-badge.badge-rating-adult {
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.16);
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.48);
   }
 
   .indicator-badge.badge-rating-age {
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.15);
-    border: 1px solid rgba(251, 191, 36, 0.3);
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.18);
+    border: 1px solid rgba(251, 191, 36, 0.42);
   }
 
   .indicator-badge.badge-rating-free {
-    color: #6ee7b7;
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.28);
+    color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.42);
   }
 
   /* Details Column */
@@ -2449,15 +2444,18 @@
 
     /* Integrated Indicators below cover on mobile */
     .cover-indicators-group {
+      width: 100%;
       max-width: 260px;
-      margin: 2px auto 0;
-      justify-content: center;
+      margin: 8px auto 0;
       gap: 6px;
+      align-items: stretch;
     }
 
     .indicator-badge {
-      font-size: 0.72rem;
-      padding: 3px 8px;
+      min-height: 30px;
+      font-size: 0.77rem;
+      padding: 4px 6px;
+      border-radius: 7px;
     }
 
     /* Hero actions on mobile: full width, comfortable touch targets >= 44px */
