@@ -20,7 +20,12 @@ const PERSONALIZED_HOME_COOKIE = /(?:^|;\\s*)(?:nox-age-status|nox-blur-nsfw)=/i
 
 function shouldBypassSharedCache(req) {
   const cookie = req.headers.get('cookie') || '';
-  return AUTHENTICATED_SESSION_COOKIE.test(cookie) || PERSONALIZED_HOME_COOKIE.test(cookie) || req.headers.has('authorization');
+  if (AUTHENTICATED_SESSION_COOKIE.test(cookie) || req.headers.has('authorization')) return true;
+  try {
+    const url = new URL(req.url);
+    if (url.pathname === '/' && PERSONALIZED_HOME_COOKIE.test(cookie)) return true;
+  } catch {}
+  return false;
 }
 
 var worker_default = {`;

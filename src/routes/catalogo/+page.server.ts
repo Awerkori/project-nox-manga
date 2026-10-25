@@ -6,7 +6,7 @@ let cachedTags: { timestamp: number; data: any[] } | null = null;
 const TAGS_CACHE_TTL_MS = 300_000;
 
 let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; tags: any[] } | null = null;
-const CATALOGO_CACHE_TTL_MS = 60_000;
+const CATALOGO_CACHE_TTL_MS = 300_000;
 
 export const load = async ({ locals, url, setHeaders, platform }: any) => {
   const q = (url.searchParams.get('q') || '').slice(0, 100),
@@ -20,7 +20,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
 
   if (!locals.user) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
     });
   }
 
@@ -46,7 +46,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
       ? Promise.resolve(cachedTags.data)
       : withTimeout(
           fetchTagsFromYugabyte(platform?.env),
-          3000,
+          2000,
           cachedTags?.data || [],
           'catalogo_yugabyte_tags'
         ),
@@ -96,7 +96,9 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
   return {
     works,
     count: totalCount,
-    tags: tagsData,
+    tags: tag && !tagsData.some((t: any) => t?.slug === tag)
+      ? [...tagsData, { id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
+      : tagsData,
     q,
     tag,
     kind,

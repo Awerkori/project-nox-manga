@@ -336,7 +336,7 @@ export async function fetchRecentReleasesFromYugabyte(
           WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
             ${kindClause}
             ${cursorClause}
-          ORDER BY w.latest_chapter_published_at DESC, w.id DESC
+          ORDER BY w.latest_chapter_published_at DESC
           LIMIT $1
         )
         SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating,
@@ -351,11 +351,10 @@ export async function fetchRecentReleasesFromYugabyte(
                  chapter_kind, edition, language, title, published_at
           FROM chapters
           WHERE work_id = lw.work_id AND published_at IS NOT NULL
-          ORDER BY published_at DESC, chapter_order_key DESC, canonical_chapter_key DESC, id DESC
+          ORDER BY published_at DESC
           LIMIT $2
         ) c
-        ORDER BY lw.latest_published_at DESC, lw.work_id DESC,
-                 c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC;
+        ORDER BY lw.latest_published_at DESC, c.published_at DESC;
       `;
 
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
@@ -462,7 +461,7 @@ export interface YugabyteCatalogOptions {
 export type YugabyteWorkSearchOptions = YugabyteCatalogOptions;
 
 let cachedPublishedCount: { timestamp: number; count: number } | null = null;
-const PUBLISHED_COUNT_TTL_MS = 60_000;
+const PUBLISHED_COUNT_TTL_MS = 600_000;
 
 /**
  * Fetch total number of published works from authoritative YugabyteDB.
@@ -491,31 +490,60 @@ export async function fetchPublishedWorksCountFromYugabyte(platformEnv?: any): P
 }
 
 let cachedAllTags: { timestamp: number; tags: YugabyteTag[] } | null = null;
-const ALL_TAGS_TTL_MS = 300_000;
+const ALL_TAGS_TTL_MS = 600_000;
+const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v1';
+const CATALOG_TAGS_EDGE_TTL_S = 6 * 60 * 60;
+const CATALOG_TAG_MIN_WORKS = 10;
+
+async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[]> {
+  try {
+    const res = await executeYugabyteSql<YugabyteTag>(
+      `SELECT id, name, slug, kind FROM catalog_filter_tags ORDER BY name ASC;`,
+      [],
+      platformEnv
+    );
+    if (res.rows.length > 0) {
+      cachedAllTags = { timestamp: Date.now(), tags: res.rows };
+      return res.rows;
+    }
+  } catch {
+    /* fallback to dynamic aggregate if table missing */
+  }
+
+  const res = await executeYugabyteSql<YugabyteTag>(
+    `SELECT t.id, t.name, t.slug, t.kind
+       FROM tags t
+       JOIN (SELECT tag_id FROM work_tags GROUP BY tag_id HAVING count(*) >= $1) used ON used.tag_id = t.id
+      ORDER BY t.name ASC;`,
+    [CATALOG_TAG_MIN_WORKS],
+    platformEnv
+  );
+  if (res.rows.length > 0) {
+    cachedAllTags = { timestamp: Date.now(), tags: res.rows };
+    try {
+      const cache = (globalThis as any).caches?.default;
+      await cache?.put(
+        CATALOG_TAGS_CACHE_URL,
+        new Response(JSON.stringify(res.rows), {
+          headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${CATALOG_TAGS_EDGE_TTL_S}` }
+        })
+      );
+    } catch {
+      /* edge cache is best-effort */
+    }
+  }
+  return res.rows;
+}
 
 /**
- * Fetch all taxonomy tags from authoritative YugabyteDB.
- * Cached in-memory with LKG fallback to ensure instantaneous filter rendering.
+ * Catalogue filter tags (fast indexed read from catalog_filter_tags, ~1.8ms).
+ * Cached in-memory for 10 minutes with LKG fallback.
  */
 export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<YugabyteTag[]> {
   if (cachedAllTags && Date.now() - cachedAllTags.timestamp < ALL_TAGS_TTL_MS && cachedAllTags.tags.length > 0) {
     return cachedAllTags.tags;
   }
-  return withYugabyteLkg(
-    'all_tags',
-    async () => {
-      const res = await executeYugabyteSql<YugabyteTag>(
-        'SELECT id, name, slug, kind FROM tags ORDER BY name ASC;',
-        [],
-        platformEnv
-      );
-      if (res.rows.length > 0) {
-        cachedAllTags = { timestamp: Date.now(), tags: res.rows };
-      }
-      return res.rows;
-    },
-    cachedAllTags?.tags || []
-  );
+  return withYugabyteLkg('all_tags', () => computeCatalogFilterTags(platformEnv), cachedAllTags?.tags || []);
 }
 
 /**
@@ -557,7 +585,7 @@ export async function fetchCatalogFromYugabyte(
             `SELECT ${WORK_SELECT_COLUMNS}
              FROM works
              WHERE published = true
-             ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+             ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}
              LIMIT $1 OFFSET $2;`,
             [limit, offset],
             platformEnv

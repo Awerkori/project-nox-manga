@@ -27,10 +27,16 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   const isPreviewRequested = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
   const canAccessUnpublished = isStaff && isPreviewRequested;
 
+  const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
+  const userAgeStatus = locals.sessionCache?.profile?.age_status || rawAgeCookie;
+
   // Instant in-memory reader cache for published chapters (served to all readers, including staff, unless explicit preview requested)
   if (!isPreviewRequested && readerCache.has(params.id)) {
     const cached = readerCache.get(params.id)!;
-    if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS && cached.chapter.works?.content_rating !== 'ADULT_18') {
+    if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS) {
+      if (cached.chapter.works?.content_rating === 'ADULT_18' && userAgeStatus === 'MINOR') {
+        error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
+      }
       let userProgress = null;
       if (locals.user) {
         const pRes = await withTimeout(
@@ -47,8 +53,11 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         userProgress = pRes?.data || null;
       } else {
         const link = firstPagePreloadHeader(cached.pages);
+        const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
-          'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+          'cache-control': isAdultCached
+            ? 'private, no-cache, no-store, must-revalidate'
+            : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
           ...(link ? { link } : {})
         });
       }
@@ -130,7 +139,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
 
   if ((chapter.works as any)?.content_rating === 'ADULT_18') {
-    const rawAgeCookie = cookies.get('nox-age-status');
+    const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
     let ageStatus = rawAgeCookie;
     if (locals.sessionCache?.profile?.age_status) {
       ageStatus = locals.sessionCache.profile.age_status;
@@ -232,9 +241,12 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   }
 
   const link = firstPagePreloadHeader(pagesData);
+  const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
   if (!locals.user && !preview) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+      'cache-control': isAdultChapter
+        ? 'private, no-cache, no-store, must-revalidate'
+        : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
       ...(link ? { link } : {})
     });
   } else if (link) {
