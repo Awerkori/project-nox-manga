@@ -43,6 +43,7 @@
     let targetParallaxY = 0;
     let currentParallaxX = 0;
     let currentParallaxY = 0;
+    let bookShimmer = 0;
 
     function isMobile() {
       return typeof window !== 'undefined' && window.innerWidth < 768;
@@ -67,8 +68,8 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Adaptive particle density: 85 desktop, 30 mobile / low-end
-      const count = mobile || lowEnd ? 30 : 85;
+      // Adaptive particle density: 90 desktop, 35 mobile / low-end
+      const count = mobile || lowEnd ? 35 : 90;
 
       if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
@@ -78,29 +79,29 @@
     function createParticle(randomY = false, mobile = false): Particle {
       // 3 depth tiers for depth-of-field effect:
       // depth 0: small subtle background stars (45%)
-      // depth 1: mid floating ambient motes (38%)
-      // depth 2: refined foreground snowflakes (17%)
+      // depth 1: mid floating ambient motes (36%)
+      // depth 2: refined foreground snowflakes (19% - slightly larger, 2.0-2.5px target)
       const rand = Math.random();
-      const depth = rand < 0.45 ? 0 : rand < 0.83 ? 1 : 2;
+      const depth = rand < 0.45 ? 0 : rand < 0.81 ? 1 : 2;
 
       let radius: number;
       let baseAlpha: number;
       let baseSpeedY: number;
 
       if (depth === 0) {
-        // Micro background stars: 0.45 - 0.95px
+        // Micro background stars: 0.5 - 0.95px
         radius = mobile ? 0.45 + Math.random() * 0.35 : 0.55 + Math.random() * 0.4;
-        baseAlpha = 0.2 + Math.random() * 0.3;
+        baseAlpha = 0.22 + Math.random() * 0.3;
         baseSpeedY = (mobile ? 0.09 : 0.13) + Math.random() * 0.14;
       } else if (depth === 1) {
-        // Mid-layer motes: 0.75 - 1.4px
-        radius = mobile ? 0.75 + Math.random() * 0.45 : 0.85 + Math.random() * 0.55;
-        baseAlpha = 0.35 + Math.random() * 0.3;
+        // Mid-layer motes: 0.9 - 1.5px
+        radius = mobile ? 0.8 + Math.random() * 0.45 : 0.95 + Math.random() * 0.55;
+        baseAlpha = 0.38 + Math.random() * 0.32;
         baseSpeedY = (mobile ? 0.17 : 0.22) + Math.random() * 0.24;
       } else {
-        // Foreground snowflakes: refined, max 1.75px
-        radius = mobile ? 1.05 + Math.random() * 0.45 : 1.2 + Math.random() * 0.55;
-        baseAlpha = 0.55 + Math.random() * 0.35;
+        // Foreground snowflakes: delicate but clearly visible (1.8 - 2.45px desktop, 1.3 - 1.8px mobile)
+        radius = mobile ? 1.3 + Math.random() * 0.5 : 1.75 + Math.random() * 0.7;
+        baseAlpha = 0.6 + Math.random() * 0.35;
         baseSpeedY = (mobile ? 0.26 : 0.32) + Math.random() * 0.32;
       }
 
@@ -115,7 +116,7 @@
         speedX: 0,
         angle: Math.random() * Math.PI * 2,
         angleSpeed: 0.006 + Math.random() * 0.012,
-        sway: (depth === 0 ? 0.1 : depth === 1 ? 0.2 : 0.34) * (0.8 + Math.random() * 0.4),
+        sway: (depth === 0 ? 0.1 : depth === 1 ? 0.2 : 0.35) * (0.8 + Math.random() * 0.4),
         hue: Math.random() > 0.4 ? (Math.random() > 0.5 ? 268 : 242) : 212, // cosmic violet, indigo, or frosty white-blue
         depth
       };
@@ -129,15 +130,29 @@
 
       // Cosmic aura following cursor on desktop (zero blur cost, pure radial gradient)
       if (mouseX > -100 && mouseY > -100 && !mobile) {
-        const auraRadius = 170;
+        const auraRadius = 180;
         const aura = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, auraRadius);
-        aura.addColorStop(0, 'rgba(139, 92, 246, 0.045)');
-        aura.addColorStop(0.5, 'rgba(99, 102, 241, 0.018)');
+        aura.addColorStop(0, 'rgba(139, 92, 246, 0.05)');
+        aura.addColorStop(0.5, 'rgba(99, 102, 241, 0.02)');
         aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = aura;
         ctx.beginPath();
         ctx.arc(mouseX, mouseY, auraRadius, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Atmospheric book ripple reaction (triggered when a page turns in Nox Book)
+      if (bookShimmer > 0.02) {
+        const shimmerR = (1 - bookShimmer) * 380 + 90;
+        const shimmerGrad = ctx.createRadialGradient(width / 2, height * 0.32, shimmerR * 0.65, width / 2, height * 0.32, shimmerR);
+        shimmerGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        shimmerGrad.addColorStop(0.5, `rgba(139, 92, 246, ${bookShimmer * 0.055})`);
+        shimmerGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = shimmerGrad;
+        ctx.beginPath();
+        ctx.arc(width / 2, height * 0.32, shimmerR, 0, Math.PI * 2);
+        ctx.fill();
+        bookShimmer *= 0.96;
       }
 
       // Smooth mobile tilt interpolation
@@ -308,9 +323,16 @@
       }, 150);
     }
 
+    function onBookFlip() {
+      if (!reducedMotion) {
+        bookShimmer = 1.0;
+      }
+    }
+
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('mousemove', onMouseMove, { passive: true });
+    window.addEventListener('nox:book-flip', onBookFlip);
     document.addEventListener('mouseleave', onMouseLeave);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -332,6 +354,7 @@
         window.removeEventListener('scroll', onScroll);
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('deviceorientation', onDeviceOrientation);
+        window.removeEventListener('nox:book-flip', onBookFlip);
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('mouseleave', onMouseLeave);
