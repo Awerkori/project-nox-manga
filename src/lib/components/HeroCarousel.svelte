@@ -118,15 +118,28 @@
     };
   }
 
-  function preloadAllCovers() {
-    if (typeof window === 'undefined' || !works || works.length === 0) return;
-    works.forEach((w) => {
-      const url = resolveCoverUrl(w.cover_id || (w as any).coverId, w.slug, w.id, { size: 'hero' });
-      if (url && typeof Image !== 'undefined') {
-        const img = new Image();
-        img.src = url;
-      }
-    });
+  const preloadedCovers = new Set<string>();
+
+  function preloadCover(work: Work | null | undefined) {
+    if (!work || typeof window === 'undefined') return;
+    const url = resolveCoverUrl(work.cover_id || (work as any).coverId, work.slug, work.id, { size: 'hero' });
+    if (url && !preloadedCovers.has(url) && typeof Image !== 'undefined') {
+      preloadedCovers.add(url);
+      const img = new Image();
+      img.src = url;
+    }
+  }
+
+  function preloadWindow(index: number) {
+    if (!works || works.length === 0) return;
+    // 1. Preload active work
+    preloadCover(works[index % works.length]);
+    // 2. Preload upcoming work in sequence
+    preloadCover(works[(index + 1) % works.length]);
+    // 3. On desktop, preload previous work in 3D deck
+    if (typeof window !== 'undefined' && window.innerWidth >= 768 && works.length > 2) {
+      preloadCover(works[(index - 1 + works.length) % works.length]);
+    }
   }
 
   function nextSlide(userTriggered = true) {
@@ -135,6 +148,7 @@
     resetCardTilt();
     progressRatio = 0;
     if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
+    preloadWindow(currentIndex);
     if (userTriggered && typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
@@ -146,6 +160,7 @@
     resetCardTilt();
     progressRatio = 0;
     if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
+    preloadWindow(currentIndex);
     if (userTriggered && typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
@@ -157,6 +172,7 @@
     resetCardTilt();
     progressRatio = 0;
     if (progressFillEl) progressFillEl.style.transform = 'scaleX(0)';
+    preloadWindow(currentIndex);
     if (typeof performance !== 'undefined') {
       lastTimestamp = performance.now();
     }
@@ -260,7 +276,7 @@
   let carouselObserver: IntersectionObserver | null = null;
 
   onMount(() => {
-    preloadAllCovers();
+    preloadWindow(currentIndex);
     prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -554,6 +570,7 @@
     background: transparent;
     display: flex;
     align-items: center;
+    contain: layout style;
   }
 
   /* Full-Bleed Atmospheric Backdrop */

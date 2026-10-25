@@ -333,6 +333,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    contain: layout style;
   }
 
   .shelf-header {

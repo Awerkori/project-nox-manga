@@ -266,6 +266,7 @@
     position: relative;
     margin-bottom: 3.5rem;
     width: 100%;
+    contain: layout style;
   }
 
   .releases-header {

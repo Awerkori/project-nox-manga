@@ -1,6 +1,30 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
 
+  // Zero-GC color cache for high-frequency rendering loop
+  const FILL_CACHE_HALO: Record<number, string[]> = {
+    268: Array.from({ length: 11 }, (_, i) => `hsla(268, 80%, 75%, ${(i / 10 * 0.24).toFixed(3)})`),
+    242: Array.from({ length: 11 }, (_, i) => `hsla(242, 80%, 75%, ${(i / 10 * 0.24).toFixed(3)})`),
+    212: Array.from({ length: 11 }, (_, i) => `hsla(212, 80%, 75%, ${(i / 10 * 0.24).toFixed(3)})`)
+  };
+
+  const FILL_CACHE_MOTE: Record<number, string[]> = {
+    268: Array.from({ length: 11 }, (_, i) => `hsla(268, 65%, 85%, ${(i / 10 * 0.85).toFixed(3)})`),
+    242: Array.from({ length: 11 }, (_, i) => `hsla(242, 65%, 85%, ${(i / 10 * 0.85).toFixed(3)})`),
+    212: Array.from({ length: 11 }, (_, i) => `hsla(212, 65%, 85%, ${(i / 10 * 0.85).toFixed(3)})`)
+  };
+
+  const FILL_CACHE_STAR: Record<number, string[]> = {
+    268: Array.from({ length: 11 }, (_, i) => `hsla(268, 40%, 85%, ${(i / 10 * 0.65).toFixed(3)})`),
+    242: Array.from({ length: 11 }, (_, i) => `hsla(242, 40%, 85%, ${(i / 10 * 0.65).toFixed(3)})`),
+    212: Array.from({ length: 11 }, (_, i) => `hsla(212, 40%, 85%, ${(i / 10 * 0.65).toFixed(3)})`)
+  };
+
+  const FILL_CACHE_WHITE: string[] = Array.from(
+    { length: 11 },
+    (_, i) => `rgba(255, 255, 255, ${Math.min(1, (i / 10 * 1.15)).toFixed(3)})`
+  );
+
   interface Particle {
     x: number;
     y: number;
@@ -67,8 +91,8 @@
       canvas.height = Math.floor(height * dpr);
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Adaptive particle density: 85 desktop, 18 mobile, 25 low-end
-      const count = mobile ? 18 : lowEnd ? 25 : 85;
+      // Adaptive particle density: 65 desktop, 14 mobile, 18 low-end
+      const count = mobile ? 14 : lowEnd ? 18 : 65;
 
       if (particles.length === 0 || Math.abs(particles.length - count) > 10) {
         particles = Array.from({ length: count }, () => createParticle(true, mobile));
@@ -201,29 +225,30 @@
         const drawX = p.x + currentParallaxX * (p.depth + 0.4) * 0.5;
         const drawY = p.y + currentParallaxY * (p.depth + 0.4) * 0.5;
 
-        // Draw particle with pure GPU-accelerated paths (No shadowBlur to avoid Gecko/mobile CPU spikes)
+        // Draw particle with zero-allocation cached GPU fills (No shadowBlur to avoid Gecko/mobile CPU spikes)
+        const aIdx = Math.min(10, Math.max(0, Math.round(p.alpha * 10)));
         if (p.depth === 2) {
           // Foreground snowflakes: soft cosmic halo + luminous crisp core
           ctx.beginPath();
           ctx.arc(drawX, drawY, p.radius * 2.0, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${p.alpha * 0.24})`;
+          ctx.fillStyle = FILL_CACHE_HALO[p.hue]?.[aIdx] || 'rgba(181, 154, 245, 0.15)';
           ctx.fill();
 
           ctx.beginPath();
           ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.alpha * 1.15)})`;
+          ctx.fillStyle = FILL_CACHE_WHITE[aIdx] || '#ffffff';
           ctx.fill();
         } else if (p.depth === 1) {
           // Mid motes: soft pastel star
           ctx.beginPath();
           ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${p.hue}, 65%, 85%, ${p.alpha * 0.85})`;
+          ctx.fillStyle = FILL_CACHE_MOTE[p.hue]?.[aIdx] || 'rgba(168, 85, 247, 0.5)';
           ctx.fill();
         } else {
           // Background stars: tiny sharp points
           ctx.beginPath();
           ctx.arc(drawX, drawY, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${p.hue}, 40%, 85%, ${p.alpha * 0.65})`;
+          ctx.fillStyle = FILL_CACHE_STAR[p.hue]?.[aIdx] || 'rgba(216, 180, 254, 0.3)';
           ctx.fill();
         }
       }
