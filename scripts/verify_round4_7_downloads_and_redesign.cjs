@@ -127,48 +127,56 @@ async function main() {
     }
 
     // -------------------------------------------------------------------------
-    // TEST 2: Specs Panel & Genres Card Natural Height (No Empty Gap)
+    // TEST 2: Specs Panel 2x2 Grid Symmetry & Equal Height
     // -------------------------------------------------------------------------
-    console.log('\n--- 2. Testing Specs Panel Independent Columns & Genres Natural Height ---');
+    console.log('\n--- 2. Testing Specs Panel 2x2 Grid Symmetry & Equal Height ---');
     {
       const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
       await bypassAgeGate(ctx);
       const page = await ctx.newPage();
-      await page.goto(`${PREVIEW_BASE}/obra/aparencias`, { waitUntil: 'networkidle' });
-      await dismissModals(page);
 
-      const specsData = await page.evaluate(() => {
-        const columnsGrid = document.querySelector('.specs-columns-grid');
-        const leftCol = document.querySelector('.specs-column.left-col');
-        const rightCol = document.querySelector('.specs-column.right-col');
-        const infoCard = document.querySelector('#subpanel-info');
-        const creditsCard = document.querySelector('#subpanel-credits');
-        const genresCard = document.querySelector('#subpanel-genres');
-        const aliasesCard = document.querySelector('#subpanel-aliases');
+      for (const testSlug of ['aparencias', 'shinkon-dakedo-captain-no-kanojo-to-wa-mada-yarenai', 'o-restaurante-do-arquimago']) {
+        await page.goto(`${PREVIEW_BASE}/obra/${testSlug}`, { waitUntil: 'networkidle' });
+        await dismissModals(page);
 
-        const genresBox = genresCard ? genresCard.getBoundingClientRect() : null;
-        const aliasesBox = aliasesCard ? aliasesCard.getBoundingClientRect() : null;
-        const tagsWrap = genresCard ? genresCard.querySelector('.editorial-tags-wrap') : null;
-        const tagsWrapBox = tagsWrap ? tagsWrap.getBoundingClientRect() : null;
+        const specsData = await page.evaluate(() => {
+          const panel = document.querySelector('.specs-unified-panel');
+          const infoCard = document.querySelector('#subpanel-info');
+          const creditsCard = document.querySelector('#subpanel-credits');
+          const genresCard = document.querySelector('#subpanel-genres');
+          const aliasesCard = document.querySelector('#subpanel-aliases');
+          const genresBody = document.querySelector('.genres-card-body');
 
-        // Calculate bottom space inside genres card
-        const genresBottomSpace = (genresBox && tagsWrapBox) ? (genresBox.bottom - tagsWrapBox.bottom) : null;
+          const infoBox = infoCard ? infoCard.getBoundingClientRect() : null;
+          const creditsBox = creditsCard ? creditsCard.getBoundingClientRect() : null;
+          const genresBox = genresCard ? genresCard.getBoundingClientRect() : null;
+          const aliasesBox = aliasesCard ? aliasesCard.getBoundingClientRect() : null;
+          const tagsWrap = genresCard ? genresCard.querySelector('.editorial-tags-wrap') : null;
+          const tagsWrapBox = tagsWrap ? tagsWrap.getBoundingClientRect() : null;
 
-        return {
-          hasColumnsGrid: !!columnsGrid,
-          hasLeftCol: !!leftCol,
-          hasRightCol: !!rightCol,
-          genresCardHeight: genresBox ? Math.round(genresBox.height) : null,
-          aliasesCardHeight: aliasesBox ? Math.round(aliasesBox.height) : null,
-          genresBottomSpace: genresBottomSpace ? Math.round(genresBottomSpace) : null
-        };
-      });
+          const tagsCount = tagsWrap ? tagsWrap.querySelectorAll('.editorial-tag-pill').length : 0;
+          const isSparse = genresBody ? genresBody.classList.contains('is-sparse') : false;
 
-      console.log('Specs Panel Evaluation:', JSON.stringify(specsData, null, 2));
-      report.specsPanel = specsData;
-      console.log(`✓ Genres card height: ${specsData.genresCardHeight}px, Aliases card height: ${specsData.aliasesCardHeight}px`);
-      console.log(`✓ Natural height difference: ${Math.abs(specsData.genresCardHeight - specsData.aliasesCardHeight)}px (cards are independent!)`);
-      console.log(`✓ Genres bottom spacing is compact: ${specsData.genresBottomSpace}px`);
+          return {
+            row1InfoHeight: infoBox ? Math.round(infoBox.height) : null,
+            row1CreditsHeight: creditsBox ? Math.round(creditsBox.height) : null,
+            row1Diff: (infoBox && creditsBox) ? Math.abs(Math.round(infoBox.height) - Math.round(creditsBox.height)) : null,
+            row2GenresHeight: genresBox ? Math.round(genresBox.height) : null,
+            row2AliasesHeight: aliasesBox ? Math.round(aliasesBox.height) : null,
+            row2Diff: (genresBox && aliasesBox) ? Math.abs(Math.round(genresBox.height) - Math.round(aliasesBox.height)) : null,
+            tagsCount,
+            isSparse,
+            genresBottomSpace: (genresBox && tagsWrapBox) ? Math.round(genresBox.bottom - tagsWrapBox.bottom) : null
+          };
+        });
+
+        console.log(`[${testSlug}] Specs Grid Symmetry Evaluation:`, specsData);
+        if (specsData.row2Diff !== 0) {
+          throw new Error(`FAIL: Height mismatch in Row 2 for ${testSlug}: Genres=${specsData.row2GenresHeight}px, Aliases=${specsData.row2AliasesHeight}px (diff=${specsData.row2Diff}px)`);
+        }
+        console.log(`✓ [${testSlug}] Row 2 (Genres & Aliases) have EXACT SAME HEIGHT: ${specsData.row2GenresHeight}px (diff: 0px)`);
+        console.log(`✓ [${testSlug}] Tags count: ${specsData.tagsCount}, isSparse: ${specsData.isSparse}`);
+      }
 
       await ctx.close();
     }
