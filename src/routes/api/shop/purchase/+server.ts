@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { member } from '$lib/server/db';
+import { invalidateUserSession } from '$lib/server/session-cache';
 
 export const POST = async ({ request, locals }) => {
   member(locals);
@@ -16,6 +17,10 @@ export const POST = async ({ request, locals }) => {
 
   if (rpcError) {
     error(400, rpcError.message);
+  }
+
+  if (locals.user?.id) {
+    invalidateUserSession(locals.user.id);
   }
 
   return json(data);

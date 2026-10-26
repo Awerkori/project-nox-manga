@@ -288,17 +288,29 @@
     xpClaimInFlight = false;
   }
 
+  let completionPendingTimer: ReturnType<typeof setTimeout> | null = null;
+
   async function completeChapter() {
-    if (chapterCompleted || sending || !data.profile || data.preview) return;
+    if (chapterCompleted || !((data as any).profile || (data as any).user) || data.preview) return;
+
+    if (sending) {
+      setTimeout(() => {
+        if (!chapterCompleted) void completeChapter();
+      }, 300);
+      return;
+    }
 
     // Minimum reading time evidence: 3s for short <= 3 pages, 5s for <= 10 pages, 8s for > 10 pages
     const totalPages = data.pages?.length || 1;
     const minSeconds = totalPages <= 3 ? 3 : totalPages <= 10 ? 5 : 8;
     const elapsed = (Date.now() - chapterStartTime) / 1000;
     if (elapsed < minSeconds) {
-      setTimeout(() => {
-        if (!chapterCompleted) void completeChapter();
-      }, Math.max(100, Math.ceil((minSeconds - elapsed) * 1000)));
+      if (!completionPendingTimer) {
+        completionPendingTimer = setTimeout(() => {
+          completionPendingTimer = null;
+          if (!chapterCompleted) void completeChapter();
+        }, Math.max(100, Math.ceil((minSeconds - elapsed) * 1000)));
+      }
       return;
     }
 
@@ -329,6 +341,9 @@
               }
             })
           );
+          if (typeof (window as any).__noxTriggerXpReward === 'function') {
+            (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Capítulo concluído');
+          }
         }
         setTimeout(() => { xpNotice = ''; }, 5000);
       } else if (res?.xp_award?.reason === 'already_awarded') {
@@ -459,6 +474,9 @@
                   }
                 })
               );
+              if (typeof (window as any).__noxTriggerXpReward === 'function') {
+                (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Capítulo concluído');
+              }
             }
             setTimeout(() => { xpNotice = ''; }, 5000);
           }
