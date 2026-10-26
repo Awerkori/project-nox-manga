@@ -16,7 +16,10 @@
     ArrowUpDown,
     Filter,
     MessageSquare,
-    BookOpen
+    BookOpen,
+    ChevronLeft,
+    ChevronRight,
+    User
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
@@ -83,6 +86,7 @@
   let equippedFrame = $derived(data.profile?.frame_id ?? null);
   let equippedColor = $derived(data.profile?.name_color ?? null);
   let heroColorInfo = $derived(getNameColorInfo(previewColor || equippedColor));
+  let equippedColorInfo = $derived(getNameColorInfo(equippedColor));
   let equippedTitle = $derived(data.profile?.title_id ?? null);
   let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
 
@@ -224,7 +228,60 @@
   function closePreviewModal() {
     selectedModalItem = null;
   }
+
+  // Mobile & responsive categories scrolling
+  let categoriesNavEl = $state<HTMLElement | null>(null);
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+
+  function updateScrollState() {
+    if (!categoriesNavEl) return;
+    const { scrollLeft, scrollWidth, clientWidth } = categoriesNavEl;
+    canScrollLeft = scrollLeft > 6;
+    canScrollRight = scrollLeft + clientWidth < scrollWidth - 6;
+  }
+
+  function scrollCategories(direction: 'left' | 'right') {
+    if (!categoriesNavEl) return;
+    const amount = direction === 'left' ? -200 : 200;
+    categoriesNavEl.scrollBy({ left: amount, behavior: 'smooth' });
+  }
+
+  function handleTabClick(tabKey: typeof activeTab, el?: HTMLElement) {
+    activeTab = tabKey;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    setTimeout(updateScrollState, 350);
+  }
+
+  // Lock background body scroll when preview modal is open
+  $effect(() => {
+    if (selectedModalItem) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  });
+
+  // Track nav scroll state on resize & init
+  $effect(() => {
+    updateScrollState();
+    const onResize = () => updateScrollState();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
 </script>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && selectedModalItem) {
+      closePreviewModal();
+    }
+  }}
+/>
 
 <svelte:head>
   <title>Loja Cósmica & Cosméticos | Project Nox</title>
@@ -333,63 +390,102 @@
       </aside>
     </header>
 
-    <!-- Categories Bar -->
-    <nav class="categories-bar" aria-label="Categorias da Loja">
+    <!-- Categories Navigation Section with Mobile Indicators -->
+    <div class="categories-nav-wrapper">
       <button
         type="button"
-        class="cat-btn"
-        class:active={activeTab === 'ALL'}
-        onclick={() => (activeTab = 'ALL')}
+        class="cat-scroll-arrow left"
+        class:visible={canScrollLeft}
+        onclick={() => scrollCategories('left')}
+        aria-label="Ver categorias anteriores"
+        tabindex="-1"
       >
-        <ShoppingBag size={16} />
-        <span>Todos os Itens</span>
-        <span class="cat-count">{categoryCounts.ALL}</span>
+        <ChevronLeft size={18} />
       </button>
+
+      <div class="cat-edge-fade left" class:visible={canScrollLeft}></div>
+      <div class="cat-edge-fade right" class:visible={canScrollRight}></div>
+
+      <nav
+        bind:this={categoriesNavEl}
+        onscroll={updateScrollState}
+        class="categories-bar"
+        aria-label="Categorias da Loja"
+      >
+        <button
+          type="button"
+          class="cat-btn"
+          class:active={activeTab === 'ALL'}
+          onclick={(e) => handleTabClick('ALL', e.currentTarget)}
+        >
+          <ShoppingBag size={16} />
+          <span>Todos os Itens</span>
+          <span class="cat-count">{categoryCounts.ALL}</span>
+        </button>
+
+        <button
+          type="button"
+          class="cat-btn"
+          class:active={activeTab === 'AVATAR_FRAME'}
+          onclick={(e) => handleTabClick('AVATAR_FRAME', e.currentTarget)}
+        >
+          <Shield size={16} />
+          <span>Molduras</span>
+          <span class="cat-count">{categoryCounts.AVATAR_FRAME}</span>
+        </button>
+
+        <button
+          type="button"
+          class="cat-btn"
+          class:active={activeTab === 'NAME_COLOR'}
+          onclick={(e) => handleTabClick('NAME_COLOR', e.currentTarget)}
+        >
+          <Palette size={16} />
+          <span>Cores de Nome</span>
+          <span class="cat-count">{categoryCounts.NAME_COLOR}</span>
+        </button>
+
+        <button
+          type="button"
+          class="cat-btn"
+          class:active={activeTab === 'TITLE'}
+          onclick={(e) => handleTabClick('TITLE', e.currentTarget)}
+        >
+          <Tag size={16} />
+          <span>Títulos</span>
+          <span class="cat-count">{categoryCounts.TITLE}</span>
+        </button>
+
+        <button
+          type="button"
+          class="cat-btn"
+          class:active={activeTab === 'PROFILE_BANNER'}
+          onclick={(e) => handleTabClick('PROFILE_BANNER', e.currentTarget)}
+        >
+          <ImageIcon size={16} />
+          <span>Banners de Comentário</span>
+          <span class="cat-count">{categoryCounts.PROFILE_BANNER}</span>
+        </button>
+      </nav>
 
       <button
         type="button"
-        class="cat-btn"
-        class:active={activeTab === 'AVATAR_FRAME'}
-        onclick={() => (activeTab = 'AVATAR_FRAME')}
+        class="cat-scroll-arrow right"
+        class:visible={canScrollRight}
+        onclick={() => scrollCategories('right')}
+        aria-label="Ver próximas categorias"
+        tabindex="-1"
       >
-        <Shield size={16} />
-        <span>Molduras</span>
-        <span class="cat-count">{categoryCounts.AVATAR_FRAME}</span>
+        <ChevronRight size={18} />
       </button>
+    </div>
 
-      <button
-        type="button"
-        class="cat-btn"
-        class:active={activeTab === 'NAME_COLOR'}
-        onclick={() => (activeTab = 'NAME_COLOR')}
-      >
-        <Palette size={16} />
-        <span>Cores de Nome</span>
-        <span class="cat-count">{categoryCounts.NAME_COLOR}</span>
-      </button>
-
-      <button
-        type="button"
-        class="cat-btn"
-        class:active={activeTab === 'TITLE'}
-        onclick={() => (activeTab = 'TITLE')}
-      >
-        <Tag size={16} />
-        <span>Títulos</span>
-        <span class="cat-count">{categoryCounts.TITLE}</span>
-      </button>
-
-      <button
-        type="button"
-        class="cat-btn"
-        class:active={activeTab === 'PROFILE_BANNER'}
-        onclick={() => (activeTab = 'PROFILE_BANNER')}
-      >
-        <ImageIcon size={16} />
-        <span>Banners de Comentário</span>
-        <span class="cat-count">{categoryCounts.PROFILE_BANNER}</span>
-      </button>
-    </nav>
+    <!-- Mobile contextual swipe indicator -->
+    <div class="mobile-swipe-hint" aria-hidden="true">
+      <span class="swipe-arrow">‹</span>
+      <span>Deslize para ver mais categorias</span>
+      <span class="swipe-arrow">›</span>
+    </div>
 
     <!-- Controls Bar: Rarity Filters & Sort Order -->
     <section class="controls-bar">
@@ -583,12 +679,12 @@
               <div class="card-actions">
                 <button
                   type="button"
-                  class="btn-action-test"
-                  onclick={() => applyToLivePreview(item)}
-                  title="Testar este item no provador acima"
+                  class="btn-action-test btn-action-view"
+                  onclick={() => openPreviewModal(item)}
+                  title="Visualizar este cosmético no seu perfil"
                 >
                   <Eye size={14} />
-                  <span>Testar</span>
+                  <span>Visualizar</span>
                 </button>
 
                 {#if isEquipped}
@@ -648,9 +744,9 @@
 
       <div class="modal-backdrop" onclick={closePreviewModal} role="presentation">
         <!-- Stop click propagation on modal card -->
-        <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-item-title">
           <!-- Close Button -->
-          <button type="button" class="btn-modal-close" onclick={closePreviewModal} aria-label="Fechar">
+          <button type="button" class="btn-modal-close" onclick={closePreviewModal} aria-label="Fechar visualização">
             <X size={20} />
           </button>
 
@@ -678,61 +774,115 @@
                       frameFit={item.style_data?.frame_fit}
                       frameColor={selectedCardVariants[item.id] === 'default' ? null : selectedCardVariants[item.id]}
                       displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
-                      size={110}
+                      size={128}
                     />
                   </div>
                   <div class="stage-avatar-info">
                     <span
-                      class="stage-username"
-                      style={equippedColor ? `color: ${equippedColor}` : ''}
+                      class="stage-username {equippedColorInfo.className}"
+                      style={equippedColorInfo.style}
                     >
                       {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
                     </span>
                     {#if equippedTitle}
                       <span class="stage-title-pill">{equippedTitle}</span>
                     {/if}
+                    <span class="stage-handle-sub">@{data.profile?.username || 'usuario'} · Nível {userLevel}</span>
                   </div>
                 </div>
 
               {:else if item.kind === 'PROFILE_BANNER'}
-                <!-- Full Profile Header Mockup Stage -->
-                <div class="banner-stage-box">
-                  <div
-                    class="stage-banner-canvas"
-                    style={style.background ? `background: ${style.background};` : 'background: #1e1b4b;'}
-                  >
-                    <div class="banner-gradient-shade"></div>
-                  </div>
-                  <div class="stage-banner-profile-strip">
-                    <div class="banner-stage-avatar">
-                      <UserAvatar
-                        user={data.profile}
-                        avatarId={data.profile?.avatar_id}
-                        crop={data.profile?.avatar_crop}
-                        frameId={equippedFrame}
-                        displayName={data.profile?.display_name || 'Leitor'}
-                        size={64}
-                      />
-                    </div>
-                    <div class="banner-stage-meta">
-                      <div class="banner-stage-name-row">
-                        <span class="banner-stage-name">{data.profile?.display_name || 'Seu Nome'}</span>
-                        <span class="banner-stage-lvl">Nível {userLevel}</span>
+                {@const bannerBg = CURATED_BANNER_BACKGROUNDS[item.id] || item.asset_url || style.background || '#1e1b4b'}
+                <!-- Realistic Comment Simulation with Banner Stage -->
+                <div class="comment-simulation-stage">
+                  <span class="comment-simulation-label">Simulação Realista em Comentários</span>
+                  <div class="simulated-comment-card">
+                    <!-- Banner Strip -->
+                    <div
+                      class="simulated-banner-strip"
+                      style="background: {bannerBg};"
+                      aria-hidden="true"
+                    ></div>
+
+                    <!-- Comment Author & Body -->
+                    <div class="simulated-comment-content">
+                      <div class="simulated-avatar-col">
+                        <UserAvatar
+                          user={data.profile}
+                          avatarId={data.profile?.avatar_id}
+                          crop={data.profile?.avatar_crop}
+                          frameId={equippedFrame}
+                          displayName={data.profile?.display_name || 'Leitor'}
+                          size={42}
+                        />
                       </div>
-                      <span class="banner-stage-handle">@{data.profile?.username || 'usuario'}</span>
+                      <div class="simulated-text-col">
+                        <div class="simulated-header-line">
+                          <span
+                            class="simulated-author-name {equippedColorInfo.className}"
+                            style={equippedColorInfo.style}
+                          >
+                            {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                          </span>
+                          {#if equippedTitle}
+                            <span class="simulated-title-tag">{equippedTitle}</span>
+                          {/if}
+                          <span class="simulated-timestamp">há 5 minutos</span>
+                        </div>
+                        <p class="simulated-comment-text">
+                          Essa obra está cada vez mais incrível! Mal posso esperar pelo próximo capítulo... 🔥
+                        </p>
+                        <div class="simulated-footer-actions">
+                          <span class="simulated-like-pill">❤️ 14 curtidas</span>
+                          <span class="simulated-reply-btn">Responder</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  <p class="comment-simulation-subnote">
+                    O banner personalizado aparece destacado no topo dos seus comentários em todas as obras e capítulos.
+                  </p>
                 </div>
 
               {:else if item.kind === 'NAME_COLOR'}
                 {@const modalColorInfo = getNameColorInfo(item.id)}
                 <!-- Multi-Context Name Color Preview -->
                 <div class="color-stage-contexts">
-                  <!-- Context 1: Comment Box -->
+                  <!-- Context 1: Identity Plate (Profile & Header) -->
+                  <div class="context-card identity-context">
+                    <div class="context-tag">
+                      <User size={13} />
+                      <span>No Perfil e Cabeçalho</span>
+                    </div>
+                    <div class="mock-identity-plate">
+                      <UserAvatar
+                        user={data.profile}
+                        avatarId={data.profile?.avatar_id}
+                        crop={data.profile?.avatar_crop}
+                        frameId={equippedFrame}
+                        displayName={data.profile?.display_name || 'Leitor'}
+                        size={54}
+                      />
+                      <div class="mock-identity-text">
+                        <span
+                          class="mock-author-name-large {modalColorInfo.className}"
+                          style={modalColorInfo.style}
+                        >
+                          {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                        </span>
+                        {#if equippedTitle}
+                          <span class="mock-title-sub">{equippedTitle}</span>
+                        {/if}
+                        <span class="mock-handle">@{data.profile?.username || 'usuario'} · Nível {userLevel}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Context 2: Comment Preview -->
                   <div class="context-card comment-context">
                     <div class="context-tag">
                       <MessageSquare size={13} />
-                      <span>Nos Comentários</span>
+                      <span>Nos Comentários da Obra</span>
                     </div>
                     <div class="mock-comment">
                       <UserAvatar
@@ -741,7 +891,7 @@
                         crop={data.profile?.avatar_crop}
                         frameId={equippedFrame}
                         displayName={data.profile?.display_name || 'Leitor'}
-                        size={38}
+                        size={40}
                       />
                       <div class="mock-comment-bubble">
                         <div class="mock-comment-top">
@@ -757,34 +907,38 @@
                       </div>
                     </div>
                   </div>
-
-                  <!-- Context 2: Reader Header Bar -->
-                  <div class="context-card reader-context">
-                    <div class="context-tag">
-                      <BookOpen size={13} />
-                      <span>No Leitor & Comunidade</span>
-                    </div>
-                    <div class="mock-reader-bar">
-                      <span class="mock-chapter-title">Céu Distante — Capítulo 01</span>
-                      <span
-                        class="mock-reader-user {modalColorInfo.className}"
-                        style={modalColorInfo.style}
-                      >
-                        @{data.profile?.username || 'usuario'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
               {:else if item.kind === 'TITLE'}
                 <!-- Title Stage -->
                 <div class="title-stage-box">
-                  <span class="title-stage-label">Exibição Honorária no Perfil</span>
-                  <div class="title-stage-badge-large">
-                    <Crown size={22} class="title-stage-crown" />
-                    <span class="title-stage-text">{item.name}</span>
+                  <span class="title-stage-label">Exibição Honorária do Título</span>
+                  <div class="title-stage-identity-card">
+                    <UserAvatar
+                      user={data.profile}
+                      avatarId={data.profile?.avatar_id}
+                      crop={data.profile?.avatar_crop}
+                      frameId={equippedFrame}
+                      displayName={data.profile?.display_name || 'Leitor'}
+                      size={66}
+                    />
+                    <div class="title-stage-user-details">
+                      <span
+                        class="stage-username-with-title {equippedColorInfo.className}"
+                        style={equippedColorInfo.style}
+                      >
+                        {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                      </span>
+                      <div class="title-stage-badge-large">
+                        <Crown size={18} class="title-stage-crown" />
+                        <span class="title-stage-text">{item.name}</span>
+                      </div>
+                      <span class="title-stage-sub">
+                        @{data.profile?.username || 'usuario'} · Nível {userLevel}
+                      </span>
+                    </div>
                   </div>
-                  <p class="title-stage-sub">
+                  <p class="title-stage-footer-note">
                     Este título aparecerá em destaque abaixo do seu nome nos rankings, comentários e perfil público.
                   </p>
                 </div>
@@ -800,7 +954,7 @@
                 >
                   {rarityConf.label}
                 </span>
-                <h2 class="modal-item-name">{item.name}</h2>
+                <h2 id="modal-item-title" class="modal-item-name">{item.name}</h2>
                 <p class="modal-item-desc">{item.description}</p>
 
                 {#if item.color_variants && item.color_variants.length > 0}
@@ -866,16 +1020,6 @@
 
               <!-- Modal Actions -->
               <div class="modal-actions-wrap">
-                <button
-                  type="button"
-                  class="btn-modal-test"
-                  onclick={() => { applyToLivePreview(item); closePreviewModal(); }}
-                  title="Testar este cosmético no provador do topo da página"
-                >
-                  <Eye size={16} />
-                  <span>Aplicar ao Provador do Topo</span>
-                </button>
-
                 {#if isEquipped}
                   <button
                     type="button"
@@ -913,6 +1057,14 @@
                     {/if}
                   </button>
                 {/if}
+
+                <button
+                  type="button"
+                  class="btn-modal-secondary-close"
+                  onclick={closePreviewModal}
+                >
+                  <span>Fechar</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1169,14 +1321,120 @@
     50% { opacity: 0.4; transform: scale(0.75); }
   }
 
-  /* Categories Bar */
+  /* Categories Navigation Bar with Mobile Indicators */
+  .categories-nav-wrapper {
+    position: relative;
+    width: 100%;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+  }
+
   .categories-bar {
     display: flex;
     gap: 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    margin-bottom: 1.25rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .categories-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cat-scroll-arrow {
+    display: none;
+    position: absolute;
+    top: calc(50% - 4px);
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(15, 18, 29, 0.95);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    color: #c4b5fd;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.15s ease, background 0.2s ease;
+  }
+
+  .cat-scroll-arrow.left {
+    left: 4px;
+  }
+
+  .cat-scroll-arrow.right {
+    right: 4px;
+  }
+
+  .cat-scroll-arrow.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .cat-scroll-arrow:active {
+    transform: translateY(-50%) scale(0.92);
+  }
+
+  .cat-scroll-arrow:hover {
+    background: rgba(139, 92, 246, 0.25);
+    color: #ffffff;
+  }
+
+  .cat-edge-fade {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .cat-edge-fade.left {
+    left: 0;
+    background: linear-gradient(to right, #0b0e17 30%, transparent);
+  }
+
+  .cat-edge-fade.right {
+    right: 0;
+    background: linear-gradient(to left, #0b0e17 30%, transparent);
+  }
+
+  .cat-edge-fade.visible {
+    opacity: 1;
+  }
+
+  .mobile-swipe-hint {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: #a78bfa;
+    margin: 0 0 1.25rem;
+    opacity: 0.9;
+    letter-spacing: 0.02em;
+  }
+
+  .mobile-swipe-hint .swipe-arrow {
+    font-size: 0.95rem;
+    color: #c4b5fd;
+    animation: hintNudge 1.8s ease-in-out infinite;
+  }
+
+  @keyframes hintNudge {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(3px); }
   }
 
   .cat-btn {
@@ -1779,24 +2037,42 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(14px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
     z-index: 200;
+    animation: modalFadeIn 0.2s ease-out;
   }
 
   .modal-card {
     background: #0f121d;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: 20px;
     width: 100%;
-    max-width: 860px;
+    max-width: 880px;
     position: relative;
-    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 40px rgba(139, 92, 246, 0.12);
     overflow: hidden;
+    animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes modalScaleUp {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
   }
 
   .btn-modal-close {
@@ -1804,7 +2080,7 @@
     top: 1.25rem;
     right: 1.25rem;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #94a3b8;
     border-radius: 9999px;
     width: 36px;
@@ -1818,8 +2094,9 @@
   }
 
   .btn-modal-close:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.15);
     color: #ffffff;
+    transform: scale(1.05);
   }
 
   .modal-grid {
@@ -1829,7 +2106,7 @@
 
   /* Modal Left Stage */
   .modal-stage-col {
-    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.12), rgba(10, 12, 20, 0.95));
+    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.14), rgba(10, 12, 20, 0.96));
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     padding: 2.5rem 2rem;
     display: flex;
@@ -1865,7 +2142,7 @@
 
   .stage-avatar-holder {
     margin-bottom: 1.25rem;
-    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.6));
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.7));
   }
 
   .stage-username {
@@ -1886,66 +2163,127 @@
     font-weight: 700;
   }
 
-  /* Banner Stage */
-  .banner-stage-box {
-    background: #141724;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  .stage-handle-sub {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-top: 0.35rem;
+    display: block;
   }
 
-  .stage-banner-canvas {
-    height: 120px;
-    position: relative;
+  /* Comment Simulation Stage */
+  .comment-simulation-stage {
+    display: flex;
+    flex-direction: column;
     width: 100%;
   }
 
-  .banner-gradient-shade {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(20, 23, 36, 0.9), transparent 70%);
+  .comment-simulation-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #a78bfa;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 1rem;
+    text-align: center;
   }
 
-  .stage-banner-profile-strip {
-    padding: 0 1.25rem 1.25rem;
+  .simulated-comment-card {
+    background: rgba(18, 22, 35, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    width: 100%;
+  }
+
+  .simulated-banner-strip {
+    height: 72px;
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background-size: cover !important;
+    background-position: center !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .simulated-comment-content {
     display: flex;
-    align-items: flex-end;
-    gap: 1rem;
-    margin-top: -30px;
-    position: relative;
-    z-index: 2;
+    align-items: flex-start;
+    gap: 12px;
   }
 
-  .banner-stage-avatar {
-    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  .simulated-avatar-col {
+    flex-shrink: 0;
   }
 
-  .banner-stage-name-row {
+  .simulated-text-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .simulated-header-line {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 6px;
+    margin-bottom: 4px;
   }
 
-  .banner-stage-name {
-    font-size: 1.05rem;
+  .simulated-author-name {
+    font-size: 0.92rem;
     font-weight: 800;
-    color: #ffffff;
   }
 
-  .banner-stage-lvl {
+  .simulated-title-tag {
     font-size: 0.7rem;
     font-weight: 700;
-    color: #dfc28d;
-    background: rgba(223, 194, 141, 0.15);
-    padding: 0.15rem 0.45rem;
+    padding: 0.15rem 0.5rem;
     border-radius: 9999px;
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.35);
   }
 
-  .banner-stage-handle {
-    font-size: 0.8rem;
+  .simulated-timestamp {
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-left: auto;
+  }
+
+  .simulated-comment-text {
+    font-size: 0.84rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+    margin: 0 0 8px;
+  }
+
+  .simulated-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.74rem;
     color: #94a3b8;
-    display: block;
+  }
+
+  .simulated-like-pill {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .simulated-reply-btn {
+    cursor: default;
+    color: #a78bfa;
+  }
+
+  .comment-simulation-subnote {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-align: center;
+    margin-top: 10px;
+    line-height: 1.4;
   }
 
   /* Color Stage Contexts */
@@ -1972,6 +2310,38 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 0.75rem;
+  }
+
+  .mock-identity-plate {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+
+  .mock-identity-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mock-author-name-large {
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+
+  .mock-title-sub {
+    font-size: 0.72rem;
+    color: #dfc28d;
+    font-weight: 700;
+  }
+
+  .mock-handle {
+    font-size: 0.75rem;
+    color: #64748b;
   }
 
   .mock-comment {
@@ -2012,27 +2382,6 @@
     margin: 0;
   }
 
-  .mock-reader-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #0a0c14;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 0.65rem 0.85rem;
-  }
-
-  .mock-chapter-title {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #94a3b8;
-  }
-
-  .mock-reader-user {
-    font-size: 0.85rem;
-    font-weight: 800;
-  }
-
   /* Title Stage Box */
   .title-stage-box {
     display: flex;
@@ -2051,16 +2400,41 @@
     margin-bottom: 1.5rem;
   }
 
+  .title-stage-identity-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .title-stage-user-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .stage-username-with-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
   .title-stage-badge-large {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem 1.4rem;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
     background: rgba(223, 194, 141, 0.15);
     border: 1px solid rgba(223, 194, 141, 0.4);
     border-radius: 9999px;
-    box-shadow: 0 0 25px rgba(223, 194, 141, 0.25);
-    margin-bottom: 1.5rem;
+    box-shadow: 0 0 20px rgba(223, 194, 141, 0.25);
+    margin: 4px 0;
   }
 
   :global(.title-stage-crown) {
@@ -2074,11 +2448,17 @@
   }
 
   .title-stage-sub {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    line-height: 1.5;
-    max-width: 320px;
-    margin: 0;
+  }
+
+  .title-stage-footer-note {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.45;
+    max-width: 340px;
+    margin: 0 auto;
+    text-align: center;
   }
 
   /* Modal Right Details */
@@ -2208,28 +2588,10 @@
   }
 
   /* Modal Actions */
-  .btn-modal-test {
-    width: 100%;
-    padding: 0.8rem 1.25rem;
-    border-radius: 12px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.35);
-    color: #c4b5fd;
-    cursor: pointer;
+  .modal-actions-wrap {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-bottom: 0.65rem;
-    transition: all 0.2s ease;
-  }
-
-  .btn-modal-test:hover {
-    background: rgba(139, 92, 246, 0.25);
-    border-color: rgba(139, 92, 246, 0.55);
-    color: #ffffff;
+    flex-direction: column;
+    gap: 0.65rem;
   }
 
   .btn-modal-action {
@@ -2245,6 +2607,24 @@
     justify-content: center;
     gap: 0.6rem;
     transition: all 0.2s ease;
+  }
+
+  .btn-modal-secondary-close {
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-modal-secondary-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
   }
 
   .btn-modal-action.buy {
@@ -2320,6 +2700,29 @@
   }
 
   @media (max-width: 768px) {
+    .cat-scroll-arrow {
+      display: flex;
+    }
+
+    .cat-edge-fade {
+      display: block;
+    }
+
+    .mobile-swipe-hint {
+      display: flex;
+    }
+
+    .categories-bar {
+      padding-left: 14px;
+      padding-right: 14px;
+      scroll-padding: 0 36px;
+    }
+
+    .cat-btn {
+      padding: 0.65rem 1rem;
+      font-size: 0.85rem;
+    }
+
     .shop-page {
       padding: 1.5rem 1rem 4rem;
     }
