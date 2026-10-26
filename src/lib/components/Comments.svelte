@@ -101,13 +101,26 @@
     notice = '';
     try {
       const mentionsData = mentionAutocompleteRef?.getTrackedMentions() || null;
-      await action(
+      const res = (await action(
         'member',
         edit ? 'comment_edit' : 'comment',
         edit
           ? { id: edit, body, mentionsData }
           : { work_id: workId, chapter_id: chapterId, parent_id: reply, body, mentionsData }
-      );
+      )) as any;
+
+      if (res?.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: res.xp_award.amount,
+              title: reply ? 'Resposta publicada' : 'Comentário publicado',
+              kind: reply ? 'REPLY' : 'COMMENT'
+            }
+          })
+        );
+      }
+
       body = '';
       reply = null;
       edit = null;
@@ -124,7 +137,18 @@
     busy = true;
     notice = '';
     try {
-      await action('member', name, { id });
+      const res = (await action('member', name, { id, comment_id: id })) as any;
+      if (name === 'comment_like' && res?.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: res.xp_award.amount,
+              title: 'Curtida registrada',
+              kind: 'COMMENT_LIKE'
+            }
+          })
+        );
+      }
       await invalidateAll();
     } catch (e) {
       notice = (e as Error).message;

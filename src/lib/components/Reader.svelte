@@ -234,33 +234,48 @@
         jump(Math.min(data.pages.length, Math.max(1, saved)));
         pumpPreload();
       });
-      if (!data.preview) {
-        fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
-      }
+      chapterStartTime = Date.now();
+      viewRecorded = false;
+      setTimeout(recordViewOnce, 4500);
       resetHideTimer();
     }
   });
 
-  async function claimXp(retries = 3) {
+  let chapterStartTime = Date.now();
+  let viewRecorded = false;
+
+  function recordViewOnce() {
+    if (viewRecorded || data.preview) return;
+    viewRecorded = true;
+    fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
+  }
+
+  async function claimXp(retries = 2) {
     if (xpAwardConfirmed || xpClaimInFlight || !data.profile || data.preview) return;
     xpClaimInFlight = true;
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const res = (await action('member', 'claim_xp', {
+          work_id: data.chapter.work_id,
           chapter_id: data.chapter.id
-        })) as { awarded?: boolean; reason?: string } | null;
+        })) as { awarded?: boolean; reason?: string; amount?: number; message?: string } | null;
         if (res?.awarded) {
           xpAwardConfirmed = true;
-          xpNotice = '✦ Capítulo Concluído! +25 XP';
+          xpNotice = res.message || `✦ +${res.amount || 150} XP — Capítulo Concluído!`;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('nox-xp-awarded', {
+                detail: {
+                  amount: res.amount || 150,
+                  title: 'Capítulo concluído',
+                  kind: 'READ_CHAPTER'
+                }
+              })
+            );
+          }
           setTimeout(() => { xpNotice = ''; }, 5000);
           break;
         }
-        // Server says not ready yet (e.g. reading_time_not_met) — retry after a delay.
-        if (res?.reason === 'not_finished' || res?.reason === 'reading_time_not_met') {
-          if (attempt < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-          continue;
-        }
-        // Already awarded or other terminal reason — stop retrying.
         if (res?.reason === 'already_awarded') {
           xpAwardConfirmed = true;
           break;
@@ -275,17 +290,49 @@
 
   async function completeChapter() {
     if (chapterCompleted || sending || !data.profile || data.preview) return;
+
+    // Minimum reading time evidence: 3s for short <= 3 pages, 5s for <= 10 pages, 8s for > 10 pages
+    const totalPages = data.pages?.length || 1;
+    const minSeconds = totalPages <= 3 ? 3 : totalPages <= 10 ? 5 : 8;
+    const elapsed = (Date.now() - chapterStartTime) / 1000;
+    if (elapsed < minSeconds) {
+      setTimeout(() => {
+        if (!chapterCompleted) void completeChapter();
+      }, Math.max(100, Math.ceil((minSeconds - elapsed) * 1000)));
+      return;
+    }
+
     chapterCompleted = true;
     try {
       const res = (await action('member', 'read_page', {
         work_id: data.chapter.work_id,
         chapter_id: data.chapter.id,
         page: data.pages.length,
+        total_pages: data.pages.length,
         completed: true
-      })) as { ok?: boolean; completed?: boolean } | null;
-      if (res?.completed && !data.progress?.completed_at) {
-        // Completion registered — now claim XP separately with retry.
-        void claimXp();
+      })) as { ok?: boolean; completed?: boolean; xp_award?: any } | null;
+
+      if (res?.completed) {
+        chapterCompleted = true;
+      }
+
+      if (res?.xp_award?.awarded) {
+        xpAwardConfirmed = true;
+        xpNotice = res.xp_award.message || `✦ +${res.xp_award.amount} XP — Capítulo Concluído!`;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('nox-xp-awarded', {
+              detail: {
+                amount: res.xp_award.amount,
+                title: 'Capítulo concluído',
+                kind: 'READ_CHAPTER'
+              }
+            })
+          );
+        }
+        setTimeout(() => { xpNotice = ''; }, 5000);
+      } else if (res?.xp_award?.reason === 'already_awarded') {
+        xpAwardConfirmed = true;
       }
     } catch {
       chapterCompleted = false;
@@ -302,6 +349,9 @@
     if (visible.size) {
       current = Math.min(...visible);
       pumpPreload();
+    }
+    if (page >= 2 || (data.pages.length === 1 && isVisible)) {
+      recordViewOnce();
     }
     if (maxSeenPage >= data.pages.length && !chapterCompleted) {
       void completeChapter();
@@ -353,9 +403,9 @@
       jump(Math.min(data.pages.length, Math.max(1, saved)));
       pumpPreload();
     });
-    if (!data.preview) {
-      fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
-    }
+    chapterStartTime = Date.now();
+    viewRecorded = false;
+    setTimeout(recordViewOnce, 4500);
     if (data.profile && !data.preview)
       action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
         () => {
@@ -386,12 +436,32 @@
       if (data.profile && !data.preview) {
         sending = true;
         try {
-          await action('member', 'read_page', {
+          const res = (await action('member', 'read_page', {
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
             page: pageToSave,
+            total_pages: data.pages.length,
             completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
-          });
+          })) as any;
+          if (res?.completed && !chapterCompleted) {
+            chapterCompleted = true;
+          }
+          if (res?.xp_award?.awarded && !xpAwardConfirmed) {
+            xpAwardConfirmed = true;
+            xpNotice = res.xp_award.message || `✦ +${res.xp_award.amount} XP — Capítulo Concluído!`;
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('nox-xp-awarded', {
+                  detail: {
+                    amount: res.xp_award.amount,
+                    title: 'Capítulo concluído',
+                    kind: 'READ_CHAPTER'
+                  }
+                })
+              );
+            }
+            setTimeout(() => { xpNotice = ''; }, 5000);
+          }
           notice = '';
         } catch {
           notice = locallySaved

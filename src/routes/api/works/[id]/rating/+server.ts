@@ -92,7 +92,20 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
 
   try {
     const summary = await setWorkRating(workId, visitorId, rating, userId, platform?.env);
-    return json({ success: true, ...summary });
+    let xpAward = null;
+    if (userId) {
+      try {
+        const { data: xpRes } = await locals.db.rpc('award_xp', {
+          p_kind: 'RATE_WORK',
+          p_source_id: workId,
+          p_meta: { description: 'Avaliação de obra registrada' }
+        });
+        xpAward = xpRes;
+      } catch (e) {
+        // Non-blocking
+      }
+    }
+    return json({ success: true, ...summary, xp_award: xpAward });
   } catch (err: any) {
     return json({ error: err.message || 'Falha ao registrar avaliação' }, { status: 500 });
   }

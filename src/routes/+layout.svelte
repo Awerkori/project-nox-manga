@@ -23,6 +23,7 @@
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
   import AgeGateModal from '$lib/components/AgeGateModal.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import XpProgressionToast from '$lib/components/XpProgressionToast.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
   import { registerDynamicFrame } from '$lib/cosmetics-catalog';
   import { getSupabaseBrowserClient } from '$lib/supabase';
@@ -546,6 +547,8 @@
 <main id="conteudo" class:reader-main={reader}>
   {@render children()}
 </main>
+
+<XpProgressionToast />
 
 {#if !reader}
   <footer class="site-footer">

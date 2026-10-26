@@ -103,7 +103,18 @@
         userRating: data.userRating,
         distribution: data.distribution || rating.distribution
       };
-      // Notice Requirement 3: NO success toast/pop-up on normal voting!
+
+      if (data.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: data.xp_award.amount,
+              title: 'Avaliação registrada',
+              kind: 'RATE_WORK'
+            }
+          })
+        );
+      }
     } catch (err: any) {
       // Revert optimistic update only on error, and inform user of real failure
       rating = prevRating;
