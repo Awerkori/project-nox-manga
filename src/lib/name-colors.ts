@@ -459,6 +459,425 @@ export const NAME_COLOR_REGISTRY: Record<string, NameColorConfig> = {
     inlineStyle: 'background-image: linear-gradient(45deg, #7f1d1d, #ef4444, #991b1b, #7f1d1d);',
     isAnimated: true,
     isGradient: true
+  },
+
+  // =========================================================================
+  // ROUND FINAL: 50 NOVAS CORES DE NOME ÚNICAS (51 - 100)
+  // =========================================================================
+  color_obsidian_black: {
+      "id": "color_obsidian_black",
+      "name": "Obsidiana Abissal",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #94a3b8; text-shadow: 0 0 10px rgba(148, 163, 184, 0.4), 0 0 2px #0f172a;",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#94a3b8"
+  },
+  color_ruby_blood: {
+      "id": "color_ruby_blood",
+      "name": "Rubi Carmesim Puro",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #e11d48; text-shadow: 0 0 10px rgba(225, 29, 72, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#e11d48"
+  },
+  color_celestial_lapislazuli: {
+      "id": "color_celestial_lapislazuli",
+      "name": "Lápis-Lazúli Celestial",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #2563eb; text-shadow: 0 0 10px rgba(37, 99, 235, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#2563eb"
+  },
+  color_sunstone_amber: {
+      "id": "color_sunstone_amber",
+      "name": "Âmbar Solar Radiante",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #d97706; text-shadow: 0 0 10px rgba(217, 119, 6, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#d97706"
+  },
+  color_malachite_arcane: {
+      "id": "color_malachite_arcane",
+      "name": "Malaquita Arcana",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #059669; text-shadow: 0 0 10px rgba(5, 150, 105, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#059669"
+  },
+  color_platinum_imperial: {
+      "id": "color_platinum_imperial",
+      "name": "Platina Imperial",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #cbd5e1; text-shadow: 0 0 10px rgba(203, 213, 225, 0.5);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#cbd5e1"
+  },
+  color_amethyst_royal: {
+      "id": "color_amethyst_royal",
+      "name": "Ametista da Realeza",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #7c3aed; text-shadow: 0 0 10px rgba(124, 58, 237, 0.5);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#7c3aed"
+  },
+  color_topaz_golden: {
+      "id": "color_topaz_golden",
+      "name": "Topázio das Dunas",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #eab308; text-shadow: 0 0 10px rgba(234, 179, 8, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#eab308"
+  },
+  color_spinel_rose: {
+      "id": "color_spinel_rose",
+      "name": "Espinélio Rosa Choque",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #db2777; text-shadow: 0 0 10px rgba(219, 39, 119, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#db2777"
+  },
+  color_aquamarine_abyss: {
+      "id": "color_aquamarine_abyss",
+      "name": "Água-Marinha Glacial",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #0ea5e9; text-shadow: 0 0 10px rgba(14, 165, 233, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#0ea5e9"
+  },
+  color_moonstone_pale: {
+      "id": "color_moonstone_pale",
+      "name": "Pedra da Lua Alva",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #f1f5f9; text-shadow: 0 0 10px rgba(241, 245, 249, 0.5);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#f1f5f9"
+  },
+  color_garnet_crimson: {
+      "id": "color_garnet_crimson",
+      "name": "Granada Nobre",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #991b1b; text-shadow: 0 0 10px rgba(153, 27, 27, 0.5);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#991b1b"
+  },
+  color_peridot_mystic: {
+      "id": "color_peridot_mystic",
+      "name": "Peridoto Primavera",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #65a30d; text-shadow: 0 0 10px rgba(101, 163, 13, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#65a30d"
+  },
+  color_tanzanite_dusk: {
+      "id": "color_tanzanite_dusk",
+      "name": "Tanzanita Crepuscular",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #4f46e5; text-shadow: 0 0 10px rgba(79, 70, 229, 0.45);",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#4f46e5"
+  },
+  color_onyx_starlight: {
+      "id": "color_onyx_starlight",
+      "name": "Ônix Estrelado",
+      "animClass": "nox-color-static",
+      "inlineStyle": "color: #64748b; text-shadow: 0 0 10px rgba(100, 116, 139, 0.5), 0 0 2px #fff;",
+      "isAnimated": false,
+      "isGradient": false,
+      "rawColor": "#64748b"
+  },
+  color_sakura_breeze: {
+      "id": "color_sakura_breeze",
+      "name": "Brisa de Sakura Astral",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #f472b6, #fb7185, #fda4af, #f472b6);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_ocean_trench: {
+      "id": "color_ocean_trench",
+      "name": "Fossa Mariana Abissal",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #0284c7, #0d9488, #06b6d4, #0284c7);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_dragon_breath: {
+      "id": "color_dragon_breath",
+      "name": "Respiração Dracônica",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #dc2626, #f97316, #eab308, #dc2626);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_arcane_alchemy: {
+      "id": "color_arcane_alchemy",
+      "name": "Transmutação Alquímica",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #10b981, #6366f1, #d97706, #10b981);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_arctic_blizzard: {
+      "id": "color_arctic_blizzard",
+      "name": "Nevasca Ártica Eterna",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #38bdf8, #818cf8, #e0f2fe, #38bdf8);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_solar_eclipse_corona: {
+      "id": "color_solar_eclipse_corona",
+      "name": "Coroa Solar do Eclipse",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #fbbf24, #f59e0b, #b45309, #fbbf24);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_astral_forest: {
+      "id": "color_astral_forest",
+      "name": "Floresta Astral Fluida",
+      "animClass": "nox-anim-grad-flow",
+      "inlineStyle": "background-image: linear-gradient(135deg, #34d399, #a78bfa, #38bdf8, #34d399);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_damascus_steel: {
+      "id": "color_damascus_steel",
+      "name": "Aço Damasco Reluzente",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #64748b 0%, #cbd5e1 45%, #ffffff 50%, #cbd5e1 55%, #64748b 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_rose_gold_royal: {
+      "id": "color_rose_gold_royal",
+      "name": "Ouro Rosa da Rainha",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #f43f5e 0%, #fda4af 45%, #ffffff 50%, #fda4af 55%, #f43f5e 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_titanium_white: {
+      "id": "color_titanium_white",
+      "name": "Titânio Alvo Nobre",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #94a3b8 0%, #e2e8f0 45%, #ffffff 50%, #e2e8f0 55%, #94a3b8 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_black_iron: {
+      "id": "color_black_iron",
+      "name": "Ferro Negro das Forjas",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #334155 0%, #f97316 45%, #fef08a 50%, #f97316 55%, #334155 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_bronze_ancient: {
+      "id": "color_bronze_ancient",
+      "name": "Bronze dos Titãs",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #b45309 0%, #fde68a 45%, #ffffff 50%, #fde68a 55%, #b45309 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_mithril_elven: {
+      "id": "color_mithril_elven",
+      "name": "Mithril Élfico Puro",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #60a5fa 0%, #bae6fd 45%, #ffffff 50%, #bae6fd 55%, #60a5fa 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_orichalcum_gleam: {
+      "id": "color_orichalcum_gleam",
+      "name": "Oricalco Lendário",
+      "animClass": "nox-anim-shimmer",
+      "inlineStyle": "background-image: linear-gradient(90deg, #ea580c 0%, #fed7aa 45%, #ffffff 50%, #fed7aa 55%, #ea580c 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_opal_fire: {
+      "id": "color_opal_fire",
+      "name": "Opala de Fogo Australiana",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #f97316, #ec4899, #10b981, #3b82f6);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_cyber_vaporwave: {
+      "id": "color_cyber_vaporwave",
+      "name": "Vaporwave Cósmico",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #06b6d4, #ec4899, #8b5cf6, #facc15);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_nebula_silk: {
+      "id": "color_nebula_silk",
+      "name": "Seda da Nebulosa",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #c084fc, #f472b6, #38bdf8, #818cf8);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_soap_bubble_astral: {
+      "id": "color_soap_bubble_astral",
+      "name": "Bolha Astral Perolada",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #e0e7ff, #fce7f3, #cffafe, #dcfce7);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_chameleon_scale: {
+      "id": "color_chameleon_scale",
+      "name": "Escama de Camaleão Estelar",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #10b981, #06b6d4, #8b5cf6, #10b981);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_mirage_desert: {
+      "id": "color_mirage_desert",
+      "name": "Miragem Dimensional",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #f59e0b, #06b6d4, #a855f7, #f59e0b);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_biolum_jellyfish: {
+      "id": "color_biolum_jellyfish",
+      "name": "Medusa Bioluminescente",
+      "animClass": "nox-anim-hologram",
+      "inlineStyle": "background-image: linear-gradient(135deg, #22d3ee, #f43f5e, #a78bfa, #22d3ee);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_comet_tail_glint: {
+      "id": "color_comet_tail_glint",
+      "name": "Cauda de Cometa Reluzente",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 30%, #93c5fd 48%, #ffffff 50%, #93c5fd 52%, #3b82f6 70%, #1e3a8a 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_shooting_star: {
+      "id": "color_shooting_star",
+      "name": "Estrela Cadente Noturna",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #312e81 0%, #6366f1 35%, #a5b4fc 48%, #ffffff 50%, #a5b4fc 52%, #6366f1 65%, #312e81 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_cat_eye_chrysoberyl: {
+      "id": "color_cat_eye_chrysoberyl",
+      "name": "Olho de Gato de Crisoberilo",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #4d7c0f 0%, #84cc16 35%, #bef264 48%, #ffffff 50%, #bef264 52%, #84cc16 65%, #4d7c0f 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_rough_diamond_glint: {
+      "id": "color_rough_diamond_glint",
+      "name": "Cintilação de Diamante Bruto",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #475569 0%, #94a3b8 35%, #e2e8f0 48%, #ffffff 50%, #e2e8f0 52%, #94a3b8 65%, #475569 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_volcanic_spark: {
+      "id": "color_volcanic_spark",
+      "name": "Faísca Vulcânica Noturna",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #7c2d12 0%, #ea580c 35%, #fed7aa 48%, #ffffff 50%, #fed7aa 52%, #ea580c 65%, #7c2d12 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_starlight_glimmer: {
+      "id": "color_starlight_glimmer",
+      "name": "Vislumbre Estelar Puro",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #1e1b4b 0%, #4338ca 35%, #c7d2fe 48%, #ffffff 50%, #c7d2fe 52%, #4338ca 65%, #1e1b4b 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_emerald_flash: {
+      "id": "color_emerald_flash",
+      "name": "Clarão de Esmeralda Antiga",
+      "animClass": "nox-anim-glint",
+      "inlineStyle": "background-image: linear-gradient(90deg, #064e3b 0%, #059669 35%, #a7f3d0 48%, #ffffff 50%, #a7f3d0 52%, #059669 65%, #064e3b 100%);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_dimension_rift_shift: {
+      "id": "color_dimension_rift_shift",
+      "name": "Fenda Dimensional",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #701a75, #ec4899, #38bdf8, #701a75);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_twilight_aurora_shift: {
+      "id": "color_twilight_aurora_shift",
+      "name": "Deriva da Aurora Crepuscular",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #0369a1, #f43f5e, #10b981, #0369a1);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_supernova_collapse: {
+      "id": "color_supernova_collapse",
+      "name": "Colapso de Supernova",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #f59e0b, #ef4444, #7e22ce, #f59e0b);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_matrix_hyperdrive: {
+      "id": "color_matrix_hyperdrive",
+      "name": "Hiperdrive Digital",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #047857, #10b981, #06b6d4, #047857);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_crimson_nebula_drift: {
+      "id": "color_crimson_nebula_drift",
+      "name": "Deriva da Nebulosa Rubra",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #991b1b, #dc2626, #c084fc, #991b1b);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_celestial_river: {
+      "id": "color_celestial_river",
+      "name": "Rio Celestial Estelar",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #1d4ed8, #60a5fa, #c084fc, #1d4ed8);",
+      "isAnimated": true,
+      "isGradient": true
+  },
+  color_cosmic_chaos_drift: {
+      "id": "color_cosmic_chaos_drift",
+      "name": "Caos Cósmico Transcendente",
+      "animClass": "nox-anim-grad-shift",
+      "inlineStyle": "background-image: linear-gradient(45deg, #8b5cf6, #ec4899, #f59e0b, #10b981, #8b5cf6);",
+      "isAnimated": true,
+      "isGradient": true
   }
 };
 

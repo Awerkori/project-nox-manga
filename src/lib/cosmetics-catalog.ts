@@ -1,12 +1,11 @@
 /**
- * Curated Cosmetics Catalog for Project Nox (Round 5)
- * Exactly 50 items per primary category (200 Total Curated Cosmetics):
- * - 50 Animated Avatar Frames (almost all with rich live color customization)
- * - 50 Animated Name Colors (radiant glow pulses, multi-stop cosmic gradients)
- * - 50 Deep Lore Cosmic Titles with custom insignias
- * - 50 High-Definition Procedural Animated Comment Banners (SVG/CSS Keyframes)
+ * Curated Cosmetics Catalog for Project Nox (Round Final - 100 por Categoria)
+ * Exactly 100 items per primary category (400 Total Curated Cosmetics):
+ * - 100 Animated Avatar Frames (almost all with rich live color customization)
+ * - 100 Name Colors (15 static solids, 14 gradient waves, 14 shimmers, 14 holograms, 14 glints, 14 drifts)
+ * - 100 Deep Lore Cosmic Titles with custom insignias
+ * - 100 High-Definition Procedural Animated Comment Banners (SVG/CSS Keyframes)
  */
-
 import { CURATED_BANNER_BACKGROUNDS } from './cosmetic-banners';
 
 export interface ColorVariant {
@@ -32,7 +31,9 @@ export interface CosmeticItem {
 
 export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
   // =========================================================================
-  // A. MOLDURAS DE AVATAR (50 itens animados e personalizáveis)
+  // A. MOLDURAS DE AVATAR (100 molduras únicas e animadas com customização)
+  // =========================================================================
+// A. MOLDURAS DE AVATAR (50 itens animados e personalizáveis)
   // =========================================================================
   {
     id: 'frame_cosmic_nox',
@@ -732,7 +733,711 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     color_variants: [{"id": "default", "label": "Ouro Supremo (Padrão)", "color": "#eab308"}, {"id": "silver", "label": "Platina Divina", "color": "#ffffff"}, {"id": "crimson", "label": "Suserano Sangrento", "color": "#dc2626"}, {"id": "violet", "label": "Divindade Púrpura", "color": "#7c3aed"}]
   },
   // =========================================================================
-  // B. CORES DE NOME (50 cores animadas com pulso de brilho e gradientes)
+
+  // --- NOVAS MOLDURAS (51 - 100) ---
+  {
+    id: 'frame_katana_bushido',
+    name: 'Bushido Katana',
+    description: 'Borda forjada em aço estelar com katanas cerimoniais cruzadas e faíscas incandescentes em órbita.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 950,
+    min_level: 6,
+    is_animated: true,
+    order_index: 51,
+    asset_url: '',
+    style_data: {"theme":"samurai"}
+    ,color_variants: [{"id":"default","label":"Aço Carmesim (Padrão)","color":"#dc2626"},{"id":"blue","label":"Lâmina do Trovão","color":"#38bdf8"},{"id":"gold","label":"Honra Imperial","color":"#fbbf24"},{"id":"emerald","label":"Vento de Bambu","color":"#10b981"},{"id":"violet","label":"Corte da Noite","color":"#a855f7"}]
+  },
+  {
+    id: 'frame_infernal_dragon',
+    name: 'Dragão Infernal',
+    description: 'Chifres dracônicos de obsidiana ardente com labaredas vulcânicas emanando de fissuras de magma.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 1850,
+    min_level: 10,
+    is_animated: true,
+    order_index: 52,
+    asset_url: '',
+    style_data: {"theme":"infernal"}
+    ,color_variants: [{"id":"default","label":"Fogo Infernal (Padrão)","color":"#ef4444"},{"id":"blue","label":"Chama Azul Dracônica","color":"#0ea5e9"},{"id":"green","label":"Fogo Tóxico","color":"#84cc16"},{"id":"violet","label":"Chama Abissal","color":"#9333ea"},{"id":"gold","label":"Dragão Dourado","color":"#f59e0b"}]
+  },
+  {
+    id: 'frame_clockwork_automaton',
+    name: 'Autômato de Engrenagens',
+    description: 'Mecanismo de relógio celestial vitoriano com engrenagens de latão e ponteiros que marcam o tempo cósmico.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 600,
+    min_level: 4,
+    is_animated: true,
+    order_index: 53,
+    asset_url: '',
+    style_data: {"theme":"steampunk"}
+    ,color_variants: [{"id":"default","label":"Bronze Polido (Padrão)","color":"#f59e0b"},{"id":"silver","label":"Cromo Futurista","color":"#e2e8f0"},{"id":"cyan","label":"Energia Taquiônica","color":"#06b6d4"},{"id":"crimson","label":"Cobre Quente","color":"#e11d48"},{"id":"gold","label":"Ouro Real","color":"#fbbf24"}]
+  },
+  {
+    id: 'frame_deepsea_leviathan',
+    name: 'Leviatã Abissal',
+    description: 'Tentáculos luminescentes e ondas profundas inspiradas no rei dos mares primitivos do universo.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2200,
+    min_level: 11,
+    is_animated: true,
+    order_index: 54,
+    asset_url: '',
+    style_data: {"theme":"oceanic"}
+    ,color_variants: [{"id":"default","label":"Fossa das Marianas (Padrão)","color":"#06b6d4"},{"id":"violet","label":"Polvo Espectral","color":"#8b5cf6"},{"id":"emerald","label":"Maré Esmeralda","color":"#10b981"},{"id":"crimson","label":"Mar de Sangue","color":"#ef4444"},{"id":"gold","label":"Leviatã Solar","color":"#fbbf24"}]
+  },
+  {
+    id: 'frame_ouroboros_alchemical',
+    name: 'Alquimia do Ouroboros',
+    description: 'Círculo transmutatório com símbolos herméticos e uma serpente mística em ciclo eterno de renovação.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1250,
+    min_level: 7,
+    is_animated: true,
+    order_index: 55,
+    asset_url: '',
+    style_data: {"theme":"alchemy"}
+    ,color_variants: [{"id":"default","label":"Esmeralda Alquímica (Padrão)","color":"#10b981"},{"id":"gold","label":"Transmutação Áurea","color":"#fbbf24"},{"id":"cyan","label":"Mercúrio Etéreo","color":"#38bdf8"},{"id":"violet","label":"Pedra Filosofal","color":"#a855f7"},{"id":"crimson","label":"Rubedo Primordial","color":"#ef4444"}]
+  },
+  {
+    id: 'frame_halo_divinus',
+    name: 'Auréola Divina',
+    description: 'Resplendor sagrado com raios solares dourados e anéis angélicos concêntricos que irradiam pureza.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2500,
+    min_level: 12,
+    is_animated: true,
+    order_index: 56,
+    asset_url: '',
+    style_data: {"theme":"celestial"}
+    ,color_variants: [{"id":"default","label":"Ouro Sagrado (Padrão)","color":"#fbbf24"},{"id":"silver","label":"Luz Imaculada","color":"#ffffff"},{"id":"cyan","label":"Céu Paradisiaco","color":"#38bdf8"},{"id":"violet","label":"Graça Cósmica","color":"#c084fc"},{"id":"rose","label":"Amor Serafim","color":"#f43f5e"}]
+  },
+  {
+    id: 'frame_gothic_black_rose',
+    name: 'Rosa Negra Gótica',
+    description: 'Pétalas de ébano aveludado e espinhos afiados envoltos em uma névoa crepuscular hipnotizante.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1100,
+    min_level: 6,
+    is_animated: true,
+    order_index: 57,
+    asset_url: '',
+    style_data: {"theme":"gothic"}
+  },
+  {
+    id: 'frame_nanotech_shield',
+    name: 'Escudo de Nanotecnologia',
+    description: 'Malha de nanobots hexagonais com recarga de barreira cinética e pulsos holográficos azuis.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 700,
+    min_level: 4,
+    is_animated: true,
+    order_index: 58,
+    asset_url: '',
+    style_data: {"theme":"cybernetic"}
+    ,color_variants: [{"id":"default","label":"Ciano Nanite (Padrão)","color":"#0284c7"},{"id":"emerald","label":"Bio-Nano Verde","color":"#10b981"},{"id":"gold","label":"Nano-Ouro Refinado","color":"#fbbf24"},{"id":"crimson","label":"Alerta Crítico","color":"#ef4444"},{"id":"violet","label":"Overclock Roxo","color":"#8b5cf6"}]
+  },
+  {
+    id: 'frame_storm_conductor',
+    name: 'Condutor de Tempestade',
+    description: 'Arcos elétricos de alta voltagem e bobinas pulsantes que descarregam trovões intermitentes.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1300,
+    min_level: 7,
+    is_animated: true,
+    order_index: 59,
+    asset_url: '',
+    style_data: {"theme":"electric"}
+    ,color_variants: [{"id":"default","label":"Relâmpago Índigo (Padrão)","color":"#818cf8"},{"id":"cyan","label":"Choque Eletrostático","color":"#38bdf8"},{"id":"gold","label":"Trovão Divino","color":"#facc15"},{"id":"crimson","label":"Raio Vermelho","color":"#ef4444"},{"id":"emerald","label":"Descarga Plasma","color":"#22c55e"}]
+  },
+  {
+    id: 'frame_amethyst_cluster',
+    name: 'Geodo de Ametista',
+    description: 'Cristais pontiagudos de ametista púrpura brotando da borda com reflexos prismáticos deslumbrantes.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1150,
+    min_level: 6,
+    is_animated: true,
+    order_index: 60,
+    asset_url: '',
+    style_data: {"theme":"crystalline"}
+    ,color_variants: [{"id":"default","label":"Ametista Real (Padrão)","color":"#a855f7"},{"id":"cyan","label":"Topázio Azul","color":"#06b6d4"},{"id":"crimson","label":"Rubi Lapidado","color":"#e11d48"},{"id":"emerald","label":"Esmeralda Bruta","color":"#10b981"},{"id":"gold","label":"Citrino Solar","color":"#fbbf24"}]
+  },
+  {
+    id: 'frame_vampire_lord',
+    name: 'Lorde Vampiro',
+    description: 'Asas de morcego estilizadas em gótico carmesim com gotas de néctar e uma gema rubi central.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2300,
+    min_level: 11,
+    is_animated: true,
+    order_index: 61,
+    asset_url: '',
+    style_data: {"theme":"gothic"}
+    ,color_variants: [{"id":"default","label":"Sangue Vampírico (Padrão)","color":"#881337"},{"id":"violet","label":"Sombra da Meia-Noite","color":"#581c87"},{"id":"silver","label":"Gelo Mortuário","color":"#94a3b8"},{"id":"gold","label":"Nobreza Ancestral","color":"#d97706"}]
+  },
+  {
+    id: 'frame_solar_phoenix',
+    name: 'Fênix Solar Radiante',
+    description: 'Plumas incandescentes de pássaro do sol em constante combustão com faíscas que nunca se apagam.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 4500,
+    min_level: 17,
+    is_animated: true,
+    order_index: 62,
+    asset_url: '',
+    style_data: {"theme":"celestial"}
+    ,color_variants: [{"id":"default","label":"Chama Solar (Padrão)","color":"#f97316"},{"id":"blue","label":"Fênix de Gelo Azul","color":"#0284c7"},{"id":"violet","label":"Fênix Estelar Violeta","color":"#9333ea"},{"id":"emerald","label":"Fênix Esmeralda","color":"#059669"},{"id":"crimson","label":"Brasa Carmesim","color":"#b91c1c"}]
+  },
+  {
+    id: 'frame_cyber_overdrive',
+    name: 'Overdrive Cibernético',
+    description: 'Linhas de alta velocidade com circuito acelerador de dados e ventiladores de pulso quântico.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 750,
+    min_level: 4,
+    is_animated: true,
+    order_index: 63,
+    asset_url: '',
+    style_data: {"theme":"cybernetic"}
+    ,color_variants: [{"id":"default","label":"Matrix Verde (Padrão)","color":"#10b981"},{"id":"cyan","label":"Synthwave Ciano","color":"#06b6d4"},{"id":"magenta","label":"Cyberpunk Magenta","color":"#ec4899"},{"id":"orange","label":"Alerta Térmico","color":"#f97316"},{"id":"gold","label":"Protocolo Ouro","color":"#fbbf24"}]
+  },
+  {
+    id: 'frame_runic_ring_ancient',
+    name: 'Anel Rúnico Ancestral',
+    description: 'Glifos esculpidos em pedra de meteorito girando lentamente sob uma ressonância de magia pura.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1400,
+    min_level: 8,
+    is_animated: true,
+    order_index: 64,
+    asset_url: '',
+    style_data: {"theme":"arcane"}
+    ,color_variants: [{"id":"default","label":"Runa Celeste (Padrão)","color":"#38bdf8"},{"id":"violet","label":"Mistério Arcano","color":"#8b5cf6"},{"id":"crimson","label":"Runa Proibida","color":"#ef4444"},{"id":"gold","label":"Runa Solar","color":"#f59e0b"},{"id":"emerald","label":"Glifo Druídico","color":"#10b981"}]
+  },
+  {
+    id: 'frame_frost_bite_glacier',
+    name: 'Geleira Eterna',
+    description: 'Espículas pontiagudas de gelo perene e flocos de neve cristalizados que sopram uma brisa polar constante.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1350,
+    min_level: 7,
+    is_animated: true,
+    order_index: 65,
+    asset_url: '',
+    style_data: {"theme":"crystalline"}
+    ,color_variants: [{"id":"default","label":"Gelo Puro (Padrão)","color":"#38bdf8"},{"id":"silver","label":"Neve Alva","color":"#f8fafc"},{"id":"violet","label":"Aurora Boreal","color":"#a855f7"},{"id":"cyan","label":"Iceberg Profundo","color":"#0284c7"}]
+  },
+  {
+    id: 'frame_tribal_shaman',
+    name: 'Xamã Tribal',
+    description: 'Pinturas rituais rúnicas, dentes de feras míticas e totens arcanos que protegem o usuário com bênçãos.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 650,
+    min_level: 3,
+    is_animated: true,
+    order_index: 66,
+    asset_url: '',
+    style_data: {"theme":"tribal"}
+    ,color_variants: [{"id":"default","label":"Fogo Tribal (Padrão)","color":"#ea580c"},{"id":"gold","label":"Ocre Ancestral","color":"#eab308"},{"id":"emerald","label":"Espírito da Floresta","color":"#16a34a"},{"id":"cyan","label":"Totem Fluvial","color":"#0891b2"},{"id":"crimson","label":"Fera Carmesim","color":"#dc2626"}]
+  },
+  {
+    id: 'frame_andromeda_spiral',
+    name: 'Espiral de Andrômeda',
+    description: 'Braços espirais galácticos pontilhados com milhões de sóis girando harmoniosamente em torno do perfil.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2600,
+    min_level: 13,
+    is_animated: true,
+    order_index: 67,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Galáxia Violeta (Padrão)","color":"#c084fc"},{"id":"cyan","label":"Via Láctea Ciano","color":"#38bdf8"},{"id":"rose","label":"Nebulosa Magenta","color":"#ec4899"},{"id":"gold","label":"Constelação Dourada","color":"#fbbf24"}]
+  },
+  {
+    id: 'frame_six_winged_seraph',
+    name: 'Serafim de Seis Asas',
+    description: 'Seis asas angelicais esculpidas em luz pura que se desdobram e batem suavemente em reverência sagrada.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 4800,
+    min_level: 18,
+    is_animated: true,
+    order_index: 68,
+    asset_url: '',
+    style_data: {"theme":"sacred"}
+    ,color_variants: [{"id":"default","label":"Ouro Serafim (Padrão)","color":"#fbbf24"},{"id":"silver","label":"Pureza Celestial","color":"#ffffff"},{"id":"cyan","label":"Luz Celeste","color":"#38bdf8"},{"id":"crimson","label":"Asas da Justiça","color":"#ef4444"},{"id":"violet","label":"Graça Divina","color":"#a855f7"}]
+  },
+  {
+    id: 'frame_valkyrie_spear',
+    name: 'Lança da Valquíria',
+    description: 'Ponta de lança nórdica polida com asas de águia metálicas que conduzem os bravos para o banquete eterno.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1450,
+    min_level: 8,
+    is_animated: true,
+    order_index: 69,
+    asset_url: '',
+    style_data: {"theme":"mythological"}
+    ,color_variants: [{"id":"default","label":"Aço Valhalla (Padrão)","color":"#94a3b8"},{"id":"cyan","label":"Gelo Nórdico","color":"#38bdf8"},{"id":"gold","label":"Banquete dos Deuses","color":"#f59e0b"},{"id":"crimson","label":"Sangue de Batalha","color":"#dc2626"}]
+  },
+  {
+    id: 'frame_navigators_astrolabe',
+    name: 'Astrolábio do Navegante',
+    description: 'Instrumento astronômico de latão com discos graduados e anéis móveis para calcular rotas interestelares.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 800,
+    min_level: 5,
+    is_animated: true,
+    order_index: 70,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Latão Estelar (Padrão)","color":"#d97706"},{"id":"silver","label":"Platina Náutica","color":"#cbd5e1"},{"id":"cyan","label":"Rosa dos Ventos Ciano","color":"#06b6d4"},{"id":"emerald","label":"Bússola de Jade","color":"#10b981"}]
+  },
+  {
+    id: 'frame_ouroboros_dragon',
+    name: 'Ouroboros Dracônico',
+    description: 'Grande dragão esmeralda mordendo a própria cauda com escamas brilhantes e olhos de rubi cintilante.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2700,
+    min_level: 13,
+    is_animated: true,
+    order_index: 71,
+    asset_url: '',
+    style_data: {"theme":"draconic"}
+    ,color_variants: [{"id":"default","label":"Jade Dracônico (Padrão)","color":"#059669"},{"id":"gold","label":"Dragão de Ouro Imperial","color":"#eab308"},{"id":"crimson","label":"Dragão Vermelho Vulcânico","color":"#dc2626"},{"id":"violet","label":"Dragão do Éter","color":"#8b5cf6"},{"id":"cyan","label":"Dragão das Geleiras","color":"#06b6d4"}]
+  },
+  {
+    id: 'frame_black_sun_eclipse',
+    name: 'Sol Negro do Eclipse',
+    description: 'Disco negro fosco circundado por uma corona de chamas avermelhadas em constante erupção.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2800,
+    min_level: 14,
+    is_animated: true,
+    order_index: 72,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Corona Carmesim (Padrão)","color":"#ef4444"},{"id":"violet","label":"Corona Violeta","color":"#a855f7"},{"id":"gold","label":"Corona Solar Áurea","color":"#fbbf24"},{"id":"cyan","label":"Corona Quântica Azul","color":"#0ea5e9"}]
+  },
+  {
+    id: 'frame_toxic_hazard',
+    name: 'Bio-Perigo Tóxico',
+    description: 'Símbolo bio-hazard com líquidos verdes luminescentes borbulhando em tubos de ensaio reforçados.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 720,
+    min_level: 4,
+    is_animated: true,
+    order_index: 73,
+    asset_url: '',
+    style_data: {"theme":"chaotic"}
+    ,color_variants: [{"id":"default","label":"Verde Tóxico (Padrão)","color":"#84cc16"},{"id":"orange","label":"Alerta Químico Laranja","color":"#f97316"},{"id":"cyan","label":"Líquido Criogênico","color":"#06b6d4"},{"id":"magenta","label":"Vírus Quântico","color":"#d946ef"}]
+  },
+  {
+    id: 'frame_eldritch_horror',
+    name: 'Horror Cósmico Primordial',
+    description: 'Olhos extraterrestres que piscam de dentro da fenda dimensional com gavinhas sombrias se contorcendo.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 4900,
+    min_level: 18,
+    is_animated: true,
+    order_index: 74,
+    asset_url: '',
+    style_data: {"theme":"chaotic"}
+    ,color_variants: [{"id":"default","label":"Abismo Magenta (Padrão)","color":"#701a75"},{"id":"violet","label":"Vazio Cósmico","color":"#4c1d95"},{"id":"emerald","label":"Sussurros de Cthulhu","color":"#064e3b"},{"id":"crimson","label":"Carne dos Deuses Antigos","color":"#7f1d1d"}]
+  },
+  {
+    id: 'frame_imperial_monarch',
+    name: 'Monarca Imperial',
+    description: 'Coroa de louros dourada incrustada com diamantes e rubis imperiais que proclamam realeza absoluta.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 2900,
+    min_level: 14,
+    is_animated: true,
+    order_index: 75,
+    asset_url: '',
+    style_data: {"theme":"imperial"}
+    ,color_variants: [{"id":"default","label":"Ouro Imperial (Padrão)","color":"#eab308"},{"id":"silver","label":"Platina do Trono","color":"#e2e8f0"},{"id":"crimson","label":"Capa Escarlate","color":"#dc2626"},{"id":"cyan","label":"Safira Real","color":"#0284c7"},{"id":"violet","label":"Púrpura Romana","color":"#7c3aed"}]
+  },
+  {
+    id: 'frame_enchanted_flora',
+    name: 'Flora Encantada',
+    description: 'Ramos botânicos florescentes com orquídeas luminescentes e pólen mágico que flutua delicadamente.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 780,
+    min_level: 5,
+    is_animated: true,
+    order_index: 76,
+    asset_url: '',
+    style_data: {"theme":"botanical"}
+    ,color_variants: [{"id":"default","label":"Orquídea Rosa (Padrão)","color":"#ec4899"},{"id":"cyan","label":"Flor Glacial Azul","color":"#06b6d4"},{"id":"emerald","label":"Floresta Viva","color":"#10b981"},{"id":"gold","label":"Flor Dourada","color":"#eab308"},{"id":"violet","label":"Lavanda Mística","color":"#8b5cf6"}]
+  },
+  {
+    id: 'frame_meteor_ring',
+    name: 'Órbita de Meteoros',
+    description: 'Aglomerado de fragmentos de bólidos cósmicos incandescentes traçando órbitas elípticas velozes.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1500,
+    min_level: 8,
+    is_animated: true,
+    order_index: 77,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Fogo de Bólido (Padrão)","color":"#f97316"},{"id":"cyan","label":"Cometa de Gelo","color":"#38bdf8"},{"id":"violet","label":"Meteoro Antimatéria","color":"#9333ea"},{"id":"gold","label":"Chuva Estelar Dourada","color":"#fbbf24"},{"id":"emerald","label":"Rocha Radioativa","color":"#22c55e"}]
+  },
+  {
+    id: 'frame_binding_chains',
+    name: 'Correntes Arcanas',
+    description: 'Grilhões de energia mística entrelaçados com runas de contenção selando o avatar em um escudo inquebrável.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1550,
+    min_level: 8,
+    is_animated: true,
+    order_index: 78,
+    asset_url: '',
+    style_data: {"theme":"arcane"}
+    ,color_variants: [{"id":"default","label":"Púrpura Arcano (Padrão)","color":"#8b5cf6"},{"id":"crimson","label":"Correntes de Sangue","color":"#ef4444"},{"id":"gold","label":"Selo Dourado","color":"#f59e0b"},{"id":"cyan","label":"Grilhão Espectral","color":"#06b6d4"}]
+  },
+  {
+    id: 'frame_stargate_portal',
+    name: 'Portal Stargate',
+    description: 'Anel de liga alienígena com chevrons que se ativam sequencialmente gerando um vórtice de dobra espacial.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 5100,
+    min_level: 19,
+    is_animated: true,
+    order_index: 79,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Horizonte Azul (Padrão)","color":"#0ea5e9"},{"id":"violet","label":"Dobra Hiperespacial","color":"#8b5cf6"},{"id":"emerald","label":"Portal Transdimensional","color":"#10b981"},{"id":"gold","label":"Portal dos Deuses","color":"#fbbf24"},{"id":"crimson","label":"Fenda de Destruição","color":"#ef4444"}]
+  },
+  {
+    id: 'frame_prism_refraction',
+    name: 'Refração Prismática',
+    description: 'Feixe de luz branca incidindo sobre um cristal triangular e explodindo em um espectro cromático vivo.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1600,
+    min_level: 9,
+    is_animated: true,
+    order_index: 80,
+    asset_url: '',
+    style_data: {"theme":"crystalline"}
+    ,color_variants: [{"id":"default","label":"Arco-Íris Refletido (Padrão)","color":"#ec4899"},{"id":"cyan","label":"Caleidoscópio Ciano","color":"#06b6d4"},{"id":"gold","label":"Luz Dourada Pura","color":"#f59e0b"},{"id":"violet","label":"Espectro Violeta","color":"#a855f7"}]
+  },
+  {
+    id: 'frame_dark_matter_core',
+    name: 'Núcleo de Matéria Escura',
+    description: 'Esfera densa com atração gravitacional visível que distorce e engole a luz ambiente ao redor.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3100,
+    min_level: 15,
+    is_animated: true,
+    order_index: 81,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Vazio Escuro (Padrão)","color":"#581c87"},{"id":"crimson","label":"Gravidade Carmesim","color":"#991b1b"},{"id":"cyan","label":"Distorção Azul","color":"#0369a1"},{"id":"gold","label":"Horizonte Áureo","color":"#b45309"}]
+  },
+  {
+    id: 'frame_spartan_aegis',
+    name: 'Égide Espartana',
+    description: 'Grande escudo circular de bronze com a letra grega Lambda cravada e marcas de combate vitorioso.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 850,
+    min_level: 5,
+    is_animated: true,
+    order_index: 82,
+    asset_url: '',
+    style_data: {"theme":"mythological"}
+    ,color_variants: [{"id":"default","label":"Bronze de Esparta (Padrão)","color":"#b45309"},{"id":"crimson","label":"Manto Escarlate","color":"#dc2626"},{"id":"silver","label":"Ferro de Atenas","color":"#94a3b8"},{"id":"gold","label":"Ouro do Olimpo","color":"#eab308"}]
+  },
+  {
+    id: 'frame_blood_moon_curse',
+    name: 'Maldição da Lua de Sangue',
+    description: 'Lua cheia avermelhada que tinge todo o enquadramento com uma atmosfera macabra e misteriosa.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3200,
+    min_level: 15,
+    is_animated: true,
+    order_index: 83,
+    asset_url: '',
+    style_data: {"theme":"gothic"}
+  },
+  {
+    id: 'frame_grail_light',
+    name: 'Luz do Santo Graal',
+    description: 'Taça reluzente de onde transborda a fonte de luz sagrada eterna e bênçãos de sabedoria.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 5300,
+    min_level: 19,
+    is_animated: true,
+    order_index: 84,
+    asset_url: '',
+    style_data: {"theme":"sacred"}
+    ,color_variants: [{"id":"default","label":"Ouro Relicário (Padrão)","color":"#facc15"},{"id":"silver","label":"Prata Abençoada","color":"#ffffff"},{"id":"cyan","label":"Águas Vivas","color":"#38bdf8"},{"id":"crimson","label":"Vinho Sagrado","color":"#e11d48"}]
+  },
+  {
+    id: 'frame_sentinel_drone',
+    name: 'Drone Sentinela',
+    description: 'Unidade autônoma de vigilância com scanners infravermelhos orbitando o avatar com precisão cirúrgica.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 880,
+    min_level: 5,
+    is_animated: true,
+    order_index: 85,
+    asset_url: '',
+    style_data: {"theme":"cybernetic"}
+    ,color_variants: [{"id":"default","label":"Laser Vermelho (Padrão)","color":"#ef4444"},{"id":"cyan","label":"Scanner Azul","color":"#0284c7"},{"id":"emerald","label":"Modo Furtivo Verde","color":"#10b981"},{"id":"gold","label":"Sentinela Prime","color":"#f59e0b"}]
+  },
+  {
+    id: 'frame_zen_lotus',
+    name: 'Lótus Espiritual',
+    description: 'Flor serena descansando sobre águas calmas de um jardim zen, emanando ondas suaves de paz interior.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 900,
+    min_level: 5,
+    is_animated: true,
+    order_index: 86,
+    asset_url: '',
+    style_data: {"theme":"botanical"}
+    ,color_variants: [{"id":"default","label":"Pétalas Rosa (Padrão)","color":"#f472b6"},{"id":"cyan","label":"Lago da Tranquilidade","color":"#38bdf8"},{"id":"violet","label":"Meditação Violeta","color":"#c084fc"},{"id":"emerald","label":"Bambu Verde","color":"#34d399"},{"id":"gold","label":"Iluminação Dourada","color":"#facc15"}]
+  },
+  {
+    id: 'frame_arachne_web',
+    name: 'Teia de Aracne',
+    description: 'Fios finíssimos de seda prateada tecidos em geometria perfeita capturando gotas de orvalho reluzente.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 920,
+    min_level: 5,
+    is_animated: true,
+    order_index: 87,
+    asset_url: '',
+    style_data: {"theme":"gothic"}
+    ,color_variants: [{"id":"default","label":"Seda Prateada (Padrão)","color":"#cbd5e1"},{"id":"violet","label":"Veneno Arcano","color":"#a855f7"},{"id":"crimson","label":"Viúva Negra Carmesim","color":"#ef4444"},{"id":"emerald","label":"Teia da Floresta","color":"#10b981"}]
+  },
+  {
+    id: 'frame_chains_of_hell',
+    name: 'Correntes do Inferno',
+    description: 'Elos de ferro negro em brasa forjados no lago de fogo com labaredas crepitando em cada movimento.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3300,
+    min_level: 15,
+    is_animated: true,
+    order_index: 88,
+    asset_url: '',
+    style_data: {"theme":"infernal"}
+    ,color_variants: [{"id":"default","label":"Brasas Ardentes (Padrão)","color":"#dc2626"},{"id":"orange","label":"Enxofre Vulcânico","color":"#ea580c"},{"id":"violet","label":"Chama do Purgatório","color":"#7c3aed"},{"id":"cyan","label":"Fogo Fátuo","color":"#0284c7"}]
+  },
+  {
+    id: 'frame_supernova_ring',
+    name: 'Anel de Supernova',
+    description: 'Ondas de choque térmicas circundando o núcleo estelar em expansão vertiginosa pela galáxia.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3450,
+    min_level: 16,
+    is_animated: true,
+    order_index: 89,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Explosão Dourada (Padrão)","color":"#fbbf24"},{"id":"crimson","label":"Supernova Carmesim","color":"#ef4444"},{"id":"cyan","label":"Estrela de Nêutrons Azul","color":"#0ea5e9"},{"id":"violet","label":"Radiação Gama","color":"#9333ea"}]
+  },
+  {
+    id: 'frame_time_weaver',
+    name: 'Tecelão do Tempo',
+    description: 'Fios dourados da cronologia universal sendo tecidos por agulhas dimensionais em tempo real.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3600,
+    min_level: 16,
+    is_animated: true,
+    order_index: 90,
+    asset_url: '',
+    style_data: {"theme":"arcane"}
+    ,color_variants: [{"id":"default","label":"Linhas do Tempo Ouro (Padrão)","color":"#d97706"},{"id":"cyan","label":"Ampulheta Cósmica","color":"#06b6d4"},{"id":"violet","label":"Paradoxo Temporal","color":"#a855f7"},{"id":"silver","label":"Eco Eterno","color":"#e2e8f0"}]
+  },
+  {
+    id: 'frame_desert_mirage',
+    name: 'Miragem do Deserto',
+    description: 'Ondulações térmicas douradas que criam ilusões de oásis e templos nas areias infinitas do firmamento.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 950,
+    min_level: 5,
+    is_animated: true,
+    order_index: 91,
+    asset_url: '',
+    style_data: {"theme":"mythological"}
+    ,color_variants: [{"id":"default","label":"Areia Dourada (Padrão)","color":"#eab308"},{"id":"orange","label":"Pôr do Sol no Saara","color":"#ea580c"},{"id":"cyan","label":"Oásis Escondido","color":"#06b6d4"},{"id":"violet","label":"Noite das Dunas","color":"#6366f1"}]
+  },
+  {
+    id: 'frame_kraken_abyss',
+    name: 'Olho do Kraken',
+    description: 'Olhar penetrante da fera marinha abissal emergindo de águas escuras cercado por maremotos vorazes.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3750,
+    min_level: 16,
+    is_animated: true,
+    order_index: 92,
+    asset_url: '',
+    style_data: {"theme":"oceanic"}
+    ,color_variants: [{"id":"default","label":"Abismo Oceânico (Padrão)","color":"#0284c7"},{"id":"emerald","label":"Gavinhas do Fundo do Mar","color":"#059669"},{"id":"violet","label":"Kraken Espectral","color":"#7c3aed"},{"id":"crimson","label":"Fúria dos Mares","color":"#dc2626"}]
+  },
+  {
+    id: 'frame_tesla_globe',
+    name: 'Globo de Tesla',
+    description: 'Cúpula transparente de vidro onde raios elétricos violeta colidem continuamente contra as paredes.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1700,
+    min_level: 9,
+    is_animated: true,
+    order_index: 93,
+    asset_url: '',
+    style_data: {"theme":"electric"}
+    ,color_variants: [{"id":"default","label":"Faísca Tesla (Padrão)","color":"#a855f7"},{"id":"cyan","label":"Arco Voltaico","color":"#06b6d4"},{"id":"gold","label":"Energia Radiante","color":"#facc15"},{"id":"crimson","label":"Plasma Vermelho","color":"#ef4444"}]
+  },
+  {
+    id: 'frame_archangel_feather',
+    name: 'Penas do Arcanjo',
+    description: 'Plumagem imaculada e resplandecente que flutua graciosamente como bênção de proteção divina.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 3900,
+    min_level: 17,
+    is_animated: true,
+    order_index: 94,
+    asset_url: '',
+    style_data: {"theme":"sacred"}
+    ,color_variants: [{"id":"default","label":"Luz Imaculada (Padrão)","color":"#e2e8f0"},{"id":"gold","label":"Plumas Douradas","color":"#fbbf24"},{"id":"cyan","label":"Azul Serafim","color":"#38bdf8"},{"id":"violet","label":"Mistério da Graça","color":"#c084fc"}]
+  },
+  {
+    id: 'frame_demon_lord_horns',
+    name: 'Chifres do Rei Demônio',
+    description: 'Par de chifres colossais coroados com chamas negras e anéis de poder forjados nos confins do inferno.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 5600,
+    min_level: 20,
+    is_animated: true,
+    order_index: 95,
+    asset_url: '',
+    style_data: {"theme":"infernal"}
+    ,color_variants: [{"id":"default","label":"Chifres de Sangue (Padrão)","color":"#b91c1c"},{"id":"violet","label":"Lorde do Vazio","color":"#581c87"},{"id":"gold","label":"Pacto Imperial","color":"#d97706"},{"id":"cyan","label":"Fogo Gelado do Inferno","color":"#0284c7"}]
+  },
+  {
+    id: 'frame_cyber_motherboard',
+    name: 'Placa-Mãe Neural',
+    description: 'Trilhas de circuito impresso com soldas de ouro e pulsos binários trafegando a velocidades hiper-luminosas.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'RARA',
+    price_xp: 1750,
+    min_level: 9,
+    is_animated: true,
+    order_index: 96,
+    asset_url: '',
+    style_data: {"theme":"cybernetic"}
+    ,color_variants: [{"id":"default","label":"Verde PCB (Padrão)","color":"#10b981"},{"id":"cyan","label":"Ciano Quântico","color":"#06b6d4"},{"id":"crimson","label":"Sobrecarga Vermelha","color":"#ef4444"},{"id":"gold","label":"Trilhas de Ouro","color":"#fbbf24"},{"id":"violet","label":"Neural Roxo","color":"#8b5cf6"}]
+  },
+  {
+    id: 'frame_galaxy_vortex',
+    name: 'Vórtice da Galáxia',
+    description: 'Redemoinho estelar maciço girando velozmente e canalizando a poeira cósmica para o centro do avatar.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'EPICA',
+    price_xp: 4100,
+    min_level: 17,
+    is_animated: true,
+    order_index: 97,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Vórtice Violeta (Padrão)","color":"#8b5cf6"},{"id":"cyan","label":"Espiral Ciano","color":"#06b6d4"},{"id":"rose","label":"Rosa Galáctico","color":"#ec4899"},{"id":"gold","label":"Vórtice Solar","color":"#f59e0b"}]
+  },
+  {
+    id: 'frame_fairy_wings',
+    name: 'Asas da Fada Astral',
+    description: 'Delicadas asas transparentes cintilando com poeira mágica e reflexos iridescentes de pura fantasia.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'INCOMUM',
+    price_xp: 980,
+    min_level: 5,
+    is_animated: true,
+    order_index: 98,
+    asset_url: '',
+    style_data: {"theme":"botanical"}
+    ,color_variants: [{"id":"default","label":"Brilho Esmeralda (Padrão)","color":"#34d399"},{"id":"pink","label":"Fada Rosa","color":"#f472b6"},{"id":"cyan","label":"Asas Glaciais","color":"#38bdf8"},{"id":"gold","label":"Pó de Fada Dourado","color":"#fbbf24"},{"id":"violet","label":"Sonho Violeta","color":"#c084fc"}]
+  },
+  {
+    id: 'frame_sovereign_wyrm',
+    name: 'Dragão Soberano Imperial',
+    description: 'Duas serpentes dracônicas celestes entrelaçadas em torno de uma orbe de poder imperial supremo.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'LENDARIA',
+    price_xp: 6200,
+    min_level: 22,
+    is_animated: true,
+    order_index: 99,
+    asset_url: '',
+    style_data: {"theme":"draconic"}
+    ,color_variants: [{"id":"default","label":"Ouro Soberano (Padrão)","color":"#eab308"},{"id":"emerald","label":"Jade Imperial","color":"#059669"},{"id":"crimson","label":"Dragão Carmesim Real","color":"#dc2626"},{"id":"cyan","label":"Dragão Celestial","color":"#0284c7"},{"id":"violet","label":"Soberano das Sombras","color":"#6d28d9"}]
+  },
+  {
+    id: 'frame_nox_singularity',
+    name: 'Singularidade Nox Prime',
+    description: 'O ápice da tecnologia e magia Nox: prisma taquiônico giratório com anéis quânticos e assinatura definitiva.',
+    kind: 'AVATAR_FRAME',
+    rarity: 'MITICA',
+    price_xp: 12000,
+    min_level: 25,
+    is_animated: true,
+    order_index: 100,
+    asset_url: '',
+    style_data: {"theme":"cosmic"}
+    ,color_variants: [{"id":"default","label":"Nox Prime Violeta (Padrão)","color":"#8b5cf6"},{"id":"gold","label":"Nox Prime Imperial","color":"#fbbf24"},{"id":"cyan","label":"Nox Prime Quântico","color":"#06b6d4"},{"id":"crimson","label":"Nox Prime Carmesim","color":"#ef4444"},{"id":"emerald","label":"Nox Prime Éter","color":"#10b981"},{"id":"silver","label":"Nox Prime Platina","color":"#ffffff"}]
+  },
+
+  // =========================================================================
+  // B. CORES DE NOME (100 cores: sólidas estáticas, ondas, shimmers, glints)
+  // =========================================================================
+// B. CORES DE NOME (50 cores animadas com pulso de brilho e gradientes)
   // =========================================================================
   {
     id: 'color_cosmic_violet',
@@ -743,7 +1448,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 200,
     min_level: 1,
     is_animated: false,
-    order_index: 51,
+    order_index: 101,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #c084fc; text-shadow: 0 0 8px rgba(192, 132, 252, 0.4);","isGradient":false,"color":"#c084fc"}
   },
@@ -756,7 +1461,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 200,
     min_level: 1,
     is_animated: false,
-    order_index: 52,
+    order_index: 102,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #38bdf8; text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);","isGradient":false,"color":"#38bdf8"}
   },
@@ -769,7 +1474,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 250,
     min_level: 2,
     is_animated: false,
-    order_index: 53,
+    order_index: 103,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.45);","isGradient":false,"color":"#ffffff"}
   },
@@ -782,7 +1487,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 400,
     min_level: 3,
     is_animated: false,
-    order_index: 54,
+    order_index: 104,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #34d399; text-shadow: 0 0 8px rgba(52, 211, 153, 0.4);","isGradient":false,"color":"#34d399"}
   },
@@ -795,7 +1500,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 450,
     min_level: 3,
     is_animated: false,
-    order_index: 55,
+    order_index: 105,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #60a5fa; text-shadow: 0 0 8px rgba(96, 165, 250, 0.4);","isGradient":false,"color":"#60a5fa"}
   },
@@ -808,7 +1513,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 500,
     min_level: 4,
     is_animated: false,
-    order_index: 56,
+    order_index: 106,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.4);","isGradient":false,"color":"#4ade80"}
   },
@@ -821,7 +1526,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 500,
     min_level: 4,
     is_animated: false,
-    order_index: 57,
+    order_index: 107,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #e2e8f0; text-shadow: 0 0 8px rgba(226, 232, 240, 0.4);","isGradient":false,"color":"#e2e8f0"}
   },
@@ -834,7 +1539,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 800,
     min_level: 5,
     is_animated: false,
-    order_index: 58,
+    order_index: 108,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #fb7185; text-shadow: 0 0 8px rgba(251, 113, 133, 0.4);","isGradient":false,"color":"#fb7185"}
   },
@@ -847,7 +1552,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 850,
     min_level: 6,
     is_animated: true,
-    order_index: 59,
+    order_index: 109,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #0891b2 0%, #22d3ee 35%, #ffffff 50%, #22d3ee 65%, #0891b2 100%);","isGradient":true}
   },
@@ -860,7 +1565,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 900,
     min_level: 6,
     is_animated: false,
-    order_index: 60,
+    order_index: 110,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);","isGradient":false,"color":"#fb923c"}
   },
@@ -873,7 +1578,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 950,
     min_level: 6,
     is_animated: true,
-    order_index: 61,
+    order_index: 111,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #b45309 0%, #facc15 35%, #ffffff 50%, #facc15 65%, #b45309 100%);","isGradient":true}
   },
@@ -886,7 +1591,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1000,
     min_level: 7,
     is_animated: false,
-    order_index: 62,
+    order_index: 112,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #f472b6; text-shadow: 0 0 8px rgba(244, 114, 182, 0.4);","isGradient":false,"color":"#f472b6"}
   },
@@ -899,7 +1604,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1100,
     min_level: 7,
     is_animated: false,
-    order_index: 63,
+    order_index: 113,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #d8b4fe; text-shadow: 0 0 8px rgba(216, 180, 254, 0.4);","isGradient":false,"color":"#d8b4fe"}
   },
@@ -912,7 +1617,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1400,
     min_level: 8,
     is_animated: true,
-    order_index: 64,
+    order_index: 114,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #4d7c0f 0%, #a3e635 35%, #ffffff 50%, #a3e635 65%, #4d7c0f 100%);","isGradient":true}
   },
@@ -925,7 +1630,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1600,
     min_level: 9,
     is_animated: false,
-    order_index: 65,
+    order_index: 115,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);","isGradient":false,"color":"#ef4444"}
   },
@@ -938,7 +1643,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1800,
     min_level: 10,
     is_animated: false,
-    order_index: 66,
+    order_index: 116,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);","isGradient":false,"color":"#fbbf24"}
   },
@@ -951,7 +1656,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1900,
     min_level: 10,
     is_animated: false,
-    order_index: 67,
+    order_index: 117,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #818cf8; text-shadow: 0 0 8px rgba(129, 140, 248, 0.4);","isGradient":false,"color":"#818cf8"}
   },
@@ -964,7 +1669,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2000,
     min_level: 11,
     is_animated: false,
-    order_index: 68,
+    order_index: 118,
     asset_url: '',
     style_data: {"animationClass":"nox-color-static","style":"color: #b91c1c; text-shadow: 0 0 8px rgba(185, 28, 28, 0.4);","isGradient":false,"color":"#b91c1c"}
   },
@@ -977,7 +1682,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2100,
     min_level: 11,
     is_animated: true,
-    order_index: 69,
+    order_index: 119,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #5eead4, #93c5fd, #c4b5fd, #5eead4);","isGradient":true}
   },
@@ -990,7 +1695,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3200,
     min_level: 15,
     is_animated: true,
-    order_index: 70,
+    order_index: 120,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #a855f7, #ec4899, #3b82f6, #a855f7);","isGradient":true}
   },
@@ -1003,7 +1708,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3500,
     min_level: 16,
     is_animated: true,
-    order_index: 71,
+    order_index: 121,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #6ee7b7, #38bdf8, #c084fc, #6ee7b7);","isGradient":true}
   },
@@ -1016,7 +1721,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3800,
     min_level: 17,
     is_animated: true,
-    order_index: 72,
+    order_index: 122,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #c2410c 0%, #ea580c 40%, #fed7aa 50%, #ea580c 60%, #c2410c 100%);","isGradient":true}
   },
@@ -1029,7 +1734,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4800,
     min_level: 20,
     is_animated: true,
-    order_index: 73,
+    order_index: 123,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #f43f5e, #fbbf24, #10b981, #3b82f6, #f43f5e);","isGradient":true}
   },
@@ -1042,7 +1747,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5500,
     min_level: 22,
     is_animated: true,
-    order_index: 74,
+    order_index: 124,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #d97706 0%, #fbbf24 40%, #ffffff 50%, #fbbf24 60%, #d97706 100%);","isGradient":true}
   },
@@ -1055,7 +1760,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3400,
     min_level: 15,
     is_animated: true,
-    order_index: 75,
+    order_index: 125,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #312e81, #6366f1, #38bdf8, #312e81);","isGradient":true}
   },
@@ -1068,7 +1773,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3600,
     min_level: 16,
     is_animated: true,
-    order_index: 76,
+    order_index: 126,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #c084fc, #38bdf8, #f472b6, #c084fc);","isGradient":true}
   },
@@ -1081,7 +1786,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3700,
     min_level: 16,
     is_animated: true,
-    order_index: 77,
+    order_index: 127,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #c2410c 0%, #f97316 40%, #fef08a 50%, #f97316 60%, #c2410c 100%);","isGradient":true}
   },
@@ -1094,7 +1799,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1200,
     min_level: 7,
     is_animated: true,
-    order_index: 78,
+    order_index: 128,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4, #ec4899);","isGradient":true}
   },
@@ -1107,7 +1812,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2200,
     min_level: 11,
     is_animated: true,
-    order_index: 79,
+    order_index: 129,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #ef4444, #f97316, #fbbf24, #ef4444);","isGradient":true}
   },
@@ -1120,7 +1825,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2300,
     min_level: 12,
     is_animated: true,
-    order_index: 80,
+    order_index: 130,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #f472b6, #38bdf8, #a78bfa, #f472b6);","isGradient":true}
   },
@@ -1133,7 +1838,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1250,
     min_level: 7,
     is_animated: true,
-    order_index: 81,
+    order_index: 131,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #fbbf24, #f43f5e, #c084fc, #fbbf24);","isGradient":true}
   },
@@ -1146,7 +1851,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2400,
     min_level: 12,
     is_animated: true,
-    order_index: 82,
+    order_index: 132,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #1e1b4b, #7c3aed, #a78bfa, #1e1b4b);","isGradient":true}
   },
@@ -1159,7 +1864,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1300,
     min_level: 8,
     is_animated: true,
-    order_index: 83,
+    order_index: 133,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #10b981, #34d399, #059669, #10b981);","isGradient":true}
   },
@@ -1172,7 +1877,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2500,
     min_level: 13,
     is_animated: true,
-    order_index: 84,
+    order_index: 134,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #b91c1c 0%, #ef4444 40%, #ffffff 50%, #ef4444 60%, #b91c1c 100%);","isGradient":true}
   },
@@ -1185,7 +1890,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 550,
     min_level: 4,
     is_animated: true,
-    order_index: 85,
+    order_index: 135,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #b45309 0%, #d97706 40%, #fef3c7 50%, #d97706 60%, #b45309 100%);","isGradient":true}
   },
@@ -1198,7 +1903,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2600,
     min_level: 13,
     is_animated: true,
-    order_index: 86,
+    order_index: 136,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #a5b4fc, #67e8f9, #fbcfe8, #a5b4fc);","isGradient":true}
   },
@@ -1211,7 +1916,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3900,
     min_level: 17,
     is_animated: true,
-    order_index: 87,
+    order_index: 137,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #fbcfe8, #bae6fd, #e0e7ff, #fbcfe8);","isGradient":true}
   },
@@ -1224,7 +1929,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2700,
     min_level: 14,
     is_animated: true,
-    order_index: 88,
+    order_index: 138,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #0369a1, #38bdf8, #0284c7, #0369a1);","isGradient":true}
   },
@@ -1237,7 +1942,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 600,
     min_level: 4,
     is_animated: true,
-    order_index: 89,
+    order_index: 139,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #fda4af, #fef08a, #fbcfe8, #fda4af);","isGradient":true}
   },
@@ -1250,7 +1955,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2800,
     min_level: 14,
     is_animated: true,
-    order_index: 90,
+    order_index: 140,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #b45309, #f59e0b, #ea580c, #b45309);","isGradient":true}
   },
@@ -1263,7 +1968,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1350,
     min_level: 8,
     is_animated: true,
-    order_index: 91,
+    order_index: 141,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #7e22ce 0%, #a855f7 40%, #ffffff 50%, #a855f7 60%, #7e22ce 100%);","isGradient":true}
   },
@@ -1276,7 +1981,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4000,
     min_level: 18,
     is_animated: true,
-    order_index: 92,
+    order_index: 142,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #991b1b 0%, #f43f5e 35%, #ffffff 50%, #f43f5e 65%, #991b1b 100%);","isGradient":true}
   },
@@ -1289,7 +1994,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5800,
     min_level: 22,
     is_animated: true,
-    order_index: 93,
+    order_index: 143,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #93c5fd 0%, #ffffff 35%, #bfdbfe 50%, #ffffff 65%, #93c5fd 100%);","isGradient":true}
   },
@@ -1302,7 +2007,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4200,
     min_level: 18,
     is_animated: true,
-    order_index: 94,
+    order_index: 144,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #06b6d4, #8b5cf6, #f43f5e, #06b6d4);","isGradient":true}
   },
@@ -1315,7 +2020,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 650,
     min_level: 4,
     is_animated: true,
-    order_index: 95,
+    order_index: 145,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #d97706 0%, #fbbf24 35%, #ffffff 50%, #fbbf24 65%, #d97706 100%);","isGradient":true}
   },
@@ -1328,7 +2033,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2900,
     min_level: 15,
     is_animated: true,
-    order_index: 96,
+    order_index: 146,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #7f1d1d, #ef4444, #991b1b, #7f1d1d);","isGradient":true}
   },
@@ -1341,7 +2046,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1400,
     min_level: 8,
     is_animated: true,
-    order_index: 97,
+    order_index: 147,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc, #38bdf8);","isGradient":true}
   },
@@ -1354,7 +2059,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4300,
     min_level: 19,
     is_animated: true,
-    order_index: 98,
+    order_index: 148,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #581c87, #9333ea, #c084fc, #581c87);","isGradient":true}
   },
@@ -1367,7 +2072,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1450,
     min_level: 8,
     is_animated: true,
-    order_index: 99,
+    order_index: 149,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #0284c7 0%, #38bdf8 35%, #ffffff 50%, #38bdf8 65%, #0284c7 100%);","isGradient":true}
   },
@@ -1380,12 +2085,668 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 6800,
     min_level: 24,
     is_animated: true,
-    order_index: 100,
+    order_index: 150,
     asset_url: '',
     style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #a16207 0%, #eab308 40%, #ffffff 50%, #eab308 60%, #a16207 100%);","isGradient":true}
   },
   // =========================================================================
-  // C. TÍTULOS CÓSMICOS (50 títulos de alta lore sem genéricos)
+
+  // --- NOVAS CORES DE NOME (151 - 200) ---
+  {
+    id: 'color_obsidian_black',
+    name: 'Obsidiana Abissal',
+    description: 'Tom mineral profundo inspirado na rocha vulcânica vítrea com aura cinza lunar.',
+    kind: 'NAME_COLOR',
+    rarity: 'COMUM',
+    price_xp: 250,
+    min_level: 2,
+    is_animated: false,
+    order_index: 151,
+    asset_url: '',
+    style_data: {"color":"#94a3b8"}
+  },
+  {
+    id: 'color_ruby_blood',
+    name: 'Rubi Carmesim Puro',
+    description: 'Vermelho intenso e saturado como o núcleo de um rubi lapidado de alta nobreza.',
+    kind: 'NAME_COLOR',
+    rarity: 'COMUM',
+    price_xp: 280,
+    min_level: 2,
+    is_animated: false,
+    order_index: 152,
+    asset_url: '',
+    style_data: {"color":"#e11d48"}
+  },
+  {
+    id: 'color_celestial_lapislazuli',
+    name: 'Lápis-Lazúli Celestial',
+    description: 'Azul ultramarino real com pureza estelar dos pigmentos nobres mais reverenciados.',
+    kind: 'NAME_COLOR',
+    rarity: 'COMUM',
+    price_xp: 300,
+    min_level: 2,
+    is_animated: false,
+    order_index: 153,
+    asset_url: '',
+    style_data: {"color":"#2563eb"}
+  },
+  {
+    id: 'color_sunstone_amber',
+    name: 'Âmbar Pedra do Sol',
+    description: 'Matiz alaranjado aconchegante com a energia contida da luz solar fossilizada.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 380,
+    min_level: 3,
+    is_animated: false,
+    order_index: 154,
+    asset_url: '',
+    style_data: {"color":"#d97706"}
+  },
+  {
+    id: 'color_malachite_arcane',
+    name: 'Malaquita Arcana',
+    description: 'Verde nobre e elegante inspirado nos anéis minerais da sabedoria ancestral.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 420,
+    min_level: 3,
+    is_animated: false,
+    order_index: 155,
+    asset_url: '',
+    style_data: {"color":"#059669"}
+  },
+  {
+    id: 'color_platinum_imperial',
+    name: 'Platina Imperial',
+    description: 'Tom metálico claro e lustroso que reflete distinção e serenidade aristocrática.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 460,
+    min_level: 4,
+    is_animated: false,
+    order_index: 156,
+    asset_url: '',
+    style_data: {"color":"#cbd5e1"}
+  },
+  {
+    id: 'color_amethyst_royal',
+    name: 'Ametista Real Estática',
+    description: 'Roxo nobre cristalino de alta fidelidade sem oscilações visuais.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 500,
+    min_level: 4,
+    is_animated: false,
+    order_index: 157,
+    asset_url: '',
+    style_data: {"color":"#9333ea"}
+  },
+  {
+    id: 'color_topaz_golden',
+    name: 'Topázio Imperial Dourado',
+    description: 'Brilho suave de gema imperial com rica presença áurea e nitidez inconfundível.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 550,
+    min_level: 4,
+    is_animated: false,
+    order_index: 158,
+    asset_url: '',
+    style_data: {"color":"#ca8a04"}
+  },
+  {
+    id: 'color_spinel_rose',
+    name: 'Espinélio Rosa Antigo',
+    description: 'Rosa magenta fechado sofisticado apreciado nas coroas das dinastias históricas.',
+    kind: 'NAME_COLOR',
+    rarity: 'INCOMUM',
+    price_xp: 590,
+    min_level: 4,
+    is_animated: false,
+    order_index: 159,
+    asset_url: '',
+    style_data: {"color":"#db2777"}
+  },
+  {
+    id: 'color_aquamarine_abyss',
+    name: 'Água-Marinha Serena',
+    description: 'Azul água cristalina de alta montanha para leitores de postura tranquila e polida.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 750,
+    min_level: 6,
+    is_animated: false,
+    order_index: 160,
+    asset_url: '',
+    style_data: {"color":"#0891b2"}
+  },
+  {
+    id: 'color_moonstone_pale',
+    name: 'Pedra da Lua Pálida',
+    description: 'Branco perolado suave com leve toque azulado que evoca noites de luar tranquilo.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 800,
+    min_level: 6,
+    is_animated: false,
+    order_index: 161,
+    asset_url: '',
+    style_data: {"color":"#e0e7ff"}
+  },
+  {
+    id: 'color_garnet_crimson',
+    name: 'Granada Sangue Escuro',
+    description: 'Vermelho borgonha encorpado com profundidade visual única e presença marcante.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 850,
+    min_level: 6,
+    is_animated: false,
+    order_index: 162,
+    asset_url: '',
+    style_data: {"color":"#9f1239"}
+  },
+  {
+    id: 'color_peridot_mystic',
+    name: 'Peridoto Místico',
+    description: 'Verde oliva vibrante originário de meteoritos antigos com frescor visual cativante.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 900,
+    min_level: 7,
+    is_animated: false,
+    order_index: 163,
+    asset_url: '',
+    style_data: {"color":"#65a30d"}
+  },
+  {
+    id: 'color_tanzanite_dusk',
+    name: 'Tanzanita Crepuscular',
+    description: 'Azul arroxeado exótico com transição natural de luz de fim de tarde.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 950,
+    min_level: 7,
+    is_animated: false,
+    order_index: 164,
+    asset_url: '',
+    style_data: {"color":"#4f46e5"}
+  },
+  {
+    id: 'color_onyx_starlight',
+    name: 'Ônix Estelar',
+    description: 'Preto profundo com aura estelar suave e elegância sem exageros.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1000,
+    min_level: 7,
+    is_animated: false,
+    order_index: 165,
+    asset_url: '',
+    style_data: {"color":"#f1f5f9"}
+  },
+  {
+    id: 'color_sakura_breeze',
+    name: 'Brisa de Sakura Ondulante',
+    description: 'Onda suave entre tons de pétala de cerejeira e branco orvalho em movimento contínuo.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1100,
+    min_level: 7,
+    is_animated: true,
+    order_index: 166,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #f472b6, #fda4af, #ffffff)"}
+  },
+  {
+    id: 'color_ocean_trench',
+    name: 'Maré da Fossa Oceânica',
+    description: 'Fluxo ondulante de azuis oceânicos que deslizam pelas letras com calma e imponência.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1150,
+    min_level: 7,
+    is_animated: true,
+    order_index: 167,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #0284c7, #38bdf8, #bae6fd)"}
+  },
+  {
+    id: 'color_dragon_breath',
+    name: 'Sopro de Dragão Vivo',
+    description: 'Onda ardente de vermelho e laranja fluindo pelas letras como magma incandescente.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 1600,
+    min_level: 9,
+    is_animated: true,
+    order_index: 168,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #dc2626, #f97316, #fde047)"}
+  },
+  {
+    id: 'color_arcane_alchemy',
+    name: 'Elixir da Alquimia Viva',
+    description: 'Transição suave entre esmeralda e turquesa místico em pulsação de transmutação.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 1700,
+    min_level: 9,
+    is_animated: true,
+    order_index: 169,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #059669, #10b981, #2dd4bf)"}
+  },
+  {
+    id: 'color_arctic_blizzard',
+    name: 'Nevasca Ártica Flutuante',
+    description: 'Vento polar sutil com brancos e azuis celestes deslizando pelas letras do nome.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 1800,
+    min_level: 10,
+    is_animated: true,
+    order_index: 170,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #0284c7, #7dd3fc, #ffffff)"}
+  },
+  {
+    id: 'color_solar_eclipse_corona',
+    name: 'Corona do Eclipse Solar',
+    description: 'Onda dourada e carmesim deslizando no contorno da lua nova com brilho cósmico.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 1950,
+    min_level: 10,
+    is_animated: true,
+    order_index: 171,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #ef4444, #f59e0b, #fef08a)"}
+  },
+  {
+    id: 'color_astral_forest',
+    name: 'Bosque Esmeralda Noturno',
+    description: 'Movimento botânico das florestas astrais entre verde musgo e menta cintilante.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2100,
+    min_level: 11,
+    is_animated: true,
+    order_index: 172,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #166534, #22c55e, #86efac)"}
+  },
+  {
+    id: 'color_damascus_steel',
+    name: 'Aço de Damasco Refletido',
+    description: 'Reflexo metálico prateado com dobras de forja deslizando pela extensão do nome.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1300,
+    min_level: 8,
+    is_animated: true,
+    order_index: 173,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #475569, #cbd5e1, #ffffff, #475569)"}
+  },
+  {
+    id: 'color_rose_gold_royal',
+    name: 'Ouro Rosé Nobre',
+    description: 'Feixe de brilho nobre deslizando sobre o gradiente cobre-rosado de alta realeza.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1400,
+    min_level: 8,
+    is_animated: true,
+    order_index: 174,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #9f1239, #fb7185, #fed7aa, #9f1239)"}
+  },
+  {
+    id: 'color_titanium_white',
+    name: 'Titânio Puro Lustroso',
+    description: 'Lustro reluzente e cirúrgico de liga de titânio aeroespacial cortando o texto.',
+    kind: 'NAME_COLOR',
+    rarity: 'RARA',
+    price_xp: 1500,
+    min_level: 8,
+    is_animated: true,
+    order_index: 175,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #64748b, #f8fafc, #ffffff, #64748b)"}
+  },
+  {
+    id: 'color_black_iron',
+    name: 'Ferro Negro Ancestral',
+    description: 'Reflexo prateado sobre metal forjado em meteorito escuro com contraste impecável.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2200,
+    min_level: 11,
+    is_animated: true,
+    order_index: 176,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #1e293b, #94a3b8, #f8fafc, #1e293b)"}
+  },
+  {
+    id: 'color_bronze_ancient',
+    name: 'Bronze Heroico Reluzente',
+    description: 'Faiscar dourado-acobreado que honra as estátuas e escudos dos heróis mitológicos.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2350,
+    min_level: 11,
+    is_animated: true,
+    order_index: 177,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #78350f, #d97706, #fde68a, #78350f)"}
+  },
+  {
+    id: 'color_mithril_elven',
+    name: 'Mithril Élfico Lendário',
+    description: 'Luz prateada celestial fluindo com leveza inacreditável e resistência absoluta.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 4200,
+    min_level: 17,
+    is_animated: true,
+    order_index: 178,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #0284c7, #e0f2fe, #ffffff, #0284c7)"}
+  },
+  {
+    id: 'color_orichalcum_gleam',
+    name: 'Oricalco de Atlântida',
+    description: 'O metal místico dourado com reflexos rubros que brilhava nas muralhas perdidas.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 4600,
+    min_level: 18,
+    is_animated: true,
+    order_index: 179,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #dc2626, #f59e0b, #fef08a, #dc2626)"}
+  },
+  {
+    id: 'color_opal_fire',
+    name: 'Opala de Fogo Australiana',
+    description: 'Transição suave entre laranjas, verdes e violetas holográficos como uma opala viva.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2500,
+    min_level: 12,
+    is_animated: true,
+    order_index: 180,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #f97316, #fbbf24, #10b981, #a855f7)"}
+  },
+  {
+    id: 'color_cyber_vaporwave',
+    name: 'Holograma Synthwave 80s',
+    description: 'Estética neon retrô com ciano e magenta em alternância suave de frequência visual.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2650,
+    min_level: 12,
+    is_animated: true,
+    order_index: 181,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #06b6d4, #a855f7, #ec4899)"}
+  },
+  {
+    id: 'color_nebula_silk',
+    name: 'Seda de Nebulosa Cósmica',
+    description: 'Véu fluido translúcido com tons de poeira estelar violeta e azul profundo.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2800,
+    min_level: 13,
+    is_animated: true,
+    order_index: 182,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #6366f1, #c084fc, #38bdf8)"}
+  },
+  {
+    id: 'color_soap_bubble_astral',
+    name: 'Bolha Prismática Quântica',
+    description: 'Filme fino iridescente com interferência óptica refletindo todas as cores do arco-íris.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 4800,
+    min_level: 18,
+    is_animated: true,
+    order_index: 183,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #f43f5e, #facc15, #2dd4bf, #818cf8)"}
+  },
+  {
+    id: 'color_chameleon_scale',
+    name: 'Escama de Camaleão Astral',
+    description: 'Mudança de tom dinâmico entre esmeralda selvagem e azul royal hipnótico.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 5000,
+    min_level: 19,
+    is_animated: true,
+    order_index: 184,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #10b981, #06b6d4, #6366f1)"}
+  },
+  {
+    id: 'color_mirage_desert',
+    name: 'Miragem Quântica Holográfica',
+    description: 'Ilusão de calor do deserto com tons de ouro, areia e reflexos de céu azul flutuante.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 5300,
+    min_level: 19,
+    is_animated: true,
+    order_index: 185,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #eab308, #f97316, #38bdf8)"}
+  },
+  {
+    id: 'color_biolum_jellyfish',
+    name: 'Bioluminescência Abissal',
+    description: 'Emissão suave e pulsante inspirada em medusas que vagam pelas fossas oceânicas.',
+    kind: 'NAME_COLOR',
+    rarity: 'MITICA',
+    price_xp: 7500,
+    min_level: 22,
+    is_animated: true,
+    order_index: 186,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(135deg, #059669, #06b6d4, #a855f7)"}
+  },
+  {
+    id: 'color_comet_tail_glint',
+    name: 'Faísca de Cauda de Cometa',
+    description: 'Feixe de luz concentrado atravessando o nome em azul glacial e deixando rastro de poeira.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 2950,
+    min_level: 14,
+    is_animated: true,
+    order_index: 187,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #0369a1, #38bdf8, #ffffff, #0369a1)"}
+  },
+  {
+    id: 'color_shooting_star',
+    name: 'Estrela Cadente Dourada',
+    description: 'Brilho pontual e estonteante de estrela cadente percorrendo as letras do nome.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 3100,
+    min_level: 14,
+    is_animated: true,
+    order_index: 188,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #b45309, #fbbf24, #ffffff, #b45309)"}
+  },
+  {
+    id: 'color_cat_eye_chrysoberyl',
+    name: 'Olho de Gato Crisoberilo',
+    description: 'Linha de reflexo afiada deslizando sobre pedra esmeralda polida como a pupila de um felino.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 3300,
+    min_level: 15,
+    is_animated: true,
+    order_index: 189,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #15803d, #4ade80, #ffffff, #15803d)"}
+  },
+  {
+    id: 'color_rough_diamond_glint',
+    name: 'Cintilação de Diamante Bruto',
+    description: 'Reflexo ultra-nítido viajando sobre o cinza grafite do diamante recém-extraído.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 5600,
+    min_level: 20,
+    is_animated: true,
+    order_index: 190,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #475569, #94a3b8, #ffffff, #475569)"}
+  },
+  {
+    id: 'color_volcanic_spark',
+    name: 'Centelha da Fissura Vulcânica',
+    description: 'Ponto incandescente de brasa viva correndo pelo magma escurecido da rocha basáltica.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 5900,
+    min_level: 21,
+    is_animated: true,
+    order_index: 191,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #991b1b, #f87171, #ffffff, #991b1b)"}
+  },
+  {
+    id: 'color_starlight_glimmer',
+    name: 'Vislumbre de Estrela Anã Branca',
+    description: 'Pulso denso e ultraluminoso de radiação estelar percorrendo as letras do perfil.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 6300,
+    min_level: 21,
+    is_animated: true,
+    order_index: 192,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #6d28d9, #c084fc, #ffffff, #6d28d9)"}
+  },
+  {
+    id: 'color_emerald_flash',
+    name: 'Relâmpago Esmeralda Puro',
+    description: 'Glint verde elétrico que atravessa o texto com intensidade arrebatadora.',
+    kind: 'NAME_COLOR',
+    rarity: 'MITICA',
+    price_xp: 8200,
+    min_level: 23,
+    is_animated: true,
+    order_index: 193,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(90deg, #065f46, #34d399, #ffffff, #065f46)"}
+  },
+  {
+    id: 'color_dimension_rift_shift',
+    name: 'Deriva da Fenda Dimensional',
+    description: 'Deslocamento angular contínuo entre tons de vácuo índigo e violeta quântico.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 3500,
+    min_level: 15,
+    is_animated: true,
+    order_index: 194,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #1e1b4b, #6366f1, #a855f7)"}
+  },
+  {
+    id: 'color_twilight_aurora_shift',
+    name: 'Aurora do Crepúsculo Nórdico',
+    description: 'Balanço diagonal hipnótico evocando o encontro do céu noturno com as luzes do norte.',
+    kind: 'NAME_COLOR',
+    rarity: 'EPICA',
+    price_xp: 3700,
+    min_level: 16,
+    is_animated: true,
+    order_index: 195,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #0f766e, #2dd4bf, #a855f7)"}
+  },
+  {
+    id: 'color_supernova_collapse',
+    name: 'Colapso de Supernova Térmica',
+    description: 'Deriva angular intensa com gradiente de fusão termonuclear em alta velocidade.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 6600,
+    min_level: 22,
+    is_animated: true,
+    order_index: 196,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #991b1b, #f97316, #fde047)"}
+  },
+  {
+    id: 'color_matrix_hyperdrive',
+    name: 'Hiperdrive do Ciberespaço',
+    description: 'Fluxo inclinado de linhas de dados em verde esmeralda e ciano terminal de alta velocidade.',
+    kind: 'NAME_COLOR',
+    rarity: 'LENDARIA',
+    price_xp: 7000,
+    min_level: 22,
+    is_animated: true,
+    order_index: 197,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #022c22, #10b981, #06b6d4)"}
+  },
+  {
+    id: 'color_crimson_nebula_drift',
+    name: 'Deriva da Nebulosa Carmesim',
+    description: 'Camadas de gás interestelar vermelho sangue e rosa cósmico em translação diagonal suave.',
+    kind: 'NAME_COLOR',
+    rarity: 'MITICA',
+    price_xp: 8800,
+    min_level: 24,
+    is_animated: true,
+    order_index: 198,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #881337, #f43f5e, #fb7185)"}
+  },
+  {
+    id: 'color_celestial_river',
+    name: 'Rio Celeste das Constelações',
+    description: 'Correnteza diagonal de pura matéria astral azul celeste pontilhada com poeira dourada.',
+    kind: 'NAME_COLOR',
+    rarity: 'MITICA',
+    price_xp: 9500,
+    min_level: 25,
+    is_animated: true,
+    order_index: 199,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #1e3a8a, #38bdf8, #fef08a)"}
+  },
+  {
+    id: 'color_cosmic_chaos_drift',
+    name: 'Caos Cósmico Nox Prime',
+    description: 'O ápice da expressão cromática: transição contínua através de todas as energias do universo Nox.',
+    kind: 'NAME_COLOR',
+    rarity: 'MITICA',
+    price_xp: 12000,
+    min_level: 25,
+    is_animated: true,
+    order_index: 200,
+    asset_url: '',
+    style_data: {"gradient":"linear-gradient(45deg, #4c1d95, #ec4899, #06b6d4, #fbbf24)"}
+  },
+
+  // =========================================================================
+  // C. TÍTULOS CÓSMICOS (100 títulos ricos com lore de Project Nox)
+  // =========================================================================
+// C. TÍTULOS CÓSMICOS (50 títulos de alta lore sem genéricos)
   // =========================================================================
   {
     id: 'title_viajante_estelar',
@@ -1396,7 +2757,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 150,
     min_level: 1,
     is_animated: false,
-    order_index: 101,
+    order_index: 201,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1409,7 +2770,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 250,
     min_level: 2,
     is_animated: false,
-    order_index: 102,
+    order_index: 202,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1422,7 +2783,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 450,
     min_level: 3,
     is_animated: false,
-    order_index: 103,
+    order_index: 203,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1435,7 +2796,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 550,
     min_level: 4,
     is_animated: false,
-    order_index: 104,
+    order_index: 204,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1448,7 +2809,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 850,
     min_level: 5,
     is_animated: false,
-    order_index: 105,
+    order_index: 205,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1461,7 +2822,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 950,
     min_level: 6,
     is_animated: false,
-    order_index: 106,
+    order_index: 206,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1474,7 +2835,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1100,
     min_level: 7,
     is_animated: false,
-    order_index: 107,
+    order_index: 207,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1487,7 +2848,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1250,
     min_level: 7,
     is_animated: false,
-    order_index: 108,
+    order_index: 208,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1500,7 +2861,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1500,
     min_level: 8,
     is_animated: false,
-    order_index: 109,
+    order_index: 209,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1513,7 +2874,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1600,
     min_level: 9,
     is_animated: false,
-    order_index: 110,
+    order_index: 210,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1526,7 +2887,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2100,
     min_level: 11,
     is_animated: false,
-    order_index: 111,
+    order_index: 211,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1539,7 +2900,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2000,
     min_level: 11,
     is_animated: false,
-    order_index: 112,
+    order_index: 212,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1552,7 +2913,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2500,
     min_level: 13,
     is_animated: false,
-    order_index: 113,
+    order_index: 213,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1565,7 +2926,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2200,
     min_level: 12,
     is_animated: false,
-    order_index: 114,
+    order_index: 214,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1578,7 +2939,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3200,
     min_level: 15,
     is_animated: false,
-    order_index: 115,
+    order_index: 215,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1591,7 +2952,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3500,
     min_level: 16,
     is_animated: false,
-    order_index: 116,
+    order_index: 216,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1604,7 +2965,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3800,
     min_level: 17,
     is_animated: false,
-    order_index: 117,
+    order_index: 217,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1617,7 +2978,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4200,
     min_level: 19,
     is_animated: false,
-    order_index: 118,
+    order_index: 218,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1630,7 +2991,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4800,
     min_level: 19,
     is_animated: false,
-    order_index: 119,
+    order_index: 219,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1643,7 +3004,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5200,
     min_level: 20,
     is_animated: false,
-    order_index: 120,
+    order_index: 220,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1656,7 +3017,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5500,
     min_level: 21,
     is_animated: false,
-    order_index: 121,
+    order_index: 221,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1669,7 +3030,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 7000,
     min_level: 24,
     is_animated: false,
-    order_index: 122,
+    order_index: 222,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1682,7 +3043,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 300,
     min_level: 2,
     is_animated: false,
-    order_index: 123,
+    order_index: 223,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1695,7 +3056,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 600,
     min_level: 4,
     is_animated: false,
-    order_index: 124,
+    order_index: 224,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1708,7 +3069,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1300,
     min_level: 7,
     is_animated: false,
-    order_index: 125,
+    order_index: 225,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1721,7 +3082,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1350,
     min_level: 8,
     is_animated: false,
-    order_index: 126,
+    order_index: 226,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1734,7 +3095,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1700,
     min_level: 9,
     is_animated: false,
-    order_index: 127,
+    order_index: 227,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1747,7 +3108,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1800,
     min_level: 10,
     is_animated: false,
-    order_index: 128,
+    order_index: 228,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1760,7 +3121,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1900,
     min_level: 10,
     is_animated: false,
-    order_index: 129,
+    order_index: 229,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1773,7 +3134,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2300,
     min_level: 12,
     is_animated: false,
-    order_index: 130,
+    order_index: 230,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1786,7 +3147,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3300,
     min_level: 15,
     is_animated: false,
-    order_index: 131,
+    order_index: 231,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1799,7 +3160,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3400,
     min_level: 15,
     is_animated: false,
-    order_index: 132,
+    order_index: 232,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1812,7 +3173,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3600,
     min_level: 16,
     is_animated: false,
-    order_index: 133,
+    order_index: 233,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1825,7 +3186,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3700,
     min_level: 16,
     is_animated: false,
-    order_index: 134,
+    order_index: 234,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1838,7 +3199,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3900,
     min_level: 17,
     is_animated: false,
-    order_index: 135,
+    order_index: 235,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1851,7 +3212,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4100,
     min_level: 18,
     is_animated: false,
-    order_index: 136,
+    order_index: 236,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1864,7 +3225,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4900,
     min_level: 19,
     is_animated: false,
-    order_index: 137,
+    order_index: 237,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1877,7 +3238,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 500,
     min_level: 3,
     is_animated: false,
-    order_index: 138,
+    order_index: 238,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1890,7 +3251,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1000,
     min_level: 6,
     is_animated: false,
-    order_index: 139,
+    order_index: 239,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1903,7 +3264,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1200,
     min_level: 7,
     is_animated: false,
-    order_index: 140,
+    order_index: 240,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1916,7 +3277,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1650,
     min_level: 9,
     is_animated: false,
-    order_index: 141,
+    order_index: 241,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1929,7 +3290,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2050,
     min_level: 11,
     is_animated: false,
-    order_index: 142,
+    order_index: 242,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1942,7 +3303,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2400,
     min_level: 12,
     is_animated: false,
-    order_index: 143,
+    order_index: 243,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1955,7 +3316,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4000,
     min_level: 18,
     is_animated: false,
-    order_index: 144,
+    order_index: 244,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1968,7 +3329,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4300,
     min_level: 19,
     is_animated: false,
-    order_index: 145,
+    order_index: 245,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1981,7 +3342,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5100,
     min_level: 20,
     is_animated: false,
-    order_index: 146,
+    order_index: 246,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -1994,7 +3355,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5400,
     min_level: 21,
     is_animated: false,
-    order_index: 147,
+    order_index: 247,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -2007,7 +3368,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 6000,
     min_level: 23,
     is_animated: false,
-    order_index: 148,
+    order_index: 248,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -2020,7 +3381,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 6500,
     min_level: 24,
     is_animated: false,
-    order_index: 149,
+    order_index: 249,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
@@ -2033,12 +3394,668 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 8000,
     min_level: 25,
     is_animated: false,
-    order_index: 150,
+    order_index: 250,
     asset_url: '',
     style_data: { badge: 'crown' }
   },
   // =========================================================================
-  // D. BANNERS DE COMENTÁRIO (50 banners dinâmicos e animados a 60fps)
+
+  // --- NOVOS TÍTULOS (251 - 300) ---
+  {
+    id: 'title_sombra_do_eon',
+    name: 'Sombra do Éon',
+    description: 'Observador silencioso que atravessa as eras sem deixar pegadas.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 150,
+    min_level: 1,
+    is_animated: false,
+    order_index: 251,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_peregrino_das_brumas',
+    name: 'Peregrino das Brumas',
+    description: 'Viajante incansável das brumas esquecidas entre os reinos de Nox.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 180,
+    min_level: 1,
+    is_animated: false,
+    order_index: 252,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_escriba_do_caos',
+    name: 'Escriba do Caos',
+    description: 'Registrador das anomalias e desvios imprevisíveis do cosmos literário.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 220,
+    min_level: 2,
+    is_animated: false,
+    order_index: 253,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_rastreador_de_cometas',
+    name: 'Rastreador de Cometas',
+    description: 'Aventureiro veloz que persegue as caudas ardentes pelas rotas estelares.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 250,
+    min_level: 2,
+    is_animated: false,
+    order_index: 254,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_alquimista_de_almas',
+    name: 'Alquimista de Almas',
+    description: 'Estudioso dos sentimentos e elixires que movem os heróis de cada narrativa.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 280,
+    min_level: 2,
+    is_animated: false,
+    order_index: 255,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_muralha_de_obsidiana',
+    name: 'Muralha de Obsidiana',
+    description: 'Defensor inabalável cuja postura resiste a qualquer colapso cósmico.',
+    kind: 'TITLE',
+    rarity: 'COMUM',
+    price_xp: 300,
+    min_level: 2,
+    is_animated: false,
+    order_index: 256,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_guardiao_da_chama_fria',
+    name: 'Guardião da Chama Fria',
+    description: 'Portador do fogo azul que queima sem consumir a matéria cósmica.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 350,
+    min_level: 3,
+    is_animated: false,
+    order_index: 257,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_cacador_de_ecos',
+    name: 'Caçador de Ecos',
+    description: 'Aquele que escuta os sussurros de histórias esquecidas no eco primordial.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 380,
+    min_level: 3,
+    is_animated: false,
+    order_index: 258,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_sentinela_das_runas',
+    name: 'Sentinela das Runas',
+    description: 'Vigia consagrado aos símbolos ancestrais gravados nos pilares da realidade.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 420,
+    min_level: 3,
+    is_animated: false,
+    order_index: 259,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_viajante_das_dunas_astrais',
+    name: 'Viajante das Dunas Astrais',
+    description: 'Explorador que caminha sob as tempestades de areia dourada do vácuo.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 460,
+    min_level: 4,
+    is_animated: false,
+    order_index: 260,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_heraldo_do_sol_negro',
+    name: 'Heraldo do Sol Negro',
+    description: 'Mensageiro dos eclipses totais e das verdades veladas pela noite.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 500,
+    min_level: 4,
+    is_animated: false,
+    order_index: 261,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_artesao_do_tempo',
+    name: 'Artesão do Tempo',
+    description: 'Mecânico refinado que sincroniza os ponteiros das crônicas noxianas.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 540,
+    min_level: 4,
+    is_animated: false,
+    order_index: 262,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_lobo_do_vazio',
+    name: 'Lobo do Vazio',
+    description: 'Predador cósmico solitário que caça monstros nas franjas do desconhecido.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 580,
+    min_level: 5,
+    is_animated: false,
+    order_index: 263,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_observador_do_abismo',
+    name: 'Observador do Abismo',
+    description: 'Aquele que olhou diretamente nos olhos do nada absoluto e sorriu de volta.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 620,
+    min_level: 5,
+    is_animated: false,
+    order_index: 264,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_invocador_de_tempestades',
+    name: 'Invocador de Tempestades',
+    description: 'Canalizador dos relâmpagos violeta que rasgam as noites do servidor.',
+    kind: 'TITLE',
+    rarity: 'INCOMUM',
+    price_xp: 660,
+    min_level: 5,
+    is_animated: false,
+    order_index: 265,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_cavaleiro_da_aurora_boreal',
+    name: 'Cavaleiro da Aurora Boreal',
+    description: 'Paladino coberto pelos véus luminescentes dos pólos estelares.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 750,
+    min_level: 6,
+    is_animated: false,
+    order_index: 266,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_mestre_das_lamina_oculta',
+    name: 'Mestre da Lâmina Oculta',
+    description: 'Guerreiro do código e do silêncio cuja precisão nunca falha um golpe.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 820,
+    min_level: 6,
+    is_animated: false,
+    order_index: 267,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_domador_de_dragoes_astrais',
+    name: 'Domador de Dragões Astrais',
+    description: 'Soberano que cavalga as serpentes emplumadas pelos anéis de Saturno.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 900,
+    min_level: 6,
+    is_animated: false,
+    order_index: 268,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_senhor_dos_espelhos_arcanos',
+    name: 'Senhor dos Espelhos Arcanos',
+    description: 'Mago dos reflexos infinitos e das ilusões caleidoscópicas perfeitas.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 980,
+    min_level: 7,
+    is_animated: false,
+    order_index: 269,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_comandante_da_flotilha_estelar',
+    name: 'Comandante da Flotilha Estelar',
+    description: 'Almirante de cruzadores siderais cruzando nebulosas inexploradas.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 1050,
+    min_level: 7,
+    is_animated: false,
+    order_index: 270,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_filho_da_supernova',
+    name: 'Filho da Supernova',
+    description: 'Nascido no exato instante da explosão estelar mais brilhante da galáxia.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 1150,
+    min_level: 7,
+    is_animated: false,
+    order_index: 271,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_tecelao_de_memorias',
+    name: 'Tecelão de Memórias',
+    description: 'Guardião das lembranças de todas as obras lidas e apreciadas pela comunidade.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 1250,
+    min_level: 8,
+    is_animated: false,
+    order_index: 272,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_soberano_das_profundezas',
+    name: 'Soberano das Profundezas',
+    description: 'Governante dos abismos oceânicos onde a luz do sol nunca alcança.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 1350,
+    min_level: 8,
+    is_animated: false,
+    order_index: 273,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_arauto_da_fenix',
+    name: 'Arauto da Fênix',
+    description: 'Aquele que ressurge renovado e mais brilhante a cada tempestade superada.',
+    kind: 'TITLE',
+    rarity: 'RARA',
+    price_xp: 1450,
+    min_level: 8,
+    is_animated: false,
+    order_index: 274,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_arquivista_do_infinito',
+    name: 'Arquivista do Infinito',
+    description: 'Catalogador de infinitos universos literários com rigor impecável.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 1600,
+    min_level: 9,
+    is_animated: false,
+    order_index: 275,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_feiticeiro_da_antimateria',
+    name: 'Feiticeiro da Antimatéria',
+    description: 'Manipulador das colisões quânticas que liberam energia incomensurável.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 1750,
+    min_level: 9,
+    is_animated: false,
+    order_index: 276,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_general_da_legiao_fantasma',
+    name: 'General da Legião Fantasma',
+    description: 'Líder de guerreiros etéreos jurados à defesa perpétua do santuário Nox.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 1900,
+    min_level: 10,
+    is_animated: false,
+    order_index: 277,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_protetor_da_arvore_da_vida',
+    name: 'Protetor da Árvore da Vida',
+    description: 'Guardião das raízes primordiais de onde brotam todas as lendas e mitos.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 2100,
+    min_level: 10,
+    is_animated: false,
+    order_index: 278,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_senhor_dos_pesadelos_lucidos',
+    name: 'Senhor dos Pesadelos Lúcidos',
+    description: 'Conquistador dos reinos oníricos onde a imaginação desafia a física.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 2300,
+    min_level: 11,
+    is_animated: false,
+    order_index: 279,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_chanceler_do_conselho_estelar',
+    name: 'Chanceler do Conselho Estelar',
+    description: 'Diplomata supremo das nações estelares federadas sob o emblema Nox.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 2500,
+    min_level: 11,
+    is_animated: false,
+    order_index: 280,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_tirano_da_entropia',
+    name: 'Tirano da Entropia',
+    description: 'Aquele que dita a velocidade do decaimento atômico e da renovação cósmica.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 2750,
+    min_level: 12,
+    is_animated: false,
+    order_index: 281,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_espectro_da_meia_noite',
+    name: 'Espectro da Meia-Noite',
+    description: 'Entidade crepuscular que se manifesta no ápice da hora mais escura.',
+    kind: 'TITLE',
+    rarity: 'EPICA',
+    price_xp: 3000,
+    min_level: 13,
+    is_animated: false,
+    order_index: 282,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_rei_dos_elementos_primordiais',
+    name: 'Rei dos Elementos Primordiais',
+    description: 'Detentor do domínio harmônico sobre fogo, terra, água, ar e éter.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 3400,
+    min_level: 14,
+    is_animated: false,
+    order_index: 283,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_profeta_do_fim_dos_tempos',
+    name: 'Profeta do Fim dos Tempos',
+    description: 'Vidente que vislumbrou o fechar da última página do multiverso.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 3800,
+    min_level: 15,
+    is_animated: false,
+    order_index: 284,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_imperador_da_estrela_polar',
+    name: 'Imperador da Estrela Polar',
+    description: 'Farol inflexível que orienta as almas perdidas nas travessias galácticas.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 4200,
+    min_level: 16,
+    is_animated: false,
+    order_index: 285,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_avatar_da_gravidade',
+    name: 'Avatar da Gravidade',
+    description: 'Força cósmica que curva a luz, dobra o tempo e atrai todas as atenções.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 4600,
+    min_level: 17,
+    is_animated: false,
+    order_index: 286,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_carrasco_dos_deuses_falsos',
+    name: 'Carrasco dos Deuses Falsos',
+    description: 'Guerreiro lendário que extirpou a arrogância de divindades tirânicas.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 5000,
+    min_level: 18,
+    is_animated: false,
+    order_index: 287,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_espadachim_das_mil_dimensoes',
+    name: 'Espadachim das Mil Dimensões',
+    description: 'Mestre cuja lâmina corta o tecido do espaço em mil ângulos simultâneos.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 5400,
+    min_level: 18,
+    is_animated: false,
+    order_index: 288,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_senhor_das_reliquias_eternas',
+    name: 'Senhor das Relíquias Eternas',
+    description: 'Colecionador dos artefatos supremos esquecidos no alvorecer do mundo.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 5800,
+    min_level: 19,
+    is_animated: false,
+    order_index: 289,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_soberano_do_vortice_celeste',
+    name: 'Soberano do Vórtice Celeste',
+    description: 'Comandante do turbilhão de luzes e pulsares no coração da galáxia.',
+    kind: 'TITLE',
+    rarity: 'LENDARIA',
+    price_xp: 6200,
+    min_level: 19,
+    is_animated: false,
+    order_index: 290,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_arquiteto_do_multiverso',
+    name: 'Arquiteto do Multiverso',
+    description: 'Engenheiro supremo que desenhou os alicerces e pontes entre realidades.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 6800,
+    min_level: 20,
+    is_animated: false,
+    order_index: 291,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_vontade_absoluta_do_cosmos',
+    name: 'Vontade Absoluta do Cosmos',
+    description: 'Consciência cuja determinação molda leis físicas e destinos imutáveis.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 7400,
+    min_level: 21,
+    is_animated: false,
+    order_index: 292,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_deus_da_forja_estelar',
+    name: 'Deus da Forja Estelar',
+    description: 'Criador que martela sóis nascente sobre bigornas de ferro de meteorito.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 8000,
+    min_level: 22,
+    is_animated: false,
+    order_index: 293,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_eternidade_encarnada',
+    name: 'Eternidade Encarnada',
+    description: 'Ser atemporal que transcende começos e fins, imune ao envelhecimento.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 8700,
+    min_level: 23,
+    is_animated: false,
+    order_index: 294,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_primordial_do_caos_e_da_ordem',
+    name: 'Primordial do Caos e da Ordem',
+    description: 'O ponto zero onde o equilíbrio supremo sustenta todas as manifestações.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 9400,
+    min_level: 24,
+    is_animated: false,
+    order_index: 295,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_monarca_da_criacao_literaria',
+    name: 'Monarca da Criação Literária',
+    description: 'Divindade máxima inspiradora de cada autor, ilustrador e leitor.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 10200,
+    min_level: 25,
+    is_animated: false,
+    order_index: 296,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_olho_da_onipresenca',
+    name: 'Olho da Onipresença',
+    description: 'Visão que penetra cada capítulo, cada estante e cada segredo do Nox.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 11000,
+    min_level: 26,
+    is_animated: false,
+    order_index: 297,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_supremo_governante_de_nox',
+    name: 'Supremo Governante de Nox',
+    description: 'Venerado detentor da coroa das sombras e da luz eterna.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 12500,
+    min_level: 27,
+    is_animated: false,
+    order_index: 298,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_lenda_viva_do_firmamento',
+    name: 'Lenda Viva do Firmamento',
+    description: 'O ápice absoluto de prestígio, respeito e dedicação dentro do universo Nox.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 14000,
+    min_level: 28,
+    is_animated: false,
+    order_index: 299,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+  {
+    id: 'title_mito_primordial',
+    name: 'Mito Primordial de Nox',
+    description: 'A própria gênese encarnada. O início de tudo o que foi, é e será lido.',
+    kind: 'TITLE',
+    rarity: 'MITICA',
+    price_xp: 16000,
+    min_level: 30,
+    is_animated: false,
+    order_index: 300,
+    asset_url: '',
+    style_data: {"badge":"crown"}
+  },
+
+  // =========================================================================
+  // D. BANNERS DE COMENTÁRIO (100 cenários procedurais SVG/CSS 60fps)
+  // =========================================================================
+// D. BANNERS DE COMENTÁRIO (50 banners dinâmicos e animados a 60fps)
   // =========================================================================
   {
     id: 'banner_nebulosa_vazio',
@@ -2049,7 +4066,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 300,
     min_level: 2,
     is_animated: true,
-    order_index: 151,
+    order_index: 301,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_nebulosa_vazio'] }
   },
@@ -2062,7 +4079,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 600,
     min_level: 4,
     is_animated: true,
-    order_index: 152,
+    order_index: 302,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_aurora_astral'] }
   },
@@ -2075,7 +4092,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1000,
     min_level: 7,
     is_animated: true,
-    order_index: 153,
+    order_index: 303,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_energia_arcana'] }
   },
@@ -2088,7 +4105,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1800,
     min_level: 10,
     is_animated: true,
-    order_index: 154,
+    order_index: 304,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_eclipse_cosmico'] }
   },
@@ -2101,7 +4118,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3200,
     min_level: 15,
     is_animated: true,
-    order_index: 155,
+    order_index: 305,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_biblioteca_estrelas'] }
   },
@@ -2114,7 +4131,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5000,
     min_level: 20,
     is_animated: true,
-    order_index: 156,
+    order_index: 306,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_fenda_runica'] }
   },
@@ -2127,7 +4144,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1300,
     min_level: 7,
     is_animated: true,
-    order_index: 157,
+    order_index: 307,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_chuva_meteoros'] }
   },
@@ -2140,7 +4157,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1600,
     min_level: 9,
     is_animated: true,
-    order_index: 158,
+    order_index: 308,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_portal_abissal'] }
   },
@@ -2153,7 +4170,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2800,
     min_level: 14,
     is_animated: true,
-    order_index: 159,
+    order_index: 309,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_jardim_astral'] }
   },
@@ -2166,7 +4183,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4500,
     min_level: 18,
     is_animated: true,
-    order_index: 160,
+    order_index: 310,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cidadela_celestial'] }
   },
@@ -2179,7 +4196,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 700,
     min_level: 4,
     is_animated: true,
-    order_index: 161,
+    order_index: 311,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ruinas_celestes'] }
   },
@@ -2192,7 +4209,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1100,
     min_level: 7,
     is_animated: true,
-    order_index: 162,
+    order_index: 312,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_luas_multiplas'] }
   },
@@ -2205,7 +4222,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1900,
     min_level: 10,
     is_animated: true,
-    order_index: 163,
+    order_index: 313,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_vulcao_cosmico'] }
   },
@@ -2218,7 +4235,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3300,
     min_level: 15,
     is_animated: true,
-    order_index: 164,
+    order_index: 314,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ceu_infernal'] }
   },
@@ -2231,7 +4248,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5200,
     min_level: 20,
     is_animated: true,
-    order_index: 165,
+    order_index: 315,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_santuario_dourado'] }
   },
@@ -2244,7 +4261,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1200,
     min_level: 7,
     is_animated: true,
-    order_index: 166,
+    order_index: 316,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_tempestade_estelar'] }
   },
@@ -2257,7 +4274,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2000,
     min_level: 11,
     is_animated: true,
-    order_index: 167,
+    order_index: 317,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_runas_vivas'] }
   },
@@ -2270,7 +4287,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3400,
     min_level: 16,
     is_animated: true,
-    order_index: 168,
+    order_index: 318,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_oceano_celestial'] }
   },
@@ -2283,7 +4300,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 350,
     min_level: 2,
     is_animated: true,
-    order_index: 169,
+    order_index: 319,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_templo_astronomico'] }
   },
@@ -2296,7 +4313,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5400,
     min_level: 21,
     is_animated: true,
-    order_index: 170,
+    order_index: 320,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_buraco_negro'] }
   },
@@ -2309,7 +4326,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 750,
     min_level: 4,
     is_animated: true,
-    order_index: 171,
+    order_index: 321,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_floresta_cristal'] }
   },
@@ -2322,7 +4339,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1250,
     min_level: 7,
     is_animated: true,
-    order_index: 172,
+    order_index: 322,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cidade_cyberpunk'] }
   },
@@ -2335,7 +4352,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3500,
     min_level: 16,
     is_animated: true,
-    order_index: 173,
+    order_index: 323,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_fenix_ascendente'] }
   },
@@ -2348,7 +4365,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 400,
     min_level: 2,
     is_animated: true,
-    order_index: 174,
+    order_index: 324,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_mar_de_estrelas'] }
   },
@@ -2361,7 +4378,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 800,
     min_level: 4,
     is_animated: true,
-    order_index: 175,
+    order_index: 325,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cacador_cometas'] }
   },
@@ -2374,7 +4391,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2100,
     min_level: 11,
     is_animated: true,
-    order_index: 176,
+    order_index: 326,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_labirinto_espelho'] }
   },
@@ -2387,7 +4404,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3600,
     min_level: 16,
     is_animated: true,
-    order_index: 177,
+    order_index: 327,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_castelo_gotico'] }
   },
@@ -2400,7 +4417,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1350,
     min_level: 8,
     is_animated: true,
-    order_index: 178,
+    order_index: 328,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_aneis_saturno'] }
   },
@@ -2413,7 +4430,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2200,
     min_level: 12,
     is_animated: true,
-    order_index: 179,
+    order_index: 329,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ponte_bifrost'] }
   },
@@ -2426,7 +4443,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5600,
     min_level: 22,
     is_animated: true,
-    order_index: 180,
+    order_index: 330,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_dragao_celeste'] }
   },
@@ -2439,7 +4456,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 850,
     min_level: 5,
     is_animated: true,
-    order_index: 181,
+    order_index: 331,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ilha_flutuante'] }
   },
@@ -2452,7 +4469,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2300,
     min_level: 12,
     is_animated: true,
-    order_index: 182,
+    order_index: 332,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_forja_estelar'] }
   },
@@ -2465,7 +4482,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3700,
     min_level: 17,
     is_animated: true,
-    order_index: 183,
+    order_index: 333,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_fundo_marinho_abissal'] }
   },
@@ -2478,7 +4495,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1400,
     min_level: 8,
     is_animated: true,
-    order_index: 184,
+    order_index: 334,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_matrix_digital'] }
   },
@@ -2491,7 +4508,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 450,
     min_level: 3,
     is_animated: true,
-    order_index: 185,
+    order_index: 335,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_sakura_noturna'] }
   },
@@ -2504,7 +4521,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2400,
     min_level: 12,
     is_animated: true,
-    order_index: 186,
+    order_index: 336,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_torre_relogio'] }
   },
@@ -2517,7 +4534,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 900,
     min_level: 5,
     is_animated: true,
-    order_index: 187,
+    order_index: 337,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_pradaria_astral'] }
   },
@@ -2530,7 +4547,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 5800,
     min_level: 22,
     is_animated: true,
-    order_index: 188,
+    order_index: 338,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_quasar_supremo'] }
   },
@@ -2543,7 +4560,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1450,
     min_level: 8,
     is_animated: true,
-    order_index: 189,
+    order_index: 339,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_santuario_lua'] }
   },
@@ -2556,7 +4573,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 3800,
     min_level: 17,
     is_animated: true,
-    order_index: 190,
+    order_index: 340,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_fenda_tempo'] }
   },
@@ -2569,7 +4586,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2500,
     min_level: 13,
     is_animated: true,
-    order_index: 191,
+    order_index: 341,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_altar_sacrificio'] }
   },
@@ -2582,7 +4599,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1500,
     min_level: 8,
     is_animated: true,
-    order_index: 192,
+    order_index: 342,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_viagem_hiperespaco'] }
   },
@@ -2595,7 +4612,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 500,
     min_level: 3,
     is_animated: true,
-    order_index: 193,
+    order_index: 343,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_montanhas_neve_cosmica'] }
   },
@@ -2608,7 +4625,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 950,
     min_level: 5,
     is_animated: true,
-    order_index: 194,
+    order_index: 344,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cemiterio_naves'] }
   },
@@ -2621,7 +4638,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 4000,
     min_level: 18,
     is_animated: true,
-    order_index: 195,
+    order_index: 345,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_esfera_dyson'] }
   },
@@ -2634,7 +4651,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 2600,
     min_level: 13,
     is_animated: true,
-    order_index: 196,
+    order_index: 346,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_valquiria_campo'] }
   },
@@ -2647,7 +4664,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 500,
     min_level: 3,
     is_animated: true,
-    order_index: 197,
+    order_index: 347,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_floresta_fungos'] }
   },
@@ -2660,7 +4677,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 1550,
     min_level: 8,
     is_animated: true,
-    order_index: 198,
+    order_index: 348,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_caverna_ametista'] }
   },
@@ -2673,7 +4690,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 6000,
     min_level: 23,
     is_animated: true,
-    order_index: 199,
+    order_index: 349,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_nexus_elementos'] }
   },
@@ -2686,10 +4703,663 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     price_xp: 7500,
     min_level: 25,
     is_animated: true,
-    order_index: 200,
+    order_index: 350,
     asset_url: '',
     style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_trono_soberano'] }
   },
+
+  // --- NOVOS BANNERS DE COMENTÁRIO (351 - 400) ---
+  {
+    id: 'banner_cidade_flutuante_celestial',
+    name: 'Cidade Flutuante Celestial',
+    description: 'Metrópole de espirais douradas e cascatas de luz suspensa entre nuvens etéreas.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 950,
+    min_level: 6,
+    is_animated: true,
+    order_index: 351,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cidade_flutuante_celestial'] }
+  },
+  {
+    id: 'banner_templo_das_constelacoes',
+    name: 'Templo das Constelações',
+    description: 'Santuário de mármore translúcido sob abóbada celeste mapeando mapas astrais vivos.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1000,
+    min_level: 6,
+    is_animated: true,
+    order_index: 352,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_templo_das_constelacoes'] }
+  },
+  {
+    id: 'banner_deserto_astral_dunas',
+    name: 'Dunas Astrais Infinitas',
+    description: 'Deserto cósmico sob dois sóis poentes com areias douradas em constante deslocamento.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 750,
+    min_level: 4,
+    is_animated: true,
+    order_index: 353,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_deserto_astral_dunas'] }
+  },
+  {
+    id: 'banner_oceano_cristal_profundo',
+    name: 'Oceano de Cristal Profundo',
+    description: 'Águas abissais luminescentes com espigões de quartzo brilhando na escuridão subaquática.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 1800,
+    min_level: 10,
+    is_animated: true,
+    order_index: 354,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_oceano_cristal_profundo'] }
+  },
+  {
+    id: 'banner_ruinas_da_civilizacao_solar',
+    name: 'Ruínas da Civilização Solar',
+    description: 'Colunas ancestrais talhadas em pedra solar com glifos pulsando calor eterno.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 800,
+    min_level: 5,
+    is_animated: true,
+    order_index: 355,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ruinas_da_civilizacao_solar'] }
+  },
+  {
+    id: 'banner_jardim_das_orquideas_misticas',
+    name: 'Jardim das Orquídeas Místicas',
+    description: 'Vale botânico encantado onde pétalas luminescentes liberam orvalho de néon.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1100,
+    min_level: 7,
+    is_animated: true,
+    order_index: 356,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_jardim_das_orquideas_misticas'] }
+  },
+  {
+    id: 'banner_eclipse_do_dragao',
+    name: 'Eclipse do Dragão Solar',
+    description: 'Silhueta de dragão alado recortada contra um eclipse total de corona rubi.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 2200,
+    min_level: 11,
+    is_animated: true,
+    order_index: 357,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_eclipse_do_dragao'] }
+  },
+  {
+    id: 'banner_tempestade_de_plasma',
+    name: 'Tempestade de Plasma Primordial',
+    description: 'Arcos elétricos monumentais e relâmpagos violeta varrendo atmosfera de alta densidade.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 2400,
+    min_level: 12,
+    is_animated: true,
+    order_index: 358,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_tempestade_de_plasma'] }
+  },
+  {
+    id: 'banner_torre_da_astronomia_antiga',
+    name: 'Observatório dos Antigos',
+    description: 'Torre esguia com lunetas gigantescas apontadas para nebulosas e cometas em aproximação.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 850,
+    min_level: 5,
+    is_animated: true,
+    order_index: 359,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_torre_da_astronomia_antiga'] }
+  },
+  {
+    id: 'banner_santuario_da_arvore_sagrada',
+    name: 'Santuário da Árvore Sagrada',
+    description: 'Yggdrasil cósmica cujas folhas são galáxias inteiras conectadas por seiva de luz.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 4500,
+    min_level: 17,
+    is_animated: true,
+    order_index: 360,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_santuario_da_arvore_sagrada'] }
+  },
+  {
+    id: 'banner_biblioteca_arcanos_proibidos',
+    name: 'Biblioteca dos Tomos Arcanos',
+    description: 'Prateleiras infinitas de grimórios flutuantes com páginas murmurando segredos da criação.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1250,
+    min_level: 7,
+    is_animated: true,
+    order_index: 361,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_biblioteca_arcanos_proibidos'] }
+  },
+  {
+    id: 'banner_palacio_imperial_de_jade',
+    name: 'Palácio Imperial de Jade',
+    description: 'Pavilhões orientais de jade polida e telhados curvados sob luar de prata ancestral.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 2600,
+    min_level: 13,
+    is_animated: true,
+    order_index: 362,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_palacio_imperial_de_jade'] }
+  },
+  {
+    id: 'banner_sistema_de_tres_sois',
+    name: 'Trissolaris Prime',
+    description: 'Horizonte exótico banhado pela iluminação combinada de três estrelas de cores distintas.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1350,
+    min_level: 8,
+    is_animated: true,
+    order_index: 363,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_sistema_de_tres_sois'] }
+  },
+  {
+    id: 'banner_criatura_leviata_estelar',
+    name: 'Baleia Astral das Profundezas',
+    description: 'Colosso estelar sereno nadando lentamente através de nuvens interestelares azuis.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 2800,
+    min_level: 14,
+    is_animated: true,
+    order_index: 364,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_criatura_leviata_estelar'] }
+  },
+  {
+    id: 'banner_portal_das_dimensoes',
+    name: 'Portal das Mil Dimensões',
+    description: 'Monólito circular de dobra quântica com horizonte de eventos em rotação gravitacional.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 4800,
+    min_level: 18,
+    is_animated: true,
+    order_index: 365,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_portal_das_dimensoes'] }
+  },
+  {
+    id: 'banner_aurora_polar_dos_glaciares',
+    name: 'Aurora Boreal dos Glaciares',
+    description: 'Cortinas etéreas de luz esmeralda ondulando suavemente sobre montanhas de gelo puro.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 900,
+    min_level: 5,
+    is_animated: true,
+    order_index: 366,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_aurora_polar_dos_glaciares'] }
+  },
+  {
+    id: 'banner_vulcao_de_obsidiana',
+    name: 'Caldeira de Obsidiana',
+    description: 'Rios de magma carmesim serpentilizando entre penhascos de vidro vulcânico negro.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1450,
+    min_level: 8,
+    is_animated: true,
+    order_index: 367,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_vulcao_de_obsidiana'] }
+  },
+  {
+    id: 'banner_reliquia_da_arca_estelar',
+    name: 'Arca Estelar dos Precursores',
+    description: 'Nave capitânia monumental adormecida nas crateras silenciosas de um asteroide.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 3000,
+    min_level: 15,
+    is_animated: true,
+    order_index: 368,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_reliquia_da_arca_estelar'] }
+  },
+  {
+    id: 'banner_floresta_de_bambu_espiritual',
+    name: 'Floresta de Bambu Espiritual',
+    description: 'Trilha serena entre colunas de bambu cintilante com vaga-lumes cósmicos em dança.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 950,
+    min_level: 5,
+    is_animated: true,
+    order_index: 369,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_floresta_de_bambu_espiritual'] }
+  },
+  {
+    id: 'banner_nebulosa_do_corvo_noturno',
+    name: 'Nebulosa do Corvo Noturno',
+    description: 'Agrupamento de poeira e gás formando as asas de uma ave mística vigilante no cosmos.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1550,
+    min_level: 8,
+    is_animated: true,
+    order_index: 370,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_nebulosa_do_corvo_noturno'] }
+  },
+  {
+    id: 'banner_mina_de_cristais_luminosos',
+    name: 'Mina dos Cristais Luminescentes',
+    description: 'Galeria subterrânea mágica repleta de geodos gigantes que emitem luz ciano e ametista.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 980,
+    min_level: 5,
+    is_animated: true,
+    order_index: 371,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_mina_de_cristais_luminosos'] }
+  },
+  {
+    id: 'banner_navio_fantasma_celeste',
+    name: 'Galeão Fantasma do Éter',
+    description: 'Veleiro lendário com velas rasgadas de névoa navegando pelos mares do vácuo.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 3200,
+    min_level: 15,
+    is_animated: true,
+    order_index: 372,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_navio_fantasma_celeste'] }
+  },
+  {
+    id: 'banner_forja_do_armagedom',
+    name: 'Forja Cósmica Primordial',
+    description: 'Bigorna colossal onde núcleos estelares são moldados sob martelos de gravidade pura.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 3400,
+    min_level: 16,
+    is_animated: true,
+    order_index: 373,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_forja_do_armagedom'] }
+  },
+  {
+    id: 'banner_altar_do_sol_invictus',
+    name: 'Altar do Sol Invictus',
+    description: 'Pirâmide solar irradiando raios áureos inquebrantáveis contra a escuridão do espaço.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 5100,
+    min_level: 19,
+    is_animated: true,
+    order_index: 374,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_altar_do_sol_invictus'] }
+  },
+  {
+    id: 'banner_abismo_das_aguas_vivas',
+    name: 'Dança das Medusas Astrais',
+    description: 'Enxame de criaturas translúcidas flutuando em maré calma de éter turquesa.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1650,
+    min_level: 9,
+    is_animated: true,
+    order_index: 375,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_abismo_das_aguas_vivas'] }
+  },
+  {
+    id: 'banner_estacao_espacial_orbital',
+    name: 'Estação Espacial Nox Orbital',
+    description: 'Complexo científico circular girando lentamente em órbita de um planeta azul.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1750,
+    min_level: 9,
+    is_animated: true,
+    order_index: 376,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_estacao_espacial_orbital'] }
+  },
+  {
+    id: 'banner_vale_dos_monolitos_runicos',
+    name: 'Vale dos Menires Antigos',
+    description: 'Planície deserta pontilhada por monólitos rúnicos milenares que vibram ao luar.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1000,
+    min_level: 5,
+    is_animated: true,
+    order_index: 377,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_vale_dos_monolitos_runicos'] }
+  },
+  {
+    id: 'banner_oasis_sob_o_firmamento',
+    name: 'Oásis da Noite Eterna',
+    description: 'Lago cristalino cercado por palmeiras cósmicas espelhando o firmamento estelar.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1050,
+    min_level: 5,
+    is_animated: true,
+    order_index: 378,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_oasis_sob_o_firmamento'] }
+  },
+  {
+    id: 'banner_catedral_da_meia_noite',
+    name: 'Catedral Gótica da Meia-Noite',
+    description: 'Arcos ogivais monumentais e vitrais iluminados pela lua cheia prateada.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 3600,
+    min_level: 16,
+    is_animated: true,
+    order_index: 379,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_catedral_da_meia_noite'] }
+  },
+  {
+    id: 'banner_fissura_de_antimateria',
+    name: 'Fissura Quântica de Antimatéria',
+    description: 'Racha no tecido da realidade de onde vertem feixes violetas e partículas de alta energia.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 3800,
+    min_level: 17,
+    is_animated: true,
+    order_index: 380,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_fissura_de_antimateria'] }
+  },
+  {
+    id: 'banner_danca_dos_meteoritos',
+    name: 'Chuva de Meteoros de Perseidas',
+    description: 'Centenas de traços luminosos cruzando a atmosfera em espetáculo celestial vibrante.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1850,
+    min_level: 10,
+    is_animated: true,
+    order_index: 381,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_danca_dos_meteoritos'] }
+  },
+  {
+    id: 'banner_labirinto_de_quartzo_rosa',
+    name: 'Labirinto de Quartzo Rosa',
+    description: 'Muralhas de cristal rosado reluzente criando reflexos suaves de paz e harmonia.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1100,
+    min_level: 6,
+    is_animated: true,
+    order_index: 382,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_labirinto_de_quartzo_rosa'] }
+  },
+  {
+    id: 'banner_santuario_da_valquiria',
+    name: 'Santuário da Valquíria Alada',
+    description: 'Penhasco nórdico onde estátuas de guerreiras celestes vigiam as entradas de Valhalla.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 4000,
+    min_level: 17,
+    is_animated: true,
+    order_index: 383,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_santuario_da_valquiria'] }
+  },
+  {
+    id: 'banner_torre_de_engrenagens_tempo',
+    name: 'Torre do Relógio Temporal',
+    description: 'Engrenagens vitorianas astronômicas em movimento rítmico medindo eras cósmicas.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 1950,
+    min_level: 10,
+    is_animated: true,
+    order_index: 384,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_torre_de_engrenagens_tempo'] }
+  },
+  {
+    id: 'banner_ilha_dos_cogumelos_gigantes',
+    name: 'Bosque Fúngico Bioluminescente',
+    description: 'Cogumelos gigantescos com cúpulas que emitem esporos brilhantes na noite mágica.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1150,
+    min_level: 6,
+    is_animated: true,
+    order_index: 385,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_ilha_dos_cogumelos_gigantes'] }
+  },
+  {
+    id: 'banner_desfiladeiro_dos_trovoes',
+    name: 'Desfiladeiro dos Trovões Eletrizantes',
+    description: 'Garganta montanhosa onde descargas elétricas permanentes iluminam as escarpas de rocha.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 4200,
+    min_level: 18,
+    is_animated: true,
+    order_index: 386,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_desfiladeiro_dos_trovoes'] }
+  },
+  {
+    id: 'banner_flotilha_dos_navegantes',
+    name: 'Flotilha dos Navegantes Cósmicos',
+    description: 'Esquadra de fragatas estelares em formação de cruzeiro ao lado dos anéis planetários.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 2050,
+    min_level: 11,
+    is_animated: true,
+    order_index: 387,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_flotilha_dos_navegantes'] }
+  },
+  {
+    id: 'banner_jardim_zen_sob_estrelas',
+    name: 'Jardim Zen Sob as Estrelas',
+    description: 'Areia rastreada em padrões harmoniosos com pedras sagradas sob o manto da Via Láctea.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1200,
+    min_level: 6,
+    is_animated: true,
+    order_index: 388,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_jardim_zen_sob_estrelas'] }
+  },
+  {
+    id: 'banner_cemiterio_dos_titas',
+    name: 'Vale dos Titãs Adormecidos',
+    description: 'Armaduras e espadas colossais cravadas na terra transformadas em montanhas místicas.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 4400,
+    min_level: 18,
+    is_animated: true,
+    order_index: 389,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_cemiterio_dos_titas'] }
+  },
+  {
+    id: 'banner_templo_do_lotus_abissal',
+    name: 'Templo do Lótus Submerso',
+    description: 'Flor colossal de lótus de pedra brotando no centro de um lago subterrâneo sagrado.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 2150,
+    min_level: 11,
+    is_animated: true,
+    order_index: 390,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_templo_do_lotus_abissal'] }
+  },
+  {
+    id: 'banner_horizonte_da_superterra',
+    name: 'Nascer da Super-Terra',
+    description: 'Amanhecer majestoso em lua alienígena vendo um planeta gigante cruzar o horizonte.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 5400,
+    min_level: 20,
+    is_animated: true,
+    order_index: 391,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_horizonte_da_superterra'] }
+  },
+  {
+    id: 'banner_portao_do_valhalla',
+    name: 'Portão Dourado de Valhalla',
+    description: 'Entrada monumental protegida por brasões dourados e runas de acolhimento aos honrados.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 5700,
+    min_level: 20,
+    is_animated: true,
+    order_index: 392,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_portao_do_valhalla'] }
+  },
+  {
+    id: 'banner_festa_das_lanternas_celestes',
+    name: 'Festival das Lanternas Astrais',
+    description: 'Milhares de lanternas incandescentes flutuando em direção à lua de outono noxiana.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 2250,
+    min_level: 12,
+    is_animated: true,
+    order_index: 393,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_festa_das_lanternas_celestes'] }
+  },
+  {
+    id: 'banner_canyon_de_cristal_vermelho',
+    name: 'Cânion de Cristal Vermelho',
+    description: 'Escarpa profunda esculpida em quartzo rubi sob céu estrelado de galáxia distante.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'INCOMUM',
+    price_xp: 1250,
+    min_level: 6,
+    is_animated: true,
+    order_index: 394,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_canyon_de_cristal_vermelho'] }
+  },
+  {
+    id: 'banner_santuario_submarino_atlantida',
+    name: 'Cúpula Submarina de Atlântida',
+    description: 'Domo protetor preservando arquitetura clássica no coração do oceano profundo.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 6000,
+    min_level: 21,
+    is_animated: true,
+    order_index: 395,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_santuario_submarino_atlantida'] }
+  },
+  {
+    id: 'banner_circuito_de_dados_neural',
+    name: 'Supervia de Dados Neural',
+    description: 'Fluxo quântico de informações e feixes binários em arquitetura cibernética limpa.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'RARA',
+    price_xp: 2350,
+    min_level: 12,
+    is_animated: true,
+    order_index: 396,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_circuito_de_dados_neural'] }
+  },
+  {
+    id: 'banner_eclipse_anular_de_diamante',
+    name: 'Anel de Diamante do Eclipse',
+    description: 'O momento sublime do alinhamento perfeito onde a borda lunar brilha como joia pura.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'LENDARIA',
+    price_xp: 6400,
+    min_level: 22,
+    is_animated: true,
+    order_index: 397,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_eclipse_anular_de_diamante'] }
+  },
+  {
+    id: 'banner_castelo_das_nuvens_alvas',
+    name: 'Fortaleza dos Ventos Alvos',
+    description: 'Torres imponentes de calcário e prata repousando sobre tapete maciço de nuvens claras.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'EPICA',
+    price_xp: 4600,
+    min_level: 18,
+    is_animated: true,
+    order_index: 398,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_castelo_das_nuvens_alvas'] }
+  },
+  {
+    id: 'banner_torre_dos_quatro_elementos',
+    name: 'Pináculo dos Quatro Elementos',
+    description: 'Obelisco elemental onde fogo, água, terra e ar giram em harmonia perfeita.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'MITICA',
+    price_xp: 9000,
+    min_level: 24,
+    is_animated: true,
+    order_index: 399,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_torre_dos_quatro_elementos'] }
+  },
+  {
+    id: 'banner_singularidade_cosmica_nox',
+    name: 'Singularidade Cósmica Nox Prime',
+    description: 'O horizonte de eventos definitivo: o ponto central onde todas as histórias e almas convergem.',
+    kind: 'PROFILE_BANNER',
+    rarity: 'MITICA',
+    price_xp: 15000,
+    min_level: 25,
+    is_animated: true,
+    order_index: 400,
+    asset_url: '',
+    style_data: { background: CURATED_BANNER_BACKGROUNDS['banner_singularidade_cosmica_nox'] }
+  },
+
 ];
 
 export const ARCHIVED_SHOP_ITEM_IDS: string[] = [

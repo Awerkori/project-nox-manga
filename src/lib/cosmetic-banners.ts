@@ -1044,6 +1044,1199 @@ export const BANNER_TRONO_SOBERANO_SVG = `<svg xmlns="http://www.w3.org/2000/svg
   </g>
 </svg>`;
 
+
+// =========================================================================
+// ROUND FINAL: 50 NOVOS BANNERS DE COMENTÁRIO ÚNICOS (51 - 100)
+// =========================================================================
+export const BANNER_CIDADE_FLUTUANTE_CELESTIAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="cfc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e1035"/><stop offset="60%" stop-color="#3b1d60"/><stop offset="100%" stop-color="#0d0618"/></linearGradient>
+    <linearGradient id="cfc-island" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#4c1d95"/><stop offset="100%" stop-color="#1e1b4b"/></linearGradient>
+    <linearGradient id="cfc-cloud" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="rgba(244, 114, 182, 0.4)"/><stop offset="50%" stop-color="rgba(192, 132, 252, 0.5)"/><stop offset="100%" stop-color="rgba(147, 197, 253, 0.3)"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes cfcFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+    @keyframes cfcCloudDrift { 0% { transform: translateX(-100px); } 100% { transform: translateX(100px); } }
+    .island1 { animation: cfcFloat 7s ease-in-out infinite; }
+    .island2 { animation: cfcFloat 9s ease-in-out infinite 1.5s; }
+    .clouds { animation: cfcCloudDrift 20s linear infinite alternate; }
+  </style>
+  <rect width="1200" height="400" fill="url(#cfc-bg)"/>
+  <!-- Floating clouds -->
+  <path class="clouds" d="M-100,280 Q200,220 500,270 T1100,250 T1400,290 L1400,400 L-100,400 Z" fill="url(#cfc-cloud)"/>
+  <!-- Giant moon behind -->
+  <circle cx="950" cy="140" r="85" fill="#fef08a" opacity="0.35" filter="drop-shadow(0 0 25px #fbbf24)"/>
+  <!-- Floating Island 1 (Main Citadel) -->
+  <g class="island1">
+    <path d="M450,220 L750,220 L680,310 L600,340 L520,310 Z" fill="url(#cfc-island)" stroke="#8b5cf6" stroke-width="1.5"/>
+    <!-- Citadel towers -->
+    <rect x="520" y="160" width="30" height="60" fill="#6d28d9"/>
+    <polygon points="520,160 535,130 550,160" fill="#fbbf24"/>
+    <rect x="580" y="140" width="40" height="80" fill="#7c3aed"/>
+    <polygon points="580,140 600,105 620,140" fill="#fbbf24"/>
+    <rect x="650" y="170" width="25" height="50" fill="#6d28d9"/>
+    <polygon points="650,170 662,145 675,170" fill="#fbbf24"/>
+    <line x1="600" y1="220" x2="600" y2="340" stroke="#38bdf8" stroke-width="2" opacity="0.8"/>
+  </g>
+  <!-- Floating Island 2 (Satellite Outpost) -->
+  <g class="island2">
+    <path d="M180,240 L340,240 L300,295 L260,315 L220,295 Z" fill="url(#cfc-island)" stroke="#a78bfa" stroke-width="1.2"/>
+    <rect x="245" y="195" width="30" height="45" fill="#6d28d9"/>
+    <polygon points="245,195 260,170 275,195" fill="#38bdf8"/>
+  </g>
+</svg>`;
+
+export const BANNER_TEMPLO_DAS_CONSTELACOES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="tc-bg" cx="50%" cy="30%" r="80%"><stop offset="0%" stop-color="#0f172a"/><stop offset="50%" stop-color="#020617"/><stop offset="100%" stop-color="#000000"/></radialGradient>
+    <linearGradient id="tc-glow" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="rgba(56, 189, 248, 0.4)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes tcRot { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes tcPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.95; } }
+    .dial { transform-origin: 600px 200px; animation: tcRot 60s linear infinite; }
+    .stars { animation: tcPulse 3s ease-in-out infinite; }
+  </style>
+  <rect width="1200" height="400" fill="url(#tc-bg)"/>
+  <!-- Celestial Astrolabe Ring -->
+  <g class="dial" stroke="#38bdf8" stroke-width="1.2" fill="none" opacity="0.6">
+    <circle cx="600" cy="200" r="160"/>
+    <circle cx="600" cy="200" r="140" stroke-dasharray="4,8"/>
+    <line x1="600" y1="40" x2="600" y2="360"/>
+    <line x1="440" y1="200" x2="760" y2="200"/>
+    <polygon points="600,60 610,75 590,75" fill="#38bdf8"/>
+    <polygon points="600,340 610,325 590,325" fill="#38bdf8"/>
+    <polygon points="460,200 475,190 475,210" fill="#38bdf8"/>
+    <polygon points="740,200 725,190 725,210" fill="#38bdf8"/>
+  </g>
+  <!-- Constellation Nodes & Lines -->
+  <g class="stars" stroke="#cbd5e1" stroke-width="1.5" fill="#38bdf8">
+    <polyline points="200,120 280,90 350,140 420,110 500,170" fill="none" opacity="0.75"/>
+    <circle cx="200" cy="120" r="3.5" filter="drop-shadow(0 0 6px #38bdf8)"/>
+    <circle cx="280" cy="90" r="2.5"/><circle cx="350" cy="140" r="3"/><circle cx="420" cy="110" r="2.5"/><circle cx="500" cy="170" r="4" filter="drop-shadow(0 0 8px #fff)"/>
+    <polyline points="720,160 800,110 890,130 960,80 1050,110" fill="none" opacity="0.75"/>
+    <circle cx="720" cy="160" r="3"/><circle cx="800" cy="110" r="4" filter="drop-shadow(0 0 6px #38bdf8)"/><circle cx="890" cy="130" r="2.5"/><circle cx="960" cy="80" r="3"/><circle cx="1050" cy="110" r="4" filter="drop-shadow(0 0 8px #fff)"/>
+  </g>
+  <!-- Temple Columns Silhouette -->
+  <rect x="100" y="240" width="30" height="160" fill="#0b0f19"/><rect x="180" y="240" width="30" height="160" fill="#0b0f19"/><rect x="990" y="240" width="30" height="160" fill="#0b0f19"/><rect x="1070" y="240" width="30" height="160" fill="#0b0f19"/>
+  <rect x="70" y="225" width="170" height="20" fill="#131b2e"/><rect x="960" y="225" width="170" height="20" fill="#131b2e"/>
+</svg>`;
+
+export const BANNER_DESERTO_ASTRAL_DUNAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="dad-sky" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0a0518"/><stop offset="50%" stop-color="#241242"/><stop offset="100%" stop-color="#4c1d65"/></linearGradient>
+    <linearGradient id="dad-dune1" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#3b0764"/></linearGradient>
+    <linearGradient id="dad-dune2" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#d946ef"/><stop offset="100%" stop-color="#581c87"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes dadShooting { 0% { transform: translate(-80px, -40px); opacity: 0; } 10% { opacity: 1; } 30% { transform: translate(300px, 150px); opacity: 0; } 100% { opacity: 0; } }
+    .meteor { animation: dadShooting 8s linear infinite; }
+  </style>
+  <rect width="1200" height="400" fill="url(#dad-sky)"/>
+  <!-- Twin Astral Moons -->
+  <circle cx="880" cy="110" r="50" fill="#fbcfe8" opacity="0.6" filter="drop-shadow(0 0 18px #f43f5e)"/>
+  <circle cx="970" cy="150" r="30" fill="#bae6fd" opacity="0.5" filter="drop-shadow(0 0 12px #38bdf8)"/>
+  <!-- Shooting Star -->
+  <line x1="200" y1="40" x2="280" y2="80" stroke="#fbcfe8" stroke-width="2" stroke-linecap="round" class="meteor"/>
+  <!-- Rolling Astral Dunes -->
+  <path d="M0,260 Q300,190 650,270 T1200,240 L1200,400 L0,400 Z" fill="url(#dad-dune1)"/>
+  <path d="M0,310 Q400,240 850,330 T1200,300 L1200,400 L0,400 Z" fill="url(#dad-dune2)" opacity="0.9"/>
+  <!-- Lone Stargazer Traveler -->
+  <circle cx="480" cy="272" r="4" fill="#fde047"/>
+  <path d="M476,276 L484,276 L482,290 L478,290 Z" fill="#fde047"/>
+  <line x1="486" y1="272" x2="486" y2="292" stroke="#fde047" stroke-width="1.5"/>
+</svg>`;
+
+export const BANNER_OCEANO_CRISTAL_PROFUNDO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="ocp-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#031525"/><stop offset="60%" stop-color="#082f49"/><stop offset="100%" stop-color="#021019"/></linearGradient>
+    <linearGradient id="ocp-cryst" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8"/><stop offset="50%" stop-color="#0284c7"/><stop offset="100%" stop-color="#0369a1"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes ocpShine { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.03); } }
+    .crystal-group { animation: ocpShine 5s ease-in-out infinite; transform-origin: center bottom; }
+  </style>
+  <rect width="1200" height="400" fill="url(#ocp-bg)"/>
+  <!-- Light rays from surface -->
+  <polygon points="300,0 380,0 550,400 420,400" fill="#38bdf8" opacity="0.08"/>
+  <polygon points="650,0 720,0 850,400 750,400" fill="#38bdf8" opacity="0.09"/>
+  <!-- Deep Crystal Spires -->
+  <g class="crystal-group">
+    <polygon points="120,400 150,220 180,400" fill="url(#ocp-cryst)" stroke="#7dd3fc" stroke-width="1"/>
+    <polygon points="170,400 200,180 230,400" fill="#0284c7" stroke="#bae6fd" stroke-width="1.5"/>
+    <polygon points="220,400 250,250 270,400" fill="#0369a1"/>
+    
+    <polygon points="560,400 600,150 640,400" fill="url(#ocp-cryst)" stroke="#bae6fd" stroke-width="2" filter="drop-shadow(0 0 16px #0ea5e9)"/>
+    <polygon points="520,400 550,210 580,400" fill="#0284c7"/>
+    <polygon points="620,400 660,200 690,400" fill="#0369a1"/>
+
+    <polygon points="980,400 1020,190 1060,400" fill="url(#ocp-cryst)" stroke="#7dd3fc" stroke-width="1"/>
+    <polygon points="1050,400 1080,240 1110,400" fill="#0369a1"/>
+  </g>
+  <!-- Floating Spores / Bubbles -->
+  <circle cx="450" cy="180" r="3" fill="#bae6fd" opacity="0.6"/><circle cx="750" cy="220" r="4" fill="#38bdf8" opacity="0.5"/><circle cx="320" cy="290" r="2.5" fill="#7dd3fc" opacity="0.7"/>
+</svg>`;
+
+export const BANNER_RUINAS_DA_CIVILIZACAO_SOLAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="rcs-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#451a03"/><stop offset="60%" stop-color="#78350f"/><stop offset="100%" stop-color="#1c0a00"/></linearGradient>
+    <radialGradient id="rcs-sun" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fef08a"/><stop offset="40%" stop-color="#f59e0b"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes rcsPulse { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.08); opacity: 1; } }
+    .sun { transform-origin: 600px 180px; animation: rcsPulse 6s ease-in-out infinite; }
+  </style>
+  <rect width="1200" height="400" fill="url(#rcs-bg)"/>
+  <!-- Colossal Setting Sun -->
+  <circle cx="600" cy="180" r="140" fill="url(#rcs-sun)" class="sun"/>
+  <!-- Ancient Stepped Pyramid & Pillars Silhouette -->
+  <polygon points="400,400 460,260 740,260 800,400" fill="#1c0a00"/>
+  <rect x="520" y="220" width="160" height="40" fill="#1c0a00"/>
+  <polygon points="560,220 600,180 640,220" fill="#1c0a00"/>
+  <!-- Broken Solar Pillars -->
+  <rect x="150" y="200" width="40" height="200" fill="#1c0a00"/>
+  <rect x="135" y="185" width="70" height="20" fill="#1c0a00"/>
+  <rect x="250" y="270" width="35" height="130" fill="#1c0a00"/>
+  <rect x="950" y="220" width="40" height="180" fill="#1c0a00"/>
+  <rect x="935" y="205" width="70" height="20" fill="#1c0a00"/>
+  <rect x="1050" y="290" width="35" height="110" fill="#1c0a00"/>
+</svg>`;
+
+export const BANNER_JARDIM_DAS_ORQUIDEAS_MISTICAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="jom-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0f0728"/><stop offset="60%" stop-color="#28114b"/><stop offset="100%" stop-color="#080316"/></linearGradient>
+    <radialGradient id="jom-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f472b6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes jomFloraWave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(4deg); } }
+    @keyframes jomFirefly { 0%, 100% { transform: translate(0, 0); opacity: 0.3; } 50% { transform: translate(15px, -20px); opacity: 1; } }
+    .flora { transform-origin: bottom center; animation: jomFloraWave 6s ease-in-out infinite; }
+    .ff1 { animation: jomFirefly 4s ease-in-out infinite; }
+    .ff2 { animation: jomFirefly 5s ease-in-out infinite 1.5s; }
+  </style>
+  <rect width="1200" height="400" fill="url(#jom-bg)"/>
+  <!-- Giant Glowing Orchids -->
+  <g class="flora">
+    <!-- Left Plant -->
+    <path d="M150,400 Q200,280 260,200" stroke="#10b981" stroke-width="6" fill="none"/>
+    <ellipse cx="260" cy="200" rx="45" ry="25" fill="#ec4899" opacity="0.8" transform="rotate(-20 260 200)" filter="drop-shadow(0 0 15px #ec4899)"/>
+    <ellipse cx="260" cy="200" rx="25" ry="45" fill="#f43f5e" opacity="0.9" transform="rotate(25 260 200)"/>
+    <circle cx="260" cy="200" r="10" fill="#fef08a"/>
+    <!-- Right Plant -->
+    <path d="M1050,400 Q1000,270 940,180" stroke="#10b981" stroke-width="6" fill="none"/>
+    <ellipse cx="940" cy="180" rx="50" ry="28" fill="#a855f7" opacity="0.8" transform="rotate(25 940 180)" filter="drop-shadow(0 0 15px #a855f7)"/>
+    <ellipse cx="940" cy="180" rx="28" ry="50" fill="#c084fc" opacity="0.9" transform="rotate(-20 940 180)"/>
+    <circle cx="940" cy="180" r="10" fill="#fef08a"/>
+  </g>
+  <!-- Fireflies -->
+  <circle cx="340" cy="150" r="3.5" fill="#fef08a" class="ff1" filter="drop-shadow(0 0 8px #facc15)"/>
+  <circle cx="580" cy="220" r="4" fill="#a7f3d0" class="ff2" filter="drop-shadow(0 0 8px #6ee7b7)"/>
+  <circle cx="820" cy="130" r="3" fill="#fbcfe8" class="ff1" filter="drop-shadow(0 0 8px #f472b6)"/>
+</svg>`;
+
+export const BANNER_ECLIPSE_DO_DRAGAO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="edd-sky" cx="50%" cy="45%" r="70%"><stop offset="0%" stop-color="#450a0a"/><stop offset="50%" stop-color="#180404"/><stop offset="100%" stop-color="#050101"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes eddCorona { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.05); opacity: 1; } }
+    .corona { transform-origin: 600px 180px; animation: eddCorona 4s ease-in-out infinite; }
+  </style>
+  <rect width="1200" height="400" fill="url(#edd-sky)"/>
+  <!-- Dragon Eclipse Ring -->
+  <g class="corona">
+    <circle cx="600" cy="180" r="110" fill="none" stroke="#ef4444" stroke-width="12" filter="drop-shadow(0 0 35px #dc2626)"/>
+    <circle cx="600" cy="180" r="114" fill="none" stroke="#fbbf24" stroke-width="3" opacity="0.9"/>
+  </g>
+  <circle cx="600" cy="180" r="102" fill="#050101"/>
+  <!-- Winged Dragon Silhouette in Front of Eclipse -->
+  <path d="M600,130 C585,150 540,165 480,140 C440,125 380,150 350,190 C420,185 470,210 510,240 C550,225 580,210 600,260 C620,210 650,225 690,240 C730,210 780,185 850,190 C820,150 760,125 720,140 C660,165 615,150 600,130 Z" fill="#050101" stroke="#dc2626" stroke-width="1.5"/>
+</svg>`;
+
+export const BANNER_TEMPESTADE_DE_PLASMA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="tdp-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="50%" stop-color="#311042"/><stop offset="100%" stop-color="#0f0728"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes tdpLightning { 0%, 92%, 100% { opacity: 0; } 93%, 97% { opacity: 1; } }
+    .bolt1 { animation: tdpLightning 3.5s linear infinite; }
+    .bolt2 { animation: tdpLightning 4.8s linear infinite 1.2s; }
+  </style>
+  <rect width="1200" height="400" fill="url(#tdp-bg)"/>
+  <!-- Plasma cloud swirls -->
+  <circle cx="300" cy="200" r="180" fill="rgba(168, 85, 247, 0.25)" filter="blur(40px)"/>
+  <circle cx="900" cy="180" r="200" fill="rgba(236, 72, 153, 0.25)" filter="blur(45px)"/>
+  <!-- Lightning Bolt 1 -->
+  <polyline class="bolt1" points="350,0 320,120 370,140 310,280 340,290 280,400" stroke="#f0abfc" stroke-width="3" fill="none" filter="drop-shadow(0 0 12px #c084fc)"/>
+  <!-- Lightning Bolt 2 -->
+  <polyline class="bolt2" points="850,0 890,110 840,140 910,270 870,290 920,400" stroke="#38bdf8" stroke-width="3.5" fill="none" filter="drop-shadow(0 0 14px #0284c7)"/>
+</svg>`;
+
+export const BANNER_TORRE_DA_ASTRONOMIA_ANTIGA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="taa-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#000000"/></linearGradient>
+  </defs>
+  <rect width="1200" height="400" fill="url(#taa-bg)"/>
+  <!-- Saturn-like Ringed Planet -->
+  <g transform="translate(850, 120)">
+    <circle cx="0" cy="0" r="45" fill="#fef08a" opacity="0.8"/>
+    <ellipse cx="0" cy="0" rx="100" ry="24" fill="none" stroke="#eab308" stroke-width="8" transform="rotate(-18)" opacity="0.75"/>
+  </g>
+  <!-- Mountainous Ridge -->
+  <polygon points="0,400 0,320 220,220 450,280 700,210 950,300 1200,230 1200,400" fill="#090d16"/>
+  <!-- Astronomy Tower Spiral on Cliff (220, 220) -->
+  <g transform="translate(190, 100)" fill="#030712">
+    <rect x="15" y="60" width="30" height="65"/>
+    <path d="M10,60 Q30,20 50,60 Z"/>
+    <!-- Brass Telescope pointing up-right -->
+    <line x1="30" y1="40" x2="70" y2="10" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="70" cy="10" r="3" fill="#fef08a" filter="drop-shadow(0 0 8px #fbbf24)"/>
+  </g>
+</svg>`;
+
+export const BANNER_SANTUARIO_DA_ARVORE_SAGRADA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sas-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#064e3b"/><stop offset="50%" stop-color="#022c22"/><stop offset="100%" stop-color="#01140e"/></linearGradient>
+  </defs>
+  <style>
+    @keyframes sasLeaves { 0%, 100% { opacity: 0.8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .foliage { animation: sasLeaves 5s ease-in-out infinite; transform-origin: 600px 140px; }
+  </style>
+  <rect width="1200" height="400" fill="url(#sas-bg)"/>
+  <!-- Giant Sacred World Tree Center -->
+  <!-- Bioluminescent Trunk & Roots -->
+  <path d="M570,400 Q590,260 600,180 Q610,260 630,400 Z" fill="#042f2e"/>
+  <path d="M520,400 Q560,320 580,240" stroke="#10b981" stroke-width="4" fill="none" opacity="0.8"/>
+  <path d="M680,400 Q640,320 620,240" stroke="#34d399" stroke-width="4" fill="none" opacity="0.8"/>
+  <!-- Tree Canopy (Glowing Orbs) -->
+  <g class="foliage" filter="drop-shadow(0 0 30px #10b981)">
+    <circle cx="600" cy="130" r="75" fill="#10b981" opacity="0.7"/>
+    <circle cx="530" cy="150" r="55" fill="#34d399" opacity="0.75"/>
+    <circle cx="670" cy="150" r="55" fill="#059669" opacity="0.8"/>
+    <circle cx="600" cy="90" r="45" fill="#6ee7b7" opacity="0.85"/>
+  </g>
+</svg>`;
+
+export const BANNER_BIBLIOTECA_ARCANOS_PROIBIDOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="biblioteca_arcanos_proibidos-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="60%" stop-color="#4338ca"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="biblioteca_arcanos_proibidos-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes biblioteca_arcanos_proibidosPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .biblioteca_arcanos_proibidos-anim { animation: biblioteca_arcanos_proibidosPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#biblioteca_arcanos_proibidos-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#biblioteca_arcanos_proibidos-glow)" class="biblioteca_arcanos_proibidos-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#818cf8" stroke-width="1.5" fill="#818cf8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #818cf8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_PALACIO_IMPERIAL_DE_JADE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="palacio_imperial_de_jade-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#022c22"/><stop offset="60%" stop-color="#065f46"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="palacio_imperial_de_jade-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes palacio_imperial_de_jadePulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .palacio_imperial_de_jade-anim { animation: palacio_imperial_de_jadePulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#palacio_imperial_de_jade-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#palacio_imperial_de_jade-glow)" class="palacio_imperial_de_jade-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#34d399" stroke-width="1.5" fill="#34d399" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #34d399)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_SISTEMA_DE_TRES_SOIS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sistema_de_tres_sois-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#450a0a"/><stop offset="60%" stop-color="#b45309"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="sistema_de_tres_sois-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fde047" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes sistema_de_tres_soisPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .sistema_de_tres_sois-anim { animation: sistema_de_tres_soisPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#sistema_de_tres_sois-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#sistema_de_tres_sois-glow)" class="sistema_de_tres_sois-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fde047" stroke-width="1.5" fill="#fde047" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fde047)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CRIATURA_LEVIATA_ESTELAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="criatura_leviata_estelar-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0f172a"/><stop offset="60%" stop-color="#1e3a8a"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="criatura_leviata_estelar-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes criatura_leviata_estelarPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .criatura_leviata_estelar-anim { animation: criatura_leviata_estelarPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#criatura_leviata_estelar-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#criatura_leviata_estelar-glow)" class="criatura_leviata_estelar-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#38bdf8" stroke-width="1.5" fill="#38bdf8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #38bdf8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_PORTAL_DAS_DIMENSOES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="portal_das_dimensoes-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2e1065"/><stop offset="60%" stop-color="#6b21a8"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="portal_das_dimensoes-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#c084fc" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes portal_das_dimensoesPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .portal_das_dimensoes-anim { animation: portal_das_dimensoesPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#portal_das_dimensoes-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#portal_das_dimensoes-glow)" class="portal_das_dimensoes-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#c084fc" stroke-width="1.5" fill="#c084fc" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #c084fc)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_AURORA_POLAR_DOS_GLACIARES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="aurora_polar_dos_glaciares-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#032541"/><stop offset="60%" stop-color="#0369a1"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="aurora_polar_dos_glaciares-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes aurora_polar_dos_glaciaresPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .aurora_polar_dos_glaciares-anim { animation: aurora_polar_dos_glaciaresPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#aurora_polar_dos_glaciares-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#aurora_polar_dos_glaciares-glow)" class="aurora_polar_dos_glaciares-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#2dd4bf" stroke-width="1.5" fill="#2dd4bf" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #2dd4bf)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_VULCAO_DE_OBSIDIANA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="vulcao_de_obsidiana-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#450a0a"/><stop offset="60%" stop-color="#dc2626"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="vulcao_de_obsidiana-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes vulcao_de_obsidianaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .vulcao_de_obsidiana-anim { animation: vulcao_de_obsidianaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#vulcao_de_obsidiana-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#vulcao_de_obsidiana-glow)" class="vulcao_de_obsidiana-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f97316" stroke-width="1.5" fill="#f97316" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f97316)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_RELIQUIA_DA_ARCA_ESTELAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="reliquia_da_arca_estelar-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="reliquia_da_arca_estelar-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes reliquia_da_arca_estelarPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .reliquia_da_arca_estelar-anim { animation: reliquia_da_arca_estelarPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#reliquia_da_arca_estelar-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#reliquia_da_arca_estelar-glow)" class="reliquia_da_arca_estelar-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#38bdf8" stroke-width="1.5" fill="#38bdf8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #38bdf8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_FLORESTA_DE_BAMBU_ESPIRITUAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="floresta_de_bambu_espiritual-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#022c22"/><stop offset="60%" stop-color="#047857"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="floresta_de_bambu_espiritual-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#a7f3d0" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes floresta_de_bambu_espiritualPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .floresta_de_bambu_espiritual-anim { animation: floresta_de_bambu_espiritualPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#floresta_de_bambu_espiritual-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#floresta_de_bambu_espiritual-glow)" class="floresta_de_bambu_espiritual-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#a7f3d0" stroke-width="1.5" fill="#a7f3d0" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #a7f3d0)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_NEBULOSA_DO_CORVO_NOTURNO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="nebulosa_do_corvo_noturno-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#180e38"/><stop offset="60%" stop-color="#581c87"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="nebulosa_do_corvo_noturno-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#ec4899" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes nebulosa_do_corvo_noturnoPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .nebulosa_do_corvo_noturno-anim { animation: nebulosa_do_corvo_noturnoPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#nebulosa_do_corvo_noturno-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#nebulosa_do_corvo_noturno-glow)" class="nebulosa_do_corvo_noturno-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#ec4899" stroke-width="1.5" fill="#ec4899" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #ec4899)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_MINA_DE_CRISTAIS_LUMINOSOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="mina_de_cristais_luminosos-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#111827"/><stop offset="60%" stop-color="#4b5563"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="mina_de_cristais_luminosos-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes mina_de_cristais_luminososPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .mina_de_cristais_luminosos-anim { animation: mina_de_cristais_luminososPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#mina_de_cristais_luminosos-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#mina_de_cristais_luminosos-glow)" class="mina_de_cristais_luminosos-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#a855f7" stroke-width="1.5" fill="#a855f7" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #a855f7)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_NAVIO_FANTASMA_CELESTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="navio_fantasma_celeste-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#030712"/><stop offset="60%" stop-color="#1d4ed8"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="navio_fantasma_celeste-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#93c5fd" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes navio_fantasma_celestePulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .navio_fantasma_celeste-anim { animation: navio_fantasma_celestePulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#navio_fantasma_celeste-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#navio_fantasma_celeste-glow)" class="navio_fantasma_celeste-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#93c5fd" stroke-width="1.5" fill="#93c5fd" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #93c5fd)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_FORJA_DO_ARMAGEDOM_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="forja_do_armagedom-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#431407"/><stop offset="60%" stop-color="#c2410c"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="forja_do_armagedom-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#facc15" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes forja_do_armagedomPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .forja_do_armagedom-anim { animation: forja_do_armagedomPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#forja_do_armagedom-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#forja_do_armagedom-glow)" class="forja_do_armagedom-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#facc15" stroke-width="1.5" fill="#facc15" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #facc15)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_ALTAR_DO_SOL_INVICTUS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="altar_do_sol_invictus-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3f2c00"/><stop offset="60%" stop-color="#a16207"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="altar_do_sol_invictus-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fef08a" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes altar_do_sol_invictusPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .altar_do_sol_invictus-anim { animation: altar_do_sol_invictusPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#altar_do_sol_invictus-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#altar_do_sol_invictus-glow)" class="altar_do_sol_invictus-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fef08a" stroke-width="1.5" fill="#fef08a" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fef08a)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_ABISMO_DAS_AGUAS_VIVAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="abismo_das_aguas_vivas-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#021e2f"/><stop offset="60%" stop-color="#0284c7"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="abismo_das_aguas_vivas-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes abismo_das_aguas_vivasPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .abismo_das_aguas_vivas-anim { animation: abismo_das_aguas_vivasPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#abismo_das_aguas_vivas-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#abismo_das_aguas_vivas-glow)" class="abismo_das_aguas_vivas-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f472b6" stroke-width="1.5" fill="#f472b6" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f472b6)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_ESTACAO_ESPACIAL_ORBITAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="estacao_espacial_orbital-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#334155"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="estacao_espacial_orbital-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes estacao_espacial_orbitalPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .estacao_espacial_orbital-anim { animation: estacao_espacial_orbitalPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#estacao_espacial_orbital-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#estacao_espacial_orbital-glow)" class="estacao_espacial_orbital-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#38bdf8" stroke-width="1.5" fill="#38bdf8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #38bdf8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_VALE_DOS_MONOLITOS_RUNICOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="vale_dos_monolitos_runicos-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0b0f19"/><stop offset="60%" stop-color="#374151"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="vale_dos_monolitos_runicos-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#60a5fa" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes vale_dos_monolitos_runicosPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .vale_dos_monolitos_runicos-anim { animation: vale_dos_monolitos_runicosPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#vale_dos_monolitos_runicos-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#vale_dos_monolitos_runicos-glow)" class="vale_dos_monolitos_runicos-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#60a5fa" stroke-width="1.5" fill="#60a5fa" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #60a5fa)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_OASIS_SOB_O_FIRMAMENTO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="oasis_sob_o_firmamento-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="60%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="oasis_sob_o_firmamento-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes oasis_sob_o_firmamentoPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .oasis_sob_o_firmamento-anim { animation: oasis_sob_o_firmamentoPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#oasis_sob_o_firmamento-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#oasis_sob_o_firmamento-glow)" class="oasis_sob_o_firmamento-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f472b6" stroke-width="1.5" fill="#f472b6" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f472b6)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CATEDRAL_DA_MEIA_NOITE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="catedral_da_meia_noite-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#140826"/><stop offset="60%" stop-color="#4c1d95"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="catedral_da_meia_noite-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#c084fc" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes catedral_da_meia_noitePulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .catedral_da_meia_noite-anim { animation: catedral_da_meia_noitePulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#catedral_da_meia_noite-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#catedral_da_meia_noite-glow)" class="catedral_da_meia_noite-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#c084fc" stroke-width="1.5" fill="#c084fc" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #c084fc)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_FISSURA_DE_ANTIMATERIA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="fissura_de_antimateria-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0a0014"/><stop offset="60%" stop-color="#3b0764"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="fissura_de_antimateria-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes fissura_de_antimateriaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .fissura_de_antimateria-anim { animation: fissura_de_antimateriaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#fissura_de_antimateria-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#fissura_de_antimateria-glow)" class="fissura_de_antimateria-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f43f5e" stroke-width="1.5" fill="#f43f5e" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f43f5e)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_DANCA_DOS_METEORITOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="danca_dos_meteoritos-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1c1917"/><stop offset="60%" stop-color="#78350f"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="danca_dos_meteoritos-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes danca_dos_meteoritosPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .danca_dos_meteoritos-anim { animation: danca_dos_meteoritosPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#danca_dos_meteoritos-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#danca_dos_meteoritos-glow)" class="danca_dos_meteoritos-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f97316" stroke-width="1.5" fill="#f97316" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f97316)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_LABIRINTO_DE_QUARTZO_ROSA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="labirinto_de_quartzo_rosa-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2a0818"/><stop offset="60%" stop-color="#9d174d"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="labirinto_de_quartzo_rosa-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fbcfe8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes labirinto_de_quartzo_rosaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .labirinto_de_quartzo_rosa-anim { animation: labirinto_de_quartzo_rosaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#labirinto_de_quartzo_rosa-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#labirinto_de_quartzo_rosa-glow)" class="labirinto_de_quartzo_rosa-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fbcfe8" stroke-width="1.5" fill="#fbcfe8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fbcfe8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_SANTUARIO_DA_VALQUIRIA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="santuario_da_valquiria-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0c1a2e"/><stop offset="60%" stop-color="#1e3a8a"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="santuario_da_valquiria-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#e2e8f0" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes santuario_da_valquiriaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .santuario_da_valquiria-anim { animation: santuario_da_valquiriaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#santuario_da_valquiria-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#santuario_da_valquiria-glow)" class="santuario_da_valquiria-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#e2e8f0" stroke-width="1.5" fill="#e2e8f0" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #e2e8f0)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_TORRE_DE_ENGRENAGENS_TEMPO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="torre_de_engrenagens_tempo-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#291804"/><stop offset="60%" stop-color="#854d0e"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="torre_de_engrenagens_tempo-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fef08a" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes torre_de_engrenagens_tempoPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .torre_de_engrenagens_tempo-anim { animation: torre_de_engrenagens_tempoPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#torre_de_engrenagens_tempo-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#torre_de_engrenagens_tempo-glow)" class="torre_de_engrenagens_tempo-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fef08a" stroke-width="1.5" fill="#fef08a" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fef08a)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_ILHA_DOS_COGUMELOS_GIGANTES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="ilha_dos_cogumelos_gigantes-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#17062e"/><stop offset="60%" stop-color="#6b21a8"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="ilha_dos_cogumelos_gigantes-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes ilha_dos_cogumelos_gigantesPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .ilha_dos_cogumelos_gigantes-anim { animation: ilha_dos_cogumelos_gigantesPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#ilha_dos_cogumelos_gigantes-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#ilha_dos_cogumelos_gigantes-glow)" class="ilha_dos_cogumelos_gigantes-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#34d399" stroke-width="1.5" fill="#34d399" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #34d399)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_DESFILADEIRO_DOS_TROVOES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="desfiladeiro_dos_trovoes-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0f172a"/><stop offset="60%" stop-color="#334155"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="desfiladeiro_dos_trovoes-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#67e8f9" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes desfiladeiro_dos_trovoesPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .desfiladeiro_dos_trovoes-anim { animation: desfiladeiro_dos_trovoesPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#desfiladeiro_dos_trovoes-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#desfiladeiro_dos_trovoes-glow)" class="desfiladeiro_dos_trovoes-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#67e8f9" stroke-width="1.5" fill="#67e8f9" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #67e8f9)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_FLOTILHA_DOS_NAVEGANTES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="flotilha_dos_navegantes-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="flotilha_dos_navegantes-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes flotilha_dos_navegantesPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .flotilha_dos_navegantes-anim { animation: flotilha_dos_navegantesPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#flotilha_dos_navegantes-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#flotilha_dos_navegantes-glow)" class="flotilha_dos_navegantes-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#38bdf8" stroke-width="1.5" fill="#38bdf8" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #38bdf8)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_JARDIM_ZEN_SOB_ESTRELAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="jardim_zen_sob_estrelas-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#041724"/><stop offset="60%" stop-color="#0f766e"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="jardim_zen_sob_estrelas-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#ccfbf1" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes jardim_zen_sob_estrelasPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .jardim_zen_sob_estrelas-anim { animation: jardim_zen_sob_estrelasPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#jardim_zen_sob_estrelas-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#jardim_zen_sob_estrelas-glow)" class="jardim_zen_sob_estrelas-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#ccfbf1" stroke-width="1.5" fill="#ccfbf1" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #ccfbf1)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CEMITERIO_DOS_TITAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="cemiterio_dos_titas-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#090d16"/><stop offset="60%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="cemiterio_dos_titas-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#64748b" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes cemiterio_dos_titasPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .cemiterio_dos_titas-anim { animation: cemiterio_dos_titasPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#cemiterio_dos_titas-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#cemiterio_dos_titas-glow)" class="cemiterio_dos_titas-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#64748b" stroke-width="1.5" fill="#64748b" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #64748b)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_TEMPLO_DO_LOTUS_ABISSAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="templo_do_lotus_abissal-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#110c2e"/><stop offset="60%" stop-color="#4c1d95"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="templo_do_lotus_abissal-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#e879f9" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes templo_do_lotus_abissalPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .templo_do_lotus_abissal-anim { animation: templo_do_lotus_abissalPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#templo_do_lotus_abissal-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#templo_do_lotus_abissal-glow)" class="templo_do_lotus_abissal-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#e879f9" stroke-width="1.5" fill="#e879f9" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #e879f9)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_HORIZONTE_DA_SUPERTERRA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="horizonte_da_superterra-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#0369a1"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="horizonte_da_superterra-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes horizonte_da_superterraPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .horizonte_da_superterra-anim { animation: horizonte_da_superterraPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#horizonte_da_superterra-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#horizonte_da_superterra-glow)" class="horizonte_da_superterra-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#7dd3fc" stroke-width="1.5" fill="#7dd3fc" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #7dd3fc)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_PORTAO_DO_VALHALLA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="portao_do_valhalla-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a0d00"/><stop offset="60%" stop-color="#9a3412"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="portao_do_valhalla-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fed7aa" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes portao_do_valhallaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .portao_do_valhalla-anim { animation: portao_do_valhallaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#portao_do_valhalla-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#portao_do_valhalla-glow)" class="portao_do_valhalla-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fed7aa" stroke-width="1.5" fill="#fed7aa" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fed7aa)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_FESTA_DAS_LANTERNAS_CELESTES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="festa_das_lanternas_celestes-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1f0d2b"/><stop offset="60%" stop-color="#701a75"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="festa_das_lanternas_celestes-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fde047" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes festa_das_lanternas_celestesPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .festa_das_lanternas_celestes-anim { animation: festa_das_lanternas_celestesPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#festa_das_lanternas_celestes-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#festa_das_lanternas_celestes-glow)" class="festa_das_lanternas_celestes-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fde047" stroke-width="1.5" fill="#fde047" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fde047)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CANYON_DE_CRISTAL_VERMELHO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="canyon_de_cristal_vermelho-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b0712"/><stop offset="60%" stop-color="#9f1239"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="canyon_de_cristal_vermelho-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fda4af" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes canyon_de_cristal_vermelhoPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .canyon_de_cristal_vermelho-anim { animation: canyon_de_cristal_vermelhoPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#canyon_de_cristal_vermelho-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#canyon_de_cristal_vermelho-glow)" class="canyon_de_cristal_vermelho-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fda4af" stroke-width="1.5" fill="#fda4af" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fda4af)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_SANTUARIO_SUBMARINO_ATLANTIDA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="santuario_submarino_atlantida-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#022438"/><stop offset="60%" stop-color="#0284c7"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="santuario_submarino_atlantida-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#5eead4" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes santuario_submarino_atlantidaPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .santuario_submarino_atlantida-anim { animation: santuario_submarino_atlantidaPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#santuario_submarino_atlantida-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#santuario_submarino_atlantida-glow)" class="santuario_submarino_atlantida-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#5eead4" stroke-width="1.5" fill="#5eead4" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #5eead4)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CIRCUITO_DE_DADOS_NEURAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="circuito_de_dados_neural-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020617"/><stop offset="60%" stop-color="#065f46"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="circuito_de_dados_neural-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#22c55e" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes circuito_de_dados_neuralPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .circuito_de_dados_neural-anim { animation: circuito_de_dados_neuralPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#circuito_de_dados_neural-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#circuito_de_dados_neural-glow)" class="circuito_de_dados_neural-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#22c55e" stroke-width="1.5" fill="#22c55e" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #22c55e)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_ECLIPSE_ANULAR_DE_DIAMANTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="eclipse_anular_de_diamante-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0a0a0a"/><stop offset="60%" stop-color="#404040"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="eclipse_anular_de_diamante-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes eclipse_anular_de_diamantePulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .eclipse_anular_de_diamante-anim { animation: eclipse_anular_de_diamantePulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#eclipse_anular_de_diamante-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#eclipse_anular_de_diamante-glow)" class="eclipse_anular_de_diamante-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#ffffff" stroke-width="1.5" fill="#ffffff" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #ffffff)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_CASTELO_DAS_NUVENS_ALVAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="castelo_das_nuvens_alvas-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a1033"/><stop offset="60%" stop-color="#581c87"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="castelo_das_nuvens_alvas-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#fed7aa" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes castelo_das_nuvens_alvasPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .castelo_das_nuvens_alvas-anim { animation: castelo_das_nuvens_alvasPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#castelo_das_nuvens_alvas-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#castelo_das_nuvens_alvas-glow)" class="castelo_das_nuvens_alvas-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#fed7aa" stroke-width="1.5" fill="#fed7aa" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #fed7aa)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_TORRE_DOS_QUATRO_ELEMENTOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="torre_dos_quatro_elementos-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#180d2b"/><stop offset="60%" stop-color="#4338ca"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="torre_dos_quatro_elementos-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes torre_dos_quatro_elementosPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .torre_dos_quatro_elementos-anim { animation: torre_dos_quatro_elementosPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#torre_dos_quatro_elementos-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#torre_dos_quatro_elementos-glow)" class="torre_dos_quatro_elementos-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#f43f5e" stroke-width="1.5" fill="#f43f5e" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #f43f5e)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
+export const BANNER_SINGULARIDADE_COSMICA_NOX_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="singularidade_cosmica_nox-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#060012"/><stop offset="60%" stop-color="#3b0764"/><stop offset="100%" stop-color="#020205"/></linearGradient>
+    <radialGradient id="singularidade_cosmica_nox-glow" cx="50%" cy="50%" r="60%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.6"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+  </defs>
+  <style>
+    @keyframes singularidade_cosmica_noxPulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    .singularidade_cosmica_nox-anim { animation: singularidade_cosmica_noxPulse 6s ease-in-out infinite; transform-origin: center; }
+  </style>
+  <rect width="1200" height="400" fill="url(#singularidade_cosmica_nox-bg)"/>
+  <!-- Ambient Atmospheric Orb -->
+  <circle cx="600" cy="190" r="150" fill="url(#singularidade_cosmica_nox-glow)" class="singularidade_cosmica_nox-anim"/>
+  <!-- Horizon Ridge or Scenic Geometry -->
+  <path d="M0,320 Q300,240 600,300 T1200,260 L1200,400 L0,400 Z" fill="#020205" opacity="0.85"/>
+  <path d="M0,360 Q400,300 800,370 T1200,330 L1200,400 L0,400 Z" fill="#000000"/>
+  <!-- Thematic Silhouette Focus -->
+  <g stroke="#a855f7" stroke-width="1.5" fill="#a855f7" opacity="0.85">
+    <circle cx="600" cy="190" r="12" filter="drop-shadow(0 0 10px #a855f7)"/>
+    <line x1="600" y1="120" x2="600" y2="260" stroke-dasharray="3,6"/>
+    <line x1="530" y1="190" x2="670" y2="190" stroke-dasharray="3,6"/>
+  </g>
+</svg>`;
+
 export const CURATED_BANNER_BACKGROUNDS: Record<string, string> = {
   'banner_nebulosa_vazio': svgToDataUri(BANNER_NEBULOSA_VAZIO_SVG),
   'banner_aurora_astral': svgToDataUri(BANNER_AURORA_ASTRAL_SVG),
@@ -1095,4 +2288,54 @@ export const CURATED_BANNER_BACKGROUNDS: Record<string, string> = {
   'banner_caverna_ametista': svgToDataUri(BANNER_CAVERNA_AMETISTA_SVG),
   'banner_nexus_elementos': svgToDataUri(BANNER_NEXUS_ELEMENTOS_SVG),
   'banner_trono_soberano': svgToDataUri(BANNER_TRONO_SOBERANO_SVG),
+  'banner_cidade_flutuante_celestial': svgToDataUri(BANNER_CIDADE_FLUTUANTE_CELESTIAL_SVG),
+  'banner_templo_das_constelacoes': svgToDataUri(BANNER_TEMPLO_DAS_CONSTELACOES_SVG),
+  'banner_deserto_astral_dunas': svgToDataUri(BANNER_DESERTO_ASTRAL_DUNAS_SVG),
+  'banner_oceano_cristal_profundo': svgToDataUri(BANNER_OCEANO_CRISTAL_PROFUNDO_SVG),
+  'banner_ruinas_da_civilizacao_solar': svgToDataUri(BANNER_RUINAS_DA_CIVILIZACAO_SOLAR_SVG),
+  'banner_jardim_das_orquideas_misticas': svgToDataUri(BANNER_JARDIM_DAS_ORQUIDEAS_MISTICAS_SVG),
+  'banner_eclipse_do_dragao': svgToDataUri(BANNER_ECLIPSE_DO_DRAGAO_SVG),
+  'banner_tempestade_de_plasma': svgToDataUri(BANNER_TEMPESTADE_DE_PLASMA_SVG),
+  'banner_torre_da_astronomia_antiga': svgToDataUri(BANNER_TORRE_DA_ASTRONOMIA_ANTIGA_SVG),
+  'banner_santuario_da_arvore_sagrada': svgToDataUri(BANNER_SANTUARIO_DA_ARVORE_SAGRADA_SVG),
+  'banner_biblioteca_arcanos_proibidos': svgToDataUri(BANNER_BIBLIOTECA_ARCANOS_PROIBIDOS_SVG),
+  'banner_palacio_imperial_de_jade': svgToDataUri(BANNER_PALACIO_IMPERIAL_DE_JADE_SVG),
+  'banner_sistema_de_tres_sois': svgToDataUri(BANNER_SISTEMA_DE_TRES_SOIS_SVG),
+  'banner_criatura_leviata_estelar': svgToDataUri(BANNER_CRIATURA_LEVIATA_ESTELAR_SVG),
+  'banner_portal_das_dimensoes': svgToDataUri(BANNER_PORTAL_DAS_DIMENSOES_SVG),
+  'banner_aurora_polar_dos_glaciares': svgToDataUri(BANNER_AURORA_POLAR_DOS_GLACIARES_SVG),
+  'banner_vulcao_de_obsidiana': svgToDataUri(BANNER_VULCAO_DE_OBSIDIANA_SVG),
+  'banner_reliquia_da_arca_estelar': svgToDataUri(BANNER_RELIQUIA_DA_ARCA_ESTELAR_SVG),
+  'banner_floresta_de_bambu_espiritual': svgToDataUri(BANNER_FLORESTA_DE_BAMBU_ESPIRITUAL_SVG),
+  'banner_nebulosa_do_corvo_noturno': svgToDataUri(BANNER_NEBULOSA_DO_CORVO_NOTURNO_SVG),
+  'banner_mina_de_cristais_luminosos': svgToDataUri(BANNER_MINA_DE_CRISTAIS_LUMINOSOS_SVG),
+  'banner_navio_fantasma_celeste': svgToDataUri(BANNER_NAVIO_FANTASMA_CELESTE_SVG),
+  'banner_forja_do_armagedom': svgToDataUri(BANNER_FORJA_DO_ARMAGEDOM_SVG),
+  'banner_altar_do_sol_invictus': svgToDataUri(BANNER_ALTAR_DO_SOL_INVICTUS_SVG),
+  'banner_abismo_das_aguas_vivas': svgToDataUri(BANNER_ABISMO_DAS_AGUAS_VIVAS_SVG),
+  'banner_estacao_espacial_orbital': svgToDataUri(BANNER_ESTACAO_ESPACIAL_ORBITAL_SVG),
+  'banner_vale_dos_monolitos_runicos': svgToDataUri(BANNER_VALE_DOS_MONOLITOS_RUNICOS_SVG),
+  'banner_oasis_sob_o_firmamento': svgToDataUri(BANNER_OASIS_SOB_O_FIRMAMENTO_SVG),
+  'banner_catedral_da_meia_noite': svgToDataUri(BANNER_CATEDRAL_DA_MEIA_NOITE_SVG),
+  'banner_fissura_de_antimateria': svgToDataUri(BANNER_FISSURA_DE_ANTIMATERIA_SVG),
+  'banner_danca_dos_meteoritos': svgToDataUri(BANNER_DANCA_DOS_METEORITOS_SVG),
+  'banner_labirinto_de_quartzo_rosa': svgToDataUri(BANNER_LABIRINTO_DE_QUARTZO_ROSA_SVG),
+  'banner_santuario_da_valquiria': svgToDataUri(BANNER_SANTUARIO_DA_VALQUIRIA_SVG),
+  'banner_torre_de_engrenagens_tempo': svgToDataUri(BANNER_TORRE_DE_ENGRENAGENS_TEMPO_SVG),
+  'banner_ilha_dos_cogumelos_gigantes': svgToDataUri(BANNER_ILHA_DOS_COGUMELOS_GIGANTES_SVG),
+  'banner_desfiladeiro_dos_trovoes': svgToDataUri(BANNER_DESFILADEIRO_DOS_TROVOES_SVG),
+  'banner_flotilha_dos_navegantes': svgToDataUri(BANNER_FLOTILHA_DOS_NAVEGANTES_SVG),
+  'banner_jardim_zen_sob_estrelas': svgToDataUri(BANNER_JARDIM_ZEN_SOB_ESTRELAS_SVG),
+  'banner_cemiterio_dos_titas': svgToDataUri(BANNER_CEMITERIO_DOS_TITAS_SVG),
+  'banner_templo_do_lotus_abissal': svgToDataUri(BANNER_TEMPLO_DO_LOTUS_ABISSAL_SVG),
+  'banner_horizonte_da_superterra': svgToDataUri(BANNER_HORIZONTE_DA_SUPERTERRA_SVG),
+  'banner_portao_do_valhalla': svgToDataUri(BANNER_PORTAO_DO_VALHALLA_SVG),
+  'banner_festa_das_lanternas_celestes': svgToDataUri(BANNER_FESTA_DAS_LANTERNAS_CELESTES_SVG),
+  'banner_canyon_de_cristal_vermelho': svgToDataUri(BANNER_CANYON_DE_CRISTAL_VERMELHO_SVG),
+  'banner_santuario_submarino_atlantida': svgToDataUri(BANNER_SANTUARIO_SUBMARINO_ATLANTIDA_SVG),
+  'banner_circuito_de_dados_neural': svgToDataUri(BANNER_CIRCUITO_DE_DADOS_NEURAL_SVG),
+  'banner_eclipse_anular_de_diamante': svgToDataUri(BANNER_ECLIPSE_ANULAR_DE_DIAMANTE_SVG),
+  'banner_castelo_das_nuvens_alvas': svgToDataUri(BANNER_CASTELO_DAS_NUVENS_ALVAS_SVG),
+  'banner_torre_dos_quatro_elementos': svgToDataUri(BANNER_TORRE_DOS_QUATRO_ELEMENTOS_SVG),
+  'banner_singularidade_cosmica_nox': svgToDataUri(BANNER_SINGULARIDADE_COSMICA_NOX_SVG),
 };

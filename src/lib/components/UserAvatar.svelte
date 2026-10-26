@@ -131,6 +131,57 @@
     if (parsedFrameId === 'frame_cosmic_compass') return 'compass';
     if (parsedFrameId === 'frame_fairy_dust') return 'fairy';
     if (parsedFrameId === 'frame_god_emperor') return 'emperor';
+    if (parsedFrameId === 'frame_katana_bushido') return 'katana';
+    if (parsedFrameId === 'frame_infernal_dragon') return 'infdragon';
+    if (parsedFrameId === 'frame_clockwork_automaton') return 'clockwork';
+    if (parsedFrameId === 'frame_deepsea_leviathan') return 'leviathan';
+    if (parsedFrameId === 'frame_ouroboros_alchemical') return 'alchemouroboros';
+    if (parsedFrameId === 'frame_halo_divinus') return 'halodivinus';
+    if (parsedFrameId === 'frame_gothic_black_rose') return 'blackrose';
+    if (parsedFrameId === 'frame_nanotech_shield') return 'nanotech';
+    if (parsedFrameId === 'frame_storm_conductor') return 'stormconductor';
+    if (parsedFrameId === 'frame_amethyst_cluster') return 'amethystcluster';
+    if (parsedFrameId === 'frame_vampire_lord') return 'vampirelord';
+    if (parsedFrameId === 'frame_solar_phoenix') return 'solarphoenix';
+    if (parsedFrameId === 'frame_cyber_overdrive') return 'cyberoverdrive';
+    if (parsedFrameId === 'frame_runic_ring_ancient') return 'runicring';
+    if (parsedFrameId === 'frame_frost_bite_glacier') return 'frostglacier';
+    if (parsedFrameId === 'frame_tribal_shaman') return 'tribalshaman';
+    if (parsedFrameId === 'frame_andromeda_spiral') return 'andromeda';
+    if (parsedFrameId === 'frame_six_winged_seraph') return 'sixseraph';
+    if (parsedFrameId === 'frame_valkyrie_spear') return 'valkspear';
+    if (parsedFrameId === 'frame_navigators_astrolabe') return 'astrolabe';
+    if (parsedFrameId === 'frame_ouroboros_dragon') return 'dragonouroboros';
+    if (parsedFrameId === 'frame_black_sun_eclipse') return 'blacksun';
+    if (parsedFrameId === 'frame_toxic_hazard') return 'toxichazard';
+    if (parsedFrameId === 'frame_eldritch_horror') return 'eldritch';
+    if (parsedFrameId === 'frame_imperial_monarch') return 'imperialmonarch';
+    if (parsedFrameId === 'frame_enchanted_flora') return 'enchantedflora';
+    if (parsedFrameId === 'frame_meteor_ring') return 'meteorring';
+    if (parsedFrameId === 'frame_binding_chains') return 'bindingchains';
+    if (parsedFrameId === 'frame_stargate_portal') return 'stargate';
+    if (parsedFrameId === 'frame_prism_refraction') return 'prismrefraction';
+    if (parsedFrameId === 'frame_dark_matter_core') return 'darkmatter';
+    if (parsedFrameId === 'frame_spartan_aegis') return 'spartanaegis';
+    if (parsedFrameId === 'frame_blood_moon_curse') return 'bloodmoon';
+    if (parsedFrameId === 'frame_grail_light') return 'graillight';
+    if (parsedFrameId === 'frame_sentinel_drone') return 'sentineldone';
+    if (parsedFrameId === 'frame_zen_lotus') return 'zenlotus';
+    if (parsedFrameId === 'frame_arachne_web') return 'arachneweb';
+    if (parsedFrameId === 'frame_chains_of_hell') return 'hellchains';
+    if (parsedFrameId === 'frame_supernova_ring') return 'supernovaring';
+    if (parsedFrameId === 'frame_time_weaver') return 'timeweaver';
+    if (parsedFrameId === 'frame_desert_mirage') return 'desertmirage';
+    if (parsedFrameId === 'frame_kraken_abyss') return 'krakenabyss';
+    if (parsedFrameId === 'frame_tesla_globe') return 'teslaglobe';
+    if (parsedFrameId === 'frame_archangel_feather') return 'archangelfeather';
+    if (parsedFrameId === 'frame_demon_lord_horns') return 'demonhorns';
+    if (parsedFrameId === 'frame_cyber_motherboard') return 'motherboard';
+    if (parsedFrameId === 'frame_galaxy_vortex') return 'galaxyvortex';
+    if (parsedFrameId === 'frame_fairy_wings') return 'fairywings';
+    if (parsedFrameId === 'frame_sovereign_wyrm') return 'sovereignwyrm';
+    if (parsedFrameId === 'frame_nox_singularity') return 'noxsingularity';
+
     return 'legacy';
   });
 
@@ -192,6 +243,57 @@
   class:frame-compass={resolvedFrameKey === 'compass'}
   class:frame-fairy={resolvedFrameKey === 'fairy'}
   class:frame-emperor={resolvedFrameKey === 'emperor'}
+  class:frame-katana={resolvedFrameKey === 'katana'}
+  class:frame-infdragon={resolvedFrameKey === 'infdragon'}
+  class:frame-clockwork={resolvedFrameKey === 'clockwork'}
+  class:frame-leviathan={resolvedFrameKey === 'leviathan'}
+  class:frame-alchemouroboros={resolvedFrameKey === 'alchemouroboros'}
+  class:frame-halodivinus={resolvedFrameKey === 'halodivinus'}
+  class:frame-blackrose={resolvedFrameKey === 'blackrose'}
+  class:frame-nanotech={resolvedFrameKey === 'nanotech'}
+  class:frame-stormconductor={resolvedFrameKey === 'stormconductor'}
+  class:frame-amethystcluster={resolvedFrameKey === 'amethystcluster'}
+  class:frame-vampirelord={resolvedFrameKey === 'vampirelord'}
+  class:frame-solarphoenix={resolvedFrameKey === 'solarphoenix'}
+  class:frame-cyberoverdrive={resolvedFrameKey === 'cyberoverdrive'}
+  class:frame-runicring={resolvedFrameKey === 'runicring'}
+  class:frame-frostglacier={resolvedFrameKey === 'frostglacier'}
+  class:frame-tribalshaman={resolvedFrameKey === 'tribalshaman'}
+  class:frame-andromeda={resolvedFrameKey === 'andromeda'}
+  class:frame-sixseraph={resolvedFrameKey === 'sixseraph'}
+  class:frame-valkspear={resolvedFrameKey === 'valkspear'}
+  class:frame-astrolabe={resolvedFrameKey === 'astrolabe'}
+  class:frame-dragonouroboros={resolvedFrameKey === 'dragonouroboros'}
+  class:frame-blacksun={resolvedFrameKey === 'blacksun'}
+  class:frame-toxichazard={resolvedFrameKey === 'toxichazard'}
+  class:frame-eldritch={resolvedFrameKey === 'eldritch'}
+  class:frame-imperialmonarch={resolvedFrameKey === 'imperialmonarch'}
+  class:frame-enchantedflora={resolvedFrameKey === 'enchantedflora'}
+  class:frame-meteorring={resolvedFrameKey === 'meteorring'}
+  class:frame-bindingchains={resolvedFrameKey === 'bindingchains'}
+  class:frame-stargate={resolvedFrameKey === 'stargate'}
+  class:frame-prismrefraction={resolvedFrameKey === 'prismrefraction'}
+  class:frame-darkmatter={resolvedFrameKey === 'darkmatter'}
+  class:frame-spartanaegis={resolvedFrameKey === 'spartanaegis'}
+  class:frame-bloodmoon={resolvedFrameKey === 'bloodmoon'}
+  class:frame-graillight={resolvedFrameKey === 'graillight'}
+  class:frame-sentineldone={resolvedFrameKey === 'sentineldone'}
+  class:frame-zenlotus={resolvedFrameKey === 'zenlotus'}
+  class:frame-arachneweb={resolvedFrameKey === 'arachneweb'}
+  class:frame-hellchains={resolvedFrameKey === 'hellchains'}
+  class:frame-supernovaring={resolvedFrameKey === 'supernovaring'}
+  class:frame-timeweaver={resolvedFrameKey === 'timeweaver'}
+  class:frame-desertmirage={resolvedFrameKey === 'desertmirage'}
+  class:frame-krakenabyss={resolvedFrameKey === 'krakenabyss'}
+  class:frame-teslaglobe={resolvedFrameKey === 'teslaglobe'}
+  class:frame-archangelfeather={resolvedFrameKey === 'archangelfeather'}
+  class:frame-demonhorns={resolvedFrameKey === 'demonhorns'}
+  class:frame-motherboard={resolvedFrameKey === 'motherboard'}
+  class:frame-galaxyvortex={resolvedFrameKey === 'galaxyvortex'}
+  class:frame-fairywings={resolvedFrameKey === 'fairywings'}
+  class:frame-sovereignwyrm={resolvedFrameKey === 'sovereignwyrm'}
+  class:frame-noxsingularity={resolvedFrameKey === 'noxsingularity'}
+
   class:tint-blue={parsedFrameColor === 'blue' || parsedFrameColor === 'sapphire'}
   class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red' || parsedFrameColor === 'ruby'}
   class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple' || parsedFrameColor === 'amethyst'}
@@ -272,6 +374,577 @@
             <path d="M78,78 L79.5,75 L81,78 L79.5,81 Z" class="star-twinkle-1" />
           </g>
         </svg>
+      {:else if resolvedFrameKey === 'katana'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-katana" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-katana-base" stroke="#e2e8f0" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #e2e8f0)"/>
+          <circle cx="50" cy="50" r="42" class="ring-katana-pulse" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M50,4 Q70,25 96,50" stroke="#e2e8f0" stroke-width="2.5" fill="none"/>
+          <path d="M50,96 Q30,75 4,50" stroke="#e2e8f0" stroke-width="2.5" fill="none"/>
+          <polygon points="50,2 54,8 50,14 46,8" fill="#dc2626"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'infdragon'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-infdragon" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-infdragon-base" stroke="#ef4444" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ef4444)"/>
+          <circle cx="50" cy="50" r="42" class="ring-infdragon-pulse" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M25,28 Q10,5 28,2" stroke="#ef4444" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path d="M75,28 Q90,5 72,2" stroke="#ef4444" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <polygon points="50,90 54,96 50,100 46,96" fill="#f59e0b"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'clockwork'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-clockwork" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-clockwork-base" stroke="#f59e0b" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #f59e0b)"/>
+          <circle cx="50" cy="50" r="42" class="ring-clockwork-pulse" stroke="#78350f" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-clockwork">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#78350f" filter="drop-shadow(0 0 4px #78350f)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#78350f"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#f59e0b"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#f59e0b"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'leviathan'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-leviathan" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-leviathan-base" stroke="#06b6d4" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #06b6d4)"/>
+          <circle cx="50" cy="50" r="42" class="ring-leviathan-pulse" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-leviathan">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#0284c7" filter="drop-shadow(0 0 4px #0284c7)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#0284c7"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#06b6d4"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#06b6d4"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'alchemouroboros'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-alchemouroboros" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-alchemouroboros-base" stroke="#10b981" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #10b981)"/>
+          <circle cx="50" cy="50" r="42" class="ring-alchemouroboros-pulse" stroke="#6366f1" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-alchemouroboros">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#6366f1" filter="drop-shadow(0 0 4px #6366f1)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#6366f1"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#10b981"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#10b981"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'halodivinus'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-halodivinus" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-halodivinus-base" stroke="#fbbf24" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #fbbf24)"/>
+          <circle cx="50" cy="50" r="42" class="ring-halodivinus-pulse" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <polygon points="50,4 58,16 68,8 64,24 36,24 32,8 42,16" fill="#fbbf24" stroke="#ffffff" stroke-width="1"/>
+          <circle cx="50" cy="94" r="3.5" fill="#ffffff"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'blackrose'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-blackrose" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-blackrose-base" stroke="#9f1239" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #9f1239)"/>
+          <circle cx="50" cy="50" r="42" class="ring-blackrose-pulse" stroke="#1e1b4b" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-blackrose">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#1e1b4b" filter="drop-shadow(0 0 4px #1e1b4b)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#1e1b4b"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#9f1239"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#9f1239"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'nanotech'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-nanotech" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-nanotech-base" stroke="#0284c7" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #0284c7)"/>
+          <circle cx="50" cy="50" r="42" class="ring-nanotech-pulse" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-nanotech">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#38bdf8"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#0284c7"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#0284c7"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'stormconductor'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-stormconductor" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-stormconductor-base" stroke="#818cf8" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #818cf8)"/>
+          <circle cx="50" cy="50" r="42" class="ring-stormconductor-pulse" stroke="#c084fc" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-stormconductor">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#c084fc" filter="drop-shadow(0 0 4px #c084fc)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#c084fc"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#818cf8"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#818cf8"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'amethystcluster'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-amethystcluster" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-amethystcluster-base" stroke="#a855f7" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #a855f7)"/>
+          <circle cx="50" cy="50" r="42" class="ring-amethystcluster-pulse" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-amethystcluster">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#7c3aed" filter="drop-shadow(0 0 4px #7c3aed)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#7c3aed"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#a855f7"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#a855f7"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'vampirelord'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-vampirelord" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-vampirelord-base" stroke="#881337" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #881337)"/>
+          <circle cx="50" cy="50" r="42" class="ring-vampirelord-pulse" stroke="#e11d48" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M12,45 C2,25 25,15 45,35" stroke="#881337" stroke-width="2" fill="none" opacity="0.9"/>
+          <path d="M88,45 C98,25 75,15 55,35" stroke="#881337" stroke-width="2" fill="none" opacity="0.9"/>
+          <circle cx="50" cy="8" r="3.5" fill="#e11d48" filter="drop-shadow(0 0 6px #e11d48)"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'solarphoenix'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-solarphoenix" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-solarphoenix-base" stroke="#f97316" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #f97316)"/>
+          <circle cx="50" cy="50" r="42" class="ring-solarphoenix-pulse" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M12,45 C2,25 25,15 45,35" stroke="#f97316" stroke-width="2" fill="none" opacity="0.9"/>
+          <path d="M88,45 C98,25 75,15 55,35" stroke="#f97316" stroke-width="2" fill="none" opacity="0.9"/>
+          <circle cx="50" cy="8" r="3.5" fill="#fbbf24" filter="drop-shadow(0 0 6px #fbbf24)"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'cyberoverdrive'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-cyberoverdrive" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-cyberoverdrive-base" stroke="#10b981" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #10b981)"/>
+          <circle cx="50" cy="50" r="42" class="ring-cyberoverdrive-pulse" stroke="#06b6d4" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-cyberoverdrive">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#06b6d4" filter="drop-shadow(0 0 4px #06b6d4)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#06b6d4"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#10b981"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#10b981"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'runicring'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-runicring" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-runicring-base" stroke="#38bdf8" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #38bdf8)"/>
+          <circle cx="50" cy="50" r="42" class="ring-runicring-pulse" stroke="#6366f1" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-runicring">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#6366f1" filter="drop-shadow(0 0 4px #6366f1)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#6366f1"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#38bdf8"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#38bdf8"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'frostglacier'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-frostglacier" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-frostglacier-base" stroke="#38bdf8" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #38bdf8)"/>
+          <circle cx="50" cy="50" r="42" class="ring-frostglacier-pulse" stroke="#e0f2fe" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-frostglacier">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#e0f2fe" filter="drop-shadow(0 0 4px #e0f2fe)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#e0f2fe"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#38bdf8"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#38bdf8"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'tribalshaman'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-tribalshaman" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-tribalshaman-base" stroke="#ea580c" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ea580c)"/>
+          <circle cx="50" cy="50" r="42" class="ring-tribalshaman-pulse" stroke="#eab308" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-tribalshaman">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#eab308" filter="drop-shadow(0 0 4px #eab308)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#eab308"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#ea580c"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#ea580c"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'andromeda'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-andromeda" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-andromeda-base" stroke="#c084fc" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #c084fc)"/>
+          <circle cx="50" cy="50" r="42" class="ring-andromeda-pulse" stroke="#ec4899" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-andromeda">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#ec4899" filter="drop-shadow(0 0 4px #ec4899)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#ec4899"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#c084fc"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#c084fc"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'sixseraph'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-sixseraph" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-sixseraph-base" stroke="#fbbf24" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #fbbf24)"/>
+          <circle cx="50" cy="50" r="42" class="ring-sixseraph-pulse" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M12,45 C2,25 25,15 45,35" stroke="#fbbf24" stroke-width="2" fill="none" opacity="0.9"/>
+          <path d="M88,45 C98,25 75,15 55,35" stroke="#fbbf24" stroke-width="2" fill="none" opacity="0.9"/>
+          <circle cx="50" cy="8" r="3.5" fill="#ffffff" filter="drop-shadow(0 0 6px #ffffff)"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'valkspear'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-valkspear" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-valkspear-base" stroke="#94a3b8" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #94a3b8)"/>
+          <circle cx="50" cy="50" r="42" class="ring-valkspear-pulse" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-valkspear">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#38bdf8"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#94a3b8"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#94a3b8"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'astrolabe'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-astrolabe" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-astrolabe-base" stroke="#d97706" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #d97706)"/>
+          <circle cx="50" cy="50" r="42" class="ring-astrolabe-pulse" stroke="#fde047" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-astrolabe">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#fde047" filter="drop-shadow(0 0 4px #fde047)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#fde047"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#d97706"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#d97706"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'dragonouroboros'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-dragonouroboros" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-dragonouroboros-base" stroke="#059669" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #059669)"/>
+          <circle cx="50" cy="50" r="42" class="ring-dragonouroboros-pulse" stroke="#10b981" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-dragonouroboros">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#10b981" filter="drop-shadow(0 0 4px #10b981)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#10b981"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#059669"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#059669"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'blacksun'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-blacksun" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-blacksun-base" stroke="#ef4444" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ef4444)"/>
+          <circle cx="50" cy="50" r="42" class="ring-blacksun-pulse" stroke="#171717" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-blacksun">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#171717" filter="drop-shadow(0 0 4px #171717)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#171717"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#ef4444"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#ef4444"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'toxichazard'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-toxichazard" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-toxichazard-base" stroke="#84cc16" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #84cc16)"/>
+          <circle cx="50" cy="50" r="42" class="ring-toxichazard-pulse" stroke="#eab308" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-toxichazard">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#eab308" filter="drop-shadow(0 0 4px #eab308)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#eab308"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#84cc16"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#84cc16"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'eldritch'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-eldritch" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-eldritch-base" stroke="#701a75" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #701a75)"/>
+          <circle cx="50" cy="50" r="42" class="ring-eldritch-pulse" stroke="#a21caf" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-eldritch">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#a21caf" filter="drop-shadow(0 0 4px #a21caf)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#a21caf"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#701a75"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#701a75"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'imperialmonarch'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-imperialmonarch" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-imperialmonarch-base" stroke="#eab308" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #eab308)"/>
+          <circle cx="50" cy="50" r="42" class="ring-imperialmonarch-pulse" stroke="#fef08a" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <polygon points="50,4 58,16 68,8 64,24 36,24 32,8 42,16" fill="#eab308" stroke="#fef08a" stroke-width="1"/>
+          <circle cx="50" cy="94" r="3.5" fill="#fef08a"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'enchantedflora'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-enchantedflora" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-enchantedflora-base" stroke="#ec4899" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ec4899)"/>
+          <circle cx="50" cy="50" r="42" class="ring-enchantedflora-pulse" stroke="#10b981" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-enchantedflora">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#10b981" filter="drop-shadow(0 0 4px #10b981)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#10b981"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#ec4899"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#ec4899"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'meteorring'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-meteorring" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-meteorring-base" stroke="#f97316" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #f97316)"/>
+          <circle cx="50" cy="50" r="42" class="ring-meteorring-pulse" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-meteorring">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#dc2626" filter="drop-shadow(0 0 4px #dc2626)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#dc2626"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#f97316"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#f97316"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'bindingchains'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-bindingchains" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-bindingchains-base" stroke="#8b5cf6" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #8b5cf6)"/>
+          <circle cx="50" cy="50" r="42" class="ring-bindingchains-pulse" stroke="#c084fc" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-bindingchains">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#c084fc" filter="drop-shadow(0 0 4px #c084fc)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#c084fc"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#8b5cf6"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#8b5cf6"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'stargate'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-stargate" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-stargate-base" stroke="#0ea5e9" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #0ea5e9)"/>
+          <circle cx="50" cy="50" r="42" class="ring-stargate-pulse" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-stargate">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#38bdf8"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#0ea5e9"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#0ea5e9"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'prismrefraction'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-prismrefraction" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-prismrefraction-base" stroke="#ec4899" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ec4899)"/>
+          <circle cx="50" cy="50" r="42" class="ring-prismrefraction-pulse" stroke="#06b6d4" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-prismrefraction">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#06b6d4" filter="drop-shadow(0 0 4px #06b6d4)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#06b6d4"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#ec4899"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#ec4899"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'darkmatter'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-darkmatter" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-darkmatter-base" stroke="#581c87" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #581c87)"/>
+          <circle cx="50" cy="50" r="42" class="ring-darkmatter-pulse" stroke="#9333ea" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-darkmatter">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#9333ea" filter="drop-shadow(0 0 4px #9333ea)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#9333ea"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#581c87"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#581c87"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'spartanaegis'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-spartanaegis" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-spartanaegis-base" stroke="#b45309" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #b45309)"/>
+          <circle cx="50" cy="50" r="42" class="ring-spartanaegis-pulse" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-spartanaegis">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#f59e0b" filter="drop-shadow(0 0 4px #f59e0b)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#f59e0b"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#b45309"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#b45309"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'bloodmoon'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-bloodmoon" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-bloodmoon-base" stroke="#991b1b" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #991b1b)"/>
+          <circle cx="50" cy="50" r="42" class="ring-bloodmoon-pulse" stroke="#f43f5e" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-bloodmoon">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#f43f5e" filter="drop-shadow(0 0 4px #f43f5e)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#f43f5e"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#991b1b"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#991b1b"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'graillight'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-graillight" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-graillight-base" stroke="#facc15" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #facc15)"/>
+          <circle cx="50" cy="50" r="42" class="ring-graillight-pulse" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-graillight">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#ffffff" filter="drop-shadow(0 0 4px #ffffff)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#ffffff"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#facc15"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#facc15"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'sentineldone'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-sentineldone" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-sentineldone-base" stroke="#ef4444" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #ef4444)"/>
+          <circle cx="50" cy="50" r="42" class="ring-sentineldone-pulse" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-sentineldone">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#0284c7" filter="drop-shadow(0 0 4px #0284c7)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#0284c7"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#ef4444"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#ef4444"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'zenlotus'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-zenlotus" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-zenlotus-base" stroke="#f472b6" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #f472b6)"/>
+          <circle cx="50" cy="50" r="42" class="ring-zenlotus-pulse" stroke="#c084fc" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-zenlotus">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#c084fc" filter="drop-shadow(0 0 4px #c084fc)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#c084fc"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#f472b6"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#f472b6"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'arachneweb'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-arachneweb" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-arachneweb-base" stroke="#cbd5e1" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #cbd5e1)"/>
+          <circle cx="50" cy="50" r="42" class="ring-arachneweb-pulse" stroke="#64748b" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-arachneweb">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#64748b" filter="drop-shadow(0 0 4px #64748b)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#64748b"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#cbd5e1"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#cbd5e1"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'hellchains'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-hellchains" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-hellchains-base" stroke="#dc2626" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #dc2626)"/>
+          <circle cx="50" cy="50" r="42" class="ring-hellchains-pulse" stroke="#f97316" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-hellchains">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#f97316" filter="drop-shadow(0 0 4px #f97316)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#f97316"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#dc2626"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#dc2626"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'supernovaring'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-supernovaring" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-supernovaring-base" stroke="#fbbf24" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #fbbf24)"/>
+          <circle cx="50" cy="50" r="42" class="ring-supernovaring-pulse" stroke="#f43f5e" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-supernovaring">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#f43f5e" filter="drop-shadow(0 0 4px #f43f5e)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#f43f5e"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#fbbf24"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#fbbf24"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'timeweaver'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-timeweaver" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-timeweaver-base" stroke="#d97706" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #d97706)"/>
+          <circle cx="50" cy="50" r="42" class="ring-timeweaver-pulse" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-timeweaver">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#38bdf8"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#d97706"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#d97706"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'desertmirage'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-desertmirage" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-desertmirage-base" stroke="#eab308" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #eab308)"/>
+          <circle cx="50" cy="50" r="42" class="ring-desertmirage-pulse" stroke="#06b6d4" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-desertmirage">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#06b6d4" filter="drop-shadow(0 0 4px #06b6d4)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#06b6d4"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#eab308"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#eab308"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'krakenabyss'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-krakenabyss" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-krakenabyss-base" stroke="#0284c7" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #0284c7)"/>
+          <circle cx="50" cy="50" r="42" class="ring-krakenabyss-pulse" stroke="#06b6d4" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-krakenabyss">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#06b6d4" filter="drop-shadow(0 0 4px #06b6d4)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#06b6d4"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#0284c7"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#0284c7"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'teslaglobe'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-teslaglobe" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-teslaglobe-base" stroke="#a855f7" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #a855f7)"/>
+          <circle cx="50" cy="50" r="42" class="ring-teslaglobe-pulse" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-teslaglobe">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#38bdf8"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#a855f7"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#a855f7"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'archangelfeather'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-archangelfeather" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-archangelfeather-base" stroke="#e2e8f0" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #e2e8f0)"/>
+          <circle cx="50" cy="50" r="42" class="ring-archangelfeather-pulse" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-archangelfeather">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#fbbf24" filter="drop-shadow(0 0 4px #fbbf24)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#fbbf24"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#e2e8f0"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#e2e8f0"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'demonhorns'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-demonhorns" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-demonhorns-base" stroke="#b91c1c" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #b91c1c)"/>
+          <circle cx="50" cy="50" r="42" class="ring-demonhorns-pulse" stroke="#7f1d1d" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M25,28 Q10,5 28,2" stroke="#b91c1c" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path d="M75,28 Q90,5 72,2" stroke="#b91c1c" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <polygon points="50,90 54,96 50,100 46,96" fill="#7f1d1d"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'motherboard'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-motherboard" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-motherboard-base" stroke="#10b981" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #10b981)"/>
+          <circle cx="50" cy="50" r="42" class="ring-motherboard-pulse" stroke="#06b6d4" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-motherboard">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#06b6d4" filter="drop-shadow(0 0 4px #06b6d4)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#06b6d4"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#10b981"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#10b981"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'galaxyvortex'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-galaxyvortex" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-galaxyvortex-base" stroke="#8b5cf6" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #8b5cf6)"/>
+          <circle cx="50" cy="50" r="42" class="ring-galaxyvortex-pulse" stroke="#ec4899" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-galaxyvortex">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#ec4899" filter="drop-shadow(0 0 4px #ec4899)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#ec4899"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#8b5cf6"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#8b5cf6"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'fairywings'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-fairywings" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-fairywings-base" stroke="#34d399" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #34d399)"/>
+          <circle cx="50" cy="50" r="42" class="ring-fairywings-pulse" stroke="#f472b6" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <path d="M12,45 C2,25 25,15 45,35" stroke="#34d399" stroke-width="2" fill="none" opacity="0.9"/>
+          <path d="M88,45 C98,25 75,15 55,35" stroke="#34d399" stroke-width="2" fill="none" opacity="0.9"/>
+          <circle cx="50" cy="8" r="3.5" fill="#f472b6" filter="drop-shadow(0 0 6px #f472b6)"/>
+        </svg>
+
+      {:else if resolvedFrameKey === 'sovereignwyrm'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-sovereignwyrm" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-sovereignwyrm-base" stroke="#eab308" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #eab308)"/>
+          <circle cx="50" cy="50" r="42" class="ring-sovereignwyrm-pulse" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-sovereignwyrm">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#dc2626" filter="drop-shadow(0 0 4px #dc2626)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#dc2626"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#eab308"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#eab308"/>
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'noxsingularity'}
+        <svg viewBox="0 0 100 100" class="frame-svg frame-svg-noxsingularity" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-noxsingularity-base" stroke="#8b5cf6" stroke-width="2.5" fill="none" opacity="0.85" filter="drop-shadow(0 0 6px #8b5cf6)"/>
+          <circle cx="50" cy="50" r="42" class="ring-noxsingularity-pulse" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.9"/>
+          <g class="nodes-noxsingularity">
+            <polygon points="50,4 53,9 50,14 47,9" fill="#3b82f6" filter="drop-shadow(0 0 4px #3b82f6)"/>
+            <polygon points="50,86 53,91 50,96 47,91" fill="#3b82f6"/>
+            <polygon points="4,50 9,53 14,50 9,47" fill="#8b5cf6"/>
+            <polygon points="86,50 91,53 96,50 91,47" fill="#8b5cf6"/>
+          </g>
+        </svg>
+
 
       {:else if resolvedFrameKey === 'cyber'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
@@ -1546,5 +2219,110 @@
   .arm-l2 { animation: waveSwell 3.2s ease-in-out infinite 0.4s; transform-origin: 22px 72px; }
   .arm-r2 { animation: waveSwell 3.2s ease-in-out infinite 1.1s; transform-origin: 78px 72px; }
   .arm-center { animation: gemBreathe 2.4s ease-in-out infinite; transform-origin: 50px 94px; }
+
+
+  /* Round Final Procedural Frames 51-100 Animations */
+  @keyframes noxPulseRing { 0%, 100% { opacity: 0.65; transform: scale(1); } 50% { opacity: 1; transform: scale(1.03); } }
+  @keyframes noxRotateFrame { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .frame-katana .ring-katana-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-katana .ring-katana-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-infdragon .ring-infdragon-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-infdragon .ring-infdragon-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-clockwork .ring-clockwork-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-clockwork .ring-clockwork-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-leviathan .ring-leviathan-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-leviathan .ring-leviathan-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-alchemouroboros .ring-alchemouroboros-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-alchemouroboros .ring-alchemouroboros-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-halodivinus .ring-halodivinus-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-halodivinus .ring-halodivinus-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-blackrose .ring-blackrose-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-blackrose .ring-blackrose-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-nanotech .ring-nanotech-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-nanotech .ring-nanotech-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-stormconductor .ring-stormconductor-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-stormconductor .ring-stormconductor-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-amethystcluster .ring-amethystcluster-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-amethystcluster .ring-amethystcluster-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-vampirelord .ring-vampirelord-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-vampirelord .ring-vampirelord-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-solarphoenix .ring-solarphoenix-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-solarphoenix .ring-solarphoenix-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-cyberoverdrive .ring-cyberoverdrive-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-cyberoverdrive .ring-cyberoverdrive-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-runicring .ring-runicring-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-runicring .ring-runicring-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-frostglacier .ring-frostglacier-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-frostglacier .ring-frostglacier-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-tribalshaman .ring-tribalshaman-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-tribalshaman .ring-tribalshaman-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-andromeda .ring-andromeda-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-andromeda .ring-andromeda-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-sixseraph .ring-sixseraph-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-sixseraph .ring-sixseraph-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-valkspear .ring-valkspear-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-valkspear .ring-valkspear-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-astrolabe .ring-astrolabe-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-astrolabe .ring-astrolabe-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-dragonouroboros .ring-dragonouroboros-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-dragonouroboros .ring-dragonouroboros-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-blacksun .ring-blacksun-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-blacksun .ring-blacksun-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-toxichazard .ring-toxichazard-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-toxichazard .ring-toxichazard-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-eldritch .ring-eldritch-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-eldritch .ring-eldritch-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-imperialmonarch .ring-imperialmonarch-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-imperialmonarch .ring-imperialmonarch-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-enchantedflora .ring-enchantedflora-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-enchantedflora .ring-enchantedflora-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-meteorring .ring-meteorring-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-meteorring .ring-meteorring-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-bindingchains .ring-bindingchains-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-bindingchains .ring-bindingchains-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-stargate .ring-stargate-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-stargate .ring-stargate-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-prismrefraction .ring-prismrefraction-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-prismrefraction .ring-prismrefraction-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-darkmatter .ring-darkmatter-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-darkmatter .ring-darkmatter-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-spartanaegis .ring-spartanaegis-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-spartanaegis .ring-spartanaegis-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-bloodmoon .ring-bloodmoon-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-bloodmoon .ring-bloodmoon-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-graillight .ring-graillight-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-graillight .ring-graillight-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-sentineldone .ring-sentineldone-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-sentineldone .ring-sentineldone-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-zenlotus .ring-zenlotus-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-zenlotus .ring-zenlotus-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-arachneweb .ring-arachneweb-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-arachneweb .ring-arachneweb-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-hellchains .ring-hellchains-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-hellchains .ring-hellchains-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-supernovaring .ring-supernovaring-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-supernovaring .ring-supernovaring-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-timeweaver .ring-timeweaver-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-timeweaver .ring-timeweaver-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-desertmirage .ring-desertmirage-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-desertmirage .ring-desertmirage-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-krakenabyss .ring-krakenabyss-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-krakenabyss .ring-krakenabyss-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-teslaglobe .ring-teslaglobe-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-teslaglobe .ring-teslaglobe-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-archangelfeather .ring-archangelfeather-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-archangelfeather .ring-archangelfeather-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-demonhorns .ring-demonhorns-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-demonhorns .ring-demonhorns-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-motherboard .ring-motherboard-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-motherboard .ring-motherboard-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-galaxyvortex .ring-galaxyvortex-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-galaxyvortex .ring-galaxyvortex-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-fairywings .ring-fairywings-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-fairywings .ring-fairywings-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-sovereignwyrm .ring-sovereignwyrm-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-sovereignwyrm .ring-sovereignwyrm-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
+  .frame-noxsingularity .ring-noxsingularity-pulse { transform-origin: 50px 50px; animation: noxRotateFrame 18s linear infinite; }
+  .frame-noxsingularity .ring-noxsingularity-base { transform-origin: 50px 50px; animation: noxPulseRing 4.5s ease-in-out infinite; }
 
 </style>
