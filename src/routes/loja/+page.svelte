@@ -1589,8 +1589,15 @@
 
   .xp-activities-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.15rem;
+  }
+
+  @media (max-width: 1024px) {
+    .xp-activities-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
   }
 
   .xp-activity-card {
