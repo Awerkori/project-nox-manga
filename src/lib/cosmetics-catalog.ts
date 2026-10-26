@@ -2734,6 +2734,9 @@ export const LEGACY_UNREFURBISHED_IDS = new Set<string>([
   'color_astral_prism',
   'color_golden_sovereign',
   'color_singularity_rainbow',
+  'color_emerald_glow',
+  'frame_void_nebula',
+  'frame_celestial_gold',
   'item_placeholder',
   'item_banner_placeholder',
   'item_frame_empty'
