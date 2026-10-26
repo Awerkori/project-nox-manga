@@ -65,17 +65,22 @@
     if (parsedFrameId === 'frame_aurora_mystic') return 'aurora';
     if (parsedFrameId === 'frame_crimson_eclipse') return 'crimson';
     if (parsedFrameId === 'frame_celestial_sovereign' || parsedFrameId === 'frame_celestial_gold') return 'celestial';
-    // Round 3 new frames
+    // Round 3 frames
     if (parsedFrameId === 'frame_lightning_storm') return 'lightning';
     if (parsedFrameId === 'frame_crystal_shards') return 'crystal';
     if (parsedFrameId === 'frame_void_vortex') return 'vortex';
     if (parsedFrameId === 'frame_astral_thorn_crown') return 'thorn';
+    // Round 4 new frames
+    if (parsedFrameId === 'frame_angelic_seraph') return 'angelic';
+    if (parsedFrameId === 'frame_abyssal_infernal') return 'infernal';
+    if (parsedFrameId === 'frame_oceanic_tide') return 'oceanic';
+    if (parsedFrameId === 'frame_runic_monolith') return 'monolith';
+    if (parsedFrameId === 'frame_blossom_astral') return 'blossom';
+    if (parsedFrameId === 'frame_cyber_glitch_v2' || parsedFrameId === 'frame_cyber_glitch') return 'glitch';
     return 'legacy';
   });
 
   $effect(() => {
-    // A new media id is immutable and canonical. Reset a prior definitive
-    // load failure only when that id changes; never fall back to an old asset.
     if (failedSrc && failedSrc !== resolvedSrc) failedSrc = null;
   });
 </script>
@@ -95,15 +100,22 @@
   class:frame-crystal={resolvedFrameKey === 'crystal'}
   class:frame-vortex={resolvedFrameKey === 'vortex'}
   class:frame-thorn={resolvedFrameKey === 'thorn'}
-  class:tint-blue={parsedFrameColor === 'blue'}
-  class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red'}
-  class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple'}
+  class:frame-angelic={resolvedFrameKey === 'angelic'}
+  class:frame-infernal={resolvedFrameKey === 'infernal'}
+  class:frame-oceanic={resolvedFrameKey === 'oceanic'}
+  class:frame-monolith={resolvedFrameKey === 'monolith'}
+  class:frame-blossom={resolvedFrameKey === 'blossom'}
+  class:frame-glitch={resolvedFrameKey === 'glitch'}
+  class:tint-blue={parsedFrameColor === 'blue' || parsedFrameColor === 'sapphire'}
+  class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red' || parsedFrameColor === 'ruby'}
+  class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple' || parsedFrameColor === 'amethyst'}
   class:tint-emerald={parsedFrameColor === 'emerald' || parsedFrameColor === 'green'}
-  class:tint-gold={parsedFrameColor === 'gold'}
-  class:tint-cyan={parsedFrameColor === 'cyan'}
-  class:tint-magenta={parsedFrameColor === 'magenta'}
+  class:tint-gold={parsedFrameColor === 'gold' || parsedFrameColor === 'amber'}
+  class:tint-cyan={parsedFrameColor === 'cyan' || parsedFrameColor === 'turquoise' || parsedFrameColor === 'holo'}
+  class:tint-magenta={parsedFrameColor === 'magenta' || parsedFrameColor === 'pink'}
   class:tint-green={parsedFrameColor === 'green'}
-  class:tint-orange={parsedFrameColor === 'orange'}
+  class:tint-orange={parsedFrameColor === 'orange' || parsedFrameColor === 'hazard'}
+  class:tint-silver={parsedFrameColor === 'silver' || parsedFrameColor === 'alva'}
   style="--avatar-size: {size}px;"
 >
   <div class="avatar-inner">
@@ -130,15 +142,16 @@
   {:else if parsedFrameId}
     <div
       class="avatar-frame-overlay frame-{resolvedFrameKey}"
-      class:tint-blue={parsedFrameColor === 'blue'}
-      class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red'}
-      class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple'}
+      class:tint-blue={parsedFrameColor === 'blue' || parsedFrameColor === 'sapphire'}
+      class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red' || parsedFrameColor === 'ruby'}
+      class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple' || parsedFrameColor === 'amethyst'}
       class:tint-emerald={parsedFrameColor === 'emerald' || parsedFrameColor === 'green'}
-      class:tint-gold={parsedFrameColor === 'gold'}
-      class:tint-cyan={parsedFrameColor === 'cyan'}
-      class:tint-magenta={parsedFrameColor === 'magenta'}
+      class:tint-gold={parsedFrameColor === 'gold' || parsedFrameColor === 'amber'}
+      class:tint-cyan={parsedFrameColor === 'cyan' || parsedFrameColor === 'turquoise' || parsedFrameColor === 'holo'}
+      class:tint-magenta={parsedFrameColor === 'magenta' || parsedFrameColor === 'pink'}
       class:tint-green={parsedFrameColor === 'green'}
-      class:tint-orange={parsedFrameColor === 'orange'}
+      class:tint-orange={parsedFrameColor === 'orange' || parsedFrameColor === 'hazard'}
+      class:tint-silver={parsedFrameColor === 'silver' || parsedFrameColor === 'alva'}
       aria-hidden="true"
     >
       {#if resolvedFrameKey === 'cosmic'}
@@ -257,9 +270,7 @@
           <polygon points="92,50 88,48 84,50 88,52" class="celestial-gem-right" />
         </svg>
 
-      <!-- ROUND 3 NEW FRAMES -->
       {:else if resolvedFrameKey === 'lightning'}
-        <!-- 9. Tempestade Cósmica (Lightning Storm) -->
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="ring-lightning-base" />
           <circle cx="50" cy="50" r="41.5" class="ring-lightning-orbit" />
@@ -278,7 +289,6 @@
         </svg>
 
       {:else if resolvedFrameKey === 'crystal'}
-        <!-- 10. Fragmentos de Prisma (Crystal Shards) -->
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <polygon points="50,11 77,22 89,50 77,78 50,89 23,78 11,50 23,22" class="ring-crystal-octa" />
           <circle cx="50" cy="50" r="41.5" class="ring-crystal-orbit" />
@@ -295,7 +305,6 @@
         </svg>
 
       {:else if resolvedFrameKey === 'vortex'}
-        <!-- 11. Vórtice do Vazio (Void Vortex) -->
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="39" class="ring-vortex-horizon" />
           <g class="vortex-arms-spin">
@@ -313,7 +322,6 @@
         </svg>
 
       {:else if resolvedFrameKey === 'thorn'}
-        <!-- 12. Coroa de Espinhos da Noite (Astral Thorn Crown) -->
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="39" class="ring-thorn-aura" />
           <path d="M14,40 Q25,18 50,15 Q75,18 86,40 Q76,28 50,25 Q24,28 14,40 Z" class="thorn-vine-upper" />
@@ -333,6 +341,110 @@
             <circle cx="72" cy="20" r="2.4" class="thorn-gem-flank" />
             <circle cx="28" cy="80" r="2.4" class="thorn-gem-flank" />
             <circle cx="72" cy="80" r="2.4" class="thorn-gem-flank" />
+          </g>
+        </svg>
+
+      <!-- ROUND 4 NEW FRAMES -->
+      {:else if resolvedFrameKey === 'angelic'}
+        <!-- 13. Asas do Serafim (Angelic Seraph) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <ellipse cx="50" cy="8" rx="22" ry="5" class="seraph-halo" />
+          <path d="M18,50 C6,30 2,14 20,8 C14,22 18,38 30,48 Z" class="seraph-wing wing-left" />
+          <path d="M82,50 C94,30 98,14 80,8 C86,22 82,38 70,48 Z" class="seraph-wing wing-right" />
+          <circle cx="50" cy="50" r="38.5" class="ring-seraph-base" />
+          <circle cx="50" cy="50" r="41.5" class="ring-seraph-orbit" />
+          <g class="seraph-feathers">
+            <circle cx="16" cy="68" r="2.2" class="seraph-mote mote-1" />
+            <circle cx="84" cy="68" r="2.2" class="seraph-mote mote-2" />
+            <circle cx="50" cy="94" r="2.5" class="seraph-mote mote-3" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'infernal'}
+        <!-- 14. Chifres do Abismo (Abyssal Infernal) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <path d="M25,28 Q10,12 3,2 Q16,8 29,18 Z" class="infernal-horn horn-left" />
+          <path d="M75,28 Q90,12 97,2 Q84,8 71,18 Z" class="infernal-horn horn-right" />
+          <circle cx="50" cy="50" r="38.5" class="ring-infernal-magma" />
+          <circle cx="50" cy="50" r="42" class="ring-infernal-flames" />
+          <polygon points="50,97 45,86 55,86" class="infernal-fang fang-bottom" />
+          <g class="infernal-embers">
+            <circle cx="20" cy="45" r="2" class="ember-dot ember-1" />
+            <circle cx="80" cy="45" r="2" class="ember-dot ember-2" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'oceanic'}
+        <!-- 15. Maremoto Astral (Oceanic Tide) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="ring-ocean-depth" />
+          <circle cx="50" cy="50" r="41.5" class="ring-ocean-foam" />
+          <g class="ocean-wave-arms">
+            <path d="M50,8 Q70,12 78,30 Q68,26 50,14 Z" class="ocean-wave wave-1" />
+            <path d="M88,50 Q86,72 68,82 Q72,68 84,52 Z" class="ocean-wave wave-2" />
+            <path d="M50,92 Q28,88 20,68 Q30,74 48,86 Z" class="ocean-wave wave-3" />
+            <path d="M12,50 Q16,28 34,18 Q28,32 16,48 Z" class="ocean-wave wave-4" />
+          </g>
+          <g class="ocean-pearls">
+            <circle cx="50" cy="7" r="3.2" class="ocean-pearl pearl-n" />
+            <circle cx="93" cy="50" r="3.2" class="ocean-pearl pearl-e" />
+            <circle cx="50" cy="93" r="3.2" class="ocean-pearl pearl-s" />
+            <circle cx="7" cy="50" r="3.2" class="ocean-pearl pearl-w" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'monolith'}
+        <!-- 16. Relicário Rúnico (Runic Monolith) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-monolith-base" />
+          <circle cx="50" cy="50" r="41.5" class="ring-monolith-orbit" />
+          <g class="monolith-keystones">
+            <polygon points="50,2 62,8 60,16 40,16 38,8" class="monolith-plate plate-top" />
+            <polygon points="50,98 62,92 60,84 40,84 38,92" class="monolith-plate plate-bottom" />
+            <polygon points="2,50 8,38 16,40 16,60 8,62" class="monolith-plate plate-left" />
+            <polygon points="98,50 92,38 84,40 84,60 92,62" class="monolith-plate plate-right" />
+          </g>
+          <g class="monolith-glyphs">
+            <circle cx="50" cy="11" r="2.2" class="glyph-node" />
+            <circle cx="50" cy="89" r="2.2" class="glyph-node" />
+            <circle cx="11" cy="50" r="2.2" class="glyph-node" />
+            <circle cx="89" cy="50" r="2.2" class="glyph-node" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'blossom'}
+        <!-- 17. Lótus Astral (Astral Blossom) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="ring-blossom-vine" />
+          <circle cx="50" cy="50" r="41.5" class="ring-blossom-orbit" />
+          <g class="blossom-petals">
+            <path d="M50,4 Q40,16 50,22 Q60,16 50,4 Z" class="lotus-petal petal-top" />
+            <path d="M34,10 Q24,20 34,25 Z" class="lotus-petal-side petal-tl" />
+            <path d="M66,10 Q76,20 66,25 Z" class="lotus-petal-side petal-tr" />
+            <path d="M50,96 Q40,84 50,78 Q60,84 50,96 Z" class="lotus-petal petal-bottom" />
+            <path d="M34,90 Q24,80 34,75 Z" class="lotus-petal-side petal-bl" />
+            <path d="M66,90 Q76,80 66,75 Z" class="lotus-petal-side petal-br" />
+          </g>
+          <g class="dew-drops">
+            <circle cx="50" cy="14" r="2.5" class="dew-orb" />
+            <circle cx="50" cy="86" r="2.5" class="dew-orb" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'glitch'}
+        <!-- 18. Sobrecarga Quântica (Cyber Glitch V2) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="ring-glitch-core" />
+          <circle cx="50" cy="50" r="41.5" class="ring-glitch-scan" />
+          <g class="glitch-brackets">
+            <path d="M16,32 L16,16 L32,16" class="hud-bracket" />
+            <path d="M84,32 L84,16 L68,16" class="hud-bracket" />
+            <path d="M16,68 L16,84 L32,84" class="hud-bracket" />
+            <path d="M84,68 L84,84 L68,84" class="hud-bracket" />
+          </g>
+          <g class="glitch-bits">
+            <rect x="42" y="6" width="16" height="3" class="glitch-bit" />
+            <rect x="42" y="91" width="16" height="3" class="glitch-bit" />
           </g>
         </svg>
 
@@ -419,43 +531,15 @@
   }
 
   /* =========================================================================
-     1. COSMIC NOX FRAME & TINT VARIANTS
+     1. COSMIC NOX
      ========================================================================= */
-  .ring-cosmic-base {
-    fill: none;
-    stroke: #a78bfa;
-    stroke-width: 2.2;
-    filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.85));
-  }
-
-  .ring-cosmic-orbit {
-    fill: none;
-    stroke: rgba(192, 132, 252, 0.65);
-    stroke-width: 1.2;
-    stroke-dasharray: 8 5;
-    animation: rotateCw 8s linear infinite;
-    transform-origin: 50px 50px;
-  }
-
-  .cardinal-gems polygon {
-    fill: #c084fc;
-    stroke: #ffffff;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 6px #c084fc);
-    animation: gemBreathe 2.6s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-
-  .corner-stars path {
-    fill: #ffffff;
-    filter: drop-shadow(0 0 4px #e9d5ff);
-    animation: starTwinkle 2s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
+  .ring-cosmic-base { fill: none; stroke: #a78bfa; stroke-width: 2.2; filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.85)); }
+  .ring-cosmic-orbit { fill: none; stroke: rgba(192, 132, 252, 0.65); stroke-width: 1.2; stroke-dasharray: 8 5; animation: rotateCw 8s linear infinite; transform-origin: 50px 50px; }
+  .cardinal-gems polygon { fill: #c084fc; stroke: #ffffff; stroke-width: 0.8; filter: drop-shadow(0 0 6px #c084fc); animation: gemBreathe 2.6s ease-in-out infinite; transform-origin: 50px 50px; }
+  .corner-stars path { fill: #ffffff; filter: drop-shadow(0 0 4px #e9d5ff); animation: starTwinkle 2s ease-in-out infinite; transform-origin: 50px 50px; }
   .star-twinkle-2 { animation-delay: 0.5s !important; }
   .star-twinkle-3 { animation-delay: 1s !important; }
 
-  /* Cosmic Nox Tints */
   .frame-cosmic.tint-gold .ring-cosmic-base { stroke: #fbbf24; filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.9)); }
   .frame-cosmic.tint-gold .ring-cosmic-orbit { stroke: rgba(251, 191, 36, 0.65); }
   .frame-cosmic.tint-gold .cardinal-gems polygon { fill: #fef08a; stroke: #f59e0b; filter: drop-shadow(0 0 6px #fbbf24); }
@@ -473,144 +557,57 @@
   .frame-cosmic.tint-emerald .cardinal-gems polygon { fill: #d1fae5; stroke: #047857; filter: drop-shadow(0 0 6px #10b981); }
 
   /* =========================================================================
-     2. CYBER NEON FRAME & TINT VARIANTS
+     2. CYBER NEON
      ========================================================================= */
-  .ring-cyber-track {
-    fill: none;
-    stroke: rgba(6, 182, 212, 0.45);
-    stroke-width: 2;
-  }
+  .ring-cyber-track { fill: none; stroke: rgba(6, 182, 212, 0.45); stroke-width: 2; }
+  .ring-cyber-pulse { fill: none; stroke: #06b6d4; stroke-width: 2.2; stroke-dasharray: 18 10; animation: rotateCw 4s linear infinite; transform-origin: 50px 50px; filter: drop-shadow(0 0 6px #06b6d4); }
+  .cyber-bracket { fill: none; stroke: #22d3ee; stroke-width: 2.2; stroke-linecap: square; filter: drop-shadow(0 0 6px #06b6d4); animation: cyberBlink 3.2s infinite; }
+  .cyber-node-top, .cyber-node-bottom { fill: #67e8f9; filter: drop-shadow(0 0 6px #22d3ee); }
+  .cyber-node-line { stroke: #0891b2; stroke-width: 1.5; }
 
-  .ring-cyber-pulse {
-    fill: none;
-    stroke: #06b6d4;
-    stroke-width: 2.2;
-    stroke-dasharray: 18 10;
-    animation: rotateCw 4s linear infinite;
-    transform-origin: 50px 50px;
-    filter: drop-shadow(0 0 6px #06b6d4);
-  }
-
-  .cyber-bracket {
-    fill: none;
-    stroke: #22d3ee;
-    stroke-width: 2.2;
-    stroke-linecap: square;
-    filter: drop-shadow(0 0 6px #06b6d4);
-    animation: cyberBlink 3.2s infinite;
-  }
-
-  .cyber-node-top,
-  .cyber-node-bottom {
-    fill: #67e8f9;
-    filter: drop-shadow(0 0 6px #22d3ee);
-  }
-
-  .cyber-node-line {
-    stroke: #0891b2;
-    stroke-width: 1.5;
-  }
-
-  /* Cyber Neon Tints */
   .frame-cyber.tint-magenta .ring-cyber-track { stroke: rgba(244, 63, 94, 0.45); }
   .frame-cyber.tint-magenta .ring-cyber-pulse { stroke: #f43f5e; filter: drop-shadow(0 0 6px #f43f5e); }
   .frame-cyber.tint-magenta .cyber-bracket { stroke: #fb7185; filter: drop-shadow(0 0 6px #f43f5e); }
-  .frame-cyber.tint-magenta .cyber-node-top,
-  .frame-cyber.tint-magenta .cyber-node-bottom { fill: #fecdd3; filter: drop-shadow(0 0 6px #fb7185); }
+  .frame-cyber.tint-magenta .cyber-node-top, .frame-cyber.tint-magenta .cyber-node-bottom { fill: #fecdd3; filter: drop-shadow(0 0 6px #fb7185); }
   .frame-cyber.tint-magenta .cyber-node-line { stroke: #e11d48; }
 
   .frame-cyber.tint-green .ring-cyber-track { stroke: rgba(34, 197, 94, 0.45); }
   .frame-cyber.tint-green .ring-cyber-pulse { stroke: #22c55e; filter: drop-shadow(0 0 6px #22c55e); }
   .frame-cyber.tint-green .cyber-bracket { stroke: #4ade80; filter: drop-shadow(0 0 6px #22c55e); }
-  .frame-cyber.tint-green .cyber-node-top,
-  .frame-cyber.tint-green .cyber-node-bottom { fill: #bbf7d0; filter: drop-shadow(0 0 6px #4ade80); }
+  .frame-cyber.tint-green .cyber-node-top, .frame-cyber.tint-green .cyber-node-bottom { fill: #bbf7d0; filter: drop-shadow(0 0 6px #4ade80); }
   .frame-cyber.tint-green .cyber-node-line { stroke: #16a34a; }
 
   .frame-cyber.tint-purple .ring-cyber-track { stroke: rgba(168, 85, 247, 0.45); }
   .frame-cyber.tint-purple .ring-cyber-pulse { stroke: #a855f7; filter: drop-shadow(0 0 6px #a855f7); }
   .frame-cyber.tint-purple .cyber-bracket { stroke: #c084fc; filter: drop-shadow(0 0 6px #a855f7); }
-  .frame-cyber.tint-purple .cyber-node-top,
-  .frame-cyber.tint-purple .cyber-node-bottom { fill: #f3e8ff; filter: drop-shadow(0 0 6px #c084fc); }
+  .frame-cyber.tint-purple .cyber-node-top, .frame-cyber.tint-purple .cyber-node-bottom { fill: #f3e8ff; filter: drop-shadow(0 0 6px #c084fc); }
   .frame-cyber.tint-purple .cyber-node-line { stroke: #9333ea; }
 
   .frame-cyber.tint-orange .ring-cyber-track { stroke: rgba(249, 115, 22, 0.45); }
   .frame-cyber.tint-orange .ring-cyber-pulse { stroke: #f97316; filter: drop-shadow(0 0 6px #f97316); }
   .frame-cyber.tint-orange .cyber-bracket { stroke: #fb923c; filter: drop-shadow(0 0 6px #f97316); }
-  .frame-cyber.tint-orange .cyber-node-top,
-  .frame-cyber.tint-orange .cyber-node-bottom { fill: #ffedd5; filter: drop-shadow(0 0 6px #fb923c); }
+  .frame-cyber.tint-orange .cyber-node-top, .frame-cyber.tint-orange .cyber-node-bottom { fill: #ffedd5; filter: drop-shadow(0 0 6px #fb923c); }
   .frame-cyber.tint-orange .cyber-node-line { stroke: #c2410c; }
 
   /* =========================================================================
-     3. EMERALD ARCANA FRAME
+     3. EMERALD ARCANA
      ========================================================================= */
-  .ring-emerald-inner {
-    fill: none;
-    stroke: #10b981;
-    stroke-width: 2.2;
-    filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.85));
-  }
-  .ring-emerald-vines {
-    fill: none;
-    stroke: #34d399;
-    stroke-width: 1.6;
-    stroke-dasharray: 14 8;
-    animation: rotateCcw 9s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .emerald-top-gem,
-  .emerald-bottom-gem {
-    fill: #34d399;
-    stroke: #a7f3d0;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 8px #10b981);
-    animation: gemBreathe 3s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-  .spore-orb-1,
-  .spore-orb-2,
-  .spore-orb-3 {
-    fill: #6ee7b7;
-    filter: drop-shadow(0 0 4px #34d399);
-    animation: sporePulse 2.8s ease-in-out infinite;
-  }
+  .ring-emerald-inner { fill: none; stroke: #10b981; stroke-width: 2.2; filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.85)); }
+  .ring-emerald-vines { fill: none; stroke: #34d399; stroke-width: 1.6; stroke-dasharray: 14 8; animation: rotateCcw 9s linear infinite; transform-origin: 50px 50px; }
+  .emerald-top-gem, .emerald-bottom-gem { fill: #34d399; stroke: #a7f3d0; stroke-width: 0.8; filter: drop-shadow(0 0 8px #10b981); animation: gemBreathe 3s ease-in-out infinite; transform-origin: 50px 50px; }
+  .spore-orb-1, .spore-orb-2, .spore-orb-3 { fill: #6ee7b7; filter: drop-shadow(0 0 4px #34d399); animation: sporePulse 2.8s ease-in-out infinite; }
   .spore-orb-2 { animation-delay: 0.8s; }
   .spore-orb-3 { animation-delay: 1.5s; }
 
   /* =========================================================================
-     4. SOLAR FLARE FRAME & TINT VARIANTS
+     4. SOLAR FLARE
      ========================================================================= */
-  .solar-corona-spin {
-    animation: rotateCw 6s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .solar-ray {
-    fill: #f59e0b;
-    filter: drop-shadow(0 0 6px #f59e0b);
-  }
-  .ring-solar-base {
-    fill: none;
-    stroke: #f59e0b;
-    stroke-width: 2.5;
-    filter: drop-shadow(0 0 8px #f59e0b);
-  }
-  .ring-solar-halo {
-    fill: none;
-    stroke: #fbbf24;
-    stroke-width: 1.6;
-    stroke-dasharray: 12 7;
-    animation: rotateCcw 5s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .solar-crown-crest {
-    fill: #fef08a;
-    stroke: #f59e0b;
-    stroke-width: 1;
-    filter: drop-shadow(0 0 10px #fbbf24);
-    animation: flamePulse 2s ease-in-out infinite;
-    transform-origin: 50px 8px;
-  }
+  .solar-corona-spin { animation: rotateCw 6s linear infinite; transform-origin: 50px 50px; }
+  .solar-ray { fill: #f59e0b; filter: drop-shadow(0 0 6px #f59e0b); }
+  .ring-solar-base { fill: none; stroke: #f59e0b; stroke-width: 2.5; filter: drop-shadow(0 0 8px #f59e0b); }
+  .ring-solar-halo { fill: none; stroke: #fbbf24; stroke-width: 1.6; stroke-dasharray: 12 7; animation: rotateCcw 5s linear infinite; transform-origin: 50px 50px; }
+  .solar-crown-crest { fill: #fef08a; stroke: #f59e0b; stroke-width: 1; filter: drop-shadow(0 0 10px #fbbf24); animation: flamePulse 2s ease-in-out infinite; transform-origin: 50px 8px; }
 
-  /* Solar Flare Tints */
   .frame-solar.tint-blue .solar-ray { fill: #3b82f6; filter: drop-shadow(0 0 6px #3b82f6); }
   .frame-solar.tint-blue .ring-solar-base { stroke: #3b82f6; filter: drop-shadow(0 0 8px #3b82f6); }
   .frame-solar.tint-blue .ring-solar-halo { stroke: #60a5fa; }
@@ -632,240 +629,89 @@
   .frame-solar.tint-emerald .solar-crown-crest { fill: #d1fae5; stroke: #059669; filter: drop-shadow(0 0 10px #34d399); }
 
   /* =========================================================================
-     5. PARTICLE STARDUST FRAME
+     5. PARTICLE STARDUST
      ========================================================================= */
-  .gyro-ring-1 {
-    fill: none;
-    stroke: rgba(129, 140, 248, 0.75);
-    stroke-width: 1.5;
-    stroke-dasharray: 7 4;
-    animation: rotateCw 8s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .gyro-ring-2 {
-    fill: none;
-    stroke: rgba(192, 132, 252, 0.75);
-    stroke-width: 1.5;
-    stroke-dasharray: 9 5;
-    animation: rotateCcw 8s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .ring-stardust-center {
-    fill: none;
-    stroke: #818cf8;
-    stroke-width: 2.2;
-    filter: drop-shadow(0 0 7px rgba(129, 140, 248, 0.85));
-  }
-  .stardust-spark-group circle {
-    fill: #ffffff;
-    filter: drop-shadow(0 0 5px #c084fc);
-    animation: starTwinkle 2.2s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
+  .gyro-ring-1 { fill: none; stroke: rgba(129, 140, 248, 0.75); stroke-width: 1.5; stroke-dasharray: 7 4; animation: rotateCw 8s linear infinite; transform-origin: 50px 50px; }
+  .gyro-ring-2 { fill: none; stroke: rgba(192, 132, 252, 0.75); stroke-width: 1.5; stroke-dasharray: 9 5; animation: rotateCcw 8s linear infinite; transform-origin: 50px 50px; }
+  .ring-stardust-center { fill: none; stroke: #818cf8; stroke-width: 2.2; filter: drop-shadow(0 0 7px rgba(129, 140, 248, 0.85)); }
+  .stardust-spark-group circle { fill: #ffffff; filter: drop-shadow(0 0 5px #c084fc); animation: starTwinkle 2.2s ease-in-out infinite; transform-origin: 50px 50px; }
   .star-particle-2 { animation-delay: 0.6s; }
   .star-particle-3 { animation-delay: 1.2s; }
   .star-particle-4 { animation-delay: 1.8s; }
 
-  /* =========================================================================
-     6. AURORA MYSTIC FRAME
-     ========================================================================= */
-  .ring-aurora-1 {
-    fill: none;
-    stroke: #8b5cf6;
-    stroke-width: 2.4;
-    filter: drop-shadow(0 0 8px #8b5cf6);
-    animation: auroraShift 4s ease-in-out infinite;
-  }
-  .ring-aurora-2 {
-    fill: none;
-    stroke: #06b6d4;
-    stroke-width: 1.6;
-    stroke-dasharray: 16 8;
-    animation: rotateCw 7s linear infinite;
-    transform-origin: 50px 50px;
-    filter: drop-shadow(0 0 6px #06b6d4);
-  }
-  .ring-aurora-3 {
-    fill: none;
-    stroke: #10b981;
-    stroke-width: 1.2;
-    stroke-dasharray: 10 6;
-    animation: rotateCcw 9s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .aurora-crest-center,
-  .aurora-crest-flank-l,
-  .aurora-crest-flank-r {
-    fill: #a5f3fc;
-    stroke: #8b5cf6;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 8px #06b6d4);
-    animation: gemBreathe 2.8s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
+  .frame-stardust.tint-gold .ring-stardust-center { stroke: #fbbf24; }
+  .frame-stardust.tint-gold .gyro-ring-1 { stroke: rgba(251, 191, 36, 0.75); }
+  .frame-stardust.tint-cyan .ring-stardust-center { stroke: #38bdf8; }
+  .frame-stardust.tint-cyan .gyro-ring-1 { stroke: rgba(56, 189, 248, 0.75); }
+  .frame-stardust.tint-crimson .ring-stardust-center { stroke: #ef4444; }
+  .frame-stardust.tint-crimson .gyro-ring-1 { stroke: rgba(239, 68, 68, 0.75); }
+  .frame-stardust.tint-emerald .ring-stardust-center { stroke: #10b981; }
+  .frame-stardust.tint-emerald .gyro-ring-1 { stroke: rgba(16, 185, 129, 0.75); }
 
   /* =========================================================================
-     7. CRIMSON ECLIPSE FRAME
+     6. AURORA MYSTIC
      ========================================================================= */
-  .ring-crimson-core {
-    fill: none;
-    stroke: #ef4444;
-    stroke-width: 2.6;
-    filter: drop-shadow(0 0 8px #ef4444);
-  }
-  .ring-crimson-corona {
-    fill: none;
-    stroke: #dc2626;
-    stroke-width: 1.8;
-    stroke-dasharray: 12 6;
-    animation: rotateCw 5s linear infinite;
-    transform-origin: 50px 50px;
-    filter: drop-shadow(0 0 12px #b91c1c);
-  }
-  .crimson-abyss-crescent {
-    fill: #7f1d1d;
-    stroke: #ef4444;
-    stroke-width: 1.2;
-    filter: drop-shadow(0 0 6px #ef4444);
-  }
-  .crimson-spike-center,
-  .crimson-spike-l,
-  .crimson-spike-r {
-    fill: #ef4444;
-    stroke: #fca5a5;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 8px #ef4444);
-    animation: flamePulse 2.2s ease-in-out infinite;
-    transform-origin: 50px 10px;
-  }
+  .ring-aurora-1 { fill: none; stroke: #8b5cf6; stroke-width: 2.4; filter: drop-shadow(0 0 8px #8b5cf6); animation: auroraShift 4s ease-in-out infinite; }
+  .ring-aurora-2 { fill: none; stroke: #06b6d4; stroke-width: 1.6; stroke-dasharray: 16 8; animation: rotateCw 7s linear infinite; transform-origin: 50px 50px; filter: drop-shadow(0 0 6px #06b6d4); }
+  .ring-aurora-3 { fill: none; stroke: #10b981; stroke-width: 1.2; stroke-dasharray: 10 6; animation: rotateCcw 9s linear infinite; transform-origin: 50px 50px; }
+  .aurora-crest-center, .aurora-crest-flank-l, .aurora-crest-flank-r { fill: #a5f3fc; stroke: #8b5cf6; stroke-width: 0.8; filter: drop-shadow(0 0 8px #06b6d4); animation: gemBreathe 2.8s ease-in-out infinite; transform-origin: 50px 50px; }
 
   /* =========================================================================
-     8. CELESTIAL SOVEREIGN FRAME
+     7. CRIMSON ECLIPSE
      ========================================================================= */
-  .ring-celestial-core {
-    fill: none;
-    stroke: #fbbf24;
-    stroke-width: 2.6;
-    filter: drop-shadow(0 0 10px #fbbf24);
-  }
-  .ring-celestial-corona {
-    fill: none;
-    stroke: #c084fc;
-    stroke-width: 1.8;
-    stroke-dasharray: 10 5;
-    animation: rotateCw 6s linear infinite;
-    transform-origin: 50px 50px;
-    filter: drop-shadow(0 0 8px #c084fc);
-  }
-  .crown-filigree {
-    fill: #f59e0b;
-    stroke: #fbbf24;
-    stroke-width: 1.2;
-    filter: drop-shadow(0 0 12px #fbbf24);
-  }
-  .crown-gem-core {
-    fill: #ffffff;
-    stroke: #c084fc;
-    stroke-width: 1;
-    filter: drop-shadow(0 0 8px #ffffff);
-  }
-  .crown-gem-side {
-    fill: #c084fc;
-    stroke: #fbbf24;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 6px #c084fc);
-  }
-  .celestial-crown-group {
-    animation: crownFloat 3s ease-in-out infinite;
-    transform-origin: 50px 10px;
-  }
-  .celestial-gem-bottom,
-  .celestial-gem-left,
-  .celestial-gem-right {
-    fill: #fbbf24;
-    filter: drop-shadow(0 0 6px #fbbf24);
-    animation: gemBreathe 3s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
+  .ring-crimson-core { fill: none; stroke: #ef4444; stroke-width: 2.6; filter: drop-shadow(0 0 8px #ef4444); }
+  .ring-crimson-corona { fill: none; stroke: #dc2626; stroke-width: 1.8; stroke-dasharray: 12 6; animation: rotateCw 5s linear infinite; transform-origin: 50px 50px; filter: drop-shadow(0 0 12px #b91c1c); }
+  .crimson-abyss-crescent { fill: #7f1d1d; stroke: #ef4444; stroke-width: 1.2; filter: drop-shadow(0 0 6px #ef4444); }
+  .crimson-spike-center, .crimson-spike-l, .crimson-spike-r { fill: #ef4444; stroke: #fca5a5; stroke-width: 0.8; filter: drop-shadow(0 0 8px #ef4444); animation: flamePulse 2.2s ease-in-out infinite; transform-origin: 50px 10px; }
 
   /* =========================================================================
-     ROUND 3 NEW FRAMES:
-     9. LIGHTNING STORM (Tempestade Cósmica)
+     8. CELESTIAL SOVEREIGN
      ========================================================================= */
-  .ring-lightning-base {
-    fill: none;
-    stroke: #8b5cf6;
-    stroke-width: 2.4;
-    filter: drop-shadow(0 0 8px #a855f7);
-  }
-  .ring-lightning-orbit {
-    fill: none;
-    stroke: #38bdf8;
-    stroke-width: 1.4;
-    stroke-dasharray: 10 6;
-    animation: rotateCw 3.5s linear infinite;
-    transform-origin: 50px 50px;
-    filter: drop-shadow(0 0 6px #38bdf8);
-  }
-  .lightning-bolt {
-    fill: none;
-    stroke: #38bdf8;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: bevel;
-    filter: drop-shadow(0 0 8px #06b6d4);
-    animation: lightningCrack 1.8s infinite;
-  }
+  .ring-celestial-core { fill: none; stroke: #fbbf24; stroke-width: 2.6; filter: drop-shadow(0 0 10px #fbbf24); }
+  .ring-celestial-corona { fill: none; stroke: #c084fc; stroke-width: 1.8; stroke-dasharray: 10 5; animation: rotateCw 6s linear infinite; transform-origin: 50px 50px; filter: drop-shadow(0 0 8px #c084fc); }
+  .crown-filigree { fill: #f59e0b; stroke: #fbbf24; stroke-width: 1.2; filter: drop-shadow(0 0 12px #fbbf24); }
+  .crown-gem-core { fill: #ffffff; stroke: #c084fc; stroke-width: 1; filter: drop-shadow(0 0 8px #ffffff); }
+  .crown-gem-side { fill: #c084fc; stroke: #fbbf24; stroke-width: 0.8; filter: drop-shadow(0 0 6px #c084fc); }
+  .celestial-crown-group { animation: crownFloat 3s ease-in-out infinite; transform-origin: 50px 10px; }
+  .celestial-gem-bottom, .celestial-gem-left, .celestial-gem-right { fill: #fbbf24; filter: drop-shadow(0 0 6px #fbbf24); animation: gemBreathe 3s ease-in-out infinite; transform-origin: 50px 50px; }
+
+  .frame-celestial.tint-silver .ring-celestial-core { stroke: #e2e8f0; filter: drop-shadow(0 0 10px #cbd5e1); }
+  .frame-celestial.tint-silver .crown-filigree { fill: #cbd5e1; stroke: #f8fafc; }
+  .frame-celestial.tint-crimson .ring-celestial-core { stroke: #ef4444; filter: drop-shadow(0 0 10px #ef4444); }
+  .frame-celestial.tint-crimson .crown-filigree { fill: #dc2626; stroke: #f87171; }
+  .frame-celestial.tint-blue .ring-celestial-core { stroke: #38bdf8; filter: drop-shadow(0 0 10px #38bdf8); }
+  .frame-celestial.tint-blue .crown-filigree { fill: #0284c7; stroke: #7dd3fc; }
+
+  /* =========================================================================
+     9. LIGHTNING STORM
+     ========================================================================= */
+  .ring-lightning-base { fill: none; stroke: #8b5cf6; stroke-width: 2.4; filter: drop-shadow(0 0 8px #a855f7); }
+  .ring-lightning-orbit { fill: none; stroke: #38bdf8; stroke-width: 1.4; stroke-dasharray: 10 6; animation: rotateCw 3.5s linear infinite; transform-origin: 50px 50px; filter: drop-shadow(0 0 6px #38bdf8); }
+  .lightning-bolt { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: bevel; filter: drop-shadow(0 0 8px #06b6d4); animation: lightningCrack 1.8s infinite; }
   .bolt-2 { animation-delay: 0.45s; stroke: #c084fc; filter: drop-shadow(0 0 8px #a855f7); }
   .bolt-3 { animation-delay: 0.9s; }
   .bolt-4 { animation-delay: 1.35s; stroke: #c084fc; filter: drop-shadow(0 0 8px #a855f7); }
-
-  .spark-node {
-    fill: #ffffff;
-    stroke: #38bdf8;
-    stroke-width: 1;
-    filter: drop-shadow(0 0 6px #67e8f9);
-    animation: sparkFlicker 1.4s infinite alternate;
-  }
+  .spark-node { fill: #ffffff; stroke: #38bdf8; stroke-width: 1; filter: drop-shadow(0 0 6px #67e8f9); animation: sparkFlicker 1.4s infinite alternate; }
   .spark-s { animation-delay: 0.35s; }
   .spark-w { animation-delay: 0.7s; stroke: #c084fc; }
   .spark-e { animation-delay: 1.05s; stroke: #c084fc; }
 
+  .frame-lightning.tint-cyan .ring-lightning-base { stroke: #06b6d4; }
+  .frame-lightning.tint-cyan .lightning-bolt { stroke: #67e8f9; }
+  .frame-lightning.tint-crimson .ring-lightning-base { stroke: #ef4444; }
+  .frame-lightning.tint-crimson .lightning-bolt { stroke: #f87171; }
+  .frame-lightning.tint-gold .ring-lightning-base { stroke: #fbbf24; }
+  .frame-lightning.tint-gold .lightning-bolt { stroke: #fde047; }
+  .frame-lightning.tint-green .ring-lightning-base { stroke: #22c55e; }
+  .frame-lightning.tint-green .lightning-bolt { stroke: #4ade80; }
+
   /* =========================================================================
-     10. CRYSTAL SHARDS (Fragmentos de Prisma)
+     10. CRYSTAL SHARDS
      ========================================================================= */
-  .ring-crystal-octa {
-    fill: none;
-    stroke: #2dd4bf;
-    stroke-width: 2;
-    filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.8));
-    animation: rotateCw 20s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .ring-crystal-orbit {
-    fill: none;
-    stroke: #e879f9;
-    stroke-width: 1.2;
-    stroke-dasharray: 6 5;
-    animation: rotateCcw 12s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .crystal-shard {
-    fill: #2dd4bf;
-    stroke: #fdf4ff;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 8px #2dd4bf);
-    animation: crystalFloat 3.2s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-  .crystal-shard-mini {
-    fill: #e879f9;
-    stroke: #ffffff;
-    stroke-width: 0.6;
-    filter: drop-shadow(0 0 6px #e879f9);
-    animation: crystalFloat 2.6s ease-in-out infinite reverse;
-    transform-origin: 50px 50px;
-  }
+  .ring-crystal-octa { fill: none; stroke: #2dd4bf; stroke-width: 2; filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.8)); animation: rotateCw 20s linear infinite; transform-origin: 50px 50px; }
+  .ring-crystal-orbit { fill: none; stroke: #e879f9; stroke-width: 1.2; stroke-dasharray: 6 5; animation: rotateCcw 12s linear infinite; transform-origin: 50px 50px; }
+  .crystal-shard { fill: #2dd4bf; stroke: #fdf4ff; stroke-width: 0.8; filter: drop-shadow(0 0 8px #2dd4bf); animation: crystalFloat 3.2s ease-in-out infinite; transform-origin: 50px 50px; }
+  .crystal-shard-mini { fill: #e879f9; stroke: #ffffff; stroke-width: 0.6; filter: drop-shadow(0 0 6px #e879f9); animation: crystalFloat 2.6s ease-in-out infinite reverse; transform-origin: 50px 50px; }
   .shard-e { animation-delay: 0.8s; }
   .shard-s { animation-delay: 1.6s; }
   .shard-w { animation-delay: 2.4s; }
@@ -873,175 +719,177 @@
   .shard-se { animation-delay: 1.2s; }
   .shard-sw { animation-delay: 1.8s; }
 
+  .frame-crystal.tint-magenta .crystal-shard { fill: #ec4899; }
+  .frame-crystal.tint-blue .crystal-shard { fill: #3b82f6; }
+  .frame-crystal.tint-emerald .crystal-shard { fill: #10b981; }
+  .frame-crystal.tint-gold .crystal-shard { fill: #fbbf24; }
+
   /* =========================================================================
-     11. VOID VORTEX (Vórtice do Vazio)
+     11. VOID VORTEX
      ========================================================================= */
-  .ring-vortex-horizon {
-    fill: none;
-    stroke: #7c3aed;
-    stroke-width: 2.6;
-    filter: drop-shadow(0 0 8px #a855f7);
-    animation: singularityBreathe 3s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-  .vortex-arms-spin {
-    animation: rotateCw 6s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .vortex-arm {
-    fill: none;
-    stroke-linecap: round;
-  }
+  .ring-vortex-horizon { fill: none; stroke: #7c3aed; stroke-width: 2.6; filter: drop-shadow(0 0 8px #a855f7); animation: singularityBreathe 3s ease-in-out infinite; transform-origin: 50px 50px; }
+  .vortex-arms-spin { animation: rotateCw 6s linear infinite; transform-origin: 50px 50px; }
+  .vortex-arm { fill: none; stroke-linecap: round; }
   .vortex-arm.arm-1 { stroke: #c084fc; stroke-width: 2.2; filter: drop-shadow(0 0 6px #a855f7); }
   .vortex-arm.arm-2 { stroke: #818cf8; stroke-width: 2; filter: drop-shadow(0 0 6px #6366f1); }
   .vortex-arm.arm-3 { stroke: #d946ef; stroke-width: 1.8; filter: drop-shadow(0 0 6px #d946ef); }
-
-  .ring-vortex-lens {
-    fill: none;
-    stroke: rgba(192, 132, 252, 0.45);
-    stroke-width: 1.4;
-    stroke-dasharray: 12 6;
-    animation: rotateCcw 10s linear infinite;
-    transform-origin: 50px 50px;
-  }
-  .vortex-dot {
-    fill: #ffffff;
-    filter: drop-shadow(0 0 6px #c084fc);
-    animation: starTwinkle 2s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
+  .ring-vortex-lens { fill: none; stroke: rgba(192, 132, 252, 0.45); stroke-width: 1.4; stroke-dasharray: 12 6; animation: rotateCcw 10s linear infinite; transform-origin: 50px 50px; }
+  .vortex-dot { fill: #ffffff; filter: drop-shadow(0 0 6px #c084fc); animation: starTwinkle 2s ease-in-out infinite; transform-origin: 50px 50px; }
   .dot-2 { animation-delay: 0.5s; fill: #67e8f9; }
   .dot-3 { animation-delay: 1s; fill: #f0abfc; }
   .dot-4 { animation-delay: 1.5s; fill: #818cf8; }
 
+  .frame-vortex.tint-crimson .ring-vortex-horizon { stroke: #ef4444; }
+  .frame-vortex.tint-crimson .vortex-arm.arm-1 { stroke: #f87171; }
+  .frame-vortex.tint-cyan .ring-vortex-horizon { stroke: #06b6d4; }
+  .frame-vortex.tint-cyan .vortex-arm.arm-1 { stroke: #38bdf8; }
+  .frame-vortex.tint-gold .ring-vortex-horizon { stroke: #fbbf24; }
+  .frame-vortex.tint-gold .vortex-arm.arm-1 { stroke: #fde047; }
+
   /* =========================================================================
-     12. ASTRAL THORN CROWN (Coroa de Espinhos da Noite)
+     12. ASTRAL THORN CROWN
      ========================================================================= */
-  .ring-thorn-aura {
-    fill: none;
-    stroke: #7f1d1d;
-    stroke-width: 2.4;
-    filter: drop-shadow(0 0 8px #f43f5e);
-    animation: thornAuraPulse 3.5s ease-in-out infinite;
-  }
-  .thorn-vine-upper,
-  .thorn-vine-lower {
-    fill: #180d2b;
-    stroke: #8b5cf6;
-    stroke-width: 1.5;
-    filter: drop-shadow(0 0 6px #6d28d9);
-  }
-  .thorn-spike {
-    fill: #8b5cf6;
-    stroke: #f43f5e;
-    stroke-width: 1;
-    filter: drop-shadow(0 0 8px #f43f5e);
-    animation: thornSpikeGleam 2.8s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-  .spike-center-bottom,
-  .spike-flank-bl,
-  .spike-flank-br {
-    animation-delay: 1.4s;
-  }
-  .thorn-gem-core {
-    fill: #f43f5e;
-    stroke: #ffffff;
-    stroke-width: 0.8;
-    filter: drop-shadow(0 0 8px #f43f5e);
-    animation: gemBreathe 2.4s ease-in-out infinite;
-    transform-origin: 50px 50px;
-  }
-  .thorn-gem-flank {
-    fill: #c084fc;
-    stroke: #f43f5e;
-    stroke-width: 0.6;
-    filter: drop-shadow(0 0 5px #c084fc);
-    animation: gemBreathe 3s ease-in-out infinite reverse;
-    transform-origin: 50px 50px;
-  }
+  .ring-thorn-aura { fill: none; stroke: #7f1d1d; stroke-width: 2.4; filter: drop-shadow(0 0 8px #f43f5e); animation: thornAuraPulse 3.5s ease-in-out infinite; }
+  .thorn-vine-upper, .thorn-vine-lower { fill: #180d2b; stroke: #8b5cf6; stroke-width: 1.5; filter: drop-shadow(0 0 6px #6d28d9); }
+  .thorn-spike { fill: #8b5cf6; stroke: #f43f5e; stroke-width: 1; filter: drop-shadow(0 0 8px #f43f5e); animation: thornSpikeGleam 2.8s ease-in-out infinite; transform-origin: 50px 50px; }
+  .spike-center-bottom, .spike-flank-bl, .spike-flank-br { animation-delay: 1.4s; }
+  .thorn-gem-core { fill: #f43f5e; stroke: #ffffff; stroke-width: 0.8; filter: drop-shadow(0 0 8px #f43f5e); animation: gemBreathe 2.4s ease-in-out infinite; transform-origin: 50px 50px; }
+  .thorn-gem-flank { fill: #c084fc; stroke: #f43f5e; stroke-width: 0.6; filter: drop-shadow(0 0 5px #c084fc); animation: gemBreathe 3s ease-in-out infinite reverse; transform-origin: 50px 50px; }
+
+  .frame-thorn.tint-gold .thorn-spike { fill: #f59e0b; stroke: #fbbf24; }
+  .frame-thorn.tint-cyan .thorn-spike { fill: #0284c7; stroke: #38bdf8; }
+  .frame-thorn.tint-violet .thorn-spike { fill: #7c3aed; stroke: #c084fc; }
+
+  /* =========================================================================
+     ROUND 4 NEW: 13. ANGELIC SERAPH
+     ========================================================================= */
+  .seraph-halo { fill: none; stroke: #fbbf24; stroke-width: 2.2; filter: drop-shadow(0 0 10px #fde047); animation: haloFloat 2.6s ease-in-out infinite; transform-origin: 50px 8px; }
+  .seraph-wing { fill: rgba(254, 240, 138, 0.4); stroke: #fbbf24; stroke-width: 1.6; filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.85)); animation: wingFlap 3s ease-in-out infinite; transform-origin: 50px 50px; }
+  .wing-right { animation-delay: 0.2s; }
+  .ring-seraph-base { fill: none; stroke: #fbbf24; stroke-width: 2.4; filter: drop-shadow(0 0 8px #f59e0b); }
+  .ring-seraph-orbit { fill: none; stroke: #ffffff; stroke-width: 1.2; stroke-dasharray: 8 6; animation: rotateCw 7s linear infinite; transform-origin: 50px 50px; }
+  .seraph-mote { fill: #ffffff; filter: drop-shadow(0 0 6px #fde047); animation: starTwinkle 2s ease-in-out infinite; }
+  .mote-2 { animation-delay: 0.7s; }
+  .mote-3 { animation-delay: 1.4s; }
+
+  .frame-angelic.tint-silver .seraph-halo { stroke: #f8fafc; filter: drop-shadow(0 0 10px #e2e8f0); }
+  .frame-angelic.tint-silver .seraph-wing { stroke: #e2e8f0; fill: rgba(241, 245, 249, 0.4); }
+  .frame-angelic.tint-magenta .seraph-halo { stroke: #ec4899; filter: drop-shadow(0 0 10px #f472b6); }
+  .frame-angelic.tint-magenta .seraph-wing { stroke: #f472b6; fill: rgba(244, 114, 182, 0.35); }
+  .frame-angelic.tint-blue .seraph-halo { stroke: #38bdf8; filter: drop-shadow(0 0 10px #7dd3fc); }
+  .frame-angelic.tint-blue .seraph-wing { stroke: #60a5fa; fill: rgba(96, 165, 250, 0.35); }
+
+  /* =========================================================================
+     ROUND 4 NEW: 14. ABYSSAL INFERNAL
+     ========================================================================= */
+  .infernal-horn { fill: #1c080e; stroke: #ef4444; stroke-width: 1.8; filter: drop-shadow(0 0 10px #dc2626); animation: hornGlow 2.8s ease-in-out infinite; transform-origin: 50px 50px; }
+  .ring-infernal-magma { fill: none; stroke: #ef4444; stroke-width: 2.5; filter: drop-shadow(0 0 10px #b91c1c); }
+  .ring-infernal-flames { fill: none; stroke: #f97316; stroke-width: 1.8; stroke-dasharray: 12 6; animation: rotateCw 5s linear infinite; transform-origin: 50px 50px; }
+  .infernal-fang { fill: #ef4444; stroke: #fca5a5; stroke-width: 1; filter: drop-shadow(0 0 8px #ef4444); }
+  .ember-dot { fill: #fbbf24; filter: drop-shadow(0 0 5px #f97316); animation: sparkFlicker 1.5s infinite; }
+  .ember-2 { animation-delay: 0.8s; }
+
+  .frame-infernal.tint-green .infernal-horn { stroke: #22c55e; filter: drop-shadow(0 0 10px #16a34a); }
+  .frame-infernal.tint-green .ring-infernal-magma { stroke: #22c55e; }
+  .frame-infernal.tint-green .ring-infernal-flames { stroke: #4ade80; }
+  .frame-infernal.tint-blue .infernal-horn { stroke: #3b82f6; filter: drop-shadow(0 0 10px #2563eb); }
+  .frame-infernal.tint-blue .ring-infernal-magma { stroke: #3b82f6; }
+  .frame-infernal.tint-blue .ring-infernal-flames { stroke: #60a5fa; }
+  .frame-infernal.tint-violet .infernal-horn { stroke: #a855f7; filter: drop-shadow(0 0 10px #9333ea); }
+  .frame-infernal.tint-violet .ring-infernal-magma { stroke: #a855f7; }
+  .frame-infernal.tint-violet .ring-infernal-flames { stroke: #c084fc; }
+
+  /* =========================================================================
+     ROUND 4 NEW: 15. OCEANIC TIDE
+     ========================================================================= */
+  .ring-ocean-depth { fill: none; stroke: #0284c7; stroke-width: 2.5; filter: drop-shadow(0 0 8px #0284c7); }
+  .ring-ocean-foam { fill: none; stroke: #38bdf8; stroke-width: 1.6; stroke-dasharray: 14 7; animation: rotateCcw 6s linear infinite; transform-origin: 50px 50px; }
+  .ocean-wave { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-linecap: round; filter: drop-shadow(0 0 6px #0ea5e9); animation: waveSwell 3s ease-in-out infinite; }
+  .wave-2 { animation-delay: 0.75s; }
+  .wave-3 { animation-delay: 1.5s; }
+  .wave-4 { animation-delay: 2.25s; }
+  .ocean-pearl { fill: #f0fdf4; stroke: #38bdf8; stroke-width: 1; filter: drop-shadow(0 0 6px #67e8f9); animation: pearlPulse 2.5s ease-in-out infinite; }
+  .pearl-e { animation-delay: 0.6s; }
+  .pearl-s { animation-delay: 1.2s; }
+  .pearl-w { animation-delay: 1.8s; }
+
+  .frame-oceanic.tint-cyan .ring-ocean-depth { stroke: #06b6d4; }
+  .frame-oceanic.tint-magenta .ring-ocean-depth { stroke: #f43f5e; }
+  .frame-oceanic.tint-magenta .ocean-wave { stroke: #fb7185; }
+  .frame-oceanic.tint-violet .ring-ocean-depth { stroke: #8b5cf6; }
+  .frame-oceanic.tint-violet .ocean-wave { stroke: #c084fc; }
+
+  /* =========================================================================
+     ROUND 4 NEW: 16. RUNIC MONOLITH
+     ========================================================================= */
+  .ring-monolith-base { fill: none; stroke: #d97706; stroke-width: 2.4; filter: drop-shadow(0 0 8px #f59e0b); }
+  .ring-monolith-orbit { fill: none; stroke: #fbbf24; stroke-width: 1.4; stroke-dasharray: 8 5; animation: rotateCw 9s linear infinite; transform-origin: 50px 50px; }
+  .monolith-plate { fill: #1c1408; stroke: #fbbf24; stroke-width: 1.5; filter: drop-shadow(0 0 8px #f59e0b); animation: monolithShift 3.5s ease-in-out infinite; transform-origin: 50px 50px; }
+  .plate-bottom { animation-delay: 1.75s; }
+  .glyph-node { fill: #fef08a; filter: drop-shadow(0 0 6px #fbbf24); animation: sparkFlicker 1.8s infinite; }
+
+  .frame-monolith.tint-cyan .ring-monolith-base { stroke: #0284c7; }
+  .frame-monolith.tint-cyan .monolith-plate { stroke: #38bdf8; }
+  .frame-monolith.tint-crimson .ring-monolith-base { stroke: #b91c1c; }
+  .frame-monolith.tint-crimson .monolith-plate { stroke: #ef4444; }
+  .frame-monolith.tint-emerald .ring-monolith-base { stroke: #047857; }
+  .frame-monolith.tint-emerald .monolith-plate { stroke: #10b981; }
+
+  /* =========================================================================
+     ROUND 4 NEW: 17. ASTRAL BLOSSOM
+     ========================================================================= */
+  .ring-blossom-vine { fill: none; stroke: #db2777; stroke-width: 2.2; filter: drop-shadow(0 0 8px #f472b6); }
+  .ring-blossom-orbit { fill: none; stroke: #f472b6; stroke-width: 1.4; stroke-dasharray: 10 6; animation: rotateCcw 8s linear infinite; transform-origin: 50px 50px; }
+  .lotus-petal { fill: #fdf2f8; stroke: #ec4899; stroke-width: 1.2; filter: drop-shadow(0 0 8px #f472b6); animation: petalPulse 3s ease-in-out infinite; transform-origin: 50px 50px; }
+  .lotus-petal-side { fill: #fce7f3; stroke: #f472b6; stroke-width: 1; animation: petalPulse 3s ease-in-out infinite 0.5s; transform-origin: 50px 50px; }
+  .dew-orb { fill: #ffffff; filter: drop-shadow(0 0 6px #f472b6); animation: sparkFlicker 2s infinite; }
+
+  .frame-blossom.tint-cyan .ring-blossom-vine { stroke: #06b6d4; }
+  .frame-blossom.tint-cyan .lotus-petal { stroke: #22d3ee; }
+  .frame-blossom.tint-gold .ring-blossom-vine { stroke: #d97706; }
+  .frame-blossom.tint-gold .lotus-petal { stroke: #fbbf24; }
+  .frame-blossom.tint-violet .ring-blossom-vine { stroke: #7c3aed; }
+  .frame-blossom.tint-violet .lotus-petal { stroke: #c084fc; }
+
+  /* =========================================================================
+     ROUND 4 NEW: 18. CYBER GLITCH V2
+     ========================================================================= */
+  .ring-glitch-core { fill: none; stroke: #10b981; stroke-width: 2.2; filter: drop-shadow(0 0 8px #34d399); }
+  .ring-glitch-scan { fill: none; stroke: #34d399; stroke-width: 1.8; stroke-dasharray: 18 8; animation: rotateCw 3s linear infinite; transform-origin: 50px 50px; }
+  .hud-bracket { fill: none; stroke: #6ee7b7; stroke-width: 2.2; filter: drop-shadow(0 0 6px #10b981); animation: cyberBlink 2.5s infinite; }
+  .glitch-bit { fill: #a7f3d0; filter: drop-shadow(0 0 6px #34d399); animation: glitchJitter 1.2s infinite; }
+
+  .frame-glitch.tint-cyan .ring-glitch-core { stroke: #06b6d4; }
+  .frame-glitch.tint-cyan .hud-bracket { stroke: #38bdf8; }
+  .frame-glitch.tint-magenta .ring-glitch-core { stroke: #f43f5e; }
+  .frame-glitch.tint-magenta .hud-bracket { stroke: #fb7185; }
+  .frame-glitch.tint-gold .ring-glitch-core { stroke: #f59e0b; }
+  .frame-glitch.tint-gold .hud-bracket { stroke: #fbbf24; }
 
   /* =========================================================================
      GLOBAL KEYFRAME ANIMATIONS
      ========================================================================= */
-  @keyframes rotateCw {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  @keyframes rotateCcw {
-    from { transform: rotate(360deg); }
-    to { transform: rotate(0deg); }
-  }
-
-  @keyframes gemBreathe {
-    0%, 100% { transform: scale(1); opacity: 0.9; }
-    50% { transform: scale(1.12); opacity: 1; }
-  }
-
-  @keyframes crownFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-2.5px); }
-  }
-
-  @keyframes flamePulse {
-    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px #f59e0b); }
-    50% { transform: scale(1.08); filter: drop-shadow(0 0 14px #fbbf24); }
-  }
-
-  @keyframes starTwinkle {
-    0%, 100% { opacity: 0.35; transform: scale(0.75); }
-    50% { opacity: 1; transform: scale(1.25); }
-  }
-
-  @keyframes sporePulse {
-    0%, 100% { opacity: 0.6; transform: scale(0.85); }
-    50% { opacity: 1; transform: scale(1.15); }
-  }
-
-  @keyframes auroraShift {
-    0%, 100% { stroke: #8b5cf6; filter: drop-shadow(0 0 8px #8b5cf6); }
-    33% { stroke: #06b6d4; filter: drop-shadow(0 0 10px #06b6d4); }
-    66% { stroke: #10b981; filter: drop-shadow(0 0 8px #10b981); }
-  }
-
-  @keyframes cyberBlink {
-    0%, 100% { opacity: 0.85; }
-    45% { opacity: 1; }
-    50% { opacity: 0.35; }
-    55% { opacity: 1; }
-  }
-
-  @keyframes lightningCrack {
-    0%, 100% { opacity: 0.3; stroke-width: 1.8px; }
-    20% { opacity: 1; stroke-width: 2.8px; }
-    25% { opacity: 0.4; }
-    30% { opacity: 1; stroke-width: 2.5px; }
-    60% { opacity: 0.2; }
-  }
-
-  @keyframes sparkFlicker {
-    0%, 100% { transform: scale(0.8); opacity: 0.6; }
-    50% { transform: scale(1.3); opacity: 1; }
-  }
-
-  @keyframes crystalFloat {
-    0%, 100% { transform: scale(1) translateY(0); }
-    50% { transform: scale(1.1) translateY(-2px); }
-  }
-
-  @keyframes singularityBreathe {
-    0%, 100% { transform: scale(1); stroke-width: 2.6px; }
-    50% { transform: scale(1.05); stroke-width: 3.2px; }
-  }
-
-  @keyframes thornAuraPulse {
-    0%, 100% { stroke: #7f1d1d; filter: drop-shadow(0 0 6px #f43f5e); }
-    50% { stroke: #991b1b; filter: drop-shadow(0 0 14px #ef4444); }
-  }
-
-  @keyframes thornSpikeGleam {
-    0%, 100% { opacity: 0.85; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.06); }
-  }
+  @keyframes rotateCw { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes rotateCcw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+  @keyframes gemBreathe { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.12); opacity: 1; } }
+  @keyframes crownFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.5px); } }
+  @keyframes flamePulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px #f59e0b); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 14px #fbbf24); } }
+  @keyframes starTwinkle { 0%, 100% { opacity: 0.35; transform: scale(0.75); } 50% { opacity: 1; transform: scale(1.25); } }
+  @keyframes sporePulse { 0%, 100% { opacity: 0.6; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+  @keyframes auroraShift { 0%, 100% { stroke: #8b5cf6; filter: drop-shadow(0 0 8px #8b5cf6); } 33% { stroke: #06b6d4; filter: drop-shadow(0 0 10px #06b6d4); } 66% { stroke: #10b981; filter: drop-shadow(0 0 8px #10b981); } }
+  @keyframes cyberBlink { 0%, 100% { opacity: 0.85; } 45% { opacity: 1; } 50% { opacity: 0.35; } 55% { opacity: 1; } }
+  @keyframes lightningCrack { 0%, 100% { opacity: 0.3; stroke-width: 1.8px; } 20% { opacity: 1; stroke-width: 2.8px; } 25% { opacity: 0.4; } 30% { opacity: 1; stroke-width: 2.5px; } 60% { opacity: 0.2; } }
+  @keyframes sparkFlicker { 0%, 100% { transform: scale(0.8); opacity: 0.6; } 50% { transform: scale(1.3); opacity: 1; } }
+  @keyframes crystalFloat { 0%, 100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.1) translateY(-2px); } }
+  @keyframes singularityBreathe { 0%, 100% { transform: scale(1); stroke-width: 2.6px; } 50% { transform: scale(1.05); stroke-width: 3.2px; } }
+  @keyframes thornAuraPulse { 0%, 100% { stroke: #7f1d1d; filter: drop-shadow(0 0 6px #f43f5e); } 50% { stroke: #991b1b; filter: drop-shadow(0 0 14px #ef4444); } }
+  @keyframes thornSpikeGleam { 0%, 100% { opacity: 0.85; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+  @keyframes wingFlap { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.08) rotate(3deg); } }
+  @keyframes haloFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @keyframes hornGlow { 0%, 100% { filter: drop-shadow(0 0 8px #dc2626); } 50% { filter: drop-shadow(0 0 16px #f97316); } }
+  @keyframes waveSwell { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+  @keyframes pearlPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+  @keyframes monolithShift { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  @keyframes petalPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  @keyframes glitchJitter { 0%, 100% { transform: translateX(0); opacity: 0.8; } 50% { transform: translateX(2px); opacity: 1; } }
 </style>

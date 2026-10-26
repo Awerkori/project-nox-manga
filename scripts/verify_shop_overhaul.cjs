@@ -1,6 +1,6 @@
 /**
  * scripts/verify_shop_overhaul.cjs
- * Comprehensive Playwright verification script for Project Nox Cosmic Shop Round 3.
+ * Comprehensive Playwright verification script for Project Nox Cosmic Shop Round 4.
  * Target: https://home-preview-manga.project-nox-awerkori.workers.dev/loja
  */
 
@@ -41,7 +41,7 @@ async function dismissModals(page) {
 }
 
 async function run() {
-  console.log('=== STARTING PLAYWRIGHT VERIFICATION FOR SHOP OVERHAUL ROUND 3 ===');
+  console.log('=== STARTING PLAYWRIGHT VERIFICATION FOR SHOP OVERHAUL ROUND 4 ===');
   console.log('Target:', PREVIEW_URL);
 
   const browser = await chromium.launch({ headless: true });
@@ -71,152 +71,177 @@ async function run() {
 
     // Capture Top Hero
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_desktop_top.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_desktop_top.png'),
       clip: { x: 0, y: 0, width: 1440, height: 750 }
     });
-    console.log('✓ Captured shop_after_v3_desktop_top.png');
+    console.log('✓ Captured shop_round4_desktop_top.png');
 
     // Count Total Items
     const totalCards = await page.locator('.shop-card').count();
     results.itemCounts.total = totalCards;
-    console.log(`Total Cards rendered: ${totalCards} (Expected: 47)`);
+    console.log(`Total Cards rendered: ${totalCards} (Expected: 74)`);
+    results.tests.totalCardsMatch = totalCards === 74;
 
     // Capture Full Desktop Grid
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_desktop_grid.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_desktop_grid.png'),
       clip: { x: 0, y: 350, width: 1440, height: 900 }
     });
-    console.log('✓ Captured shop_after_v3_desktop_grid.png');
+    console.log('✓ Captured shop_round4_desktop_grid.png');
 
-    // Filter: Molduras (12 expected)
-    console.log('\n--- 2. CATEGORY: MOLDURAS (12 itens) ---');
+    // Filter: Molduras (18 expected)
+    console.log('\n--- 2. CATEGORY: MOLDURAS (18 itens) ---');
     await page.locator('.cat-btn:has-text("Molduras")').click();
     await page.waitForTimeout(400);
     const framesCount = await page.locator('.shop-card').count();
     results.itemCounts.frames = framesCount;
-    console.log(`Molduras rendered: ${framesCount} (Expected: 12)`);
-    results.tests.framesCountMatch = framesCount === 12;
+    console.log(`Molduras rendered: ${framesCount} (Expected: 18)`);
+    results.tests.framesCountMatch = framesCount === 18;
 
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_frames.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_frames.png'),
       clip: { x: 0, y: 350, width: 1440, height: 900 }
     });
-    console.log('✓ Captured shop_after_v3_frames.png');
+    console.log('✓ Captured shop_round4_frames.png');
 
-    // Verify New Frames Existence
+    // Verify All 6 New Frames Existence
     const newFramesExist = await page.evaluate(() => {
       const text = document.body.innerText;
       return {
-        lightningStorm: text.includes('Tempestade Cósmica'),
-        crystalShards: text.includes('Fragmentos de Prisma'),
-        voidVortex: text.includes('Vórtice do Vazio'),
-        astralThornCrown: text.includes('Coroa de Espinhos da Noite')
+        seraphWings: text.includes('Asas do Serafim'),
+        abyssalHorns: text.includes('Chifres do Abismo'),
+        oceanicTide: text.includes('Maremoto Astral'),
+        runicMonolith: text.includes('Relicário Rúnico'),
+        astralBlossom: text.includes('Lótus Astral'),
+        quantumOverload: text.includes('Sobrecarga Quântica')
       };
     });
-    console.log('New Frames verified:', newFramesExist);
-    results.tests.newFramesExist = Object.values(newFramesExist).every(Boolean);
+    console.log('Round 4 New Frames verified:', newFramesExist);
+    results.tests.round4NewFramesExist = Object.values(newFramesExist).every(Boolean);
 
-    // Filter: Cores de Nome (15 expected)
-    console.log('\n--- 3. CATEGORY: CORES DE NOME (15 itens) ---');
+    // Filter: Cores de Nome (24 expected)
+    console.log('\n--- 3. CATEGORY: CORES DE NOME (24 itens) ---');
     await page.locator('.cat-btn:has-text("Cores de Nome")').click();
     await page.waitForTimeout(400);
     const colorsCount = await page.locator('.shop-card').count();
     results.itemCounts.colors = colorsCount;
-    console.log(`Cores de Nome rendered: ${colorsCount} (Expected: 15)`);
-    results.tests.colorsCountMatch = colorsCount === 15;
+    console.log(`Cores de Nome rendered: ${colorsCount} (Expected: 24)`);
+    results.tests.colorsCountMatch = colorsCount === 24;
+
+    const newColorsExist = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return {
+        imperialGold: text.includes('Ouro Real Imperial'),
+        shockPink: text.includes('Rosa Choque Cósmico'),
+        spectralAurora: text.includes('Aurora Espectral'),
+        phoenixBlaze: text.includes('Chama da Fênix'),
+        goldenSupernova: text.includes('Supernova Dourada')
+      };
+    });
+    console.log('Round 4 New Colors verified:', newColorsExist);
+    results.tests.round4NewColorsExist = Object.values(newColorsExist).every(Boolean);
 
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_colors.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_colors.png'),
       clip: { x: 0, y: 350, width: 1440, height: 900 }
     });
-    console.log('✓ Captured shop_after_v3_colors.png');
+    console.log('✓ Captured shop_round4_colors.png');
 
-    // Filter: Títulos (14 expected)
-    console.log('\n--- 4. CATEGORY: TÍTULOS (14 itens) ---');
+    // Filter: Títulos (22 expected)
+    console.log('\n--- 4. CATEGORY: TÍTULOS (22 itens) ---');
     await page.locator('.cat-btn:has-text("Títulos")').click();
     await page.waitForTimeout(400);
     const titlesCount = await page.locator('.shop-card').count();
     results.itemCounts.titles = titlesCount;
-    console.log(`Títulos rendered: ${titlesCount} (Expected: 14)`);
-    results.tests.titlesCountMatch = titlesCount === 14;
+    console.log(`Títulos rendered: ${titlesCount} (Expected: 22)`);
+    results.tests.titlesCountMatch = titlesCount === 22;
 
-    const requestedTitlesExist = await page.evaluate(() => {
+    const newTitlesExist = await page.evaluate(() => {
       const text = document.body.innerText;
       return {
-        herdeiroDoVazio: text.includes('Herdeiro do Vazio'),
-        cronistaAstral: text.includes('Cronista Astral'),
-        portadorDasRunas: text.includes('Portador das Runas'),
-        vigiaDaNebulosa: text.includes('Vigia da Nebulosa'),
-        guardiaoDoEclipse: text.includes('Guardião do Eclipse'),
-        mestreDaBiblioteca: text.includes('Mestre da Biblioteca Astral'),
-        senhorDasConstelacoes: text.includes('Senhor das Constelações'),
-        arautoDoNox: text.includes('Arauto do Nox')
+        vanguardaInfinito: text.includes('Vanguarda do Infinito'),
+        sentinelaMares: text.includes('Sentinela das Marés Estelares'),
+        navegadorVacuo: text.includes('Navegador do Vácuo Profundo'),
+        teceEstrelas: text.includes('Tece-Estrelas de Ébano'),
+        senhorHorizonte: text.includes('Senhor do Horizonte de Eventos'),
+        entidadeTranscendental: text.includes('Entidade Transcendental')
       };
     });
-    console.log('Requested Titles verified:', requestedTitlesExist);
-    results.tests.requestedTitlesExist = Object.values(requestedTitlesExist).every(Boolean);
+    console.log('Round 4 New Titles verified:', newTitlesExist);
+    results.tests.round4NewTitlesExist = Object.values(newTitlesExist).every(Boolean);
 
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_titles.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_titles.png'),
       clip: { x: 0, y: 350, width: 1440, height: 900 }
     });
-    console.log('✓ Captured shop_after_v3_titles.png');
+    console.log('✓ Captured shop_round4_titles.png');
 
-    // Filter: Banners (6 animated expected)
-    console.log('\n--- 5. CATEGORY: BANNERS (6 itens animados) ---');
+    // Filter: Banners (10 animated expected)
+    console.log('\n--- 5. CATEGORY: BANNERS (10 itens animados) ---');
     await page.locator('.cat-btn:has-text("Banners")').click();
     await page.waitForTimeout(400);
     const bannersCount = await page.locator('.shop-card').count();
     results.itemCounts.banners = bannersCount;
-    console.log(`Banners rendered: ${bannersCount} (Expected: 6)`);
-    results.tests.bannersCountMatch = bannersCount === 6;
+    console.log(`Banners rendered: ${bannersCount} (Expected: 10)`);
+    results.tests.bannersCountMatch = bannersCount === 10;
+
+    const newBannersExist = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return {
+        chuvaMeteoros: text.includes('Chuva de Meteoros Cósmica'),
+        portalAbissal: text.includes('Portal do Vácuo Quântico'),
+        jardimAstral: text.includes('Jardim Botânico Astral'),
+        cidadelaCelestial: text.includes('Cidadela Flutuante do Nox')
+      };
+    });
+    console.log('Round 4 New Banners verified:', newBannersExist);
+    results.tests.round4NewBannersExist = Object.values(newBannersExist).every(Boolean);
 
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_banners.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_banners.png'),
       clip: { x: 0, y: 350, width: 1440, height: 900 }
     });
-    console.log('✓ Captured shop_after_v3_banners.png');
+    console.log('✓ Captured shop_round4_banners.png');
 
-    // 6. Test Color Variants Swatches on Card
-    console.log('\n--- 6. FRAME COLOR CUSTOMIZATION ON CARDS ---');
+    // 6. Test Color Variants Swatches on Newly Added Frames
+    console.log('\n--- 6. EXTENDED COLOR CUSTOMIZATION TEST ---');
     await page.locator('.cat-btn:has-text("Molduras")').click();
     await page.waitForTimeout(400);
 
-    // Locate the Solar Flare card or any card with swatches
-    const solarCard = page.locator('.shop-card:has-text("Chama Solar")');
-    const hasSwatches = await solarCard.locator('.swatch-btn').count();
-    console.log(`Chama Solar color swatches count: ${hasSwatches}`);
-    results.tests.hasColorSwatches = hasSwatches > 0;
+    // Locate Angelic Seraph card or Oceanic Tide card
+    const seraphCard = page.locator('.shop-card:has-text("Asas do Serafim")');
+    const seraphSwatches = await seraphCard.locator('.swatch-btn').count();
+    console.log(`Asas do Serafim color swatches count: ${seraphSwatches}`);
+    results.tests.seraphHasSwatches = seraphSwatches > 0;
 
-    if (hasSwatches > 1) {
-      // Click second swatch (blue flame)
-      await solarCard.locator('.swatch-btn').nth(1).click();
+    if (seraphSwatches > 1) {
+      // Click second swatch (silver / alva pura)
+      await seraphCard.locator('.swatch-btn').nth(1).click();
       await page.waitForTimeout(400);
 
-      // Verify UserAvatar inside card received tint class
-      const hasBlueTint = await solarCard.locator('.user-avatar-root.tint-blue, .avatar-frame-overlay.tint-blue').count();
-      console.log(`UserAvatar tinted blue: ${hasBlueTint > 0}`);
-      results.tests.frameTintApplied = hasBlueTint > 0;
+      const hasSilverTint = await seraphCard.locator('.user-avatar-root.tint-silver, .avatar-frame-overlay.tint-silver').count();
+      console.log(`UserAvatar tinted silver: ${hasSilverTint > 0}`);
+      results.tests.seraphSilverTint = hasSilverTint > 0;
 
-      // Click "Testar" button on Chama Solar
-      await solarCard.locator('.btn-action-test').click();
+      // Click "Testar" button
+      await seraphCard.locator('.btn-action-test').click();
       await page.waitForTimeout(500);
 
-      // Check Hero Provador is tinted
-      const heroHasTint = await page.locator('.hero-preview-box .user-avatar-root.tint-blue, .hero-preview-box .avatar-frame-overlay.tint-blue').count();
-      console.log(`Hero provador reflects frame tint: ${heroHasTint > 0}`);
-      results.tests.heroReflectsTint = heroHasTint > 0;
+      // Check Hero Provador
+      const heroHasTint = await page.locator('.hero-preview-box .user-avatar-root.tint-silver, .hero-preview-box .avatar-frame-overlay.tint-silver').count();
+      console.log(`Hero provador reflects Seraph silver tint: ${heroHasTint > 0}`);
+      results.tests.heroReflectsSeraphTint = heroHasTint > 0;
 
       await page.screenshot({
-        path: path.join(ARTIFACTS_DIR, 'shop_after_v3_color_variants.png'),
+        path: path.join(ARTIFACTS_DIR, 'shop_round4_color_variants.png'),
         clip: { x: 0, y: 0, width: 1440, height: 750 }
       });
-      console.log('✓ Captured shop_after_v3_color_variants.png');
+      console.log('✓ Captured shop_round4_color_variants.png');
     }
 
     // 7. Test Modal Color Variant Selector
     console.log('\n--- 7. MODAL COLOR VARIANT SELECTOR ---');
-    await solarCard.locator('.card-visual-clickable').click();
+    await seraphCard.locator('.card-visual-clickable').click();
     await page.waitForTimeout(500);
 
     const isModalOpen = await page.locator('.modal-card').isVisible();
@@ -226,10 +251,10 @@ async function run() {
 
     if (isModalOpen) {
       await page.screenshot({
-        path: path.join(ARTIFACTS_DIR, 'shop_after_v3_modal_variant.png'),
+        path: path.join(ARTIFACTS_DIR, 'shop_round4_modal_variant.png'),
         clip: { x: 0, y: 0, width: 1440, height: 900 }
       });
-      console.log('✓ Captured shop_after_v3_modal_variant.png');
+      console.log('✓ Captured shop_round4_modal_variant.png');
 
       await page.locator('.btn-modal-close').click();
       await page.waitForTimeout(400);
@@ -255,13 +280,13 @@ async function run() {
     results.tests.noHorizontalOverflow = scrollWidth <= clientWidth;
 
     await mobilePage.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'shop_after_v3_mobile.png'),
+      path: path.join(ARTIFACTS_DIR, 'shop_round4_mobile.png'),
       clip: { x: 0, y: 0, width: 390, height: 844 }
     });
-    console.log('✓ Captured shop_after_v3_mobile.png');
+    console.log('✓ Captured shop_round4_mobile.png');
 
     results.status = 'SUCCESS';
-    console.log('\n=== ALL PLAYWRIGHT ROUND 3 VERIFICATIONS PASSED ===');
+    console.log('\n=== ALL PLAYWRIGHT ROUND 4 VERIFICATIONS PASSED ===');
   } catch (err) {
     console.error('Test execution failed:', err);
     results.status = 'ERROR';
@@ -269,7 +294,7 @@ async function run() {
   } finally {
     await browser.close();
     fs.writeFileSync(
-      path.join(ARTIFACTS_DIR, 'shop_overhaul_v3_verification_report.json'),
+      path.join(ARTIFACTS_DIR, 'shop_overhaul_v4_verification_report.json'),
       JSON.stringify(results, null, 2)
     );
   }
