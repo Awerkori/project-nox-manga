@@ -23,6 +23,7 @@
   import ParticleBackground from '$lib/components/ParticleBackground.svelte';
   import AgeGateModal from '$lib/components/AgeGateModal.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getNameColorInfo } from '$lib/name-colors';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { page } from '$app/state';
 
@@ -35,6 +36,7 @@
   let profileOverride = $state<Record<string, any> | null>(null);
   let profile = $derived(profileOverride || data.profile);
   let rank = $derived(profile ? memberRank(profile.xp) : null);
+  let dropColorInfo = $derived(getNameColorInfo(profile?.name_color));
   let unreadDelta = $state(0);
   let observedServerUnread = $state<number | null>(null);
   let localUnread = $derived(Math.max(0, (data.unread || 0) + unreadDelta));
@@ -304,7 +306,7 @@
                     size={42}
                   />
                   <div class="dropdown-user-meta">
-                    <span class="dropdown-user-name" style={profile.name_color ? `color: ${profile.name_color};` : ''}>{profile.display_name}</span>
+                    <span class="dropdown-user-name {dropColorInfo.className}" style={dropColorInfo.style}>{profile.display_name}</span>
                     <span class="dropdown-user-handle">@{profile.username || 'leitor'}</span>
                     {#if rank}
                       <span class="dropdown-rank-pill">{rank.title}</span>

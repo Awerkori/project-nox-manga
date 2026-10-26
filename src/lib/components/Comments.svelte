@@ -9,13 +9,24 @@
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getNameColorInfo } from '$lib/name-colors';
+  import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
   type Comment = {
     id: string;
     user_id: string;
     body: string;
     created_at: string;
     parent_id: string | null;
-    members: { username: string; display_name: string; avatar_id?: string | null; avatar_crop?: unknown } | null;
+    members: {
+      username: string;
+      display_name: string;
+      avatar_id?: string | null;
+      avatar_crop?: unknown;
+      name_color?: string | null;
+      avatar_frame_id?: string | null;
+      equipped_comment_banner_id?: string | null;
+      equipped_title_id?: string | null;
+    } | null;
     comment_likes: { user_id: string }[];
   };
   let {
@@ -236,16 +247,23 @@
     </div>
   {:else}
     <div class="comment-list">
-      {#each threaded as comment (comment.id)}<article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
+      {#each threaded as comment (comment.id)}
+        {@const authorColor = getNameColorInfo(comment.members?.name_color)}
+        {@const commentBanner = comment.members?.equipped_comment_banner_id ? CURATED_BANNER_BACKGROUNDS[comment.members.equipped_comment_banner_id] : null}
+        <article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
+        {#if commentBanner}
+          <div class="comment-banner-strip" style="background: {commentBanner};" aria-hidden="true"></div>
+        {/if}
         <div class="comment-author">
           <UserAvatar
             avatarId={comment.members?.avatar_id}
+            frameId={comment.members?.avatar_frame_id}
             crop={comment.members?.avatar_crop}
             displayName={comment.members?.display_name || 'Leitor'}
             size={38}
           />
           <div>
-            <a href="/u/{comment.members?.username}">{comment.members?.display_name || 'Leitor'}</a><time
+            <a href="/u/{comment.members?.username}" class="author-name-link {authorColor.className}" style={authorColor.style}>{comment.members?.display_name || 'Leitor'}</a><time
               datetime={comment.created_at}>{date(comment.created_at)}</time
             >
           </div>
@@ -335,6 +353,22 @@
     margin-left: 30px;
     padding-left: 20px;
     border-left: 2px solid #33263e;
+  }
+  .comment-banner-strip {
+    height: 48px;
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background-size: cover !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+  .author-name-link {
+    font-weight: 700;
+    transition: opacity 0.2s ease;
+  }
+  .author-name-link:hover {
+    opacity: 0.85;
   }
   .comment-author {
     display: flex;

@@ -1,6 +1,6 @@
 /**
- * High-definition Procedural Animated Cosmic Vector Banners for Project Nox (Round 5)
- * 50 Pure SVG vectors with rich compositions and native CSS keyframe animations.
+ * High-definition Procedural Animated Cosmic Vector Banners for Project Nox (Round 5 Refined)
+ * 50 Pure SVG vectors with completely distinct compositions, motifs, and animations.
  * 100% vector, zero external asset dependencies, GPU-accelerated 60fps.
  */
 
@@ -13,70 +13,72 @@ function svgToDataUri(svg: string): string {
 export const BANNER_NEBULOSA_VAZIO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
     <radialGradient id="nv-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#180e38"/><stop offset="50%" stop-color="#0b071c"/><stop offset="100%" stop-color="#030208"/></radialGradient>
-    <radialGradient id="nv-cloud-1" cx="72%" cy="38%" r="48%"><stop offset="0%" stop-color="rgba(168, 85, 247, 0.55)"/><stop offset="45%" stop-color="rgba(139, 92, 246, 0.28)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
-    <radialGradient id="nv-cloud-2" cx="28%" cy="65%" r="45%"><stop offset="0%" stop-color="rgba(56, 189, 248, 0.45)"/><stop offset="55%" stop-color="rgba(99, 102, 241, 0.22)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+    <radialGradient id="nv-c1" cx="75%" cy="35%" r="50%"><stop offset="0%" stop-color="rgba(168, 85, 247, 0.6)"/><stop offset="50%" stop-color="rgba(139, 92, 246, 0.25)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+    <radialGradient id="nv-c2" cx="25%" cy="65%" r="45%"><stop offset="0%" stop-color="rgba(56, 189, 248, 0.5)"/><stop offset="60%" stop-color="rgba(99, 102, 241, 0.2)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
   </defs>
   <style>
-    @keyframes nvDrift1 { 0%, 100% { opacity: 0.8; transform: translate(0,0) scale(1); } 50% { opacity: 1; transform: translate(-25px, 14px) scale(1.08); } }
-    @keyframes nvDrift2 { 0%, 100% { opacity: 0.7; transform: translate(0,0) scale(1); } 50% { opacity: 0.95; transform: translate(22px, -16px) scale(1.1); } }
-    @keyframes starPulse1 { 0%, 100% { opacity: 0.25; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.25); } }
-    @keyframes meteorStreak { 0% { transform: translate(-100px, -50px); opacity: 0; } 15% { opacity: 1; } 35% { transform: translate(320px, 160px); opacity: 0; } 100% { transform: translate(320px, 160px); opacity: 0; } }
-    .nv-c1 { animation: nvDrift1 10s ease-in-out infinite; transform-origin: 72% 38%; }
-    .nv-c2 { animation: nvDrift2 12s ease-in-out infinite; transform-origin: 28% 65%; }
-    .star-a { animation: starPulse1 2.8s ease-in-out infinite; transform-origin: center; }
-    .meteor-1 { animation: meteorStreak 6s linear infinite; }
+    @keyframes nvDrift1 { 0%, 100% { transform: translate(0,0) scale(1); opacity: 0.8; } 50% { transform: translate(-30px, 15px) scale(1.08); opacity: 1; } }
+    @keyframes nvDrift2 { 0%, 100% { transform: translate(0,0) scale(1); opacity: 0.7; } 50% { transform: translate(25px, -15px) scale(1.1); opacity: 0.95; } }
+    @keyframes meteorStreak { 0% { transform: translate(-100px, -50px); opacity: 0; } 15% { opacity: 1; } 40% { transform: translate(350px, 175px); opacity: 0; } 100% { transform: translate(350px, 175px); opacity: 0; } }
+    @keyframes starTwinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.3); } }
+    .c1 { animation: nvDrift1 11s ease-in-out infinite; transform-origin: 75% 35%; }
+    .c2 { animation: nvDrift2 13s ease-in-out infinite; transform-origin: 25% 65%; }
+    .m1 { animation: meteorStreak 6s linear infinite; }
+    .st { animation: starTwinkle 2.5s ease-in-out infinite; transform-origin: center; }
   </style>
   <rect width="1200" height="400" fill="url(#nv-bg)"/>
-  <rect class="nv-c1" width="1200" height="400" fill="url(#nv-cloud-1)"/>
-  <rect class="nv-c2" width="1200" height="400" fill="url(#nv-cloud-2)"/>
-  <g stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.85">
-    <line x1="200" y1="30" x2="260" y2="60" class="meteor-1" filter="drop-shadow(0 0 6px #c084fc)"/>
+  <rect class="c1" width="1200" height="400" fill="url(#nv-c1)"/>
+  <rect class="c2" width="1200" height="400" fill="url(#nv-c2)"/>
+  <g stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9">
+    <line x1="250" y1="30" x2="320" y2="65" class="m1" filter="drop-shadow(0 0 6px #c084fc)"/>
   </g>
-  <g fill="#ffffff" class="star-a">
-    <circle cx="120" cy="80" r="1.5"/><circle cx="340" cy="220" r="1.8"/><circle cx="580" cy="90" r="1.4"/><circle cx="820" cy="180" r="2"/><circle cx="1040" cy="110" r="1.6"/>
+  <g fill="#ffffff" class="st">
+    <circle cx="120" cy="80" r="1.5"/><circle cx="340" cy="220" r="2"/><circle cx="580" cy="90" r="1.6"/><circle cx="820" cy="180" r="2.2"/><circle cx="1040" cy="110" r="1.8"/>
   </g>
 </svg>`;
 
 // Aurora Astral & Fitas Polares
 export const BANNER_AURORA_ASTRAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <linearGradient id="aa-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#02131b"/><stop offset="60%" stop-color="#041f26"/><stop offset="100%" stop-color="#010a0f"/></linearGradient>
-    <linearGradient id="aa-ribbon-1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="transparent"/><stop offset="25%" stop-color="rgba(16, 185, 129, 0.65)"/><stop offset="60%" stop-color="rgba(56, 189, 248, 0.7)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
-    <linearGradient id="aa-ribbon-2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="transparent"/><stop offset="35%" stop-color="rgba(168, 85, 247, 0.55)"/><stop offset="75%" stop-color="rgba(52, 211, 153, 0.6)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
+    <linearGradient id="aa-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#02141d"/><stop offset="65%" stop-color="#041f26"/><stop offset="100%" stop-color="#01090d"/></linearGradient>
+    <linearGradient id="aa-ribbon1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="transparent"/><stop offset="30%" stop-color="rgba(16, 185, 129, 0.75)"/><stop offset="65%" stop-color="rgba(56, 189, 248, 0.75)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
+    <linearGradient id="aa-ribbon2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="transparent"/><stop offset="40%" stop-color="rgba(168, 85, 247, 0.65)"/><stop offset="80%" stop-color="rgba(52, 211, 153, 0.7)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
   </defs>
   <style>
-    @keyframes waveRibbon1 { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-28px) scaleY(1.15); } }
-    @keyframes waveRibbon2 { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(22px) scaleY(0.9); } }
-    .rb-1 { animation: waveRibbon1 7s ease-in-out infinite; transform-origin: 50% 50%; }
-    .rb-2 { animation: waveRibbon2 8.5s ease-in-out infinite; transform-origin: 50% 50%; }
+    @keyframes waveRibbon1 { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-32px) scaleY(1.18); } }
+    @keyframes waveRibbon2 { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(26px) scaleY(0.88); } }
+    .r1 { animation: waveRibbon1 7s ease-in-out infinite; transform-origin: 50% 50%; }
+    .r2 { animation: waveRibbon2 9s ease-in-out infinite; transform-origin: 50% 50%; }
   </style>
   <rect width="1200" height="400" fill="url(#aa-bg)"/>
-  <path class="rb-1" d="M0,160 Q300,70 600,160 T1200,140 L1200,280 Q900,340 600,270 T0,280 Z" fill="url(#aa-ribbon-1)" opacity="0.8"/>
-  <path class="rb-2" d="M0,210 Q300,290 600,200 T1200,220 L1200,320 Q900,380 600,310 T0,320 Z" fill="url(#aa-ribbon-2)" opacity="0.75"/>
+  <path class="r1" d="M0,140 Q300,50 600,150 T1200,130 L1200,280 Q900,340 600,270 T0,280 Z" fill="url(#aa-ribbon1)" opacity="0.85"/>
+  <path class="r2" d="M0,200 Q300,280 600,190 T1200,210 L1200,330 Q900,390 600,320 T0,330 Z" fill="url(#aa-ribbon2)" opacity="0.8"/>
+  <!-- Mountain Horizon Silhouette -->
+  <polygon points="0,400 0,330 80,310 170,340 280,290 390,340 500,280 640,350 780,270 910,330 1040,290 1150,330 1200,300 1200,400" fill="#01090d"/>
 </svg>`;
 
 // Energia Arcana & Astrolábio
 export const BANNER_ENERGIA_ARCANA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
     <radialGradient id="ea-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#190a36"/><stop offset="60%" stop-color="#0c041c"/><stop offset="100%" stop-color="#04020a"/></radialGradient>
-    <radialGradient id="ea-core-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="35%" stop-color="rgba(192, 132, 252, 0.95)"/><stop offset="70%" stop-color="rgba(147, 51, 234, 0.5)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+    <radialGradient id="ea-core" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="35%" stop-color="rgba(192, 132, 252, 0.95)"/><stop offset="70%" stop-color="rgba(147, 51, 234, 0.5)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
   </defs>
   <style>
     @keyframes spinCw { 100% { transform: rotate(360deg); } }
     @keyframes spinCcw { 100% { transform: rotate(-360deg); } }
     @keyframes corePulse { 0%, 100% { transform: scale(0.92); opacity: 0.85; } 50% { transform: scale(1.15); opacity: 1; } }
-    .rot-cw { animation: spinCw 25s linear infinite; transform-origin: 880px 200px; }
-    .rot-ccw { animation: spinCcw 18s linear infinite; transform-origin: 880px 200px; }
-    .core-pulse { animation: corePulse 3s ease-in-out infinite; transform-origin: 880px 200px; }
+    .rotCw { animation: spinCw 25s linear infinite; transform-origin: 880px 200px; }
+    .rotCcw { animation: spinCcw 18s linear infinite; transform-origin: 880px 200px; }
+    .core { animation: corePulse 3s ease-in-out infinite; transform-origin: 880px 200px; }
   </style>
   <rect width="1200" height="400" fill="url(#ea-bg)"/>
-  <circle cx="880" cy="200" r="160" class="core-pulse" fill="url(#ea-core-glow)"/>
-  <g class="rot-cw" stroke="rgba(216, 180, 254, 0.75)" stroke-width="1.8" fill="none">
-    <circle cx="880" cy="200" r="150" stroke-dasharray="14 8"/>
+  <circle cx="880" cy="200" r="160" class="core" fill="url(#ea-core)"/>
+  <g class="rotCw" stroke="rgba(216, 180, 254, 0.8)" stroke-width="2" fill="none">
+    <circle cx="880" cy="200" r="150" stroke-dasharray="16 8"/>
     <circle cx="880" cy="200" r="110"/>
     <polygon points="880,90 975,255 785,255"/>
   </g>
-  <g class="rot-ccw" stroke="rgba(56, 189, 248, 0.7)" stroke-width="1.6" fill="none">
+  <g class="rotCcw" stroke="rgba(56, 189, 248, 0.75)" stroke-width="1.8" fill="none">
     <circle cx="880" cy="200" r="130" stroke-dasharray="8 6"/>
     <polygon points="880,310 785,145 975,145"/>
   </g>
@@ -85,45 +87,50 @@ export const BANNER_ENERGIA_ARCANA_SVG = `<svg xmlns="http://www.w3.org/2000/svg
 // Eclipse Cósmico & Corona Solar
 export const BANNER_ECLIPSE_COSMICO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <radialGradient id="ec-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1f0a14"/><stop offset="50%" stop-color="#12040b"/><stop offset="100%" stop-color="#050103"/></radialGradient>
+    <radialGradient id="ec-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#240713"/><stop offset="50%" stop-color="#12040b"/><stop offset="100%" stop-color="#040103"/></radialGradient>
     <radialGradient id="ec-corona" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="25%" stop-color="#f97316"/><stop offset="55%" stop-color="#ef4444"/><stop offset="100%" stop-color="transparent"/></radialGradient>
   </defs>
   <style>
-    @keyframes ecCoronaPulse { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.12); opacity: 1; } }
+    @keyframes ecPulse { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.14); opacity: 1; } }
     @keyframes ecSpin { 100% { transform: rotate(360deg); } }
-    .ec-pulse { animation: ecCoronaPulse 4s ease-in-out infinite; transform-origin: 320px 200px; }
-    .ec-spin { animation: ecSpin 40s linear infinite; transform-origin: 320px 200px; }
+    .ecP { animation: ecPulse 3.5s ease-in-out infinite; transform-origin: 320px 200px; }
+    .ecS { animation: ecSpin 40s linear infinite; transform-origin: 320px 200px; }
   </style>
   <rect width="1200" height="400" fill="url(#ec-bg)"/>
-  <circle cx="320" cy="200" r="180" class="ec-pulse" fill="url(#ec-corona)"/>
-  <g class="ec-spin" stroke="rgba(251, 146, 60, 0.6)" stroke-width="2">
-    <line x1="320" y1="20" x2="320" y2="380"/>
-    <line x1="140" y1="200" x2="500" y2="200"/>
-    <line x1="192" y1="72" x2="448" y2="328"/>
-    <line x1="192" y1="328" x2="448" y2="72"/>
+  <circle cx="320" cy="200" r="185" class="ecP" fill="url(#ec-corona)"/>
+  <g class="ecS" stroke="rgba(251, 146, 60, 0.75)" stroke-width="2.5">
+    <line x1="320" y1="15" x2="320" y2="385"/><line x1="135" y1="200" x2="505" y2="200"/>
+    <line x1="189" y1="69" x2="451" y2="331"/><line x1="189" y1="331" x2="451" y2="69"/>
   </g>
-  <circle cx="320" cy="200" r="95" fill="#050103" stroke="#f97316" stroke-width="3" filter="drop-shadow(0 0 15px rgba(239, 68, 68, 0.9))"/>
+  <circle cx="320" cy="200" r="95" fill="#040103" stroke="#f97316" stroke-width="3" filter="drop-shadow(0 0 16px rgba(239, 68, 68, 0.95))"/>
 </svg>`;
 
 // Biblioteca das Estrelas
 export const BANNER_BIBLIOTECA_ESTRELAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <radialGradient id="be-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1c1605"/><stop offset="60%" stop-color="#0f0b02"/><stop offset="100%" stop-color="#040300"/></radialGradient>
+    <radialGradient id="be-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1f1807"/><stop offset="60%" stop-color="#0f0b02"/><stop offset="100%" stop-color="#040300"/></radialGradient>
   </defs>
   <style>
     @keyframes armSpin1 { 100% { transform: rotate(360deg); } }
     @keyframes armSpin2 { 100% { transform: rotate(-360deg); } }
-    .arm-1 { animation: armSpin1 22s linear infinite; transform-origin: 920px 200px; }
-    .arm-2 { animation: armSpin2 16s linear infinite; transform-origin: 920px 200px; }
+    @keyframes bookHover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+    .arm1 { animation: armSpin1 24s linear infinite; transform-origin: 920px 200px; }
+    .arm2 { animation: armSpin2 18s linear infinite; transform-origin: 920px 200px; }
+    .book { animation: bookHover 4s ease-in-out infinite; }
   </style>
   <rect width="1200" height="400" fill="url(#be-bg)"/>
-  <g class="arm-1" stroke="#fbbf24" stroke-width="2" fill="none">
-    <circle cx="920" cy="200" r="140" stroke-dasharray="16 10"/>
-    <ellipse cx="920" cy="200" rx="140" ry="50"/>
+  <g class="arm1" stroke="#fbbf24" stroke-width="2.2" fill="none">
+    <circle cx="920" cy="200" r="145" stroke-dasharray="18 10"/>
+    <ellipse cx="920" cy="200" rx="145" ry="55"/>
   </g>
-  <g class="arm-2" stroke="#fef08a" stroke-width="1.6" fill="none">
-    <ellipse cx="920" cy="200" rx="140" ry="50" transform="rotate(60 920 200)"/>
-    <circle cx="920" cy="200" r="25" fill="#fbbf24" filter="drop-shadow(0 0 16px #fbbf24)"/>
+  <g class="arm2" stroke="#fef08a" stroke-width="1.8" fill="none">
+    <ellipse cx="920" cy="200" rx="145" ry="55" transform="rotate(60 920 200)"/>
+    <circle cx="920" cy="200" r="28" fill="#fbbf24" filter="drop-shadow(0 0 18px #fbbf24)"/>
+  </g>
+  <!-- Open Grimoire on Left -->
+  <g class="book" transform="translate(240, 180)">
+    <path d="M-60,30 Q-30,-20 0,0 Q30,-20 60,30 L60,50 Q30,0 0,20 Q-30,0 -60,50 Z" fill="#451a03" stroke="#fbbf24" stroke-width="2"/>
+    <path d="M-55,28 Q-28,-16 0,2 Q28,-16 55,28" fill="none" stroke="#fef08a" stroke-width="1.2"/>
   </g>
 </svg>`;
 
@@ -133,1146 +140,907 @@ export const BANNER_FENDA_RUNICA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" 
     <linearGradient id="fr-bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#05081c"/><stop offset="50%" stop-color="#0c1236"/><stop offset="100%" stop-color="#02040e"/></linearGradient>
   </defs>
   <style>
-    @keyframes monoFloat1 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
-    @keyframes monoFloat2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(16px); } }
-    @keyframes riftPulse { 0%, 100% { opacity: 0.8; stroke-width: 3; } 50% { opacity: 1; stroke-width: 6; } }
-    .mf-1 { animation: monoFloat1 5s ease-in-out infinite; }
-    .mf-2 { animation: monoFloat2 6s ease-in-out infinite; }
-    .rp { animation: riftPulse 2.5s ease-in-out infinite; }
+    @keyframes monoF1 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+    @keyframes monoF2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(18px); } }
+    @keyframes riftFlash { 0%, 100% { stroke-width: 3.5; opacity: 0.8; } 50% { stroke-width: 7; opacity: 1; } }
+    .mf1 { animation: monoF1 5.5s ease-in-out infinite; }
+    .mf2 { animation: monoF2 6.5s ease-in-out infinite; }
+    .rf { animation: riftFlash 2.2s ease-in-out infinite; }
   </style>
   <rect width="1200" height="400" fill="url(#fr-bg)"/>
-  <path class="rp" d="M600,0 Q580,120 620,200 Q590,300 600,400" stroke="#38bdf8" fill="none" filter="drop-shadow(0 0 12px #38bdf8)"/>
-  <polygon class="mf-1" points="480,140 520,130 510,240 470,250" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-  <polygon class="mf-2" points="700,160 740,150 730,260 690,270" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <path class="rf" d="M600,0 Q580,120 620,200 Q590,300 600,400" stroke="#38bdf8" fill="none" filter="drop-shadow(0 0 14px #38bdf8)"/>
+  <polygon class="mf1" points="470,130 520,120 505,250 455,260" fill="#1e293b" stroke="#38bdf8" stroke-width="2.2"/>
+  <polygon class="mf2" points="710,150 760,140 745,270 695,280" fill="#1e293b" stroke="#38bdf8" stroke-width="2.2"/>
 </svg>`;
 
 // Chuva de Meteoros Cósmica
 export const BANNER_CHUVA_METEOROS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="cm-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#140b2b"/><stop offset="100%" stop-color="#030209"/></radialGradient>
-  </defs>
+  <defs><radialGradient id="cm-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#140b2b"/><stop offset="100%" stop-color="#030209"/></radialGradient></defs>
   <style>
-    @keyframes meteorRain {
-      0% { transform: translate(-100px, -80px); opacity: 0; }
-      20% { opacity: 1; }
-      80% { opacity: 1; }
-      100% { transform: translate(600px, 450px); opacity: 0; }
-    }
-    .m-fast-1 { animation: meteorRain 3s linear infinite; }
-    .m-fast-2 { animation: meteorRain 4.2s linear infinite 1.2s; }
-    .m-fast-3 { animation: meteorRain 3.6s linear infinite 2.1s; }
+    @keyframes mRain { 0% { transform: translate(-120px, -90px); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(650px, 480px); opacity: 0; } }
+    .m1 { animation: mRain 2.8s linear infinite; }
+    .m2 { animation: mRain 3.9s linear infinite 1.1s; }
+    .m3 { animation: mRain 3.4s linear infinite 2s; }
   </style>
   <rect width="1200" height="400" fill="url(#cm-bg)"/>
+  <circle cx="950" cy="110" r="50" fill="#cbd5e1" opacity="0.8" filter="drop-shadow(0 0 15px rgba(255,255,255,0.4))"/>
   <g stroke="#ffffff" stroke-width="2.5" stroke-linecap="round">
-    <line x1="200" y1="20" x2="280" y2="80" class="m-fast-1" filter="drop-shadow(0 0 8px #f43f5e)"/>
-    <line x1="600" y1="10" x2="680" y2="70" class="m-fast-2" filter="drop-shadow(0 0 8px #38bdf8)"/>
-    <line x1="900" y1="30" x2="980" y2="90" class="m-fast-3" filter="drop-shadow(0 0 8px #fbbf24)"/>
+    <line x1="180" y1="10" x2="270" y2="75" class="m1" filter="drop-shadow(0 0 8px #f43f5e)"/>
+    <line x1="550" y1="15" x2="640" y2="80" class="m2" filter="drop-shadow(0 0 8px #38bdf8)"/>
+    <line x1="850" y1="20" x2="940" y2="85" class="m3" filter="drop-shadow(0 0 8px #fbbf24)"/>
   </g>
 </svg>`;
 
 // Portal do Vácuo Quântico
 export const BANNER_PORTAL_ABISSAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="pa-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#24072f"/><stop offset="100%" stop-color="#040106"/></radialGradient>
-  </defs>
+  <defs><radialGradient id="pa-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#260633"/><stop offset="100%" stop-color="#040106"/></radialGradient></defs>
   <style>
     @keyframes spinCw { 100% { transform: rotate(360deg); } }
     @keyframes spinCcw { 100% { transform: rotate(-360deg); } }
-    .p-ring-1 { animation: spinCw 14s linear infinite; transform-origin: 600px 200px; }
-    .p-ring-2 { animation: spinCcw 10s linear infinite; transform-origin: 600px 200px; }
+    .pr1 { animation: spinCw 13s linear infinite; transform-origin: 600px 200px; }
+    .pr2 { animation: spinCcw 9s linear infinite; transform-origin: 600px 200px; }
   </style>
   <rect width="1200" height="400" fill="url(#pa-bg)"/>
-  <g class="p-ring-1" stroke="#ec4899" stroke-width="2.5" fill="none">
-    <ellipse cx="600" cy="200" rx="160" ry="80"/>
-    <circle cx="600" cy="200" r="140" stroke-dasharray="20 12"/>
+  <g class="pr1" stroke="#ec4899" stroke-width="2.5" fill="none">
+    <ellipse cx="600" cy="200" rx="170" ry="85"/><circle cx="600" cy="200" r="145" stroke-dasharray="22 14"/>
   </g>
-  <g class="p-ring-2" stroke="#8b5cf6" stroke-width="2" fill="none">
-    <ellipse cx="600" cy="200" rx="80" ry="160"/>
-    <circle cx="600" cy="200" r="60" fill="#040106" stroke="#ffffff" filter="drop-shadow(0 0 20px #a855f7)"/>
+  <g class="pr2" stroke="#8b5cf6" stroke-width="2.2" fill="none">
+    <ellipse cx="600" cy="200" rx="85" ry="170"/><circle cx="600" cy="200" r="65" fill="#040106" stroke="#ffffff" filter="drop-shadow(0 0 22px #a855f7)"/>
   </g>
 </svg>`;
 
 // Jardim Botânico Astral
 export const BANNER_JARDIM_ASTRAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <linearGradient id="ja-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#021a15"/><stop offset="100%" stop-color="#010806"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="ja-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#031e18"/><stop offset="100%" stop-color="#010806"/></linearGradient></defs>
   <style>
-    @keyframes sporeFloat { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-30px); opacity: 1; } }
-    @keyframes lotusBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-    .spore { animation: sporeFloat 4s ease-in-out infinite; }
-    .lotus { animation: lotusBreathe 5s ease-in-out infinite; transform-origin: center; }
+    @keyframes sporeUp { 0%, 100% { transform: translateY(0); opacity: 0.3; } 50% { transform: translateY(-35px); opacity: 1; } }
+    @keyframes lotusB { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    .sp { animation: sporeUp 4.2s ease-in-out infinite; }
+    .lot { animation: lotusB 5s ease-in-out infinite; transform-origin: center; }
   </style>
   <rect width="1200" height="400" fill="url(#ja-bg)"/>
-  <g class="lotus" transform="translate(600, 260)">
-    <circle cx="0" cy="0" r="45" fill="none" stroke="#10b981" stroke-width="2.5"/>
-    <path d="M-30,10 Q0,-40 30,10 Q0,20 -30,10 Z" fill="#34d399" opacity="0.8"/>
+  <!-- Glowing Pond -->
+  <ellipse cx="600" cy="330" rx="350" ry="50" fill="#064e3b" opacity="0.6"/>
+  <g class="lot" transform="translate(600, 270)">
+    <circle cx="0" cy="0" r="48" fill="none" stroke="#10b981" stroke-width="2.5"/>
+    <path d="M-35,10 Q0,-45 35,10 Q0,25 -35,10 Z" fill="#34d399" opacity="0.85"/>
   </g>
-  <g fill="#6ee7b7" class="spore">
-    <circle cx="250" cy="220" r="4"/><circle cx="450" cy="160" r="3"/><circle cx="800" cy="210" r="4.5"/><circle cx="980" cy="170" r="3"/>
+  <g fill="#6ee7b7" class="sp">
+    <circle cx="220" cy="220" r="4"/><circle cx="430" cy="160" r="3"/><circle cx="780" cy="210" r="4.5"/><circle cx="990" cy="170" r="3"/>
   </g>
 </svg>`;
 
 // Cidadela Flutuante do Nox
 export const BANNER_CIDADELA_CELESTIAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <linearGradient id="cc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="cc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient></defs>
   <style>
-    @keyframes citFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
-    @keyframes beamPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
-    .cit { animation: citFloat 6s ease-in-out infinite; }
-    .beam { animation: beamPulse 3s ease-in-out infinite; }
+    @keyframes citF { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
+    @keyframes beamP { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.95; } }
+    .cf { animation: citF 6s ease-in-out infinite; }
+    .bp { animation: beamP 3s ease-in-out infinite; }
   </style>
   <rect width="1200" height="400" fill="url(#cc-bg)"/>
-  <g class="beam" stroke="#38bdf8" stroke-width="1.5" opacity="0.6">
-    <line x1="600" y1="0" x2="600" y2="400"/>
-    <line x1="450" y1="40" x2="450" y2="360"/>
-    <line x1="750" y1="40" x2="750" y2="360"/>
+  <g class="bp" stroke="#38bdf8" stroke-width="1.8" opacity="0.6">
+    <line x1="600" y1="0" x2="600" y2="400"/><line x1="440" y1="40" x2="440" y2="360"/><line x1="760" y1="40" x2="760" y2="360"/>
   </g>
-  <g class="cit">
-    <polygon points="500,280 600,140 700,280 600,320" fill="#1e293b" stroke="#0ea5e9" stroke-width="2.5" filter="drop-shadow(0 0 20px #0284c7)"/>
-    <polygon points="570,140 600,90 630,140" fill="#38bdf8"/>
+  <g class="cf">
+    <polygon points="480,280 600,130 720,280 600,330" fill="#1e293b" stroke="#0ea5e9" stroke-width="2.5" filter="drop-shadow(0 0 20px #0284c7)"/>
+    <polygon points="565,130 600,80 635,130" fill="#38bdf8"/>
   </g>
 </svg>`;
 
 // Ruínas Celestes da Antiguidade
 export const BANNER_RUINAS_CELESTES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_ruinas_celestes-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#4338ca"/><stop offset="60%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_ruinas_celestes-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.8"/><stop offset="100%" stop-color="#4338ca" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="rc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#090514"/></linearGradient></defs>
   <style>
-    @ruinSpin { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @floatDrift { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: ruinSpin 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: floatDrift 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: ruinSpin 3s ease-in-out infinite; }
+    @keyframes colFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+    @keyframes runeGlow { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; filter: drop-shadow(0 0 8px #fbbf24); } }
+    .cFloat { animation: colFloat 6s ease-in-out infinite; }
+    .rGlow { animation: runeGlow 3s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_ruinas_celestes-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#818cf8" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#818cf8" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_ruinas_celestes-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#818cf8" opacity="0.85" filter="drop-shadow(0 0 14px #818cf8)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #818cf8)"/>
+  <rect width="1200" height="400" fill="url(#rc-bg)"/>
+  <!-- Broken Colonnade -->
+  <g class="cFloat" fill="#334155" stroke="#94a3b8" stroke-width="2">
+    <!-- Pediment -->
+    <polygon points="350,140 600,50 850,140 350,140"/>
+    <!-- Columns -->
+    <rect x="400" y="140" width="35" height="170"/>
+    <rect x="500" y="140" width="35" height="170"/>
+    <rect x="665" y="140" width="35" height="170"/>
+    <rect x="765" y="140" width="35" height="170"/>
+    <!-- Broken chunk on right -->
+    <polygon points="900,220 950,200 930,290 880,300" stroke="#fbbf24"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <text x="600" y="110" font-size="24" fill="#fbbf24" class="rGlow" text-anchor="middle" font-family="serif">Α Ω Ψ Φ</text>
 </svg>`;
 
 // Céu das Três Luas Astrais
 export const BANNER_LUAS_MULTIPLAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_luas_multiplas-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e293b"/><stop offset="60%" stop-color="#020617"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_luas_multiplas-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#cbd5e1" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e293b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="lm-bg" cx="50%" cy="30%" r="80%"><stop offset="0%" stop-color="#0c192c"/><stop offset="100%" stop-color="#020408"/></radialGradient></defs>
   <style>
-    @moonPulse { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @waveRibbon { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: moonPulse 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: waveRibbon 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: moonPulse 3s ease-in-out infinite; }
+    @keyframes moonOrbit { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    .mOrb { animation: moonOrbit 5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_luas_multiplas-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_luas_multiplas-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#cbd5e1" opacity="0.85" filter="drop-shadow(0 0 14px #cbd5e1)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #cbd5e1)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#lm-bg)"/>
+  <!-- Moon 1: Giant Cratered Moon -->
+  <circle cx="320" cy="160" r="90" fill="#e2e8f0" class="mOrb" filter="drop-shadow(0 0 25px rgba(226,232,240,0.6))"/>
+  <circle cx="300" cy="130" r="18" fill="#94a3b8" opacity="0.6"/>
+  <circle cx="350" cy="180" r="22" fill="#94a3b8" opacity="0.6"/>
+  <!-- Moon 2: Golden Crescent Moon -->
+  <path d="M680,60 A65,65 0 0,0 730,170 A55,55 0 0,1 680,60 Z" fill="#fbbf24" filter="drop-shadow(0 0 20px #fbbf24)"/>
+  <!-- Moon 3: Mini Ringed Violet Moon -->
+  <circle cx="980" cy="140" r="45" fill="#c084fc" filter="drop-shadow(0 0 16px #a855f7)"/>
+  <ellipse cx="980" cy="140" rx="75" ry="14" fill="none" stroke="#e9d5ff" stroke-width="2.5" transform="rotate(-20 980 140)"/>
 </svg>`;
 
 // Vulcão Cósmico de Antimatéria
 export const BANNER_VULCAO_COSMICO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_vulcao_cosmico-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#991b1b"/><stop offset="60%" stop-color="#450a0a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_vulcao_cosmico-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.8"/><stop offset="100%" stop-color="#991b1b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="vc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3b0505"/><stop offset="60%" stop-color="#170202"/><stop offset="100%" stop-color="#050000"/></linearGradient></defs>
   <style>
-    @magmaSurge { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @emberFly { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: magmaSurge 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: emberFly 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: magmaSurge 3s ease-in-out infinite; }
+    @keyframes magmaBlast { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.2); opacity: 1; } }
+    @keyframes emberRise { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-160px); opacity: 0; } }
+    .blast { animation: magmaBlast 2.5s ease-in-out infinite; transform-origin: 600px 140px; }
+    .emb { animation: emberRise 3s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_vulcao_cosmico-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#ef4444" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_vulcao_cosmico-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#ef4444" opacity="0.85" filter="drop-shadow(0 0 14px #ef4444)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #ef4444)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#vc-bg)"/>
+  <!-- Volcano Cone -->
+  <polygon points="350,400 550,150 650,150 850,400" fill="#1c0505" stroke="#ef4444" stroke-width="2"/>
+  <!-- Magma Plume -->
+  <path class="blast" d="M570,140 Q600,30 630,140 Q600,100 570,140 Z" fill="#f97316" filter="drop-shadow(0 0 25px #ef4444)"/>
+  <!-- Flying Embers -->
+  <g fill="#fde047" class="emb">
+    <circle cx="580" cy="120" r="3"/><circle cx="620" cy="110" r="3.5"/><circle cx="600" cy="80" r="4"/><circle cx="560" cy="90" r="2.5"/><circle cx="640" cy="70" r="3"/>
   </g>
 </svg>`;
 
 // Céu Infernal do Abismo
 export const BANNER_CEU_INFERNAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_ceu_infernal-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#701a75"/><stop offset="60%" stop-color="#3b0764"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_ceu_infernal-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.8"/><stop offset="100%" stop-color="#701a75" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="ci-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#4a0404"/><stop offset="100%" stop-color="#0a0000"/></radialGradient></defs>
   <style>
-    @cloudChurn { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @hellLightning { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: cloudChurn 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: hellLightning 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: cloudChurn 3s ease-in-out infinite; }
+    @keyframes lightningFlash { 0%, 100% { opacity: 0.1; } 48% { opacity: 0.1; } 50% { opacity: 1; } 52% { opacity: 0.2; } 54% { opacity: 1; } 60% { opacity: 0.1; } }
+    .lFlash { animation: lightningFlash 4s infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_ceu_infernal-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#f43f5e" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_ceu_infernal-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#f43f5e" opacity="0.85" filter="drop-shadow(0 0 14px #f43f5e)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #f43f5e)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#ci-bg)"/>
+  <!-- Jagged Spikes from Ground -->
+  <polygon points="0,400 60,260 120,400 220,290 320,400 900,400 1000,270 1100,400 1160,280 1200,400" fill="#120202"/>
+  <!-- Crimson Lightning -->
+  <path d="M450,0 L420,120 L480,180 L440,300" class="lFlash" stroke="#f43f5e" stroke-width="3" fill="none" filter="drop-shadow(0 0 12px #ef4444)"/>
+  <path d="M750,0 L780,110 L730,190 L770,320" class="lFlash" stroke="#f43f5e" stroke-width="2.5" fill="none" filter="drop-shadow(0 0 12px #ef4444)"/>
 </svg>`;
 
 // Santuário Dourado Solar
 export const BANNER_SANTUARIO_DOURADO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_santuario_dourado-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#854d0e"/><stop offset="60%" stop-color="#422006"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_santuario_dourado-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/><stop offset="100%" stop-color="#854d0e" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="sd-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2d1c02"/><stop offset="100%" stop-color="#0a0600"/></linearGradient></defs>
   <style>
-    @sunRays { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @haloSpin { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: sunRays 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: haloSpin 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: sunRays 3s ease-in-out infinite; }
+    @keyframes godRays { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+    .rays { animation: godRays 4s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_santuario_dourado-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fbbf24" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_santuario_dourado-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fbbf24" opacity="0.85" filter="drop-shadow(0 0 14px #fbbf24)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fbbf24)"/>
+  <rect width="1200" height="400" fill="url(#sd-bg)"/>
+  <!-- Slanted God Rays -->
+  <g class="rays" fill="#fef08a" opacity="0.4">
+    <polygon points="400,0 550,400 480,400 360,0"/>
+    <polygon points="600,0 760,400 690,400 560,0"/>
+    <polygon points="800,0 980,400 910,400 760,0"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Cathedral Arches -->
+  <path d="M300,400 L300,180 Q450,60 600,180 L600,400 L600,180 Q750,60 900,180 L900,400" fill="none" stroke="#fbbf24" stroke-width="3" filter="drop-shadow(0 0 15px #f59e0b)"/>
+  <circle cx="600" cy="180" r="40" fill="#fbbf24" opacity="0.9" filter="drop-shadow(0 0 20px #fbbf24)"/>
 </svg>`;
 
 // Tempestade Estelar Elétrica
 export const BANNER_TEMPESTADE_ESTELAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_tempestade_estelar-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#3730a3"/><stop offset="60%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_tempestade_estelar-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.8"/><stop offset="100%" stop-color="#3730a3" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="te-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e1035"/><stop offset="100%" stop-color="#07030d"/></linearGradient></defs>
   <style>
-    @plasmaArc { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @flashLightning { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: plasmaArc 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: flashLightning 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: plasmaArc 3s ease-in-out infinite; }
+    @keyframes lightningFork { 0%, 100% { opacity: 0.15; } 45% { opacity: 0.15; } 48% { opacity: 1; stroke-width: 4; } 52% { opacity: 0.2; } 55% { opacity: 1; } 60% { opacity: 0.15; } }
+    .fork { animation: lightningFork 3.5s infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_tempestade_estelar-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#a855f7" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_tempestade_estelar-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#a855f7" opacity="0.85" filter="drop-shadow(0 0 14px #a855f7)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #a855f7)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#te-bg)"/>
+  <path d="M600,0 L570,90 L630,130 L580,210 L620,270 L590,400" class="fork" stroke="#c084fc" stroke-width="3" fill="none" filter="drop-shadow(0 0 16px #a855f7)"/>
+  <path d="M630,130 L700,190 L680,240" class="fork" stroke="#38bdf8" stroke-width="2" fill="none" filter="drop-shadow(0 0 10px #38bdf8)"/>
+  <path d="M250,0 L290,140 L260,220 L310,350" class="fork" stroke="#a855f7" stroke-width="2.5" fill="none" filter="drop-shadow(0 0 14px #a855f7)"/>
 </svg>`;
 
 // Altar das Runas Vivas
 export const BANNER_RUNAS_VIVAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_runas_vivas-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#115e59"/><stop offset="60%" stop-color="#042f2e"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_runas_vivas-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.8"/><stop offset="100%" stop-color="#115e59" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="rv-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#022c22"/><stop offset="100%" stop-color="#010a08"/></radialGradient></defs>
   <style>
-    @glyphGlow { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @runeHover { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: glyphGlow 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: runeHover 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: glyphGlow 3s ease-in-out infinite; }
+    @keyframes runeRotate { 100% { transform: rotate(360deg); } }
+    @keyframes altarPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; filter: drop-shadow(0 0 18px #2dd4bf); } }
+    .rRot { animation: runeRotate 28s linear infinite; transform-origin: 600px 200px; }
+    .aPulse { animation: altarPulse 3s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_runas_vivas-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#2dd4bf" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_runas_vivas-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#2dd4bf" opacity="0.85" filter="drop-shadow(0 0 14px #2dd4bf)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #2dd4bf)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#rv-bg)"/>
+  <!-- Central Stone Dais -->
+  <polygon points="450,330 750,330 850,380 350,380" fill="#0f172a" stroke="#2dd4bf" stroke-width="2"/>
+  <!-- Orbiting Rune Ring -->
+  <g class="rRot" stroke="#2dd4bf" stroke-width="2" fill="none">
+    <circle cx="600" cy="200" r="130" stroke-dasharray="14 10"/>
+    <text x="600" y="80" font-size="28" fill="#2dd4bf" stroke="none" class="aPulse" text-anchor="middle">ᚠ</text>
+    <text x="720" y="200" font-size="28" fill="#2dd4bf" stroke="none" class="aPulse" text-anchor="middle">ᚢ</text>
+    <text x="600" y="320" font-size="28" fill="#2dd4bf" stroke="none" class="aPulse" text-anchor="middle">ᚦ</text>
+    <text x="480" y="200" font-size="28" fill="#2dd4bf" stroke="none" class="aPulse" text-anchor="middle">ᚨ</text>
   </g>
 </svg>`;
 
 // Oceano Celestial de Netuno
 export const BANNER_OCEANO_CELESTIAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_oceano_celestial-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#075985"/><stop offset="60%" stop-color="#030712"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_oceano_celestial-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/><stop offset="100%" stop-color="#075985" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="oc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#021c30"/><stop offset="100%" stop-color="#010910"/></linearGradient></defs>
   <style>
-    @waveMotion { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @whaleDrift { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: waveMotion 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: whaleDrift 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: waveMotion 3s ease-in-out infinite; }
+    @keyframes whaleSwim { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(40px, -20px) rotate(2deg); } }
+    @keyframes waveRoll { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+    .whale { animation: whaleSwim 8s ease-in-out infinite; }
+    .wRoll { animation: waveRoll 5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_oceano_celestial-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#38bdf8" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_oceano_celestial-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#38bdf8" opacity="0.85" filter="drop-shadow(0 0 14px #38bdf8)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #38bdf8)"/>
+  <rect width="1200" height="400" fill="url(#oc-bg)"/>
+  <!-- Cosmic Whale Silhouette -->
+  <g class="whale" fill="#0284c7" opacity="0.85" filter="drop-shadow(0 0 14px #38bdf8)">
+    <path d="M400,210 Q500,160 620,180 Q720,200 800,170 Q760,220 700,230 Q580,245 480,230 Q430,230 400,210 Z"/>
+    <!-- Tail fin -->
+    <polygon points="380,180 410,210 370,235"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Bioluminescent Waves at bottom -->
+  <path class="wRoll" d="M0,320 Q300,280 600,320 T1200,300 L1200,400 L0,400 Z" fill="#0369a1" opacity="0.6"/>
+  <path class="wRoll" d="M0,350 Q300,310 600,350 T1200,330 L1200,400 L0,400 Z" fill="#0284c7" opacity="0.4"/>
 </svg>`;
 
 // Observatório Astronômico Ancestral
 export const BANNER_TEMPLO_ASTRONOMICO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_templo_astronomico-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e293b"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_templo_astronomico-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#64748b" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e293b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="ta-bg" cx="50%" cy="20%" r="80%"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></radialGradient></defs>
   <style>
-    @lensRotate { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @beamSearch { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: lensRotate 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: beamSearch 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: lensRotate 3s ease-in-out infinite; }
+    @keyframes galaxySpin { 100% { transform: rotate(360deg); } }
+    .gSpin { animation: galaxySpin 50s linear infinite; transform-origin: 850px 100px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_templo_astronomico-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#64748b" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#64748b" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_templo_astronomico-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#64748b" opacity="0.85" filter="drop-shadow(0 0 14px #64748b)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #64748b)"/>
+  <rect width="1200" height="400" fill="url(#ta-bg)"/>
+  <!-- Spiral Galaxy in sky -->
+  <g class="gSpin" stroke="#38bdf8" stroke-width="2" fill="none" opacity="0.75">
+    <path d="M850,100 Q880,70 920,90 Q950,120 930,150 Q900,170 860,160 Q820,140 820,100 Q830,60 880,50"/>
+    <circle cx="850" cy="100" r="10" fill="#ffffff" filter="drop-shadow(0 0 12px #38bdf8)"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Observatory Dome Structure -->
+  <path d="M200,400 L200,260 Q350,110 500,260 L500,400 Z" fill="#1e293b" stroke="#64748b" stroke-width="2.5"/>
+  <!-- Slit and Giant Telescope -->
+  <rect x="335" y="140" width="30" height="260" fill="#0f172a"/>
+  <line x1="320" y1="280" x2="420" y2="120" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" filter="drop-shadow(0 0 10px #fbbf24)"/>
 </svg>`;
 
 // Buraco Negro Gargântua
 export const BANNER_BURACO_NEGRO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <radialGradient id="banner_buraco_negro-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#18181b"/><stop offset="60%" stop-color="#000000"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_buraco_negro-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.8"/><stop offset="100%" stop-color="#18181b" stop-opacity="0.2"/></linearGradient>
+    <radialGradient id="bn-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1c0b02"/><stop offset="100%" stop-color="#000000"/></radialGradient>
+    <linearGradient id="bn-disc" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ea580c"/><stop offset="50%" stop-color="#fef08a"/><stop offset="100%" stop-color="#ea580c"/></linearGradient>
   </defs>
   <style>
-    @accretionSpin { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @gravLens { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: accretionSpin 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: gravLens 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: accretionSpin 3s ease-in-out infinite; }
+    @keyframes discGlow { 0%, 100% { opacity: 0.85; transform: scaleY(1); } 50% { opacity: 1; transform: scaleY(1.08); } }
+    .dGlow { animation: discGlow 3s ease-in-out infinite; transform-origin: 600px 200px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_buraco_negro-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#f97316" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#f97316" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_buraco_negro-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#f97316" opacity="0.85" filter="drop-shadow(0 0 14px #f97316)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #f97316)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#bn-bg)"/>
+  <!-- Accretion Disc Upper Warp -->
+  <path class="dGlow" d="M350,200 Q600,60 850,200 Q600,100 350,200 Z" fill="url(#bn-disc)" filter="drop-shadow(0 0 20px #f97316)"/>
+  <!-- Horizontal Disc -->
+  <ellipse cx="600" cy="200" rx="350" ry="30" fill="url(#bn-disc)" class="dGlow" filter="drop-shadow(0 0 25px #ea580c)"/>
+  <!-- Event Horizon Sphere -->
+  <circle cx="600" cy="200" r="90" fill="#000000" stroke="#fef08a" stroke-width="2" filter="drop-shadow(0 0 12px #f97316)"/>
 </svg>`;
 
 // Floresta de Cristais Astrais
 export const BANNER_FLORESTA_CRISTAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_floresta_cristal-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#0369a1"/><stop offset="60%" stop-color="#082f49"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_floresta_cristal-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.8"/><stop offset="100%" stop-color="#0369a1" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="fc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#082f49"/><stop offset="100%" stop-color="#020b12"/></linearGradient></defs>
   <style>
-    @crystalRefract { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @sporeFloat { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: crystalRefract 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: sporeFloat 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: crystalRefract 3s ease-in-out infinite; }
+    @keyframes crystalPrism { 0%, 100% { filter: drop-shadow(0 0 10px #38bdf8); } 50% { filter: drop-shadow(0 0 24px #ec4899); } }
+    .cPrism { animation: crystalPrism 4s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_floresta_cristal-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#7dd3fc" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_floresta_cristal-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#7dd3fc" opacity="0.85" filter="drop-shadow(0 0 14px #7dd3fc)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #7dd3fc)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#fc-bg)"/>
+  <!-- Spire 1 -->
+  <polygon points="250,400 290,180 320,120 350,180 390,400 320,400" fill="#0284c7" stroke="#7dd3fc" stroke-width="2" class="cPrism"/>
+  <!-- Spire 2 (Center Giant) -->
+  <polygon points="540,400 580,120 620,50 660,120 700,400 620,400" fill="#0369a1" stroke="#38bdf8" stroke-width="2.5" class="cPrism"/>
+  <!-- Spire 3 -->
+  <polygon points="850,400 880,190 910,130 940,190 970,400 910,400" fill="#0284c7" stroke="#7dd3fc" stroke-width="2" class="cPrism"/>
 </svg>`;
 
 // Metrópole Cyberpunk Neon
 export const BANNER_CIDADE_CYBERPUNK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_cidade_cyberpunk-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="60%" stop-color="#050505"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_cidade_cyberpunk-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e1b4b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="cy-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1f0729"/><stop offset="100%" stop-color="#050108"/></linearGradient></defs>
   <style>
-    @neonBlink { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @trafficFly { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: neonBlink 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: trafficFly 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: neonBlink 3s ease-in-out infinite; }
+    @keyframes neonFlicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } 52% { opacity: 1; } 75% { opacity: 0.6; } }
+    @keyframes carFly { 0% { transform: translateX(0); } 100% { transform: translateX(1300px); } }
+    .nFlick { animation: neonFlicker 3s infinite; }
+    .cFly { animation: carFly 5s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_cidade_cyberpunk-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#f43f5e" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_cidade_cyberpunk-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#f43f5e" opacity="0.85" filter="drop-shadow(0 0 14px #f43f5e)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #f43f5e)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#cy-bg)"/>
+  <!-- Skylines -->
+  <rect x="100" y="140" width="90" height="260" fill="#0f0717" stroke="#f43f5e" stroke-width="1.5"/>
+  <rect x="250" y="80" width="120" height="320" fill="#0b0412" stroke="#06b6d4" stroke-width="1.5"/>
+  <rect x="450" y="120" width="100" height="280" fill="#0f0717" stroke="#f43f5e" stroke-width="1.5"/>
+  <rect x="620" y="60" width="140" height="340" fill="#0b0412" stroke="#06b6d4" stroke-width="2"/>
+  <rect x="830" y="110" width="110" height="290" fill="#0f0717" stroke="#a855f7" stroke-width="1.5"/>
+  <rect x="1000" y="150" width="130" height="250" fill="#0b0412" stroke="#f43f5e" stroke-width="1.5"/>
+  <!-- Billboard Sign -->
+  <text x="690" y="110" fill="#f43f5e" font-size="20" font-family="monospace" class="nFlick" text-anchor="middle">NOX-2099</text>
+  <!-- Flying Vehicle -->
+  <g class="cFly" transform="translate(-100, 220)">
+    <line x1="0" y1="0" x2="40" y2="0" stroke="#06b6d4" stroke-width="3" filter="drop-shadow(0 0 6px #06b6d4)"/>
+    <circle cx="40" cy="0" r="3" fill="#ffffff"/>
   </g>
 </svg>`;
 
 // Voo da Fênix Celestial
 export const BANNER_FENIX_ASCENDENTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_fenix_ascendente-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#c2410c"/><stop offset="60%" stop-color="#450a0a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_fenix_ascendente-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/><stop offset="100%" stop-color="#c2410c" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="fn-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#3d0a0a"/><stop offset="100%" stop-color="#080101"/></radialGradient></defs>
   <style>
-    @wingBeat { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @flameTrail { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: wingBeat 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: flameTrail 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: wingBeat 3s ease-in-out infinite; }
+    @keyframes phoenixFlap { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-16px) scaleY(1.08); } }
+    .phx { animation: phoenixFlap 4s ease-in-out infinite; transform-origin: 600px 180px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_fenix_ascendente-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fbbf24" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_fenix_ascendente-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fbbf24" opacity="0.85" filter="drop-shadow(0 0 14px #fbbf24)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fbbf24)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#fn-bg)"/>
+  <g class="phx" fill="#f97316" stroke="#fbbf24" stroke-width="2" filter="drop-shadow(0 0 20px #ef4444)">
+    <!-- Body & Head -->
+    <path d="M600,100 Q605,80 615,85 Q620,95 605,120 L600,220 Z"/>
+    <!-- Left Wing -->
+    <path d="M600,130 C450,40 320,70 200,140 C340,160 460,180 595,200 Z"/>
+    <!-- Right Wing -->
+    <path d="M600,130 C750,40 880,70 1000,140 C860,160 740,180 605,200 Z"/>
+    <!-- Tail Plumes -->
+    <path d="M595,210 Q560,320 540,380 M600,210 Q600,330 600,390 M605,210 Q640,320 660,380" stroke="#f59e0b" stroke-width="3" fill="none"/>
   </g>
 </svg>`;
 
 // Mar de Estrelas Infinito
 export const BANNER_MAR_DE_ESTRELAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_mar_de_estrelas-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#0c4a6e"/><stop offset="60%" stop-color="#020617"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_mar_de_estrelas-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/><stop offset="100%" stop-color="#0c4a6e" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="ms-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#030712"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient></defs>
   <style>
-    @seaUndulate { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @reflectionBreathe { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: seaUndulate 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: reflectionBreathe 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: seaUndulate 3s ease-in-out infinite; }
+    @keyframes surfBreath { 0%, 100% { transform: scaleY(1); opacity: 0.7; } 50% { transform: scaleY(1.05); opacity: 0.95; } }
+    .surf { animation: surfBreath 4.5s ease-in-out infinite; transform-origin: center bottom; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_mar_de_estrelas-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#38bdf8" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_mar_de_estrelas-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#38bdf8" opacity="0.85" filter="drop-shadow(0 0 14px #38bdf8)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #38bdf8)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#ms-bg)"/>
+  <!-- Distant Stars & Giant Arching Nebula -->
+  <path d="M100,220 Q600,-40 1100,220" stroke="#38bdf8" stroke-width="40" fill="none" opacity="0.25" filter="blur(20px)"/>
+  <!-- Shoreline Wet Sand Reflection -->
+  <polygon points="0,400 0,250 1200,230 1200,400" fill="#020617"/>
+  <!-- Bioluminescent Surf Water -->
+  <path class="surf" d="M0,260 Q300,230 600,250 T1200,240 L1200,330 Q900,360 600,340 T0,350 Z" fill="#06b6d4" opacity="0.6" filter="drop-shadow(0 0 12px #22d3ee)"/>
 </svg>`;
 
 // Vale dos Cometas Glaciais
 export const BANNER_CACADOR_COMETAS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_cacador_cometas-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#0284c7"/><stop offset="60%" stop-color="#082f49"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_cacador_cometas-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e0f2fe" stop-opacity="0.8"/><stop offset="100%" stop-color="#0284c7" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="vg-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#041f33"/><stop offset="100%" stop-color="#01080e"/></linearGradient></defs>
   <style>
-    @cometStreak { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @frostGlimmer { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: cometStreak 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: frostGlimmer 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: cometStreak 3s ease-in-out infinite; }
+    @keyframes cometFly { 0% { transform: translate(-100px, -60px); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translate(500px, 300px); opacity: 0; } }
+    .cFly { animation: cometFly 4s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_cacador_cometas-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#e0f2fe" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#e0f2fe" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_cacador_cometas-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#e0f2fe" opacity="0.85" filter="drop-shadow(0 0 14px #e0f2fe)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #e0f2fe)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#vg-bg)"/>
+  <!-- Ice Mountain Wall Silhouette -->
+  <polygon points="0,400 0,180 180,240 320,160 500,260 700,170 920,270 1080,180 1200,220 1200,400" fill="#021422" stroke="#7dd3fc" stroke-width="2"/>
+  <!-- Massive Comet -->
+  <g class="cFly" transform="translate(450, 40)">
+    <line x1="0" y1="0" x2="-220" y2="-130" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" opacity="0.85" filter="drop-shadow(0 0 15px #38bdf8)"/>
+    <circle cx="0" cy="0" r="10" fill="#ffffff" filter="drop-shadow(0 0 20px #38bdf8)"/>
   </g>
 </svg>`;
 
 // Labirinto dos Espelhos Dimensionais
 export const BANNER_LABIRINTO_ESPELHO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_labirinto_espelho-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#3f3f46"/><stop offset="60%" stop-color="#18181b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_labirinto_espelho-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a1a1aa" stop-opacity="0.8"/><stop offset="100%" stop-color="#3f3f46" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="le-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#18181b"/><stop offset="100%" stop-color="#09090b"/></radialGradient></defs>
   <style>
-    @mirrorShift { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @prismFlash { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: mirrorShift 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: prismFlash 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: mirrorShift 3s ease-in-out infinite; }
+    @keyframes mirrorGlint { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; filter: drop-shadow(0 0 18px #a855f7); } }
+    .mGlint { animation: mirrorGlint 3.6s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_labirinto_espelho-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#a1a1aa" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#a1a1aa" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_labirinto_espelho-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#a1a1aa" opacity="0.85" filter="drop-shadow(0 0 14px #a1a1aa)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #a1a1aa)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#le-bg)"/>
+  <!-- Tilted Glass Panels -->
+  <polygon points="200,80 340,40 300,320 160,360" fill="rgba(168, 85, 247, 0.25)" stroke="#c084fc" stroke-width="2" class="mGlint"/>
+  <polygon points="460,50 620,90 580,350 420,310" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="2.5" class="mGlint"/>
+  <polygon points="760,70 900,30 870,330 730,370" fill="rgba(244, 63, 94, 0.25)" stroke="#fb7185" stroke-width="2" class="mGlint"/>
+  <polygon points="980,100 1100,60 1070,300 950,340" fill="rgba(251, 191, 36, 0.25)" stroke="#fbbf24" stroke-width="2" class="mGlint"/>
 </svg>`;
 
 // Castelo Gótico Sob a Lua Vermelha
 export const BANNER_CASTELO_GOTICO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_castelo_gotico-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#7f1d1d"/><stop offset="60%" stop-color="#1c1917"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_castelo_gotico-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#dc2626" stop-opacity="0.8"/><stop offset="100%" stop-color="#7f1d1d" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="cg-bg" cx="50%" cy="40%" r="75%"><stop offset="0%" stop-color="#3d0303"/><stop offset="100%" stop-color="#080000"/></radialGradient></defs>
   <style>
-    @batFlight { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @bloodMoonPulse { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: batFlight 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: bloodMoonPulse 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: batFlight 3s ease-in-out infinite; }
+    @keyframes bloodMoonBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); filter: drop-shadow(0 0 35px #dc2626); } }
+    .bMoon { animation: bloodMoonBreathe 4s ease-in-out infinite; transform-origin: 600px 150px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_castelo_gotico-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#dc2626" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_castelo_gotico-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#dc2626" opacity="0.85" filter="drop-shadow(0 0 14px #dc2626)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #dc2626)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#cg-bg)"/>
+  <!-- Giant Blood Moon -->
+  <circle cx="600" cy="150" r="95" fill="#991b1b" stroke="#ef4444" stroke-width="2" class="bMoon" filter="drop-shadow(0 0 25px #b91c1c)"/>
+  <!-- Spire Castle Silhouette -->
+  <polygon points="0,400 0,330 350,330 400,210 420,160 440,210 470,330 520,240 540,110 560,240 640,240 660,110 680,240 730,330 760,210 780,160 800,210 850,330 1200,330 1200,400" fill="#0f0101"/>
 </svg>`;
 
 // Travessia dos Anéis Planetários
 export const BANNER_ANEIS_SATURNO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_aneis_saturno-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#78350f"/><stop offset="60%" stop-color="#1c1917"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_aneis_saturno-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fde68a" stop-opacity="0.8"/><stop offset="100%" stop-color="#78350f" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="as-bg" cx="20%" cy="80%" r="80%"><stop offset="0%" stop-color="#2d1c05"/><stop offset="100%" stop-color="#040200"/></radialGradient></defs>
   <style>
-    @ringRotate { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @rockTumble { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: ringRotate 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: rockTumble 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: ringRotate 3s ease-in-out infinite; }
+    @keyframes ringFlow { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; stroke-width: 8; } }
+    .rFlow { animation: ringFlow 3.5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_aneis_saturno-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fde68a" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fde68a" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_aneis_saturno-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fde68a" opacity="0.85" filter="drop-shadow(0 0 14px #fde68a)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fde68a)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#as-bg)"/>
+  <!-- Giant Gas Planet Rim on Left -->
+  <circle cx="-100" cy="450" r="420" fill="#b45309" stroke="#fde68a" stroke-width="3" filter="drop-shadow(0 0 30px #f59e0b)"/>
+  <!-- Vast Ring Bands Flying Toward Viewer -->
+  <line x1="0" y1="280" x2="1200" y2="90" stroke="#fde68a" stroke-width="6" class="rFlow" opacity="0.85"/>
+  <line x1="0" y1="310" x2="1200" y2="120" stroke="#d97706" stroke-width="12" opacity="0.7"/>
+  <line x1="0" y1="340" x2="1200" y2="150" stroke="#fef3c7" stroke-width="4" opacity="0.9"/>
+  <!-- Floating Asteroid Chunks -->
+  <polygon points="650,130 670,120 685,140 660,150" fill="#78350f" stroke="#fbbf24"/>
+  <polygon points="900,105 915,95 930,110 910,120" fill="#78350f" stroke="#fbbf24"/>
 </svg>`;
 
 // Ponte do Arco-Íris Astral
 export const BANNER_PONTE_BIFROST_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_ponte_bifrost-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#312e81"/><stop offset="60%" stop-color="#09090b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_ponte_bifrost-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ec4899" stop-opacity="0.8"/><stop offset="100%" stop-color="#312e81" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="pb-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#140624"/><stop offset="100%" stop-color="#020005"/></radialGradient></defs>
   <style>
-    @rainbowStream { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @auroraFlow { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: rainbowStream 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: auroraFlow 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: rainbowStream 3s ease-in-out infinite; }
+    @keyframes bifrostFlow { 0%, 100% { filter: drop-shadow(0 0 15px #38bdf8); } 50% { filter: drop-shadow(0 0 30px #ec4899); } }
+    .bStream { animation: bifrostFlow 4s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_ponte_bifrost-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#ec4899" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_ponte_bifrost-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#ec4899" opacity="0.85" filter="drop-shadow(0 0 14px #ec4899)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #ec4899)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#pb-bg)"/>
+  <!-- Arched Rainbow Ribbon -->
+  <g class="bStream" fill="none" stroke-width="6">
+    <path d="M-100,380 Q600,20 1300,380" stroke="#ef4444"/>
+    <path d="M-100,388 Q600,28 1300,388" stroke="#f97316"/>
+    <path d="M-100,396 Q600,36 1300,396" stroke="#eab308"/>
+    <path d="M-100,404 Q600,44 1300,404" stroke="#22c55e"/>
+    <path d="M-100,412 Q600,52 1300,412" stroke="#06b6d4"/>
+    <path d="M-100,420 Q600,60 1300,420" stroke="#a855f7"/>
   </g>
 </svg>`;
 
 // Covil do Dragão Estelar
 export const BANNER_DRAGAO_CELESTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_dragao_celeste-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e40af"/><stop offset="60%" stop-color="#172554"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_dragao_celeste-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60a5fa" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e40af" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="dc-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#0b1b36"/><stop offset="100%" stop-color="#01040a"/></radialGradient></defs>
   <style>
-    @dragonBreath { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @scaleShimmer { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: dragonBreath 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: scaleShimmer 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: dragonBreath 3s ease-in-out infinite; }
+    @keyframes dragonGlide { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+    .dGlide { animation: dragonGlide 5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_dragao_celeste-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#60a5fa" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_dragao_celeste-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#60a5fa" opacity="0.85" filter="drop-shadow(0 0 14px #60a5fa)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #60a5fa)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#dc-bg)"/>
+  <!-- Moon behind dragon -->
+  <circle cx="600" cy="200" r="110" fill="#38bdf8" opacity="0.3" filter="drop-shadow(0 0 35px #0284c7)"/>
+  <!-- Serpentine Dragon Body -->
+  <path class="dGlide" d="M300,280 Q450,120 600,240 T900,160" fill="none" stroke="#60a5fa" stroke-width="16" stroke-linecap="round" filter="drop-shadow(0 0 15px #38bdf8)"/>
+  <!-- Dragon Head with Horns -->
+  <polygon points="900,160 950,130 940,170 960,190 910,180" fill="#93c5fd" class="dGlide"/>
 </svg>`;
 
 // Arquipélago Flutuante do Éter
 export const BANNER_ILHA_FLUTUANTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_ilha_flutuante-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#0f766e"/><stop offset="60%" stop-color="#042f2e"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_ilha_flutuante-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#5eead4" stop-opacity="0.8"/><stop offset="100%" stop-color="#0f766e" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="if-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#022c22"/><stop offset="100%" stop-color="#010806"/></linearGradient></defs>
   <style>
-    @islandBob { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @waterfallCascade { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: islandBob 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: waterfallCascade 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: islandBob 3s ease-in-out infinite; }
+    @keyframes islandBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+    @keyframes fallWater { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    .iBob { animation: islandBob 6s ease-in-out infinite; }
+    .wFall { animation: fallWater 2s infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_ilha_flutuante-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#5eead4" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#5eead4" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_ilha_flutuante-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#5eead4" opacity="0.85" filter="drop-shadow(0 0 14px #5eead4)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #5eead4)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#if-bg)"/>
+  <!-- Main Floating Island -->
+  <g class="iBob">
+    <!-- Rock Underbelly -->
+    <polygon points="400,200 800,200 640,360 520,330" fill="#1e293b" stroke="#0f766e" stroke-width="2"/>
+    <!-- Grass Top -->
+    <rect x="380" y="190" width="440" height="20" rx="10" fill="#10b981"/>
+    <!-- Great Tree -->
+    <rect x="585" y="110" width="30" height="90" fill="#451a03"/>
+    <circle cx="600" cy="90" r="50" fill="#059669" filter="drop-shadow(0 0 10px #34d399)"/>
+    <!-- Waterfalls falling off rock -->
+    <line x1="450" y1="200" x2="450" y2="390" stroke="#38bdf8" stroke-width="3" class="wFall"/>
+    <line x1="720" y1="200" x2="720" y2="370" stroke="#38bdf8" stroke-width="2.5" class="wFall"/>
   </g>
 </svg>`;
 
 // A Grande Forja Estelar
 export const BANNER_FORJA_ESTELAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_forja_estelar-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#9a3412"/><stop offset="60%" stop-color="#431407"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_forja_estelar-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fdba74" stop-opacity="0.8"/><stop offset="100%" stop-color="#9a3412" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="fe-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3b1103"/><stop offset="100%" stop-color="#080200"/></linearGradient></defs>
   <style>
-    @hammerStrike { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @sparkShower { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: hammerStrike 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: sparkShower 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: hammerStrike 3s ease-in-out infinite; }
+    @keyframes hammerBlow { 0%, 100% { transform: rotate(0deg); } 45% { transform: rotate(-35deg); } 50% { transform: rotate(0deg); } }
+    @keyframes sparkBurst { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.4); } }
+    .hammer { animation: hammerBlow 3s ease-in-out infinite; transform-origin: 640px 140px; }
+    .sparks { animation: sparkBurst 3s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_forja_estelar-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fdba74" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fdba74" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_forja_estelar-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fdba74" opacity="0.85" filter="drop-shadow(0 0 14px #fdba74)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fdba74)"/>
+  <rect width="1200" height="400" fill="url(#fe-bg)"/>
+  <!-- Giant Anvil Base -->
+  <polygon points="450,380 750,380 720,240 780,210 420,210 480,240" fill="#1c1917" stroke="#f97316" stroke-width="3"/>
+  <!-- Molten Star on Anvil -->
+  <circle cx="600" cy="205" r="25" fill="#fef08a" filter="drop-shadow(0 0 20px #fbbf24)"/>
+  <!-- Divine Hammer -->
+  <g class="hammer">
+    <rect x="585" y="80" width="30" height="90" fill="#d97706"/>
+    <rect x="550" y="50" width="100" height="45" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <g class="sparks" stroke="#ffffff" stroke-width="2">
+    <line x1="600" y1="200" x2="520" y2="130"/><line x1="600" y1="200" x2="680" y2="130"/>
+    <line x1="600" y1="200" x2="480" y2="180"/><line x1="600" y1="200" x2="720" y2="180"/>
   </g>
 </svg>`;
 
 // Fossa Abissal das Criaturas Arcanas
 export const BANNER_FUNDO_MARINHO_ABISSAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_fundo_marinho_abissal-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#0369a1"/><stop offset="60%" stop-color="#030712"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_fundo_marinho_abissal-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4" stop-opacity="0.8"/><stop offset="100%" stop-color="#0369a1" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="fa-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#021726"/><stop offset="100%" stop-color="#00050a"/></linearGradient></defs>
   <style>
-    @tentacleSway { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @biolumPulse { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: tentacleSway 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: biolumPulse 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: tentacleSway 3s ease-in-out infinite; }
+    @keyframes jellyFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-24px); } }
+    .jelly { animation: jellyFloat 4.5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_fundo_marinho_abissal-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#06b6d4" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_fundo_marinho_abissal-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#06b6d4" opacity="0.85" filter="drop-shadow(0 0 14px #06b6d4)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #06b6d4)"/>
+  <rect width="1200" height="400" fill="url(#fa-bg)"/>
+  <!-- Bioluminescent Jellyfish 1 -->
+  <g class="jelly" transform="translate(380, 150)">
+    <path d="M-40,0 Q0,-40 40,0 Z" fill="#06b6d4" opacity="0.8" filter="drop-shadow(0 0 15px #22d3ee)"/>
+    <path d="M-30,0 Q-20,40 -25,80 M0,0 Q10,40 0,90 M30,0 Q20,40 25,80" stroke="#67e8f9" stroke-width="2" fill="none"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <!-- Bioluminescent Jellyfish 2 -->
+  <g class="jelly" transform="translate(820, 180)">
+    <path d="M-50,0 Q0,-50 50,0 Z" fill="#a855f7" opacity="0.8" filter="drop-shadow(0 0 15px #c084fc)"/>
+    <path d="M-35,0 Q-25,50 -30,95 M0,0 Q-10,50 0,105 M35,0 Q25,50 30,95" stroke="#d8b4fe" stroke-width="2.2" fill="none"/>
   </g>
 </svg>`;
 
 // Fluxo de Dados Matrix
 export const BANNER_MATRIX_DIGITAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_matrix_digital-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#14532d"/><stop offset="60%" stop-color="#022c22"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_matrix_digital-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22c55e" stop-opacity="0.8"/><stop offset="100%" stop-color="#14532d" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="md-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#022013"/><stop offset="100%" stop-color="#000804"/></linearGradient></defs>
   <style>
-    @matrixCascade { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @glitchFlicker { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: matrixCascade 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: glitchFlicker 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: matrixCascade 3s ease-in-out infinite; }
+    @keyframes matrixDrop { 0% { stroke-dashoffset: 200; } 100% { stroke-dashoffset: 0; } }
+    .mCol { stroke: #22c55e; stroke-width: 3; stroke-dasharray: 6 6; animation: matrixDrop 2s linear infinite; filter: drop-shadow(0 0 8px #10b981); }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_matrix_digital-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#22c55e" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_matrix_digital-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#22c55e" opacity="0.85" filter="drop-shadow(0 0 14px #22c55e)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #22c55e)"/>
+  <rect width="1200" height="400" fill="url(#md-bg)"/>
+  <!-- Perspective Floor Grid -->
+  <g stroke="#14532d" stroke-width="1.5">
+    <line x1="0" y1="400" x2="600" y2="280"/><line x1="200" y1="400" x2="600" y2="280"/>
+    <line x1="400" y1="400" x2="600" y2="280"/><line x1="600" y1="400" x2="600" y2="280"/>
+    <line x1="800" y1="400" x2="600" y2="280"/><line x1="1000" y1="400" x2="600" y2="280"/>
+    <line x1="1200" y1="400" x2="600" y2="280"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Falling Code Columns -->
+  <line x1="150" y1="20" x2="150" y2="280" class="mCol"/>
+  <line x1="320" y1="10" x2="320" y2="290" class="mCol" style="animation-duration: 1.6s;"/>
+  <line x1="500" y1="30" x2="500" y2="270" class="mCol" style="animation-duration: 2.3s;"/>
+  <line x1="700" y1="15" x2="700" y2="285" class="mCol" style="animation-duration: 1.8s;"/>
+  <line x1="880" y1="25" x2="880" y2="275" class="mCol" style="animation-duration: 2.1s;"/>
+  <line x1="1050" y1="10" x2="1050" y2="290" class="mCol" style="animation-duration: 1.5s;"/>
 </svg>`;
 
 // Bosque de Cerejeiras Sob o Cosmos
 export const BANNER_SAKURA_NOTURNA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_sakura_noturna-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#831843"/><stop offset="60%" stop-color="#1f1325"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_sakura_noturna-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.8"/><stop offset="100%" stop-color="#831843" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="sn-bg" cx="50%" cy="30%" r="70%"><stop offset="0%" stop-color="#2a0d24"/><stop offset="100%" stop-color="#060105"/></radialGradient></defs>
   <style>
-    @petalSwirl { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @branchSway { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: petalSwirl 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: branchSway 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: petalSwirl 3s ease-in-out infinite; }
+    @keyframes petalDrift { 0% { transform: translate(0,0) rotate(0deg); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(320px, 180px) rotate(360deg); opacity: 0; } }
+    .petal { animation: petalDrift 5s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_sakura_noturna-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#f472b6" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_sakura_noturna-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#f472b6" opacity="0.85" filter="drop-shadow(0 0 14px #f472b6)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #f472b6)"/>
+  <rect width="1200" height="400" fill="url(#sn-bg)"/>
+  <!-- Full Moon -->
+  <circle cx="600" cy="140" r="75" fill="#fce7f3" filter="drop-shadow(0 0 25px rgba(251, 113, 133, 0.6))"/>
+  <!-- Japanese Torii Gate -->
+  <g fill="#991b1b" stroke="#f43f5e" stroke-width="2">
+    <!-- Top lintel curved -->
+    <path d="M480,180 Q600,165 720,180 L720,195 Q600,180 480,195 Z"/>
+    <!-- Second lintel -->
+    <rect x="500" y="205" width="200" height="12"/>
+    <!-- Pillars -->
+    <rect x="525" y="195" width="20" height="205"/>
+    <rect x="655" y="195" width="20" height="205"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <!-- Swirling Sakura Petals -->
+  <g fill="#fb7185" class="petal">
+    <ellipse cx="400" cy="80" rx="8" ry="4"/><ellipse cx="550" cy="50" rx="7" ry="3.5"/>
+    <ellipse cx="680" cy="70" rx="8" ry="4"/><ellipse cx="750" cy="110" rx="7" ry="4"/>
   </g>
 </svg>`;
 
 // Torre do Relógio da Eternidade
 export const BANNER_TORRE_RELOGIO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_torre_relogio-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#78350f"/><stop offset="60%" stop-color="#291e0a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_torre_relogio-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d97706" stop-opacity="0.8"/><stop offset="100%" stop-color="#78350f" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="tr-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#2b1a03"/><stop offset="100%" stop-color="#080400"/></radialGradient></defs>
   <style>
-    @clockTick { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @gearChrono { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: clockTick 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: gearChrono 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: clockTick 3s ease-in-out infinite; }
+    @keyframes gearCw { 100% { transform: rotate(360deg); } }
+    @keyframes gearCcw { 100% { transform: rotate(-360deg); } }
+    .gCw { animation: gearCw 20s linear infinite; transform-origin: 600px 200px; }
+    .gCcw { animation: gearCcw 14s linear infinite; transform-origin: 600px 200px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_torre_relogio-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#d97706" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#d97706" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_torre_relogio-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#d97706" opacity="0.85" filter="drop-shadow(0 0 14px #d97706)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #d97706)"/>
+  <rect width="1200" height="400" fill="url(#tr-bg)"/>
+  <!-- Giant Clock Face -->
+  <circle cx="600" cy="200" r="150" fill="#1c1917" stroke="#d97706" stroke-width="4" filter="drop-shadow(0 0 20px #b45309)"/>
+  <!-- Clock Cogs -->
+  <g class="gCw" stroke="#fbbf24" stroke-width="3" fill="none">
+    <circle cx="600" cy="200" r="130" stroke-dasharray="14 10"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <g class="gCcw" stroke="#fef08a" stroke-width="2" fill="none">
+    <circle cx="600" cy="200" r="90" stroke-dasharray="8 6"/>
   </g>
+  <!-- Clock Hands -->
+  <line x1="600" y1="200" x2="600" y2="90" stroke="#fef08a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="600" y1="200" x2="680" y2="200" stroke="#fbbf24" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="600" cy="200" r="8" fill="#ffffff"/>
 </svg>`;
 
 // Pradaria dos Vagalumes Astrais
 export const BANNER_PRADARIA_ASTRAL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_pradaria_astral-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#064e3b"/><stop offset="60%" stop-color="#022c22"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_pradaria_astral-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6ee7b7" stop-opacity="0.8"/><stop offset="100%" stop-color="#064e3b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="pa-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#032115"/><stop offset="100%" stop-color="#000a06"/></linearGradient></defs>
   <style>
-    @fireflyDance { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @grassWave { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: fireflyDance 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: grassWave 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: fireflyDance 3s ease-in-out infinite; }
+    @keyframes fireflyFloat { 0%, 100% { transform: translateY(0) scale(0.8); opacity: 0.3; } 50% { transform: translateY(-28px) scale(1.2); opacity: 1; } }
+    .ff { animation: fireflyFloat 3.8s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_pradaria_astral-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#6ee7b7" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#6ee7b7" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_pradaria_astral-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#6ee7b7" opacity="0.85" filter="drop-shadow(0 0 14px #6ee7b7)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #6ee7b7)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#pa-bg)"/>
+  <!-- Rolling Hills of Grass -->
+  <path d="M0,400 L0,290 Q300,240 600,280 T1200,250 L1200,400 Z" fill="#042f2e"/>
+  <path d="M0,400 L0,330 Q400,270 800,310 T1200,280 L1200,400 Z" fill="#022c22"/>
+  <!-- Glowing Fireflies -->
+  <g fill="#fde047" class="ff">
+    <circle cx="200" cy="260" r="4" filter="drop-shadow(0 0 8px #facc15)"/>
+    <circle cx="450" cy="210" r="4.5" filter="drop-shadow(0 0 8px #facc15)"/>
+    <circle cx="680" cy="240" r="3.5" filter="drop-shadow(0 0 8px #facc15)"/>
+    <circle cx="920" cy="190" r="4.5" filter="drop-shadow(0 0 8px #facc15)"/>
+    <circle cx="1080" cy="230" r="3.5" filter="drop-shadow(0 0 8px #facc15)"/>
   </g>
 </svg>`;
 
 // O Quasar da Alvorada
 export const BANNER_QUASAR_SUPREMO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_quasar_supremo-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#581c87"/><stop offset="60%" stop-color="#2e1065"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_quasar_supremo-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d8b4fe" stop-opacity="0.8"/><stop offset="100%" stop-color="#581c87" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="qs-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#2a053b"/><stop offset="100%" stop-color="#050008"/></radialGradient></defs>
   <style>
-    @beamJet { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @coreRadiance { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: beamJet 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: coreRadiance 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: beamJet 3s ease-in-out infinite; }
+    @keyframes jetSurge { 0%, 100% { opacity: 0.7; stroke-width: 6; } 50% { opacity: 1; stroke-width: 14; } }
+    .jSurge { animation: jetSurge 2.6s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_quasar_supremo-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#d8b4fe" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#d8b4fe" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_quasar_supremo-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#d8b4fe" opacity="0.85" filter="drop-shadow(0 0 14px #d8b4fe)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #d8b4fe)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#qs-bg)"/>
+  <!-- Relativistic Bipolar Jets -->
+  <line x1="600" y1="0" x2="600" y2="400" stroke="#f43f5e" class="jSurge" filter="drop-shadow(0 0 25px #fb7185)"/>
+  <line x1="600" y1="0" x2="600" y2="400" stroke="#ffffff" stroke-width="3"/>
+  <!-- Dense Gaseous Donut Torus -->
+  <ellipse cx="600" cy="200" rx="220" ry="40" fill="#701a75" stroke="#e879f9" stroke-width="3" filter="drop-shadow(0 0 20px #a21caf)"/>
+  <!-- Blinding Core -->
+  <circle cx="600" cy="200" r="28" fill="#ffffff" filter="drop-shadow(0 0 30px #ffffff)"/>
 </svg>`;
 
 // Templo da Deusa da Lua
 export const BANNER_SANTUARIO_LUA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_santuario_lua-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#334155"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_santuario_lua-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e2e8f0" stop-opacity="0.8"/><stop offset="100%" stop-color="#334155" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="sl-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient></defs>
   <style>
-    @pillarGlow { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @lunarChime { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: pillarGlow 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: lunarChime 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: pillarGlow 3s ease-in-out infinite; }
+    @keyframes waterRipple { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.95; } }
+    .wRip { animation: waterRipple 4s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_santuario_lua-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_santuario_lua-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#e2e8f0" opacity="0.85" filter="drop-shadow(0 0 14px #e2e8f0)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #e2e8f0)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#sl-bg)"/>
+  <!-- Giant Silver Moon -->
+  <circle cx="600" cy="140" r="85" fill="#f1f5f9" filter="drop-shadow(0 0 35px rgba(241, 245, 249, 0.7))"/>
+  <!-- Water Lake at Bottom -->
+  <rect x="0" y="270" width="1200" height="130" fill="#080e1a"/>
+  <line x1="450" y1="310" x2="750" y2="310" stroke="#cbd5e1" stroke-width="2" class="wRip"/>
+  <line x1="500" y1="340" x2="700" y2="340" stroke="#cbd5e1" stroke-width="1.5" class="wRip"/>
+  <!-- Pavilion Columns -->
+  <rect x="420" y="220" width="16" height="60" fill="#e2e8f0"/>
+  <rect x="520" y="220" width="16" height="60" fill="#e2e8f0"/>
+  <rect x="664" y="220" width="16" height="60" fill="#e2e8f0"/>
+  <rect x="764" y="220" width="16" height="60" fill="#e2e8f0"/>
+  <polygon points="380,220 600,165 820,220" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2"/>
 </svg>`;
 
 // Fratura no Tecido Temporal
 export const BANNER_FENDA_TEMPO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_fenda_tempo-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#4338ca"/><stop offset="60%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_fenda_tempo-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#67e8f9" stop-opacity="0.8"/><stop offset="100%" stop-color="#4338ca" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="ft-bg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#451a03"/><stop offset="50%" stop-color="#18181b"/><stop offset="100%" stop-color="#022c22"/></linearGradient></defs>
   <style>
-    @timeCrack { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @echoDistort { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: timeCrack 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: echoDistort 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: timeCrack 3s ease-in-out infinite; }
+    @keyframes crackPulse { 0%, 100% { stroke-width: 2.5; filter: drop-shadow(0 0 8px #67e8f9); } 50% { stroke-width: 5; filter: drop-shadow(0 0 18px #ffffff); } }
+    .cPulse { animation: crackPulse 2.8s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_fenda_tempo-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#67e8f9" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#67e8f9" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_fenda_tempo-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#67e8f9" opacity="0.85" filter="drop-shadow(0 0 14px #67e8f9)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #67e8f9)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#ft-bg)"/>
+  <!-- Left Side: Ancient Desert Pyramid -->
+  <polygon points="120,380 250,220 380,380" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+  <!-- Right Side: Cyber Hologram Spire -->
+  <rect x="900" y="160" width="60" height="220" fill="#042f2e" stroke="#22d3ee" stroke-width="2"/>
+  <circle cx="930" cy="140" r="15" fill="#22d3ee" filter="drop-shadow(0 0 12px #22d3ee)"/>
+  <!-- Shattered Glass Seam in Center -->
+  <path d="M600,0 L570,120 L640,190 L590,280 L620,400" class="cPulse" stroke="#e0f2fe" fill="none"/>
 </svg>`;
 
 // Altar Ritualístico de Sangue
 export const BANNER_ALTAR_SACRIFICIO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_altar_sacrificio-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#881337"/><stop offset="60%" stop-color="#2d0612"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_altar_sacrificio-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.8"/><stop offset="100%" stop-color="#881337" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="as-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#360209"/><stop offset="100%" stop-color="#080002"/></radialGradient></defs>
   <style>
-    @candleFlicker { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @sigilAscend { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: candleFlicker 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: sigilAscend 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: candleFlicker 3s ease-in-out infinite; }
+    @keyframes pentagramSpin { 100% { transform: rotate(360deg); } }
+    @keyframes candleFlicker { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; filter: drop-shadow(0 0 8px #ef4444); } }
+    .pSpin { animation: pentagramSpin 35s linear infinite; transform-origin: 600px 220px; }
+    .cFlick { animation: candleFlicker 1.8s infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_altar_sacrificio-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fb7185" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_altar_sacrificio-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fb7185" opacity="0.85" filter="drop-shadow(0 0 14px #fb7185)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fb7185)"/>
+  <rect width="1200" height="400" fill="url(#as-bg)"/>
+  <!-- Rotating Pentagram / Sigil -->
+  <g class="pSpin" stroke="#dc2626" stroke-width="2" fill="none" opacity="0.8">
+    <circle cx="600" cy="220" r="110"/>
+    <polygon points="600,110 665,290 510,180 690,180 535,290"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Stone Altar with Skulls -->
+  <rect x="480" y="270" width="240" height="60" fill="#18181b" stroke="#7f1d1d" stroke-width="2"/>
+  <!-- Red Candles -->
+  <rect x="500" y="245" width="10" height="25" fill="#450a0a"/>
+  <circle cx="505" cy="240" r="4" fill="#f87171" class="cFlick"/>
+  <rect x="690" y="245" width="10" height="25" fill="#450a0a"/>
+  <circle cx="695" cy="240" r="4" fill="#f87171" class="cFlick"/>
 </svg>`;
 
 // Salto para o Hiperespaço
 export const BANNER_VIAGEM_HIPERESPACO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_viagem_hiperespaco-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1d4ed8"/><stop offset="60%" stop-color="#030712"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_viagem_hiperespaco-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#93c5fd" stop-opacity="0.8"/><stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="vh-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1e3a8a"/><stop offset="100%" stop-color="#020617"/></radialGradient></defs>
   <style>
-    @hyperStretch { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @tunnelZoom { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: hyperStretch 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: tunnelZoom 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: hyperStretch 3s ease-in-out infinite; }
+    @keyframes warpStreak { 0% { stroke-dashoffset: 400; opacity: 0.2; } 50% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0.2; } }
+    .warp { stroke: #60a5fa; stroke-width: 2.5; stroke-dasharray: 80 40; animation: warpStreak 1.8s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_viagem_hiperespaco-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#93c5fd" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_viagem_hiperespaco-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#93c5fd" opacity="0.85" filter="drop-shadow(0 0 14px #93c5fd)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #93c5fd)"/>
+  <rect width="1200" height="400" fill="url(#vh-bg)"/>
+  <g class="warp">
+    <line x1="600" y1="200" x2="0" y2="0"/>
+    <line x1="600" y1="200" x2="300" y2="0"/>
+    <line x1="600" y1="200" x2="600" y2="0"/>
+    <line x1="600" y1="200" x2="900" y2="0"/>
+    <line x1="600" y1="200" x2="1200" y2="0"/>
+    <line x1="600" y1="200" x2="0" y2="200"/>
+    <line x1="600" y1="200" x2="1200" y2="200"/>
+    <line x1="600" y1="200" x2="0" y2="400"/>
+    <line x1="600" y1="200" x2="300" y2="400"/>
+    <line x1="600" y1="200" x2="600" y2="400"/>
+    <line x1="600" y1="200" x2="900" y2="400"/>
+    <line x1="600" y1="200" x2="1200" y2="400"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <circle cx="600" cy="200" r="16" fill="#ffffff" filter="drop-shadow(0 0 25px #93c5fd)"/>
 </svg>`;
 
 // Picos Gelados de Titã
 export const BANNER_MONTANHAS_NEVE_COSMICA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_montanhas_neve_cosmica-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#075985"/><stop offset="60%" stop-color="#082f49"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_montanhas_neve_cosmica-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#bae6fd" stop-opacity="0.8"/><stop offset="100%" stop-color="#075985" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="tc-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#075985"/><stop offset="100%" stop-color="#031522"/></linearGradient></defs>
   <style>
-    @snowBreeze { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @peakShimmer { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: snowBreeze 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: peakShimmer 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: snowBreeze 3s ease-in-out infinite; }
+    @keyframes snowFall { 0% { transform: translateY(0); } 100% { transform: translateY(400px); } }
+    .snow { animation: snowFall 6s linear infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_montanhas_neve_cosmica-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#bae6fd" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#bae6fd" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_montanhas_neve_cosmica-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#bae6fd" opacity="0.85" filter="drop-shadow(0 0 14px #bae6fd)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #bae6fd)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#tc-bg)"/>
+  <!-- Sharp Mountain Peaks -->
+  <polygon points="100,400 300,140 500,400" fill="#0c4a6e" stroke="#e0f2fe" stroke-width="2"/>
+  <polygon points="400,400 650,80 900,400" fill="#082f49" stroke="#ffffff" stroke-width="2.5"/>
+  <polygon points="800,400 1000,160 1200,400" fill="#0c4a6e" stroke="#e0f2fe" stroke-width="2"/>
+  <!-- Falling Snow -->
+  <g fill="#ffffff" class="snow" opacity="0.8">
+    <circle cx="150" cy="30" r="2"/><circle cx="350" cy="60" r="2.5"/><circle cx="550" cy="20" r="2"/><circle cx="750" cy="40" r="2.5"/><circle cx="950" cy="70" r="2"/><circle cx="1150" cy="30" r="2.5"/>
   </g>
 </svg>`;
 
 // Cemitério de Naves Estelares
 export const BANNER_CEMITERIO_NAVES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_cemiterio_naves-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e293b"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_cemiterio_naves-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#94a3b8" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e293b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="cn-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#05030a"/></radialGradient></defs>
   <style>
-    @hulkFloat { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @beaconBlink { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: hulkFloat 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: beaconBlink 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: hulkFloat 3s ease-in-out infinite; }
+    @keyframes hulkDrift { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(2deg) translateY(-8px); } }
+    @keyframes beaconBlink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; filter: drop-shadow(0 0 8px #ef4444); } }
+    .hulk { animation: hulkDrift 8s ease-in-out infinite; transform-origin: center; }
+    .bBlink { animation: beaconBlink 2s infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_cemiterio_naves-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#94a3b8" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_cemiterio_naves-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#94a3b8" opacity="0.85" filter="drop-shadow(0 0 14px #94a3b8)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #94a3b8)"/>
+  <rect width="1200" height="400" fill="url(#cn-bg)"/>
+  <!-- Derelict Cruiser 1 -->
+  <g class="hulk" fill="#1e293b" stroke="#64748b" stroke-width="2" transform="translate(300, 160)">
+    <polygon points="-120,0 80,-40 140,-10 60,30 -100,20"/>
+    <circle cx="120" cy="-10" r="3" fill="#ef4444" class="bBlink"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <!-- Derelict Cruiser 2 -->
+  <g class="hulk" fill="#0f172a" stroke="#475569" stroke-width="2" transform="translate(850, 180) rotate(-15)">
+    <polygon points="-140,10 60,-50 120,0 40,40 -120,30"/>
+    <circle cx="100" cy="0" r="3.5" fill="#ef4444" class="bBlink"/>
   </g>
 </svg>`;
 
 // Megasustrutura da Esfera de Dyson
 export const BANNER_ESFERA_DYSON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_esfera_dyson-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e3a8a"/><stop offset="60%" stop-color="#172554"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_esfera_dyson-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#facc15" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e3a8a" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="ed-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020617"/></radialGradient></defs>
   <style>
-    @panelOrbit { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @starSiphon { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: panelOrbit 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: starSiphon 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: panelOrbit 3s ease-in-out infinite; }
+    @keyframes dysonOrbit { 100% { transform: rotate(360deg); } }
+    .dOrbit { animation: dysonOrbit 40s linear infinite; transform-origin: 600px 200px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_esfera_dyson-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#facc15" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#facc15" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_esfera_dyson-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#facc15" opacity="0.85" filter="drop-shadow(0 0 14px #facc15)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #facc15)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#ed-bg)"/>
+  <!-- Central Star -->
+  <circle cx="600" cy="200" r="75" fill="#facc15" filter="drop-shadow(0 0 35px #eab308)"/>
+  <!-- Hexagonal Collector Ring -->
+  <g class="dOrbit" stroke="#fde047" stroke-width="2.5" fill="none">
+    <circle cx="600" cy="200" r="145" stroke-dasharray="24 12"/>
+    <polygon points="600,55 725,127 725,273 600,345 475,273 475,127"/>
   </g>
 </svg>`;
 
 // Campo das Valquírias
 export const BANNER_VALQUIRIA_CAMPO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_valquiria_campo-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#4c1d95"/><stop offset="60%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_valquiria_campo-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#c084fc" stop-opacity="0.8"/><stop offset="100%" stop-color="#4c1d95" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="vk-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#05030f"/></linearGradient></defs>
   <style>
-    @swordAura { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @featherFall { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: swordAura 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: featherFall 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: swordAura 3s ease-in-out infinite; }
+    @keyframes swordGlow { 0%, 100% { filter: drop-shadow(0 0 6px #c084fc); } 50% { filter: drop-shadow(0 0 18px #ffffff); } }
+    .sGlow { animation: swordGlow 3s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_valquiria_campo-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#c084fc" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_valquiria_campo-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#c084fc" opacity="0.85" filter="drop-shadow(0 0 14px #c084fc)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #c084fc)"/>
+  <rect width="1200" height="400" fill="url(#vk-bg)"/>
+  <!-- Hill -->
+  <path d="M0,400 L0,320 Q600,220 1200,320 L1200,400 Z" fill="#0f172a"/>
+  <!-- Central Great Sword in Ground -->
+  <g class="sGlow" transform="translate(600, 160)">
+    <line x1="0" y1="0" x2="0" y2="150" stroke="#ffffff" stroke-width="5"/>
+    <line x1="-30" y1="30" x2="30" y2="30" stroke="#fbbf24" stroke-width="4"/>
+    <circle cx="0" cy="0" r="6" fill="#fbbf24"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <!-- Flanking Swords -->
+  <g class="sGlow" transform="translate(450, 200)">
+    <line x1="0" y1="0" x2="0" y2="120" stroke="#e2e8f0" stroke-width="4"/>
+    <line x1="-20" y1="25" x2="20" y2="25" stroke="#fbbf24" stroke-width="3"/>
+  </g>
+  <g class="sGlow" transform="translate(750, 200)">
+    <line x1="0" y1="0" x2="0" y2="120" stroke="#e2e8f0" stroke-width="4"/>
+    <line x1="-20" y1="25" x2="20" y2="25" stroke="#fbbf24" stroke-width="3"/>
   </g>
 </svg>`;
 
 // Floresta de Cogumelos Cósmicos
 export const BANNER_FLORESTA_FUNGOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_floresta_fungos-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#047857"/><stop offset="60%" stop-color="#064e3b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_floresta_fungos-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.8"/><stop offset="100%" stop-color="#047857" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="ff-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#022c22"/><stop offset="100%" stop-color="#010a08"/></linearGradient></defs>
   <style>
-    @capBreathe { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @myceliumGlow { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: capBreathe 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: myceliumGlow 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: capBreathe 3s ease-in-out infinite; }
+    @keyframes mushroomBreathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.08); filter: drop-shadow(0 0 18px #34d399); } }
+    .mBreathe { animation: mushroomBreathe 4s ease-in-out infinite; transform-origin: bottom; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_floresta_fungos-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#34d399" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#34d399" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_floresta_fungos-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#34d399" opacity="0.85" filter="drop-shadow(0 0 14px #34d399)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #34d399)"/>
+  <rect width="1200" height="400" fill="url(#ff-bg)"/>
+  <!-- Giant Mushroom 1 -->
+  <g class="mBreathe" transform="translate(350, 180)">
+    <rect x="-15" y="0" width="30" height="220" fill="#042f2e" stroke="#10b981"/>
+    <path d="M-90,0 Q0,-90 90,0 Z" fill="#059669" filter="drop-shadow(0 0 14px #34d399)"/>
+    <circle cx="-30" cy="-30" r="8" fill="#a7f3d0"/><circle cx="30" cy="-30" r="8" fill="#a7f3d0"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <!-- Giant Mushroom 2 (Center) -->
+  <g class="mBreathe" transform="translate(750, 150)">
+    <rect x="-18" y="0" width="36" height="250" fill="#042f2e" stroke="#10b981"/>
+    <path d="M-110,0 Q0,-110 110,0 Z" fill="#0d9488" filter="drop-shadow(0 0 18px #2dd4bf)"/>
+    <circle cx="-40" cy="-40" r="10" fill="#99f6e4"/><circle cx="40" cy="-40" r="10" fill="#99f6e4"/>
   </g>
 </svg>`;
 
 // Geodo Gigante de Ametista
 export const BANNER_CAVERNA_AMETISTA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_caverna_ametista-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#6b21a8"/><stop offset="60%" stop-color="#2e1065"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_caverna_ametista-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9" stop-opacity="0.8"/><stop offset="100%" stop-color="#6b21a8" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="ga-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#2e1065"/><stop offset="100%" stop-color="#090117"/></radialGradient></defs>
   <style>
-    @facetSparkle { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @dripRipple { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: facetSparkle 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: dripRipple 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: facetSparkle 3s ease-in-out infinite; }
+    @keyframes crystalFacet { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; filter: drop-shadow(0 0 15px #e879f9); } }
+    .cFacet { animation: crystalFacet 3.2s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_caverna_ametista-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#e879f9" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#e879f9" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_caverna_ametista-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#e879f9" opacity="0.85" filter="drop-shadow(0 0 14px #e879f9)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #e879f9)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <rect width="1200" height="400" fill="url(#ga-bg)"/>
+  <!-- Top Stalactites of Amethyst -->
+  <polygon points="150,0 200,160 250,0" fill="#7e22ce" stroke="#e879f9" stroke-width="2" class="cFacet"/>
+  <polygon points="350,0 420,200 490,0" fill="#6b21a8" stroke="#d8b4fe" stroke-width="2.5" class="cFacet"/>
+  <polygon points="700,0 770,220 840,0" fill="#6b21a8" stroke="#d8b4fe" stroke-width="2.5" class="cFacet"/>
+  <polygon points="950,0 1000,160 1050,0" fill="#7e22ce" stroke="#e879f9" stroke-width="2" class="cFacet"/>
+  <!-- Bottom Stalagmites -->
+  <polygon points="250,400 300,240 350,400" fill="#6b21a8" stroke="#e879f9" stroke-width="2" class="cFacet"/>
+  <polygon points="550,400 620,190 690,400" fill="#7e22ce" stroke="#f472b6" stroke-width="2.5" class="cFacet"/>
+  <polygon points="850,400 900,250 950,400" fill="#6b21a8" stroke="#e879f9" stroke-width="2" class="cFacet"/>
 </svg>`;
 
 // O Nexus dos Quatro Elementos
 export const BANNER_NEXUS_ELEMENTOS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_nexus_elementos-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#3b0764"/><stop offset="60%" stop-color="#18181b"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_nexus_elementos-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.8"/><stop offset="100%" stop-color="#3b0764" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><radialGradient id="ne-bg" cx="50%" cy="50%" r="70%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#020108"/></radialGradient></defs>
   <style>
-    @orbClash { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @vortexBalance { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: orbClash 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: vortexBalance 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: orbClash 3s ease-in-out infinite; }
+    @keyframes nexusClash { 100% { transform: rotate(360deg); } }
+    .nClash { animation: nexusClash 25s linear infinite; transform-origin: 600px 200px; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_nexus_elementos-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#f97316" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#f97316" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_nexus_elementos-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#f97316" opacity="0.85" filter="drop-shadow(0 0 14px #f97316)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #f97316)"/>
+  <rect width="1200" height="400" fill="url(#ne-bg)"/>
+  <!-- 4 Colliding Elemental Nodes -->
+  <g class="nClash">
+    <!-- Fire (Top) -->
+    <circle cx="600" cy="90" r="45" fill="#ef4444" filter="drop-shadow(0 0 20px #f97316)"/>
+    <!-- Ice (Right) -->
+    <circle cx="710" cy="200" r="45" fill="#06b6d4" filter="drop-shadow(0 0 20px #38bdf8)"/>
+    <!-- Earth (Bottom) -->
+    <circle cx="600" cy="310" r="45" fill="#10b981" filter="drop-shadow(0 0 20px #34d399)"/>
+    <!-- Lightning (Left) -->
+    <circle cx="490" cy="200" r="45" fill="#a855f7" filter="drop-shadow(0 0 20px #c084fc)"/>
   </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
-  </g>
+  <!-- Central White Fusion Core -->
+  <circle cx="600" cy="200" r="22" fill="#ffffff" filter="drop-shadow(0 0 25px #ffffff)"/>
 </svg>`;
 
 // A Sala do Trono do Project Nox
 export const BANNER_TRONO_SOBERANO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <radialGradient id="banner_trono_soberano-bg" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="60%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020205"/></radialGradient>
-    <linearGradient id="banner_trono_soberano-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/><stop offset="100%" stop-color="#1e1b4b" stop-opacity="0.2"/></linearGradient>
-  </defs>
+  <defs><linearGradient id="ts-bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#180e29"/><stop offset="100%" stop-color="#05020a"/></linearGradient></defs>
   <style>
-    @bannerDrape { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.75; } 50% { transform: translateY(-20px) scale(1.08); opacity: 1; } }
-    @throneGlow { 0%, 100% { transform: rotate(0deg); opacity: 0.6; } 50% { transform: rotate(180deg); opacity: 0.95; } }
-    .elem-1 { animation: bannerDrape 5s ease-in-out infinite; transform-origin: center; }
-    .elem-2 { animation: throneGlow 18s linear infinite; transform-origin: 900px 200px; }
-    .pulse-star { animation: bannerDrape 3s ease-in-out infinite; }
+    @keyframes throneAura { 0%, 100% { filter: drop-shadow(0 0 15px #fbbf24); } 50% { filter: drop-shadow(0 0 35px #f59e0b); } }
+    .tAura { animation: throneAura 3.5s ease-in-out infinite; }
   </style>
-  <rect width="1200" height="400" fill="url(#banner_trono_soberano-bg)"/>
-  <circle cx="900" cy="200" r="140" class="elem-2" stroke="#fbbf24" stroke-width="2" stroke-dasharray="16 12" fill="none" opacity="0.6"/>
-  <circle cx="900" cy="200" r="90" class="elem-2" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.4"/>
-  <g class="elem-1">
-    <path d="M150,280 Q300,160 450,260 T750,220 L750,380 L150,380 Z" fill="url(#banner_trono_soberano-grad)" opacity="0.5"/>
-    <polygon points="600,120 640,190 560,190" fill="#fbbf24" opacity="0.85" filter="drop-shadow(0 0 14px #fbbf24)"/>
-    <circle cx="600" cy="100" r="6" fill="#ffffff" filter="drop-shadow(0 0 8px #fbbf24)"/>
-  </g>
-  <g fill="#ffffff" class="pulse-star" opacity="0.7">
-    <circle cx="180" cy="90" r="2"/><circle cx="380" cy="60" r="2.5"/><circle cx="720" cy="80" r="1.8"/><circle cx="1080" cy="120" r="2.2"/><circle cx="1140" cy="260" r="2"/>
+  <rect width="1200" height="400" fill="url(#ts-bg)"/>
+  <!-- High Stained Glass Window with Galaxy -->
+  <polygon points="480,0 720,0 700,240 500,240" fill="#3b0764" opacity="0.6"/>
+  <!-- Carpet Dais Steps -->
+  <polygon points="350,400 850,400 750,290 450,290" fill="#7f1d1d" stroke="#fbbf24" stroke-width="2"/>
+  <!-- Grand Obsidian & Gold Throne -->
+  <g class="tAura" fill="#0f172a" stroke="#fbbf24" stroke-width="2.5">
+    <!-- Backrest -->
+    <polygon points="560,110 600,60 640,110 635,280 565,280"/>
+    <!-- Seat -->
+    <rect x="550" y="260" width="100" height="30" fill="#450a0a"/>
+    <!-- Armrests -->
+    <rect x="535" y="240" width="15" height="40" fill="#fbbf24"/>
+    <rect x="650" y="240" width="15" height="40" fill="#fbbf24"/>
   </g>
 </svg>`;
 

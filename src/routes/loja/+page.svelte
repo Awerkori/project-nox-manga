@@ -21,6 +21,7 @@
   import { invalidateAll } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
+  import { getNameColorInfo } from '$lib/name-colors';
 
   let { data } = $props();
 
@@ -57,8 +58,7 @@
       const v = selectedCardVariants[item.id];
       previewFrameColor = v && v !== 'default' ? v : null;
     } else if (item.kind === 'NAME_COLOR') {
-      const style = getStyle(item);
-      previewColor = style.color || style.backgroundImage;
+      previewColor = item.id;
     } else if (item.kind === 'TITLE') {
       previewTitle = item.name;
     } else if (item.kind === 'PROFILE_BANNER') {
@@ -81,6 +81,7 @@
 
   let equippedFrame = $derived(data.profile?.frame_id ?? null);
   let equippedColor = $derived(data.profile?.name_color ?? null);
+  let heroColorInfo = $derived(getNameColorInfo(previewColor || equippedColor));
   let equippedTitle = $derived(data.profile?.title_id ?? null);
   let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
 
@@ -297,12 +298,8 @@
         </div>
         <div class="preview-meta">
           <span
-            class="preview-name"
-            style={(previewColor || equippedColor)
-              ? (String(previewColor || equippedColor).includes('gradient')
-                ? `background-image: ${previewColor || equippedColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: gradientFlow 3.5s ease infinite;`
-                : `color: ${previewColor || equippedColor}; text-shadow: 0 0 10px ${previewColor || equippedColor}; animation: glowPulse 2.8s ease-in-out infinite;`)
-              : ''}
+            class="preview-name {heroColorInfo.className}"
+            style={heroColorInfo.style}
           >
             {data.profile?.display_name || data.profile?.username || 'Visitante Nox'}
           </span>
@@ -474,12 +471,11 @@
                     />
                   </div>
                 {:else if item.kind === 'NAME_COLOR'}
+                  {@const cardColorInfo = getNameColorInfo(item.id)}
                   <div class="color-demo-wrap">
                     <span
-                      class="color-demo-text"
-                      style={style.backgroundImage
-                        ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
-                        : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
+                      class="color-demo-text {cardColorInfo.className}"
+                      style={cardColorInfo.style}
                     >
                       {data.profile?.username || 'ProjetoNox'}
                     </span>
@@ -697,6 +693,7 @@
                 </div>
 
               {:else if item.kind === 'NAME_COLOR'}
+                {@const modalColorInfo = getNameColorInfo(item.id)}
                 <!-- Multi-Context Name Color Preview -->
                 <div class="color-stage-contexts">
                   <!-- Context 1: Comment Box -->
@@ -715,10 +712,8 @@
                       <div class="mock-comment-bubble">
                         <div class="mock-comment-top">
                           <span
-                            class="mock-author-name"
-                            style={style.backgroundImage
-                              ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
-                              : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
+                            class="mock-author-name {modalColorInfo.className}"
+                            style={modalColorInfo.style}
                           >
                             {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
                           </span>
@@ -738,10 +733,8 @@
                     <div class="mock-reader-bar">
                       <span class="mock-chapter-title">Céu Distante — Capítulo 01</span>
                       <span
-                        class="mock-reader-user"
-                        style={style.backgroundImage
-                          ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
-                          : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
+                        class="mock-reader-user {modalColorInfo.className}"
+                        style={modalColorInfo.style}
                       >
                         @{data.profile?.username || 'usuario'}
                       </span>

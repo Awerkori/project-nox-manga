@@ -595,10 +595,20 @@
       {:else if resolvedFrameKey === 'blade'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <line x1="20" y1="20" x2="35" y2="35" class="blade-edge edge-tl" stroke-width="3" />
-          <line x1="80" y1="20" x2="65" y2="35" class="blade-edge edge-tr" stroke-width="3" />
-          <line x1="20" y1="80" x2="35" y2="65" class="blade-edge edge-bl" stroke-width="3" />
-          <line x1="80" y1="80" x2="65" y2="65" class="blade-edge edge-br" stroke-width="3" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="12 6" />
+          <!-- Katana 1 (TL to BR) -->
+          <line x1="8" y1="8" x2="36" y2="36" class="blade-edge edge-tl" stroke-width="3" stroke-linecap="round" />
+          <rect x="33" y="33" width="6" height="6" transform="rotate(45 36 36)" class="blade-tsuba" fill="var(--frame-secondary, #fbbf24)" />
+          <line x1="64" y1="64" x2="92" y2="92" class="blade-edge edge-br" stroke-width="3" stroke-linecap="round" />
+          <rect x="61" y="61" width="6" height="6" transform="rotate(45 64 64)" class="blade-tsuba" fill="var(--frame-secondary, #fbbf24)" />
+          <!-- Katana 2 (TR to BL) -->
+          <line x1="92" y1="8" x2="64" y2="36" class="blade-edge edge-tr" stroke-width="3" stroke-linecap="round" />
+          <rect x="61" y="33" width="6" height="6" transform="rotate(45 64 36)" class="blade-tsuba" fill="var(--frame-secondary, #fbbf24)" />
+          <line x1="36" y1="64" x2="8" y2="92" class="blade-edge edge-bl" stroke-width="3" stroke-linecap="round" />
+          <rect x="33" y="61" width="6" height="6" transform="rotate(45 36 64)" class="blade-tsuba" fill="var(--frame-secondary, #fbbf24)" />
+          <!-- Gleams at tips -->
+          <circle cx="8" cy="8" r="2.5" class="frame-mote" />
+          <circle cx="92" cy="8" r="2.5" class="frame-mote" />
         </svg>
 
       {:else if resolvedFrameKey === 'alchemy'}
@@ -612,18 +622,33 @@
       {:else if resolvedFrameKey === 'spider'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <path d="M25,25 Q50,38 75,25 M25,75 Q50,62 75,75" class="spider-web-strand" />
-          <polygon points="50,10 53,16 50,19 47,16" class="spider-jewel" />
-          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+          <!-- Corner webs -->
+          <path d="M12,12 L32,32 M12,20 Q20,20 20,12 M12,28 Q28,28 28,12" class="spider-web-strand" />
+          <path d="M88,12 L68,32 M88,20 Q80,20 80,12 M88,28 Q72,28 72,12" class="spider-web-strand" />
+          <path d="M12,88 L32,68 M12,80 Q20,80 20,88 M12,72 Q28,72 28,88" class="spider-web-strand" />
+          <path d="M88,88 L68,68 M88,80 Q80,80 80,88 M88,72 Q72,72 72,88" class="spider-web-strand" />
+          <!-- Spider at top descending -->
+          <line x1="50" y1="0" x2="50" y2="12" stroke="var(--frame-secondary, #93c5fd)" stroke-width="1.2" stroke-dasharray="2 2" />
+          <ellipse cx="50" cy="14" rx="3.5" ry="4.5" class="spider-jewel" />
+          <circle cx="50" cy="9.5" r="2.2" class="spider-jewel" />
+          <path d="M47,11 Q41,6 38,10 M47,13 Q39,12 37,17 M47,15 Q40,18 39,23 M47,16 Q42,22 43,26" stroke="var(--frame-primary, #3b82f6)" stroke-width="1.2" fill="none" />
+          <path d="M53,11 Q59,6 62,10 M53,13 Q61,12 63,17 M53,15 Q60,18 61,23 M53,16 Q58,22 57,26" stroke="var(--frame-primary, #3b82f6)" stroke-width="1.2" fill="none" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="8 6" />
         </svg>
 
       {:else if resolvedFrameKey === 'moon'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <circle cx="50" cy="8" r="4" class="moon-phase full" />
-          <path d="M88,50 A4,4 0 0,0 96,50 A4,4 0 0,1 88,50 Z" class="moon-phase crescent-r" />
-          <circle cx="50" cy="92" r="4" class="moon-phase new" />
-          <path d="M12,50 A4,4 0 0,1 4,50 A4,4 0 0,0 12,50 Z" class="moon-phase crescent-l" />
+          <circle cx="50" cy="50" r="43.5" class="frame-orbit-ring" stroke-dasharray="2 4" stroke-width="1" />
+          <!-- 8 Moon phases in true sequence -->
+          <circle cx="50" cy="6.5" r="3.2" fill="none" stroke="var(--frame-primary, #e2e8f0)" stroke-width="1.2" />
+          <path d="M76,16 A3.2,3.2 0 0,0 76,22.4 A3.2,3.2 0 0,1 76,16 Z" class="moon-phase" />
+          <path d="M93.5,46.8 A3.2,3.2 0 0,1 93.5,53.2 Z" class="moon-phase" />
+          <circle cx="76" cy="80" r="3.2" class="moon-phase" />
+          <circle cx="50" cy="93.5" r="4.2" class="moon-phase full" filter="drop-shadow(0 0 6px var(--frame-glow, #ffffff))" />
+          <circle cx="24" cy="80" r="3.2" class="moon-phase" />
+          <path d="M6.5,46.8 A3.2,3.2 0 0,0 6.5,53.2 Z" class="moon-phase" />
+          <path d="M24,16 A3.2,3.2 0 0,1 24,22.4 A3.2,3.2 0 0,0 24,16 Z" class="moon-phase" />
         </svg>
 
       {:else if resolvedFrameKey === 'supernova'}
@@ -641,45 +666,95 @@
       {:else if resolvedFrameKey === 'grail'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <polygon points="46,14 54,14 52,22 48,22" class="grail-base" />
-          <path d="M44,6 Q50,14 56,6 Z" class="grail-cup" />
-          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+          <!-- Holy chalice at top -->
+          <path d="M42,4 Q50,15 58,4 L55,14 L50,14 L50,18 L54,20 L46,20 L50,18 L50,14 L45,14 Z" class="grail-cup" fill="var(--frame-primary, #eab308)" stroke="var(--frame-secondary, #fef08a)" stroke-width="0.8" filter="drop-shadow(0 0 8px var(--frame-glow, #eab308))" />
+          <circle cx="50" cy="2" r="2" class="frame-mote" />
+          <line x1="50" y1="0" x2="50" y2="3" stroke="var(--frame-secondary, #fef08a)" stroke-width="1.5" />
+          <line x1="38" y1="2" x2="41" y2="5" stroke="var(--frame-secondary, #fef08a)" stroke-width="1.2" />
+          <line x1="62" y1="2" x2="59" y2="5" stroke="var(--frame-secondary, #fef08a)" stroke-width="1.2" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="14 8" />
         </svg>
 
       {:else if resolvedFrameKey === 'kraken'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <path d="M18,65 Q10,85 24,92 Q22,80 30,70" class="kraken-arm arm-l" />
-          <path d="M82,65 Q90,85 76,92 Q78,80 70,70" class="kraken-arm arm-r" />
-          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="8 6" />
+          <!-- Left tentacles -->
+          <path d="M14,50 Q4,68 12,82 Q20,92 28,78 Q22,70 20,56" class="kraken-arm arm-l1" />
+          <path d="M22,72 Q12,88 24,96 Q32,98 34,84" class="kraken-arm arm-l2" />
+          <!-- Right tentacles -->
+          <path d="M86,50 Q96,68 88,82 Q80,92 72,78 Q78,70 80,56" class="kraken-arm arm-r1" />
+          <path d="M78,72 Q88,88 76,96 Q68,98 66,84" class="kraken-arm arm-r2" />
+          <!-- Center reaching tentacles -->
+          <path d="M38,88 Q44,98 50,94 Q56,98 62,88" class="kraken-arm arm-center" stroke-width="2.2" />
+          <!-- Glowing suckers -->
+          <circle cx="10" cy="74" r="1.8" class="frame-mote" />
+          <circle cx="90" cy="74" r="1.8" class="frame-mote" />
+          <circle cx="20" cy="88" r="1.8" class="frame-mote" />
+          <circle cx="80" cy="88" r="1.8" class="frame-mote" />
         </svg>
 
       {:else if resolvedFrameKey === 'sakura'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <!-- Sakura blossom bough arches over top rim -->
+          <path d="M22,30 Q36,10 60,8 Q78,7 86,18" fill="none" stroke="#78350f" stroke-width="2.2" stroke-linecap="round" />
+          <!-- Blooming 5-petal sakura flower at top left -->
+          <g transform="translate(36, 12)">
+            <circle cx="0" cy="-3.5" r="2.5" class="sakura-petal" />
+            <circle cx="3.3" cy="-1.1" r="2.5" class="sakura-petal" />
+            <circle cx="2.1" cy="2.8" r="2.5" class="sakura-petal" />
+            <circle cx="-2.1" cy="2.8" r="2.5" class="sakura-petal" />
+            <circle cx="-3.3" cy="-1.1" r="2.5" class="sakura-petal" />
+            <circle cx="0" cy="0" r="1.5" fill="#fef08a" />
+          </g>
+          <!-- Blooming sakura flower at top right -->
+          <g transform="translate(70, 11)">
+            <circle cx="0" cy="-3" r="2.2" class="sakura-petal" />
+            <circle cx="2.8" cy="-0.9" r="2.2" class="sakura-petal" />
+            <circle cx="1.8" cy="2.4" r="2.2" class="sakura-petal" />
+            <circle cx="-1.8" cy="2.4" r="2.2" class="sakura-petal" />
+            <circle cx="-2.8" cy="-0.9" r="2.2" class="sakura-petal" />
+            <circle cx="0" cy="0" r="1.2" fill="#fef08a" />
+          </g>
+          <!-- Swirling petals caught in circular breeze -->
           <g class="sakura-petals-spin">
-            <circle cx="50" cy="9" r="3.2" class="sakura-petal" />
-            <circle cx="85" cy="30" r="2.8" class="sakura-petal" />
-            <circle cx="82" cy="74" r="3.2" class="sakura-petal" />
-            <circle cx="30" cy="85" r="2.8" class="sakura-petal" />
-            <circle cx="15" cy="40" r="3.2" class="sakura-petal" />
+            <ellipse cx="14" cy="50" rx="3.5" ry="2" transform="rotate(35 14 50)" class="sakura-petal" />
+            <ellipse cx="86" cy="55" rx="3.5" ry="2" transform="rotate(-40 86 55)" class="sakura-petal" />
+            <ellipse cx="45" cy="92" rx="3.5" ry="2" transform="rotate(15 45 92)" class="sakura-petal" />
+            <ellipse cx="28" cy="78" rx="3" ry="1.8" transform="rotate(-60 28 78)" class="sakura-petal" />
           </g>
         </svg>
 
       {:else if resolvedFrameKey === 'matrix'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <line x1="28" y1="14" x2="28" y2="40" class="matrix-code-fall col-1" stroke-dasharray="3 3" stroke-width="2" />
-          <line x1="72" y1="14" x2="72" y2="40" class="matrix-code-fall col-2" stroke-dasharray="3 3" stroke-width="2" />
-          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+          <!-- Matrix falling code streams -->
+          <g class="matrix-code-fall">
+            <line x1="20" y1="15" x2="20" y2="45" stroke="var(--frame-primary, #22c55e)" stroke-width="1.8" stroke-dasharray="3 3" />
+            <line x1="80" y1="20" x2="80" y2="55" stroke="var(--frame-primary, #22c55e)" stroke-width="1.8" stroke-dasharray="3 3" />
+            <line x1="30" y1="65" x2="30" y2="90" stroke="var(--frame-secondary, #86efac)" stroke-width="1.8" stroke-dasharray="2 3" />
+            <line x1="70" y1="60" x2="70" y2="88" stroke="var(--frame-secondary, #86efac)" stroke-width="1.8" stroke-dasharray="2 3" />
+          </g>
+          <circle cx="20" cy="48" r="2" fill="var(--frame-secondary, #86efac)" filter="drop-shadow(0 0 4px #22c55e)" />
+          <circle cx="80" cy="58" r="2" fill="var(--frame-secondary, #86efac)" filter="drop-shadow(0 0 4px #22c55e)" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="8 4" />
         </svg>
 
       {:else if resolvedFrameKey === 'gargoyle'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <polygon points="28,26 12,8 24,18" class="gargoyle-wing" />
-          <polygon points="72,26 88,8 76,18" class="gargoyle-wing" />
-          <polygon points="50,96 46,88 54,88" class="gargoyle-claw" />
+          <!-- Gargoyle bat wings spreading outwards -->
+          <path d="M22,35 C10,18 2,12 8,4 C14,14 18,22 28,30 Z" class="gargoyle-wing wing-l" />
+          <path d="M78,35 C90,18 98,12 92,4 C86,14 82,22 72,30 Z" class="gargoyle-wing wing-r" />
+          <!-- Demonic curved horns at top -->
+          <path d="M42,12 Q38,2 32,4 Q38,8 44,14 Z" fill="var(--frame-secondary, #ef4444)" />
+          <path d="M58,12 Q62,2 68,4 Q62,8 56,14 Z" fill="var(--frame-secondary, #ef4444)" />
+          <!-- Claws gripping bottom rim -->
+          <polygon points="32,84 35,92 38,84 35,80" class="gargoyle-claw" fill="var(--frame-secondary, #ef4444)" />
+          <polygon points="62,84 65,92 68,84 65,80" class="gargoyle-claw" fill="var(--frame-secondary, #ef4444)" />
+          <!-- Gargoyle ruby eye crest -->
+          <polygon points="50,6 54,12 50,15 46,12" fill="var(--frame-secondary, #ef4444)" filter="drop-shadow(0 0 6px #ef4444)" />
         </svg>
 
       {:else if resolvedFrameKey === 'harp'}
@@ -713,22 +788,41 @@
 
       {:else if resolvedFrameKey === 'glacier'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
-          <polygon points="50,6 60,18 78,16 74,34 88,44 76,56 84,74 66,74 58,90 50,80 42,90 34,74 16,74 24,56 12,44 26,34 22,16 40,18" class="glacier-shards" />
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <!-- Asymmetric Jagged Ice Spikes radiating outwards -->
+          <polygon points="50,2 54,16 50,13 46,16" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <polygon points="20,12 28,24 23,24 17,21" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <polygon points="80,12 83,21 77,24 72,24" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <polygon points="4,50 16,46 13,50 16,54" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <polygon points="96,50 84,46 87,50 84,54" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <polygon points="50,98 46,84 50,87 54,84" class="glacier-shards" fill="var(--frame-light, #e0f2fe)" stroke="var(--frame-primary, #0284c7)" stroke-width="1.2" />
+          <circle cx="50" cy="50" r="42.5" class="frame-orbit-ring" stroke-dasharray="14 10" stroke-width="1.5" />
         </svg>
 
       {:else if resolvedFrameKey === 'ouroboros'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
-          <circle cx="50" cy="50" r="38.5" class="ouroboros-body" stroke-dasharray="14 4" />
-          <polygon points="50,7 56,12 48,15" class="ouroboros-head" />
-          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+          <circle cx="50" cy="50" r="38.5" class="ouroboros-body" stroke-dasharray="6 3" stroke-width="3.5" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="2 4" stroke-width="1" />
+          <!-- Serpentine head biting tail at top -->
+          <g transform="translate(50, 11.5)">
+            <path d="M-6,-4 Q0,-8 6,-4 Q8,2 2,5 L-5,5 Z" fill="var(--frame-primary, #059669)" />
+            <path d="M-5,-4 Q-9,-10 -6,-12 M5,-4 Q9,-10 6,-12" stroke="var(--frame-secondary, #34d399)" stroke-width="1.4" fill="none" />
+            <circle cx="-2" cy="-2" r="1.2" fill="#ef4444" filter="drop-shadow(0 0 3px #ef4444)" />
+            <circle cx="2" cy="-2" r="1.2" fill="#ef4444" filter="drop-shadow(0 0 3px #ef4444)" />
+          </g>
+          <path d="M48,15 Q50,19 52,15" stroke="var(--frame-secondary, #34d399)" stroke-width="2" fill="none" />
         </svg>
 
       {:else if resolvedFrameKey === 'blackhole'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
-          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <ellipse cx="50" cy="50" rx="44" ry="16" class="accretion-disc" transform="rotate(-25 50 50)" />
-          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="10 8" />
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" stroke="#000000" stroke-width="3" filter="drop-shadow(0 0 8px var(--frame-primary, #7e22ce))" />
+          <!-- Relativistic Lensed Accretion Disk (Gargantua warped arch) -->
+          <path d="M12,50 C12,18 88,18 88,50" fill="none" stroke="var(--frame-primary, #7e22ce)" stroke-width="3.5" filter="drop-shadow(0 0 8px var(--frame-glow, #f43f5e))" />
+          <!-- Front accretion ring -->
+          <ellipse cx="50" cy="50" rx="46" ry="15" class="accretion-disc" transform="rotate(-15 50 50)" />
+          <!-- Relativistic Polar Jet Beams -->
+          <line x1="50" y1="12" x2="50" y2="0" stroke="var(--frame-secondary, #f43f5e)" stroke-width="2.5" stroke-linecap="round" filter="drop-shadow(0 0 6px #f43f5e)" />
+          <line x1="50" y1="88" x2="50" y2="100" stroke="var(--frame-secondary, #f43f5e)" stroke-width="2.5" stroke-linecap="round" filter="drop-shadow(0 0 6px #f43f5e)" />
         </svg>
 
       {:else if resolvedFrameKey === 'mandala'}
@@ -742,9 +836,22 @@
       {:else if resolvedFrameKey === 'steampunk'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <circle cx="50" cy="50" r="42.5" class="steampunk-gear" stroke-dasharray="8 6" stroke-width="3" />
-          <circle cx="24" cy="24" r="3" class="frame-center-node" />
-          <circle cx="76" cy="24" r="3" class="frame-center-node" />
+          <circle cx="50" cy="50" r="42" class="steampunk-gear gear-main" stroke-dasharray="5 3" stroke-width="3.5" />
+          <!-- Top-left interlocking sub-gear -->
+          <g transform="translate(18, 18)" class="steampunk-sub1">
+            <circle cx="0" cy="0" r="10" class="steampunk-gear gear-sub1" stroke-dasharray="4 3" stroke-width="2.5" />
+            <circle cx="0" cy="0" r="3" fill="var(--frame-secondary, #fbbf24)" />
+          </g>
+          <!-- Bottom-right interlocking sub-gear -->
+          <g transform="translate(82, 82)" class="steampunk-sub2">
+            <circle cx="0" cy="0" r="10" class="steampunk-gear gear-sub2" stroke-dasharray="4 3" stroke-width="2.5" />
+            <circle cx="0" cy="0" r="3" fill="var(--frame-secondary, #fbbf24)" />
+          </g>
+          <!-- Brass rivets at cardinal points -->
+          <circle cx="50" cy="7" r="2" class="frame-center-node" />
+          <circle cx="50" cy="93" r="2" class="frame-center-node" />
+          <circle cx="7" cy="50" r="2" class="frame-center-node" />
+          <circle cx="93" cy="50" r="2" class="frame-center-node" />
         </svg>
 
       {:else if resolvedFrameKey === 'plasma'}
@@ -765,10 +872,19 @@
       {:else if resolvedFrameKey === 'compass'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <polygon points="50,4 54,20 50,18 46,20" class="compass-needle needle-n" />
-          <polygon points="50,96 54,80 50,82 46,80" class="compass-needle needle-s" />
-          <polygon points="96,50 80,54 82,50 80,46" class="compass-needle needle-e" />
-          <polygon points="4,50 20,54 18,50 20,46" class="compass-needle needle-w" />
+          <circle cx="50" cy="50" r="43" class="frame-orbit-ring" stroke-dasharray="2 3" stroke-width="1.2" />
+          <!-- Cardinal large points -->
+          <polygon points="50,2 53,14 50,11 47,14" class="compass-needle needle-n" filter="drop-shadow(0 0 6px var(--frame-glow, #38bdf8))" />
+          <polygon points="50,98 53,86 50,89 47,86" class="compass-needle needle-s" />
+          <polygon points="2,50 14,53 11,50 14,47" class="compass-needle needle-w" />
+          <polygon points="98,50 86,53 89,50 86,47" class="compass-needle needle-e" />
+          <!-- Ordinal smaller points -->
+          <polygon points="16,16 25,23 23,21 21,23" class="compass-needle needle-nw" />
+          <polygon points="84,16 75,23 77,21 79,23" class="compass-needle needle-ne" />
+          <polygon points="16,84 25,77 23,79 21,77" class="compass-needle needle-sw" />
+          <polygon points="84,84 75,77 77,79 79,77" class="compass-needle needle-se" />
+          <!-- Compass center ring -->
+          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--frame-secondary, #38bdf8)" stroke-width="0.8" />
         </svg>
 
       {:else if resolvedFrameKey === 'fairy'}
@@ -786,9 +902,19 @@
       {:else if resolvedFrameKey === 'emperor'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
-          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
-          <polygon points="32,16 40,8 50,2 60,8 68,16 50,12" class="emperor-crown" />
-          <circle cx="50" cy="2" r="3" class="frame-mote" />
+          <!-- Sovereign Imperial Crown at top -->
+          <path d="M30,16 L34,8 L42,13 L50,4 L58,13 L66,8 L70,16 Z" class="emperor-crown" />
+          <circle cx="50" cy="3" r="2" fill="#ffffff" filter="drop-shadow(0 0 4px #ffffff)" />
+          <circle cx="34" cy="7" r="1.5" fill="#ef4444" />
+          <circle cx="66" cy="7" r="1.5" fill="#ef4444" />
+          <!-- Imperial Laurel Wreath along bottom half -->
+          <ellipse cx="20" cy="62" rx="3.5" ry="1.8" transform="rotate(-30 20 62)" fill="var(--frame-primary, #eab308)" />
+          <ellipse cx="24" cy="74" rx="3.5" ry="1.8" transform="rotate(-50 24 74)" fill="var(--frame-primary, #eab308)" />
+          <ellipse cx="34" cy="84" rx="3.5" ry="1.8" transform="rotate(-70 34 84)" fill="var(--frame-primary, #eab308)" />
+          <ellipse cx="80" cy="62" rx="3.5" ry="1.8" transform="rotate(30 80 62)" fill="var(--frame-primary, #eab308)" />
+          <ellipse cx="76" cy="74" rx="3.5" ry="1.8" transform="rotate(50 76 74)" fill="var(--frame-primary, #eab308)" />
+          <ellipse cx="66" cy="84" rx="3.5" ry="1.8" transform="rotate(70 66 84)" fill="var(--frame-primary, #eab308)" />
+          <circle cx="50" cy="92" r="3" fill="var(--frame-secondary, #ffffff)" filter="drop-shadow(0 0 5px var(--frame-glow, #eab308))" />
         </svg>
 
       {:else}
@@ -1340,5 +1466,19 @@
   .fairy-dust { fill: var(--frame-primary, #ec4899); filter: drop-shadow(0 0 5px #ec4899); }
 
   .emperor-crown { fill: var(--frame-primary, #eab308); stroke: var(--frame-secondary, #ffffff); stroke-width: 1.2; filter: drop-shadow(0 0 8px #eab308); animation: seraphFloat 3s ease-in-out infinite; transform-origin: 50px 50px; }
+
+
+  @keyframes seraphFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.04); }
+  }
+
+  .steampunk-sub1 { animation: rotateCcw 8s linear infinite; transform-origin: 18px 18px; }
+  .steampunk-sub2 { animation: rotateCcw 8s linear infinite; transform-origin: 82px 82px; }
+  .arm-l1 { animation: waveSwell 2.8s ease-in-out infinite; transform-origin: 14px 50px; }
+  .arm-r1 { animation: waveSwell 2.8s ease-in-out infinite 0.7s; transform-origin: 86px 50px; }
+  .arm-l2 { animation: waveSwell 3.2s ease-in-out infinite 0.4s; transform-origin: 22px 72px; }
+  .arm-r2 { animation: waveSwell 3.2s ease-in-out infinite 1.1s; transform-origin: 78px 72px; }
+  .arm-center { animation: gemBreathe 2.4s ease-in-out infinite; transform-origin: 50px 94px; }
 
 </style>

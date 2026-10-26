@@ -26,6 +26,7 @@
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getNameColorInfo } from '$lib/name-colors';
   import AchievementIcon from '$lib/components/AchievementIcon.svelte';
   import WorkCard from '$lib/components/WorkCard.svelte';
 
@@ -35,6 +36,7 @@
     memberRank(data.member.xp, data.member.equipped_title_id, data.member.equipped_badge_id)
   );
   let progress = $derived(getLevelProgress(data.member.xp));
+  let memberColorInfo = $derived(getNameColorInfo(data.member.name_color));
 
   let isFollowing = $state(false);
   let followersCount = $state(0);
@@ -268,8 +270,8 @@
         <div class="info-block">
           <div class="name-line">
             <h1
-              class="display-name"
-              style={data.member.name_color ? `color: ${data.member.name_color}` : ''}
+              class="display-name {memberColorInfo.className}"
+              style={memberColorInfo.style}
             >
               {data.member.display_name}
             </h1>

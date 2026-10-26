@@ -45,6 +45,7 @@
     ExternalLink
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getNameColorInfo } from '$lib/name-colors';
   import WorkCard from '$lib/components/WorkCard.svelte';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { relativeTime, date } from '$lib/types';
@@ -245,6 +246,7 @@
   // Level computation
   let currentXp = $derived(data.member.xp || 0);
   let userLevel = $derived(Math.floor(Math.sqrt(1 + currentXp / 50)));
+  let meColorInfo = $derived(getNameColorInfo(data.member.name_color));
 
   // Media is staged locally until the profile form is submitted. This keeps
   // the canonical profile unchanged while a member experiments with a crop.
@@ -451,8 +453,8 @@
       <div class="header-details-col">
         <div class="title-row">
           <h1
-            class="me-display-name"
-            style={data.member.name_color ? `color: ${data.member.name_color}` : ''}
+            class="me-display-name {meColorInfo.className}"
+            style={meColorInfo.style}
           >
             {data.member.display_name || data.member.username}
           </h1>
