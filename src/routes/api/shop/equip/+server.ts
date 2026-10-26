@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { member } from '$lib/server/db';
+import { invalidateUserSession } from '$lib/server/session-cache';
 
 export const POST = async ({ request, locals }) => {
   member(locals);
@@ -40,6 +41,10 @@ export const POST = async ({ request, locals }) => {
     } catch (_) {
       // Ignore if column update already covered
     }
+  }
+
+  if (locals.user?.id) {
+    invalidateUserSession(locals.user.id);
   }
 
   return json(data);

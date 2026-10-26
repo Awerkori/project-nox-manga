@@ -1,5 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { getWorkRating, setWorkRating, removeWorkRating } from '$lib/server/ratings';
+import { invalidateUserSession } from '$lib/server/session-cache';
+import { invalidateRankingCache } from '$lib/server/ranking-cache';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -92,7 +94,24 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
 
   try {
     const summary = await setWorkRating(workId, visitorId, rating, userId, platform?.env);
-    return json({ success: true, ...summary });
+    let xpAward = null;
+    if (userId) {
+      try {
+        const { data: xpRes } = await locals.db.rpc('award_xp', {
+          p_kind: 'RATE_WORK',
+          p_source_id: workId,
+          p_meta: { description: 'Avaliação de obra registrada' }
+        });
+        xpAward = xpRes;
+        if (xpAward?.awarded) {
+          invalidateUserSession(userId);
+          invalidateRankingCache();
+        }
+      } catch (e) {
+        // Non-blocking
+      }
+    }
+    return json({ success: true, ...summary, xp_award: xpAward });
   } catch (err: any) {
     return json({ error: err.message || 'Falha ao registrar avaliação' }, { status: 500 });
   }

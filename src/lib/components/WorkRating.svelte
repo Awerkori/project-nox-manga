@@ -103,7 +103,22 @@
         userRating: data.userRating,
         distribution: data.distribution || rating.distribution
       };
-      // Notice Requirement 3: NO success toast/pop-up on normal voting!
+
+      if (data.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: data.xp_award.amount,
+              total_xp: data.xp_award.total_xp,
+              title: 'Avaliação registrada',
+              kind: 'RATE_WORK'
+            }
+          })
+        );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(data.xp_award.amount, 'Avaliação registrada');
+        }
+      }
     } catch (err: any) {
       // Revert optimistic update only on error, and inform user of real failure
       rating = prevRating;

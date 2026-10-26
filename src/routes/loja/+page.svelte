@@ -19,7 +19,15 @@
     BookOpen,
     ChevronLeft,
     ChevronRight,
-    User
+    User,
+    Bookmark,
+    Star,
+    ThumbsUp,
+    MessageCircle,
+    Info,
+    HelpCircle,
+    TrendingUp,
+    Zap
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
@@ -44,6 +52,7 @@
   let previewTitle = $state<string | null>(null);
   let previewBanner = $state<string | null>(null);
   let selectedCardVariants = $state<Record<string, string>>({});
+  let showDetailedRules = $state(false);
 
   let isTestDriving = $derived(
     previewFrame !== null || previewColor !== null || previewTitle !== null || previewBanner !== null
@@ -389,6 +398,186 @@
         {/if}
       </aside>
     </header>
+
+    <!-- ETAPA 4: Seção "✦ Como ganhar XP" -->
+    <section class="how-to-earn-xp-section" aria-labelledby="xp-guide-title">
+      <div class="xp-section-header">
+        <div class="xp-header-title-wrap">
+          <div class="xp-badge-icon">
+            <Zap size={18} />
+          </div>
+          <h2 id="xp-guide-title" class="xp-section-title">✦ Como ganhar XP</h2>
+        </div>
+        <button
+          type="button"
+          class="btn-toggle-xp-rules"
+          onclick={() => (showDetailedRules = !showDetailedRules)}
+          aria-expanded={showDetailedRules}
+        >
+          <HelpCircle size={15} />
+          <span>{showDetailedRules ? 'Ocultar Detalhes das Regras' : 'Entenda Cooldowns e Limites'}</span>
+        </button>
+      </div>
+
+      <!-- 6 Activity Cards Grid -->
+      <div class="xp-activities-grid">
+        <!-- 1. Ler Capítulos -->
+        <div class="xp-activity-card featured">
+          <div class="activity-top">
+            <div class="activity-icon-wrap read">
+              <BookOpen size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+150 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Ler Capítulos</h3>
+          <p class="activity-desc">Conclua a leitura de qualquer capítulo publicado pela primeira vez.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Cooldown: 90s</span>
+            <span class="activity-tag">Até 40/dia</span>
+          </div>
+        </div>
+
+        <!-- 2. Favoritar Obras -->
+        <div class="xp-activity-card">
+          <div class="activity-top">
+            <div class="activity-icon-wrap fav">
+              <Bookmark size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+75 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Favoritar Obras</h3>
+          <p class="activity-desc">Adicione obras à sua biblioteca pessoal para acompanhar lançamentos.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Única por obra</span>
+            <span class="activity-tag">Até 10/dia</span>
+          </div>
+        </div>
+
+        <!-- 3. Avaliar Obras -->
+        <div class="xp-activity-card">
+          <div class="activity-top">
+            <div class="activity-icon-wrap rate">
+              <Star size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+50 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Avaliar Obras</h3>
+          <p class="activity-desc">Dê sua nota de 1 a 5 estrelas em suas obras preferidas.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Única por obra</span>
+            <span class="activity-tag">Até 10/dia</span>
+          </div>
+        </div>
+
+        <!-- 4. Comentar -->
+        <div class="xp-activity-card">
+          <div class="activity-top">
+            <div class="activity-icon-wrap comment">
+              <MessageSquare size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+30 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Comentar</h3>
+          <p class="activity-desc">Compartilhe teorias e opiniões em comentários de pelo menos 15 caracteres.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Cooldown: 60s</span>
+            <span class="activity-tag">Até 5/dia</span>
+          </div>
+        </div>
+
+        <!-- 5. Responder a Comentários -->
+        <div class="xp-activity-card">
+          <div class="activity-top">
+            <div class="activity-icon-wrap reply">
+              <MessageCircle size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+20 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Responder</h3>
+          <p class="activity-desc">Participe de conversas respondendo a mensagens de outros leitores.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Cooldown: 60s</span>
+            <span class="activity-tag">Até 5/dia</span>
+          </div>
+        </div>
+
+        <!-- 6. Curtir Comentários -->
+        <div class="xp-activity-card">
+          <div class="activity-top">
+            <div class="activity-icon-wrap like">
+              <ThumbsUp size={20} />
+            </div>
+            <div class="activity-reward-badge">
+              <span>+5 XP</span>
+            </div>
+          </div>
+          <h3 class="activity-name">Curtir Comentários</h3>
+          <p class="activity-desc">Destaque os comentários mais inspiradores e divertidos da comunidade.</p>
+          <div class="activity-footer">
+            <span class="activity-tag">Cooldown: 10s</span>
+            <span class="activity-tag">Até 10/dia</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expandable Explanations / Transparency Panel -->
+      {#if showDetailedRules}
+        <div class="xp-detailed-rules-panel">
+          <div class="rules-grid">
+            <div class="rule-box">
+              <h4 class="rule-title">
+                <Info size={16} class="rule-icon" />
+                <span>O que significa o XP e como usar?</span>
+              </h4>
+              <p>
+                O XP é a energia cósmica conquistada por sua atividade legítima no site. Seu saldo atual é de
+                <strong>{formatXp(currentXp)} XP</strong> (Nível {userLevel}). Cada cosmético na loja possui um preço em XP e uma exigência mínima de nível. Ao adquirir um item, o valor é debitado de forma permanente e o cosmético é adicionado ao seu inventário para sempre.
+              </p>
+            </div>
+
+            <div class="rule-box">
+              <h4 class="rule-title">
+                <CheckCircle2 size={16} class="rule-icon" />
+                <span>Diferença entre Concluir Leitura e Ganhar XP</span>
+              </h4>
+              <p>
+                <strong>Seu histórico e progresso de leitura são sempre salvos instantaneamente</strong> em sua conta, independentemente de qualquer cooldown. O cooldown de 90 segundos aplica-se unicamente ao crédito de bônus de XP, garantindo que leituras em maratona rápida continuem marcadas como lidas sem prejudicar seu histórico.
+              </p>
+            </div>
+
+            <div class="rule-box">
+              <h4 class="rule-title">
+                <Shield size={16} class="rule-icon" />
+                <span>Por que algumas ações não concedem XP novamente?</span>
+              </h4>
+              <p>
+                Para preservar a economia e o valor das conquistas dos leitores dedicados, ações únicas (como reler o mesmo capítulo, favoritar e desfavoritar repetidamente ou reavaliar uma obra) são registradas normalmente pelo site, mas não concedem XP duplicado.
+              </p>
+            </div>
+
+            <div class="rule-box">
+              <h4 class="rule-title">
+                <TrendingUp size={16} class="rule-icon" />
+                <span>Proteção e Transparência do Livro-Razão</span>
+              </h4>
+              <p>
+                Todas as entradas e saídas de XP são registradas em um livro-razão atômico com validação estrita no servidor. Nenhuma alteração no navegador consegue burlar os saldos ou fabricar créditos falsos.
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </section>
 
     <!-- Categories Navigation Section with Mobile Indicators -->
     <div class="categories-nav-wrapper">
@@ -1324,6 +1513,278 @@
   @keyframes pulseDot {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.4; transform: scale(0.75); }
+  }
+
+  /* ==============================================================================
+     ETAPA 4: Seção "✦ Como ganhar XP"
+     ============================================================================== */
+  .how-to-earn-xp-section {
+    background: linear-gradient(135deg, rgba(20, 12, 38, 0.7), rgba(30, 16, 56, 0.75));
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 0 20px rgba(168, 85, 247, 0.05);
+    backdrop-filter: blur(12px);
+  }
+
+  .xp-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .xp-header-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .xp-badge-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #a855f7, #f59e0b);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+  }
+
+  .xp-section-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin: 0;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  .btn-toggle-xp-rules {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: #c4b5fd;
+    padding: 0.45rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-toggle-xp-rules:hover {
+    background: rgba(168, 85, 247, 0.25);
+    color: #ffffff;
+    border-color: rgba(168, 85, 247, 0.6);
+  }
+
+  .xp-activities-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.15rem;
+  }
+
+  @media (max-width: 1024px) {
+    .xp-activities-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+  }
+
+  .xp-activity-card {
+    background: rgba(15, 12, 28, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .xp-activity-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(168, 85, 247, 0.15);
+  }
+
+  .xp-activity-card.featured {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: linear-gradient(135deg, rgba(25, 16, 42, 0.8), rgba(35, 18, 55, 0.75));
+  }
+
+  .activity-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+  }
+
+  .activity-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+  }
+
+  .activity-icon-wrap.read {
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: #c4b5fd;
+  }
+
+  .activity-icon-wrap.fav {
+    background: rgba(244, 63, 94, 0.2);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    color: #fda4af;
+  }
+
+  .activity-icon-wrap.rate {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fde68a;
+  }
+
+  .activity-icon-wrap.comment {
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #bae6fd;
+  }
+
+  .activity-icon-wrap.reply {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+  }
+
+  .activity-icon-wrap.like {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #a7f3d0;
+  }
+
+  .activity-reward-badge {
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+
+  .activity-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+  }
+
+  .activity-desc {
+    font-size: 0.84rem;
+    color: #94a3b8;
+    line-height: 1.45;
+    margin: 0;
+    flex-grow: 1;
+  }
+
+  .activity-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+  }
+
+  .activity-tag {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.18rem 0.5rem;
+    border-radius: 6px;
+  }
+
+  .xp-detailed-rules-panel {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    animation: fadeInRules 0.25s ease forwards;
+  }
+
+  @keyframes fadeInRules {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .rules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .rule-box {
+    background: rgba(12, 10, 22, 0.7);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+
+  .rule-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 0 0 0.5rem 0;
+  }
+
+  :global(.rule-icon) {
+    color: #a855f7;
+    flex-shrink: 0;
+  }
+
+  .rule-box p {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .rule-box p strong {
+    color: #f1f5f9;
+  }
+
+  @media (max-width: 640px) {
+    .how-to-earn-xp-section {
+      padding: 1.15rem;
+      margin-bottom: 1.5rem;
+    }
+    .xp-section-title {
+      font-size: 1.18rem;
+    }
+    .xp-activities-grid {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+    .btn-toggle-xp-rules {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
   /* Categories Navigation Bar with Mobile Indicators */

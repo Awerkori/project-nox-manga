@@ -322,13 +322,29 @@
     }
     busy = true;
     try {
-      await action('member', 'library', {
+      const res = (await action('member', 'library', {
         work_id: data.work.id,
         status: data.library?.status || 'READING',
         favorite: data.library?.favorite || false,
         following: data.library?.following ?? true,
         ...update
-      });
+      })) as any;
+
+      if (res?.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: res.xp_award.amount,
+              total_xp: res.xp_award.total_xp,
+              title: 'Obra favoritada',
+              kind: 'FAVORITE_WORK'
+            }
+          })
+        );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Obra adicionada aos favoritos');
+        }
+      }
       await invalidateAll();
       notice = 'Biblioteca atualizada com sucesso.';
     } catch (e) {

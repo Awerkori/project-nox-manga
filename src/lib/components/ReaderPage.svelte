@@ -39,7 +39,7 @@
           onSeen(page.position, visibleNow && loaded);
         }
       },
-      { rootMargin: '-30% 0px -30% 0px' }
+      { threshold: [0.05, 0.25, 0.5] }
     );
     visibleObserver.observe(root);
   });

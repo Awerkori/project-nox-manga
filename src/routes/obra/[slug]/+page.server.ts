@@ -159,8 +159,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
             .maybeSingle(),
           locals.db
             .from('reading')
-            .select('chapter_id,page,completed_at,chapters!inner(work_id)')
-            .eq('chapters.work_id', work.id)
+            .select('chapter_id,page,completed_at')
+            .eq('user_id', locals.user.id)
+            .eq('work_id', work.id)
             .order('updated_at', { ascending: false })
         ]),
         2500,

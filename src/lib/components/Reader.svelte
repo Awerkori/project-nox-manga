@@ -18,7 +18,6 @@
     gap = $state(false),
     preloadMode = $state<'full' | 'off'>('full'),
     notice = $state(''),
-    xpNotice = $state(''),
     fullscreen = $state(false),
     uiVisible = $state(true),
     showReportModal = $state(false),
@@ -234,33 +233,49 @@
         jump(Math.min(data.pages.length, Math.max(1, saved)));
         pumpPreload();
       });
-      if (!data.preview) {
-        fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
-      }
+      chapterStartTime = Date.now();
+      viewRecorded = false;
+      setTimeout(recordViewOnce, 4500);
       resetHideTimer();
     }
   });
 
-  async function claimXp(retries = 3) {
+  let chapterStartTime = Date.now();
+  let viewRecorded = false;
+
+  function recordViewOnce() {
+    if (viewRecorded || data.preview) return;
+    viewRecorded = true;
+    fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
+  }
+
+  async function claimXp(retries = 2) {
     if (xpAwardConfirmed || xpClaimInFlight || !data.profile || data.preview) return;
     xpClaimInFlight = true;
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const res = (await action('member', 'claim_xp', {
+          work_id: data.chapter.work_id,
           chapter_id: data.chapter.id
-        })) as { awarded?: boolean; reason?: string } | null;
+        })) as { awarded?: boolean; reason?: string; amount?: number; message?: string } | null;
         if (res?.awarded) {
           xpAwardConfirmed = true;
-          xpNotice = '✦ Capítulo Concluído! +25 XP';
-          setTimeout(() => { xpNotice = ''; }, 5000);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('nox-xp-awarded', {
+                detail: {
+                  amount: res.amount || 150,
+                  title: 'Capítulo concluído',
+                  kind: 'READ_CHAPTER'
+                }
+              })
+            );
+            if (typeof (window as any).__noxTriggerXpReward === 'function') {
+              (window as any).__noxTriggerXpReward(res.amount || 150, 'Capítulo concluído');
+            }
+          }
           break;
         }
-        // Server says not ready yet (e.g. reading_time_not_met) — retry after a delay.
-        if (res?.reason === 'not_finished' || res?.reason === 'reading_time_not_met') {
-          if (attempt < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-          continue;
-        }
-        // Already awarded or other terminal reason — stop retrying.
         if (res?.reason === 'already_awarded') {
           xpAwardConfirmed = true;
           break;
@@ -273,22 +288,49 @@
     xpClaimInFlight = false;
   }
 
+  let completionClaimInFlight = false;
+  let completionAwardAttempted = false;
+
   async function completeChapter() {
-    if (chapterCompleted || sending || !data.profile || data.preview) return;
-    chapterCompleted = true;
+    if (completionAwardAttempted || completionClaimInFlight || !((data as any).profile || (data as any).user) || data.preview) return;
+
+    completionClaimInFlight = true;
     try {
       const res = (await action('member', 'read_page', {
         work_id: data.chapter.work_id,
         chapter_id: data.chapter.id,
         page: data.pages.length,
+        total_pages: data.pages.length,
         completed: true
-      })) as { ok?: boolean; completed?: boolean } | null;
-      if (res?.completed && !data.progress?.completed_at) {
-        // Completion registered — now claim XP separately with retry.
-        void claimXp();
+      })) as { ok?: boolean; completed?: boolean; xp_award?: any } | null;
+
+      completionAwardAttempted = true;
+      chapterCompleted = true;
+
+      if (res?.xp_award?.awarded) {
+        xpAwardConfirmed = true;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('nox-xp-awarded', {
+              detail: {
+                amount: res.xp_award.amount,
+                total_xp: res.xp_award.total_xp,
+                title: 'Capítulo concluído',
+                kind: 'READ_CHAPTER'
+              }
+            })
+          );
+          if (typeof (window as any).__noxTriggerXpReward === 'function') {
+            (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Capítulo concluído');
+          }
+        }
+      } else if (res?.xp_award?.reason === 'already_awarded') {
+        xpAwardConfirmed = true;
       }
     } catch {
-      chapterCompleted = false;
+      completionAwardAttempted = false;
+    } finally {
+      completionClaimInFlight = false;
     }
   }
 
@@ -303,7 +345,10 @@
       current = Math.min(...visible);
       pumpPreload();
     }
-    if (maxSeenPage >= data.pages.length && !chapterCompleted) {
+    if (page >= 2 || (data.pages.length === 1 && isVisible)) {
+      recordViewOnce();
+    }
+    if (page >= data.pages.length && isVisible && !chapterCompleted) {
       void completeChapter();
     }
   }
@@ -348,16 +393,16 @@
       /* Default preferences remain valid. */
     }
     const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
-    maxSeenPage = saved;
+    maxSeenPage = 1;
     requestAnimationFrame(() => {
       jump(Math.min(data.pages.length, Math.max(1, saved)));
       pumpPreload();
     });
-    if (!data.preview) {
-      fetch(`/api/chapters/${data.chapter.id}/view`, { method: 'POST' }).catch(() => {});
-    }
+    chapterStartTime = Date.now();
+    viewRecorded = false;
+    setTimeout(recordViewOnce, 4500);
     if (data.profile && !data.preview)
-      action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
+      action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id, total_pages: data.pages.length, completed: false }).catch(
         () => {
           notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
         }
@@ -368,12 +413,16 @@
       endObserver = new IntersectionObserver(
         (entries) => {
           if (entries[0]?.isIntersecting) {
-            maxSeenPage = data.pages.length;
-            current = data.pages.length;
-            void completeChapter();
+            const hasScrolledDown = typeof window !== 'undefined' && window.scrollY > 200;
+            const reachedFinalPages = maxSeenPage >= Math.max(1, data.pages.length - 1);
+            if (hasScrolledDown && reachedFinalPages) {
+              maxSeenPage = data.pages.length;
+              current = data.pages.length;
+              void completeChapter();
+            }
           }
         },
-        { threshold: 0.1 }
+        { threshold: 0.05 }
       );
       endObserver.observe(endEl);
     }
@@ -390,7 +439,8 @@
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
             page: pageToSave,
-            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
+            total_pages: data.pages.length,
+            completed: false
           });
           notice = '';
         } catch {
@@ -425,7 +475,7 @@
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
             page: pageToSave,
-            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
+            completed: maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
           }
         })
       }).catch(() => {});
@@ -622,12 +672,6 @@
   {#if notice}
     <div class="notice reading-width" role="status">{notice}</div>
   {/if}
-  {#if xpNotice}
-    <div class="xp-toast" role="status">
-      <Sparkles size={16} />
-      <span>{xpNotice}</span>
-    </div>
-  {/if}
 
   <div class="page-stack" style="max-width:{width}px;gap:{gap ? '20px' : '0'}">
     {#each data.pages as page, index (page.media_id + ':' + page.position)}
@@ -676,7 +720,7 @@
           </a>
         {/if}
         {#if data.next}
-          <a class="btn-nav-next hero-next" href="/ler/{data.next.id}">
+          <a class="btn-nav-next hero-next" href="/ler/{data.next.id}" onclick={() => void completeChapter()}>
             <span>Próximo Capítulo</span>
             <ArrowRight size={16} />
           </a>
@@ -1423,22 +1467,5 @@
     }
   }
 
-  .xp-toast {
-    position: fixed;
-    top: 76px;
-    right: 20px;
-    z-index: 100;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: rgba(20, 16, 32, 0.95);
-    border: 1px solid rgba(201, 170, 115, 0.5);
-    color: #dfc28d;
-    font-size: 13px;
-    font-weight: 700;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(201, 170, 115, 0.25);
-    backdrop-filter: blur(12px);
-  }
+
 </style>
