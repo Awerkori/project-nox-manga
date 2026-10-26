@@ -1,8 +1,8 @@
 import { withTimeout } from '$lib/server/resilience';
-import { CURATED_COSMETIC_ITEMS, ARCHIVED_SHOP_ITEM_IDS } from '$lib/cosmetics-catalog';
+import { CURATED_COSMETIC_ITEMS } from '$lib/cosmetics-catalog';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
-const SHOP_CACHE_TTL_MS = 120_000;
+const SHOP_CACHE_TTL_MS = 5_000;
 
 export const load = async ({ locals, setHeaders }) => {
   let items: any[] = [];
@@ -13,37 +13,73 @@ export const load = async ({ locals, setHeaders }) => {
       locals.db
         .from('shop_items')
         .select('*')
-        .eq('is_active', true)
         .order('order_index', { ascending: true }),
-      2500,
+      3000,
       { data: [] } as any,
       'shop_items'
     );
 
     const dbItems = res?.data || [];
-    const hasCuratedInDb = dbItems.some((it: any) =>
-      it.id === 'frame_cosmic_nox' || it.id === 'color_cosmic_violet' || it.id === 'title_viajante_estelar'
-    );
+    const dbMap = new Map(dbItems.map((it: any) => [it.id, it]));
+    const curatedMap = new Map(CURATED_COSMETIC_ITEMS.map((it) => [it.id, it]));
 
-    if (hasCuratedInDb) {
-      const dbMap = new Map(dbItems.map((it: any) => [it.id, it]));
-      items = CURATED_COSMETIC_ITEMS.map((curated) => {
-        const dbItem = dbMap.get(curated.id);
-        return dbItem
-          ? {
-              ...curated,
-              price_xp: dbItem.price_xp ?? curated.price_xp,
-              min_level: dbItem.min_level ?? curated.min_level
-            }
-          : curated;
-      });
-    } else {
-      items = CURATED_COSMETIC_ITEMS;
+    const activeItems: any[] = [];
+
+    // 1. Process all curated items with database overlays
+    for (const curated of CURATED_COSMETIC_ITEMS) {
+      const dbItem = dbMap.get(curated.id);
+      if (dbItem) {
+        // If explicitly deactivated or archived by admin, exclude from store
+        if (dbItem.is_active === false || dbItem.status === 'ARCHIVED') {
+          continue;
+        }
+        // Merge database-managed metadata over catalog visual templates
+        activeItems.push({
+          ...curated,
+          name: dbItem.name || curated.name,
+          description: dbItem.description !== undefined ? dbItem.description : curated.description,
+          price_xp: dbItem.price_xp ?? curated.price_xp,
+          min_level: dbItem.min_level ?? curated.min_level,
+          rarity: dbItem.rarity || curated.rarity,
+          is_animated: dbItem.is_animated ?? curated.is_animated,
+          order_index: dbItem.order_index ?? curated.order_index,
+          asset_url: dbItem.asset_url || curated.asset_url,
+          color_variants: dbItem.style_data?.color_variants || curated.color_variants,
+          style_data: { ...curated.style_data, ...(dbItem.style_data || {}) }
+        });
+      } else {
+        // Fallback default from catalog template
+        activeItems.push(curated);
+      }
     }
+
+    // 2. Include custom items added directly via admin panel not present in curated catalog
+    for (const dbItem of dbItems) {
+      if (!curatedMap.has(dbItem.id)) {
+        if (dbItem.is_active !== false && dbItem.status !== 'ARCHIVED') {
+          activeItems.push({
+            id: dbItem.id,
+            name: dbItem.name,
+            description: dbItem.description || '',
+            kind: dbItem.kind,
+            rarity: dbItem.rarity || 'COMUM',
+            price_xp: dbItem.price_xp ?? 500,
+            min_level: dbItem.min_level ?? 1,
+            is_animated: Boolean(dbItem.is_animated),
+            order_index: dbItem.order_index ?? 999,
+            asset_url: dbItem.asset_url || '',
+            style_data: dbItem.style_data || {},
+            color_variants: dbItem.style_data?.color_variants || []
+          });
+        }
+      }
+    }
+
+    activeItems.sort((a, b) => (a.order_index ?? 999) - (b.order_index ?? 999));
+    items = activeItems;
 
     cachedShopItems = { timestamp: Date.now(), data: items };
   }
-
 
   let userInventory: string[] = [];
   let userProfile: any = null;
@@ -87,7 +123,7 @@ export const load = async ({ locals, setHeaders }) => {
     }
   } else {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'public, max-age=5, stale-while-revalidate=30'
     });
   }
 

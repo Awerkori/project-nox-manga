@@ -24,10 +24,18 @@
     Upload,
     MessageSquare,
     Award,
-    Layers
+    Layers,
+    Eye,
+    Check,
+    ChevronDown,
+    Sliders,
+    ToggleLeft,
+    ToggleRight
   } from '@lucide/svelte';
   import { page } from '$app/state';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { getNameColorInfo } from '$lib/name-colors';
+  import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
 
   let { data } = $props();
 
@@ -71,7 +79,16 @@
   let formAssetUrl = $state('');
   let formStyleJson = $state('{}');
 
-  // New helpers: auto-slug & upload state
+  // Color Variants state for Avatar Frames
+  let formColorVariants = $state<Array<{ id: string; label: string; color: string }>>([]);
+  let selectedPreviewVariantColor = $state<string | null>(null);
+
+  // Name Color Engine state
+  let formAnimEngine = $state<string>('nox-color-static');
+  let formColorHex = $state<string>('#c084fc');
+  let formGradientStops = $state<string>('#a855f7, #ec4899, #3b82f6, #a855f7');
+
+  // Auto-slug & upload state
   let slugTouched = $state(false);
   let uploading = $state(false);
   let uploadError = $state('');
@@ -102,23 +119,128 @@
     }
   }
 
-  function applyColorPreset(preset: typeof COLOR_PRESETS[0]) {
+  function parseStyle(raw: string): Record<string, any> {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  // Real-time Preview Color info for Name Color modal preview
+  let previewColorInfo = $derived.by(() => {
+    if (formKind !== 'NAME_COLOR') return { className: '', style: '' };
+    try {
+      const parsed = JSON.parse(formStyleJson || '{}');
+      const animClass = parsed.animationClass || formAnimEngine;
+      const style =
+        parsed.style ||
+        (parsed.gradient
+          ? `background-image: ${parsed.gradient};`
+          : `color: ${parsed.color || formColorHex}; text-shadow: 0 0 8px ${parsed.color || formColorHex}66;`);
+      return { className: animClass, style };
+    } catch {
+      return { className: formAnimEngine, style: `color: ${formColorHex};` };
+    }
+  });
+
+  function syncVariantsJson() {
+    try {
+      const parsed = JSON.parse(formStyleJson || '{}');
+      parsed.color_variants = formColorVariants;
+      formStyleJson = JSON.stringify(parsed, null, 2);
+    } catch {}
+  }
+
+  function addColorVariant() {
+    const nextIdx = formColorVariants.length + 1;
+    formColorVariants = [
+      ...formColorVariants,
+      {
+        id: `variant_${nextIdx}`,
+        label: `Variante ${nextIdx}`,
+        color: '#38bdf8'
+      }
+    ];
+    syncVariantsJson();
+  }
+
+  function removeColorVariant(idx: number) {
+    formColorVariants = formColorVariants.filter((_, i) => i !== idx);
+    syncVariantsJson();
+  }
+
+  function handleAnimEngineChange() {
+    formIsAnimated = formAnimEngine !== 'nox-color-static';
+    if (!formIsAnimated) {
+      formStyleJson = JSON.stringify(
+        {
+          animationClass: 'nox-color-static',
+          color: formColorHex,
+          style: `color: ${formColorHex}; text-shadow: 0 0 8px ${formColorHex}66;`,
+          isGradient: false
+        },
+        null,
+        2
+      );
+    } else {
+      let gradAngle = '90deg';
+      if (formAnimEngine === 'nox-anim-grad-shift') gradAngle = '45deg';
+      if (formAnimEngine === 'nox-anim-grad-flow') gradAngle = '135deg';
+
+      formStyleJson = JSON.stringify(
+        {
+          animationClass: formAnimEngine,
+          style: `background-image: linear-gradient(${gradAngle}, ${formGradientStops});`,
+          isGradient: true
+        },
+        null,
+        2
+      );
+    }
+  }
+
+  function handleStaticColorChange() {
+    formIsAnimated = false;
     formStyleJson = JSON.stringify(
       {
-        gradient: preset.gradient,
-        color: preset.color,
-        textShadow: `0 0 10px ${preset.color}80`
+        animationClass: 'nox-color-static',
+        color: formColorHex,
+        style: `color: ${formColorHex}; text-shadow: 0 0 8px ${formColorHex}66;`,
+        isGradient: false
       },
       null,
       2
     );
   }
 
-  function applySingleColor(colorHex: string) {
+  function handleGradientStopsChange() {
+    formIsAnimated = true;
+    let gradAngle = '90deg';
+    if (formAnimEngine === 'nox-anim-grad-shift') gradAngle = '45deg';
+    if (formAnimEngine === 'nox-anim-grad-flow') gradAngle = '135deg';
+
     formStyleJson = JSON.stringify(
       {
-        color: colorHex,
-        textShadow: `0 0 8px ${colorHex}80`
+        animationClass: formAnimEngine,
+        style: `background-image: linear-gradient(${gradAngle}, ${formGradientStops});`,
+        isGradient: true
+      },
+      null,
+      2
+    );
+  }
+
+  function applyColorPreset(preset: typeof COLOR_PRESETS[0]) {
+    formAnimEngine = 'nox-anim-grad-flow';
+    formIsAnimated = true;
+    formStyleJson = JSON.stringify(
+      {
+        animationClass: 'nox-anim-grad-flow',
+        gradient: preset.gradient,
+        style: `background-image: ${preset.gradient};`,
+        color: preset.color,
+        isGradient: true
       },
       null,
       2
@@ -150,12 +272,10 @@
       const result = await res.json();
       formAssetUrl = `/media/${result.id}`;
 
-      // Auto-detect animation for GIF or animated WebP
       if (result.isAnimated || file.name.toLowerCase().endsWith('.gif') || file.type === 'image/gif') {
         formIsAnimated = true;
       }
 
-      // Auto-suggest name and slug if empty
       if (!formName.trim()) {
         const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
         formName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
@@ -176,7 +296,11 @@
       const matchesSearch =
         it.name.toLowerCase().includes(search.toLowerCase()) ||
         it.id.toLowerCase().includes(search.toLowerCase());
-      const matchesKind = kindFilter === 'ALL' || it.kind === kindFilter;
+      const matchesKind =
+        kindFilter === 'ALL' ||
+        it.kind === kindFilter ||
+        (kindFilter === 'COMMENT_BANNER' && it.kind === 'PROFILE_BANNER') ||
+        (kindFilter === 'PROFILE_BANNER' && it.kind === 'COMMENT_BANNER');
       const matchesStatus =
         statusFilter === 'ALL' ||
         (statusFilter === 'ACTIVE' && it.is_active && it.status !== 'ARCHIVED') ||
@@ -189,29 +313,28 @@
     return new Intl.NumberFormat('pt-BR').format(n);
   }
 
-  function parseStyle(raw: string): Record<string, any> {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-
   function openCreateModal() {
     editingItem = null;
     slugTouched = false;
     formId = '';
     formName = '';
     formDescription = '';
-    formKind = 'AVATAR_FRAME';
+    formKind = kindFilter !== 'ALL' ? (kindFilter as any) : 'AVATAR_FRAME';
     formRarity = 'COMUM';
     formPriceXp = 300;
     formMinLevel = 1;
-    formIsAnimated = false;
+    formIsAnimated = formKind === 'AVATAR_FRAME';
     formStatus = 'ACTIVE';
     formOrderIndex = (data.items?.length || 0) + 1;
     formAssetUrl = '';
     formStyleJson = '{}';
+    formColorVariants = formKind === 'AVATAR_FRAME' ? [
+      { id: 'default', label: 'Padrão', color: '#a78bfa' }
+    ] : [];
+    selectedPreviewVariantColor = null;
+    formAnimEngine = 'nox-color-static';
+    formColorHex = '#a78bfa';
+    formGradientStops = '#a78bfa, #38bdf8, #fbbf24';
     uploadError = '';
     showModal = true;
     notice = '';
@@ -223,7 +346,7 @@
     formId = it.id;
     formName = it.name;
     formDescription = it.description || '';
-    formKind = it.kind;
+    formKind = it.kind === 'PROFILE_BANNER' ? 'COMMENT_BANNER' : it.kind;
     formRarity = it.rarity || 'COMUM';
     formPriceXp = it.price_xp;
     formMinLevel = it.min_level;
@@ -233,6 +356,21 @@
     formAssetUrl = it.asset_url || '';
     formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
     uploadError = '';
+    selectedPreviewVariantColor = null;
+
+    // Load color variants if frame
+    const variants = it.color_variants || it.style_data?.color_variants || [];
+    formColorVariants = Array.isArray(variants) ? variants.map((v: any) => ({ ...v })) : [];
+
+    // Load animation engine if name color
+    if (formKind === 'NAME_COLOR') {
+      const parsed = it.style_data || {};
+      const regInfo = getNameColorInfo(it.id);
+      formAnimEngine = parsed.animationClass || regInfo.className || (it.is_animated ? 'nox-anim-grad-flow' : 'nox-color-static');
+      formColorHex = parsed.color || regInfo.rawColor || '#c084fc';
+      formIsAnimated = formAnimEngine !== 'nox-color-static';
+    }
+
     showModal = true;
     notice = '';
   }
@@ -252,6 +390,8 @@
     formOrderIndex = (data.items?.length || 0) + 1;
     formAssetUrl = it.asset_url || '';
     formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
+    const variants = it.color_variants || it.style_data?.color_variants || [];
+    formColorVariants = Array.isArray(variants) ? variants.map((v: any) => ({ ...v })) : [];
     uploadError = '';
     showModal = true;
     notice = 'Item duplicado no formulário. Ajuste os campos e clique em Salvar.';
@@ -266,13 +406,25 @@
       return;
     }
 
-    let parsedStyle = {};
+    let parsedStyle: Record<string, any> = {};
     try {
       parsedStyle = JSON.parse(formStyleJson);
     } catch {
       notice = 'O campo Estilo (JSON) contém formato inválido.';
       noticeType = 'error';
       return;
+    }
+
+    // Attach color variants if Avatar Frame
+    if (formKind === 'AVATAR_FRAME') {
+      parsedStyle.color_variants = formColorVariants;
+    } else if (formKind === 'NAME_COLOR') {
+      parsedStyle.animationClass = formAnimEngine;
+      if (!formIsAnimated) {
+        parsedStyle.color = formColorHex;
+        parsedStyle.style = `color: ${formColorHex}; text-shadow: 0 0 8px ${formColorHex}66;`;
+        parsedStyle.isGradient = false;
+      }
     }
 
     busy = true;
@@ -317,7 +469,7 @@
         is_active: isNowActive
       });
       await invalidateAll();
-      notice = isNowActive ? `Item "${it.name}" reativado!` : `Item "${it.name}" arquivado.`;
+      notice = isNowActive ? `Item "${it.name}" reativado na Loja!` : `Item "${it.name}" desativado/arquivado da Loja.`;
       noticeType = 'success';
     } catch (err: any) {
       notice = err.message || 'Erro ao alterar status do item.';
@@ -330,7 +482,7 @@
   async function handleDelete(it: any) {
     if (it.owners_count > 0) {
       const ok = confirm(
-        `Este item pertence ao inventário de ${it.owners_count} usuário(s). Por segurança, ele será arquivado em vez de excluído para preservar o inventário dos leitores. Deseja arquivar?`
+        `Este item pertence ao inventário de ${it.owners_count} usuário(s). Por segurança de inventário, ele será arquivado e desativado da loja em vez de excluído para preservar os cosméticos dos leitores. Deseja arquivar?`
       );
       if (!ok) return;
     } else {
@@ -380,6 +532,10 @@
       <ShoppingBag size={15} />
       <span>Resumo</span>
     </a>
+    <a href="/admin/loja?tab=molduras" class="loja-tab-link" class:active={currentTab === 'molduras'}>
+      <Crown size={15} />
+      <span>Molduras</span>
+    </a>
     <a href="/admin/loja?tab=cores" class="loja-tab-link" class:active={currentTab === 'cores'}>
       <Palette size={15} />
       <span>Cores</span>
@@ -387,10 +543,6 @@
     <a href="/admin/loja?tab=titulos" class="loja-tab-link" class:active={currentTab === 'titulos'}>
       <Tag size={15} />
       <span>Títulos</span>
-    </a>
-    <a href="/admin/loja?tab=molduras" class="loja-tab-link" class:active={currentTab === 'molduras'}>
-      <Crown size={15} />
-      <span>Molduras</span>
     </a>
     <a href="/admin/loja?tab=banners" class="loja-tab-link" class:active={currentTab === 'banners'}>
       <ImageIcon size={15} />
@@ -434,13 +586,6 @@
       </button>
       <button
         class="filter-chip"
-        class:active={kindFilter === 'COMMENT_BANNER'}
-        onclick={() => (kindFilter = 'COMMENT_BANNER')}
-      >
-        Banners Comentários ({data.items.filter((i: any) => i.kind === 'COMMENT_BANNER').length})
-      </button>
-      <button
-        class="filter-chip"
         class:active={kindFilter === 'NAME_COLOR'}
         onclick={() => (kindFilter = 'NAME_COLOR')}
       >
@@ -455,10 +600,10 @@
       </button>
       <button
         class="filter-chip"
-        class:active={kindFilter === 'BADGE'}
-        onclick={() => (kindFilter = 'BADGE')}
+        class:active={kindFilter === 'COMMENT_BANNER'}
+        onclick={() => (kindFilter = 'COMMENT_BANNER')}
       >
-        Emblemas ({data.items.filter((i: any) => i.kind === 'BADGE').length})
+        Banners ({data.items.filter((i: any) => i.kind === 'COMMENT_BANNER' || i.kind === 'PROFILE_BANNER').length})
       </button>
     </div>
   </div>
@@ -468,6 +613,7 @@
     {#each filteredItems as item (item.id)}
       {@const style = item.style_data || {}}
       {@const isArchived = !item.is_active || item.status === 'ARCHIVED'}
+      {@const colorInfo = item.kind === 'NAME_COLOR' ? getNameColorInfo(item.id) : null}
       <div class="item-card" class:is-archived={isArchived}>
         <!-- Visual Preview Box -->
         <div class="item-preview-box">
@@ -481,22 +627,20 @@
             />
           {:else if item.kind === 'NAME_COLOR'}
             <span
-              class="preview-color-text"
-              style={style.gradient
-                ? `background: ${style.gradient}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'};`}
+              class="preview-color-text {colorInfo?.className || ''}"
+              style={colorInfo?.style || (style.gradient ? `background: ${style.gradient}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;` : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'};`)}
             >
-              ExemploNox
+              ProjetoNox
             </span>
           {:else if item.kind === 'TITLE'}
             <span class="preview-title-badge" style="color: {style.color || '#dfc28d'}">
               <Crown size={12} />
               <span>{item.name}</span>
             </span>
-          {:else if item.kind === 'COMMENT_BANNER'}
+          {:else if item.kind === 'COMMENT_BANNER' || item.kind === 'PROFILE_BANNER'}
             <div
               class="preview-comment-banner-box"
-              style={item.asset_url ? `background-image: url(${item.asset_url}); background-size: cover; background-position: center;` : style.background ? `background: ${style.background};` : 'background: #181928;'}
+              style={item.asset_url ? `background-image: url(${item.asset_url}); background-size: cover; background-position: center;` : (CURATED_BANNER_BACKGROUNDS[item.id] ? `background: ${CURATED_BANNER_BACKGROUNDS[item.id]}; background-size: cover;` : (style.background ? `background: ${style.background};` : 'background: #181928;'))}
             >
               <MessageSquare size={13} />
               <span>{item.name}</span>
@@ -518,6 +662,11 @@
             </span>
             {#if item.is_animated}
               <span class="anim-tag">Animado</span>
+            {/if}
+            {#if isArchived}
+              <span class="status-badge-mini archived">Inativo</span>
+            {:else}
+              <span class="status-badge-mini active">Disponível</span>
             {/if}
           </div>
         </div>
@@ -557,13 +706,16 @@
           </button>
           <button
             class="btn-card-action archive"
+            class:is-active-btn={!isArchived}
             onclick={() => toggleArchive(item)}
-            title={isArchived ? 'Reativar cosmético na loja' : 'Arquivar cosmético'}
+            title={isArchived ? 'Reativar cosmético na loja' : 'Desativar cosmético da loja'}
           >
             {#if isArchived}
               <RotateCcw size={14} />
+              <span>Ativar</span>
             {:else}
               <Archive size={14} />
+              <span>Desativar</span>
             {/if}
           </button>
           <button class="btn-card-action delete" onclick={() => handleDelete(item)} title="Excluir cosmético">
@@ -593,12 +745,14 @@
         </div>
 
         <form onsubmit={handleSaveItem} class="modal-form">
-          <!-- Live Preview Stage in Modal -->
+          <!-- 10. Live Preview Stage in Modal -->
           <div class="modal-preview-stage">
             <div class="preview-stage-header-row">
               <span class="preview-stage-label">PRÉVIA EM TEMPO REAL</span>
               {#if formIsAnimated}
-                <span class="anim-glow-badge">✨ GIF Animado Ativo</span>
+                <span class="anim-glow-badge">✨ Efeito Animado Ativo</span>
+              {:else}
+                <span class="static-luxury-badge">💎 Estilo Estático Nobre</span>
               {/if}
             </div>
 
@@ -607,22 +761,38 @@
                 <UserAvatar
                   avatarId={data.profile?.avatar_id}
                   frameId={formAssetUrl ? null : formId}
+                  frameColor={selectedPreviewVariantColor}
                   frameUrl={formAssetUrl || null}
                   displayName={formName || 'ProjetoNox'}
-                  size={80}
+                  size={84}
                 />
                 <div class="avatar-preview-meta">
                   <span class="avatar-preview-name">{formName || 'Moldura Cósmica'}</span>
                   <span class="avatar-preview-hint">
-                    {formAssetUrl ? '✓ Renderizada via asset de imagem/GIF' : 'Moldura clássica baseada em CSS'}
+                    {formAssetUrl ? '✓ Renderizada via asset de imagem/GIF' : 'Moldura procedural com vetor SVG e keyframes'}
                   </span>
+                  {#if formColorVariants.length > 0}
+                    <div class="modal-preview-swatches">
+                      <span class="swatch-label">Testar cor:</span>
+                      {#each formColorVariants as variant}
+                        <button
+                          type="button"
+                          class="preview-swatch-btn"
+                          class:active={selectedPreviewVariantColor === variant.color || (!selectedPreviewVariantColor && variant.id === 'default')}
+                          style="background-color: {variant.color};"
+                          onclick={() => (selectedPreviewVariantColor = variant.color === 'default' ? null : variant.color)}
+                          title="{variant.label} ({variant.color})"
+                        ></button>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               </div>
 
             {:else if formKind === 'COMMENT_BANNER'}
               <div
                 class="modal-comment-banner-preview"
-                style={formAssetUrl ? `background-image: url(${formAssetUrl}); background-size: cover; background-position: center;` : parseStyle(formStyleJson).background ? `background: ${parseStyle(formStyleJson).background};` : 'background: #181928;'}
+                style={formAssetUrl ? `background-image: url(${formAssetUrl}); background-size: cover; background-position: center;` : (CURATED_BANNER_BACKGROUNDS[formId] ? `background: ${CURATED_BANNER_BACKGROUNDS[formId]}; background-size: cover;` : (parseStyle(formStyleJson).background ? `background: ${parseStyle(formStyleJson).background};` : 'background: #181928;'))}
               >
                 <div class="comment-preview-glass">
                   <UserAvatar
@@ -643,25 +813,21 @@
             {:else if formKind === 'NAME_COLOR'}
               <div class="modal-color-preview-group">
                 <div class="color-preview-sample">
-                  <span class="sample-label">No Perfil:</span>
+                  <span class="sample-label">Visualização na Loja / Perfil:</span>
                   <span
-                    class="preview-color-text"
-                    style={parseStyle(formStyleJson).gradient
-                      ? `background: ${parseStyle(formStyleJson).gradient}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                      : `color: ${parseStyle(formStyleJson).color || '#ffffff'}; text-shadow: ${parseStyle(formStyleJson).textShadow || 'none'};`}
+                    class="preview-color-text {previewColorInfo.className}"
+                    style={previewColorInfo.style}
                   >
-                    @{data.profile?.username || 'usuario_nox'}
+                    @{data.profile?.username || 'ProjetoNox'}
                   </span>
                 </div>
                 <div class="color-preview-sample reader">
-                  <span class="sample-label">No Leitor:</span>
+                  <span class="sample-label">Visualização no Leitor / Comentários:</span>
                   <span
-                    class="preview-reader-name"
-                    style={parseStyle(formStyleJson).gradient
-                      ? `background: ${parseStyle(formStyleJson).gradient}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                      : `color: ${parseStyle(formStyleJson).color || '#ffffff'}; text-shadow: ${parseStyle(formStyleJson).textShadow || 'none'};`}
+                    class="preview-reader-name {previewColorInfo.className}"
+                    style={previewColorInfo.style}
                   >
-                    Cap. 01 — @{data.profile?.username || 'usuario_nox'}
+                    Cap. 01 — @{data.profile?.username || 'ProjetoNox'}
                   </span>
                 </div>
               </div>
@@ -687,7 +853,31 @@
             {/if}
           </div>
 
-          <!-- Basic Info -->
+          <!-- 5. Disponibilidade na Loja Switch -->
+          <div class="availability-switch-card">
+            <div class="switch-info">
+              <span class="switch-title">Disponibilidade na Loja</span>
+              <span class="switch-sub">
+                {formStatus === 'ACTIVE' ? '✓ Ativo e visível para compra por leitores na Loja Cósmica' : '✗ Desativado / Oculto na Loja (inventários de compradores continuam protegidos)'}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="switch-toggle-btn"
+              class:is-active={formStatus === 'ACTIVE'}
+              onclick={() => (formStatus = formStatus === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE')}
+            >
+              {#if formStatus === 'ACTIVE'}
+                <ToggleRight size={32} class="toggle-icon on" />
+                <span class="toggle-text">Disponível</span>
+              {:else}
+                <ToggleLeft size={32} class="toggle-icon off" />
+                <span class="toggle-text">Inativo</span>
+              {/if}
+            </button>
+          </div>
+
+          <!-- 1. Alterar Nome & ID -->
           <div class="form-row">
             <div class="form-group flex-1">
               <label for="item-name" class="form-label">Nome de Exibição *</label>
@@ -721,6 +911,7 @@
             </div>
           </div>
 
+          <!-- 2. Alterar Descrição -->
           <div class="form-group">
             <label for="item-desc" class="form-label">Descrição Cosmética</label>
             <textarea
@@ -728,18 +919,19 @@
               rows={2}
               class="form-textarea"
               bind:value={formDescription}
-              placeholder="Explique o tema e efeito visual do cosmético…"
+              placeholder="Explique o tema, lore e efeito visual do cosmético…"
             ></textarea>
           </div>
 
+          <!-- Slot Kind & 4. Modificar Raridade -->
           <div class="form-row">
             <div class="form-group flex-1">
               <label for="item-kind" class="form-label">Categoria de Slot</label>
               <select id="item-kind" class="form-select" bind:value={formKind}>
                 <option value="AVATAR_FRAME">Moldura de Avatar</option>
-                <option value="COMMENT_BANNER">Banner de Comentário</option>
                 <option value="NAME_COLOR">Cor de Nome</option>
                 <option value="TITLE">Título Cósmico</option>
+                <option value="COMMENT_BANNER">Banner de Comentário</option>
                 <option value="BADGE">Emblema / Medalha</option>
               </select>
             </div>
@@ -757,6 +949,7 @@
             </div>
           </div>
 
+          <!-- 3. Modificar Preço em XP & Nível Mínimo -->
           <div class="form-row">
             <div class="form-group flex-1">
               <label for="item-price" class="form-label">Preço em XP</label>
@@ -782,6 +975,159 @@
               />
             </div>
           </div>
+
+          <!-- 8. Modificar Variantes de Cor nas Molduras (color_variants) -->
+          {#if formKind === 'AVATAR_FRAME'}
+            <div class="color-variants-editor-section">
+              <div class="section-header-row">
+                <div>
+                  <h4 class="section-title">Variantes de Cor da Moldura ({formColorVariants.length})</h4>
+                  <p class="section-subtitle">Adicione ou ajuste paletas de cor para que o leitor personalize a moldura.</p>
+                </div>
+                <button type="button" class="btn-add-variant" onclick={addColorVariant}>
+                  <Plus size={14} />
+                  <span>Adicionar Cor</span>
+                </button>
+              </div>
+
+              {#if formColorVariants.length === 0}
+                <p class="empty-variants-note">Nenhuma variante configurada. A moldura usará sua paleta nativa.</p>
+              {:else}
+                <div class="variants-list">
+                  {#each formColorVariants as variant, idx}
+                    <div class="variant-item-row">
+                      <input
+                        type="color"
+                        class="variant-color-picker"
+                        bind:value={variant.color}
+                        oninput={() => {
+                          selectedPreviewVariantColor = variant.color;
+                          syncVariantsJson();
+                        }}
+                        title="Seletor de cor"
+                      />
+                      <input
+                        type="text"
+                        class="form-input variant-color-hex font-mono"
+                        bind:value={variant.color}
+                        placeholder="#hex"
+                        oninput={() => {
+                          selectedPreviewVariantColor = variant.color;
+                          syncVariantsJson();
+                        }}
+                      />
+                      <input
+                        type="text"
+                        class="form-input variant-label"
+                        bind:value={variant.label}
+                        placeholder="Nome da variante (ex: Ouro Solar)"
+                        oninput={syncVariantsJson}
+                      />
+                      <input
+                        type="text"
+                        class="form-input variant-id font-mono"
+                        bind:value={variant.id}
+                        placeholder="slug_id"
+                        oninput={syncVariantsJson}
+                      />
+                      <button
+                        type="button"
+                        class="btn-remove-variant"
+                        onclick={() => removeColorVariant(idx)}
+                        title="Remover variante"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- 9. Selecionar Animações/Efeitos Suportados por Dropdown (NAME_COLOR) -->
+          {#if formKind === 'NAME_COLOR'}
+            <div class="name-color-editor-section">
+              <div class="section-header-row">
+                <div>
+                  <h4 class="section-title">Motor Visual & Animação</h4>
+                  <p class="section-subtitle">Selecione o efeito estético verificado sem código arbitrário.</p>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="color-anim-engine" class="form-label">
+                    Efeito / Motor Suportado
+                  </label>
+                  <select
+                    id="color-anim-engine"
+                    class="form-select"
+                    bind:value={formAnimEngine}
+                    onchange={handleAnimEngineChange}
+                  >
+                    <option value="nox-color-static">Estático (Sem animação - Luxo Nobre)</option>
+                    <option value="nox-anim-grad-flow">Deslizamento Suave de Gradiente (Nebulosa / Fluxo Cósmico)</option>
+                    <option value="nox-anim-shimmer">Reflexo Metálico Shimmer (Varredura de Luz Líquida)</option>
+                    <option value="nox-anim-hologram">Iridescência Holográfica (Refração Perolada)</option>
+                    <option value="nox-anim-glint">Glint Estelar Localizado (Ponto de Brilho Viajante)</option>
+                    <option value="nox-anim-grad-shift">Deslocamento Angular Diagonal (Ondas 45°)</option>
+                  </select>
+                </div>
+
+                {#if formAnimEngine === 'nox-color-static'}
+                  <div class="form-group flex-1">
+                    <label for="color-picker-static" class="form-label">Cor Sólida Nobre</label>
+                    <div class="color-picker-input-wrap">
+                      <input
+                        type="color"
+                        id="color-picker-static"
+                        class="form-color-picker"
+                        bind:value={formColorHex}
+                        oninput={handleStaticColorChange}
+                      />
+                      <input
+                        type="text"
+                        class="form-input font-mono"
+                        bind:value={formColorHex}
+                        placeholder="#c084fc"
+                        oninput={handleStaticColorChange}
+                      />
+                    </div>
+                  </div>
+                {:else}
+                  <div class="form-group flex-1">
+                    <label for="color-stops-input" class="form-label">Cores do Gradiente (Stops)</label>
+                    <input
+                      id="color-stops-input"
+                      type="text"
+                      class="form-input font-mono"
+                      bind:value={formGradientStops}
+                      placeholder="#a855f7, #ec4899, #3b82f6"
+                      oninput={handleGradientStopsChange}
+                    />
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Presets Rápidos -->
+              <div class="color-presets-section">
+                <span class="presets-label">Gradientes Pré-configurados Rápidos:</span>
+                <div class="preset-chips-wrap">
+                  {#each COLOR_PRESETS as preset}
+                    <button
+                      type="button"
+                      class="preset-chip"
+                      style="background: {preset.gradient};"
+                      onclick={() => applyColorPreset(preset)}
+                    >
+                      {preset.name}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
 
           <!-- Direct Image / GIF Uploader Zone -->
           <div class="uploader-box">
@@ -812,7 +1158,7 @@
                 {#if uploading}
                   <Loader2 size={24} class="spin dropzone-icon" />
                   <div class="dropzone-text-group">
-                    <strong class="dropzone-text">Enviando e validando animação…</strong>
+                    <strong class="dropzone-text">Enviando e validando asset…</strong>
                     <span class="dropzone-sub">Processando arquivo no servidor</span>
                   </div>
                 {:else if formAssetUrl}
@@ -826,7 +1172,7 @@
                   <Upload size={24} class="dropzone-icon" />
                   <div class="dropzone-text-group">
                     <strong class="dropzone-text">Clique para selecionar imagem ou GIF</strong>
-                    <span class="dropzone-sub">Suporta GIF animado (frames preservados), WebP, PNG e JPG (até 50MB)</span>
+                    <span class="dropzone-sub">Suporta GIF animado, WebP, PNG e SVG</span>
                   </div>
                 {/if}
               </label>
@@ -837,33 +1183,12 @@
             {/if}
           </div>
 
-          <!-- Quick presets for NAME_COLOR -->
-          {#if formKind === 'NAME_COLOR'}
-            <div class="color-presets-section">
-              <div class="presets-header">
-                <span class="form-label">Predefinições Rápidas de Gradiente</span>
-              </div>
-              <div class="preset-chips-wrap">
-                {#each COLOR_PRESETS as preset}
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    style="background: {preset.gradient};"
-                    onclick={() => applyColorPreset(preset)}
-                  >
-                    {preset.name}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
           <!-- Collapsed Advanced Accordion -->
           <details class="advanced-accordion">
             <summary class="advanced-summary">
               <span class="summary-left">
                 <Layers size={14} />
-                <span>Configurações Avançadas (JSON CSS, Ordem & Status)</span>
+                <span>Configurações Técnicas Avançadas (JSON CSS & Ordem)</span>
               </span>
             </summary>
             <div class="advanced-body">
@@ -878,24 +1203,15 @@
                   />
                 </div>
                 <div class="form-group flex-1">
-                  <label for="item-status" class="form-label">Status na Loja</label>
-                  <select id="item-status" class="form-select" bind:value={formStatus}>
-                    <option value="ACTIVE">Ativo (Visível na Loja)</option>
-                    <option value="DRAFT">Rascunho (Oculto)</option>
-                    <option value="ARCHIVED">Arquivado</option>
-                  </select>
+                  <label for="item-asset" class="form-label">URL Direta do Asset</label>
+                  <input
+                    id="item-asset"
+                    type="text"
+                    class="form-input font-mono"
+                    bind:value={formAssetUrl}
+                    placeholder="/media/uuid ou https://..."
+                  />
                 </div>
-              </div>
-
-              <div class="form-group">
-                <label for="item-asset" class="form-label">URL Direta do Asset</label>
-                <input
-                  id="item-asset"
-                  type="text"
-                  class="form-input font-mono"
-                  bind:value={formAssetUrl}
-                  placeholder="/media/uuid ou https://..."
-                />
               </div>
 
               <div class="form-group">
@@ -1050,76 +1366,76 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 18px;
+    padding: 10px 16px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #d1cde0;
+    color: #cbd5e1;
     font-size: 13.5px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
   }
 
   .notice-banner {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    padding: 12px 18px;
-    border-radius: 10px;
-    background: rgba(59, 130, 246, 0.12);
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.15);
     border: 1px solid rgba(59, 130, 246, 0.3);
     color: #93c5fd;
     font-size: 13.5px;
   }
 
   .notice-banner.success {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.35);
     color: #6ee7b7;
   }
 
   .notice-banner.error {
-    background: rgba(239, 68, 68, 0.12);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
     color: #fca5a5;
   }
 
   .btn-close-notice {
-    background: transparent;
+    background: none;
     border: none;
-    color: inherit;
+    color: currentColor;
     cursor: pointer;
-    padding: 4px;
+    padding: 2px;
+    opacity: 0.8;
   }
 
-  /* Toolbar */
   .toolbar-card {
     display: flex;
+    gap: 16px;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
     flex-wrap: wrap;
-    background: rgba(13, 16, 26, 0.6);
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    padding: 14px 18px;
   }
 
   .search-box {
     display: flex;
     align-items: center;
     gap: 10px;
+    padding: 8px 14px;
+    border-radius: 8px;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 8px 14px;
-    flex: 1;
-    min-width: 260px;
-  }
-
-  :global(.search-icon) {
-    color: #8c899e;
+    min-width: 280px;
   }
 
   .search-input {
@@ -1131,6 +1447,10 @@
     width: 100%;
   }
 
+  .search-icon {
+    color: #64748b;
+  }
+
   .filter-group {
     display: flex;
     gap: 8px;
@@ -1138,129 +1458,155 @@
   }
 
   .filter-chip {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    color: #9d99ab;
-    padding: 6px 14px;
+    padding: 6px 12px;
     border-radius: 8px;
-    font-size: 12px;
-    font-weight: 500;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    font-size: 12.5px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .filter-chip:hover {
+    color: #f1f5f9;
     background: rgba(255, 255, 255, 0.06);
-    color: #ffffff;
   }
 
   .filter-chip.active {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.4);
-    color: #c4b5fd;
-    font-weight: 600;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border-color: rgba(223, 194, 141, 0.3);
   }
 
-  /* Items Grid */
+  /* Grid */
   .items-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 16px;
   }
 
   .item-card {
     display: flex;
     flex-direction: column;
-    background: rgba(13, 16, 26, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
+    background: #0f1019;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     overflow: hidden;
-    backdrop-filter: blur(10px);
     transition: all 0.2s ease;
   }
 
   .item-card:hover {
-    border-color: rgba(255, 255, 255, 0.12);
-    transform: translateY(-2px);
+    border-color: rgba(223, 194, 141, 0.25);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 
   .item-card.is-archived {
-    opacity: 0.5;
+    opacity: 0.65;
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
   .item-preview-box {
+    position: relative;
     height: 120px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, rgba(10, 12, 20, 0.95) 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    padding: 12px;
+    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.08) 0%, rgba(9, 10, 15, 0.95) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    overflow: hidden;
   }
 
   .preview-badges-top {
     position: absolute;
     top: 8px;
+    left: 8px;
     right: 8px;
     display: flex;
-    gap: 6px;
+    justify-content: space-between;
     align-items: center;
+    gap: 4px;
+    pointer-events: none;
   }
 
   .rarity-tag {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
+    text-transform: uppercase;
     letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 4px;
   }
 
-  .rarity-comum { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+  .rarity-comum { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
   .rarity-incomum { background: rgba(52, 211, 153, 0.2); color: #34d399; }
-  .rarity-rara { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
-  .rarity-epica { background: rgba(192, 132, 252, 0.2); color: #c084fc; }
+  .rarity-rara { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+  .rarity-epica { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
   .rarity-lendaria { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
   .rarity-mitica { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
 
   .anim-tag {
-    font-size: 9px;
+    font-size: 9.5px;
     font-weight: 700;
-    padding: 2px 5px;
+    padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(139, 92, 246, 0.25);
-    color: #c4b5fd;
+    background: rgba(168, 85, 247, 0.25);
+    color: #e9d5ff;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+  }
+
+  .status-badge-mini {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .status-badge-mini.active {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+
+  .status-badge-mini.archived {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.35);
   }
 
   .preview-color-text {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   .preview-title-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 5px 12px;
-    border-radius: 20px;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 12px;
-    font-weight: 750;
   }
 
-  .preview-banner-box {
+  .preview-comment-banner-box {
     width: 90%;
-    height: 48px;
+    height: 70px;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     font-size: 11px;
     font-weight: 700;
     color: #ffffff;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.5);
   }
 
   .item-info {
@@ -1273,26 +1619,31 @@
 
   .info-top {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
   }
 
   .item-name {
     font-size: 14.5px;
-    font-weight: 750;
+    font-weight: 700;
     color: #ffffff;
     margin: 0;
   }
 
   .item-id {
     font-size: 10.5px;
+    color: #64748b;
     font-family: monospace;
-    color: #8c899e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
   }
 
   .item-desc {
     font-size: 12px;
-    color: #9d99ab;
+    color: #8c899e;
     line-height: 1.4;
     margin: 0;
     display: -webkit-box;
@@ -1303,88 +1654,111 @@
 
   .item-stats-row {
     display: flex;
-    align-items: center;
     gap: 8px;
     margin-top: auto;
-    padding-top: 8px;
+    padding-top: 6px;
   }
 
   .stat-pill {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
     font-size: 11px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 5px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
   }
 
   .stat-pill.xp {
-    background: rgba(201, 170, 115, 0.12);
-    color: #dfc28d;
-    border: 1px solid rgba(201, 170, 115, 0.3);
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
   }
 
   .stat-pill.lvl {
-    background: rgba(255, 255, 255, 0.04);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
   }
 
   .stat-pill.owners {
-    background: rgba(139, 92, 246, 0.1);
-    color: #c4b5fd;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #94a3b8;
   }
 
   .item-card-footer {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 10px 14px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(0, 0, 0, 0.15);
+    gap: 6px;
   }
 
   .btn-card-action {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 5px;
     padding: 6px 10px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #d1cde0;
     font-size: 11.5px;
     font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
     cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-card-action.edit {
-    flex: 1;
-  }
-
-  .btn-card-action.edit:hover {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.35);
-    color: #c4b5fd;
-  }
-
-  .btn-card-action.delete {
-    color: #f87171;
-  }
-
-  .btn-card-action.delete:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.35);
-    color: #fca5a5;
+    transition: all 0.15s ease;
   }
 
   .btn-card-action:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
+  }
+
+  .btn-card-action.edit {
+    flex: 1;
+    justify-content: center;
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #c084fc;
+  }
+
+  .btn-card-action.edit:hover {
+    background: rgba(139, 92, 246, 0.22);
+    color: #ffffff;
+  }
+
+  .btn-card-action.archive.is-active-btn {
+    color: #94a3b8;
+  }
+
+  .btn-card-action.archive:hover {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  .btn-card-action.delete:hover {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 48px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+  }
+
+  .empty-icon {
+    color: #64748b;
+    margin-bottom: 12px;
+  }
+
+  .empty-text {
+    font-size: 14px;
+    color: #94a3b8;
+    margin: 0;
   }
 
   /* Modal */
@@ -1396,133 +1770,198 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999;
+    z-index: 1000;
     padding: 20px;
+    overflow-y: auto;
   }
 
   .modal-card {
-    background: #0f121d;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
+    background: #0f1019;
+    border: 1px solid rgba(223, 194, 141, 0.25);
+    border-radius: 16px;
     width: 100%;
-    max-width: 620px;
+    max-width: 680px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-    padding: 24px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
   }
 
   .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .modal-title {
-    font-size: 20px;
-    font-weight: 800;
+    font-size: 18px;
+    font-weight: 700;
     color: #ffffff;
     margin: 0;
   }
 
   .btn-close-modal {
-    background: transparent;
+    background: none;
     border: none;
-    color: #8c899e;
+    color: #94a3b8;
     cursor: pointer;
     padding: 4px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
   }
 
-  .modal-preview-stage {
-    position: relative;
-    min-height: 130px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, rgba(5, 7, 12, 0.98) 100%);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
-    border-radius: 14px;
+  .btn-close-modal:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .modal-form {
+    padding: 24px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px 16px;
-    margin-bottom: 18px;
-    overflow: hidden;
+    gap: 18px;
+  }
+
+  /* Live Preview Stage */
+  .modal-preview-stage {
+    padding: 18px;
+    border-radius: 12px;
+    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.12) 0%, rgba(15, 16, 25, 0.95) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .preview-stage-header-row {
-    position: absolute;
-    top: 8px;
-    left: 12px;
-    right: 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 
   .preview-stage-label {
-    font-size: 9px;
+    font-size: 10.5px;
     font-weight: 800;
-    letter-spacing: 0.12em;
-    color: #8c899e;
+    letter-spacing: 0.1em;
+    color: #dfc28d;
+    text-transform: uppercase;
   }
 
   .anim-glow-badge {
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 700;
-    color: #c4b5fd;
-    background: rgba(139, 92, 246, 0.25);
-    border: 1px solid rgba(139, 92, 246, 0.4);
-    padding: 2px 7px;
+    padding: 3px 8px;
     border-radius: 6px;
+    background: rgba(168, 85, 247, 0.2);
+    color: #d8b4fe;
+    border: 1px solid rgba(168, 85, 247, 0.35);
   }
 
-  /* Avatar Stage */
+  .static-luxury-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
   .avatar-preview-box {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 18px;
+    padding: 10px 0;
   }
 
   .avatar-preview-meta {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
   }
 
   .avatar-preview-name {
     font-size: 15px;
-    font-weight: 800;
+    font-weight: 700;
     color: #ffffff;
   }
 
   .avatar-preview-hint {
-    font-size: 11px;
-    color: #9d99ab;
+    font-size: 11.5px;
+    color: #94a3b8;
   }
 
-  /* Comment Banner Stage */
+  .modal-preview-swatches {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .swatch-label {
+    font-size: 11px;
+    color: #cbd5e1;
+    font-weight: 600;
+  }
+
+  .preview-swatch-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .preview-swatch-btn.active {
+    border-color: #ffffff;
+    transform: scale(1.15);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  }
+
+  .modal-color-preview-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 8px 0;
+  }
+
+  .color-preview-sample {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .sample-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    min-width: 175px;
+  }
+
   .modal-comment-banner-preview {
-    width: 100%;
     border-radius: 10px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    padding: 14px;
   }
 
   .comment-preview-glass {
-    background: rgba(10, 12, 20, 0.78);
-    backdrop-filter: blur(8px);
-    padding: 12px 14px;
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
+    gap: 10px;
+    background: rgba(15, 16, 25, 0.85);
+    backdrop-filter: blur(8px);
+    border-radius: 8px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .comment-preview-content {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    flex: 1;
+    gap: 2px;
   }
 
   .comment-preview-user-row {
@@ -1534,136 +1973,326 @@
   }
 
   .comment-tag {
-    font-size: 9.5px;
+    font-size: 9px;
     font-weight: 800;
     padding: 1px 5px;
     border-radius: 4px;
-    background: rgba(201, 170, 115, 0.2);
-    color: #dfc28d;
-    border: 1px solid rgba(201, 170, 115, 0.35);
+    background: #eab308;
+    color: #000;
   }
 
   .comment-preview-text {
     font-size: 12px;
     color: #cbd5e1;
     margin: 0;
-    line-height: 1.35;
   }
 
-  /* Profile Banner Stage */
-  .modal-profile-banner-preview {
-    width: 100%;
-    height: 85px;
-    border-radius: 10px;
-    overflow: hidden;
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: flex-end;
-  }
-
-  .profile-banner-glass-bar {
-    width: 100%;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(6px);
-    padding: 8px 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .profile-banner-title {
-    font-size: 13px;
-    font-weight: 750;
-    color: #ffffff;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  }
-
-  /* Color Stage */
-  .modal-color-preview-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-    max-width: 440px;
-  }
-
-  .color-preview-sample {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-  }
-
-  .sample-label {
-    font-size: 11px;
-    color: #8c899e;
-    font-weight: 600;
-  }
-
-  .preview-reader-name {
-    font-size: 13.5px;
-    font-weight: 800;
-  }
-
-  /* Title Stage */
   .modal-title-preview-box {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    padding: 12px;
   }
 
   .title-preview-sub {
-    font-size: 11px;
-    color: #8c899e;
+    font-size: 11.5px;
+    color: #94a3b8;
   }
 
-  /* Badge Stage */
-  .modal-badge-preview-box {
+  /* Availability Switch Card */
+  .availability-switch-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .switch-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 6px;
+    gap: 2px;
   }
 
-  .modal-badge-img {
-    width: 44px;
-    height: 44px;
-    object-fit: contain;
-  }
-
-  .modal-badge-icon {
-    color: #dfc28d;
-  }
-
-  .modal-badge-label {
-    font-size: 13px;
-    font-weight: 750;
+  .switch-title {
+    font-size: 13.5px;
+    font-weight: 700;
     color: #ffffff;
   }
 
-  /* Auto-slug Badge */
-  .auto-slug-badge {
-    font-size: 9px;
-    font-weight: 800;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
-    margin-left: 6px;
+  .switch-sub {
+    font-size: 11.5px;
+    color: #94a3b8;
   }
 
-  /* Uploader Box */
-  .uploader-box {
+  .switch-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+  }
+
+  .switch-toggle-btn.is-active {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+  }
+
+  .toggle-icon.on {
+    color: #10b981;
+  }
+
+  .toggle-icon.off {
+    color: #64748b;
+  }
+
+  /* Form Elements */
+  .form-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .flex-1 {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .auto-slug-badge {
+    font-size: 10px;
+    color: #38bdf8;
+    font-weight: 700;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 13.5px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .form-input:focus,
+  .form-select:focus,
+  .form-textarea:focus {
+    border-color: #8b5cf6;
+  }
+
+  .form-textarea {
+    resize: vertical;
+  }
+
+  .font-mono {
+    font-family: monospace;
+    font-size: 12.5px;
+  }
+
+  /* Color Variants Editor */
+  .color-variants-editor-section {
+    padding: 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .section-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .section-subtitle {
+    font-size: 11.5px;
+    color: #94a3b8;
+    margin: 2px 0 0;
+  }
+
+  .btn-add-variant {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c084fc;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .btn-add-variant:hover {
+    background: rgba(139, 92, 246, 0.25);
+    color: #ffffff;
+  }
+
+  .variants-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .variant-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .variant-color-picker {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    padding: 0;
+  }
+
+  .variant-color-hex {
+    width: 85px;
+  }
+
+  .variant-label {
+    flex: 2;
+  }
+
+  .variant-id {
+    flex: 1;
+  }
+
+  .btn-remove-variant {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    border-radius: 6px;
+    padding: 7px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-remove-variant:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ffffff;
+  }
+
+  .empty-variants-note {
+    font-size: 12px;
+    color: #64748b;
+    margin: 4px 0;
+    font-style: italic;
+  }
+
+  /* Name Color Editor Section */
+  .name-color-editor-section {
+    padding: 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .color-picker-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-color-picker {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    padding: 0;
+  }
+
+  .color-presets-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .presets-label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  .preset-chips-wrap {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .preset-chip {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+
+  .preset-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  }
+
+  /* Uploader */
+  .uploader-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .uploader-header {
@@ -1673,24 +2302,132 @@
   }
 
   .btn-clear-asset {
-    background: transparent;
-    border: none;
-    color: #f87171;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 4px;
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 11px;
+    cursor: pointer;
   }
 
-  .btn-clear-asset:hover {
-    text-decoration: underline;
+  .dropzone-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
 
-  .dropzone-wrap {
-    position: relative;
+  .dropzone-label:hover {
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.05);
+  }
+
+  .dropzone-icon {
+    color: #8b5cf6;
+  }
+
+  .dropzone-icon.success {
+    color: #10b981;
+  }
+
+  .dropzone-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .dropzone-text {
+    font-size: 12.5px;
+    color: #ffffff;
+  }
+
+  .dropzone-sub {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .btn-replace-pill {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .upload-error-msg {
+    font-size: 11.5px;
+    color: #ef4444;
+    margin: 2px 0 0;
+  }
+
+  /* Accordion */
+  .advanced-accordion {
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .advanced-summary {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+  }
+
+  .summary-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .advanced-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+
+  .form-checkbox {
+    width: 15px;
+    height: 15px;
+    accent-color: #8b5cf6;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .sr-only {
@@ -1702,309 +2439,5 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     border: 0;
-  }
-
-  .dropzone-label {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .dropzone-label:hover {
-    border-color: #8b5cf6;
-    background: rgba(139, 92, 246, 0.05);
-  }
-
-  .dropzone-label.is-uploading {
-    pointer-events: none;
-    opacity: 0.75;
-  }
-
-  :global(.dropzone-icon) {
-    color: #8c899e;
-    flex-shrink: 0;
-  }
-
-  :global(.dropzone-icon.success) {
-    color: #34d399;
-  }
-
-  .dropzone-text-group {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .dropzone-text {
-    font-size: 13px;
-    font-weight: 700;
-    color: #ffffff;
-  }
-
-  .dropzone-text.file-set {
-    color: #6ee7b7;
-  }
-
-  .dropzone-sub {
-    font-size: 11px;
-    color: #8c899e;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .btn-replace-pill {
-    font-size: 11px;
-    font-weight: 700;
-    color: #c4b5fd;
-    background: rgba(139, 92, 246, 0.2);
-    border: 1px solid rgba(139, 92, 246, 0.35);
-    padding: 4px 10px;
-    border-radius: 6px;
-  }
-
-  .upload-error-msg {
-    font-size: 11.5px;
-    color: #f87171;
-    margin: 0;
-  }
-
-  /* Color presets */
-  .color-presets-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .presets-header {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .preset-chips-wrap {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .preset-chip {
-    padding: 5px 12px;
-    border-radius: 6px;
-    font-size: 11.5px;
-    font-weight: 700;
-    color: #ffffff;
-    border: none;
-    cursor: pointer;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    transition: transform 0.15s ease;
-  }
-
-  .preset-chip:hover {
-    transform: scale(1.05);
-  }
-
-  /* Advanced Accordion */
-  .advanced-accordion {
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.2);
-    overflow: hidden;
-  }
-
-  .advanced-summary {
-    padding: 10px 14px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 12px;
-    font-weight: 700;
-    color: #8c899e;
-    transition: color 0.2s ease;
-  }
-
-  .advanced-summary:hover {
-    color: #ffffff;
-  }
-
-  .summary-left {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .advanced-body {
-    padding: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  /* Cards in grid additional styles */
-  .preview-comment-banner-box {
-    width: 90%;
-    height: 48px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #ffffff;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .preview-badge-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 12px;
-    font-weight: 700;
-    color: #dfc28d;
-  }
-
-  .badge-card-icon {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-  }
-
-  .modal-form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .form-row {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-  }
-
-  .form-row.items-center {
-    align-items: center;
-  }
-
-  .flex-1 {
-    flex: 1;
-    min-width: 180px;
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .form-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: #b5b1c7;
-  }
-
-  .form-input,
-  .form-textarea,
-  .form-select {
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 10px 14px;
-    color: #ffffff;
-    font-size: 13.5px;
-    outline: none;
-    transition: all 0.2s ease;
-  }
-
-  .form-input:focus,
-  .form-textarea:focus,
-  .form-select:focus {
-    border-color: #8b5cf6;
-    background: rgba(0, 0, 0, 0.5);
-  }
-
-  .font-mono {
-    font-family: monospace;
-  }
-
-  .checkbox-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #dfc28d;
-    cursor: pointer;
-  }
-
-  .form-checkbox {
-    width: 18px;
-    height: 18px;
-    accent-color: #8b5cf6;
-    cursor: pointer;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 10px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .empty-state {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 64px 20px;
-    text-align: center;
-    color: #6c687e;
-  }
-
-  .empty-icon {
-    margin-bottom: 12px;
-    opacity: 0.5;
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @media (max-width: 600px) {
-    .admin-page {
-      padding: 16px;
-    }
-    .items-grid {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

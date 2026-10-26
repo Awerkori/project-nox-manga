@@ -742,10 +742,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'COMUM',
     price_xp: 200,
     min_level: 1,
-    is_animated: true,
+    is_animated: false,
     order_index: 51,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-glow-breathe", "color": "#c084fc", "style": "color: #c084fc; text-shadow: 0 0 10px rgba(192, 132, 252, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #c084fc; text-shadow: 0 0 8px rgba(192, 132, 252, 0.4);","isGradient":false,"color":"#c084fc"}
   },
   {
     id: 'color_neon_cyan',
@@ -755,10 +755,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'COMUM',
     price_xp: 200,
     min_level: 1,
-    is_animated: true,
+    is_animated: false,
     order_index: 52,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-plasma", "color": "#38bdf8", "style": "color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #38bdf8; text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);","isGradient":false,"color":"#38bdf8"}
   },
   {
     id: 'color_pure_starlight',
@@ -768,10 +768,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'COMUM',
     price_xp: 250,
     min_level: 2,
-    is_animated: true,
+    is_animated: false,
     order_index: 53,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-shimmer", "color": "", "style": "background-image: linear-gradient(90deg, #94a3b8 0%, #ffffff 35%, #38bdf8 50%, #ffffff 65%, #94a3b8 100%);", "isGradient": true, "backgroundImage": "linear-gradient(90deg, #94a3b8 0%, #ffffff 35%, #38bdf8 50%, #ffffff 65%, #94a3b8 100%)"}
+    style_data: {"animationClass":"nox-color-static","style":"color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.45);","isGradient":false,"color":"#ffffff"}
   },
   {
     id: 'color_emerald_arcane',
@@ -781,10 +781,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'INCOMUM',
     price_xp: 400,
     min_level: 3,
-    is_animated: true,
+    is_animated: false,
     order_index: 54,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-twinkle", "color": "#34d399", "style": "color: #34d399; text-shadow: 0 0 10px rgba(52, 211, 153, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #34d399; text-shadow: 0 0 8px rgba(52, 211, 153, 0.4);","isGradient":false,"color":"#34d399"}
   },
   {
     id: 'color_sapphire_blue',
@@ -794,10 +794,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'INCOMUM',
     price_xp: 450,
     min_level: 3,
-    is_animated: true,
+    is_animated: false,
     order_index: 55,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-glow-breathe", "color": "#60a5fa", "style": "color: #60a5fa; text-shadow: 0 0 10px rgba(96, 165, 250, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #60a5fa; text-shadow: 0 0 8px rgba(96, 165, 250, 0.4);","isGradient":false,"color":"#60a5fa"}
   },
   {
     id: 'color_toxic_neon_green',
@@ -807,10 +807,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'INCOMUM',
     price_xp: 500,
     min_level: 4,
-    is_animated: true,
+    is_animated: false,
     order_index: 56,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-plasma", "color": "#4ade80", "style": "color: #4ade80; text-shadow: 0 0 12px rgba(74, 222, 128, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #4ade80; text-shadow: 0 0 8px rgba(74, 222, 128, 0.4);","isGradient":false,"color":"#4ade80"}
   },
   {
     id: 'color_lunar_silver',
@@ -820,10 +820,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'INCOMUM',
     price_xp: 500,
     min_level: 4,
-    is_animated: true,
+    is_animated: false,
     order_index: 57,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-shimmer", "color": "", "style": "background-image: linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #e2e8f0 65%, #64748b 100%);", "isGradient": true, "backgroundImage": "linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #e2e8f0 65%, #64748b 100%)"}
+    style_data: {"animationClass":"nox-color-static","style":"color: #e2e8f0; text-shadow: 0 0 8px rgba(226, 232, 240, 0.4);","isGradient":false,"color":"#e2e8f0"}
   },
   {
     id: 'color_radiant_coral',
@@ -833,10 +833,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'RARA',
     price_xp: 800,
     min_level: 5,
-    is_animated: true,
+    is_animated: false,
     order_index: 58,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-chroma", "color": "#fb7185", "style": "color: #fb7185; text-shadow: 0 0 10px rgba(251, 113, 133, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #fb7185; text-shadow: 0 0 8px rgba(251, 113, 133, 0.4);","isGradient":false,"color":"#fb7185"}
   },
   {
     id: 'color_glacial_turquoise',
@@ -849,7 +849,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 59,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-twinkle", "color": "#22d3ee", "style": "color: #22d3ee; text-shadow: 0 0 10px rgba(34, 211, 238, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #0891b2 0%, #22d3ee 35%, #ffffff 50%, #22d3ee 65%, #0891b2 100%);","isGradient":true}
   },
   {
     id: 'color_blazing_orange',
@@ -859,10 +859,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'RARA',
     price_xp: 900,
     min_level: 6,
-    is_animated: true,
+    is_animated: false,
     order_index: 60,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-flame", "color": "#fb923c", "style": "color: #fb923c; text-shadow: 0 0 10px rgba(251, 146, 60, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);","isGradient":false,"color":"#fb923c"}
   },
   {
     id: 'color_imperial_gold',
@@ -875,7 +875,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 61,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-chroma", "color": "#fbbf24", "style": "color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #b45309 0%, #facc15 35%, #ffffff 50%, #facc15 65%, #b45309 100%);","isGradient":true}
   },
   {
     id: 'color_cosmic_pink',
@@ -885,10 +885,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'RARA',
     price_xp: 1000,
     min_level: 7,
-    is_animated: true,
+    is_animated: false,
     order_index: 62,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-twinkle", "color": "#f472b6", "style": "color: #f472b6; text-shadow: 0 0 10px rgba(244, 114, 182, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #f472b6; text-shadow: 0 0 8px rgba(244, 114, 182, 0.4);","isGradient":false,"color":"#f472b6"}
   },
   {
     id: 'color_amethyst_radiant',
@@ -898,10 +898,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'RARA',
     price_xp: 1100,
     min_level: 7,
-    is_animated: true,
+    is_animated: false,
     order_index: 63,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-glow-breathe", "color": "#d8b4fe", "style": "color: #d8b4fe; text-shadow: 0 0 10px rgba(216, 180, 254, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #d8b4fe; text-shadow: 0 0 8px rgba(216, 180, 254, 0.4);","isGradient":false,"color":"#d8b4fe"}
   },
   {
     id: 'color_cyber_acid_green',
@@ -914,7 +914,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 64,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-plasma", "color": "#a3e635", "style": "color: #a3e635; text-shadow: 0 0 12px rgba(163, 230, 53, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #4d7c0f 0%, #a3e635 35%, #ffffff 50%, #a3e635 65%, #4d7c0f 100%);","isGradient":true}
   },
   {
     id: 'color_crimson_red',
@@ -924,10 +924,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'EPICA',
     price_xp: 1600,
     min_level: 9,
-    is_animated: true,
+    is_animated: false,
     order_index: 65,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-abyss", "color": "#ef4444", "style": "color: #ef4444; text-shadow: 0 0 12px rgba(239, 68, 68, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);","isGradient":false,"color":"#ef4444"}
   },
   {
     id: 'color_solar_gold',
@@ -937,10 +937,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'EPICA',
     price_xp: 1800,
     min_level: 10,
-    is_animated: true,
+    is_animated: false,
     order_index: 66,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-chroma", "color": "#fde047", "style": "color: #fde047; text-shadow: 0 0 10px rgba(253, 224, 71, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);","isGradient":false,"color":"#fbbf24"}
   },
   {
     id: 'color_stellar_lapis',
@@ -950,10 +950,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'EPICA',
     price_xp: 1900,
     min_level: 10,
-    is_animated: true,
+    is_animated: false,
     order_index: 67,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-glow-breathe", "color": "#818cf8", "style": "color: #818cf8; text-shadow: 0 0 10px rgba(129, 140, 248, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #818cf8; text-shadow: 0 0 8px rgba(129, 140, 248, 0.4);","isGradient":false,"color":"#818cf8"}
   },
   {
     id: 'color_blood_ruby',
@@ -963,10 +963,10 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     rarity: 'EPICA',
     price_xp: 2000,
     min_level: 11,
-    is_animated: true,
+    is_animated: false,
     order_index: 68,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-supernova", "color": "#b91c1c", "style": "color: #b91c1c; text-shadow: 0 0 14px rgba(185, 28, 28, 0.95);", "isGradient": false}
+    style_data: {"animationClass":"nox-color-static","style":"color: #b91c1c; text-shadow: 0 0 8px rgba(185, 28, 28, 0.4);","isGradient":false,"color":"#b91c1c"}
   },
   {
     id: 'color_ethereal_turquoise',
@@ -979,7 +979,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 69,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-glow-breathe", "color": "#2dd4bf", "style": "color: #2dd4bf; text-shadow: 0 0 10px rgba(45, 212, 191, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #5eead4, #93c5fd, #c4b5fd, #5eead4);","isGradient":true}
   },
   {
     id: 'color_twilight_gradient',
@@ -992,7 +992,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 70,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-flow", "color": "", "style": "background-image: linear-gradient(135deg, #a855f7, #ec4899, #3b82f6);", "isGradient": true, "backgroundImage": "linear-gradient(135deg, #a855f7, #ec4899, #3b82f6)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #a855f7, #ec4899, #3b82f6, #a855f7);","isGradient":true}
   },
   {
     id: 'color_spectral_aurora',
@@ -1005,7 +1005,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 71,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-shift", "color": "", "style": "background-image: linear-gradient(45deg, #10b981, #06b6d4, #8b5cf6);", "isGradient": true, "backgroundImage": "linear-gradient(45deg, #10b981, #06b6d4, #8b5cf6)"}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #6ee7b7, #38bdf8, #c084fc, #6ee7b7);","isGradient":true}
   },
   {
     id: 'color_phoenix_blaze',
@@ -1018,7 +1018,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 72,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-flame", "color": "#f97316", "style": "color: #f97316; text-shadow: 0 0 12px rgba(249, 115, 22, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #c2410c 0%, #ea580c 40%, #fed7aa 50%, #ea580c 60%, #c2410c 100%);","isGradient":true}
   },
   {
     id: 'color_cosmic_prism',
@@ -1031,7 +1031,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 73,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-flow", "color": "", "style": "background-image: linear-gradient(135deg, #f43f5e, #fbbf24, #10b981, #3b82f6);", "isGradient": true, "backgroundImage": "linear-gradient(135deg, #f43f5e, #fbbf24, #10b981, #3b82f6)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #f43f5e, #fbbf24, #10b981, #3b82f6, #f43f5e);","isGradient":true}
   },
   {
     id: 'color_golden_supernova',
@@ -1044,7 +1044,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 74,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-supernova", "color": "#f59e0b", "style": "color: #f59e0b; text-shadow: 0 0 14px rgba(245, 158, 11, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #d97706 0%, #fbbf24 40%, #ffffff 50%, #fbbf24 60%, #d97706 100%);","isGradient":true}
   },
   {
     id: 'color_galactic_abyss',
@@ -1057,7 +1057,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 75,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-abyss", "color": "#818cf8", "style": "color: #818cf8; text-shadow: 0 0 12px rgba(129, 140, 248, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #312e81, #6366f1, #38bdf8, #312e81);","isGradient":true}
   },
   {
     id: 'color_plasma_storm',
@@ -1070,7 +1070,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 76,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-plasma", "color": "#06b6d4", "style": "color: #06b6d4; text-shadow: 0 0 12px rgba(6, 182, 212, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #c084fc, #38bdf8, #f472b6, #c084fc);","isGradient":true}
   },
   {
     id: 'color_solar_eclipse',
@@ -1083,7 +1083,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 77,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-supernova", "color": "#ea580c", "style": "color: #ea580c; text-shadow: 0 0 12px rgba(234, 88, 12, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #c2410c 0%, #f97316 40%, #fef08a 50%, #f97316 60%, #c2410c 100%);","isGradient":true}
   },
   {
     id: 'color_nebula_dream',
@@ -1096,7 +1096,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 78,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-flow", "color": "", "style": "background-image: linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4);", "isGradient": true, "backgroundImage": "linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4, #ec4899);","isGradient":true}
   },
   {
     id: 'color_dragon_fire',
@@ -1109,7 +1109,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 79,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-flame", "color": "#ef4444", "style": "color: #ef4444; text-shadow: 0 0 12px rgba(239, 68, 68, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #ef4444, #f97316, #fbbf24, #ef4444);","isGradient":true}
   },
   {
     id: 'color_cyberpunk_neon',
@@ -1122,7 +1122,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 80,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-shift", "color": "", "style": "background-image: linear-gradient(45deg, #f43f5e, #06b6d4, #a855f7);", "isGradient": true, "backgroundImage": "linear-gradient(45deg, #f43f5e, #06b6d4, #a855f7)"}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #f472b6, #38bdf8, #a78bfa, #f472b6);","isGradient":true}
   },
   {
     id: 'color_celestial_dawn',
@@ -1135,7 +1135,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 81,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-flow", "color": "", "style": "background-image: linear-gradient(135deg, #fbbf24, #f43f5e, #c084fc);", "isGradient": true, "backgroundImage": "linear-gradient(135deg, #fbbf24, #f43f5e, #c084fc)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #fbbf24, #f43f5e, #c084fc, #fbbf24);","isGradient":true}
   },
   {
     id: 'color_void_singularity',
@@ -1148,7 +1148,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 82,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-abyss", "color": "#a78bfa", "style": "color: #a78bfa; text-shadow: 0 0 12px rgba(167, 139, 250, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #1e1b4b, #7c3aed, #a78bfa, #1e1b4b);","isGradient":true}
   },
   {
     id: 'color_mystic_emerald_stream',
@@ -1161,7 +1161,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 83,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-shift", "color": "", "style": "background-image: linear-gradient(45deg, #10b981, #34d399, #059669);", "isGradient": true, "backgroundImage": "linear-gradient(45deg, #10b981, #34d399, #059669)"}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #10b981, #34d399, #059669, #10b981);","isGradient":true}
   },
   {
     id: 'color_supergiant_star',
@@ -1174,7 +1174,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 84,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-twinkle", "color": "#f87171", "style": "color: #f87171; text-shadow: 0 0 10px rgba(248, 113, 113, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #b91c1c 0%, #ef4444 40%, #ffffff 50%, #ef4444 60%, #b91c1c 100%);","isGradient":true}
   },
   {
     id: 'color_chrono_amber',
@@ -1187,7 +1187,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 85,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-supernova", "color": "#d97706", "style": "color: #d97706; text-shadow: 0 0 12px rgba(217, 119, 6, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #b45309 0%, #d97706 40%, #fef3c7 50%, #d97706 60%, #b45309 100%);","isGradient":true}
   },
   {
     id: 'color_hologram_matrix',
@@ -1200,7 +1200,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 86,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-shift", "color": "", "style": "background-image: linear-gradient(45deg, #06b6d4, #3b82f6, #6366f1);", "isGradient": true, "backgroundImage": "linear-gradient(45deg, #06b6d4, #3b82f6, #6366f1)"}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #a5b4fc, #67e8f9, #fbcfe8, #a5b4fc);","isGradient":true}
   },
   {
     id: 'color_valkyrie_wings',
@@ -1213,7 +1213,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 87,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-chroma", "color": "#f472b6", "style": "color: #f472b6; text-shadow: 0 0 10px rgba(244, 114, 182, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #fbcfe8, #bae6fd, #e0e7ff, #fbcfe8);","isGradient":true}
   },
   {
     id: 'color_abyssal_deep',
@@ -1226,7 +1226,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 88,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-abyss", "color": "#38bdf8", "style": "color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #0369a1, #38bdf8, #0284c7, #0369a1);","isGradient":true}
   },
   {
     id: 'color_sakura_petal',
@@ -1239,7 +1239,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 89,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-twinkle", "color": "#fda4af", "style": "color: #fda4af; text-shadow: 0 0 10px rgba(253, 164, 175, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-hologram","style":"background-image: linear-gradient(135deg, #fda4af, #fef08a, #fbcfe8, #fda4af);","isGradient":true}
   },
   {
     id: 'color_infernal_sulfur',
@@ -1252,7 +1252,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 90,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-flame", "color": "#f59e0b", "style": "color: #f59e0b; text-shadow: 0 0 10px rgba(245, 158, 11, 0.85);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #b45309, #f59e0b, #ea580c, #b45309);","isGradient":true}
   },
   {
     id: 'color_electric_violet',
@@ -1265,7 +1265,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 91,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-plasma", "color": "#a855f7", "style": "color: #a855f7; text-shadow: 0 0 12px rgba(168, 85, 247, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #7e22ce 0%, #a855f7 40%, #ffffff 50%, #a855f7 60%, #7e22ce 100%);","isGradient":true}
   },
   {
     id: 'color_arcane_runes',
@@ -1278,7 +1278,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 92,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-supernova", "color": "#e11d48", "style": "color: #e11d48; text-shadow: 0 0 12px rgba(225, 29, 72, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #991b1b 0%, #f43f5e 35%, #ffffff 50%, #f43f5e 65%, #991b1b 100%);","isGradient":true}
   },
   {
     id: 'color_diamond_sparkle',
@@ -1291,7 +1291,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 93,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-shimmer", "color": "", "style": "background-image: linear-gradient(90deg, #93c5fd 0%, #ffffff 35%, #bfdbfe 50%, #ffffff 65%, #93c5fd 100%);", "isGradient": true, "backgroundImage": "linear-gradient(90deg, #93c5fd 0%, #ffffff 35%, #bfdbfe 50%, #ffffff 65%, #93c5fd 100%)"}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #93c5fd 0%, #ffffff 35%, #bfdbfe 50%, #ffffff 65%, #93c5fd 100%);","isGradient":true}
   },
   {
     id: 'color_quantum_flux',
@@ -1304,7 +1304,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 94,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-flow", "color": "", "style": "background-image: linear-gradient(135deg, #06b6d4, #8b5cf6, #f43f5e);", "isGradient": true, "backgroundImage": "linear-gradient(135deg, #06b6d4, #8b5cf6, #f43f5e)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #06b6d4, #8b5cf6, #f43f5e, #06b6d4);","isGradient":true}
   },
   {
     id: 'color_starlight_gold',
@@ -1317,7 +1317,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 95,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-shimmer", "color": "", "style": "background-image: linear-gradient(90deg, #d97706 0%, #fbbf24 35%, #ffffff 50%, #fbbf24 65%, #d97706 100%);", "isGradient": true, "backgroundImage": "linear-gradient(90deg, #d97706 0%, #fbbf24 35%, #ffffff 50%, #fbbf24 65%, #d97706 100%)"}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #d97706 0%, #fbbf24 35%, #ffffff 50%, #fbbf24 65%, #d97706 100%);","isGradient":true}
   },
   {
     id: 'color_blood_moon',
@@ -1330,7 +1330,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 96,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-flame", "color": "#dc2626", "style": "color: #dc2626; text-shadow: 0 0 12px rgba(220, 38, 38, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #7f1d1d, #ef4444, #991b1b, #7f1d1d);","isGradient":true}
   },
   {
     id: 'color_oceanic_pearl',
@@ -1343,7 +1343,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 97,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-grad-shift", "color": "", "style": "background-image: linear-gradient(45deg, #38bdf8, #818cf8, #c084fc);", "isGradient": true, "backgroundImage": "linear-gradient(45deg, #38bdf8, #818cf8, #c084fc)"}
+    style_data: {"animationClass":"nox-anim-grad-flow","style":"background-image: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc, #38bdf8);","isGradient":true}
   },
   {
     id: 'color_dark_matter',
@@ -1356,7 +1356,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 98,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-abyss", "color": "#c084fc", "style": "color: #c084fc; text-shadow: 0 0 12px rgba(192, 132, 252, 0.9);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-grad-shift","style":"background-image: linear-gradient(45deg, #581c87, #9333ea, #c084fc, #581c87);","isGradient":true}
   },
   {
     id: 'color_cosmic_comet',
@@ -1369,7 +1369,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 99,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-shimmer", "color": "", "style": "background-image: linear-gradient(90deg, #0284c7 0%, #38bdf8 35%, #ffffff 50%, #38bdf8 65%, #0284c7 100%);", "isGradient": true, "backgroundImage": "linear-gradient(90deg, #0284c7 0%, #38bdf8 35%, #ffffff 50%, #38bdf8 65%, #0284c7 100%)"}
+    style_data: {"animationClass":"nox-anim-shimmer","style":"background-image: linear-gradient(90deg, #0284c7 0%, #38bdf8 35%, #ffffff 50%, #38bdf8 65%, #0284c7 100%);","isGradient":true}
   },
   {
     id: 'color_supreme_sovereign',
@@ -1382,7 +1382,7 @@ export const CURATED_COSMETIC_ITEMS: CosmeticItem[] = [
     is_animated: true,
     order_index: 100,
     asset_url: '',
-    style_data: {"animationClass": "nox-anim-chroma", "color": "#eab308", "style": "color: #eab308; text-shadow: 0 0 14px rgba(234, 179, 8, 0.95);", "isGradient": false}
+    style_data: {"animationClass":"nox-anim-glint","style":"background-image: linear-gradient(90deg, #a16207 0%, #eab308 40%, #ffffff 50%, #eab308 60%, #a16207 100%);","isGradient":true}
   },
   // =========================================================================
   // C. TÍTULOS CÓSMICOS (50 títulos de alta lore sem genéricos)

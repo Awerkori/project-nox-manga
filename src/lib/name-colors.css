@@ -1,15 +1,24 @@
 /**
  * src/lib/name-colors.css
- * Global animations and visual styles for Project Nox Name Colors.
- * 10 distinct, visible animation engines designed for dark themes with high contrast.
- * Fully supports prefers-reduced-motion.
+ * Curated, elegant animations and visual styles for Project Nox Name Colors.
+ * 
+ * Variety of visual styles:
+ * - Static Luxury & Solid Nobles (No animation, high-contrast, crisp typography)
+ * - Smooth Sliding Gradient Waves (nox-anim-grad-flow)
+ * - Metallic Shimmer Beam (nox-anim-shimmer)
+ * - Holographic Iridescent Shift (nox-anim-hologram)
+ * - Localized Traveling Glint (nox-anim-glint)
+ * - Diagonal Angular Drift (nox-anim-grad-shift)
+ * 
+ * ZERO rapid blinking, ZERO harsh strobe.
+ * Full prefers-reduced-motion support.
  */
 
 /* =========================================================================
-   KEYFRAME DEFINITIONS
+   KEYFRAME DEFINITIONS (Fluid, GPU-accelerated, non-strobe)
    ========================================================================= */
 
-/* 1. Dynamic Gradient Flow (Multi-stop smooth wave) */
+/* 1. Smooth Horizontal Gradient Flow (Water / Nebula wave) */
 @keyframes noxKeyframeGradFlow {
   0% {
     background-position: 0% 50%;
@@ -22,7 +31,7 @@
   }
 }
 
-/* 2. Shifting Angle Gradient */
+/* 2. Diagonal Angular Drift (Smooth 45deg transition) */
 @keyframes noxKeyframeGradShift {
   0% {
     background-position: 0% 0%;
@@ -35,7 +44,7 @@
   }
 }
 
-/* 3. Radiant Shimmer Beam (Light traveling across the letters) */
+/* 3. Metallic Light Reflection / Shimmer Sweep */
 @keyframes noxKeyframeShimmer {
   0% {
     background-position: -200% 0;
@@ -45,125 +54,45 @@
   }
 }
 
-/* 4. Deep Luminous Aura Breathing (Pulse) */
-@keyframes noxKeyframeGlowBreathe {
-  0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 4px currentColor);
-    transform: scale(1);
-  }
-  50% {
-    filter: brightness(1.45) drop-shadow(0 0 16px currentColor) drop-shadow(0 0 8px #ffffff);
-    transform: scale(1.035);
-  }
-}
-
-/* 5. Incandescent Flame Heatwave */
-@keyframes noxKeyframeFlame {
-  0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 4px #f97316);
-    transform: translateY(0);
-  }
-  25% {
-    filter: brightness(1.35) drop-shadow(0 0 14px #ef4444) drop-shadow(0 0 20px #f97316);
-    transform: translateY(-1px) scale(1.015);
-  }
-  50% {
-    filter: brightness(1.15) drop-shadow(0 0 8px #f59e0b);
-    transform: translateY(0.5px);
-  }
-  75% {
-    filter: brightness(1.45) drop-shadow(0 0 18px #dc2626) drop-shadow(0 0 24px #ef4444);
-    transform: translateY(-0.8px) scale(1.02);
-  }
-}
-
-/* 6. Electric Plasma Crepitation (High-frequency sparks) */
-@keyframes noxKeyframePlasma {
-  0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 4px currentColor);
-    transform: scale(1);
-  }
-  20% {
-    filter: brightness(1.5) drop-shadow(0 0 16px #38bdf8) drop-shadow(0 0 24px #60a5fa);
-    transform: scale(1.02);
-  }
-  40% {
-    filter: brightness(1.1) drop-shadow(0 0 6px currentColor);
-    transform: scale(0.99);
-  }
-  60% {
-    filter: brightness(1.65) drop-shadow(0 0 22px #ffffff) drop-shadow(0 0 14px #38bdf8);
-    transform: scale(1.03);
-  }
-  80% {
-    filter: brightness(1.25) drop-shadow(0 0 9px currentColor);
-    transform: scale(1.01);
-  }
-}
-
-/* 7. Spectral Chromatic Rotation (Rainbow Cycle) */
-@keyframes noxKeyframeChroma {
+/* 4. Pearlescent Hologram Iridescence */
+@keyframes noxKeyframeHologram {
   0% {
-    filter: hue-rotate(0deg) brightness(1.1) drop-shadow(0 0 8px currentColor);
+    background-position: 0% 50%;
+    filter: hue-rotate(0deg);
   }
   50% {
-    filter: hue-rotate(180deg) brightness(1.4) drop-shadow(0 0 18px currentColor);
+    background-position: 100% 50%;
+    filter: hue-rotate(30deg);
   }
   100% {
-    filter: hue-rotate(360deg) brightness(1.1) drop-shadow(0 0 8px currentColor);
+    background-position: 0% 50%;
+    filter: hue-rotate(0deg);
   }
 }
 
-/* 8. Star Twinkle (Diamond Sparkle) */
-@keyframes noxKeyframeTwinkle {
-  0%, 100% {
-    opacity: 0.85;
-    filter: drop-shadow(0 0 3px currentColor) brightness(1);
-    transform: scale(1);
+/* 5. Localized Traveling Glint / Star Streak */
+@keyframes noxKeyframeGlint {
+  0% {
+    background-position: -150% 0;
   }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 20px currentColor) drop-shadow(0 0 10px #ffffff) brightness(1.5);
-    transform: scale(1.03);
-  }
-}
-
-/* 9. Void Dark Matter Inversion (Abyss Pulse) */
-@keyframes noxKeyframeAbyss {
-  0%, 100% {
-    filter: drop-shadow(0 0 5px #7c3aed);
-    transform: scale(1);
-  }
-  50% {
-    filter: drop-shadow(0 0 18px #3b82f6) drop-shadow(0 0 28px #9333ea) brightness(1.35);
-    transform: scale(1.035);
-  }
-}
-
-/* 10. Supernova Flare Surge */
-@keyframes noxKeyframeSupernova {
-  0%, 100% {
-    filter: brightness(1) drop-shadow(0 0 4px #fbbf24);
-    transform: scale(1);
-  }
-  42% {
-    filter: brightness(1.18) drop-shadow(0 0 10px #f59e0b);
-    transform: scale(1.01);
-  }
-  50% {
-    filter: brightness(1.7) drop-shadow(0 0 26px #ffffff) drop-shadow(0 0 18px #fbbf24) drop-shadow(0 0 32px #f59e0b);
-    transform: scale(1.045);
-  }
-  58% {
-    filter: brightness(1.18) drop-shadow(0 0 10px #f59e0b);
-    transform: scale(1.01);
+  100% {
+    background-position: 250% 0;
   }
 }
 
 /* =========================================================================
-   ANIMATION CLASSES APPLIED TO NAME ELEMENTS
+   STYLE CLASSES
    ========================================================================= */
 
+/* Static Luxury Colors & Gradients (Zero motion) */
+.nox-color-static {
+  display: inline-block;
+  font-weight: 700;
+  animation: none !important;
+  transform: none !important;
+}
+
+/* Smooth Gradient Flow Wave */
 .nox-anim-grad-flow {
   display: inline-block;
   background-size: 250% 250% !important;
@@ -171,10 +100,47 @@
   background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   color: transparent !important;
-  animation: noxKeyframeGradFlow 3.2s ease infinite !important;
+  animation: noxKeyframeGradFlow 4.2s ease-in-out infinite !important;
   font-weight: 700;
 }
 
+/* Metallic Shimmer Reflection */
+.nox-anim-shimmer {
+  display: inline-block;
+  background-size: 220% auto !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+  animation: noxKeyframeShimmer 3.2s ease-in-out infinite !important;
+  font-weight: 700;
+}
+
+/* Holographic Pearlescent Wave */
+.nox-anim-hologram {
+  display: inline-block;
+  background-size: 250% 250% !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+  animation: noxKeyframeHologram 5s ease-in-out infinite !important;
+  font-weight: 700;
+}
+
+/* Localized Glint / Star Streak */
+.nox-anim-glint {
+  display: inline-block;
+  background-size: 200% auto !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+  animation: noxKeyframeGlint 3.6s ease-in-out infinite !important;
+  font-weight: 700;
+}
+
+/* Diagonal Angular Drift */
 .nox-anim-grad-shift {
   display: inline-block;
   background-size: 300% 300% !important;
@@ -182,76 +148,19 @@
   background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   color: transparent !important;
-  animation: noxKeyframeGradShift 4s linear infinite !important;
+  animation: noxKeyframeGradShift 5s linear infinite !important;
   font-weight: 700;
 }
 
-.nox-anim-shimmer {
-  display: inline-block;
-  background-size: 200% auto !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  color: transparent !important;
-  animation: noxKeyframeShimmer 2.4s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-glow-breathe {
-  display: inline-block;
-  animation: noxKeyframeGlowBreathe 2.4s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-flame {
-  display: inline-block;
-  animation: noxKeyframeFlame 1.9s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-plasma {
-  display: inline-block;
-  animation: noxKeyframePlasma 1.6s steps(2, start) infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-chroma {
-  display: inline-block;
-  animation: noxKeyframeChroma 5s linear infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-twinkle {
-  display: inline-block;
-  animation: noxKeyframeTwinkle 2.1s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-abyss {
-  display: inline-block;
-  animation: noxKeyframeAbyss 3s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-.nox-anim-supernova {
-  display: inline-block;
-  animation: noxKeyframeSupernova 3.4s ease-in-out infinite !important;
-  font-weight: 700;
-}
-
-/* Accessibility: respect users who prefer reduced motion */
+/* Accessibility: respects prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .nox-anim-grad-flow,
-  .nox-anim-grad-shift,
   .nox-anim-shimmer,
-  .nox-anim-glow-breathe,
-  .nox-anim-flame,
-  .nox-anim-plasma,
-  .nox-anim-chroma,
-  .nox-anim-twinkle,
-  .nox-anim-abyss,
-  .nox-anim-supernova {
+  .nox-anim-hologram,
+  .nox-anim-glint,
+  .nox-anim-grad-shift {
     animation: none !important;
     transform: none !important;
+    filter: none !important;
   }
 }
