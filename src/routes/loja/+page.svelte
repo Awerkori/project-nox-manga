@@ -215,7 +215,7 @@
   <title>Loja Cósmica & Cosméticos | Project Nox</title>
   <meta
     name="description"
-    content="Personalize seu perfil no Project Nox com molduras animadas, cores de nome exclusivas, títulos cósmicos e banners de alta definição."
+    content="Personalize seu perfil e comentários no Project Nox com molduras animadas, cores de nome animadas, títulos cósmicos e banners de comentário."
   />
 </svelte:head>
 
@@ -242,7 +242,7 @@
         </div>
         <h1 class="shop-title">Loja Cósmica</h1>
         <p class="shop-desc">
-          Troque o XP acumulado durante suas leituras por molduras animadas exclusivas, banners astrais em alta
+          Troque o XP acumulado durante suas leituras por molduras animadas exclusivas, banners de comentário astrais em alta
           definição, títulos honorários e cores dinâmicas para seu perfil e comentários.
         </p>
 
@@ -298,7 +298,11 @@
         <div class="preview-meta">
           <span
             class="preview-name"
-            style={(previewColor || equippedColor) ? `color: ${previewColor || equippedColor}` : ''}
+            style={(previewColor || equippedColor)
+              ? (String(previewColor || equippedColor).includes('gradient')
+                ? `background-image: ${previewColor || equippedColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: gradientFlow 3.5s ease infinite;`
+                : `color: ${previewColor || equippedColor}; text-shadow: 0 0 10px ${previewColor || equippedColor}; animation: glowPulse 2.8s ease-in-out infinite;`)
+              : ''}
           >
             {data.profile?.display_name || data.profile?.username || 'Visitante Nox'}
           </span>
@@ -369,7 +373,7 @@
         onclick={() => (activeTab = 'PROFILE_BANNER')}
       >
         <ImageIcon size={16} />
-        <span>Banners</span>
+        <span>Banners de Comentário</span>
         <span class="cat-count">{categoryCounts.PROFILE_BANNER}</span>
       </button>
     </nav>
@@ -474,8 +478,8 @@
                     <span
                       class="color-demo-text"
                       style={style.backgroundImage
-                        ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                        : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'};`}
+                        ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
+                        : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
                     >
                       {data.profile?.username || 'ProjetoNox'}
                     </span>
@@ -713,8 +717,8 @@
                           <span
                             class="mock-author-name"
                             style={style.backgroundImage
-                              ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                              : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'};`}
+                              ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
+                              : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
                           >
                             {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
                           </span>
@@ -736,8 +740,8 @@
                       <span
                         class="mock-reader-user"
                         style={style.backgroundImage
-                          ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent;`
-                          : `color: ${style.color || '#ffffff'};`}
+                          ? `background-image: ${style.backgroundImage}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 250% 250%; animation: ${style.animation || 'gradientFlow 3.5s ease infinite'};`
+                          : `color: ${style.color || '#ffffff'}; text-shadow: ${style.textShadow || 'none'}; animation: ${style.animation || 'glowPulse 2.8s ease-in-out infinite'};`}
                       >
                         @{data.profile?.username || 'usuario'}
                       </span>
@@ -1410,9 +1414,22 @@
     opacity: 1;
   }
 
+  @keyframes gradientFlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  @keyframes glowPulse {
+    0%, 100% { filter: brightness(1) drop-shadow(0 0 2px currentColor); transform: scale(1); }
+    50% { filter: brightness(1.22) drop-shadow(0 0 8px currentColor); transform: scale(1.02); }
+  }
+
   .color-demo-text {
     font-size: 1.4rem;
     font-weight: 800;
+    display: inline-block;
+    transition: transform 0.2s ease;
   }
 
   .title-demo-badge {

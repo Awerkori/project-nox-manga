@@ -55,28 +55,58 @@
     frameColor || (rawFrameId && rawFrameId.includes(':') ? rawFrameId.split(':')[1] : null)
   );
 
-  let resolvedFrameKey = $derived.by(() => {
+    let resolvedFrameKey = $derived.by(() => {
     if (!parsedFrameId) return null;
     if (parsedFrameId === 'frame_cosmic_nox') return 'cosmic';
     if (parsedFrameId === 'frame_cyber_neon') return 'cyber';
     if (parsedFrameId === 'frame_emerald_veil') return 'emerald';
     if (parsedFrameId === 'frame_solar_flare') return 'solar';
     if (parsedFrameId === 'frame_particle_stardust') return 'stardust';
+    if (parsedFrameId === 'frame_crystal_shards') return 'crystal';
+    if (parsedFrameId === 'frame_lightning_storm') return 'lightning';
     if (parsedFrameId === 'frame_aurora_mystic') return 'aurora';
     if (parsedFrameId === 'frame_crimson_eclipse') return 'crimson';
-    if (parsedFrameId === 'frame_celestial_sovereign' || parsedFrameId === 'frame_celestial_gold') return 'celestial';
-    // Round 3 frames
-    if (parsedFrameId === 'frame_lightning_storm') return 'lightning';
-    if (parsedFrameId === 'frame_crystal_shards') return 'crystal';
     if (parsedFrameId === 'frame_void_vortex') return 'vortex';
     if (parsedFrameId === 'frame_astral_thorn_crown') return 'thorn';
-    // Round 4 new frames
+    if (parsedFrameId === 'frame_celestial_sovereign' || parsedFrameId === 'frame_celestial_gold') return 'celestial';
     if (parsedFrameId === 'frame_angelic_seraph') return 'angelic';
     if (parsedFrameId === 'frame_abyssal_infernal') return 'infernal';
     if (parsedFrameId === 'frame_oceanic_tide') return 'oceanic';
     if (parsedFrameId === 'frame_runic_monolith') return 'monolith';
     if (parsedFrameId === 'frame_blossom_astral') return 'blossom';
     if (parsedFrameId === 'frame_cyber_glitch_v2' || parsedFrameId === 'frame_cyber_glitch') return 'glitch';
+    if (parsedFrameId === 'frame_phoenix_rebirth') return 'phoenix';
+    if (parsedFrameId === 'frame_dragon_scale') return 'dragon';
+    if (parsedFrameId === 'frame_chrono_gear') return 'chrono';
+    if (parsedFrameId === 'frame_chaos_orb') return 'chaos';
+    if (parsedFrameId === 'frame_sacred_valkyrie') return 'valkyrie';
+    if (parsedFrameId === 'frame_astral_eye') return 'eye';
+    if (parsedFrameId === 'frame_quantum_shield') return 'shield';
+    if (parsedFrameId === 'frame_spectral_wraith') return 'wraith';
+    if (parsedFrameId === 'frame_diamond_sovereign') return 'diamond';
+    if (parsedFrameId === 'frame_astral_blade') return 'blade';
+    if (parsedFrameId === 'frame_alchemy_circle') return 'alchemy';
+    if (parsedFrameId === 'frame_spider_fate') return 'spider';
+    if (parsedFrameId === 'frame_moon_phases') return 'moon';
+    if (parsedFrameId === 'frame_supernova_burst') return 'supernova';
+    if (parsedFrameId === 'frame_holy_grail') return 'grail';
+    if (parsedFrameId === 'frame_deep_kraken') return 'kraken';
+    if (parsedFrameId === 'frame_sakura_storm') return 'sakura';
+    if (parsedFrameId === 'frame_cyber_matrix') return 'matrix';
+    if (parsedFrameId === 'frame_demonic_gargoyle') return 'gargoyle';
+    if (parsedFrameId === 'frame_celestial_harp') return 'harp';
+    if (parsedFrameId === 'frame_arcane_portal') return 'portal';
+    if (parsedFrameId === 'frame_volcanic_core') return 'volcanic';
+    if (parsedFrameId === 'frame_frozen_glacier') return 'glacier';
+    if (parsedFrameId === 'frame_serpent_ouroboros') return 'ouroboros';
+    if (parsedFrameId === 'frame_black_hole_horizon') return 'blackhole';
+    if (parsedFrameId === 'frame_divine_mandala') return 'mandala';
+    if (parsedFrameId === 'frame_steampunk_chronos') return 'steampunk';
+    if (parsedFrameId === 'frame_plasma_discharge') return 'plasma';
+    if (parsedFrameId === 'frame_shadow_assassin') return 'shadow';
+    if (parsedFrameId === 'frame_cosmic_compass') return 'compass';
+    if (parsedFrameId === 'frame_fairy_dust') return 'fairy';
+    if (parsedFrameId === 'frame_god_emperor') return 'emperor';
     return 'legacy';
   });
 
@@ -88,24 +118,56 @@
 <div
   class="user-avatar-root {className}"
   class:has-frame={!!parsedFrameId || !!frameUrl}
-  class:frame-cosmic={resolvedFrameKey === 'cosmic'}
+    class:frame-cosmic={resolvedFrameKey === 'cosmic'}
   class:frame-cyber={resolvedFrameKey === 'cyber'}
   class:frame-emerald={resolvedFrameKey === 'emerald'}
   class:frame-solar={resolvedFrameKey === 'solar'}
   class:frame-stardust={resolvedFrameKey === 'stardust'}
+  class:frame-crystal={resolvedFrameKey === 'crystal'}
+  class:frame-lightning={resolvedFrameKey === 'lightning'}
   class:frame-aurora={resolvedFrameKey === 'aurora'}
   class:frame-crimson={resolvedFrameKey === 'crimson'}
-  class:frame-celestial={resolvedFrameKey === 'celestial'}
-  class:frame-lightning={resolvedFrameKey === 'lightning'}
-  class:frame-crystal={resolvedFrameKey === 'crystal'}
   class:frame-vortex={resolvedFrameKey === 'vortex'}
   class:frame-thorn={resolvedFrameKey === 'thorn'}
+  class:frame-celestial={resolvedFrameKey === 'celestial'}
   class:frame-angelic={resolvedFrameKey === 'angelic'}
   class:frame-infernal={resolvedFrameKey === 'infernal'}
   class:frame-oceanic={resolvedFrameKey === 'oceanic'}
   class:frame-monolith={resolvedFrameKey === 'monolith'}
   class:frame-blossom={resolvedFrameKey === 'blossom'}
   class:frame-glitch={resolvedFrameKey === 'glitch'}
+  class:frame-phoenix={resolvedFrameKey === 'phoenix'}
+  class:frame-dragon={resolvedFrameKey === 'dragon'}
+  class:frame-chrono={resolvedFrameKey === 'chrono'}
+  class:frame-chaos={resolvedFrameKey === 'chaos'}
+  class:frame-valkyrie={resolvedFrameKey === 'valkyrie'}
+  class:frame-eye={resolvedFrameKey === 'eye'}
+  class:frame-shield={resolvedFrameKey === 'shield'}
+  class:frame-wraith={resolvedFrameKey === 'wraith'}
+  class:frame-diamond={resolvedFrameKey === 'diamond'}
+  class:frame-blade={resolvedFrameKey === 'blade'}
+  class:frame-alchemy={resolvedFrameKey === 'alchemy'}
+  class:frame-spider={resolvedFrameKey === 'spider'}
+  class:frame-moon={resolvedFrameKey === 'moon'}
+  class:frame-supernova={resolvedFrameKey === 'supernova'}
+  class:frame-grail={resolvedFrameKey === 'grail'}
+  class:frame-kraken={resolvedFrameKey === 'kraken'}
+  class:frame-sakura={resolvedFrameKey === 'sakura'}
+  class:frame-matrix={resolvedFrameKey === 'matrix'}
+  class:frame-gargoyle={resolvedFrameKey === 'gargoyle'}
+  class:frame-harp={resolvedFrameKey === 'harp'}
+  class:frame-portal={resolvedFrameKey === 'portal'}
+  class:frame-volcanic={resolvedFrameKey === 'volcanic'}
+  class:frame-glacier={resolvedFrameKey === 'glacier'}
+  class:frame-ouroboros={resolvedFrameKey === 'ouroboros'}
+  class:frame-blackhole={resolvedFrameKey === 'blackhole'}
+  class:frame-mandala={resolvedFrameKey === 'mandala'}
+  class:frame-steampunk={resolvedFrameKey === 'steampunk'}
+  class:frame-plasma={resolvedFrameKey === 'plasma'}
+  class:frame-shadow={resolvedFrameKey === 'shadow'}
+  class:frame-compass={resolvedFrameKey === 'compass'}
+  class:frame-fairy={resolvedFrameKey === 'fairy'}
+  class:frame-emperor={resolvedFrameKey === 'emperor'}
   class:tint-blue={parsedFrameColor === 'blue' || parsedFrameColor === 'sapphire'}
   class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red' || parsedFrameColor === 'ruby'}
   class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple' || parsedFrameColor === 'amethyst'}
@@ -446,6 +508,287 @@
             <rect x="42" y="6" width="16" height="3" class="glitch-bit" />
             <rect x="42" y="91" width="16" height="3" class="glitch-bit" />
           </g>
+        </svg>
+
+      
+
+      {:else if resolvedFrameKey === 'phoenix'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M16,45 C4,25 6,8 24,12 C18,24 22,36 32,46 Z" class="phoenix-wing wing-l" />
+          <path d="M84,45 C96,25 94,8 76,12 C82,24 78,36 68,46 Z" class="phoenix-wing wing-r" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+          <polygon points="50,4 54,12 50,15 46,12" class="phoenix-crest" />
+          <circle cx="50" cy="92" r="2.5" class="frame-mote" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'dragon'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="10 6" />
+          <polygon points="50,2 54,9 50,14 46,9" class="dragon-scale-horn" />
+          <polygon points="26,16 33,22 28,26 22,20" class="dragon-claw" />
+          <polygon points="74,16 78,20 72,26 67,22" class="dragon-claw" />
+          <polygon points="50,98 46,91 50,86 54,91" class="dragon-scale-horn" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'chrono'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42.5" class="chrono-teeth" stroke-dasharray="4 4" stroke-width="2.5" />
+          <line x1="50" y1="50" x2="50" y2="16" class="chrono-hand-min" stroke-width="1.8" />
+          <line x1="50" y1="50" x2="74" y2="50" class="chrono-hand-hour" stroke-width="2.2" />
+          <circle cx="50" cy="50" r="3" class="frame-center-node" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'chaos'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <g class="chaos-nodes">
+            <circle cx="20" cy="30" r="3.2" class="chaos-orb orb-1" />
+            <circle cx="80" cy="30" r="3.2" class="chaos-orb orb-2" />
+            <circle cx="50" cy="90" r="3.5" class="chaos-orb orb-3" />
+          </g>
+          <ellipse cx="50" cy="50" rx="43" ry="20" class="chaos-orbit" transform="rotate(45 50 50)" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'valkyrie'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M22,35 L12,12 L28,22 Z" class="valkyrie-wing" />
+          <path d="M78,35 L88,12 L72,22 Z" class="valkyrie-wing" />
+          <polygon points="50,4 53,10 50,13 47,10" class="valkyrie-tiara" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'eye'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+          <g class="eye-symbol" transform="translate(50, 10)">
+            <path d="M-12,0 Q0,-8 12,0 Q0,8 -12,0 Z" class="eye-shape" />
+            <circle cx="0" cy="0" r="2.5" class="eye-pupil" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'shield'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <polygon points="50,8 86,29 86,71 50,92 14,71 14,29" class="shield-hexa" />
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="12 8" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'wraith'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M20,60 Q30,90 50,85 Q70,90 80,60" class="wraith-mist-bot" />
+          <circle cx="34" cy="24" r="2.2" class="frame-mote" />
+          <circle cx="66" cy="24" r="2.2" class="frame-mote" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'diamond'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <polygon points="50,7 64,22 84,22 70,50 84,78 64,78 50,93 36,78 16,78 30,50 16,22 36,22" class="diamond-facets" />
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'blade'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <line x1="20" y1="20" x2="35" y2="35" class="blade-edge edge-tl" stroke-width="3" />
+          <line x1="80" y1="20" x2="65" y2="35" class="blade-edge edge-tr" stroke-width="3" />
+          <line x1="20" y1="80" x2="35" y2="65" class="blade-edge edge-bl" stroke-width="3" />
+          <line x1="80" y1="80" x2="65" y2="65" class="blade-edge edge-br" stroke-width="3" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'alchemy'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42.5" class="alchemy-ring" stroke-dasharray="14 6" />
+          <polygon points="50,9 85,70 15,70" class="alchemy-tri tri-1" />
+          <polygon points="50,91 15,30 85,30" class="alchemy-tri tri-2" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'spider'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M25,25 Q50,38 75,25 M25,75 Q50,62 75,75" class="spider-web-strand" />
+          <polygon points="50,10 53,16 50,19 47,16" class="spider-jewel" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'moon'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="8" r="4" class="moon-phase full" />
+          <path d="M88,50 A4,4 0 0,0 96,50 A4,4 0 0,1 88,50 Z" class="moon-phase crescent-r" />
+          <circle cx="50" cy="92" r="4" class="moon-phase new" />
+          <path d="M12,50 A4,4 0 0,1 4,50 A4,4 0 0,0 12,50 Z" class="moon-phase crescent-l" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'supernova'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <g class="supernova-rays">
+            <line x1="50" y1="2" x2="50" y2="12" class="nova-beam beam-1" stroke-width="2.5" />
+            <line x1="98" y1="50" x2="88" y2="50" class="nova-beam beam-2" stroke-width="2.5" />
+            <line x1="50" y1="98" x2="50" y2="88" class="nova-beam beam-3" stroke-width="2.5" />
+            <line x1="2" y1="50" x2="12" y2="50" class="nova-beam beam-4" stroke-width="2.5" />
+          </g>
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="6 4" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'grail'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <polygon points="46,14 54,14 52,22 48,22" class="grail-base" />
+          <path d="M44,6 Q50,14 56,6 Z" class="grail-cup" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'kraken'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M18,65 Q10,85 24,92 Q22,80 30,70" class="kraken-arm arm-l" />
+          <path d="M82,65 Q90,85 76,92 Q78,80 70,70" class="kraken-arm arm-r" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'sakura'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <g class="sakura-petals-spin">
+            <circle cx="50" cy="9" r="3.2" class="sakura-petal" />
+            <circle cx="85" cy="30" r="2.8" class="sakura-petal" />
+            <circle cx="82" cy="74" r="3.2" class="sakura-petal" />
+            <circle cx="30" cy="85" r="2.8" class="sakura-petal" />
+            <circle cx="15" cy="40" r="3.2" class="sakura-petal" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'matrix'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <line x1="28" y1="14" x2="28" y2="40" class="matrix-code-fall col-1" stroke-dasharray="3 3" stroke-width="2" />
+          <line x1="72" y1="14" x2="72" y2="40" class="matrix-code-fall col-2" stroke-dasharray="3 3" stroke-width="2" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'gargoyle'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <polygon points="28,26 12,8 24,18" class="gargoyle-wing" />
+          <polygon points="72,26 88,8 76,18" class="gargoyle-wing" />
+          <polygon points="50,96 46,88 54,88" class="gargoyle-claw" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'harp'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M40,10 Q55,4 60,18 L58,26" class="harp-frame" />
+          <line x1="44" y1="10" x2="44" y2="24" class="harp-string string-1" stroke-width="1.2" />
+          <line x1="48" y1="8" x2="48" y2="24" class="harp-string string-2" stroke-width="1.2" />
+          <line x1="52" y1="8" x2="52" y2="24" class="harp-string string-3" stroke-width="1.2" />
+          <circle cx="50" cy="50" r="41.5" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'portal'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42.5" class="portal-outer" stroke-dasharray="18 10" />
+          <polygon points="50,5 54,11 46,11" class="portal-chevron chev-t" />
+          <polygon points="95,50 89,54 89,46" class="portal-chevron chev-r" />
+          <polygon points="50,95 46,89 54,89" class="portal-chevron chev-b" />
+          <polygon points="5,50 11,46 11,54" class="portal-chevron chev-l" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'volcanic'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="8 6" />
+          <polygon points="48,6 52,6 54,14 46,14" class="volcanic-spout" />
+          <circle cx="24" cy="80" r="2.5" class="volcanic-ember" />
+          <circle cx="76" cy="80" r="2.5" class="volcanic-ember" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'glacier'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <polygon points="50,6 60,18 78,16 74,34 88,44 76,56 84,74 66,74 58,90 50,80 42,90 34,74 16,74 24,56 12,44 26,34 22,16 40,18" class="glacier-shards" />
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'ouroboros'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="ouroboros-body" stroke-dasharray="14 4" />
+          <polygon points="50,7 56,12 48,15" class="ouroboros-head" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'blackhole'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <ellipse cx="50" cy="50" rx="44" ry="16" class="accretion-disc" transform="rotate(-25 50 50)" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" stroke-dasharray="10 8" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'mandala'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="mandala-petals" stroke-dasharray="6 6" />
+          <polygon points="50,8 60,20 50,32 40,20" class="mandala-petal p-t" />
+          <polygon points="50,92 60,80 50,68 40,80" class="mandala-petal p-b" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'steampunk'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42.5" class="steampunk-gear" stroke-dasharray="8 6" stroke-width="3" />
+          <circle cx="24" cy="24" r="3" class="frame-center-node" />
+          <circle cx="76" cy="24" r="3" class="frame-center-node" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'plasma'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M22,30 Q36,18 50,30 Q64,42 78,30" class="plasma-arc arc-t" />
+          <path d="M22,70 Q36,82 50,70 Q64,58 78,70" class="plasma-arc arc-b" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'shadow'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <path d="M16,40 Q28,14 50,18 Q72,14 84,40 Q68,26 50,30 Q32,26 16,40 Z" class="shadow-cloak" />
+          <circle cx="50" cy="90" r="2.5" class="frame-mote" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'compass'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <polygon points="50,4 54,20 50,18 46,20" class="compass-needle needle-n" />
+          <polygon points="50,96 54,80 50,82 46,80" class="compass-needle needle-s" />
+          <polygon points="96,50 80,54 82,50 80,46" class="compass-needle needle-e" />
+          <polygon points="4,50 20,54 18,50 20,46" class="compass-needle needle-w" />
+        </svg>
+
+      {:else if resolvedFrameKey === 'fairy'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+          <g class="fairy-particles">
+            <circle cx="30" cy="18" r="2.2" class="fairy-dust d-1" />
+            <circle cx="70" cy="18" r="2.2" class="fairy-dust d-2" />
+            <circle cx="85" cy="60" r="2.5" class="fairy-dust d-3" />
+            <circle cx="15" cy="60" r="2.5" class="fairy-dust d-4" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'emperor'}
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="frame-base-ring" />
+          <circle cx="50" cy="50" r="42" class="frame-orbit-ring" />
+          <polygon points="32,16 40,8 50,2 60,8 68,16 50,12" class="emperor-crown" />
+          <circle cx="50" cy="2" r="3" class="frame-mote" />
         </svg>
 
       {:else}
@@ -892,4 +1235,110 @@
   @keyframes monolithShift { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
   @keyframes petalPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
   @keyframes glitchJitter { 0%, 100% { transform: translateX(0); opacity: 0.8; } 50% { transform: translateX(2px); opacity: 1; } }
+
+  /* =========================================================================
+     UNIVERSAL TINT VARIABLES & NEW FRAMES (Round 5: 50 Frames)
+     ========================================================================= */
+  .tint-blue { --frame-primary: #38bdf8; --frame-secondary: #0284c7; --frame-glow: rgba(56, 189, 248, 0.85); --frame-light: #e0f2fe; }
+  .tint-crimson { --frame-primary: #ef4444; --frame-secondary: #b91c1c; --frame-glow: rgba(239, 68, 68, 0.85); --frame-light: #fecaca; }
+  .tint-violet { --frame-primary: #a855f7; --frame-secondary: #7e22ce; --frame-glow: rgba(168, 85, 247, 0.85); --frame-light: #f3e8ff; }
+  .tint-emerald { --frame-primary: #10b981; --frame-secondary: #047857; --frame-glow: rgba(16, 185, 129, 0.85); --frame-light: #d1fae5; }
+  .tint-gold { --frame-primary: #fbbf24; --frame-secondary: #d97706; --frame-glow: rgba(251, 191, 36, 0.85); --frame-light: #fef08a; }
+  .tint-cyan { --frame-primary: #06b6d4; --frame-secondary: #0891b2; --frame-glow: rgba(6, 182, 212, 0.85); --frame-light: #cffafe; }
+  .tint-magenta { --frame-primary: #f43f5e; --frame-secondary: #e11d48; --frame-glow: rgba(244, 63, 94, 0.85); --frame-light: #ffe4e6; }
+  .tint-green { --frame-primary: #22c55e; --frame-secondary: #16a34a; --frame-glow: rgba(34, 197, 94, 0.85); --frame-light: #dcfce7; }
+  .tint-orange { --frame-primary: #f97316; --frame-secondary: #c2410c; --frame-glow: rgba(249, 115, 22, 0.85); --frame-light: #ffedd5; }
+  .tint-silver { --frame-primary: #e2e8f0; --frame-secondary: #94a3b8; --frame-glow: rgba(226, 232, 240, 0.85); --frame-light: #ffffff; }
+
+  .frame-base-ring { fill: none; stroke: var(--frame-primary, #a855f7); stroke-width: 2.2; filter: drop-shadow(0 0 6px var(--frame-glow, rgba(168, 85, 247, 0.85))); }
+  .frame-orbit-ring { fill: none; stroke: var(--frame-secondary, #c084fc); stroke-width: 1.5; animation: rotateCw 8s linear infinite; transform-origin: 50px 50px; }
+  .frame-mote { fill: var(--frame-light, #ffffff); filter: drop-shadow(0 0 4px var(--frame-glow, rgba(255, 255, 255, 0.9))); animation: starTwinkle 2s ease-in-out infinite; }
+  .frame-center-node { fill: var(--frame-primary, #fbbf24); filter: drop-shadow(0 0 6px var(--frame-glow, rgba(251, 191, 36, 0.9))); }
+
+  .phoenix-wing { fill: var(--frame-primary, #f97316); stroke: var(--frame-secondary, #fbbf24); animation: seraphFloat 2.6s ease-in-out infinite; transform-origin: 50px 50px; }
+  .phoenix-crest { fill: var(--frame-secondary, #fbbf24); filter: drop-shadow(0 0 6px var(--frame-glow, #f97316)); }
+
+  .dragon-scale-horn { fill: var(--frame-primary, #dc2626); stroke: var(--frame-secondary, #f87171); stroke-width: 0.8; animation: gemBreathe 3s ease-in-out infinite; transform-origin: 50px 50px; }
+  .dragon-claw { fill: var(--frame-secondary, #f87171); filter: drop-shadow(0 0 4px var(--frame-glow, #dc2626)); }
+
+  .chrono-teeth { fill: none; stroke: var(--frame-primary, #d97706); animation: rotateCw 20s linear infinite; transform-origin: 50px 50px; }
+  .chrono-hand-min { stroke: var(--frame-secondary, #fde68a); animation: rotateCw 6s linear infinite; transform-origin: 50px 50px; }
+  .chrono-hand-hour { stroke: var(--frame-primary, #d97706); animation: rotateCw 18s linear infinite; transform-origin: 50px 50px; }
+
+  .chaos-nodes { animation: rotateCcw 7s linear infinite; transform-origin: 50px 50px; }
+  .chaos-orb { fill: var(--frame-secondary, #ec4899); filter: drop-shadow(0 0 6px var(--frame-glow, #a855f7)); }
+  .chaos-orbit { fill: none; stroke: var(--frame-primary, #a855f7); stroke-width: 1.2; stroke-dasharray: 6 4; }
+
+  .valkyrie-wing { fill: var(--frame-secondary, #ffffff); stroke: var(--frame-primary, #38bdf8); stroke-width: 1.2; animation: seraphFloat 3s ease-in-out infinite; }
+  .valkyrie-tiara { fill: var(--frame-primary, #38bdf8); filter: drop-shadow(0 0 6px var(--frame-glow, #38bdf8)); }
+
+  .eye-symbol { animation: gemBreathe 2.5s ease-in-out infinite; transform-origin: 50px 10px; }
+  .eye-shape { fill: none; stroke: var(--frame-primary, #8b5cf6); stroke-width: 2; }
+  .eye-pupil { fill: var(--frame-secondary, #c084fc); filter: drop-shadow(0 0 5px var(--frame-glow, #8b5cf6)); }
+
+  .shield-hexa { fill: none; stroke: var(--frame-primary, #06b6d4); stroke-width: 2; animation: gemBreathe 3.5s ease-in-out infinite; transform-origin: 50px 50px; }
+
+  .wraith-mist-bot { fill: none; stroke: var(--frame-primary, #10b981); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--frame-glow, #10b981)); animation: cyberBlink 3s infinite; }
+
+  .diamond-facets { fill: none; stroke: var(--frame-primary, #e2e8f0); stroke-width: 1.6; filter: drop-shadow(0 0 6px var(--frame-glow, rgba(226, 232, 240, 0.8))); animation: rotateCw 28s linear infinite; transform-origin: 50px 50px; }
+
+  .blade-edge { stroke: var(--frame-primary, #6366f1); stroke-linecap: round; filter: drop-shadow(0 0 6px var(--frame-glow, #6366f1)); animation: cyberBlink 3s infinite; }
+
+  .alchemy-ring { fill: none; stroke: var(--frame-primary, #f59e0b); stroke-width: 1.4; animation: rotateCw 18s linear infinite; transform-origin: 50px 50px; }
+  .alchemy-tri { fill: none; stroke: var(--frame-secondary, #fde68a); stroke-width: 1.5; }
+  .alchemy-tri.tri-1 { animation: rotateCw 14s linear infinite; transform-origin: 50px 50px; }
+  .alchemy-tri.tri-2 { animation: rotateCcw 14s linear infinite; transform-origin: 50px 50px; }
+
+  .spider-web-strand { fill: none; stroke: var(--frame-primary, #3b82f6); stroke-width: 1.5; stroke-dasharray: 4 2; }
+  .spider-jewel { fill: var(--frame-secondary, #93c5fd); filter: drop-shadow(0 0 6px var(--frame-glow, #3b82f6)); }
+
+  .moon-phase { fill: var(--frame-primary, #e2e8f0); filter: drop-shadow(0 0 5px var(--frame-glow, rgba(226, 232, 240, 0.8))); animation: starTwinkle 3s ease-in-out infinite; }
+
+  .supernova-rays { animation: rotateCw 12s linear infinite; transform-origin: 50px 50px; }
+  .nova-beam { stroke: var(--frame-primary, #f97316); filter: drop-shadow(0 0 6px var(--frame-glow, #f97316)); }
+
+  .grail-base, .grail-cup { fill: var(--frame-primary, #eab308); stroke: var(--frame-secondary, #fef08a); stroke-width: 0.8; animation: gemBreathe 2.8s ease-in-out infinite; transform-origin: 50px 14px; }
+
+  .kraken-arm { fill: none; stroke: var(--frame-primary, #0ea5e9); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 6px var(--frame-glow, #0ea5e9)); animation: cyberBlink 3s infinite; }
+
+  .sakura-petals-spin { animation: rotateCw 16s linear infinite; transform-origin: 50px 50px; }
+  .sakura-petal { fill: var(--frame-primary, #f43f5e); filter: drop-shadow(0 0 4px var(--frame-glow, #f43f5e)); }
+
+  .matrix-code-fall { stroke: var(--frame-primary, #22c55e); animation: rotateCcw 8s linear infinite; transform-origin: 50px 50px; }
+
+  .gargoyle-wing { fill: var(--frame-primary, #991b1b); stroke: var(--frame-secondary, #ef4444); stroke-width: 0.8; animation: seraphFloat 3.2s ease-in-out infinite; transform-origin: 50px 50px; }
+  .gargoyle-claw { fill: var(--frame-secondary, #ef4444); }
+
+  .harp-frame { fill: none; stroke: var(--frame-primary, #38bdf8); stroke-width: 2; }
+  .harp-string { stroke: var(--frame-secondary, #c084fc); animation: cyberBlink 2.5s infinite; }
+
+  .portal-outer { fill: none; stroke: var(--frame-primary, #7c3aed); stroke-width: 2.2; animation: rotateCw 6s linear infinite; transform-origin: 50px 50px; }
+  .portal-chevron { fill: var(--frame-secondary, #c4b5fd); filter: drop-shadow(0 0 6px var(--frame-glow, #7c3aed)); }
+
+  .volcanic-spout { fill: var(--frame-primary, #c2410c); animation: gemBreathe 2s ease-in-out infinite; transform-origin: 50px 50px; }
+  .volcanic-ember { fill: var(--frame-secondary, #fb923c); filter: drop-shadow(0 0 4px #c2410c); animation: sporePulse 2.4s infinite; }
+
+  .glacier-shards { fill: none; stroke: var(--frame-primary, #0284c7); stroke-width: 2; animation: rotateCw 25s linear infinite; transform-origin: 50px 50px; }
+
+  .ouroboros-body { fill: none; stroke: var(--frame-primary, #059669); stroke-width: 2.5; animation: rotateCw 10s linear infinite; transform-origin: 50px 50px; }
+  .ouroboros-head { fill: var(--frame-secondary, #34d399); filter: drop-shadow(0 0 6px #059669); }
+
+  .accretion-disc { fill: none; stroke: var(--frame-primary, #7e22ce); stroke-width: 3; animation: rotateCw 5s linear infinite; transform-origin: 50px 50px; }
+
+  .mandala-petals { fill: none; stroke: var(--frame-primary, #d97706); stroke-width: 2; animation: rotateCcw 15s linear infinite; transform-origin: 50px 50px; }
+  .mandala-petal { fill: var(--frame-secondary, #fef08a); }
+
+  .steampunk-gear { fill: none; stroke: var(--frame-primary, #b45309); animation: rotateCw 12s linear infinite; transform-origin: 50px 50px; }
+
+  .plasma-arc { fill: none; stroke: var(--frame-primary, #2563eb); stroke-width: 2; stroke-linecap: round; filter: drop-shadow(0 0 6px #2563eb); animation: cyberBlink 1.8s infinite; }
+
+  .shadow-cloak { fill: var(--frame-primary, #475569); stroke: var(--frame-secondary, #94a3b8); stroke-width: 1.5; animation: gemBreathe 3s ease-in-out infinite; transform-origin: 50px 50px; }
+
+  .compass-needle { fill: var(--frame-primary, #0284c7); stroke: var(--frame-secondary, #38bdf8); stroke-width: 0.8; animation: rotateCw 24s linear infinite; transform-origin: 50px 50px; }
+
+  .fairy-particles { animation: rotateCcw 9s linear infinite; transform-origin: 50px 50px; }
+  .fairy-dust { fill: var(--frame-primary, #ec4899); filter: drop-shadow(0 0 5px #ec4899); }
+
+  .emperor-crown { fill: var(--frame-primary, #eab308); stroke: var(--frame-secondary, #ffffff); stroke-width: 1.2; filter: drop-shadow(0 0 8px #eab308); animation: seraphFloat 3s ease-in-out infinite; transform-origin: 50px 50px; }
+
 </style>
