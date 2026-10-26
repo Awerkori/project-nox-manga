@@ -93,6 +93,13 @@
   let uploading = $state(false);
   let uploadError = $state('');
 
+  // Frame Framing & Adjustment State
+  let formFrameScale = $state(1.25);
+  let formFrameOffsetX = $state(0);
+  let formFrameOffsetY = $state(0);
+  let formFrameFit = $state<'contain' | 'cover'>('contain');
+  let showCircleGuide = $state(false);
+
   const COLOR_PRESETS = [
     { name: 'Cyber Neon', gradient: 'linear-gradient(135deg, #06b6d4, #a855f7)', color: '#06b6d4' },
     { name: 'Ouro Real', gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#fbbf24' },
@@ -276,6 +283,31 @@
         formIsAnimated = true;
       }
 
+      if (formKind === 'AVATAR_FRAME') {
+        const lowerName = file.name.toLowerCase();
+        if (lowerName.includes('halloween') || lowerName.includes('5922565')) {
+          formFrameScale = 1.44;
+          formFrameOffsetX = 5.5;
+          formFrameOffsetY = 0;
+          formFrameFit = 'contain';
+          showCircleGuide = true;
+        } else {
+          try {
+            const testImg = new Image();
+            testImg.onload = () => {
+              const ratio = testImg.naturalWidth / testImg.naturalHeight;
+              if (Math.abs(ratio - 1) > 0.05) {
+                formFrameFit = 'contain';
+                if (ratio > 1) {
+                  formFrameScale = Math.max(1.2, Math.round(ratio * 1.25 * 100) / 100);
+                }
+              }
+            };
+            testImg.src = URL.createObjectURL(file);
+          } catch {}
+        }
+      }
+
       if (!formName.trim()) {
         const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
         formName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
@@ -332,6 +364,11 @@
       { id: 'default', label: 'Padrão', color: '#a78bfa' }
     ] : [];
     selectedPreviewVariantColor = null;
+    formFrameScale = 1.25;
+    formFrameOffsetX = 0;
+    formFrameOffsetY = 0;
+    formFrameFit = 'contain';
+    showCircleGuide = false;
     formAnimEngine = 'nox-color-static';
     formColorHex = '#a78bfa';
     formGradientStops = '#a78bfa, #38bdf8, #fbbf24';
@@ -357,6 +394,13 @@
     formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
     uploadError = '';
     selectedPreviewVariantColor = null;
+
+    // Load frame framing parameters
+    formFrameScale = Number(it.style_data?.frame_scale ?? 1.25);
+    formFrameOffsetX = Number(it.style_data?.frame_offset_x ?? 0);
+    formFrameOffsetY = Number(it.style_data?.frame_offset_y ?? 0);
+    formFrameFit = (it.style_data?.frame_fit ?? 'contain') as 'contain' | 'cover';
+    showCircleGuide = false;
 
     // Load color variants if frame
     const variants = it.color_variants || it.style_data?.color_variants || [];
@@ -390,6 +434,11 @@
     formOrderIndex = (data.items?.length || 0) + 1;
     formAssetUrl = it.asset_url || '';
     formStyleJson = JSON.stringify(it.style_data || {}, null, 2);
+    formFrameScale = Number(it.style_data?.frame_scale ?? 1.25);
+    formFrameOffsetX = Number(it.style_data?.frame_offset_x ?? 0);
+    formFrameOffsetY = Number(it.style_data?.frame_offset_y ?? 0);
+    formFrameFit = (it.style_data?.frame_fit ?? 'contain') as 'contain' | 'cover';
+    showCircleGuide = false;
     const variants = it.color_variants || it.style_data?.color_variants || [];
     formColorVariants = Array.isArray(variants) ? variants.map((v: any) => ({ ...v })) : [];
     uploadError = '';
@@ -415,9 +464,13 @@
       return;
     }
 
-    // Attach color variants if Avatar Frame
+    // Attach color variants and framing settings if Avatar Frame
     if (formKind === 'AVATAR_FRAME') {
       parsedStyle.color_variants = formColorVariants;
+      parsedStyle.frame_scale = formFrameScale;
+      parsedStyle.frame_offset_x = formFrameOffsetX;
+      parsedStyle.frame_offset_y = formFrameOffsetY;
+      parsedStyle.frame_fit = formFrameFit;
     } else if (formKind === 'NAME_COLOR') {
       parsedStyle.animationClass = formAnimEngine;
       if (!formIsAnimated) {
@@ -619,9 +672,15 @@
         <div class="item-preview-box">
           {#if item.kind === 'AVATAR_FRAME'}
             <UserAvatar
-              avatarId={null}
+              user={data.profile}
+              avatarId={data.profile?.avatar_id}
+              crop={data.profile?.avatar_crop}
               frameId={item.asset_url ? null : item.id}
               frameUrl={item.asset_url || null}
+              frameScale={style.frame_scale}
+              frameOffsetX={style.frame_offset_x}
+              frameOffsetY={style.frame_offset_y}
+              frameFit={style.frame_fit}
               displayName={item.name}
               size={64}
             />
@@ -758,19 +817,38 @@
 
             {#if formKind === 'AVATAR_FRAME'}
               <div class="avatar-preview-box">
-                <UserAvatar
-                  avatarId={data.profile?.avatar_id}
-                  frameId={formAssetUrl ? null : formId}
-                  frameColor={selectedPreviewVariantColor}
-                  frameUrl={formAssetUrl || null}
-                  displayName={formName || 'ProjetoNox'}
-                  size={84}
-                />
+                <div class="avatar-preview-viewport">
+                  <UserAvatar
+                    user={data.profile}
+                    avatarId={data.profile?.avatar_id}
+                    crop={data.profile?.avatar_crop}
+                    frameId={formAssetUrl ? null : formId}
+                    frameColor={selectedPreviewVariantColor}
+                    frameUrl={formAssetUrl || null}
+                    frameScale={formFrameScale}
+                    frameOffsetX={formFrameOffsetX}
+                    frameOffsetY={formFrameOffsetY}
+                    frameFit={formFrameFit}
+                    displayName={formName || 'ProjetoNox'}
+                    size={84}
+                  />
+                  {#if showCircleGuide}
+                    <div class="avatar-circle-guide" aria-hidden="true"></div>
+                  {/if}
+                </div>
                 <div class="avatar-preview-meta">
                   <span class="avatar-preview-name">{formName || 'Moldura Cósmica'}</span>
                   <span class="avatar-preview-hint">
                     {formAssetUrl ? '✓ Renderizada via asset de imagem/GIF' : 'Moldura procedural com vetor SVG e keyframes'}
                   </span>
+                  {#if formAssetUrl}
+                    <div class="avatar-framing-badge-row">
+                      <span class="badge-framing">Zoom: {formFrameScale.toFixed(2)}x</span>
+                      <span class="badge-framing">X: {formFrameOffsetX > 0 ? '+' : ''}{formFrameOffsetX}%</span>
+                      <span class="badge-framing">Y: {formFrameOffsetY > 0 ? '+' : ''}{formFrameOffsetY}%</span>
+                      <span class="badge-framing uppercase">{formFrameFit}</span>
+                    </div>
+                  {/if}
                   {#if formColorVariants.length > 0}
                     <div class="modal-preview-swatches">
                       <span class="swatch-label">Testar cor:</span>
@@ -796,8 +874,10 @@
               >
                 <div class="comment-preview-glass">
                   <UserAvatar
+                    user={data.profile}
                     avatarId={data.profile?.avatar_id}
-                    displayName="LeitorNox"
+                    crop={data.profile?.avatar_crop}
+                    displayName={data.profile?.display_name || 'LeitorNox'}
                     size={36}
                   />
                   <div class="comment-preview-content">
@@ -1182,6 +1262,132 @@
               <p class="upload-error-msg">{uploadError}</p>
             {/if}
           </div>
+
+          <!-- Frame Framing Fine-Tuning Controls (When Frame has custom asset) -->
+          {#if formKind === 'AVATAR_FRAME' && formAssetUrl}
+            <div class="frame-framing-card">
+              <div class="framing-card-header">
+                <div>
+                  <h4 class="framing-title">Ajuste Fino de Enquadramento da Moldura</h4>
+                  <p class="framing-sub">Alinhe a abertura da moldura sobre o avatar circular com ornamentos livres.</p>
+                </div>
+                <button
+                  type="button"
+                  class="btn-toggle-guide"
+                  class:active={showCircleGuide}
+                  onclick={() => (showCircleGuide = !showCircleGuide)}
+                >
+                  {showCircleGuide ? '✓ Guia Circular Ativa' : 'Exibir Guia Circular'}
+                </button>
+              </div>
+
+              <!-- Preset buttons -->
+              <div class="framing-presets-row">
+                <span class="presets-label">Atalhos de Enquadramento:</span>
+                <button
+                  type="button"
+                  class="btn-preset-pill"
+                  onclick={() => {
+                    formFrameScale = 1.25;
+                    formFrameOffsetX = 0;
+                    formFrameOffsetY = 0;
+                    formFrameFit = 'contain';
+                  }}
+                >
+                  Padrão 1:1 (1.25x)
+                </button>
+                <button
+                  type="button"
+                  class="btn-preset-pill highlight"
+                  onclick={() => {
+                    formFrameScale = 1.44;
+                    formFrameOffsetX = 5.5;
+                    formFrameOffsetY = 0;
+                    formFrameFit = 'contain';
+                  }}
+                >
+                  🎃 Preset Halloween (1.44x, +5.5% X)
+                </button>
+                <button
+                  type="button"
+                  class="btn-preset-pill"
+                  onclick={() => {
+                    formFrameScale = 1.0;
+                    formFrameOffsetX = 0;
+                    formFrameOffsetY = 0;
+                    formFrameFit = 'cover';
+                  }}
+                >
+                  Preencher (1.0x Cover)
+                </button>
+              </div>
+
+              <div class="framing-sliders-grid">
+                <!-- Escala Slider -->
+                <div class="framing-control-group">
+                  <div class="slider-header">
+                    <label for="frame-scale-range" class="control-label">Escala / Zoom da Moldura</label>
+                    <span class="slider-val">{formFrameScale.toFixed(2)}x</span>
+                  </div>
+                  <input
+                    id="frame-scale-range"
+                    type="range"
+                    min="0.5"
+                    max="2.5"
+                    step="0.01"
+                    bind:value={formFrameScale}
+                    class="framing-range"
+                  />
+                </div>
+
+                <!-- Deslocamento X Slider -->
+                <div class="framing-control-group">
+                  <div class="slider-header">
+                    <label for="frame-offset-x-range" class="control-label">Deslocamento Horizontal (Eixo X)</label>
+                    <span class="slider-val">{formFrameOffsetX > 0 ? '+' : ''}{formFrameOffsetX}%</span>
+                  </div>
+                  <input
+                    id="frame-offset-x-range"
+                    type="range"
+                    min="-50"
+                    max="50"
+                    step="0.5"
+                    bind:value={formFrameOffsetX}
+                    class="framing-range"
+                  />
+                </div>
+
+                <!-- Deslocamento Y Slider -->
+                <div class="framing-control-group">
+                  <div class="slider-header">
+                    <label for="frame-offset-y-range" class="control-label">Deslocamento Vertical (Eixo Y)</label>
+                    <span class="slider-val">{formFrameOffsetY > 0 ? '+' : ''}{formFrameOffsetY}%</span>
+                  </div>
+                  <input
+                    id="frame-offset-y-range"
+                    type="range"
+                    min="-50"
+                    max="50"
+                    step="0.5"
+                    bind:value={formFrameOffsetY}
+                    class="framing-range"
+                  />
+                </div>
+
+                <!-- Modo de Ajuste (Fit) -->
+                <div class="framing-control-group">
+                  <div class="slider-header">
+                    <label for="frame-fit-select" class="control-label">Modo de Ajuste (Proporção)</label>
+                    <span class="slider-val">{formFrameFit === 'contain' ? 'Preservar proporção' : 'Cobrir'}</span>
+                  </div>
+                  <select id="frame-fit-select" class="form-select" bind:value={formFrameFit}>
+                    <option value="contain">Conter (contain) — Mantém proporção e ornamentos livres</option>
+                    <option value="cover">Cobrir (cover) — Preenche a área circular</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          {/if}
 
           <!-- Collapsed Advanced Accordion -->
           <details class="advanced-accordion">
@@ -1873,8 +2079,187 @@
   .avatar-preview-box {
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 10px 0;
+    gap: 20px;
+    padding: 8px 0;
+  }
+
+  .avatar-preview-viewport {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px dashed rgba(223, 194, 141, 0.25);
+    border-radius: 14px;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .avatar-circle-guide {
+    position: absolute;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    border: 1.5px dashed #38bdf8;
+    pointer-events: none;
+    z-index: 5;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+
+  .avatar-framing-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .badge-framing {
+    font-size: 10.5px;
+    font-family: monospace;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(139, 92, 246, 0.18);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+  }
+
+  .frame-framing-card {
+    background: rgba(15, 17, 26, 0.85);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .framing-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .framing-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .framing-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 2px 0 0;
+  }
+
+  .btn-toggle-guide {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .btn-toggle-guide:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-toggle-guide.active {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #7dd3fc;
+  }
+
+  .framing-presets-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+  }
+
+  .presets-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-preset-pill {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-preset-pill:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .btn-preset-pill.highlight {
+    background: rgba(249, 115, 22, 0.18);
+    border-color: rgba(249, 115, 22, 0.45);
+    color: #fed7aa;
+  }
+
+  .btn-preset-pill.highlight:hover {
+    background: rgba(249, 115, 22, 0.3);
+  }
+
+  .framing-sliders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .framing-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .control-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+  }
+
+  .slider-val {
+    font-size: 11.5px;
+    font-family: monospace;
+    font-weight: 700;
+    color: #dfc28d;
+  }
+
+  .framing-range {
+    width: 100%;
+    accent-color: #a855f7;
+    cursor: pointer;
   }
 
   .avatar-preview-meta {

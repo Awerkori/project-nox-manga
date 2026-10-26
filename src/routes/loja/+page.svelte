@@ -22,6 +22,7 @@
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
   import { getNameColorInfo } from '$lib/name-colors';
+  import { registerDynamicFrame } from '$lib/cosmetics-catalog';
 
   let { data } = $props();
 
@@ -86,6 +87,19 @@
   let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
 
   let inventorySet = $derived(new Set(data.inventory || []));
+
+  $effect(() => {
+    if (data.items) {
+      for (const it of data.items) {
+        if (it.kind === 'AVATAR_FRAME' && it.asset_url) {
+          registerDynamicFrame(it.id, {
+            asset_url: it.asset_url,
+            style_data: it.style_data || {}
+          });
+        }
+      }
+    }
+  });
 
   let categoryCounts = $derived({
     ALL: (data.items || []).length,
@@ -289,7 +303,9 @@
 
         <div class="preview-avatar-wrap">
           <UserAvatar
+            user={data.profile}
             avatarId={data.profile?.avatar_id}
+            crop={data.profile?.avatar_crop}
             frameId={previewFrame || equippedFrame}
             frameColor={previewFrame ? previewFrameColor : (equippedFrame?.includes(':') ? equippedFrame.split(':')[1] : null)}
             displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
@@ -463,8 +479,15 @@
                 {#if item.kind === 'AVATAR_FRAME'}
                   <div class="frame-demo-wrap">
                     <UserAvatar
+                      user={data.profile}
                       avatarId={data.profile?.avatar_id}
-                      frameId={item.id}
+                      crop={data.profile?.avatar_crop}
+                      frameId={item.asset_url ? null : item.id}
+                      frameUrl={item.asset_url || null}
+                      frameScale={item.style_data?.frame_scale}
+                      frameOffsetX={item.style_data?.frame_offset_x}
+                      frameOffsetY={item.style_data?.frame_offset_y}
+                      frameFit={item.style_data?.frame_fit}
                       frameColor={selectedCardVariants[item.id] === 'default' ? null : selectedCardVariants[item.id]}
                       displayName={item.name}
                       size={72}
@@ -644,8 +667,15 @@
                 <div class="avatar-stage-box">
                   <div class="stage-avatar-holder">
                     <UserAvatar
+                      user={data.profile}
                       avatarId={data.profile?.avatar_id}
-                      frameId={item.id}
+                      crop={data.profile?.avatar_crop}
+                      frameId={item.asset_url ? null : item.id}
+                      frameUrl={item.asset_url || null}
+                      frameScale={item.style_data?.frame_scale}
+                      frameOffsetX={item.style_data?.frame_offset_x}
+                      frameOffsetY={item.style_data?.frame_offset_y}
+                      frameFit={item.style_data?.frame_fit}
                       frameColor={selectedCardVariants[item.id] === 'default' ? null : selectedCardVariants[item.id]}
                       displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
                       size={110}
@@ -676,7 +706,9 @@
                   <div class="stage-banner-profile-strip">
                     <div class="banner-stage-avatar">
                       <UserAvatar
+                        user={data.profile}
                         avatarId={data.profile?.avatar_id}
+                        crop={data.profile?.avatar_crop}
                         frameId={equippedFrame}
                         displayName={data.profile?.display_name || 'Leitor'}
                         size={64}
@@ -704,7 +736,9 @@
                     </div>
                     <div class="mock-comment">
                       <UserAvatar
+                        user={data.profile}
                         avatarId={data.profile?.avatar_id}
+                        crop={data.profile?.avatar_crop}
                         frameId={equippedFrame}
                         displayName={data.profile?.display_name || 'Leitor'}
                         size={38}

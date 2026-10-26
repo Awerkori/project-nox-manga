@@ -2741,3 +2741,50 @@ export const LEGACY_UNREFURBISHED_IDS = new Set<string>([
   'item_banner_placeholder',
   'item_frame_empty'
 ]);
+
+export interface FrameConfig {
+  asset_url: string;
+  style_data: {
+    frame_scale?: number;
+    frame_offset_x?: number;
+    frame_offset_y?: number;
+    frame_fit?: 'contain' | 'cover';
+    [key: string]: any;
+  };
+}
+
+const dynamicFramesRegistry = new Map<string, FrameConfig>();
+
+export function registerDynamicFrame(id: string, config: FrameConfig) {
+  if (id && config) {
+    dynamicFramesRegistry.set(id, config);
+  }
+}
+
+export function getFrameConfig(frameId: string | null | undefined): FrameConfig | null {
+  if (!frameId) return null;
+  const cleanId = frameId.split(':')[0];
+  if (dynamicFramesRegistry.has(cleanId)) {
+    return dynamicFramesRegistry.get(cleanId)!;
+  }
+  const item = CURATED_COSMETIC_ITEMS.find((c) => c.id === cleanId);
+  if (item && item.asset_url) {
+    return {
+      asset_url: item.asset_url,
+      style_data: item.style_data || {}
+    };
+  }
+  if (
+    cleanId.startsWith('/media/') ||
+    cleanId.startsWith('/cosmetics/') ||
+    cleanId.startsWith('http') ||
+    cleanId.startsWith('data:')
+  ) {
+    return {
+      asset_url: cleanId,
+      style_data: { frame_scale: 1.25, frame_offset_x: 0, frame_offset_y: 0, frame_fit: 'contain' }
+    };
+  }
+  return null;
+}
+

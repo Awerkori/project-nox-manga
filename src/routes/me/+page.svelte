@@ -371,18 +371,44 @@
     cropPreviewOwnedByModal = false;
   }
 
-  function saveCrop() {
+  async function saveCrop() {
     cropSaving = true;
     modalNotice = '';
     try {
+      const normalizedCrop = normalizeAvatarCrop({ x: cropX, y: cropY, zoom: cropZoom });
       const draft: MediaDraft = {
         file: pendingFile || cropBaseDraft?.file || null,
         previewUrl: cropPreviewUrl || canonicalMediaUrl(cropType),
-        crop: normalizeAvatarCrop({ x: cropX, y: cropY, zoom: cropZoom })
+        crop: normalizedCrop
       };
       if (!draft.previewUrl) throw new Error('Selecione uma imagem antes de ajustar o enquadramento.');
       setDraft(cropType, draft);
-      uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} pronto para prévia. Salve as alterações para confirmar.`;
+
+      // If repositioning existing avatar/banner without uploading a new file:
+      // Persist directly to DB right now so changes apply instantly across the whole platform!
+      if (!pendingFile) {
+        const actionName = cropType === 'avatar' ? '?/updateAvatarCrop' : '?/updateBannerCrop';
+        const fd = new FormData();
+        fd.set('x', String(cropX));
+        fd.set('y', String(cropY));
+        fd.set('zoom', String(cropZoom));
+        const res = await fetch(actionName, {
+          method: 'POST',
+          body: fd
+        });
+        if (!res.ok) {
+          throw new Error('Falha ao salvar enquadramento no servidor.');
+        }
+        if (cropType === 'avatar') {
+          data.member.avatar_crop = normalizedCrop;
+          window.dispatchEvent(new CustomEvent('nox:profile-updated', { detail: { ...data.member, avatar_crop: normalizedCrop } }));
+        } else {
+          data.member.banner_crop = normalizedCrop;
+        }
+        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} reposicionado e salvo com sucesso em todo o site!`;
+      } else {
+        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} pronto para prévia. Salve as alterações para confirmar.`;
+      }
       closeCropModal(true);
     } catch (err: any) {
       modalNotice = err.message || 'Erro ao salvar posicionamento.';
@@ -442,8 +468,9 @@
     <header class="me-header-strip">
       <div class="header-avatar-col">
         <UserAvatar
+          user={data.member}
           avatarId={data.member.avatar_id}
-          frameId={data.member.frame_id}
+          frameId={data.member.avatar_frame_id}
           crop={data.member.avatar_crop}
           displayName={data.member.display_name || data.member.username}
           size={72}
@@ -1440,6 +1467,33 @@
       </div>
 
       <div class="crop-controls">
+        {#if cropType === 'avatar'}
+          <div class="crop-presets-strip">
+            <span class="crop-preset-label">Atalhos de Enquadramento:</span>
+            <button
+              type="button"
+              class="crop-preset-btn"
+              onclick={() => { cropX = 50; cropY = 50; cropZoom = 1; }}
+            >
+              Centralizar (50%)
+            </button>
+            <button
+              type="button"
+              class="crop-preset-btn highlight"
+              onclick={() => { cropX = 50; cropY = 12; cropZoom = 1.05; }}
+            >
+              🎯 Foco no Rosto (Topo)
+            </button>
+            <button
+              type="button"
+              class="crop-preset-btn"
+              onclick={() => { cropX = 50; cropY = 15; cropZoom = 1.35; }}
+            >
+              🔍 Zoom Face (1.35x)
+            </button>
+          </div>
+        {/if}
+
         <div class="control-row">
           <label for="crop-zoom"><ZoomIn size={14} /> Zoom ({cropZoom.toFixed(2)}x)</label>
           <input
@@ -1611,6 +1665,46 @@
     flex-direction: column;
     gap: 0.85rem;
     background: #0d111d;
+  }
+  .crop-presets-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .crop-preset-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .crop-preset-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e5e7eb;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .crop-preset-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  .crop-preset-btn.highlight {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: #8b5cf6;
+    color: #c4b5fd;
+  }
+  .crop-preset-btn.highlight:hover {
+    background: rgba(139, 92, 246, 0.4);
   }
   .control-row {
     display: flex;

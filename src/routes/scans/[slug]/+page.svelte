@@ -751,7 +751,7 @@
             >
               <input type="hidden" name="scan_id" value={data.scan.id} />
               <div class="composer-top">
-                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} size={38} />
+                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} crop={data.viewer.avatarCrop || data.viewer.avatar_crop} size={38} />
                 <div class="composer-input-wrap">
                   <textarea
                     name="body"

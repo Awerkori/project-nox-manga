@@ -1,5 +1,6 @@
 <script lang="ts">
   import { avatarCropStyle } from '$lib/avatar';
+  import { getFrameConfig } from '$lib/cosmetics-catalog';
   type AvatarUser = {
     avatar_id?: string | null;
     avatarId?: string | null;
@@ -22,6 +23,10 @@
     frameId?: string | null;
     frameColor?: string | null;
     frameUrl?: string | null;
+    frameScale?: number | string | null;
+    frameOffsetX?: number | string | null;
+    frameOffsetY?: number | string | null;
+    frameFit?: 'contain' | 'cover' | null;
     crop?: { x?: number; y?: number; zoom?: number } | any | null;
     loading?: 'eager' | 'lazy';
     class?: string;
@@ -36,6 +41,10 @@
     frameId = null,
     frameColor = null,
     frameUrl = null,
+    frameScale = null,
+    frameOffsetX = null,
+    frameOffsetY = null,
+    frameFit = null,
     crop = null,
     loading = 'lazy',
     class: className = ''
@@ -53,6 +62,21 @@
   let parsedFrameId = $derived(rawFrameId ? rawFrameId.split(':')[0] : null);
   let parsedFrameColor = $derived(
     frameColor || (rawFrameId && rawFrameId.includes(':') ? rawFrameId.split(':')[1] : null)
+  );
+
+  let resolvedFrameConfig = $derived(getFrameConfig(parsedFrameId));
+  let resolvedFrameUrl = $derived(frameUrl || resolvedFrameConfig?.asset_url || null);
+  let resolvedFrameScale = $derived(
+    Number(frameScale ?? resolvedFrameConfig?.style_data?.frame_scale ?? 1.25)
+  );
+  let resolvedFrameOffsetX = $derived(
+    Number(frameOffsetX ?? resolvedFrameConfig?.style_data?.frame_offset_x ?? 0)
+  );
+  let resolvedFrameOffsetY = $derived(
+    Number(frameOffsetY ?? resolvedFrameConfig?.style_data?.frame_offset_y ?? 0)
+  );
+  let resolvedFrameFit = $derived(
+    (frameFit ?? resolvedFrameConfig?.style_data?.frame_fit ?? 'contain') as 'contain' | 'cover'
   );
 
     let resolvedFrameKey = $derived.by(() => {
@@ -117,7 +141,7 @@
 
 <div
   class="user-avatar-root {className}"
-  class:has-frame={!!parsedFrameId || !!frameUrl}
+  class:has-frame={!!parsedFrameId || !!resolvedFrameUrl}
     class:frame-cosmic={resolvedFrameKey === 'cosmic'}
   class:frame-cyber={resolvedFrameKey === 'cyber'}
   class:frame-emerald={resolvedFrameKey === 'emerald'}
@@ -199,8 +223,23 @@
     {/if}
   </div>
 
-  {#if frameUrl}
-    <img src={frameUrl} alt="" class="avatar-frame-image" aria-hidden="true" />
+  {#if resolvedFrameUrl}
+    <div
+      class="avatar-custom-frame-overlay"
+      style="
+        --frame-scale: {resolvedFrameScale};
+        --frame-offset-x: {resolvedFrameOffsetX}%;
+        --frame-offset-y: {resolvedFrameOffsetY}%;
+      "
+      aria-hidden="true"
+    >
+      <img
+        src={resolvedFrameUrl}
+        alt=""
+        class="avatar-custom-frame-asset"
+        style="object-fit: {resolvedFrameFit};"
+      />
+    </div>
   {:else if parsedFrameId}
     <div
       class="avatar-frame-overlay frame-{resolvedFrameKey}"
@@ -982,9 +1021,36 @@
     overflow: visible;
   }
 
+  .avatar-custom-frame-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(calc(-50% + var(--frame-offset-x, 0%)), calc(-50% + var(--frame-offset-y, 0%))) scale(var(--frame-scale, 1.25));
+    transform-origin: center center;
+  }
+
+  .avatar-custom-frame-asset {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    display: block;
+    pointer-events: none;
+  }
+
   .avatar-frame-image {
     position: absolute;
-    inset: -14%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 128%;
     height: 128%;
     object-fit: contain;
