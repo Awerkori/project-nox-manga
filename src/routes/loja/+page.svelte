@@ -20,6 +20,7 @@
   } from '@lucide/svelte';
   import { invalidateAll } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
 
   let { data } = $props();
 
@@ -33,17 +34,28 @@
 
   // Live preview states in hero
   let previewFrame = $state<string | null>(null);
+  let previewFrameColor = $state<string | null>(null);
   let previewColor = $state<string | null>(null);
   let previewTitle = $state<string | null>(null);
   let previewBanner = $state<string | null>(null);
+  let selectedCardVariants = $state<Record<string, string>>({});
 
   let isTestDriving = $derived(
     previewFrame !== null || previewColor !== null || previewTitle !== null || previewBanner !== null
   );
 
+  function selectVariant(itemId: string, variantId: string) {
+    selectedCardVariants[itemId] = variantId;
+    if (previewFrame === itemId) {
+      previewFrameColor = variantId === 'default' ? null : variantId;
+    }
+  }
+
   function applyToLivePreview(item: any) {
     if (item.kind === 'AVATAR_FRAME') {
       previewFrame = item.id;
+      const v = selectedCardVariants[item.id];
+      previewFrameColor = v && v !== 'default' ? v : null;
     } else if (item.kind === 'NAME_COLOR') {
       const style = getStyle(item);
       previewColor = style.color || style.backgroundImage;
@@ -57,6 +69,7 @@
 
   function resetLivePreview() {
     previewFrame = null;
+    previewFrameColor = null;
     previewColor = null;
     previewTitle = null;
     previewBanner = null;
@@ -254,7 +267,10 @@
       </div>
 
       <!-- Live Identity Preview / Provador ao Vivo -->
-      <aside class="hero-preview-box">
+      <aside
+        class="hero-preview-box"
+        style={previewBanner && CURATED_BANNER_BACKGROUNDS[previewBanner] ? `background: ${CURATED_BANNER_BACKGROUNDS[previewBanner]}; background-size: cover;` : ''}
+      >
         <div class="preview-box-header">
           <span class="preview-title">{isTestDriving ? 'Provador Ativo' : 'Sua Identidade'}</span>
           {#if isTestDriving}
@@ -274,6 +290,7 @@
           <UserAvatar
             avatarId={data.profile?.avatar_id}
             frameId={previewFrame || equippedFrame}
+            frameColor={previewFrame ? previewFrameColor : (equippedFrame?.includes(':') ? equippedFrame.split(':')[1] : null)}
             displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
             size={88}
           />
@@ -447,6 +464,7 @@
                     <UserAvatar
                       avatarId={data.profile?.avatar_id}
                       frameId={item.id}
+                      frameColor={selectedCardVariants[item.id] === 'default' ? null : selectedCardVariants[item.id]}
                       displayName={item.name}
                       size={72}
                     />
@@ -502,6 +520,28 @@
               </div>
 
               <p class="item-desc">{item.description}</p>
+
+              {#if item.color_variants && item.color_variants.length > 0}
+                <div class="card-color-swatches" role="group" aria-label="Variações de cor para {item.name}">
+                  <span class="swatches-label">Cor:</span>
+                  <div class="swatches-list">
+                    {#each item.color_variants as variant}
+                      <button
+                        type="button"
+                        class="swatch-btn"
+                        class:active={(selectedCardVariants[item.id] || 'default') === variant.id}
+                        style="background-color: {variant.color};"
+                        title={variant.label}
+                        aria-label="{variant.label} para {item.name}"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          selectVariant(item.id, variant.id);
+                        }}
+                      ></button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
 
               <div class="item-meta">
                 <div class="xp-price" class:cant-afford={!isOwned && !canAfford}>
@@ -606,6 +646,7 @@
                     <UserAvatar
                       avatarId={data.profile?.avatar_id}
                       frameId={item.id}
+                      frameColor={selectedCardVariants[item.id] === 'default' ? null : selectedCardVariants[item.id]}
                       displayName={data.profile?.display_name || data.profile?.username || 'Leitor'}
                       size={110}
                     />
@@ -730,6 +771,28 @@
                 </span>
                 <h2 class="modal-item-name">{item.name}</h2>
                 <p class="modal-item-desc">{item.description}</p>
+
+                {#if item.color_variants && item.color_variants.length > 0}
+                  <div class="modal-variants-block">
+                    <div class="variants-title-row">
+                      <Palette size={14} />
+                      <span class="variants-heading">Variações de Cor da Moldura:</span>
+                    </div>
+                    <div class="modal-swatches-grid">
+                      {#each item.color_variants as variant}
+                        <button
+                          type="button"
+                          class="modal-swatch-chip"
+                          class:active={(selectedCardVariants[item.id] || 'default') === variant.id}
+                          onclick={() => selectVariant(item.id, variant.id)}
+                        >
+                          <span class="chip-color-dot" style="background-color: {variant.color};"></span>
+                          <span class="chip-label">{variant.label}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
 
               <!-- Item Requisite -->
@@ -1434,6 +1497,120 @@
     line-height: 1.5;
     margin: 0 0 1.25rem;
     flex: 1;
+  }
+
+  /* Card Color Variants */
+  .card-color-swatches {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: -0.5rem 0 0.85rem;
+    padding: 0.35rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 8px;
+  }
+
+  .swatches-label {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .swatches-list {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .swatch-btn {
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .swatch-btn:hover {
+    transform: scale(1.25);
+    border-color: #ffffff;
+  }
+
+  .swatch-btn.active {
+    transform: scale(1.3);
+    border-color: #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  }
+
+  /* Modal Color Variants */
+  .modal-variants-block {
+    margin-bottom: 1.25rem;
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+
+  .variants-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.75rem;
+    color: #c4b5fd;
+  }
+
+  .variants-heading {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .modal-swatches-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .modal-swatch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.65rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #cbd5e1;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .modal-swatch-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+  }
+
+  .modal-swatch-chip.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: #a78bfa;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+  }
+
+  .chip-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .item-meta {

@@ -1,8 +1,8 @@
 /**
- * High-definition Procedural Cosmic Vector Banners for Project Nox
- * Pure SVG vectors with rich compositions: constellations, eclipses, auroras,
- * arcane glyphs, astrolabes, and spacetime rifts.
- * 100% vector, zero external asset dependencies, zero 404s.
+ * High-definition Procedural Animated Cosmic Vector Banners for Project Nox
+ * Pure SVG vectors with rich compositions and native CSS keyframe animations:
+ * constellations, eclipses, auroras, arcane glyphs, astrolabes, and spacetime rifts.
+ * 100% vector, zero external asset dependencies, GPU-accelerated.
  */
 
 function svgToDataUri(svg: string): string {
@@ -10,7 +10,7 @@ function svgToDataUri(svg: string): string {
   return `url("data:image/svg+xml,${encodeURIComponent(clean)}") center/cover no-repeat`;
 }
 
-// 1. Nebulosa do Vazio & Constelações
+// 1. Nebulosa do Vazio & Constelações (Animado)
 export const BANNER_NEBULOSA_VAZIO_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -40,30 +40,46 @@ export const BANNER_NEBULOSA_VAZIO_SVG = `
     </radialGradient>
   </defs>
 
+  <style>
+    @keyframes nvDrift1 { 0%, 100% { opacity: 0.85; transform: scale(1) translate(0,0); } 50% { opacity: 1; transform: scale(1.05) translate(-10px, 6px); } }
+    @keyframes nvDrift2 { 0%, 100% { opacity: 0.75; transform: scale(1) translate(0,0); } 50% { opacity: 0.95; transform: scale(1.06) translate(12px, -8px); } }
+    @keyframes starPulse1 { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+    @keyframes starPulse2 { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
+    @keyframes constBreathe { 0%, 100% { stroke-opacity: 0.35; } 50% { stroke-opacity: 0.8; } }
+    .nv-c1 { animation: nvDrift1 12s ease-in-out infinite; transform-origin: 72% 38%; }
+    .nv-c2 { animation: nvDrift2 14s ease-in-out infinite; transform-origin: 28% 65%; }
+    .star-a { animation: starPulse1 3.5s ease-in-out infinite; }
+    .star-b { animation: starPulse2 4s ease-in-out infinite; }
+    .const-line { animation: constBreathe 5s ease-in-out infinite; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#nv-bg)"/>
-  <rect width="1200" height="400" fill="url(#nv-cloud-1)"/>
-  <rect width="1200" height="400" fill="url(#nv-cloud-2)"/>
+  <rect class="nv-c1" width="1200" height="400" fill="url(#nv-cloud-1)"/>
+  <rect class="nv-c2" width="1200" height="400" fill="url(#nv-cloud-2)"/>
   <rect width="1200" height="400" fill="url(#nv-cloud-3)"/>
 
-  <!-- Distant Starfield -->
-  <g fill="#ffffff" opacity="0.55">
-    <circle cx="45" cy="82" r="1"/><circle cx="112" cy="240" r="1.2"/><circle cx="178" cy="45" r="0.8"/>
-    <circle cx="240" cy="310" r="1.4"/><circle cx="310" cy="180" r="0.9"/><circle cx="390" cy="70" r="1.3"/>
-    <circle cx="460" cy="290" r="1"/><circle cx="530" cy="120" r="1.2"/><circle cx="610" cy="260" r="0.9"/>
-    <circle cx="680" cy="50" r="1.1"/><circle cx="750" cy="330" r="1.3"/><circle cx="820" cy="110" r="0.8"/>
-    <circle cx="890" cy="270" r="1.2"/><circle cx="960" cy="85" r="1.5"/><circle cx="1040" cy="315" r="0.9"/>
-    <circle cx="1110" cy="140" r="1.1"/><circle cx="1175" cy="65" r="1.3"/><circle cx="80" cy="150" r="1.2"/>
-    <circle cx="150" cy="340" r="0.8"/><circle cx="670" cy="190" r="1.4"/><circle cx="1080" cy="230" r="1"/>
+  <!-- Distant Starfield with Twinkle Animations -->
+  <g fill="#ffffff">
+    <g class="star-a">
+      <circle cx="45" cy="82" r="1"/><circle cx="178" cy="45" r="0.8"/><circle cx="310" cy="180" r="0.9"/>
+      <circle cx="460" cy="290" r="1"/><circle cx="610" cy="260" r="0.9"/><circle cx="750" cy="330" r="1.3"/>
+      <circle cx="890" cy="270" r="1.2"/><circle cx="1040" cy="315" r="0.9"/><circle cx="1175" cy="65" r="1.3"/>
+    </g>
+    <g class="star-b">
+      <circle cx="112" cy="240" r="1.2"/><circle cx="240" cy="310" r="1.4"/><circle cx="390" cy="70" r="1.3"/>
+      <circle cx="530" cy="120" r="1.2"/><circle cx="680" cy="50" r="1.1"/><circle cx="820" cy="110" r="0.8"/>
+      <circle cx="960" cy="85" r="1.5"/><circle cx="1110" cy="140" r="1.1"/><circle cx="670" cy="190" r="1.4"/>
+    </g>
   </g>
 
   <!-- Constellation 1: Coroa de Nox (Left-Center) -->
   <g>
     <polyline points="140,110 230,160 340,120 420,195 520,135 600,210" 
-      stroke="rgba(192, 132, 252, 0.45)" stroke-width="1.5" stroke-dasharray="4,4" fill="none"/>
+      stroke="rgba(192, 132, 252, 0.6)" stroke-width="1.5" stroke-dasharray="4,4" fill="none" class="const-line"/>
     <circle cx="140" cy="110" r="2.5" fill="#e9d5ff"/>
     <circle cx="230" cy="160" r="2" fill="#c084fc"/>
-    <circle cx="340" cy="120" r="4" fill="url(#nv-star-glow)"/>
-    <path d="M340,110 L340,130 M330,120 L350,120" stroke="#ffffff" stroke-width="1.2"/>
+    <circle cx="340" cy="120" r="4.5" fill="url(#nv-star-glow)" class="star-a"/>
+    <path d="M340,110 L340,130 M330,120 L350,120" stroke="#ffffff" stroke-width="1.2" class="star-a"/>
     <circle cx="420" cy="195" r="2.5" fill="#e9d5ff"/>
     <circle cx="520" cy="135" r="3" fill="#c084fc"/>
     <circle cx="600" cy="210" r="2.5" fill="#e9d5ff"/>
@@ -72,19 +88,19 @@ export const BANNER_NEBULOSA_VAZIO_SVG = `
   <!-- Constellation 2: Serpente do Vazio (Right-Center) -->
   <g>
     <polyline points="720,250 810,190 910,225 1000,140 1090,175 1150,115" 
-      stroke="rgba(56, 189, 248, 0.45)" stroke-width="1.5" stroke-dasharray="4,4" fill="none"/>
+      stroke="rgba(56, 189, 248, 0.6)" stroke-width="1.5" stroke-dasharray="4,4" fill="none" class="const-line"/>
     <circle cx="720" cy="250" r="2.5" fill="#bae6fd"/>
     <circle cx="810" cy="190" r="2" fill="#38bdf8"/>
     <circle cx="910" cy="225" r="2.5" fill="#bae6fd"/>
-    <circle cx="1000" cy="140" r="4.5" fill="url(#nv-star-glow)"/>
-    <path d="M1000,128 L1000,152 M988,140 L1012,140" stroke="#ffffff" stroke-width="1.2"/>
+    <circle cx="1000" cy="140" r="5" fill="url(#nv-star-glow)" class="star-b"/>
+    <path d="M1000,128 L1000,152 M988,140 L1012,140" stroke="#ffffff" stroke-width="1.2" class="star-b"/>
     <circle cx="1090" cy="175" r="2.5" fill="#38bdf8"/>
     <circle cx="1150" cy="115" r="3" fill="#bae6fd"/>
   </g>
 </svg>
 `;
 
-// 2. Aurora Astral & Cordilheira Cósmica
+// 2. Aurora Astral & Cordilheira Cósmica (Animado)
 export const BANNER_AURORA_ASTRAL_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -95,24 +111,35 @@ export const BANNER_AURORA_ASTRAL_SVG = `
     </linearGradient>
     <linearGradient id="aa-wave-1" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="rgba(16, 185, 129, 0)"/>
-      <stop offset="25%" stop-color="rgba(16, 185, 129, 0.55)"/>
-      <stop offset="50%" stop-color="rgba(6, 182, 212, 0.6)"/>
-      <stop offset="75%" stop-color="rgba(52, 211, 153, 0.5)"/>
+      <stop offset="25%" stop-color="rgba(16, 185, 129, 0.65)"/>
+      <stop offset="50%" stop-color="rgba(6, 182, 212, 0.7)"/>
+      <stop offset="75%" stop-color="rgba(52, 211, 153, 0.6)"/>
       <stop offset="100%" stop-color="rgba(6, 182, 212, 0)"/>
     </linearGradient>
     <linearGradient id="aa-wave-2" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="rgba(6, 182, 212, 0)"/>
-      <stop offset="30%" stop-color="rgba(56, 189, 248, 0.45)"/>
-      <stop offset="60%" stop-color="rgba(139, 92, 246, 0.4)"/>
-      <stop offset="90%" stop-color="rgba(16, 185, 129, 0.35)"/>
+      <stop offset="30%" stop-color="rgba(56, 189, 248, 0.55)"/>
+      <stop offset="60%" stop-color="rgba(139, 92, 246, 0.5)"/>
+      <stop offset="90%" stop-color="rgba(16, 185, 129, 0.45)"/>
       <stop offset="100%" stop-color="rgba(139, 92, 246, 0)"/>
     </linearGradient>
   </defs>
 
+  <style>
+    @keyframes curtainWave { 0%, 100% { opacity: 0.22; transform: translateY(0); } 50% { opacity: 0.38; transform: translateY(-10px); } }
+    @keyframes ribbonFlow1 { 0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.75; } 50% { transform: translateY(-12px) scaleY(1.08); opacity: 0.95; } }
+    @keyframes ribbonFlow2 { 0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.65; } 50% { transform: translateY(10px) scaleY(1.06); opacity: 0.88; } }
+    @keyframes starGleam { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .curtain-grp { animation: curtainWave 7s ease-in-out infinite; }
+    .ribbon-1 { animation: ribbonFlow1 8s ease-in-out infinite; }
+    .ribbon-2 { animation: ribbonFlow2 10s ease-in-out infinite; }
+    .star-gleam { animation: starGleam 4s ease-in-out infinite; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#aa-bg)"/>
 
-  <!-- Vertical Light Curtains -->
-  <g opacity="0.25">
+  <!-- Vertical Light Curtains (Animated Sway) -->
+  <g class="curtain-grp">
     <line x1="200" y1="40" x2="200" y2="280" stroke="#34d399" stroke-width="24" filter="blur(6px)"/>
     <line x1="380" y1="20" x2="380" y2="260" stroke="#06b6d4" stroke-width="32" filter="blur(8px)"/>
     <line x1="580" y1="50" x2="580" y2="290" stroke="#10b981" stroke-width="40" filter="blur(10px)"/>
@@ -121,15 +148,15 @@ export const BANNER_AURORA_ASTRAL_SVG = `
   </g>
 
   <!-- Aurora Ribbon 1 -->
-  <path d="M-50,140 Q250,40 550,120 T1150,60 Q1220,50 1250,80 L1250,330 L-50,330 Z" 
-    fill="url(#aa-wave-1)" opacity="0.75"/>
+  <path class="ribbon-1" d="M-50,140 Q250,40 550,120 T1150,60 Q1220,50 1250,80 L1250,330 L-50,330 Z" 
+    fill="url(#aa-wave-1)"/>
 
   <!-- Aurora Ribbon 2 -->
-  <path d="M-50,180 Q350,80 700,160 T1250,100 L1250,350 L-50,350 Z" 
-    fill="url(#aa-wave-2)" opacity="0.65"/>
+  <path class="ribbon-2" d="M-50,180 Q350,80 700,160 T1250,100 L1250,350 L-50,350 Z" 
+    fill="url(#aa-wave-2)"/>
 
   <!-- Starfield shining through aurora -->
-  <g fill="#ffffff" opacity="0.65">
+  <g fill="#ffffff" class="star-gleam">
     <circle cx="90" cy="50" r="1.2"/><circle cx="180" cy="90" r="1"/><circle cx="280" cy="40" r="1.5"/>
     <circle cx="370" cy="110" r="0.9"/><circle cx="480" cy="65" r="1.3"/><circle cx="620" cy="35" r="1.6"/>
     <circle cx="740" cy="95" r="1.1"/><circle cx="860" cy="45" r="1.4"/><circle cx="990" cy="80" r="1.2"/>
@@ -141,11 +168,11 @@ export const BANNER_AURORA_ASTRAL_SVG = `
     fill="#02070a"/>
   <!-- Mountain Rim Starlight Highlight -->
   <polyline points="-50,340 80,315 210,345 350,295 480,340 640,285 790,335 940,305 1070,345 1250,310" 
-    stroke="rgba(52, 211, 153, 0.35)" stroke-width="1.2" fill="none"/>
+    stroke="rgba(52, 211, 153, 0.45)" stroke-width="1.2" fill="none"/>
 </svg>
 `;
 
-// 3. Energia Arcana & Círculo Rúnico
+// 3. Energia Arcana & Círculo Rúnico (Animado)
 export const BANNER_ENERGIA_ARCANA_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -161,42 +188,63 @@ export const BANNER_ENERGIA_ARCANA_SVG = `
     </radialGradient>
   </defs>
 
+  <style>
+    @keyframes astrolabeSpinCw { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes astrolabeSpinCcw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+    @keyframes coreBreathe { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.15); opacity: 1; } }
+    @keyframes filamentWave { 0%, 100% { opacity: 0.35; transform: translateX(0); } 50% { opacity: 0.65; transform: translateX(-15px); } }
+    .spin-cw { animation: astrolabeSpinCw 30s linear infinite; transform-origin: 980px 200px; }
+    .spin-ccw { animation: astrolabeSpinCcw 24s linear infinite; transform-origin: 980px 200px; }
+    .orb-pulse { animation: coreBreathe 3s ease-in-out infinite; transform-origin: 980px 200px; }
+    .filaments { animation: filamentWave 6s ease-in-out infinite; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#ea-bg)"/>
   <rect width="1200" height="400" fill="url(#ea-vortex)"/>
 
   <!-- Energy Wave Filaments flowing from right to left -->
-  <g fill="none" opacity="0.45">
+  <g fill="none" class="filaments">
     <path d="M1200,200 C900,160 700,240 400,180 T0,220" stroke="#c084fc" stroke-width="2"/>
     <path d="M1200,180 C850,220 650,140 350,210 T0,170" stroke="#818cf8" stroke-width="1.5"/>
     <path d="M1200,220 C950,140 750,260 500,190 T0,240" stroke="#e879f9" stroke-width="1.2"/>
   </g>
 
-  <!-- Arcane Magic Circle / Astrolabe at (980, 200) -->
-  <g transform="translate(980, 200)">
-    <!-- Outer Rune Ring -->
-    <circle cx="0" cy="0" r="160" stroke="rgba(192, 132, 252, 0.45)" stroke-width="2" stroke-dasharray="10,6" fill="none"/>
-    <circle cx="0" cy="0" r="148" stroke="rgba(168, 85, 247, 0.35)" stroke-width="1" fill="none"/>
-    <!-- Middle Glyphic Ring -->
-    <circle cx="0" cy="0" r="125" stroke="rgba(232, 121, 249, 0.5)" stroke-width="2.5" fill="none"/>
-    <!-- 8 Cardinal Nodes -->
-    <circle cx="0" cy="-125" r="4.5" fill="#f0abfc"/>
-    <circle cx="0" cy="125" r="4.5" fill="#f0abfc"/>
-    <circle cx="-125" cy="0" r="4.5" fill="#f0abfc"/>
-    <circle cx="125" cy="0" r="4.5" fill="#f0abfc"/>
-    <circle cx="-88" cy="-88" r="3.5" fill="#c084fc"/>
-    <circle cx="88" cy="-88" r="3.5" fill="#c084fc"/>
-    <circle cx="-88" cy="88" r="3.5" fill="#c084fc"/>
-    <circle cx="88" cy="88" r="3.5" fill="#c084fc"/>
-    <!-- Interlocking Sacred Triangles / Hexagram -->
-    <polygon points="0,-100 86.6,50 -86.6,50" stroke="rgba(192, 132, 252, 0.55)" stroke-width="1.5" fill="none"/>
-    <polygon points="0,100 86.6,-50 -86.6,-50" stroke="rgba(192, 132, 252, 0.55)" stroke-width="1.5" fill="none"/>
-    <!-- Inner Core Orb -->
-    <circle cx="0" cy="0" r="40" stroke="rgba(240, 171, 252, 0.7)" stroke-width="2" fill="none"/>
-    <circle cx="0" cy="0" r="18" fill="rgba(240, 171, 252, 0.8)"/>
+  <!-- Arcane Magic Circle / Astrolabe at (980, 200) with Rotating Layers -->
+  <g>
+    <!-- Outer Rune Ring (Slow CW rotation) -->
+    <g class="spin-cw">
+      <circle cx="980" cy="200" r="160" stroke="rgba(192, 132, 252, 0.55)" stroke-width="2" stroke-dasharray="10,6" fill="none"/>
+      <circle cx="980" cy="200" r="148" stroke="rgba(168, 85, 247, 0.45)" stroke-width="1" fill="none"/>
+    </g>
+
+    <!-- Middle Glyphic Ring & 8 Cardinal Nodes (CCW rotation) -->
+    <g class="spin-ccw">
+      <circle cx="980" cy="200" r="125" stroke="rgba(232, 121, 249, 0.6)" stroke-width="2.5" fill="none"/>
+      <circle cx="980" cy="75" r="5" fill="#f0abfc"/>
+      <circle cx="980" cy="325" r="5" fill="#f0abfc"/>
+      <circle cx="855" cy="200" r="5" fill="#f0abfc"/>
+      <circle cx="1105" cy="200" r="5" fill="#f0abfc"/>
+      <circle cx="892" cy="112" r="3.5" fill="#c084fc"/>
+      <circle cx="1068" cy="112" r="3.5" fill="#c084fc"/>
+      <circle cx="892" cy="288" r="3.5" fill="#c084fc"/>
+      <circle cx="1068" cy="288" r="3.5" fill="#c084fc"/>
+    </g>
+
+    <!-- Interlocking Sacred Triangles / Hexagram (Slow CW) -->
+    <g class="spin-cw">
+      <polygon points="980,100 1066.6,250 893.4,250" stroke="rgba(192, 132, 252, 0.65)" stroke-width="1.8" fill="none"/>
+      <polygon points="980,300 1066.6,150 893.4,150" stroke="rgba(192, 132, 252, 0.65)" stroke-width="1.8" fill="none"/>
+    </g>
+
+    <!-- Inner Core Orb (Breathing Pulse) -->
+    <g class="orb-pulse">
+      <circle cx="980" cy="200" r="42" stroke="rgba(240, 171, 252, 0.85)" stroke-width="2" fill="none"/>
+      <circle cx="980" cy="200" r="20" fill="rgba(240, 171, 252, 0.9)"/>
+    </g>
   </g>
 
   <!-- Floating Arcane Particles -->
-  <g fill="#f0abfc" opacity="0.65">
+  <g fill="#f0abfc" opacity="0.75">
     <circle cx="840" cy="120" r="2.5"/><circle cx="780" cy="270" r="2"/><circle cx="680" cy="150" r="3"/>
     <circle cx="560" cy="240" r="1.8"/><circle cx="450" cy="110" r="2.2"/><circle cx="320" cy="260" r="1.5"/>
     <circle cx="210" cy="140" r="2.5"/><circle cx="95" cy="230" r="1.8"/>
@@ -204,7 +252,7 @@ export const BANNER_ENERGIA_ARCANA_SVG = `
 </svg>
 `;
 
-// 4. Eclipse Cósmico & Corona Solar
+// 4. Eclipse Cósmico & Corona Solar (Animado)
 export const BANNER_ECLIPSE_COSMICO_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -223,39 +271,48 @@ export const BANNER_ECLIPSE_COSMICO_SVG = `
     <radialGradient id="ec-flare" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#ffffff"/>
       <stop offset="35%" stop-color="#fde047"/>
-      <stop offset="70%" stop-color="rgba(249, 115, 22, 0.4)"/>
+      <stop offset="70%" stop-color="rgba(249, 115, 22, 0.5)"/>
       <stop offset="100%" stop-color="transparent"/>
     </radialGradient>
   </defs>
 
+  <style>
+    @keyframes coronaPulse { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.08); opacity: 1; } }
+    @keyframes prominenceWobble { 0%, 100% { transform: rotate(0deg); opacity: 0.65; } 50% { transform: rotate(6deg); opacity: 0.95; } }
+    @keyframes diamondGlint { 0%, 100% { transform: scale(0.9) rotate(0deg); opacity: 0.85; } 50% { transform: scale(1.2) rotate(45deg); opacity: 1; } }
+    .corona-layer { animation: coronaPulse 4s ease-in-out infinite; transform-origin: 820px 180px; }
+    .prominence-layer { animation: prominenceWobble 6s ease-in-out infinite; transform-origin: 820px 180px; }
+    .diamond-flare { animation: diamondGlint 3s ease-in-out infinite; transform-origin: 740px 100px; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#ec-bg)"/>
 
   <!-- Crimson Cosmic Dust Cloud -->
-  <ellipse cx="800" cy="180" rx="420" ry="240" fill="rgba(220, 38, 38, 0.18)" filter="blur(20px)"/>
+  <ellipse cx="800" cy="180" rx="420" ry="240" fill="rgba(220, 38, 38, 0.22)" filter="blur(20px)"/>
 
-  <!-- Solar Eclipse Corona Burst -->
-  <circle cx="820" cy="180" r="190" fill="url(#ec-corona)" opacity="0.95"/>
+  <!-- Solar Eclipse Corona Burst (Pulsing Corona) -->
+  <circle class="corona-layer" cx="820" cy="180" r="195" fill="url(#ec-corona)"/>
 
-  <!-- Coronal Prominence Streamers -->
-  <g stroke="rgba(251, 191, 36, 0.65)" stroke-width="2" fill="none">
-    <path d="M820,180 L820,0 M820,180 L820,360"/>
-    <path d="M820,180 L640,60 M820,180 L1000,300"/>
-    <path d="M820,180 L640,300 M820,180 L1000,60"/>
-    <path d="M820,180 L620,180 M820,180 L1020,180"/>
+  <!-- Coronal Prominence Streamers (Wobble) -->
+  <g class="prominence-layer" stroke="rgba(251, 191, 36, 0.75)" stroke-width="2.2" fill="none">
+    <path d="M820,180 L820, -10 M820,180 L820,370"/>
+    <path d="M820,180 L630,50 M820,180 L1010,310"/>
+    <path d="M820,180 L630,310 M820,180 L1010,50"/>
+    <path d="M820,180 L610,180 M820,180 L1030,180"/>
   </g>
 
   <!-- Total Dark Moon Silhouette -->
   <circle cx="820" cy="180" r="115" fill="#090104"/>
 
-  <!-- Diamond Flare on Eclipse Rim (Upper Left) -->
-  <g transform="translate(740, 100)">
-    <circle cx="0" cy="0" r="32" fill="url(#ec-flare)"/>
-    <path d="M0,-40 L0,40 M-40,0 L40,0" stroke="#ffffff" stroke-width="2"/>
-    <circle cx="0" cy="0" r="6" fill="#ffffff"/>
+  <!-- Diamond Flare on Eclipse Rim (Upper Left Animated) -->
+  <g class="diamond-flare" transform="translate(740, 100)">
+    <circle cx="0" cy="0" r="34" fill="url(#ec-flare)"/>
+    <path d="M0,-42 L0,42 M-42,0 L42,0" stroke="#ffffff" stroke-width="2.2"/>
+    <circle cx="0" cy="0" r="7" fill="#ffffff"/>
   </g>
 
   <!-- Drifting Embers & Starfield -->
-  <g fill="#fca5a5" opacity="0.6">
+  <g fill="#fca5a5" opacity="0.65">
     <circle cx="120" cy="80" r="1.2"/><circle cx="210" cy="220" r="1.5"/><circle cx="340" cy="130" r="1"/>
     <circle cx="450" cy="270" r="1.8"/><circle cx="560" cy="90" r="1.3"/><circle cx="670" cy="310" r="2"/>
     <circle cx="1020" cy="95" r="1.4"/><circle cx="1120" cy="250" r="1.6"/>
@@ -263,7 +320,7 @@ export const BANNER_ECLIPSE_COSMICO_SVG = `
 </svg>
 `;
 
-// 5. Biblioteca das Estrelas & Astrolábio Dourado
+// 5. Biblioteca das Estrelas & Astrolábio Dourado (Animado)
 export const BANNER_BIBLIOTECA_ESTRELAS_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -273,17 +330,26 @@ export const BANNER_BIBLIOTECA_ESTRELAS_SVG = `
       <stop offset="100%" stop-color="#03050a"/>
     </radialGradient>
     <radialGradient id="be-gold-glow" cx="50%" cy="30%" r="60%">
-      <stop offset="0%" stop-color="rgba(251, 191, 36, 0.3)"/>
-      <stop offset="50%" stop-color="rgba(217, 119, 6, 0.15)"/>
+      <stop offset="0%" stop-color="rgba(251, 191, 36, 0.35)"/>
+      <stop offset="50%" stop-color="rgba(217, 119, 6, 0.18)"/>
       <stop offset="100%" stop-color="transparent"/>
     </radialGradient>
   </defs>
 
+  <style>
+    @keyframes armillarySpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes flarePulse { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; } 50% { transform: scale(1.25) rotate(90deg); opacity: 1; } }
+    @keyframes goldDustGlow { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.95; } }
+    .armillary-spin { animation: armillarySpin 45s linear infinite; transform-origin: 600px 200px; }
+    .flare-center { animation: flarePulse 3.5s ease-in-out infinite; transform-origin: 600px 200px; }
+    .gold-dust { animation: goldDustGlow 4s ease-in-out infinite; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#be-bg)"/>
   <rect width="1200" height="400" fill="url(#be-gold-glow)"/>
 
-  <!-- Celestial Astrolabe Coordinates & Armillary Arcs -->
-  <g stroke="rgba(251, 191, 36, 0.35)" fill="none" stroke-width="1.2">
+  <!-- Celestial Astrolabe Coordinates & Armillary Arcs (Slow Rotation) -->
+  <g class="armillary-spin" stroke="rgba(251, 191, 36, 0.45)" fill="none" stroke-width="1.3">
     <!-- Big Armillary Ring -->
     <circle cx="600" cy="200" r="180" stroke-dasharray="6,4"/>
     <circle cx="600" cy="200" r="170"/>
@@ -296,7 +362,7 @@ export const BANNER_BIBLIOTECA_ESTRELAS_SVG = `
   </g>
 
   <!-- Architectural Columns / Arches Silhouettes on Flanks -->
-  <g fill="rgba(8, 14, 26, 0.85)" stroke="rgba(251, 191, 36, 0.25)" stroke-width="1">
+  <g fill="rgba(8, 14, 26, 0.85)" stroke="rgba(251, 191, 36, 0.3)" stroke-width="1">
     <path d="M0,0 L140,0 L140,400 L0,400 Z"/>
     <path d="M140,0 Q180,100 180,400 L140,400 Z"/>
     <path d="M1200,0 L1060,0 L1060,400 L1200,400 Z"/>
@@ -311,21 +377,21 @@ export const BANNER_BIBLIOTECA_ESTRELAS_SVG = `
     <circle cx="480" cy="290" r="3"/><circle cx="720" cy="290" r="3"/>
   </g>
 
-  <!-- Starlight Flare in Astrolabe Center -->
-  <g transform="translate(600, 200)">
-    <circle cx="0" cy="0" r="12" fill="#fef08a"/>
-    <path d="M0,-24 L0,24 M-24,0 L24,0" stroke="#fbbf24" stroke-width="1.8"/>
+  <!-- Starlight Flare in Astrolabe Center (Breathing Pulse) -->
+  <g class="flare-center">
+    <circle cx="600" cy="200" r="14" fill="#fef08a"/>
+    <path d="M600,172 L600,228 M572,200 L628,200" stroke="#fbbf24" stroke-width="2"/>
   </g>
 
   <!-- Golden Floating Star Dust -->
-  <g fill="#fde68a" opacity="0.6">
+  <g class="gold-dust" fill="#fde68a">
     <circle cx="260" cy="90" r="1.5"/><circle cx="340" cy="280" r="1.8"/><circle cx="860" cy="120" r="1.5"/>
     <circle cx="940" cy="290" r="2"/><circle cx="520" cy="70" r="1.2"/><circle cx="680" cy="330" r="1.4"/>
   </g>
 </svg>
 `;
 
-// 6. Fenda Rúnica & Abismo Dimensional
+// 6. Fenda Rúnica & Abismo Dimensional (Animado)
 export const BANNER_RUNAS_PRIMORDIAIS_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -342,44 +408,61 @@ export const BANNER_RUNAS_PRIMORDIAIS_SVG = `
     </linearGradient>
   </defs>
 
+  <style>
+    @keyframes riftPlasma { 0%, 100% { stroke-width: 4.5px; opacity: 0.9; } 50% { stroke-width: 7px; opacity: 1; } }
+    @keyframes shardFloatA { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+    @keyframes shardFloatB { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
+    @keyframes gravityRingBreathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.7; } }
+    .rift-pulse { animation: riftPlasma 3.5s ease-in-out infinite; }
+    .shard-a { animation: shardFloatA 5s ease-in-out infinite; }
+    .shard-b { animation: shardFloatB 6s ease-in-out infinite; }
+    .gravity-rings { animation: gravityRingBreathe 4.5s ease-in-out infinite; }
+  </style>
+
   <rect width="1200" height="400" fill="url(#rp-bg)"/>
 
   <!-- Distortion Ambient Glow -->
-  <ellipse cx="600" cy="200" rx="550" ry="180" fill="rgba(217, 70, 239, 0.18)" filter="blur(30px)" transform="rotate(-12 600 200)"/>
-  <ellipse cx="600" cy="200" rx="450" ry="100" fill="rgba(6, 182, 212, 0.22)" filter="blur(20px)" transform="rotate(-12 600 200)"/>
+  <ellipse cx="600" cy="200" rx="550" ry="180" fill="rgba(217, 70, 239, 0.22)" filter="blur(30px)" transform="rotate(-12 600 200)"/>
+  <ellipse cx="600" cy="200" rx="450" ry="100" fill="rgba(6, 182, 212, 0.26)" filter="blur(20px)" transform="rotate(-12 600 200)"/>
 
-  <!-- Spacetime Gravitational Rings -->
-  <g stroke="rgba(6, 182, 212, 0.35)" stroke-width="1.5" fill="none" stroke-dasharray="8,6" transform="rotate(-12 600 200)">
+  <!-- Spacetime Gravitational Rings (Breathing) -->
+  <g class="gravity-rings" stroke="rgba(6, 182, 212, 0.45)" stroke-width="1.5" fill="none" stroke-dasharray="8,6" transform="rotate(-12 600 200)">
     <ellipse cx="600" cy="200" rx="350" ry="70"/>
     <ellipse cx="600" cy="200" rx="240" ry="45"/>
     <ellipse cx="600" cy="200" rx="140" ry="25"/>
   </g>
 
-  <!-- Jagged Spacetime Fracture Core -->
-  <path d="M120,-30 L280,70 L340,55 L480,160 L540,140 L700,230 L760,215 L920,320 L1010,295 L1120,430" 
+  <!-- Jagged Spacetime Fracture Core (Electric Pulse) -->
+  <path class="rift-pulse" d="M120,-30 L280,70 L340,55 L480,160 L540,140 L700,230 L760,215 L920,320 L1010,295 L1120,430" 
     stroke="url(#rp-rift-core)" stroke-width="5" fill="none" stroke-linecap="round"/>
   <path d="M120,-30 L280,70 L340,55 L480,160 L540,140 L700,230 L760,215 L920,320 L1010,295 L1120,430" 
     stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round"/>
 
   <!-- Secondary Fractures -->
   <path d="M340,55 L390,20 M700,230 L660,290 M920,320 L960,370" 
-    stroke="rgba(217, 70, 239, 0.7)" stroke-width="1.8" fill="none"/>
+    stroke="rgba(217, 70, 239, 0.8)" stroke-width="1.8" fill="none"/>
 
-  <!-- Floating Primordial Runic Monoliths -->
-  <g fill="rgba(15, 6, 30, 0.9)" stroke="rgba(6, 182, 212, 0.65)" stroke-width="1.5">
-    <!-- Shard 1 -->
-    <polygon points="260,180 290,160 300,220 270,240"/>
-    <line x1="280" y1="180" x2="285" y2="220" stroke="#67e8f9" stroke-width="1.2"/>
-    <!-- Shard 2 -->
-    <polygon points="450,280 480,260 490,320 460,335"/>
-    <line x1="470" y1="275" x2="475" y2="315" stroke="#f0abfc" stroke-width="1.2"/>
-    <!-- Shard 3 -->
-    <polygon points="840,90 870,75 880,135 850,150"/>
-    <line x1="860" y1="90" x2="865" y2="130" stroke="#67e8f9" stroke-width="1.2"/>
+  <!-- Floating Primordial Runic Monoliths (Levitating Shards) -->
+  <g fill="rgba(15, 6, 30, 0.9)" stroke="rgba(6, 182, 212, 0.75)" stroke-width="1.5">
+    <!-- Shard 1 (Float A) -->
+    <g class="shard-a">
+      <polygon points="260,180 290,160 300,220 270,240"/>
+      <line x1="280" y1="180" x2="285" y2="220" stroke="#67e8f9" stroke-width="1.2"/>
+    </g>
+    <!-- Shard 2 (Float B) -->
+    <g class="shard-b">
+      <polygon points="450,280 480,260 490,320 460,335"/>
+      <line x1="470" y1="275" x2="475" y2="315" stroke="#f0abfc" stroke-width="1.2"/>
+    </g>
+    <!-- Shard 3 (Float A) -->
+    <g class="shard-a">
+      <polygon points="840,90 870,75 880,135 850,150"/>
+      <line x1="860" y1="90" x2="865" y2="130" stroke="#67e8f9" stroke-width="1.2"/>
+    </g>
   </g>
 
   <!-- Swirling Vortex Particles -->
-  <g fill="#67e8f9" opacity="0.75">
+  <g fill="#67e8f9" opacity="0.8">
     <circle cx="210" cy="110" r="2.5"/><circle cx="380" cy="190" r="3"/><circle cx="580" cy="170" r="3.5"/>
     <circle cx="650" cy="260" r="2.8"/><circle cx="800" cy="210" r="3.2"/><circle cx="950" cy="270" r="2.2"/>
     <circle cx="1060" cy="360" r="2.8"/>

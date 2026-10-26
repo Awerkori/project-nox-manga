@@ -10,6 +10,7 @@
     display_name?: string | null;
     displayName?: string | null;
     username?: string | null;
+    avatar_frame_id?: string | null;
   };
   type Props = {
     /** Supports the compact member objects used by staff/social views. */
@@ -19,6 +20,7 @@
     displayName?: string;
     size?: number;
     frameId?: string | null;
+    frameColor?: string | null;
     frameUrl?: string | null;
     crop?: { x?: number; y?: number; zoom?: number } | any | null;
     loading?: 'eager' | 'lazy';
@@ -32,6 +34,7 @@
     displayName = '',
     size = 40,
     frameId = null,
+    frameColor = null,
     frameUrl = null,
     crop = null,
     loading = 'lazy',
@@ -46,16 +49,27 @@
   let cropStyle = $derived(avatarCropStyle(crop ?? user?.avatar_crop ?? user?.avatarCrop));
   let failedSrc = $state<string | null>(null);
 
+  let rawFrameId = $derived(frameId || user?.avatar_frame_id || null);
+  let parsedFrameId = $derived(rawFrameId ? rawFrameId.split(':')[0] : null);
+  let parsedFrameColor = $derived(
+    frameColor || (rawFrameId && rawFrameId.includes(':') ? rawFrameId.split(':')[1] : null)
+  );
+
   let resolvedFrameKey = $derived.by(() => {
-    if (!frameId) return null;
-    if (frameId === 'frame_cosmic_nox') return 'cosmic';
-    if (frameId === 'frame_cyber_neon') return 'cyber';
-    if (frameId === 'frame_emerald_veil') return 'emerald';
-    if (frameId === 'frame_solar_flare') return 'solar';
-    if (frameId === 'frame_particle_stardust') return 'stardust';
-    if (frameId === 'frame_aurora_mystic') return 'aurora';
-    if (frameId === 'frame_crimson_eclipse') return 'crimson';
-    if (frameId === 'frame_celestial_sovereign' || frameId === 'frame_celestial_gold') return 'celestial';
+    if (!parsedFrameId) return null;
+    if (parsedFrameId === 'frame_cosmic_nox') return 'cosmic';
+    if (parsedFrameId === 'frame_cyber_neon') return 'cyber';
+    if (parsedFrameId === 'frame_emerald_veil') return 'emerald';
+    if (parsedFrameId === 'frame_solar_flare') return 'solar';
+    if (parsedFrameId === 'frame_particle_stardust') return 'stardust';
+    if (parsedFrameId === 'frame_aurora_mystic') return 'aurora';
+    if (parsedFrameId === 'frame_crimson_eclipse') return 'crimson';
+    if (parsedFrameId === 'frame_celestial_sovereign' || parsedFrameId === 'frame_celestial_gold') return 'celestial';
+    // Round 3 new frames
+    if (parsedFrameId === 'frame_lightning_storm') return 'lightning';
+    if (parsedFrameId === 'frame_crystal_shards') return 'crystal';
+    if (parsedFrameId === 'frame_void_vortex') return 'vortex';
+    if (parsedFrameId === 'frame_astral_thorn_crown') return 'thorn';
     return 'legacy';
   });
 
@@ -68,7 +82,7 @@
 
 <div
   class="user-avatar-root {className}"
-  class:has-frame={!!frameId || !!frameUrl}
+  class:has-frame={!!parsedFrameId || !!frameUrl}
   class:frame-cosmic={resolvedFrameKey === 'cosmic'}
   class:frame-cyber={resolvedFrameKey === 'cyber'}
   class:frame-emerald={resolvedFrameKey === 'emerald'}
@@ -77,6 +91,19 @@
   class:frame-aurora={resolvedFrameKey === 'aurora'}
   class:frame-crimson={resolvedFrameKey === 'crimson'}
   class:frame-celestial={resolvedFrameKey === 'celestial'}
+  class:frame-lightning={resolvedFrameKey === 'lightning'}
+  class:frame-crystal={resolvedFrameKey === 'crystal'}
+  class:frame-vortex={resolvedFrameKey === 'vortex'}
+  class:frame-thorn={resolvedFrameKey === 'thorn'}
+  class:tint-blue={parsedFrameColor === 'blue'}
+  class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red'}
+  class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple'}
+  class:tint-emerald={parsedFrameColor === 'emerald' || parsedFrameColor === 'green'}
+  class:tint-gold={parsedFrameColor === 'gold'}
+  class:tint-cyan={parsedFrameColor === 'cyan'}
+  class:tint-magenta={parsedFrameColor === 'magenta'}
+  class:tint-green={parsedFrameColor === 'green'}
+  class:tint-orange={parsedFrameColor === 'orange'}
   style="--avatar-size: {size}px;"
 >
   <div class="avatar-inner">
@@ -100,8 +127,20 @@
 
   {#if frameUrl}
     <img src={frameUrl} alt="" class="avatar-frame-image" aria-hidden="true" />
-  {:else if frameId}
-    <div class="avatar-frame-overlay frame-{resolvedFrameKey}" aria-hidden="true">
+  {:else if parsedFrameId}
+    <div
+      class="avatar-frame-overlay frame-{resolvedFrameKey}"
+      class:tint-blue={parsedFrameColor === 'blue'}
+      class:tint-crimson={parsedFrameColor === 'crimson' || parsedFrameColor === 'red'}
+      class:tint-violet={parsedFrameColor === 'violet' || parsedFrameColor === 'purple'}
+      class:tint-emerald={parsedFrameColor === 'emerald' || parsedFrameColor === 'green'}
+      class:tint-gold={parsedFrameColor === 'gold'}
+      class:tint-cyan={parsedFrameColor === 'cyan'}
+      class:tint-magenta={parsedFrameColor === 'magenta'}
+      class:tint-green={parsedFrameColor === 'green'}
+      class:tint-orange={parsedFrameColor === 'orange'}
+      aria-hidden="true"
+    >
       {#if resolvedFrameKey === 'cosmic'}
         <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
           <circle cx="50" cy="50" r="38" class="ring-cosmic-base" />
@@ -217,6 +256,86 @@
           <polygon points="8,50 12,52 16,50 12,48" class="celestial-gem-left" />
           <polygon points="92,50 88,48 84,50 88,52" class="celestial-gem-right" />
         </svg>
+
+      <!-- ROUND 3 NEW FRAMES -->
+      {:else if resolvedFrameKey === 'lightning'}
+        <!-- 9. Tempestade Cósmica (Lightning Storm) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="38.5" class="ring-lightning-base" />
+          <circle cx="50" cy="50" r="41.5" class="ring-lightning-orbit" />
+          <g class="lightning-bolts-group">
+            <path d="M26,14 L34,26 L29,28 L38,40" class="lightning-bolt bolt-1" />
+            <path d="M74,14 L66,26 L71,28 L62,40" class="lightning-bolt bolt-2" />
+            <path d="M26,86 L34,74 L29,72 L38,60" class="lightning-bolt bolt-3" />
+            <path d="M74,86 L66,74 L71,72 L62,60" class="lightning-bolt bolt-4" />
+          </g>
+          <g class="lightning-sparks">
+            <circle cx="50" cy="7" r="2.8" class="spark-node spark-n" />
+            <circle cx="50" cy="93" r="2.8" class="spark-node spark-s" />
+            <circle cx="7" cy="50" r="2.8" class="spark-node spark-w" />
+            <circle cx="93" cy="50" r="2.8" class="spark-node spark-e" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'crystal'}
+        <!-- 10. Fragmentos de Prisma (Crystal Shards) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <polygon points="50,11 77,22 89,50 77,78 50,89 23,78 11,50 23,22" class="ring-crystal-octa" />
+          <circle cx="50" cy="50" r="41.5" class="ring-crystal-orbit" />
+          <g class="crystal-shards-cluster">
+            <polygon points="50,2 55,10 50,17 45,10" class="crystal-shard shard-n" />
+            <polygon points="98,50 90,55 83,50 90,45" class="crystal-shard shard-e" />
+            <polygon points="50,98 45,90 50,83 55,90" class="crystal-shard shard-s" />
+            <polygon points="2,50 10,45 17,50 10,55" class="crystal-shard shard-w" />
+            <polygon points="81,19 85,24 81,28 77,23" class="crystal-shard-mini shard-ne" />
+            <polygon points="19,19 23,24 19,28 15,23" class="crystal-shard-mini shard-nw" />
+            <polygon points="81,81 85,76 81,72 77,77" class="crystal-shard-mini shard-se" />
+            <polygon points="19,81 23,76 19,72 15,77" class="crystal-shard-mini shard-sw" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'vortex'}
+        <!-- 11. Vórtice do Vazio (Void Vortex) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-vortex-horizon" />
+          <g class="vortex-arms-spin">
+            <path d="M50,7 Q76,14 85,38 Q90,62 76,82 Q62,94 40,88" class="vortex-arm arm-1" />
+            <path d="M93,50 Q86,76 62,85 Q38,90 18,76 Q6,62 12,40" class="vortex-arm arm-2" />
+            <path d="M50,93 Q24,86 15,62 Q10,38 24,18 Q38,6 60,12" class="vortex-arm arm-3" />
+          </g>
+          <circle cx="50" cy="50" r="43" class="ring-vortex-lens" />
+          <g class="vortex-dust">
+            <circle cx="48" cy="11" r="2.2" class="vortex-dot dot-1" />
+            <circle cx="89" cy="46" r="2.5" class="vortex-dot dot-2" />
+            <circle cx="52" cy="89" r="2.2" class="vortex-dot dot-3" />
+            <circle cx="11" cy="54" r="2.4" class="vortex-dot dot-4" />
+          </g>
+        </svg>
+
+      {:else if resolvedFrameKey === 'thorn'}
+        <!-- 12. Coroa de Espinhos da Noite (Astral Thorn Crown) -->
+        <svg viewBox="0 0 100 100" class="frame-svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="39" class="ring-thorn-aura" />
+          <path d="M14,40 Q25,18 50,15 Q75,18 86,40 Q76,28 50,25 Q24,28 14,40 Z" class="thorn-vine-upper" />
+          <path d="M14,60 Q25,82 50,85 Q75,82 86,60 Q76,72 50,75 Q24,72 14,60 Z" class="thorn-vine-lower" />
+          <g class="thorn-spikes-group">
+            <polygon points="50,2 54,16 50,19 46,16" class="thorn-spike spike-center-top" />
+            <polygon points="26,12 34,22 29,24 23,17" class="thorn-spike spike-flank-tl" />
+            <polygon points="74,12 77,17 71,24 66,22" class="thorn-spike spike-flank-tr" />
+            <polygon points="50,98 46,84 50,81 54,84" class="thorn-spike spike-center-bottom" />
+            <polygon points="26,88 23,83 29,76 34,78" class="thorn-spike spike-flank-bl" />
+            <polygon points="74,88 66,78 71,76 77,83" class="thorn-spike spike-flank-br" />
+          </g>
+          <g class="thorn-rubies">
+            <circle cx="50" cy="16" r="3.2" class="thorn-gem-core" />
+            <circle cx="50" cy="84" r="3.2" class="thorn-gem-core" />
+            <circle cx="28" cy="20" r="2.4" class="thorn-gem-flank" />
+            <circle cx="72" cy="20" r="2.4" class="thorn-gem-flank" />
+            <circle cx="28" cy="80" r="2.4" class="thorn-gem-flank" />
+            <circle cx="72" cy="80" r="2.4" class="thorn-gem-flank" />
+          </g>
+        </svg>
+
       {:else}
         <div class="avatar-frame-overlay-legacy"></div>
       {/if}
@@ -255,7 +374,6 @@
     object-fit: cover;
     object-position: center;
     display: block;
-    /* GIF animations run natively without freezing */
   }
 
   .avatar-fallback {
@@ -300,7 +418,9 @@
     border: 2px solid #a78bfa;
   }
 
-  /* 1. Cosmic Nox Frame */
+  /* =========================================================================
+     1. COSMIC NOX FRAME & TINT VARIANTS
+     ========================================================================= */
   .ring-cosmic-base {
     fill: none;
     stroke: #a78bfa;
@@ -332,16 +452,29 @@
     animation: starTwinkle 2s ease-in-out infinite;
     transform-origin: 50px 50px;
   }
+  .star-twinkle-2 { animation-delay: 0.5s !important; }
+  .star-twinkle-3 { animation-delay: 1s !important; }
 
-  .star-twinkle-2 {
-    animation-delay: 0.5s !important;
-  }
+  /* Cosmic Nox Tints */
+  .frame-cosmic.tint-gold .ring-cosmic-base { stroke: #fbbf24; filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.9)); }
+  .frame-cosmic.tint-gold .ring-cosmic-orbit { stroke: rgba(251, 191, 36, 0.65); }
+  .frame-cosmic.tint-gold .cardinal-gems polygon { fill: #fef08a; stroke: #f59e0b; filter: drop-shadow(0 0 6px #fbbf24); }
 
-  .star-twinkle-3 {
-    animation-delay: 1s !important;
-  }
+  .frame-cosmic.tint-cyan .ring-cosmic-base { stroke: #38bdf8; filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.9)); }
+  .frame-cosmic.tint-cyan .ring-cosmic-orbit { stroke: rgba(56, 189, 248, 0.65); }
+  .frame-cosmic.tint-cyan .cardinal-gems polygon { fill: #e0f2fe; stroke: #0284c7; filter: drop-shadow(0 0 6px #38bdf8); }
 
-  /* 2. Cyber Neon Frame */
+  .frame-cosmic.tint-crimson .ring-cosmic-base { stroke: #ef4444; filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.9)); }
+  .frame-cosmic.tint-crimson .ring-cosmic-orbit { stroke: rgba(239, 68, 68, 0.65); }
+  .frame-cosmic.tint-crimson .cardinal-gems polygon { fill: #fecaca; stroke: #b91c1c; filter: drop-shadow(0 0 6px #ef4444); }
+
+  .frame-cosmic.tint-emerald .ring-cosmic-base { stroke: #10b981; filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.9)); }
+  .frame-cosmic.tint-emerald .ring-cosmic-orbit { stroke: rgba(16, 185, 129, 0.65); }
+  .frame-cosmic.tint-emerald .cardinal-gems polygon { fill: #d1fae5; stroke: #047857; filter: drop-shadow(0 0 6px #10b981); }
+
+  /* =========================================================================
+     2. CYBER NEON FRAME & TINT VARIANTS
+     ========================================================================= */
   .ring-cyber-track {
     fill: none;
     stroke: rgba(6, 182, 212, 0.45);
@@ -378,14 +511,44 @@
     stroke-width: 1.5;
   }
 
-  /* 3. Emerald Arcana Frame */
+  /* Cyber Neon Tints */
+  .frame-cyber.tint-magenta .ring-cyber-track { stroke: rgba(244, 63, 94, 0.45); }
+  .frame-cyber.tint-magenta .ring-cyber-pulse { stroke: #f43f5e; filter: drop-shadow(0 0 6px #f43f5e); }
+  .frame-cyber.tint-magenta .cyber-bracket { stroke: #fb7185; filter: drop-shadow(0 0 6px #f43f5e); }
+  .frame-cyber.tint-magenta .cyber-node-top,
+  .frame-cyber.tint-magenta .cyber-node-bottom { fill: #fecdd3; filter: drop-shadow(0 0 6px #fb7185); }
+  .frame-cyber.tint-magenta .cyber-node-line { stroke: #e11d48; }
+
+  .frame-cyber.tint-green .ring-cyber-track { stroke: rgba(34, 197, 94, 0.45); }
+  .frame-cyber.tint-green .ring-cyber-pulse { stroke: #22c55e; filter: drop-shadow(0 0 6px #22c55e); }
+  .frame-cyber.tint-green .cyber-bracket { stroke: #4ade80; filter: drop-shadow(0 0 6px #22c55e); }
+  .frame-cyber.tint-green .cyber-node-top,
+  .frame-cyber.tint-green .cyber-node-bottom { fill: #bbf7d0; filter: drop-shadow(0 0 6px #4ade80); }
+  .frame-cyber.tint-green .cyber-node-line { stroke: #16a34a; }
+
+  .frame-cyber.tint-purple .ring-cyber-track { stroke: rgba(168, 85, 247, 0.45); }
+  .frame-cyber.tint-purple .ring-cyber-pulse { stroke: #a855f7; filter: drop-shadow(0 0 6px #a855f7); }
+  .frame-cyber.tint-purple .cyber-bracket { stroke: #c084fc; filter: drop-shadow(0 0 6px #a855f7); }
+  .frame-cyber.tint-purple .cyber-node-top,
+  .frame-cyber.tint-purple .cyber-node-bottom { fill: #f3e8ff; filter: drop-shadow(0 0 6px #c084fc); }
+  .frame-cyber.tint-purple .cyber-node-line { stroke: #9333ea; }
+
+  .frame-cyber.tint-orange .ring-cyber-track { stroke: rgba(249, 115, 22, 0.45); }
+  .frame-cyber.tint-orange .ring-cyber-pulse { stroke: #f97316; filter: drop-shadow(0 0 6px #f97316); }
+  .frame-cyber.tint-orange .cyber-bracket { stroke: #fb923c; filter: drop-shadow(0 0 6px #f97316); }
+  .frame-cyber.tint-orange .cyber-node-top,
+  .frame-cyber.tint-orange .cyber-node-bottom { fill: #ffedd5; filter: drop-shadow(0 0 6px #fb923c); }
+  .frame-cyber.tint-orange .cyber-node-line { stroke: #c2410c; }
+
+  /* =========================================================================
+     3. EMERALD ARCANA FRAME
+     ========================================================================= */
   .ring-emerald-inner {
     fill: none;
     stroke: #10b981;
     stroke-width: 2.2;
     filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.85));
   }
-
   .ring-emerald-vines {
     fill: none;
     stroke: #34d399;
@@ -394,7 +557,6 @@
     animation: rotateCcw 9s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .emerald-top-gem,
   .emerald-bottom-gem {
     fill: #34d399;
@@ -404,7 +566,6 @@
     animation: gemBreathe 3s ease-in-out infinite;
     transform-origin: 50px 50px;
   }
-
   .spore-orb-1,
   .spore-orb-2,
   .spore-orb-3 {
@@ -412,33 +573,26 @@
     filter: drop-shadow(0 0 4px #34d399);
     animation: sporePulse 2.8s ease-in-out infinite;
   }
+  .spore-orb-2 { animation-delay: 0.8s; }
+  .spore-orb-3 { animation-delay: 1.5s; }
 
-  .spore-orb-2 {
-    animation-delay: 0.8s;
-  }
-
-  .spore-orb-3 {
-    animation-delay: 1.5s;
-  }
-
-  /* 4. Solar Flare Frame */
+  /* =========================================================================
+     4. SOLAR FLARE FRAME & TINT VARIANTS
+     ========================================================================= */
   .solar-corona-spin {
     animation: rotateCw 6s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .solar-ray {
     fill: #f59e0b;
     filter: drop-shadow(0 0 6px #f59e0b);
   }
-
   .ring-solar-base {
     fill: none;
     stroke: #f59e0b;
     stroke-width: 2.5;
     filter: drop-shadow(0 0 8px #f59e0b);
   }
-
   .ring-solar-halo {
     fill: none;
     stroke: #fbbf24;
@@ -447,7 +601,6 @@
     animation: rotateCcw 5s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .solar-crown-crest {
     fill: #fef08a;
     stroke: #f59e0b;
@@ -457,7 +610,30 @@
     transform-origin: 50px 8px;
   }
 
-  /* 5. Particle Stardust Frame */
+  /* Solar Flare Tints */
+  .frame-solar.tint-blue .solar-ray { fill: #3b82f6; filter: drop-shadow(0 0 6px #3b82f6); }
+  .frame-solar.tint-blue .ring-solar-base { stroke: #3b82f6; filter: drop-shadow(0 0 8px #3b82f6); }
+  .frame-solar.tint-blue .ring-solar-halo { stroke: #60a5fa; }
+  .frame-solar.tint-blue .solar-crown-crest { fill: #dbeafe; stroke: #2563eb; filter: drop-shadow(0 0 10px #60a5fa); }
+
+  .frame-solar.tint-crimson .solar-ray { fill: #ef4444; filter: drop-shadow(0 0 6px #ef4444); }
+  .frame-solar.tint-crimson .ring-solar-base { stroke: #ef4444; filter: drop-shadow(0 0 8px #ef4444); }
+  .frame-solar.tint-crimson .ring-solar-halo { stroke: #f87171; }
+  .frame-solar.tint-crimson .solar-crown-crest { fill: #fee2e2; stroke: #dc2626; filter: drop-shadow(0 0 10px #f87171); }
+
+  .frame-solar.tint-violet .solar-ray { fill: #a855f7; filter: drop-shadow(0 0 6px #a855f7); }
+  .frame-solar.tint-violet .ring-solar-base { stroke: #a855f7; filter: drop-shadow(0 0 8px #a855f7); }
+  .frame-solar.tint-violet .ring-solar-halo { stroke: #c084fc; }
+  .frame-solar.tint-violet .solar-crown-crest { fill: #f3e8ff; stroke: #9333ea; filter: drop-shadow(0 0 10px #c084fc); }
+
+  .frame-solar.tint-emerald .solar-ray { fill: #10b981; filter: drop-shadow(0 0 6px #10b981); }
+  .frame-solar.tint-emerald .ring-solar-base { stroke: #10b981; filter: drop-shadow(0 0 8px #10b981); }
+  .frame-solar.tint-emerald .ring-solar-halo { stroke: #34d399; }
+  .frame-solar.tint-emerald .solar-crown-crest { fill: #d1fae5; stroke: #059669; filter: drop-shadow(0 0 10px #34d399); }
+
+  /* =========================================================================
+     5. PARTICLE STARDUST FRAME
+     ========================================================================= */
   .gyro-ring-1 {
     fill: none;
     stroke: rgba(129, 140, 248, 0.75);
@@ -466,7 +642,6 @@
     animation: rotateCw 8s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .gyro-ring-2 {
     fill: none;
     stroke: rgba(192, 132, 252, 0.75);
@@ -475,34 +650,25 @@
     animation: rotateCcw 8s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .ring-stardust-center {
     fill: none;
     stroke: #818cf8;
     stroke-width: 2.2;
     filter: drop-shadow(0 0 7px rgba(129, 140, 248, 0.85));
   }
-
   .stardust-spark-group circle {
     fill: #ffffff;
     filter: drop-shadow(0 0 5px #c084fc);
     animation: starTwinkle 2.2s ease-in-out infinite;
     transform-origin: 50px 50px;
   }
+  .star-particle-2 { animation-delay: 0.6s; }
+  .star-particle-3 { animation-delay: 1.2s; }
+  .star-particle-4 { animation-delay: 1.8s; }
 
-  .star-particle-2 {
-    animation-delay: 0.6s;
-  }
-
-  .star-particle-3 {
-    animation-delay: 1.2s;
-  }
-
-  .star-particle-4 {
-    animation-delay: 1.8s;
-  }
-
-  /* 6. Aurora Mystic Frame */
+  /* =========================================================================
+     6. AURORA MYSTIC FRAME
+     ========================================================================= */
   .ring-aurora-1 {
     fill: none;
     stroke: #8b5cf6;
@@ -510,7 +676,6 @@
     filter: drop-shadow(0 0 8px #8b5cf6);
     animation: auroraShift 4s ease-in-out infinite;
   }
-
   .ring-aurora-2 {
     fill: none;
     stroke: #06b6d4;
@@ -520,7 +685,6 @@
     transform-origin: 50px 50px;
     filter: drop-shadow(0 0 6px #06b6d4);
   }
-
   .ring-aurora-3 {
     fill: none;
     stroke: #10b981;
@@ -529,7 +693,6 @@
     animation: rotateCcw 9s linear infinite;
     transform-origin: 50px 50px;
   }
-
   .aurora-crest-center,
   .aurora-crest-flank-l,
   .aurora-crest-flank-r {
@@ -541,14 +704,15 @@
     transform-origin: 50px 50px;
   }
 
-  /* 7. Crimson Eclipse Frame */
+  /* =========================================================================
+     7. CRIMSON ECLIPSE FRAME
+     ========================================================================= */
   .ring-crimson-core {
     fill: none;
     stroke: #ef4444;
     stroke-width: 2.6;
     filter: drop-shadow(0 0 8px #ef4444);
   }
-
   .ring-crimson-corona {
     fill: none;
     stroke: #dc2626;
@@ -558,14 +722,12 @@
     transform-origin: 50px 50px;
     filter: drop-shadow(0 0 12px #b91c1c);
   }
-
   .crimson-abyss-crescent {
     fill: #7f1d1d;
     stroke: #ef4444;
     stroke-width: 1.2;
     filter: drop-shadow(0 0 6px #ef4444);
   }
-
   .crimson-spike-center,
   .crimson-spike-l,
   .crimson-spike-r {
@@ -577,14 +739,15 @@
     transform-origin: 50px 10px;
   }
 
-  /* 8. Celestial Sovereign Frame */
+  /* =========================================================================
+     8. CELESTIAL SOVEREIGN FRAME
+     ========================================================================= */
   .ring-celestial-core {
     fill: none;
     stroke: #fbbf24;
     stroke-width: 2.6;
     filter: drop-shadow(0 0 10px #fbbf24);
   }
-
   .ring-celestial-corona {
     fill: none;
     stroke: #c084fc;
@@ -594,33 +757,28 @@
     transform-origin: 50px 50px;
     filter: drop-shadow(0 0 8px #c084fc);
   }
-
   .crown-filigree {
     fill: #f59e0b;
     stroke: #fbbf24;
     stroke-width: 1.2;
     filter: drop-shadow(0 0 12px #fbbf24);
   }
-
   .crown-gem-core {
     fill: #ffffff;
     stroke: #c084fc;
     stroke-width: 1;
     filter: drop-shadow(0 0 8px #ffffff);
   }
-
   .crown-gem-side {
     fill: #c084fc;
     stroke: #fbbf24;
     stroke-width: 0.8;
     filter: drop-shadow(0 0 6px #c084fc);
   }
-
   .celestial-crown-group {
     animation: crownFloat 3s ease-in-out infinite;
     transform-origin: 50px 10px;
   }
-
   .celestial-gem-bottom,
   .celestial-gem-left,
   .celestial-gem-right {
@@ -630,105 +788,260 @@
     transform-origin: 50px 50px;
   }
 
-  /* Global Animations */
+  /* =========================================================================
+     ROUND 3 NEW FRAMES:
+     9. LIGHTNING STORM (Tempestade Cósmica)
+     ========================================================================= */
+  .ring-lightning-base {
+    fill: none;
+    stroke: #8b5cf6;
+    stroke-width: 2.4;
+    filter: drop-shadow(0 0 8px #a855f7);
+  }
+  .ring-lightning-orbit {
+    fill: none;
+    stroke: #38bdf8;
+    stroke-width: 1.4;
+    stroke-dasharray: 10 6;
+    animation: rotateCw 3.5s linear infinite;
+    transform-origin: 50px 50px;
+    filter: drop-shadow(0 0 6px #38bdf8);
+  }
+  .lightning-bolt {
+    fill: none;
+    stroke: #38bdf8;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: bevel;
+    filter: drop-shadow(0 0 8px #06b6d4);
+    animation: lightningCrack 1.8s infinite;
+  }
+  .bolt-2 { animation-delay: 0.45s; stroke: #c084fc; filter: drop-shadow(0 0 8px #a855f7); }
+  .bolt-3 { animation-delay: 0.9s; }
+  .bolt-4 { animation-delay: 1.35s; stroke: #c084fc; filter: drop-shadow(0 0 8px #a855f7); }
+
+  .spark-node {
+    fill: #ffffff;
+    stroke: #38bdf8;
+    stroke-width: 1;
+    filter: drop-shadow(0 0 6px #67e8f9);
+    animation: sparkFlicker 1.4s infinite alternate;
+  }
+  .spark-s { animation-delay: 0.35s; }
+  .spark-w { animation-delay: 0.7s; stroke: #c084fc; }
+  .spark-e { animation-delay: 1.05s; stroke: #c084fc; }
+
+  /* =========================================================================
+     10. CRYSTAL SHARDS (Fragmentos de Prisma)
+     ========================================================================= */
+  .ring-crystal-octa {
+    fill: none;
+    stroke: #2dd4bf;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.8));
+    animation: rotateCw 20s linear infinite;
+    transform-origin: 50px 50px;
+  }
+  .ring-crystal-orbit {
+    fill: none;
+    stroke: #e879f9;
+    stroke-width: 1.2;
+    stroke-dasharray: 6 5;
+    animation: rotateCcw 12s linear infinite;
+    transform-origin: 50px 50px;
+  }
+  .crystal-shard {
+    fill: #2dd4bf;
+    stroke: #fdf4ff;
+    stroke-width: 0.8;
+    filter: drop-shadow(0 0 8px #2dd4bf);
+    animation: crystalFloat 3.2s ease-in-out infinite;
+    transform-origin: 50px 50px;
+  }
+  .crystal-shard-mini {
+    fill: #e879f9;
+    stroke: #ffffff;
+    stroke-width: 0.6;
+    filter: drop-shadow(0 0 6px #e879f9);
+    animation: crystalFloat 2.6s ease-in-out infinite reverse;
+    transform-origin: 50px 50px;
+  }
+  .shard-e { animation-delay: 0.8s; }
+  .shard-s { animation-delay: 1.6s; }
+  .shard-w { animation-delay: 2.4s; }
+  .shard-ne { animation-delay: 0.6s; }
+  .shard-se { animation-delay: 1.2s; }
+  .shard-sw { animation-delay: 1.8s; }
+
+  /* =========================================================================
+     11. VOID VORTEX (Vórtice do Vazio)
+     ========================================================================= */
+  .ring-vortex-horizon {
+    fill: none;
+    stroke: #7c3aed;
+    stroke-width: 2.6;
+    filter: drop-shadow(0 0 8px #a855f7);
+    animation: singularityBreathe 3s ease-in-out infinite;
+    transform-origin: 50px 50px;
+  }
+  .vortex-arms-spin {
+    animation: rotateCw 6s linear infinite;
+    transform-origin: 50px 50px;
+  }
+  .vortex-arm {
+    fill: none;
+    stroke-linecap: round;
+  }
+  .vortex-arm.arm-1 { stroke: #c084fc; stroke-width: 2.2; filter: drop-shadow(0 0 6px #a855f7); }
+  .vortex-arm.arm-2 { stroke: #818cf8; stroke-width: 2; filter: drop-shadow(0 0 6px #6366f1); }
+  .vortex-arm.arm-3 { stroke: #d946ef; stroke-width: 1.8; filter: drop-shadow(0 0 6px #d946ef); }
+
+  .ring-vortex-lens {
+    fill: none;
+    stroke: rgba(192, 132, 252, 0.45);
+    stroke-width: 1.4;
+    stroke-dasharray: 12 6;
+    animation: rotateCcw 10s linear infinite;
+    transform-origin: 50px 50px;
+  }
+  .vortex-dot {
+    fill: #ffffff;
+    filter: drop-shadow(0 0 6px #c084fc);
+    animation: starTwinkle 2s ease-in-out infinite;
+    transform-origin: 50px 50px;
+  }
+  .dot-2 { animation-delay: 0.5s; fill: #67e8f9; }
+  .dot-3 { animation-delay: 1s; fill: #f0abfc; }
+  .dot-4 { animation-delay: 1.5s; fill: #818cf8; }
+
+  /* =========================================================================
+     12. ASTRAL THORN CROWN (Coroa de Espinhos da Noite)
+     ========================================================================= */
+  .ring-thorn-aura {
+    fill: none;
+    stroke: #7f1d1d;
+    stroke-width: 2.4;
+    filter: drop-shadow(0 0 8px #f43f5e);
+    animation: thornAuraPulse 3.5s ease-in-out infinite;
+  }
+  .thorn-vine-upper,
+  .thorn-vine-lower {
+    fill: #180d2b;
+    stroke: #8b5cf6;
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 6px #6d28d9);
+  }
+  .thorn-spike {
+    fill: #8b5cf6;
+    stroke: #f43f5e;
+    stroke-width: 1;
+    filter: drop-shadow(0 0 8px #f43f5e);
+    animation: thornSpikeGleam 2.8s ease-in-out infinite;
+    transform-origin: 50px 50px;
+  }
+  .spike-center-bottom,
+  .spike-flank-bl,
+  .spike-flank-br {
+    animation-delay: 1.4s;
+  }
+  .thorn-gem-core {
+    fill: #f43f5e;
+    stroke: #ffffff;
+    stroke-width: 0.8;
+    filter: drop-shadow(0 0 8px #f43f5e);
+    animation: gemBreathe 2.4s ease-in-out infinite;
+    transform-origin: 50px 50px;
+  }
+  .thorn-gem-flank {
+    fill: #c084fc;
+    stroke: #f43f5e;
+    stroke-width: 0.6;
+    filter: drop-shadow(0 0 5px #c084fc);
+    animation: gemBreathe 3s ease-in-out infinite reverse;
+    transform-origin: 50px 50px;
+  }
+
+  /* =========================================================================
+     GLOBAL KEYFRAME ANIMATIONS
+     ========================================================================= */
   @keyframes rotateCw {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   @keyframes rotateCcw {
-    from {
-      transform: rotate(360deg);
-    }
-    to {
-      transform: rotate(0deg);
-    }
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
   }
 
   @keyframes gemBreathe {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 0.9;
-    }
-    50% {
-      transform: scale(1.12);
-      opacity: 1;
-    }
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.12); opacity: 1; }
   }
 
   @keyframes crownFloat {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-2.5px);
-    }
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2.5px); }
   }
 
   @keyframes flamePulse {
-    0%, 100% {
-      transform: scale(1);
-      filter: drop-shadow(0 0 6px #f59e0b);
-    }
-    50% {
-      transform: scale(1.08);
-      filter: drop-shadow(0 0 14px #fbbf24);
-    }
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px #f59e0b); }
+    50% { transform: scale(1.08); filter: drop-shadow(0 0 14px #fbbf24); }
   }
 
   @keyframes starTwinkle {
-    0%, 100% {
-      opacity: 0.35;
-      transform: scale(0.75);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.25);
-    }
+    0%, 100% { opacity: 0.35; transform: scale(0.75); }
+    50% { opacity: 1; transform: scale(1.25); }
   }
 
   @keyframes sporePulse {
-    0%, 100% {
-      opacity: 0.6;
-      transform: scale(0.85);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.15);
-    }
+    0%, 100% { opacity: 0.6; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.15); }
   }
 
   @keyframes auroraShift {
-    0%, 100% {
-      stroke: #8b5cf6;
-      filter: drop-shadow(0 0 8px #8b5cf6);
-    }
-    33% {
-      stroke: #06b6d4;
-      filter: drop-shadow(0 0 10px #06b6d4);
-    }
-    66% {
-      stroke: #10b981;
-      filter: drop-shadow(0 0 8px #10b981);
-    }
+    0%, 100% { stroke: #8b5cf6; filter: drop-shadow(0 0 8px #8b5cf6); }
+    33% { stroke: #06b6d4; filter: drop-shadow(0 0 10px #06b6d4); }
+    66% { stroke: #10b981; filter: drop-shadow(0 0 8px #10b981); }
   }
 
   @keyframes cyberBlink {
-    0%, 100% {
-      opacity: 0.85;
-    }
-    45% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-    55% {
-      opacity: 1;
-    }
+    0%, 100% { opacity: 0.85; }
+    45% { opacity: 1; }
+    50% { opacity: 0.35; }
+    55% { opacity: 1; }
+  }
+
+  @keyframes lightningCrack {
+    0%, 100% { opacity: 0.3; stroke-width: 1.8px; }
+    20% { opacity: 1; stroke-width: 2.8px; }
+    25% { opacity: 0.4; }
+    30% { opacity: 1; stroke-width: 2.5px; }
+    60% { opacity: 0.2; }
+  }
+
+  @keyframes sparkFlicker {
+    0%, 100% { transform: scale(0.8); opacity: 0.6; }
+    50% { transform: scale(1.3); opacity: 1; }
+  }
+
+  @keyframes crystalFloat {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.1) translateY(-2px); }
+  }
+
+  @keyframes singularityBreathe {
+    0%, 100% { transform: scale(1); stroke-width: 2.6px; }
+    50% { transform: scale(1.05); stroke-width: 3.2px; }
+  }
+
+  @keyframes thornAuraPulse {
+    0%, 100% { stroke: #7f1d1d; filter: drop-shadow(0 0 6px #f43f5e); }
+    50% { stroke: #991b1b; filter: drop-shadow(0 0 14px #ef4444); }
+  }
+
+  @keyframes thornSpikeGleam {
+    0%, 100% { opacity: 0.85; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.06); }
   }
 </style>

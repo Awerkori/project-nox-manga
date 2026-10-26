@@ -26,7 +26,17 @@ export const load = async ({ locals, setHeaders }) => {
     );
 
     if (hasCuratedInDb) {
-      items = dbItems.filter((it: any) => !ARCHIVED_SHOP_ITEM_IDS.has(it.id));
+      const dbMap = new Map(dbItems.map((it: any) => [it.id, it]));
+      items = CURATED_COSMETIC_ITEMS.map((curated) => {
+        const dbItem = dbMap.get(curated.id);
+        return dbItem
+          ? {
+              ...curated,
+              price_xp: dbItem.price_xp ?? curated.price_xp,
+              min_level: dbItem.min_level ?? curated.min_level
+            }
+          : curated;
+      });
     } else {
       items = CURATED_COSMETIC_ITEMS;
     }
