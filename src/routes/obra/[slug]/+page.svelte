@@ -340,6 +340,9 @@
             }
           })
         );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Obra adicionada aos favoritos');
+        }
       }
       await invalidateAll();
       notice = 'Biblioteca atualizada com sucesso.';

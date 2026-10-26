@@ -300,7 +300,11 @@ BEGIN
 
     v_count := GREATEST(1, COALESCE((p_data->>'total_pages')::integer, (SELECT count(*) FROM public.pages WHERE chapter_id = cid), 1));
     v_page := GREATEST(1, LEAST(COALESCE((p_data->>'page')::integer, 1), v_count + 1));
-    v_completed := COALESCE((p_data->>'completed')::boolean, false) OR (v_page >= v_count AND v_count > 0);
+    v_completed := (p_action = 'read_page') AND (
+      COALESCE((p_data->>'completed')::boolean, false) OR (
+        COALESCE((p_data->>'total_pages')::integer, 0) > 1 AND v_page >= v_count
+      )
+    );
 
     -- Upsert reading session
     INSERT INTO public.reading_sessions(user_id, chapter_id, next_page, accepted_at)

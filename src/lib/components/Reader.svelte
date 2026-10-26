@@ -288,33 +288,13 @@
     xpClaimInFlight = false;
   }
 
-  let completionPendingTimer: ReturnType<typeof setTimeout> | null = null;
+  let completionClaimInFlight = false;
+  let completionAwardAttempted = false;
 
   async function completeChapter() {
-    if (chapterCompleted || !((data as any).profile || (data as any).user) || data.preview) return;
+    if (completionAwardAttempted || completionClaimInFlight || !((data as any).profile || (data as any).user) || data.preview) return;
 
-    if (sending) {
-      setTimeout(() => {
-        if (!chapterCompleted) void completeChapter();
-      }, 300);
-      return;
-    }
-
-    // Minimum reading time evidence: 3s for short <= 3 pages, 5s for <= 10 pages, 8s for > 10 pages
-    const totalPages = data.pages?.length || 1;
-    const minSeconds = totalPages <= 3 ? 3 : totalPages <= 10 ? 5 : 8;
-    const elapsed = (Date.now() - chapterStartTime) / 1000;
-    if (elapsed < minSeconds) {
-      if (!completionPendingTimer) {
-        completionPendingTimer = setTimeout(() => {
-          completionPendingTimer = null;
-          if (!chapterCompleted) void completeChapter();
-        }, Math.max(100, Math.ceil((minSeconds - elapsed) * 1000)));
-      }
-      return;
-    }
-
-    chapterCompleted = true;
+    completionClaimInFlight = true;
     try {
       const res = (await action('member', 'read_page', {
         work_id: data.chapter.work_id,
@@ -324,9 +304,8 @@
         completed: true
       })) as { ok?: boolean; completed?: boolean; xp_award?: any } | null;
 
-      if (res?.completed) {
-        chapterCompleted = true;
-      }
+      completionAwardAttempted = true;
+      chapterCompleted = true;
 
       if (res?.xp_award?.awarded) {
         xpAwardConfirmed = true;
@@ -350,7 +329,9 @@
         xpAwardConfirmed = true;
       }
     } catch {
-      chapterCompleted = false;
+      completionAwardAttempted = false;
+    } finally {
+      completionClaimInFlight = false;
     }
   }
 
@@ -368,7 +349,7 @@
     if (page >= 2 || (data.pages.length === 1 && isVisible)) {
       recordViewOnce();
     }
-    if (maxSeenPage >= data.pages.length && !chapterCompleted) {
+    if (page >= data.pages.length && isVisible && !chapterCompleted) {
       void completeChapter();
     }
   }
@@ -413,7 +394,7 @@
       /* Default preferences remain valid. */
     }
     const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
-    maxSeenPage = saved;
+    maxSeenPage = 1;
     requestAnimationFrame(() => {
       jump(Math.min(data.pages.length, Math.max(1, saved)));
       pumpPreload();
@@ -422,7 +403,7 @@
     viewRecorded = false;
     setTimeout(recordViewOnce, 4500);
     if (data.profile && !data.preview)
-      action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id }).catch(
+      action('member', 'read_start', { work_id: data.chapter.work_id, chapter_id: data.chapter.id, total_pages: data.pages.length, completed: false }).catch(
         () => {
           notice = 'Sincronização indisponível. Tentaremos novamente durante a leitura.';
         }
@@ -433,12 +414,16 @@
       endObserver = new IntersectionObserver(
         (entries) => {
           if (entries[0]?.isIntersecting) {
-            maxSeenPage = data.pages.length;
-            current = data.pages.length;
-            void completeChapter();
+            const hasScrolledDown = typeof window !== 'undefined' && window.scrollY > 200;
+            const reachedFinalPages = maxSeenPage >= Math.max(1, data.pages.length - 1);
+            if (hasScrolledDown || reachedFinalPages) {
+              maxSeenPage = data.pages.length;
+              current = data.pages.length;
+              void completeChapter();
+            }
           }
         },
-        { threshold: 0.1 }
+        { threshold: 0.05 }
       );
       endObserver.observe(endEl);
     }
@@ -451,35 +436,13 @@
       if (data.profile && !data.preview) {
         sending = true;
         try {
-          const res = (await action('member', 'read_page', {
+          await action('member', 'read_page', {
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
             page: pageToSave,
             total_pages: data.pages.length,
-            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
-          })) as any;
-          if (res?.completed && !chapterCompleted) {
-            chapterCompleted = true;
-          }
-          if (res?.xp_award?.awarded && !xpAwardConfirmed) {
-            xpAwardConfirmed = true;
-            xpNotice = res.xp_award.message || `✦ +${res.xp_award.amount} XP — Capítulo Concluído!`;
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(
-                new CustomEvent('nox-xp-awarded', {
-                  detail: {
-                    amount: res.xp_award.amount,
-                    title: 'Capítulo concluído',
-                    kind: 'READ_CHAPTER'
-                  }
-                })
-              );
-              if (typeof (window as any).__noxTriggerXpReward === 'function') {
-                (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Capítulo concluído');
-              }
-            }
-            setTimeout(() => { xpNotice = ''; }, 5000);
-          }
+            completed: false
+          });
           notice = '';
         } catch {
           notice = locallySaved
@@ -513,7 +476,7 @@
             work_id: data.chapter.work_id,
             chapter_id: data.chapter.id,
             page: pageToSave,
-            completed: chapterCompleted || maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
+            completed: maxSeenPage >= data.pages.length || pageToSave >= data.pages.length
           }
         })
       }).catch(() => {});
@@ -764,7 +727,7 @@
           </a>
         {/if}
         {#if data.next}
-          <a class="btn-nav-next hero-next" href="/ler/{data.next.id}">
+          <a class="btn-nav-next hero-next" href="/ler/{data.next.id}" onclick={() => void completeChapter()}>
             <span>Próximo Capítulo</span>
             <ArrowRight size={16} />
           </a>

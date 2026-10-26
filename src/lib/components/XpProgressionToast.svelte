@@ -10,10 +10,19 @@
   }
 
   let toasts = $state<XpToast[]>([]);
+  let lastTriggerTime = 0;
+  let lastTriggerKind = '';
 
   export function triggerXpReward(amount: number, title: string) {
     if (!amount || amount <= 0) return;
-    const id = `xp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = Date.now();
+    if (now - lastTriggerTime < 500 && lastTriggerKind === `${amount}:${title}`) {
+      return; // Deduplicate rapid calls from dual dispatch/listeners
+    }
+    lastTriggerTime = now;
+    lastTriggerKind = `${amount}:${title}`;
+
+    const id = `xp_${now}_${Math.random().toString(36).substring(2, 7)}`;
     const newToast: XpToast = {
       id,
       amount,
@@ -43,6 +52,10 @@
     if (amount > 0) {
       triggerXpReward(amount, title);
     }
+  }
+
+  if (typeof window !== 'undefined') {
+    (window as any).__noxTriggerXpReward = triggerXpReward;
   }
 
   onMount(() => {

@@ -114,6 +114,9 @@
             }
           })
         );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(data.xp_award.amount, 'Avaliação registrada');
+        }
       }
     } catch (err: any) {
       // Revert optimistic update only on error, and inform user of real failure
