@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
-import { CURATED_COSMETIC_ITEMS } from '$lib/cosmetics-catalog';
+import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
 
 export const load = async ({ locals }) => {
   const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
@@ -28,6 +28,8 @@ export const load = async ({ locals }) => {
 
   // 1. Process all curated items
   for (const curated of CURATED_COSMETIC_ITEMS) {
+    if (LEGACY_UNREFURBISHED_IDS.has(curated.id)) continue;
+
     const dbItem = dbMap.get(curated.id);
     if (dbItem) {
       combinedItems.push({
@@ -76,10 +78,10 @@ export const load = async ({ locals }) => {
     }
   }
 
-  // 2. Add custom items created directly in DB
+  // 2. Add genuine custom items created directly in DB
   const curatedIds = new Set(CURATED_COSMETIC_ITEMS.map((c) => c.id));
   for (const dbItem of dbItems) {
-    if (!curatedIds.has(dbItem.id)) {
+    if (!curatedIds.has(dbItem.id) && !LEGACY_UNREFURBISHED_IDS.has(dbItem.id)) {
       combinedItems.push({
         ...dbItem,
         color_variants: dbItem.style_data?.color_variants || [],
@@ -90,7 +92,6 @@ export const load = async ({ locals }) => {
 
   // 3. Auto-seed missing items into database in the background if needed
   if (missingCurated.length > 0) {
-    // Fire-and-forget batch upsert to ensure DB parity
     (async () => {
       try {
         const batchSize = 50;
@@ -98,6 +99,11 @@ export const load = async ({ locals }) => {
           const chunk = missingCurated.slice(i, i + batchSize);
           await db.from('shop_items').upsert(chunk, { onConflict: 'id', ignoreDuplicates: true });
         }
+        // Also ensure legacy unrefurbished placeholders are archived
+        await db
+          .from('shop_items')
+          .update({ is_active: false, status: 'ARCHIVED' })
+          .in('id', Array.from(LEGACY_UNREFURBISHED_IDS));
       } catch (err) {
         console.warn('Background shop_items seed notice:', err);
       }

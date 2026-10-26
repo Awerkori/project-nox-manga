@@ -1,5 +1,5 @@
 import { withTimeout } from '$lib/server/resilience';
-import { CURATED_COSMETIC_ITEMS } from '$lib/cosmetics-catalog';
+import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
 const SHOP_CACHE_TTL_MS = 5_000;
@@ -27,6 +27,8 @@ export const load = async ({ locals, setHeaders }) => {
 
     // 1. Process all curated items with database overlays
     for (const curated of CURATED_COSMETIC_ITEMS) {
+      if (LEGACY_UNREFURBISHED_IDS.has(curated.id)) continue;
+
       const dbItem = dbMap.get(curated.id);
       if (dbItem) {
         // If explicitly deactivated or archived by admin, exclude from store
@@ -53,9 +55,9 @@ export const load = async ({ locals, setHeaders }) => {
       }
     }
 
-    // 2. Include custom items added directly via admin panel not present in curated catalog
+    // 2. Include genuine custom items added directly via admin panel (excluding unrefurbished legacy placeholders)
     for (const dbItem of dbItems) {
-      if (!curatedMap.has(dbItem.id)) {
+      if (!curatedMap.has(dbItem.id) && !LEGACY_UNREFURBISHED_IDS.has(dbItem.id)) {
         if (dbItem.is_active !== false && dbItem.status !== 'ARCHIVED') {
           activeItems.push({
             id: dbItem.id,
