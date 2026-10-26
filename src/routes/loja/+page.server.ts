@@ -87,6 +87,10 @@ export const load = async ({ locals, setHeaders }) => {
   let userProfile: any = null;
 
   if (locals.user) {
+    setHeaders({
+      'cache-control': 'private, no-cache, no-store, must-revalidate'
+    });
+
     const profile = locals.sessionCache?.profile;
     const [invRes, profileRes] = await withTimeout(
       Promise.all([
@@ -94,13 +98,11 @@ export const load = async ({ locals, setHeaders }) => {
           .from('member_inventory')
           .select('item_id')
           .eq('user_id', locals.user.id),
-        profile
-          ? Promise.resolve({ data: profile })
-          : locals.db
-              .from('members')
-              .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
-              .eq('id', locals.user.id)
-              .maybeSingle()
+        locals.db
+          .from('members')
+          .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
+          .eq('id', locals.user.id)
+          .maybeSingle()
       ]),
       1200,
       [{ data: [] }, { data: profile || null }] as any,
@@ -110,6 +112,9 @@ export const load = async ({ locals, setHeaders }) => {
     userInventory = (invRes?.data || []).map((r: any) => r.item_id);
     const p = profileRes?.data || profile;
     if (p) {
+      if (profileRes?.data && locals.sessionCache?.profile) {
+        locals.sessionCache.profile.xp = profileRes.data.xp;
+      }
       userProfile = {
         id: p.id,
         username: p.username,

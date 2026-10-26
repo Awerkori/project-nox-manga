@@ -26,7 +26,7 @@ export interface CachedSession {
   tokenExp?: number;
 }
 
-const SESSION_CACHE_TTL_MS = 60_000; // 60 seconds memory window
+const SESSION_CACHE_TTL_MS = 3_000; // 3 seconds window to ensure freshness across actions while deduplicating in-flight subrequests
 const sessionCache = new Map<string, CachedSession>();
 const activeFlights = new Map<string, Promise<CachedSession>>();
 
