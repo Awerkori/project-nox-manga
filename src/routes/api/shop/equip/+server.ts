@@ -29,5 +29,18 @@ export const POST = async ({ request, locals }) => {
     error(400, rpcError.message);
   }
 
+  // Keep equipped_banner_id and equipped_comment_banner_id synchronized
+  if (kind === 'PROFILE_BANNER' || kind === 'COMMENT_BANNER') {
+    const companionKind = kind === 'PROFILE_BANNER' ? 'COMMENT_BANNER' : 'PROFILE_BANNER';
+    try {
+      await locals.db.rpc('equip_cosmetic_item', {
+        p_kind: companionKind,
+        p_item_id: itemId
+      });
+    } catch (_) {
+      // Ignore if column update already covered
+    }
+  }
+
   return json(data);
 };

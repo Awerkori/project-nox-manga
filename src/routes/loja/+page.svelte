@@ -793,54 +793,59 @@
 
               {:else if item.kind === 'PROFILE_BANNER'}
                 {@const bannerBg = CURATED_BANNER_BACKGROUNDS[item.id] || item.asset_url || style.background || '#1e1b4b'}
-                <!-- Realistic Comment Simulation with Banner Stage -->
+                <!-- Realistic Comment Simulation with Full Card Banner Background -->
                 <div class="comment-simulation-stage">
-                  <span class="comment-simulation-label">Simulação Realista em Comentários</span>
-                  <div class="simulated-comment-card">
-                    <!-- Banner Strip -->
+                  <span class="comment-simulation-label">Simulação Realista em Comentários (Plano de Fundo Completo)</span>
+                  <div class="simulated-comment-card has-comment-banner">
+                    <!-- Full Card Animated Background -->
                     <div
-                      class="simulated-banner-strip"
+                      class="comment-banner-background"
                       style="background: {bannerBg};"
                       aria-hidden="true"
                     ></div>
 
-                    <!-- Comment Author & Body -->
-                    <div class="simulated-comment-content">
-                      <div class="simulated-avatar-col">
-                        <UserAvatar
-                          user={data.profile}
-                          avatarId={data.profile?.avatar_id}
-                          crop={data.profile?.avatar_crop}
-                          frameId={equippedFrame}
-                          displayName={data.profile?.display_name || 'Leitor'}
-                          size={42}
-                        />
-                      </div>
-                      <div class="simulated-text-col">
-                        <div class="simulated-header-line">
-                          <span
-                            class="simulated-author-name {equippedColorInfo.className}"
-                            style={equippedColorInfo.style}
-                          >
-                            {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
-                          </span>
-                          {#if equippedTitle}
-                            <span class="simulated-title-tag">{equippedTitle}</span>
-                          {/if}
-                          <span class="simulated-timestamp">há 5 minutos</span>
+                    <!-- Legibility Protective Contrast Overlay -->
+                    <div class="comment-banner-overlay" aria-hidden="true"></div>
+
+                    <!-- Comment Content Layer (in foreground) -->
+                    <div class="comment-content-layer">
+                      <div class="simulated-comment-content">
+                        <div class="simulated-avatar-col">
+                          <UserAvatar
+                            user={data.profile}
+                            avatarId={data.profile?.avatar_id}
+                            crop={data.profile?.avatar_crop}
+                            frameId={equippedFrame}
+                            displayName={data.profile?.display_name || 'Leitor'}
+                            size={42}
+                          />
                         </div>
-                        <p class="simulated-comment-text">
-                          Essa obra está cada vez mais incrível! Mal posso esperar pelo próximo capítulo... 🔥
-                        </p>
-                        <div class="simulated-footer-actions">
-                          <span class="simulated-like-pill">❤️ 14 curtidas</span>
-                          <span class="simulated-reply-btn">Responder</span>
+                        <div class="simulated-text-col">
+                          <div class="simulated-header-line">
+                            <span
+                              class="simulated-author-name {equippedColorInfo.className}"
+                              style={equippedColorInfo.style}
+                            >
+                              {data.profile?.display_name || data.profile?.username || 'Seu Nome'}
+                            </span>
+                            {#if equippedTitle}
+                              <span class="simulated-title-tag">{equippedTitle}</span>
+                            {/if}
+                            <span class="simulated-timestamp">há 5 minutos</span>
+                          </div>
+                          <p class="simulated-comment-text">
+                            Essa obra está cada vez mais incrível! Mal posso esperar pelo próximo capítulo... 🔥
+                          </p>
+                          <div class="simulated-footer-actions">
+                            <span class="simulated-like-pill">❤️ 14 curtidas</span>
+                            <span class="simulated-reply-btn">Responder</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                   <p class="comment-simulation-subnote">
-                    O banner personalizado aparece destacado no topo dos seus comentários em todas as obras e capítulos.
+                    O banner personalizado preenche todo o fundo do seu comentário, destacando sua identidade em todas as obras e capítulos.
                   </p>
                 </div>
 
@@ -2188,23 +2193,53 @@
   }
 
   .simulated-comment-card {
+    position: relative;
+    overflow: hidden;
     background: rgba(18, 22, 35, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 14px;
-    padding: 12px;
+    padding: 16px 18px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     width: 100%;
+    min-height: 120px;
   }
 
-  .simulated-banner-strip {
-    height: 72px;
+  .simulated-comment-card.has-comment-banner {
+    border-color: rgba(168, 85, 247, 0.3);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 20px rgba(168, 85, 247, 0.15);
+  }
+
+  .comment-banner-background {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    border-radius: 10px;
-    margin-bottom: 12px;
+    height: 100%;
     background-size: cover !important;
     background-position: center !important;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    background-repeat: no-repeat !important;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .comment-banner-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(10, 14, 26, 0.76) 0%,
+      rgba(10, 14, 26, 0.86) 100%
+    );
+    backdrop-filter: blur(0.5px);
+  }
+
+  .comment-content-layer {
+    position: relative;
+    z-index: 2;
+    width: 100%;
   }
 
   .simulated-comment-content {
@@ -2231,8 +2266,9 @@
   }
 
   .simulated-author-name {
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     font-weight: 800;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
   }
 
   .simulated-title-tag {
@@ -2243,19 +2279,22 @@
     background: rgba(223, 194, 141, 0.15);
     color: #dfc28d;
     border: 1px solid rgba(223, 194, 141, 0.35);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   }
 
   .simulated-timestamp {
     font-size: 0.72rem;
-    color: #64748b;
+    color: #94a3b8;
     margin-left: auto;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   }
 
   .simulated-comment-text {
-    font-size: 0.84rem;
-    color: #cbd5e1;
-    line-height: 1.45;
-    margin: 0 0 8px;
+    font-size: 0.88rem;
+    color: #f1f5f9;
+    line-height: 1.5;
+    margin: 0 0 10px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   }
 
   .simulated-footer-actions {
@@ -2263,7 +2302,8 @@
     align-items: center;
     gap: 12px;
     font-size: 0.74rem;
-    color: #94a3b8;
+    color: #cbd5e1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   }
 
   .simulated-like-pill {

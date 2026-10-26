@@ -25,6 +25,7 @@
       name_color?: string | null;
       avatar_frame_id?: string | null;
       equipped_comment_banner_id?: string | null;
+      equipped_banner_id?: string | null;
       equipped_title_id?: string | null;
     } | null;
     comment_likes: { user_id: string }[];
@@ -249,12 +250,22 @@
     <div class="comment-list">
       {#each threaded as comment (comment.id)}
         {@const authorColor = getNameColorInfo(comment.members?.name_color)}
-        {@const commentBanner = comment.members?.equipped_comment_banner_id ? CURATED_BANNER_BACKGROUNDS[comment.members.equipped_comment_banner_id] : null}
-        <article id={'comment-' + comment.id} class:reply={comment.parent_id !== null} class:is-reply-target={reply === comment.id}>
-        {#if commentBanner}
-          <div class="comment-banner-strip" style="background: {commentBanner};" aria-hidden="true"></div>
-        {/if}
-        <div class="comment-author">
+        {@const bannerKey = comment.members?.equipped_comment_banner_id || comment.members?.equipped_banner_id}
+        {@const commentBanner = bannerKey ? (CURATED_BANNER_BACKGROUNDS[bannerKey] || bannerKey) : null}
+        <article
+          id={'comment-' + comment.id}
+          class:reply={comment.parent_id !== null}
+          class:is-reply-target={reply === comment.id}
+          class:has-comment-banner={!!commentBanner}
+        >
+          {#if commentBanner}
+            <!-- Full card background banner (pure procedural SVG / animated keyframes) -->
+            <div class="comment-banner-background" style="background: {commentBanner};" aria-hidden="true"></div>
+            <!-- High-legibility protective contrast tint overlay -->
+            <div class="comment-banner-overlay" aria-hidden="true"></div>
+          {/if}
+          <div class="comment-content-layer">
+            <div class="comment-author">
           <UserAvatar
             avatarId={comment.members?.avatar_id}
             frameId={comment.members?.avatar_frame_id}
@@ -316,8 +327,9 @@
                 <Flag size={11} />
                 <span>Denunciar</span>
               </button>{/if}{/if}
-        </div>
-      </article>{/each}
+            </div>
+          </div>
+        </article>{/each}
     </div>
   {/if}
 
@@ -354,14 +366,69 @@
     padding-left: 20px;
     border-left: 2px solid #33263e;
   }
-  .comment-banner-strip {
-    height: 48px;
+  /* Comment Cards with Full Animated / Curated Banner Background */
+  .comment-list article.has-comment-banner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+    padding: 18px 22px;
+    margin: 16px 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .comment-list article.has-comment-banner:hover {
+    border-color: rgba(168, 85, 247, 0.35);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(168, 85, 247, 0.12);
+  }
+  .comment-list article.has-comment-banner.reply {
+    margin-left: 28px;
+    padding-left: 20px;
+    border-left: 3px solid #8b5cf6;
+  }
+  .comment-banner-background {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    border-radius: 8px;
-    margin-bottom: 12px;
+    height: 100%;
     background-size: cover !important;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .comment-banner-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(10, 14, 26, 0.78) 0%,
+      rgba(10, 14, 26, 0.88) 100%
+    );
+    backdrop-filter: blur(0.5px);
+  }
+  .comment-content-layer {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+  }
+  .has-comment-banner .author-name-link {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+  }
+  .has-comment-banner .comment-body {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    color: #f1f5f9;
+  }
+  .has-comment-banner .comment-author time {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    color: #cbd5e1;
+  }
+  .has-comment-banner .comment-button {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   }
   .author-name-link {
     font-weight: 700;
