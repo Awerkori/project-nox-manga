@@ -24,10 +24,21 @@
   import AgeGateModal from '$lib/components/AgeGateModal.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
+  import { registerDynamicFrame } from '$lib/cosmetics-catalog';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { page } from '$app/state';
 
   let { data, children } = $props();
+
+  // Register uploaded frames before children render (SSR + hydration consistent).
+  function registerCustomFrames(frames: any[] | undefined) {
+    for (const f of frames || []) registerDynamicFrame(f.id, { asset_url: f.asset_url, style_data: f.style_data || {} });
+  }
+  const initialCustomFrames = data?.customFrames;
+  registerCustomFrames(initialCustomFrames);
+  $effect.pre(() => {
+    registerCustomFrames(data.customFrames);
+  });
   let currentPath = $derived(page.url.pathname);
   let menu = $state(false);
   let userMenuOpen = $state(false);

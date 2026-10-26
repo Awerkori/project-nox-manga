@@ -13,7 +13,38 @@ let cachedSettings: { timestamp: number; config: Record<string, string> } = {
 };
 const SETTINGS_CACHE_TTL_MS = 120_000;
 
+// Uploaded (image/GIF) avatar frames need their asset + framing metadata on every
+// page where an equipped frame can appear (comments, profiles, header...).
+type CustomFrame = { id: string; asset_url: string; style_data: Record<string, any> };
+let cachedCustomFrames: { timestamp: number; frames: CustomFrame[] } = { timestamp: 0, frames: [] };
+const CUSTOM_FRAMES_TTL_MS = 120_000;
+
 export const load = async ({ locals, url, cookies }) => {
+  if (Date.now() - cachedCustomFrames.timestamp > CUSTOM_FRAMES_TTL_MS) {
+    try {
+      const res = await withTimeout(
+        locals.db
+          .from('shop_items')
+          .select('id, asset_url, style_data')
+          .eq('kind', 'AVATAR_FRAME')
+          .neq('asset_url', ''),
+        1200,
+        { data: null } as any,
+        'custom_frames'
+      );
+      if (Array.isArray(res?.data)) {
+        cachedCustomFrames = {
+          timestamp: Date.now(),
+          frames: res.data
+            .filter((f: any) => f.asset_url)
+            .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
+        };
+      }
+    } catch {
+      // Keep stale frames; procedural frames don't depend on this.
+    }
+  }
+
   let profile = locals.sessionCache?.profile || null;
   let unread = locals.sessionCache?.unread ?? 0;
   let userScans = locals.sessionCache?.userScans || [];
@@ -117,6 +148,7 @@ export const load = async ({ locals, url, cookies }) => {
     ageStatus,
     blurNsfw,
     siteUrl: url.origin,
-    userScans
+    userScans,
+    customFrames: cachedCustomFrames.frames
   };
 };

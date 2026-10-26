@@ -371,44 +371,18 @@
     cropPreviewOwnedByModal = false;
   }
 
-  async function saveCrop() {
+  function saveCrop() {
     cropSaving = true;
     modalNotice = '';
     try {
-      const normalizedCrop = normalizeAvatarCrop({ x: cropX, y: cropY, zoom: cropZoom });
       const draft: MediaDraft = {
         file: pendingFile || cropBaseDraft?.file || null,
         previewUrl: cropPreviewUrl || canonicalMediaUrl(cropType),
-        crop: normalizedCrop
+        crop: normalizeAvatarCrop({ x: cropX, y: cropY, zoom: cropZoom })
       };
       if (!draft.previewUrl) throw new Error('Selecione uma imagem antes de ajustar o enquadramento.');
       setDraft(cropType, draft);
-
-      // If repositioning existing avatar/banner without uploading a new file:
-      // Persist directly to DB right now so changes apply instantly across the whole platform!
-      if (!pendingFile) {
-        const actionName = cropType === 'avatar' ? '?/updateAvatarCrop' : '?/updateBannerCrop';
-        const fd = new FormData();
-        fd.set('x', String(cropX));
-        fd.set('y', String(cropY));
-        fd.set('zoom', String(cropZoom));
-        const res = await fetch(actionName, {
-          method: 'POST',
-          body: fd
-        });
-        if (!res.ok) {
-          throw new Error('Falha ao salvar enquadramento no servidor.');
-        }
-        if (cropType === 'avatar') {
-          data.member.avatar_crop = normalizedCrop;
-          window.dispatchEvent(new CustomEvent('nox:profile-updated', { detail: { ...data.member, avatar_crop: normalizedCrop } }));
-        } else {
-          data.member.banner_crop = normalizedCrop;
-        }
-        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} reposicionado e salvo com sucesso em todo o site!`;
-      } else {
-        uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} pronto para prévia. Salve as alterações para confirmar.`;
-      }
+      uploadNotice = `${cropType === 'avatar' ? 'Avatar' : 'Banner'} pronto para prévia. Salve as alterações para confirmar.`;
       closeCropModal(true);
     } catch (err: any) {
       modalNotice = err.message || 'Erro ao salvar posicionamento.';

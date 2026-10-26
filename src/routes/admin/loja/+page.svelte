@@ -35,6 +35,7 @@
   import { page } from '$app/state';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
+  import { computeFrameFitFromUrl } from '$lib/frame-fit';
   import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
 
   let { data } = $props();
@@ -254,6 +255,37 @@
     );
   }
 
+  /**
+   * Detects the transparent opening of a frame PNG (the connected transparent
+   * region around the image centre that does not touch the borders) and
+   * computes scale/offset so that opening sits exactly over the circular photo.
+   * Works for any aspect ratio; ornaments outside the opening stay free.
+   */
+  let autoFitNotice = $state('');
+  async function autoFitFrame(src: string) {
+    autoFitNotice = '';
+    if (!src) return;
+    try {
+      const result = await computeFrameFitFromUrl(src);
+      if (!result.ok) {
+        formFrameFit = 'contain';
+        formFrameScale = Math.abs(result.width / result.height - 1) > 0.05 ? 1.4 : 1.25;
+        formFrameOffsetX = 0;
+        formFrameOffsetY = 0;
+        autoFitNotice = 'Abertura não detectada automaticamente — ajuste manualmente com os controles.';
+        return;
+      }
+      formFrameFit = result.fit.frame_fit;
+      formFrameScale = result.fit.frame_scale;
+      formFrameOffsetX = result.fit.frame_offset_x;
+      formFrameOffsetY = result.fit.frame_offset_y;
+      showCircleGuide = true;
+      autoFitNotice = 'Abertura detectada automaticamente e alinhada ao avatar.';
+    } catch {
+      autoFitNotice = 'Não foi possível analisar a imagem — ajuste manualmente.';
+    }
+  }
+
   async function handleFileUpload(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -284,28 +316,8 @@
       }
 
       if (formKind === 'AVATAR_FRAME') {
-        const lowerName = file.name.toLowerCase();
-        if (lowerName.includes('halloween') || lowerName.includes('5922565')) {
-          formFrameScale = 1.44;
-          formFrameOffsetX = 5.5;
-          formFrameOffsetY = 0;
-          formFrameFit = 'contain';
-          showCircleGuide = true;
-        } else {
-          try {
-            const testImg = new Image();
-            testImg.onload = () => {
-              const ratio = testImg.naturalWidth / testImg.naturalHeight;
-              if (Math.abs(ratio - 1) > 0.05) {
-                formFrameFit = 'contain';
-                if (ratio > 1) {
-                  formFrameScale = Math.max(1.2, Math.round(ratio * 1.25 * 100) / 100);
-                }
-              }
-            };
-            testImg.src = URL.createObjectURL(file);
-          } catch {}
-        }
+        const localUrl = URL.createObjectURL(file);
+        autoFitFrame(localUrl).finally(() => URL.revokeObjectURL(localUrl));
       }
 
       if (!formName.trim()) {
@@ -1299,14 +1311,9 @@
                 <button
                   type="button"
                   class="btn-preset-pill highlight"
-                  onclick={() => {
-                    formFrameScale = 1.44;
-                    formFrameOffsetX = 5.5;
-                    formFrameOffsetY = 0;
-                    formFrameFit = 'contain';
-                  }}
+                  onclick={() => autoFitFrame(formAssetUrl)}
                 >
-                  🎃 Preset Halloween (1.44x, +5.5% X)
+                  ✨ Auto-detectar abertura
                 </button>
                 <button
                   type="button"
@@ -1322,6 +1329,10 @@
                 </button>
               </div>
 
+              {#if autoFitNotice}
+                <p class="framing-sub">{autoFitNotice}</p>
+              {/if}
+
               <div class="framing-sliders-grid">
                 <!-- Escala Slider -->
                 <div class="framing-control-group">
@@ -1333,7 +1344,7 @@
                     id="frame-scale-range"
                     type="range"
                     min="0.5"
-                    max="2.5"
+                    max="4"
                     step="0.01"
                     bind:value={formFrameScale}
                     class="framing-range"
@@ -1349,8 +1360,8 @@
                   <input
                     id="frame-offset-x-range"
                     type="range"
-                    min="-50"
-                    max="50"
+                    min="-60"
+                    max="60"
                     step="0.5"
                     bind:value={formFrameOffsetX}
                     class="framing-range"
@@ -1366,8 +1377,8 @@
                   <input
                     id="frame-offset-y-range"
                     type="range"
-                    min="-50"
-                    max="50"
+                    min="-60"
+                    max="60"
                     step="0.5"
                     bind:value={formFrameOffsetY}
                     class="framing-range"
@@ -2078,6 +2089,7 @@
 
   .avatar-preview-box {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 20px;
     padding: 8px 0;
@@ -2085,8 +2097,9 @@
 
   .avatar-preview-viewport {
     position: relative;
-    width: 140px;
-    height: 140px;
+    width: 190px;
+    height: 190px;
+    max-width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
