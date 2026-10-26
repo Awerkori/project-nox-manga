@@ -109,6 +109,7 @@
           new CustomEvent('nox-xp-awarded', {
             detail: {
               amount: data.xp_award.amount,
+              total_xp: data.xp_award.total_xp,
               title: 'Avaliação registrada',
               kind: 'RATE_WORK'
             }

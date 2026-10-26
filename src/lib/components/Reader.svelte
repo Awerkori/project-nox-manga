@@ -18,7 +18,6 @@
     gap = $state(false),
     preloadMode = $state<'full' | 'off'>('full'),
     notice = $state(''),
-    xpNotice = $state(''),
     fullscreen = $state(false),
     uiVisible = $state(true),
     showReportModal = $state(false),
@@ -261,7 +260,6 @@
         })) as { awarded?: boolean; reason?: string; amount?: number; message?: string } | null;
         if (res?.awarded) {
           xpAwardConfirmed = true;
-          xpNotice = res.message || `✦ +${res.amount || 150} XP — Capítulo Concluído!`;
           if (typeof window !== 'undefined') {
             window.dispatchEvent(
               new CustomEvent('nox-xp-awarded', {
@@ -272,8 +270,10 @@
                 }
               })
             );
+            if (typeof (window as any).__noxTriggerXpReward === 'function') {
+              (window as any).__noxTriggerXpReward(res.amount || 150, 'Capítulo concluído');
+            }
           }
-          setTimeout(() => { xpNotice = ''; }, 5000);
           break;
         }
         if (res?.reason === 'already_awarded') {
@@ -309,12 +309,12 @@
 
       if (res?.xp_award?.awarded) {
         xpAwardConfirmed = true;
-        xpNotice = res.xp_award.message || `✦ +${res.xp_award.amount} XP — Capítulo Concluído!`;
         if (typeof window !== 'undefined') {
           window.dispatchEvent(
             new CustomEvent('nox-xp-awarded', {
               detail: {
                 amount: res.xp_award.amount,
+                total_xp: res.xp_award.total_xp,
                 title: 'Capítulo concluído',
                 kind: 'READ_CHAPTER'
               }
@@ -324,7 +324,6 @@
             (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Capítulo concluído');
           }
         }
-        setTimeout(() => { xpNotice = ''; }, 5000);
       } else if (res?.xp_award?.reason === 'already_awarded') {
         xpAwardConfirmed = true;
       }
@@ -416,7 +415,7 @@
           if (entries[0]?.isIntersecting) {
             const hasScrolledDown = typeof window !== 'undefined' && window.scrollY > 200;
             const reachedFinalPages = maxSeenPage >= Math.max(1, data.pages.length - 1);
-            if (hasScrolledDown || reachedFinalPages) {
+            if (hasScrolledDown && reachedFinalPages) {
               maxSeenPage = data.pages.length;
               current = data.pages.length;
               void completeChapter();
@@ -672,12 +671,6 @@
 
   {#if notice}
     <div class="notice reading-width" role="status">{notice}</div>
-  {/if}
-  {#if xpNotice}
-    <div class="xp-toast" role="status">
-      <Sparkles size={16} />
-      <span>{xpNotice}</span>
-    </div>
   {/if}
 
   <div class="page-stack" style="max-width:{width}px;gap:{gap ? '20px' : '0'}">
@@ -1474,22 +1467,5 @@
     }
   }
 
-  .xp-toast {
-    position: fixed;
-    top: 76px;
-    right: 20px;
-    z-index: 100;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: rgba(20, 16, 32, 0.95);
-    border: 1px solid rgba(201, 170, 115, 0.5);
-    color: #dfc28d;
-    font-size: 13px;
-    font-weight: 700;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(201, 170, 115, 0.25);
-    backdrop-filter: blur(12px);
-  }
+
 </style>

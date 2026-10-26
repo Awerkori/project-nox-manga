@@ -335,7 +335,8 @@
           new CustomEvent('nox-xp-awarded', {
             detail: {
               amount: res.xp_award.amount,
-              title: 'Obra adicionada aos favoritos',
+              total_xp: res.xp_award.total_xp,
+              title: 'Obra favoritada',
               kind: 'FAVORITE_WORK'
             }
           })

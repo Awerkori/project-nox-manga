@@ -110,15 +110,20 @@
       )) as any;
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
+        const title = reply ? 'Resposta publicada' : 'Comentário publicado';
         window.dispatchEvent(
           new CustomEvent('nox-xp-awarded', {
             detail: {
               amount: res.xp_award.amount,
-              title: reply ? 'Resposta publicada' : 'Comentário publicado',
+              total_xp: res.xp_award.total_xp,
+              title,
               kind: reply ? 'REPLY' : 'COMMENT'
             }
           })
         );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(res.xp_award.amount, title);
+        }
       }
 
       body = '';

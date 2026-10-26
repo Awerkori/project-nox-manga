@@ -1,23 +1,21 @@
 import { safeDbQuery } from '$lib/server/resilience';
-
-type RankingCache = {
-  timestamp: number;
-  members: any[];
-};
-
-let cachedRanking: RankingCache | null = null;
-const RANKING_CACHE_TTL_MS = 300_000;
+import { getCachedRanking, setCachedRanking } from '$lib/server/ranking-cache';
 
 export const load = async ({ locals, setHeaders }) => {
   if (!locals.user) {
     setHeaders({
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300'
+      'cache-control': 'public, max-age=5, stale-while-revalidate=15'
+    });
+  } else {
+    setHeaders({
+      'cache-control': 'private, no-cache, no-store, must-revalidate'
     });
   }
 
-  if (cachedRanking && Date.now() - cachedRanking.timestamp < RANKING_CACHE_TTL_MS) {
+  const cached = getCachedRanking();
+  if (cached) {
     return {
-      members: cachedRanking.members,
+      members: cached,
       loadError: false,
       isStale: false
     };
@@ -36,22 +34,11 @@ export const load = async ({ locals, setHeaders }) => {
   );
 
   if (res.data && res.data.length > 0) {
-    cachedRanking = {
-      timestamp: Date.now(),
-      members: res.data
-    };
+    setCachedRanking(res.data);
     return {
       members: res.data,
       loadError: false,
       isStale: false
-    };
-  }
-
-  if (cachedRanking) {
-    return {
-      members: cachedRanking.members,
-      loadError: false,
-      isStale: true
     };
   }
 

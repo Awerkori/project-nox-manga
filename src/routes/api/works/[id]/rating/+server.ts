@@ -1,5 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { getWorkRating, setWorkRating, removeWorkRating } from '$lib/server/ratings';
+import { invalidateUserSession } from '$lib/server/session-cache';
+import { invalidateRankingCache } from '$lib/server/ranking-cache';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -101,6 +103,10 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
           p_meta: { description: 'Avaliação de obra registrada' }
         });
         xpAward = xpRes;
+        if (xpAward?.awarded) {
+          invalidateUserSession(userId);
+          invalidateRankingCache();
+        }
       } catch (e) {
         // Non-blocking
       }

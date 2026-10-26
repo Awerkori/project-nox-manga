@@ -28,6 +28,7 @@
   import { registerDynamicFrame } from '$lib/cosmetics-catalog';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { page } from '$app/state';
+  import { invalidateAll } from '$app/navigation';
 
   let { data, children } = $props();
 
@@ -145,10 +146,26 @@
       }
     };
     window.addEventListener('nox:profile-updated', handleProfileUpdate);
+
+    const handleXpAwarded = (event: Event) => {
+      const detail = (event as CustomEvent<{ amount?: number; total_xp?: number }>).detail;
+      if (data.profile) {
+        const total = Number(detail?.total_xp);
+        const amount = Number(detail?.amount);
+        const currentXp = (profileOverride?.xp ?? data.profile.xp) || 0;
+        const newXp = total && total > 0 ? total : currentXp + (amount || 0);
+        profileOverride = { ...(profileOverride || data.profile), xp: newXp };
+        data.profile = { ...data.profile, xp: newXp };
+      }
+      void invalidateAll();
+    };
+    window.addEventListener('nox-xp-awarded', handleXpAwarded);
+
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('nox:profile-updated', handleProfileUpdate);
+      window.removeEventListener('nox-xp-awarded', handleXpAwarded);
     };
   });
 </script>

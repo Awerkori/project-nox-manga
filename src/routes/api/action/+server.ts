@@ -4,6 +4,7 @@ import { member } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
+import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import type { Json } from '$lib/database.types';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
@@ -147,6 +148,7 @@ export const POST = async ({ request, locals, platform }: any) => {
   if (locals.user?.id) {
     if ((data as any)?.xp_award?.awarded || ['read_page', 'library', 'profile'].includes(body.action)) {
       invalidateUserSession(locals.user.id);
+      invalidateRankingCache();
     }
   }
 

@@ -9,39 +9,45 @@
     created: number;
   }
 
-  let toasts = $state<XpToast[]>([]);
+  let toast = $state<XpToast | null>(null);
+  let dismissTimer: ReturnType<typeof setTimeout> | null = null;
   let lastTriggerTime = 0;
-  let lastTriggerKind = '';
+  let lastTriggerKey = '';
 
   export function triggerXpReward(amount: number, title: string) {
     if (!amount || amount <= 0) return;
     const now = Date.now();
-    if (now - lastTriggerTime < 500 && lastTriggerKind === `${amount}:${title}`) {
-      return; // Deduplicate rapid calls from dual dispatch/listeners
+    const cleanTitle = title.replace(/^✦\s*\+\d+\s*XP\s*—\s*/, '').trim();
+    const key = `${amount}:${cleanTitle}`;
+
+    // Deduplicate rapid calls from dual dispatch/listeners within 1200ms
+    if (now - lastTriggerTime < 1200 && lastTriggerKey === key) {
+      return;
     }
     lastTriggerTime = now;
-    lastTriggerKind = `${amount}:${title}`;
+    lastTriggerKey = key;
 
-    const id = `xp_${now}_${Math.random().toString(36).substring(2, 7)}`;
-    const newToast: XpToast = {
-      id,
-      amount,
-      title,
-      badge: `✦ +${amount} XP`,
-      created: Date.now()
-    };
-
-    // Keep max 2 toasts at a time in the center to maintain elegance
-    if (toasts.length >= 2) {
-      toasts = [...toasts.slice(1), newToast];
-    } else {
-      toasts = [...toasts, newToast];
+    if (dismissTimer) {
+      clearTimeout(dismissTimer);
+      dismissTimer = null;
     }
 
-    // Dismiss after 2.6s (fulfilling the 2 to 3 seconds requirement)
-    setTimeout(() => {
-      toasts = toasts.filter((t) => t.id !== id);
-    }, 2600);
+    const id = `xp_${now}_${Math.random().toString(36).substring(2, 7)}`;
+    toast = {
+      id,
+      amount,
+      title: cleanTitle,
+      badge: `✦ +${amount} XP`,
+      created: now
+    };
+
+    // Exactly 2.5 seconds total duration requested
+    dismissTimer = setTimeout(() => {
+      if (toast?.id === id) {
+        toast = null;
+      }
+      dismissTimer = null;
+    }, 2500);
   }
 
   function handleCustomEvent(e: Event) {
@@ -66,6 +72,7 @@
   });
 
   onDestroy(() => {
+    if (dismissTimer) clearTimeout(dismissTimer);
     if (typeof window !== 'undefined') {
       window.removeEventListener('nox-xp-awarded', handleCustomEvent);
       if ((window as any).__noxTriggerXpReward === triggerXpReward) {
@@ -75,130 +82,125 @@
   });
 </script>
 
-{#if toasts.length > 0}
+{#if toast}
   <div class="xp-toast-container" aria-live="polite" aria-atomic="true">
-    {#each toasts as toast (toast.id)}
-      <div class="xp-toast-card">
-        <div class="xp-glow-backdrop"></div>
-        <div class="xp-toast-content">
-          <div class="xp-badge-wrap">
-            <span class="xp-sparkle">✦</span>
-            <span class="xp-amount">+{toast.amount} XP</span>
-          </div>
-          <div class="xp-divider"></div>
-          <span class="xp-toast-desc">{toast.title.replace(/^✦\s*\+\d+\s*XP\s*—\s*/, '')}</span>
+    <div class="xp-toast-card" key={toast.id}>
+      <div class="xp-glow-backdrop"></div>
+      <div class="xp-toast-content">
+        <div class="xp-badge-wrap">
+          <span class="xp-sparkle" aria-hidden="true">✦</span>
+          <span class="xp-amount">+{toast.amount} XP</span>
         </div>
+        <div class="xp-divider" aria-hidden="true"></div>
+        <span class="xp-toast-desc">{toast.title}</span>
       </div>
-    {/each}
+    </div>
   </div>
 {/if}
 
 <style>
   .xp-toast-container {
     position: fixed;
-    top: 54%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    top: 24px;
+    right: 24px;
     z-index: 99999999;
     display: flex;
-    flex-direction: column-reverse;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-end;
     pointer-events: none;
     user-select: none;
-    width: auto;
-    max-width: 92vw;
+    max-width: 90vw;
   }
 
   .xp-toast-card {
     position: relative;
     display: inline-flex;
     align-items: center;
-    background: linear-gradient(135deg, rgba(22, 10, 38, 0.96), rgba(46, 16, 78, 0.98));
-    border: 1.5px solid rgba(168, 85, 247, 0.75);
+    background: linear-gradient(135deg, rgba(20, 10, 36, 0.96), rgba(42, 14, 72, 0.98));
+    border: 1px solid rgba(168, 85, 247, 0.65);
     border-radius: 9999px;
-    padding: 11px 24px 11px 18px;
+    padding: 8px 18px 8px 14px;
     box-shadow:
-      0 12px 38px rgba(0, 0, 0, 0.8),
-      0 0 30px rgba(168, 85, 247, 0.55),
-      inset 0 0 16px rgba(245, 158, 11, 0.28);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    animation: xpSoloLevelingFloat 2.6s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+      0 8px 24px rgba(0, 0, 0, 0.7),
+      0 0 20px rgba(168, 85, 247, 0.4),
+      inset 0 0 12px rgba(245, 158, 11, 0.2);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    animation: xpTopRightSlideFade 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
   .xp-glow-backdrop {
     position: absolute;
-    inset: -3px;
+    inset: -2px;
     border-radius: 9999px;
-    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.45) 0%, transparent 75%);
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.35) 0%, transparent 75%);
     z-index: -1;
     pointer-events: none;
-    animation: xpGlowPulse 2s ease-in-out infinite alternate;
+    animation: xpGlowPulse 1.8s ease-in-out infinite alternate;
   }
 
   .xp-toast-content {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     white-space: nowrap;
   }
 
   .xp-badge-wrap {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
   }
 
   .xp-sparkle {
     color: #fbbf24;
-    font-size: 16px;
-    filter: drop-shadow(0 0 8px #f59e0b);
+    font-size: 14px;
+    filter: drop-shadow(0 0 6px #f59e0b);
     animation: xpSparkleSpin 1.4s ease-in-out infinite;
   }
 
   .xp-amount {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 800;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.5px;
     color: #fbbf24;
-    text-shadow: 0 0 12px rgba(251, 191, 36, 0.7);
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.65);
     font-family: inherit;
   }
 
   .xp-divider {
     width: 1px;
-    height: 16px;
-    background: rgba(255, 255, 255, 0.25);
+    height: 14px;
+    background: rgba(255, 255, 255, 0.22);
   }
 
   .xp-toast-desc {
-    font-size: 14.5px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #f8fafc;
-    letter-spacing: 0.3px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+    letter-spacing: 0.25px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
   }
 
-  @keyframes xpSoloLevelingFloat {
+  @keyframes xpTopRightSlideFade {
     0% {
       opacity: 0;
-      transform: translateY(22px) scale(0.88);
+      transform: translateY(-12px) scale(0.94);
       filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.2));
     }
     14% {
       opacity: 1;
       transform: translateY(0) scale(1);
-      filter: drop-shadow(0 0 22px rgba(168, 85, 247, 0.7));
+      filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.6));
     }
-    72% {
+    76% {
       opacity: 1;
-      transform: translateY(-28px) scale(1);
-      filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.5));
+      transform: translateY(-4px) scale(1);
+      filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.45));
     }
     100% {
       opacity: 0;
-      transform: translateY(-64px) scale(0.94);
+      transform: translateY(-16px) scale(0.96);
       filter: drop-shadow(0 0 0 rgba(168, 85, 247, 0));
     }
   }
@@ -210,7 +212,7 @@
     }
     100% {
       opacity: 1;
-      transform: scale(1.04);
+      transform: scale(1.03);
     }
   }
 
@@ -220,15 +222,15 @@
       opacity: 0.95;
     }
     50% {
-      transform: scale(1.3);
+      transform: scale(1.25);
       opacity: 1;
-      filter: drop-shadow(0 0 12px #f59e0b);
+      filter: drop-shadow(0 0 10px #f59e0b);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .xp-toast-card {
-      animation: xpFadeOnly 2.6s ease forwards;
+      animation: xpFadeOnly 2.5s ease forwards;
     }
     .xp-sparkle,
     .xp-glow-backdrop {
@@ -244,18 +246,20 @@
 
   @media (max-width: 640px) {
     .xp-toast-container {
-      top: 50%;
-      max-width: 95vw;
+      top: max(16px, env(safe-area-inset-top, 16px));
+      right: max(16px, env(safe-area-inset-right, 16px));
+      left: auto;
+      max-width: calc(100vw - 32px);
     }
     .xp-toast-card {
-      padding: 9px 18px 9px 15px;
+      padding: 7px 15px 7px 12px;
     }
     .xp-amount {
-      font-size: 15px;
+      font-size: 13.5px;
     }
     .xp-toast-desc {
-      font-size: 13.5px;
-      max-width: 220px;
+      font-size: 12.5px;
+      max-width: 200px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
