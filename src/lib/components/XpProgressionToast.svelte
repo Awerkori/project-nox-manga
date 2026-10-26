@@ -101,8 +101,8 @@
 <style>
   .xp-toast-container {
     position: fixed;
-    top: 24px;
-    right: 24px;
+    top: clamp(160px, 38vh, 46vh);
+    right: 28px;
     z-index: 99999999;
     display: flex;
     flex-direction: column;
@@ -126,7 +126,7 @@
       inset 0 0 12px rgba(245, 158, 11, 0.2);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    animation: xpTopRightSlideFade 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: xpNaturalFloatFade 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .xp-glow-backdrop {
@@ -182,25 +182,25 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
   }
 
-  @keyframes xpTopRightSlideFade {
+  @keyframes xpNaturalFloatFade {
     0% {
       opacity: 0;
-      transform: translateY(-12px) scale(0.94);
+      transform: translate3d(24px, 12px, 0) scale(0.92);
       filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.2));
     }
     14% {
       opacity: 1;
-      transform: translateY(0) scale(1);
+      transform: translate3d(0, 0, 0) scale(1);
       filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.6));
     }
-    76% {
+    75% {
       opacity: 1;
-      transform: translateY(-4px) scale(1);
+      transform: translate3d(0, -6px, 0) scale(1);
       filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.45));
     }
     100% {
       opacity: 0;
-      transform: translateY(-16px) scale(0.96);
+      transform: translate3d(8px, -18px, 0) scale(0.96);
       filter: drop-shadow(0 0 0 rgba(168, 85, 247, 0));
     }
   }
@@ -246,7 +246,7 @@
 
   @media (max-width: 640px) {
     .xp-toast-container {
-      top: max(16px, env(safe-area-inset-top, 16px));
+      top: clamp(110px, 26vh, 32vh);
       right: max(16px, env(safe-area-inset-right, 16px));
       left: auto;
       max-width: calc(100vw - 32px);

@@ -35,7 +35,8 @@
     Code,
     Headphones,
     Scan,
-    Flag
+    Flag,
+    Trophy
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
@@ -564,8 +565,19 @@
             {/if}
           </button>
 
-          {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
+          {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes', '/admin/rankings'])}
             <div class="category-links">
+              {#if canManageConfig}
+                <a
+                  href="/admin/rankings"
+                  class="nav-link"
+                  class:active={isActive('/admin/rankings')}
+                  onclick={closeMobile}
+                >
+                  <Trophy size={16} class="nav-icon" />
+                  <span>Rankings & Temporadas</span>
+                </a>
+              {/if}
               {#if canManageScans}
                 <a
                   href="/admin/scans"

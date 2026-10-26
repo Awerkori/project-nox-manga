@@ -5,6 +5,8 @@ import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
+import { invalidateObraAuxCache } from '$lib/server/obra-cache';
+import { fetchWorkFromYugabyte } from '$lib/server/yugabyte';
 import type { Json } from '$lib/database.types';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
@@ -22,6 +24,58 @@ export const POST = async ({ request, locals, platform }: any) => {
   } catch {
     error(400, 'Solicitação inválida');
   }
+
+  // Ensure work stub exists in Supabase public.works for foreign key integrity
+  const targetWorkId = body.data?.work_id ? String(body.data.work_id) : null;
+  if (body.scope === 'member' && targetWorkId && ['like', 'library', 'comment', 'rate_work'].includes(body.action)) {
+    const { data: wExists } = await locals.db.from('works').select('id').eq('id', targetWorkId).maybeSingle();
+    if (!wExists) {
+      try {
+        const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
+        if (ybWork) {
+          await locals.db.from('works').upsert(
+            {
+              id: ybWork.id,
+              slug: ybWork.slug || targetWorkId,
+              title: ybWork.title || 'Obra',
+              published: true,
+              cover_id: ybWork.cover_id || null
+            },
+            { onConflict: 'id' }
+          );
+        }
+      } catch (err) {
+        console.error('[ACTION] Error syncing work stub to Supabase:', err);
+      }
+    }
+  }
+
+  // Handle 'like' action using member_action RPC
+  if (body.scope === 'member' && body.action === 'like') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    if (!targetWorkId) error(400, 'work_id obrigatório');
+
+    const { data: rpcRes, error: rpcProblem } = await locals.db.rpc('member_action', {
+      p_action: 'like',
+      p_data: { work_id: targetWorkId }
+    });
+    if (rpcProblem) error(rpcProblem.code === '42501' ? 403 : 400, rpcProblem.message);
+
+    const { count: totalLikes } = await locals.db
+      .from('likes')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('work_id', targetWorkId);
+
+    invalidateObraAuxCache(targetWorkId);
+
+    const isLiked = Boolean((rpcRes as any)?.liked);
+    return json({
+      ok: true,
+      liked: isLiked,
+      count: totalLikes ?? (isLiked ? 1 : 0)
+    });
+  }
+
   const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
   const { data, error: problem } = isCanonicalChapterWrite
     ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
@@ -30,6 +84,10 @@ export const POST = async ({ request, locals, platform }: any) => {
         p_data: body.data as Json
       });
   if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+
+  if (targetWorkId) {
+    invalidateObraAuxCache(targetWorkId);
+  }
 
   if (body.scope === 'member' && body.action === 'comment' && locals.user) {
     const commentBody = String(body.data.body || '');

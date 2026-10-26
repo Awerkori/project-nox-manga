@@ -4,18 +4,9 @@ import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
+import { getObraAuxCache, setObraAuxCache } from '$lib/server/obra-cache';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-
-type ObraAuxCacheEntry = {
-  timestamp: number;
-  comments: any[];
-  likes: any[];
-  metrics: any;
-  workScans: any[];
-};
-const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
-const OBRA_AUX_CACHE_TTL_MS = 60_000;
 
 export const load = async ({ locals, params, url, cookies, platform, setHeaders }: any) => {
   const isTargetUuid = isUuid(params.slug);
@@ -95,10 +86,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
 
   // Check in-memory aux cache for public comments, likes, metrics and scans
-  const cachedAuxEntry = obraAuxCache.get(work.id);
-  const isAuxFresh = cachedAuxEntry && Date.now() - cachedAuxEntry.timestamp < OBRA_AUX_CACHE_TTL_MS;
+  const cachedAuxEntry = getObraAuxCache(work.id);
 
-  const publicAuxPromise = isAuxFresh
+  const publicAuxPromise = cachedAuxEntry
     ? Promise.resolve({
         comments: cachedAuxEntry.comments,
         likes: cachedAuxEntry.likes,
@@ -125,18 +115,13 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
             .eq('work_id', work.id)
         ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
           const entry = {
-            timestamp: Date.now(),
             comments: commentsRes?.data || [],
             likes: likesRes?.data || [],
             metrics: metricsRes?.data?.[0] || null,
             workScans: scansRes?.data || []
           };
-          if (obraAuxCache.size >= 200) {
-            const oldest = obraAuxCache.keys().next().value;
-            if (oldest) obraAuxCache.delete(oldest);
-          }
-          obraAuxCache.set(work.id, entry);
-          return entry;
+          setObraAuxCache(work.id, entry);
+          return { ...entry, timestamp: Date.now() };
         }),
         3500,
         {
