@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import {
     Ticket,
     Flag,
     FileCheck,
     ShieldAlert,
+    ShieldCheck,
     Clock,
     CheckCircle2,
     XCircle,
@@ -32,14 +33,15 @@
     Layers,
     MapPin,
     CornerDownRight,
-    Quote
+    Quote,
+    ArrowRight
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   let { data } = $props();
 
   let activeTab = $derived(data.activeTab || 'relatorios');
-  let currentStatus = $derived(data.statusFilter || 'ALL');
+  let currentStatus = $derived(data.statusFilter || (activeTab === 'scans' ? 'PENDING' : 'NOVO'));
   let currentType = $derived(data.typeFilter || 'ALL');
   let searchQuery = $state(data.searchQuery || '');
 
@@ -74,19 +76,19 @@
     url.searchParams.delete('status');
     url.searchParams.delete('type');
     url.searchParams.delete('q');
-    window.location.href = url.toString();
+    goto(url.toString(), { keepFocus: true });
   }
 
   function setStatusFilter(status: string) {
     const url = new URL(page.url);
     url.searchParams.set('status', status);
-    window.location.href = url.toString();
+    goto(url.toString(), { keepFocus: true, noScroll: true });
   }
 
   function setTypeFilter(t: string) {
     const url = new URL(page.url);
     url.searchParams.set('type', t);
-    window.location.href = url.toString();
+    goto(url.toString(), { keepFocus: true, noScroll: true });
   }
 
   function toggleCluster(key: string) {
@@ -238,17 +240,37 @@
 </svelte:head>
 
 <div class="tickets-workspace">
-  <!-- Top Header Cluster -->
-  <header class="tickets-header">
+  <!-- Dynamic Top Header Cluster -->
+  <header class="tickets-header" class:reports-theme={activeTab === 'relatorios'} class:scans-theme={activeTab === 'scans'} class:moderation-theme={activeTab === 'moderacao'}>
     <div class="header-main">
-      <div class="header-badge">
-        <Ticket size={14} />
-        <span>CENTRAL DE OPERAÇÕES</span>
-      </div>
-      <h1 class="header-title">Central de Tickets</h1>
-      <p class="header-desc">
-        Gestão unificada de relatórios de conteúdo, candidaturas de scans e moderação da comunidade.
-      </p>
+      {#if activeTab === 'relatorios'}
+        <div class="header-badge amber-badge">
+          <Flag size={14} />
+          <span>SUPORTE EDITORIAL</span>
+        </div>
+        <h1 class="header-title">Relatórios de Conteúdo</h1>
+        <p class="header-desc">
+          Triagem e atendimento de inconsistências, capítulos quebrados e defeitos relatados em obras e páginas.
+        </p>
+      {:else if activeTab === 'scans'}
+        <div class="header-badge gold-badge">
+          <FileCheck size={14} />
+          <span>ADMISSÃO DE PARCEIROS</span>
+        </div>
+        <h1 class="header-title">Inscrições de Scans</h1>
+        <p class="header-desc">
+          Avaliação de candidaturas, conformidade de material e concessão de permissões de publicação.
+        </p>
+      {:else}
+        <div class="header-badge crimson-badge">
+          <ShieldAlert size={14} />
+          <span>SENTINEL — MODERAÇÃO</span>
+        </div>
+        <h1 class="header-title">Moderação Comunitária</h1>
+        <p class="header-desc">
+          Monitoramento e ações disciplinares sobre comentários denunciados, visibilidade e aplicação de suspensões.
+        </p>
+      {/if}
     </div>
 
     {#if feedbackMessage}
@@ -263,114 +285,160 @@
     {/if}
   </header>
 
-  <!-- Metric Highlights Bar -->
-  <section class="stats-grid" aria-label="Resumo de tickets pendentes">
-    <div class="stat-card stat-total">
-      <div class="stat-icon-wrapper total">
-        <Ticket size={22} />
+  <!-- Metric Highlights Bar (Specific to the Active Section) -->
+  <section class="stats-grid" aria-label="Indicadores da área">
+    {#if activeTab === 'relatorios'}
+      <div class="stat-card" class:stat-alert={data.contentStatusCounts.NOVO > 0}>
+        <div class="stat-icon-wrapper reports">
+          <Flag size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Novos / Abertos</span>
+          <span class="stat-value">{data.contentStatusCounts.NOVO}</span>
+        </div>
+        <span class="stat-pill {data.contentStatusCounts.NOVO > 0 ? 'warning' : 'clean'}">
+          {data.contentStatusCounts.NOVO > 0 ? 'Triagem Pendente' : 'Em Dia'}
+        </span>
       </div>
-      <div class="stat-meta">
-        <span class="stat-label">Total Pendente</span>
-        <span class="stat-value">{data.ticketStats.totalTicketsCount}</span>
-      </div>
-      <span class="stat-pill {data.ticketStats.totalTicketsCount > 0 ? 'alert' : 'clean'}">
-        {data.ticketStats.totalTicketsCount > 0 ? 'Atenção Necessária' : 'Em Dia'}
-      </span>
-    </div>
 
-    <div class="stat-card">
-      <div class="stat-icon-wrapper reports">
-        <Flag size={20} />
-      </div>
-      <div class="stat-meta">
-        <span class="stat-label">Relatórios de Conteúdo</span>
-        <span class="stat-value">{data.ticketStats.pendingReportsCount}</span>
-      </div>
-      <span class="stat-pill {data.ticketStats.pendingReportsCount > 0 ? 'warning' : 'clean'}">
-        {data.ticketStats.pendingReportsCount} abertos
-      </span>
-    </div>
-
-    {#if data.isAdmin}
       <div class="stat-card">
+        <div class="stat-icon-wrapper reports-analise">
+          <Clock size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Em Análise</span>
+          <span class="stat-value">{data.contentStatusCounts.EM_ANALISE}</span>
+        </div>
+        <span class="stat-pill {data.contentStatusCounts.EM_ANALISE > 0 ? 'info' : 'clean'}">
+          {data.contentStatusCounts.EM_ANALISE} em atendimento
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-resolvido">
+          <CheckCircle2 size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Resolvidos</span>
+          <span class="stat-value">{data.contentStatusCounts.RESOLVIDO}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.contentStatusCounts.RESOLVIDO} corrigidos
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper total">
+          <Ticket size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Total de Relatórios</span>
+          <span class="stat-value">{data.contentStatusCounts.ALL}</span>
+        </div>
+        <span class="stat-pill clean">Histórico</span>
+      </div>
+    {:else if activeTab === 'scans'}
+      <div class="stat-card" class:stat-alert={data.partnerStatusCounts.PENDING > 0}>
         <div class="stat-icon-wrapper scans">
           <FileCheck size={20} />
         </div>
         <div class="stat-meta">
-          <span class="stat-label">Inscrições de Scans</span>
-          <span class="stat-value">{data.ticketStats.pendingScansCount}</span>
+          <span class="stat-label">Pendentes de Avaliação</span>
+          <span class="stat-value">{data.partnerStatusCounts.PENDING}</span>
         </div>
-        <span class="stat-pill {data.ticketStats.pendingScansCount > 0 ? 'gold' : 'clean'}">
-          {data.ticketStats.pendingScansCount} para análise
+        <span class="stat-pill {data.partnerStatusCounts.PENDING > 0 ? 'gold' : 'clean'}">
+          {data.partnerStatusCounts.PENDING > 0 ? 'Aguardando Análise' : 'Em Dia'}
         </span>
       </div>
 
       <div class="stat-card">
+        <div class="stat-icon-wrapper reports-resolvido">
+          <CheckCircle2 size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Aprovadas</span>
+          <span class="stat-value">{data.partnerStatusCounts.APPROVED}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.partnerStatusCounts.APPROVED} parceiras
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-rejeitado">
+          <XCircle size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Recusadas</span>
+          <span class="stat-value">{data.partnerStatusCounts.REJECTED}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.partnerStatusCounts.REJECTED} indeferidas
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper total">
+          <Ticket size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Total de Candidaturas</span>
+          <span class="stat-value">{data.partnerStatusCounts.ALL}</span>
+        </div>
+        <span class="stat-pill clean">Histórico</span>
+      </div>
+    {:else}
+      <div class="stat-card" class:stat-alert={data.moderationStatusCounts.NOVO > 0}>
         <div class="stat-icon-wrapper moderation">
           <ShieldAlert size={20} />
         </div>
         <div class="stat-meta">
-          <span class="stat-label">Moderação Comunitária</span>
-          <span class="stat-value">{data.ticketStats.pendingModerationCount}</span>
+          <span class="stat-label">Novas Denúncias</span>
+          <span class="stat-value">{data.moderationStatusCounts.NOVO}</span>
         </div>
-        <span class="stat-pill {data.ticketStats.pendingModerationCount > 0 ? 'alert' : 'clean'}">
-          {data.ticketStats.pendingModerationCount} ocorrências
+        <span class="stat-pill {data.moderationStatusCounts.NOVO > 0 ? 'alert' : 'clean'}">
+          {data.moderationStatusCounts.NOVO > 0 ? 'Ação Necessária' : 'Em Dia'}
         </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-analise">
+          <Clock size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Em Análise</span>
+          <span class="stat-value">{data.moderationStatusCounts.EM_ANALISE}</span>
+        </div>
+        <span class="stat-pill {data.moderationStatusCounts.EM_ANALISE > 0 ? 'info' : 'clean'}">
+          {data.moderationStatusCounts.EM_ANALISE} investigando
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-resolvido">
+          <CheckCircle2 size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Resolvidas</span>
+          <span class="stat-value">{data.moderationStatusCounts.RESOLVIDO}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.moderationStatusCounts.RESOLVIDO} tratadas
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper total">
+          <Ticket size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Total no Histórico</span>
+          <span class="stat-value">{data.moderationStatusCounts.ALL}</span>
+        </div>
+        <span class="stat-pill clean">Registros</span>
       </div>
     {/if}
   </section>
-
-  <!-- Tab Switcher Bar -->
-  <div class="tabs-nav-bar">
-    <div class="tabs-cluster" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        class="tab-btn"
-        class:active={activeTab === 'relatorios'}
-        aria-selected={activeTab === 'relatorios'}
-        onclick={() => setTab('relatorios')}
-      >
-        <Flag size={16} />
-        <span>Relatórios de Conteúdo</span>
-        {#if data.ticketStats.pendingReportsCount > 0}
-          <span class="tab-badge">{data.ticketStats.pendingReportsCount}</span>
-        {/if}
-      </button>
-
-      {#if data.isAdmin}
-        <button
-          type="button"
-          role="tab"
-          class="tab-btn"
-          class:active={activeTab === 'scans'}
-          aria-selected={activeTab === 'scans'}
-          onclick={() => setTab('scans')}
-        >
-          <FileCheck size={16} />
-          <span>Inscrições de Scans</span>
-          {#if data.ticketStats.pendingScansCount > 0}
-            <span class="tab-badge gold">{data.ticketStats.pendingScansCount}</span>
-          {/if}
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          class="tab-btn"
-          class:active={activeTab === 'moderacao'}
-          aria-selected={activeTab === 'moderacao'}
-          onclick={() => setTab('moderacao')}
-        >
-          <ShieldAlert size={16} />
-          <span>Moderação</span>
-          {#if data.ticketStats.pendingModerationCount > 0}
-            <span class="tab-badge alert">{data.ticketStats.pendingModerationCount}</span>
-          {/if}
-        </button>
-      {/if}
-    </div>
-  </div>
 
   <!-- TAB 1: RELATÓRIOS DE CONTEÚDO -->
   {#if activeTab === 'relatorios'}
@@ -378,14 +446,6 @@
       <!-- Filter Controls Toolbar -->
       <div class="toolbar-bar">
         <div class="filter-pills-row">
-          <button
-            type="button"
-            class="filter-pill"
-            class:active={currentStatus === 'ALL'}
-            onclick={() => setStatusFilter('ALL')}
-          >
-            Todos ({data.contentStatusCounts.ALL})
-          </button>
           <button
             type="button"
             class="filter-pill pill-alert"
@@ -416,7 +476,15 @@
             class:active={currentStatus === 'REJEITADO'}
             onclick={() => setStatusFilter('REJEITADO')}
           >
-            Rejeitados ({data.contentStatusCounts.REJEITADO})
+            Dispensados ({data.contentStatusCounts.REJEITADO})
+          </button>
+          <button
+            type="button"
+            class="filter-pill"
+            class:active={currentStatus === 'ALL'}
+            onclick={() => setStatusFilter('ALL')}
+          >
+            Todos ({data.contentStatusCounts.ALL})
           </button>
         </div>
 
@@ -437,9 +505,21 @@
       <!-- Clusters / List of Content Issues -->
       {#if data.clusters.length === 0}
         <div class="empty-state">
-          <CheckCircle2 size={40} class="empty-icon" />
-          <h3>Nenhum relatório pendente</h3>
-          <p>Tudo certo! Não há relatórios de conteúdo correspondentes aos filtros selecionados.</p>
+          {#if currentStatus === 'NOVO'}
+            <CheckCircle2 size={42} class="empty-icon text-amber" />
+            <h3>Nenhuma nova pendência. Tudo em dia!</h3>
+            <p>Não há novos relatórios de conteúdo aguardando atendimento inicial.</p>
+            {#if data.contentStatusCounts.EM_ANALISE > 0}
+              <button type="button" class="btn-empty-shortcut" onclick={() => setStatusFilter('EM_ANALISE')}>
+                <span>Ver {data.contentStatusCounts.EM_ANALISE} {data.contentStatusCounts.EM_ANALISE === 1 ? 'relatório em análise' : 'relatórios em análise'}</span>
+                <ArrowRight size={14} />
+              </button>
+            {/if}
+          {:else}
+            <CheckCircle2 size={40} class="empty-icon" />
+            <h3>Nenhum relatório encontrado</h3>
+            <p>Não há relatórios de conteúdo correspondentes aos filtros selecionados.</p>
+          {/if}
         </div>
       {:else}
         <div class="reports-feed">
@@ -660,14 +740,6 @@
         <div class="filter-pills-row">
           <button
             type="button"
-            class="filter-pill"
-            class:active={currentStatus === 'ALL'}
-            onclick={() => setStatusFilter('ALL')}
-          >
-            Todas ({data.partnerStatusCounts.ALL})
-          </button>
-          <button
-            type="button"
             class="filter-pill pill-gold"
             class:active={currentStatus === 'PENDING'}
             onclick={() => setStatusFilter('PENDING')}
@@ -690,15 +762,29 @@
           >
             Recusadas ({data.partnerStatusCounts.REJECTED})
           </button>
+          <button
+            type="button"
+            class="filter-pill"
+            class:active={currentStatus === 'ALL'}
+            onclick={() => setStatusFilter('ALL')}
+          >
+            Todas ({data.partnerStatusCounts.ALL})
+          </button>
         </div>
       </div>
 
       <!-- Scans List -->
       {#if data.partnerRequests.length === 0}
         <div class="empty-state">
-          <FileCheck size={40} class="empty-icon" />
-          <h3>Nenhuma solicitação de scan</h3>
-          <p>Nenhuma inscrição de scan parceira encontrada para o filtro atual.</p>
+          {#if currentStatus === 'PENDING'}
+            <FileCheck size={42} class="empty-icon text-gold" />
+            <h3>Nenhuma nova pendência. Tudo em dia!</h3>
+            <p>Todas as candidaturas de scans parceiras foram avaliadas.</p>
+          {:else}
+            <FileCheck size={40} class="empty-icon" />
+            <h3>Nenhuma inscrição encontrada</h3>
+            <p>Nenhuma inscrição de scan parceira encontrada para o filtro selecionado.</p>
+          {/if}
         </div>
       {:else}
         <div class="partner-cards-grid">
@@ -854,14 +940,6 @@
         <div class="filter-pills-row">
           <button
             type="button"
-            class="filter-pill"
-            class:active={currentStatus === 'ALL'}
-            onclick={() => setStatusFilter('ALL')}
-          >
-            Todas ({data.moderationStatusCounts.ALL})
-          </button>
-          <button
-            type="button"
             class="filter-pill pill-alert"
             class:active={currentStatus === 'NOVO'}
             onclick={() => setStatusFilter('NOVO')}
@@ -892,15 +970,35 @@
           >
             Dispensadas ({data.moderationStatusCounts.REJEITADO})
           </button>
+          <button
+            type="button"
+            class="filter-pill"
+            class:active={currentStatus === 'ALL'}
+            onclick={() => setStatusFilter('ALL')}
+          >
+            Todas ({data.moderationStatusCounts.ALL})
+          </button>
         </div>
       </div>
 
       <!-- Moderation Items List -->
       {#if data.moderationReports.length === 0}
         <div class="empty-state">
-          <ShieldAlert size={40} class="empty-icon text-rose" />
-          <h3>Nenhuma ocorrência de moderação</h3>
-          <p>Tudo pacífico! Nenhuma denúncia de comentário pendente para a administração.</p>
+          {#if currentStatus === 'NOVO'}
+            <ShieldCheck size={42} class="empty-icon text-violet" />
+            <h3>Nenhuma nova pendência. Tudo em dia!</h3>
+            <p>Nenhuma nova ocorrência ou denúncia pendente de triagem no momento.</p>
+            {#if data.moderationStatusCounts.EM_ANALISE > 0}
+              <button type="button" class="btn-empty-shortcut" onclick={() => setStatusFilter('EM_ANALISE')}>
+                <span>Ver {data.moderationStatusCounts.EM_ANALISE} {data.moderationStatusCounts.EM_ANALISE === 1 ? 'ocorrência em análise' : 'ocorrências em análise'}</span>
+                <ArrowRight size={14} />
+              </button>
+            {/if}
+          {:else}
+            <ShieldAlert size={40} class="empty-icon text-rose" />
+            <h3>Nenhuma ocorrência encontrada</h3>
+            <p>Nenhuma denúncia de comentário corresponde ao filtro selecionado.</p>
+          {/if}
         </div>
       {:else}
         <div class="moderation-feed">
@@ -1030,27 +1128,49 @@
 
               <!-- Actions Strip: Primary Visualizar no Site + Moderation Actions Suite -->
               <div class="mod-action-footer">
-                <!-- MANDATORY PRIMARY ACTION: Visualizar no Site -->
-                {#if rep.siteLink}
+                <!-- PRIMARY ACTION: Visualizar no Site (Disabled with label if deleted) -->
+                {#if rep.visibilityStatus !== 'DELETED' && rep.siteLink}
                   <a
                     href={rep.siteLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="btn-primary-site-view"
+                    title="Abrir o comentário diretamente na obra ou capítulo"
                   >
                     <ExternalLink size={15} />
                     <span>Visualizar no Site</span>
                   </a>
+                {:else}
+                  <span class="btn-primary-site-view btn-site-view-disabled" title="Comentário excluído não está mais acessível no site público">
+                    <EyeOff size={15} />
+                    <span>Removido do Site</span>
+                  </span>
                 {/if}
 
                 <div class="mod-buttons-cluster">
-                  {#if rep.comment}
+                  {#if rep.visibilityStatus === 'DELETED'}
+                    <span class="mod-status-text alert-text">
+                      <Trash2 size={13} />
+                      <span>Comentário já excluído</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-mod-action btn-restore"
+                      disabled={busy}
+                      onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment?.id })}
+                      title="Restaurar visibilidade do comentário"
+                    >
+                      <Eye size={14} />
+                      <span>Restaurar</span>
+                    </button>
+                  {:else if rep.comment}
                     {#if rep.comment.removed}
                       <button
                         type="button"
                         class="btn-mod-action btn-restore"
                         disabled={busy}
                         onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment.id })}
+                        title="Restaurar comentário ocultado"
                       >
                         <Eye size={14} />
                         <span>Restaurar</span>
@@ -1061,6 +1181,7 @@
                         class="btn-mod-action btn-hide"
                         disabled={busy}
                         onclick={() => moderate('hide', { reportId: rep.id, commentId: rep.comment.id })}
+                        title="Ocultar comentário do site público"
                       >
                         <EyeOff size={14} />
                         <span>Ocultar Comentário</span>
@@ -1072,6 +1193,7 @@
                       class="btn-mod-action btn-delete"
                       disabled={busy}
                       onclick={() => moderate('delete', { reportId: rep.id, commentId: rep.comment.id })}
+                      title="Excluir comentário permanentemente e resolver denúncia"
                     >
                       <Trash2 size={14} />
                       <span>Excluir</span>
@@ -1083,6 +1205,7 @@
                         class="btn-mod-action btn-suspend"
                         disabled={busy}
                         onclick={() => moderate('suspend_user', { reportId: rep.id, targetUserId: rep.comment.author.id })}
+                        title="Suspender este usuário do Project Nox"
                       >
                         <UserX size={14} />
                         <span>Suspender Autor</span>
@@ -2637,6 +2760,78 @@
     box-shadow: 0 6px 22px rgba(139, 92, 246, 0.55);
     transform: translateY(-1px);
     color: #ffffff;
+  }
+  .btn-primary-site-view.btn-site-view-disabled {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #6d758d;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .btn-primary-site-view.btn-site-view-disabled:hover {
+    transform: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: #6d758d;
+  }
+  .header-badge.amber-badge {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+  }
+  .header-badge.gold-badge {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+  }
+  .header-badge.crimson-badge {
+    background: rgba(225, 29, 72, 0.15);
+    border-color: rgba(225, 29, 72, 0.35);
+    color: #fb7185;
+  }
+  .stat-icon-wrapper.reports-analise {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+  }
+  .stat-icon-wrapper.reports-resolvido {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
+  .stat-icon-wrapper.reports-rejeitado {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+  .mod-status-text.alert-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+  .btn-empty-shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 9px 18px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #d1d5db;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-empty-shortcut:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    transform: translateY(-1px);
   }
   .mod-buttons-cluster {
     display: flex;

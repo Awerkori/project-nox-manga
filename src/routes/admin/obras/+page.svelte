@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
+  import { page } from '$app/state';
+  import { goto, invalidateAll } from '$app/navigation';
   import {
     Plus,
     Search,
@@ -10,7 +11,11 @@
     BookOpen,
     Clock,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight
   } from '@lucide/svelte';
   import { kindLabels, date } from '$lib/types';
 
@@ -23,24 +28,88 @@
   let noticeType = $state<'info' | 'success' | 'error'>('info');
   let syncing = $state(false);
 
-  let filteredWorks = $derived(
-    data.works.filter((w: any) => {
-      const matchesSearch =
-        !search ||
-        w.title.toLowerCase().includes(search.toLowerCase()) ||
-        w.slug.toLowerCase().includes(search.toLowerCase()) ||
-        (w.author && w.author.toLowerCase().includes(search.toLowerCase()));
+  $effect(() => {
+    search = data.search || '';
+    selectedKind = data.selectedKind || 'ALL';
+    selectedStatus = data.selectedStatus || 'ALL';
+  });
 
-      const matchesKind = selectedKind === 'ALL' || w.kind === selectedKind;
+  function updateUrl(newParams: { q?: string; tipo?: string; status?: string; pagina?: number }) {
+    const url = new URL(page.url);
+    if (newParams.q !== undefined) {
+      if (newParams.q.trim()) url.searchParams.set('q', newParams.q.trim());
+      else url.searchParams.delete('q');
+    }
+    if (newParams.tipo !== undefined) {
+      if (newParams.tipo && newParams.tipo !== 'ALL') url.searchParams.set('tipo', newParams.tipo);
+      else url.searchParams.delete('tipo');
+    }
+    if (newParams.status !== undefined) {
+      if (newParams.status && newParams.status !== 'ALL') url.searchParams.set('status', newParams.status);
+      else url.searchParams.delete('status');
+    }
+    if (newParams.pagina !== undefined) {
+      if (newParams.pagina > 1) url.searchParams.set('pagina', String(newParams.pagina));
+      else url.searchParams.delete('pagina');
+    }
+    goto(url.toString(), { keepFocus: true, noScroll: true });
+  }
 
-      const matchesStatus =
-        selectedStatus === 'ALL' ||
-        (selectedStatus === 'PUBLISHED' && w.published) ||
-        (selectedStatus === 'DRAFT' && !w.published);
+  let searchDebounceTimer: any = null;
+  function handleSearchInput(e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    search = val;
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      updateUrl({ q: search, pagina: 1 });
+    }, 280);
+  }
 
-      return matchesSearch && matchesKind && matchesStatus;
-    })
-  );
+  function handleSearchKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      clearTimeout(searchDebounceTimer);
+      updateUrl({ q: search, pagina: 1 });
+    }
+  }
+
+  function setStatus(st: string) {
+    selectedStatus = st;
+    updateUrl({ status: st, pagina: 1 });
+  }
+
+  function setKind(kd: string) {
+    selectedKind = kd;
+    updateUrl({ tipo: kd, pagina: 1 });
+  }
+
+  function clearFilters() {
+    search = '';
+    selectedKind = 'ALL';
+    selectedStatus = 'ALL';
+    updateUrl({ q: '', tipo: 'ALL', status: 'ALL', pagina: 1 });
+  }
+
+  function goToPage(p: number) {
+    if (p < 1 || p > data.totalPages || p === data.page) return;
+    updateUrl({ pagina: p });
+  }
+
+  let visiblePageNumbers = $derived.by(() => {
+    const current = data.page;
+    const total = data.totalPages;
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    pages.push(1);
+    if (current > 3) pages.push('...');
+    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+      pages.push(i);
+    }
+    if (current < total - 2) pages.push('...');
+    pages.push(total);
+    return pages;
+  });
 
   async function sync() {
     syncing = true;
@@ -58,12 +127,6 @@
     } finally {
       syncing = false;
     }
-  }
-
-  function clearFilters() {
-    search = '';
-    selectedKind = 'ALL';
-    selectedStatus = 'ALL';
   }
 </script>
 
@@ -125,12 +188,19 @@
       <input
         type="text"
         class="search-input"
-        placeholder="Buscar por título, slug ou autor…"
+        placeholder="Buscar por título, título alternativo, slug ou autor…"
         aria-label="Buscar obras"
         bind:value={search}
+        oninput={handleSearchInput}
+        onkeydown={handleSearchKeyDown}
       />
       {#if search}
-        <button type="button" class="search-clear" onclick={() => (search = '')} aria-label="Limpar busca">
+        <button
+          type="button"
+          class="search-clear"
+          onclick={() => { search = ''; updateUrl({ q: '', pagina: 1 }); }}
+          aria-label="Limpar busca"
+        >
           <X size={14} />
         </button>
       {/if}
@@ -145,7 +215,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'ALL'}
-          onclick={() => (selectedStatus = 'ALL')}
+          onclick={() => setStatus('ALL')}
         >
           Todas
         </button>
@@ -153,7 +223,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'PUBLISHED'}
-          onclick={() => (selectedStatus = 'PUBLISHED')}
+          onclick={() => setStatus('PUBLISHED')}
         >
           <span class="dot-pub"></span>
           No ar
@@ -162,7 +232,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedStatus === 'DRAFT'}
-          onclick={() => (selectedStatus = 'DRAFT')}
+          onclick={() => setStatus('DRAFT')}
         >
           <span class="dot-draft"></span>
           Rascunho
@@ -176,7 +246,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'ALL'}
-          onclick={() => (selectedKind = 'ALL')}
+          onclick={() => setKind('ALL')}
         >
           Todos
         </button>
@@ -184,7 +254,7 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'MANHWA'}
-          onclick={() => (selectedKind = 'MANHWA')}
+          onclick={() => setKind('MANHWA')}
         >
           Manhwa
         </button>
@@ -192,21 +262,49 @@
           type="button"
           class="pill-btn"
           class:active={selectedKind === 'MANGA'}
-          onclick={() => (selectedKind = 'MANGA')}
+          onclick={() => setKind('MANGA')}
         >
           Mangá
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          class:active={selectedKind === 'MANHUA'}
+          onclick={() => setKind('MANHUA')}
+        >
+          Manhua
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          class:active={selectedKind === 'NOVEL'}
+          onclick={() => setKind('NOVEL')}
+        >
+          Novel
         </button>
       </div>
     </div>
 
     <!-- Results Count -->
     <div class="results-count">
-      <span>Mostrando <strong>{filteredWorks.length}</strong> de {data.works.length} obras</span>
+      {#if data.total === 0}
+        <span>Nenhuma obra encontrada</span>
+      {:else if data.total === 1}
+        <span>Mostrando <strong>1</strong> de <strong>1</strong> obra encontrada</span>
+      {:else}
+        <span>
+          Mostrando <strong>{(data.page - 1) * data.perPage + 1}–{Math.min(data.page * data.perPage, data.total)}</strong>
+          de <strong>{data.total.toLocaleString('pt-BR')}</strong> obras
+          {#if data.totalPages > 1}
+            <span class="page-count-badge">(Pág. {data.page}/{data.totalPages})</span>
+          {/if}
+        </span>
+      {/if}
     </div>
   </div>
 
   <!-- Works Container -->
-  {#if filteredWorks.length > 0}
+  {#if data.works.length > 0}
     <!-- 1. Desktop Rich Table -->
     <div class="desktop-table-card">
       <table class="works-table">
@@ -221,7 +319,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each filteredWorks as work (work.id)}
+          {#each data.works as work (work.id)}
             <tr class="work-table-row">
               <!-- Cover Column -->
               <td class="td-cover">
@@ -247,7 +345,14 @@
                   <a href="/admin/obras/{work.id}" class="work-title-link">
                     {work.title}
                   </a>
-                  <span class="work-slug-label">/obra/{work.slug}</span>
+                  <div class="work-meta-subline">
+                    <span class="work-slug-label">/obra/{work.slug}</span>
+                    {#if work.aliases && work.aliases.length > 0}
+                      <span class="work-alias-pill" title="Títulos alternativos: {work.aliases.join(', ')}">
+                        {work.aliases[0]}{#if work.aliases.length > 1} +{work.aliases.length - 1}{/if}
+                      </span>
+                    {/if}
+                  </div>
                 </div>
               </td>
 
@@ -305,7 +410,7 @@
 
     <!-- 2. Mobile Responsive Cards (< 820px) -->
     <div class="mobile-cards-feed">
-      {#each filteredWorks as work (work.id)}
+      {#each data.works as work (work.id)}
         <div class="mobile-work-card">
           <!-- Mini Cover -->
           <a href="/admin/obras/{work.id}" class="mobile-cover-wrap" tabindex="-1">
@@ -329,6 +434,9 @@
               <a href="/admin/obras/{work.id}" class="mobile-card-title">
                 {work.title}
               </a>
+              {#if work.aliases && work.aliases.length > 0}
+                <span class="mobile-alias-sub">{work.aliases[0]}</span>
+              {/if}
               {#if work.published}
                 <span class="status-badge status-live">
                   <span class="status-dot-live"></span>
@@ -368,6 +476,75 @@
         </div>
       {/each}
     </div>
+
+    <!-- 3. Pagination Bar -->
+    {#if data.totalPages > 1}
+      <nav class="pagination-bar" aria-label="Paginação do catálogo de obras">
+        <div class="pagination-info">
+          Página <strong>{data.page}</strong> de <strong>{data.totalPages}</strong> ({data.total.toLocaleString('pt-BR')} obras)
+        </div>
+        <div class="pagination-controls">
+          <button
+            type="button"
+            class="page-btn page-arrow"
+            disabled={data.page <= 1}
+            onclick={() => goToPage(1)}
+            title="Primeira página"
+            aria-label="Primeira página"
+          >
+            <ChevronsLeft size={16} />
+          </button>
+
+          <button
+            type="button"
+            class="page-btn page-arrow"
+            disabled={data.page <= 1}
+            onclick={() => goToPage(data.page - 1)}
+            title="Página anterior"
+            aria-label="Página anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          {#each visiblePageNumbers as p}
+            {#if p === '...'}
+              <span class="page-ellipsis">…</span>
+            {:else}
+              <button
+                type="button"
+                class="page-btn page-number"
+                class:active={data.page === p}
+                onclick={() => goToPage(Number(p))}
+              >
+                {p}
+              </button>
+            {/if}
+          {/each}
+
+          <button
+            type="button"
+            class="page-btn page-arrow"
+            disabled={data.page >= data.totalPages}
+            onclick={() => goToPage(data.page + 1)}
+            title="Próxima página"
+            aria-label="Próxima página"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          <button
+            type="button"
+            class="page-btn page-arrow"
+            disabled={data.page >= data.totalPages}
+            onclick={() => goToPage(data.totalPages)}
+            title="Última página"
+            aria-label="Última página"
+          >
+            <ChevronsRight size={16} />
+          </button>
+        </div>
+      </nav>
+    {/if}
   {:else}
     <!-- Empty State -->
     <div class="empty-catalog-card">
@@ -1071,6 +1248,127 @@
     }
   }
 
+  /* Pagination Bar */
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    background: rgba(18, 16, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  .pagination-info {
+    font-size: 13px;
+    color: #8c93a8;
+  }
+
+  .pagination-info strong {
+    color: #ffffff;
+  }
+
+  .page-count-badge {
+    font-size: 11px;
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.1);
+    border: 1px solid rgba(223, 194, 141, 0.2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+  }
+
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #c9cedd;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .page-btn:hover:not(:disabled) {
+    background: rgba(223, 194, 141, 0.15);
+    border-color: rgba(223, 194, 141, 0.4);
+    color: #dfc28d;
+  }
+
+  .page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .page-btn.active {
+    background: linear-gradient(135deg, #dfc28d 0%, #c49c5e 100%);
+    border-color: #dfc28d;
+    color: #0d0c14;
+    font-weight: 750;
+    box-shadow: 0 2px 8px rgba(223, 194, 141, 0.3);
+  }
+
+  .page-ellipsis {
+    color: #636b83;
+    padding: 0 4px;
+    font-size: 13px;
+  }
+
+  .work-meta-subline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+  }
+
+  .work-alias-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #c0a8f8;
+    background: rgba(181, 154, 245, 0.12);
+    border: 1px solid rgba(181, 154, 245, 0.25);
+    padding: 1px 7px;
+    border-radius: 4px;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-alias-sub {
+    display: inline-block;
+    font-size: 11px;
+    color: #c0a8f8;
+    background: rgba(181, 154, 245, 0.12);
+    border: 1px solid rgba(181, 154, 245, 0.25);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 3px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @media (max-width: 540px) {
     .header-actions {
       flex-direction: column;
@@ -1080,6 +1378,17 @@
     .btn-secondary-sync {
       width: 100%;
       box-sizing: border-box;
+    }
+
+    .pagination-bar {
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pagination-controls {
+      justify-content: center;
+      width: 100%;
     }
   }
 </style>

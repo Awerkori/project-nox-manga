@@ -265,3 +265,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   return response;
 };
+
+export const handleError = ({ error, event }: any) => {
+  console.error('[UNHANDLED SERVER ERROR]:', error, event?.url?.href);
+  return {
+    message: (error as any)?.message || 'Erro interno no servidor'
+  };
+};
+

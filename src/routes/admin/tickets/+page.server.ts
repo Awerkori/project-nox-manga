@@ -1,10 +1,23 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
+import { createClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { parsePartnerRequestMeta } from '$lib/scans';
 import { createNotification } from '$lib/server/notifications';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
 import type { PageServerLoad, Actions } from './$types';
+
+function getAdminDb(locals: any, platform?: any) {
+  const serviceKey = platform?.env?.SUPABASE_SERVICE_ROLE_KEY || platform?.env?.STAFF_SUPABASE_SERVICE_ROLE_KEY;
+  const url = platform?.env?.PUBLIC_SUPABASE_URL || 'https://izregkwaqdygwioqzwwo.supabase.co';
+  if (serviceKey) {
+    try {
+      return createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+    } catch {}
+  }
+  return locals.db;
+}
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
@@ -25,11 +38,13 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ? 'moderacao'
     : 'relatorios';
 
-  const statusFilter = url.searchParams.get('status') || 'ALL';
+  const requestedStatus = url.searchParams.get('status');
+  const defaultStatus = activeTab === 'scans' ? 'PENDING' : 'NOVO';
+  const statusFilter = requestedStatus || defaultStatus;
   const typeFilter = url.searchParams.get('type') || 'ALL';
   const searchQuery = (url.searchParams.get('q') || '').trim().toLowerCase();
 
-  const db = locals.db || privileged();
+  const db = getAdminDb(locals, platform);
 
   // 1. Content Reports Query (Work & Chapter issues)
   let contentQuery = db
@@ -99,6 +114,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
             user_id,
             parent_id,
             removed,
+            deleted,
             created_at,
             author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop),
             work:works(id, title, slug),
@@ -116,43 +132,45 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   }
 
   // 4. Overall counts for badges and stats
-  const [contentReportsRes, partnerReqsRes, moderationReportsRes, allReportsCountRes] = await Promise.all([
+  const [contentReportsRes, partnerReqsRes, moderationReportsRes, allReportsCountRes, allScansCountRes] = await Promise.all([
     contentQuery,
     partnerQuery,
     moderationQuery,
-    db.from('reports').select('id, status, target_type')
+    db.from('reports').select('id, status, target_type'),
+    isAdmin ? db.from('scan_partner_requests').select('id, status') : Promise.resolve({ data: [] })
   ]);
 
   const rawReports = (contentReportsRes.data as any[]) || [];
   const rawScans = (partnerReqsRes.data as any[]) || [];
   const rawModeration = (moderationReportsRes.data as any[]) || [];
   const allReportsMeta = (allReportsCountRes.data as any[]) || [];
+  const allScansMeta = (allScansCountRes.data as any[]) || [];
 
   // Categorize counts
   const contentReportsList = allReportsMeta.filter(r => !['COMMENT', 'USER'].includes(r.target_type));
   const moderationReportsList = allReportsMeta.filter(r => ['COMMENT', 'USER'].includes(r.target_type));
 
   const contentStatusCounts = {
-    ALL: contentReportsList.length,
     NOVO: contentReportsList.filter(r => r.status === 'NOVO').length,
     EM_ANALISE: contentReportsList.filter(r => r.status === 'EM_ANALISE').length,
     RESOLVIDO: contentReportsList.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: contentReportsList.filter(r => r.status === 'REJEITADO').length
+    REJEITADO: contentReportsList.filter(r => r.status === 'REJEITADO').length,
+    ALL: contentReportsList.length
   };
 
   const partnerStatusCounts = {
-    ALL: rawScans.length,
-    PENDING: rawScans.filter((s: any) => s.status === 'PENDING').length,
-    APPROVED: rawScans.filter((s: any) => s.status === 'APPROVED').length,
-    REJECTED: rawScans.filter((s: any) => s.status === 'REJECTED').length
+    PENDING: allScansMeta.filter((s: any) => s.status === 'PENDING').length,
+    APPROVED: allScansMeta.filter((s: any) => s.status === 'APPROVED').length,
+    REJECTED: allScansMeta.filter((s: any) => s.status === 'REJECTED').length,
+    ALL: allScansMeta.length
   };
 
   const moderationStatusCounts = {
-    ALL: moderationReportsList.length,
     NOVO: moderationReportsList.filter(r => r.status === 'NOVO').length,
     EM_ANALISE: moderationReportsList.filter(r => r.status === 'EM_ANALISE').length,
     RESOLVIDO: moderationReportsList.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: moderationReportsList.filter(r => r.status === 'REJEITADO').length
+    REJEITADO: moderationReportsList.filter(r => r.status === 'REJEITADO').length,
+    ALL: moderationReportsList.length
   };
 
   // Enrich Content Reports with specific Work, Chapter, and Page context
@@ -338,7 +356,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     }
 
     let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED' = 'VISIBLE';
-    if (!comm) {
+    if (!comm || comm.deleted) {
       visibilityStatus = 'DELETED';
     } else if (comm.removed) {
       visibilityStatus = 'HIDDEN';
@@ -397,7 +415,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 };
 
 export const actions: Actions = {
-  updateReportStatus: async ({ request, locals }) => {
+  updateReportStatus: async ({ request, locals, platform }) => {
     if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
       return fail(403, { error: 'Não autorizado.' });
     }
@@ -423,7 +441,7 @@ export const actions: Actions = {
       updatePayload.resolution_notes = notes;
     }
 
-    const db = locals.db || privileged();
+    const db = getAdminDb(locals, platform);
 
     const { data: rep } = await db
       .from('reports')
@@ -456,7 +474,7 @@ export const actions: Actions = {
     return { success: true };
   },
 
-  resolveBatchReports: async ({ request, locals }) => {
+  resolveBatchReports: async ({ request, locals, platform }) => {
     if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
       return fail(403, { error: 'Não autorizado.' });
     }
@@ -483,7 +501,7 @@ export const actions: Actions = {
       updatePayload.resolution_notes = notes;
     }
 
-    const db = locals.db || privileged();
+    const db = getAdminDb(locals, platform);
 
     const { data: reps } = await db
       .from('reports')
@@ -531,7 +549,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados de avaliação de parceria inválidos.' });
     }
 
-    const db = locals.db || privileged();
+    const db = getAdminDb(locals, platform);
 
     // 1. Fetch current request to know candidate details & meta
     const { data: partnerReq, error: reqErr } = await db
@@ -639,7 +657,7 @@ export const actions: Actions = {
     return { success: true, reviewedPartner: data };
   },
 
-  moderateComment: async ({ request, locals }) => {
+  moderateComment: async ({ request, locals, platform }) => {
     // STRICT ACCESS: Only global ADMIN can execute moderation actions
     if (locals.role !== 'ADMIN') {
       return fail(403, { message: 'Acesso negado. Apenas Administradores Globais podem moderar a comunidade.' });
@@ -651,13 +669,13 @@ export const actions: Actions = {
     const actionType = formData.get('action') as string; // 'hide', 'unhide', 'delete', 'suspend_user', 'dismiss_report', 'resolve_report'
     const notes = (formData.get('notes') as string || '').trim();
 
-    const db = locals.db || privileged();
+    const privilegedDb = getAdminDb(locals, platform);
 
     if (actionType === 'hide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
-      await db.from('comments').update({ removed: true }).eq('id', commentId);
+      await privilegedDb.from('comments').update({ removed: true }).eq('id', commentId);
       if (reportId) {
-        await db.from('reports').update({
+        await privilegedDb.from('reports').update({
           status: 'RESOLVIDO',
           resolution_notes: notes || 'Comentário ocultado pela moderação.',
           assigned_to: locals.user!.id,
@@ -669,30 +687,62 @@ export const actions: Actions = {
 
     if (actionType === 'unhide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
-      await db.from('comments').update({ removed: false }).eq('id', commentId);
+      await privilegedDb.from('comments').update({ removed: false, deleted: false, deleted_at: null }).eq('id', commentId);
       return { success: true, action: 'unhide' };
     }
 
     if (actionType === 'delete') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
-      await db.from('comments').delete().eq('id', commentId);
-      if (reportId) {
-        await db.from('reports').update({
+
+      // 1. Soft-delete comment to ensure it is immediately excluded from the public site while preserving audit history
+      const { error: commErr } = await privilegedDb
+        .from('comments')
+        .update({
+          removed: true,
+          deleted: true,
+          deleted_at: new Date().toISOString()
+        })
+        .eq('id', commentId);
+
+      if (commErr) {
+        return fail(500, { message: 'Falha ao excluir comentário: ' + commErr.message });
+      }
+
+      // 2. Automatically resolve all open reports associated with this deleted comment
+      const resolutionNotes = notes || 'Comentário excluído definitivamente pela moderação.';
+      await privilegedDb
+        .from('reports')
+        .update({
           status: 'RESOLVIDO',
-          resolution_notes: notes || 'Comentário excluído definitivamente pela moderação.',
+          resolution_notes: resolutionNotes,
           assigned_to: locals.user!.id,
           updated_at: new Date().toISOString()
-        }).eq('id', reportId);
+        })
+        .eq('comment_id', commentId)
+        .in('status', ['NOVO', 'EM_ANALISE']);
+
+      // 3. Also ensure the current report is marked resolved
+      if (reportId) {
+        await privilegedDb
+          .from('reports')
+          .update({
+            status: 'RESOLVIDO',
+            resolution_notes: resolutionNotes,
+            assigned_to: locals.user!.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reportId);
       }
+
       return { success: true, action: 'delete' };
     }
 
     if (actionType === 'suspend_user') {
       const targetUserId = formData.get('target_user_id') as string;
       if (!targetUserId) return fail(400, { message: 'Usuário alvo inválido.' });
-      await db.from('access_roles').update({ suspended: true }).eq('user_id', targetUserId);
+      await privilegedDb.from('access_roles').update({ suspended: true }).eq('user_id', targetUserId);
       if (reportId) {
-        await db.from('reports').update({
+        await privilegedDb.from('reports').update({
           status: 'RESOLVIDO',
           resolution_notes: notes || 'Usuário suspenso pela moderação.',
           assigned_to: locals.user!.id,
@@ -704,7 +754,7 @@ export const actions: Actions = {
 
     if (actionType === 'dismiss_report') {
       if (!reportId) return fail(400, { message: 'Denúncia inválida.' });
-      await db.from('reports').update({
+      await privilegedDb.from('reports').update({
         status: 'REJEITADO',
         resolution_notes: notes || 'Denúncia dispensada pela moderação.',
         assigned_to: locals.user!.id,
@@ -715,7 +765,7 @@ export const actions: Actions = {
 
     if (actionType === 'resolve_report') {
       if (!reportId) return fail(400, { message: 'Denúncia inválida.' });
-      await db.from('reports').update({
+      await privilegedDb.from('reports').update({
         status: 'RESOLVIDO',
         resolution_notes: notes || 'Ocorrência resolvida pela moderação.',
         assigned_to: locals.user!.id,
