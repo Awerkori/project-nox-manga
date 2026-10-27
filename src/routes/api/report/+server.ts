@@ -63,13 +63,36 @@ export const POST: RequestHandler = async ({ request, locals, platform }: any) =
     });
   }
 
+  // Context auto-resolution: guarantee work_id and chapter_id are populated
+  let resolvedWorkId = workId || null;
+  let resolvedChapterId = chapterId || null;
+
+  if (targetType === 'CHAPTER' && resolvedChapterId && !resolvedWorkId) {
+    const { data: ch } = await locals.db
+      .from('chapters')
+      .select('work_id')
+      .eq('id', resolvedChapterId)
+      .maybeSingle();
+    if (ch?.work_id) resolvedWorkId = ch.work_id;
+  } else if (targetType === 'COMMENT' && commentId) {
+    const { data: comm } = await locals.db
+      .from('comments')
+      .select('work_id, chapter_id')
+      .eq('id', commentId)
+      .maybeSingle();
+    if (comm) {
+      if (!resolvedWorkId && comm.work_id) resolvedWorkId = comm.work_id;
+      if (!resolvedChapterId && comm.chapter_id) resolvedChapterId = comm.chapter_id;
+    }
+  }
+
   const { data: inserted, error: insertError } = await locals.db
     .from('reports')
     .insert({
       reporter_id: locals.user.id,
       target_type: targetType,
-      work_id: workId || null,
-      chapter_id: chapterId || null,
+      work_id: resolvedWorkId,
+      chapter_id: resolvedChapterId,
       comment_id: commentId || null,
       target_user_id: targetUserId || null,
       reason: cleanReason,

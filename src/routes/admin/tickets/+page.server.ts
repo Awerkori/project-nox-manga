@@ -37,6 +37,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     .select(`
       id,
       target_type,
+      work_id,
+      chapter_id,
       reason,
       details,
       status,
@@ -46,7 +48,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
       assigned:members!reports_assigned_to_fkey(id, username, display_name),
       work:works(id, title, slug, cover_id),
-      chapter:chapters(id, number, title, works(id, title, slug))
+      chapter:chapters(id, number, display_number, title, work_id, works(id, title, slug, cover_id))
     `)
     .not('target_type', 'in', '("COMMENT","USER")')
     .order('created_at', { ascending: false })
@@ -69,6 +71,10 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         .limit(100)
     : Promise.resolve({ data: [] });
 
+  if (isAdmin && activeTab === 'scans' && statusFilter !== 'ALL') {
+    partnerQuery = (partnerQuery as any).eq('status', statusFilter);
+  }
+
   // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY)
   let moderationQuery = isAdmin
     ? db
@@ -76,6 +82,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         .select(`
           id,
           target_type,
+          work_id,
+          chapter_id,
+          comment_id,
           reason,
           details,
           status,
@@ -84,13 +93,27 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
           updated_at,
           reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
           assigned:members!reports_assigned_to_fkey(id, username, display_name),
-          comment:comments(id, body, user_id, removed, created_at, author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)),
+          comment:comments(
+            id,
+            body,
+            user_id,
+            parent_id,
+            removed,
+            created_at,
+            author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop),
+            work:works(id, title, slug),
+            chapter:chapters(id, number, display_number, title, works(id, title, slug))
+          ),
           target_user:members!reports_target_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
         `)
         .in('target_type', ['COMMENT', 'USER'])
         .order('created_at', { ascending: false })
         .limit(100)
     : Promise.resolve({ data: [] });
+
+  if (isAdmin && activeTab === 'moderacao' && statusFilter !== 'ALL') {
+    moderationQuery = (moderationQuery as any).eq('status', statusFilter);
+  }
 
   // 4. Overall counts for badges and stats
   const [contentReportsRes, partnerReqsRes, moderationReportsRes, allReportsCountRes] = await Promise.all([
@@ -132,26 +155,64 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     REJEITADO: moderationReportsList.filter(r => r.status === 'REJEITADO').length
   };
 
+  // Enrich Content Reports with specific Work, Chapter, and Page context
+  const enrichedReports = rawReports.map((rep: any) => {
+    const pageMatch = rep.details?.match(/\[Página\s+(\d+)\]/i) || rep.details?.match(/\bp[áa]gina\s+(\d+)\b/i);
+    const pageNumber = pageMatch ? parseInt(pageMatch[1], 10) : null;
+    const cleanDetails = rep.details ? rep.details.replace(/^\[Página\s+\d+\]\s*/i, '').trim() : '';
+
+    const effectiveWork = rep.chapter?.works || rep.work;
+    const workTitle = effectiveWork?.title || (rep.target_type === 'CHAPTER' ? 'Obra do Capítulo' : 'Obra do Catálogo');
+    const workSlug = effectiveWork?.slug || '';
+    const coverId = effectiveWork?.cover_id || null;
+
+    let chapterDisplay: string | null = null;
+    let chapterTitle: string | null = null;
+    let problemLink = '';
+
+    if (rep.target_type === 'CHAPTER') {
+      if (rep.chapter) {
+        const num = rep.chapter.display_number ?? rep.chapter.number;
+        chapterDisplay = num !== null && num !== undefined ? `${num}` : 'Especial';
+        chapterTitle = rep.chapter.title || null;
+        const pageParam = pageNumber ? `?page=${pageNumber}#pagina-${pageNumber}` : '';
+        problemLink = `/ler/${rep.chapter.id}${pageParam}`;
+      } else if (effectiveWork?.slug) {
+        problemLink = `/obra/${effectiveWork.slug}`;
+      }
+    } else if (rep.target_type === 'WORK') {
+      if (effectiveWork?.slug) {
+        problemLink = `/obra/${effectiveWork.slug}`;
+      }
+    }
+
+    return {
+      ...rep,
+      workTitle,
+      workSlug,
+      coverId,
+      chapterDisplay,
+      chapterTitle,
+      pageNumber,
+      cleanDetails: cleanDetails || rep.details || '',
+      problemLink
+    };
+  });
+
   // Group Content Reports into clusters
   const clustersMap = new Map<string, any>();
-  for (const rep of rawReports) {
+  for (const rep of enrichedReports) {
     let key = `SINGLE:${rep.id}`;
-    let title = 'Conteúdo Geral';
-    let link = '';
-    let coverId: string | null = null;
+    let clusterTitle = rep.workTitle;
+    let link = rep.problemLink;
+    let coverId = rep.coverId;
 
     if (rep.target_type === 'CHAPTER' && rep.chapter) {
       key = `CHAPTER:${rep.chapter.id}`;
-      const workTitle = rep.chapter.works?.title || 'Obra';
-      const displayNumber = rep.chapter.display_number ?? rep.chapter.number ?? 'Especial';
-      title = `${workTitle} — Cap. ${displayNumber}${rep.chapter.title ? ` (${rep.chapter.title})` : ''}`;
-      link = `/ler/${rep.chapter.id}`;
-      coverId = rep.chapter.works?.cover_id || null;
+      clusterTitle = `${rep.workTitle} — Cap. ${rep.chapterDisplay}${rep.chapterTitle ? ` (${rep.chapterTitle})` : ''}`;
     } else if (rep.target_type === 'WORK' && rep.work) {
       key = `WORK:${rep.work.id}`;
-      title = `Obra: ${rep.work.title}`;
-      link = `/obra/${rep.work.slug}`;
-      coverId = rep.work.cover_id || null;
+      clusterTitle = `Obra: ${rep.workTitle}`;
     }
 
     let cluster = clustersMap.get(key);
@@ -159,7 +220,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       cluster = {
         clusterKey: key,
         targetType: rep.target_type,
-        targetTitle: title,
+        targetTitle: clusterTitle,
+        workTitle: rep.workTitle,
+        chapterDisplay: rep.chapterDisplay,
         targetLink: link,
         coverId,
         count: 0,
@@ -194,6 +257,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   if (searchQuery) {
     clusters = clusters.filter(c =>
       c.targetTitle.toLowerCase().includes(searchQuery) ||
+      c.workTitle.toLowerCase().includes(searchQuery) ||
       c.reasons.some((r: string) => r.toLowerCase().includes(searchQuery))
     );
   }
@@ -203,6 +267,107 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ...r,
     meta: parsePartnerRequestMeta(r.sample_links)
   }));
+
+  // Fetch parent comments for replies in moderation
+  const parentCommentIds = rawModeration
+    .map((r: any) => r.comment?.parent_id)
+    .filter((id: string | null | undefined): id is string => Boolean(id));
+
+  const parentCommentsMap = new Map<string, any>();
+  if (parentCommentIds.length > 0) {
+    const { data: parentRows } = await db
+      .from('comments')
+      .select(`
+        id,
+        body,
+        removed,
+        created_at,
+        author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
+      `)
+      .in('id', parentCommentIds);
+    if (parentRows) {
+      for (const p of parentRows) {
+        parentCommentsMap.set(p.id, p);
+      }
+    }
+  }
+
+  // Fetch suspended status for users involved in moderation
+  const userIdsToCheck = rawModeration
+    .map((r: any) => r.comment?.user_id || r.target_user?.id)
+    .filter((id: string | null | undefined): id is string => Boolean(id));
+
+  const suspendedMap = new Map<string, boolean>();
+  if (userIdsToCheck.length > 0) {
+    const { data: roleRows } = await db
+      .from('access_roles')
+      .select('user_id, suspended')
+      .in('user_id', userIdsToCheck);
+    if (roleRows) {
+      for (const role of roleRows) {
+        suspendedMap.set(role.user_id, Boolean(role.suspended));
+      }
+    }
+  }
+
+  // Enrich moderation reports
+  let enrichedModeration = rawModeration.map((r: any) => {
+    const comm = r.comment;
+    const authorId = comm?.user_id || r.target_user?.id;
+    const isAuthorSuspended = authorId ? suspendedMap.get(authorId) || false : false;
+
+    let parentComment = null;
+    if (comm?.parent_id) {
+      parentComment = parentCommentsMap.get(comm.parent_id) || null;
+    }
+
+    let siteLink = '';
+    let locationLabel = 'Conteúdo Geral';
+    let workTitle = '';
+    let chapterDisplay = '';
+
+    if (comm?.chapter) {
+      workTitle = comm.chapter.works?.title || 'Obra';
+      chapterDisplay = comm.chapter.display_number ?? comm.chapter.number ?? '';
+      locationLabel = `${workTitle} — Cap. ${chapterDisplay}`;
+      siteLink = `/ler/${comm.chapter.id}#comment-${comm.id}`;
+    } else if (comm?.work) {
+      workTitle = comm.work.title || 'Obra';
+      locationLabel = `Obra: ${workTitle}`;
+      siteLink = `/obra/${comm.work.slug}#comment-${comm.id}`;
+    }
+
+    let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED' = 'VISIBLE';
+    if (!comm) {
+      visibilityStatus = 'DELETED';
+    } else if (comm.removed) {
+      visibilityStatus = 'HIDDEN';
+    } else {
+      visibilityStatus = 'VISIBLE';
+    }
+
+    return {
+      ...r,
+      parentComment,
+      isAuthorSuspended,
+      siteLink,
+      locationLabel,
+      workTitle,
+      chapterDisplay,
+      visibilityStatus
+    };
+  });
+
+  if (searchQuery) {
+    enrichedModeration = enrichedModeration.filter((m: any) =>
+      m.reason?.toLowerCase().includes(searchQuery) ||
+      m.details?.toLowerCase().includes(searchQuery) ||
+      m.comment?.body?.toLowerCase().includes(searchQuery) ||
+      m.comment?.author?.username?.toLowerCase().includes(searchQuery) ||
+      m.comment?.author?.display_name?.toLowerCase().includes(searchQuery) ||
+      m.locationLabel?.toLowerCase().includes(searchQuery)
+    );
+  }
 
   const pendingReportsCount = contentStatusCounts.NOVO + contentStatusCounts.EM_ANALISE;
   const pendingScansCount = partnerStatusCounts.PENDING;
@@ -215,12 +380,12 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     statusFilter,
     typeFilter,
     searchQuery,
-    contentReports: rawReports,
+    contentReports: enrichedReports,
     clusters,
     contentStatusCounts,
     partnerRequests,
     partnerStatusCounts,
-    moderationReports: rawModeration,
+    moderationReports: enrichedModeration,
     moderationStatusCounts,
     ticketStats: {
       totalTicketsCount,

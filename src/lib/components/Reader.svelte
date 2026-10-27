@@ -354,7 +354,8 @@
   }
 
   function jump(page: number) {
-    document.getElementById(`pagina-${page}`)?.scrollIntoView({ behavior: 'instant' });
+    const el = document.getElementById(`pagina-${page}`) || document.getElementById(`page-${page}`);
+    el?.scrollIntoView({ behavior: 'instant' });
   }
 
   async function full() {
@@ -392,8 +393,12 @@
     } catch {
       /* Default preferences remain valid. */
     }
-    const saved = data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
-    maxSeenPage = 1;
+    const pageFromUrl = typeof window !== 'undefined'
+      ? (Number(new URLSearchParams(window.location.search).get('page')) ||
+         Number(window.location.hash.match(/pagina-(\d+)|page-(\d+)/)?.[1] || window.location.hash.match(/pagina-(\d+)|page-(\d+)/)?.[2]) || 0)
+      : 0;
+    const saved = pageFromUrl || data.progress?.page || Number(readPreference(`nox-page:${data.chapter.id}`)) || 1;
+    maxSeenPage = Math.max(1, saved);
     requestAnimationFrame(() => {
       jump(Math.min(data.pages.length, Math.max(1, saved)));
       pumpPreload();
@@ -788,6 +793,7 @@
     <ReportModal
       targetType="CHAPTER"
       chapterId={data.chapter.id}
+      workId={data.chapter.work_id || data.chapter.works?.id}
       targetTitle={`${data.chapter.works?.title || 'Obra'} — Cap. ${chapterIdentityLabel(data.chapter)}`}
       pageNumber={current}
       onclose={() => (showReportModal = false)}

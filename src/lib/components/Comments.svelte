@@ -395,6 +395,15 @@
     padding-left: 20px;
     border-left: 2px solid #33263e;
   }
+  .comment-list article:target {
+    border: 2px solid #a855f7 !important;
+    background: rgba(168, 85, 247, 0.08) !important;
+    border-radius: 12px;
+    padding: 20px !important;
+    box-shadow: 0 0 24px rgba(168, 85, 247, 0.35) !important;
+    scroll-margin-top: 100px;
+    transition: all 0.3s ease;
+  }
   /* Comment Cards with Full Animated / Curated Banner Background */
   .comment-list article.has-comment-banner {
     position: relative;

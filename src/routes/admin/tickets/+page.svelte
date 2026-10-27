@@ -10,6 +10,7 @@
     CheckCircle2,
     XCircle,
     AlertTriangle,
+    AlertCircle,
     Eye,
     EyeOff,
     Trash2,
@@ -28,7 +29,10 @@
     Sparkles,
     User,
     BookOpen,
-    Layers
+    Layers,
+    MapPin,
+    CornerDownRight,
+    Quote
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
@@ -438,143 +442,209 @@
           <p>Tudo certo! Não há relatórios de conteúdo correspondentes aos filtros selecionados.</p>
         </div>
       {:else}
-        <div class="clusters-list">
+        <div class="reports-feed">
           {#each data.clusters as cluster (cluster.clusterKey)}
-            <article class="cluster-card" class:has-new={cluster.newCount > 0}>
-              <div class="cluster-header">
-                <div class="cluster-target-group">
+            {@const leadRep = cluster.reports[0]}
+            <article class="report-ticket-card" class:has-new={cluster.newCount > 0}>
+              <!-- Header Strip: Target Work, Chapter & Page Badges -->
+              <div class="ticket-top-row">
+                <div class="ticket-target-info">
                   {#if cluster.coverId}
                     <img
                       src="/media/{cluster.coverId}"
-                      alt=""
-                      class="target-cover"
+                      alt="Capa de {cluster.workTitle}"
+                      class="ticket-work-cover"
                       loading="lazy"
                     />
                   {:else}
-                    <div class="target-cover-fallback">
-                      <BookOpen size={18} />
+                    <div class="ticket-work-cover-fallback">
+                      <BookOpen size={20} />
                     </div>
                   {/if}
 
-                  <div class="target-meta">
-                    <div class="target-sub-row">
-                      <span class="target-type-badge">{cluster.targetType === 'CHAPTER' ? 'CAPÍTULO' : 'OBRA'}</span>
-                      <span class="target-date">Último reporte: {new Date(cluster.latestCreatedAt).toLocaleDateString('pt-BR')}</span>
+                  <div class="ticket-title-hierarchy">
+                    <div class="ticket-badges-row">
+                      <span class="type-pill">{cluster.targetType === 'CHAPTER' ? 'CAPÍTULO' : 'OBRA'}</span>
+                      {#if cluster.chapterDisplay}
+                        <span class="chapter-highlight-pill">Cap. {cluster.chapterDisplay}</span>
+                      {/if}
+                      {#if leadRep?.pageNumber}
+                        <span class="page-highlight-pill">
+                          <Layers size={11} />
+                          Página {leadRep.pageNumber}
+                        </span>
+                      {/if}
                     </div>
-                    <h3 class="target-title">{cluster.targetTitle}</h3>
-                    <div class="reasons-wrap">
-                      {#each cluster.reasons as reason}
-                        <span class="reason-pill">{reason}</span>
-                      {/each}
-                    </div>
+
+                    <h3 class="ticket-work-title">
+                      {#if leadRep?.workSlug}
+                        <a href="/obra/{leadRep.workSlug}" target="_blank" rel="noopener noreferrer" class="work-link">
+                          {cluster.workTitle}
+                        </a>
+                      {:else}
+                        {cluster.workTitle}
+                      {/if}
+                    </h3>
                   </div>
                 </div>
 
-                <div class="cluster-status-cluster">
+                <div class="ticket-status-box">
                   <span class="status-badge status-{cluster.status.toLowerCase()}">
-                    {cluster.status === 'NOVO' ? 'NOVO' : cluster.status === 'EM_ANALISE' ? 'EM ANÁLISE' : cluster.status === 'RESOLVIDO' ? 'RESOLVIDO' : 'REJEITADO'}
+                    {cluster.status === 'NOVO' ? 'ABERTO / NOVO' : cluster.status === 'EM_ANALISE' ? 'EM ANÁLISE' : cluster.status === 'RESOLVIDO' ? 'RESOLVIDO' : 'REJEITADO'}
                   </span>
-                  <span class="reports-count-pill">{cluster.count} {cluster.count === 1 ? 'denúncia' : 'denúncias'}</span>
+                  <span class="ticket-date">{new Date(cluster.latestCreatedAt).toLocaleString('pt-BR')}</span>
                 </div>
               </div>
 
-              <!-- Quick Action Bar -->
-              <div class="cluster-actions-bar">
-                <div class="left-actions">
-                  {#if cluster.targetLink}
-                    <a
-                      href={cluster.targetLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="btn-action-ghost"
-                    >
-                      <ExternalLink size={14} />
-                      <span>Ver no Leitor / Obra</span>
-                    </a>
-                  {/if}
+              <!-- Defect Summary & Details -->
+              <div class="ticket-body-section">
+                <div class="problem-category-strip">
+                  <span class="problem-label">Problema:</span>
+                  <div class="reasons-pills-list">
+                    {#each cluster.reasons as reason}
+                      <span class="reason-pill-amber">
+                        <AlertTriangle size={12} />
+                        {reason}
+                      </span>
+                    {/each}
+                  </div>
+                </div>
+
+                {#if leadRep?.cleanDetails}
+                  <div class="report-quote-block">
+                    <Quote size={15} class="quote-icon" />
+                    <p class="report-quote-text">"{leadRep.cleanDetails}"</p>
+                  </div>
+                {/if}
+
+                {#if leadRep?.resolution_notes}
+                  <div class="resolution-notes-callout">
+                    <CheckCircle2 size={14} class="res-icon" />
+                    <div>
+                      <strong>Nota da Resolução:</strong>
+                      <span>{leadRep.resolution_notes}</span>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Reporter Meta Row -->
+              <div class="ticket-reporter-strip">
+                <div class="reporter-info-pill">
+                  <UserAvatar
+                    avatarId={leadRep?.reporter?.avatar_id}
+                    crop={leadRep?.reporter?.avatar_crop}
+                    displayName={leadRep?.reporter?.display_name || leadRep?.reporter?.username || 'Leitor'}
+                    size={22}
+                  />
+                  <span>Reportado por: <strong>{leadRep?.reporter?.display_name || leadRep?.reporter?.username || 'Leitor anônimo'}</strong></span>
+                </div>
+
+                {#if cluster.count > 1}
                   <button
                     type="button"
-                    class="btn-action-ghost"
+                    class="btn-cluster-toggle"
                     onclick={() => toggleCluster(cluster.clusterKey)}
                   >
                     {#if expandedClusters[cluster.clusterKey]}
                       <ChevronDown size={14} />
-                      <span>Ocultar Detalhes</span>
+                      <span>Ocultar outras denúncias</span>
                     {:else}
                       <ChevronRight size={14} />
-                      <span>Ver Detalhes ({cluster.count})</span>
+                      <span>Ver todas as denúncias deste item ({cluster.count})</span>
                     {/if}
                   </button>
-                </div>
+                {/if}
+              </div>
 
-                <div class="right-actions">
+              <!-- Expanded Detailed Reports for Clusters with >1 report -->
+              {#if expandedClusters[cluster.clusterKey] && cluster.reports.length > 1}
+                <div class="cluster-subreports-drawer">
+                  <h4 class="subreports-title">Outros reportes agrupados nesta mesma obra/capítulo:</h4>
+                  <div class="subreports-list">
+                    {#each cluster.reports.slice(1) as subRep}
+                      <div class="subreport-card">
+                        <div class="subreport-header">
+                          <div class="subreport-reporter">
+                            <UserAvatar
+                              avatarId={subRep.reporter?.avatar_id}
+                              crop={subRep.reporter?.avatar_crop}
+                              displayName={subRep.reporter?.display_name || subRep.reporter?.username || 'Leitor'}
+                              size={20}
+                            />
+                            <span>{subRep.reporter?.display_name || subRep.reporter?.username || 'Leitor'}</span>
+                            <span class="subreport-date">{new Date(subRep.created_at).toLocaleString('pt-BR')}</span>
+                          </div>
+                          {#if subRep.pageNumber}
+                            <span class="page-pill-mini">Página {subRep.pageNumber}</span>
+                          {/if}
+                        </div>
+                        <div class="subreport-content">
+                          <span class="subreport-reason">{subRep.reason}</span>
+                          {#if subRep.cleanDetails}
+                            <p class="subreport-text">"{subRep.cleanDetails}"</p>
+                          {/if}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Actions Strip -->
+              <div class="ticket-actions-bar">
+                <!-- MANDATORY PRIMARY ACTION: Ir para o Problema -->
+                {#if cluster.targetLink}
+                  <a
+                    href={cluster.targetLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn-primary-problem"
+                  >
+                    <ExternalLink size={15} />
+                    <span>Ir para o Problema</span>
+                  </a>
+                {/if}
+
+                <div class="ticket-workflow-actions">
                   {#if cluster.status === 'NOVO'}
                     <button
                       type="button"
                       class="btn-action-warning"
                       disabled={busy}
                       onclick={() => quickUpdateReportStatus(cluster.reportIds[0], 'EM_ANALISE')}
+                      title="Atribuir a si mesmo e iniciar atendimento"
                     >
                       <Clock size={14} />
-                      <span>Assumir / Em Análise</span>
+                      <span>Em Análise</span>
                     </button>
                   {/if}
-                  <button
-                    type="button"
-                    class="btn-action-success"
-                    disabled={busy}
-                    onclick={() => openResolveModal(cluster.reportIds[0], 'RESOLVIDO')}
-                  >
-                    <Check size={14} />
-                    <span>Resolver</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-action-danger"
-                    disabled={busy}
-                    onclick={() => openResolveModal(cluster.reportIds[0], 'REJEITADO')}
-                  >
-                    <X size={14} />
-                    <span>Rejeitar</span>
-                  </button>
+
+                  {#if cluster.status !== 'RESOLVIDO'}
+                    <button
+                      type="button"
+                      class="btn-action-success"
+                      disabled={busy}
+                      onclick={() => openResolveModal(cluster.reportIds[0], 'RESOLVIDO')}
+                    >
+                      <Check size={14} />
+                      <span>Resolver</span>
+                    </button>
+                  {/if}
+
+                  {#if cluster.status !== 'REJEITADO'}
+                    <button
+                      type="button"
+                      class="btn-action-danger"
+                      disabled={busy}
+                      onclick={() => openResolveModal(cluster.reportIds[0], 'REJEITADO')}
+                    >
+                      <X size={14} />
+                      <span>Rejeitar</span>
+                    </button>
+                  {/if}
                 </div>
               </div>
-
-              <!-- Expanded Detailed Reports -->
-              {#if expandedClusters[cluster.clusterKey]}
-                <div class="cluster-expanded-body">
-                  <h4 class="expanded-heading">Relatórios individuais agrupados neste item:</h4>
-                  <div class="expanded-reports-grid">
-                    {#each cluster.reports as rep}
-                      <div class="individual-report-item">
-                        <div class="report-user-row">
-                          <UserAvatar
-                            avatarId={rep.reporter?.avatar_id}
-                            crop={rep.reporter?.avatar_crop}
-                            displayName={rep.reporter?.display_name || rep.reporter?.username || 'Leitor'}
-                            size={24}
-                          />
-                          <span class="reporter-name">
-                            {rep.reporter?.display_name || rep.reporter?.username || 'Anônimo'}
-                          </span>
-                          <span class="report-time">{new Date(rep.created_at).toLocaleString('pt-BR')}</span>
-                        </div>
-                        <div class="report-reason-row">
-                          <strong class="report-reason-tag">{rep.reason}</strong>
-                          {#if rep.details}
-                            <p class="report-details-text">"{rep.details}"</p>
-                          {/if}
-                        </div>
-                        {#if rep.resolution_notes}
-                          <div class="resolution-notes-box">
-                            <strong>Nota da Equipe:</strong> {rep.resolution_notes}
-                          </div>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
             </article>
           {/each}
         </div>
@@ -828,70 +898,157 @@
       <!-- Moderation Items List -->
       {#if data.moderationReports.length === 0}
         <div class="empty-state">
-          <ShieldAlert size={40} class="empty-icon" />
+          <ShieldAlert size={40} class="empty-icon text-rose" />
           <h3>Nenhuma ocorrência de moderação</h3>
-          <p>Nenhuma denúncia de comentário ou usuário aguardando intervenção.</p>
+          <p>Tudo pacífico! Nenhuma denúncia de comentário pendente para a administração.</p>
         </div>
       {:else}
-        <div class="moderation-cards-list">
+        <div class="moderation-feed">
           {#each data.moderationReports as rep (rep.id)}
-            <article class="mod-card">
-              <div class="mod-card-header">
-                <div class="mod-target-cluster">
-                  <span class="mod-type-pill">{rep.target_type === 'COMMENT' ? 'COMENTÁRIO' : 'USUÁRIO'}</span>
-                  <span class="mod-reason-tag">{rep.reason}</span>
-                  {#if rep.details}
-                    <span class="mod-details-preview">"{rep.details}"</span>
-                  {/if}
+            <article class="mod-sentinel-card" class:is-new={rep.status === 'NOVO'}>
+              <!-- Header Bar: Author, Suspension Status & Visibility Pill -->
+              <div class="mod-header-row">
+                <div class="mod-author-group">
+                  <UserAvatar
+                    avatarId={rep.comment?.author?.avatar_id}
+                    crop={rep.comment?.author?.avatar_crop}
+                    displayName={rep.comment?.author?.display_name || rep.comment?.author?.username || 'Autor'}
+                    size={38}
+                  />
+                  <div class="mod-author-meta">
+                    <div class="mod-author-name-line">
+                      <strong class="mod-author-name">
+                        {rep.comment?.author?.display_name || rep.comment?.author?.username || 'Usuário Desconhecido'}
+                      </strong>
+                      {#if rep.comment?.author?.username}
+                        <span class="mod-author-handle">@{rep.comment.author.username}</span>
+                      {/if}
+                      {#if rep.isAuthorSuspended}
+                        <span class="badge-author-suspended">
+                          <UserX size={11} />
+                          SUSPENSO
+                        </span>
+                      {/if}
+                    </div>
+
+                    <!-- Location info with link -->
+                    <div class="mod-location-line">
+                      <MapPin size={12} class="pin-icon" />
+                      <span>Publicado em:</span>
+                      {#if rep.siteLink}
+                        <a href={rep.siteLink} target="_blank" rel="noopener noreferrer" class="mod-location-link">
+                          {rep.locationLabel}
+                        </a>
+                      {:else}
+                        <span class="mod-location-text">{rep.locationLabel}</span>
+                      {/if}
+                    </div>
+                  </div>
                 </div>
 
-                <div class="mod-status-cluster">
+                <div class="mod-status-group">
+                  <!-- Visibility Status Pill -->
+                  <div class="mod-visibility-pill {rep.visibilityStatus.toLowerCase()}">
+                    {#if rep.visibilityStatus === 'VISIBLE'}
+                      <Eye size={13} />
+                      <span>Visível no site</span>
+                    {:else if rep.visibilityStatus === 'HIDDEN'}
+                      <EyeOff size={13} />
+                      <span>Ocultado pela moderação</span>
+                    {:else}
+                      <Trash2 size={13} />
+                      <span>Excluído</span>
+                    {/if}
+                  </div>
+
                   <span class="status-badge status-{rep.status.toLowerCase()}">
-                    {rep.status === 'NOVO' ? 'NOVO' : rep.status === 'EM_ANALISE' ? 'EM ANÁLISE' : rep.status === 'RESOLVIDO' ? 'RESOLVIDO' : 'DISPENSADO'}
+                    {rep.status === 'NOVO' ? 'ABERTO / NOVO' : rep.status === 'EM_ANALISE' ? 'EM ANÁLISE' : rep.status === 'RESOLVIDO' ? 'RESOLVIDO' : 'DISPENSADO'}
                   </span>
-                  <span class="mod-date">{new Date(rep.created_at).toLocaleString('pt-BR')}</span>
                 </div>
               </div>
 
-              <!-- Reported Comment Body -->
-              {#if rep.comment}
-                <div class="mod-content-box" class:comment-removed={rep.comment.removed}>
-                  <div class="comment-author-strip">
-                    <UserAvatar
-                      avatarId={rep.comment.author?.avatar_id}
-                      crop={rep.comment.author?.avatar_crop}
-                      displayName={rep.comment.author?.display_name || rep.comment.author?.username || 'Autor'}
-                      size={26}
-                    />
-                    <div class="comment-author-meta">
-                      <strong>{rep.comment.author?.display_name || rep.comment.author?.username || 'Usuário'}</strong>
-                      <span class="comment-created">em {new Date(rep.comment.created_at).toLocaleString('pt-BR')}</span>
+              <!-- Context & Reported Content Block -->
+              <div class="mod-content-stage">
+                <!-- If it was a reply to another comment, show parent comment context -->
+                {#if rep.parentComment}
+                  <div class="parent-comment-context-box">
+                    <div class="parent-context-label">
+                      <CornerDownRight size={13} />
+                      <span>Em resposta a <strong>@{rep.parentComment.author?.username || 'leitor'}</strong>:</span>
                     </div>
-                    <span class="comment-vis-badge {rep.comment.removed ? 'removed' : 'visible'}">
-                      {rep.comment.removed ? 'Ocultado' : 'Visível no Site'}
-                    </span>
+                    <blockquote class="parent-quote-body">
+                      "{rep.parentComment.body}"
+                    </blockquote>
                   </div>
+                {/if}
 
-                  <blockquote class="comment-quote-text">
-                    {rep.comment.body}
-                  </blockquote>
+                <!-- The Reported Comment Body -->
+                <div class="reported-quote-card" class:card-hidden={rep.visibilityStatus === 'HIDDEN'}>
+                  <div class="quote-header">
+                    <Quote size={18} class="quote-icon-crimson" />
+                    <span class="quote-header-title">CONTEÚDO DENUNCIADO:</span>
+                  </div>
+                  {#if rep.comment}
+                    <blockquote class="reported-quote-text">
+                      {rep.comment.body}
+                    </blockquote>
+                  {:else}
+                    <p class="reported-comment-deleted">[Este comentário foi excluído do banco de dados.]</p>
+                  {/if}
+                </div>
+              </div>
+
+              <!-- Ticket Audit / Reporter Meta -->
+              <div class="mod-audit-strip">
+                <div class="mod-reason-badge">
+                  <ShieldAlert size={13} />
+                  <span>Motivo: <strong>{rep.reason}</strong></span>
+                </div>
+
+                {#if rep.details}
+                  <div class="mod-reporter-note">
+                    <span class="note-label">Observação:</span>
+                    <span class="note-body">"{rep.details}"</span>
+                  </div>
+                {/if}
+
+                <div class="mod-reporter-chip">
+                  <User size={13} />
+                  <span>Denunciado por <strong>@{rep.reporter?.username || 'anônimo'}</strong> em {new Date(rep.created_at).toLocaleString('pt-BR')}</span>
+                </div>
+              </div>
+
+              {#if rep.resolution_notes}
+                <div class="resolution-notes-callout crimson-tint">
+                  <CheckCircle2 size={14} class="res-icon" />
+                  <div>
+                    <strong>Anotação da Moderação:</strong>
+                    <span>{rep.resolution_notes}</span>
+                  </div>
                 </div>
               {/if}
 
-              <!-- Reporter Meta -->
-              <div class="mod-reporter-footer">
-                <div class="reporter-chip">
-                  <User size={13} />
-                  <span>Denunciado por <strong>{rep.reporter?.display_name || rep.reporter?.username || 'Anônimo'}</strong></span>
-                </div>
+              <!-- Actions Strip: Primary Visualizar no Site + Moderation Actions Suite -->
+              <div class="mod-action-footer">
+                <!-- MANDATORY PRIMARY ACTION: Visualizar no Site -->
+                {#if rep.siteLink}
+                  <a
+                    href={rep.siteLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn-primary-site-view"
+                  >
+                    <ExternalLink size={15} />
+                    <span>Visualizar no Site</span>
+                  </a>
+                {/if}
 
-                <!-- Moderation Actions -->
-                <div class="mod-actions-cluster">
+                <div class="mod-buttons-cluster">
                   {#if rep.comment}
                     {#if rep.comment.removed}
                       <button
                         type="button"
-                        class="btn-action-ghost"
+                        class="btn-mod-action btn-restore"
                         disabled={busy}
                         onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment.id })}
                       >
@@ -901,7 +1058,7 @@
                     {:else}
                       <button
                         type="button"
-                        class="btn-action-warning"
+                        class="btn-mod-action btn-hide"
                         disabled={busy}
                         onclick={() => moderate('hide', { reportId: rep.id, commentId: rep.comment.id })}
                       >
@@ -912,7 +1069,7 @@
 
                     <button
                       type="button"
-                      class="btn-action-danger"
+                      class="btn-mod-action btn-delete"
                       disabled={busy}
                       onclick={() => moderate('delete', { reportId: rep.id, commentId: rep.comment.id })}
                     >
@@ -920,10 +1077,10 @@
                       <span>Excluir</span>
                     </button>
 
-                    {#if rep.comment.author?.id}
+                    {#if rep.comment.author?.id && !rep.isAuthorSuspended}
                       <button
                         type="button"
-                        class="btn-action-danger"
+                        class="btn-mod-action btn-suspend"
                         disabled={busy}
                         onclick={() => moderate('suspend_user', { reportId: rep.id, targetUserId: rep.comment.author.id })}
                       >
@@ -933,25 +1090,29 @@
                     {/if}
                   {/if}
 
-                  <button
-                    type="button"
-                    class="btn-action-success"
-                    disabled={busy}
-                    onclick={() => moderate('resolve_report', { reportId: rep.id })}
-                  >
-                    <Check size={14} />
-                    <span>Concluir</span>
-                  </button>
+                  {#if rep.status !== 'RESOLVIDO'}
+                    <button
+                      type="button"
+                      class="btn-mod-action btn-resolve"
+                      disabled={busy}
+                      onclick={() => moderate('resolve_report', { reportId: rep.id })}
+                    >
+                      <Check size={14} />
+                      <span>Resolver</span>
+                    </button>
+                  {/if}
 
-                  <button
-                    type="button"
-                    class="btn-action-ghost"
-                    disabled={busy}
-                    onclick={() => moderate('dismiss_report', { reportId: rep.id })}
-                  >
-                    <X size={14} />
-                    <span>Dispensar</span>
-                  </button>
+                  {#if rep.status !== 'REJEITADO'}
+                    <button
+                      type="button"
+                      class="btn-mod-action btn-dismiss"
+                      disabled={busy}
+                      onclick={() => moderate('dismiss_report', { reportId: rep.id })}
+                    >
+                      <X size={14} />
+                      <span>Dispensar</span>
+                    </button>
+                  {/if}
                 </div>
               </div>
             </article>
@@ -1438,152 +1599,360 @@
     margin: 0;
   }
 
-  /* Clusters List */
-  .clusters-list {
+  /* ========================================================
+     RELATÓRIOS (EDITORIAL CONTENT TICKETS)
+     ======================================================== */
+  .reports-feed {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
-  .cluster-card {
-    background: rgba(18, 22, 34, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 16px 18px;
+  .report-ticket-card {
+    background: rgba(18, 22, 34, 0.92);
+    border: 1px solid rgba(223, 194, 141, 0.16);
+    border-radius: 16px;
+    padding: 20px 22px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    transition: border-color 0.16s ease;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
   }
-  .cluster-card.has-new {
-    border-left: 3px solid #f87171;
+  .report-ticket-card:hover {
+    border-color: rgba(223, 194, 141, 0.35);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   }
-  .cluster-header {
+  .report-ticket-card.has-new {
+    border-left: 4px solid #f59e0b;
+  }
+
+  .ticket-top-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
   }
-  .cluster-target-group {
+  .ticket-target-info {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     min-width: 0;
     flex: 1;
   }
-  .target-cover {
-    width: 44px;
-    height: 60px;
+  .ticket-work-cover {
+    width: 52px;
+    height: 72px;
     object-fit: cover;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     flex-shrink: 0;
   }
-  .target-cover-fallback {
-    width: 44px;
-    height: 60px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .ticket-work-cover-fallback {
+    width: 52px;
+    height: 72px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #64748b;
+    color: #dfc28d;
     flex-shrink: 0;
   }
-  .target-meta {
+  .ticket-title-hierarchy {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
   }
-  .target-sub-row {
+  .ticket-badges-row {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
-  .target-type-badge {
-    font-size: 9.5px;
-    font-weight: 800;
+  .type-pill {
+    font-size: 10px;
+    font-weight: 850;
     letter-spacing: 0.05em;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.08);
     color: #94a3b8;
   }
-  .target-date {
+  .chapter-highlight-pill {
     font-size: 11px;
-    color: #64748b;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.38);
+    letter-spacing: 0.02em;
   }
-  .target-title {
-    font-size: 15px;
-    font-weight: 750;
-    color: #f1f5f9;
+  .page-highlight-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: rgba(223, 194, 141, 0.2);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.4);
+  }
+  .ticket-work-title {
+    font-size: 17.5px;
+    font-weight: 850;
+    color: #f8fafc;
     margin: 0;
     line-height: 1.3;
   }
-  .reasons-wrap {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 2px;
+  .work-link {
+    color: #f8fafc;
+    text-decoration: none;
+    transition: color 0.15s ease;
   }
-  .reason-pill {
-    font-size: 11px;
-    font-weight: 650;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(239, 68, 68, 0.14);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.28);
+  .work-link:hover {
+    color: #dfc28d;
+    text-decoration: underline;
   }
 
-  .cluster-status-cluster {
+  .ticket-status-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .ticket-date {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .ticket-body-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .problem-category-strip {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
-  .status-badge {
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 800;
+  .problem-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-  .status-badge.status-novo {
-    background: rgba(239, 68, 68, 0.16);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.35);
+  .reasons-pills-list {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
-  .status-badge.status-em_analise {
-    background: rgba(245, 158, 11, 0.16);
+  .reason-pill-amber {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 750;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.15);
     color: #fbbf24;
     border: 1px solid rgba(245, 158, 11, 0.35);
   }
-  .status-badge.status-resolvido {
-    background: rgba(34, 197, 94, 0.16);
+  .report-quote-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(245, 158, 11, 0.04);
+    border-left: 3px solid #f59e0b;
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+  }
+  .quote-icon {
+    color: #fbbf24;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .report-quote-text {
+    margin: 0;
+    font-size: 13.5px;
+    color: #e2e8f0;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .resolution-notes-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: #86efac;
+  }
+  .res-icon {
     color: #4ade80;
-    border: 1px solid rgba(34, 197, 94, 0.35);
-  }
-  .status-badge.status-rejeitado {
-    background: rgba(148, 163, 184, 0.16);
-    color: #94a3b8;
-    border: 1px solid rgba(148, 163, 184, 0.3);
-  }
-  .reports-count-pill {
-    font-size: 11.5px;
-    color: #94a3b8;
-    font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 2px;
   }
 
-  .cluster-actions-bar {
+  .ticket-reporter-strip {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     flex-wrap: wrap;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .reporter-info-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .reporter-info-pill strong {
+    color: #f1f5f9;
+  }
+  .btn-cluster-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    color: #dfc28d;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-cluster-toggle:hover {
+    text-decoration: underline;
+  }
+
+  .cluster-subreports-drawer {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
     gap: 10px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .subreports-title {
+    font-size: 11.5px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    margin: 0;
+  }
+  .subreports-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .subreport-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .subreport-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+  }
+  .subreport-reporter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #f1f5f9;
+  }
+  .subreport-date {
+    color: #64748b;
+    margin-left: 6px;
+  }
+  .page-pill-mini {
+    font-size: 10px;
+    font-weight: 750;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.3);
+  }
+  .subreport-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .subreport-reason {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fbbf24;
+  }
+  .subreport-text {
+    margin: 0;
+    font-size: 12px;
+    color: #cbd5e1;
+    font-style: italic;
+  }
+
+  .ticket-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .btn-primary-problem {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    border: 1px solid #f59e0b;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(217, 119, 6, 0.4);
+    transition: all 0.18s ease;
+    cursor: pointer;
+  }
+  .btn-primary-problem:hover {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 6px 22px rgba(245, 158, 11, 0.55);
+    transform: translateY(-1px);
+    color: #ffffff;
+  }
+  .ticket-workflow-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   .left-actions, .right-actions {
     display: flex;
@@ -1981,139 +2350,360 @@
     gap: 6px;
   }
 
-  /* Moderation Cards */
-  .moderation-cards-list {
+  /* ========================================================
+     MODERAÇÃO (COMMUNITY SENTINEL TICKETS)
+     ======================================================== */
+  .moderation-feed {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
-  .mod-card {
-    background: rgba(18, 22, 34, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 16px 18px;
+  .mod-sentinel-card {
+    background: rgba(18, 22, 34, 0.92);
+    border: 1px solid rgba(244, 63, 94, 0.18);
+    border-radius: 16px;
+    padding: 20px 22px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
   }
-  .mod-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+  .mod-sentinel-card:hover {
+    border-color: rgba(244, 63, 94, 0.35);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   }
-  .mod-target-cluster {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .mod-type-pill {
-    font-size: 9.5px;
-    font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: rgba(239, 68, 68, 0.18);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.35);
-  }
-  .mod-reason-tag {
-    font-size: 12.5px;
-    font-weight: 750;
-    color: #f1f5f9;
-  }
-  .mod-details-preview {
-    font-size: 12px;
-    color: #94a3b8;
-    font-style: italic;
-  }
-  .mod-status-cluster {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .mod-date {
-    font-size: 11px;
-    color: #64748b;
+  .mod-sentinel-card.is-new {
+    border-left: 4px solid #f43f5e;
   }
 
-  .mod-content-box {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    padding: 12px 14px;
+  .mod-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .mod-author-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1;
+  }
+  .mod-author-meta {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    min-width: 0;
   }
-  .mod-content-box.comment-removed {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.05);
-  }
-  .comment-author-strip {
+  .mod-author-name-line {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
-  .comment-author-meta {
+  .mod-author-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
+  }
+  .mod-author-handle {
+    font-size: 12.5px;
+    color: #94a3b8;
+  }
+  .badge-author-suspended {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 850;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    letter-spacing: 0.05em;
+  }
+
+  .mod-location-line {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
-  }
-  .comment-created {
-    font-size: 11px;
-    color: #64748b;
-  }
-  .comment-vis-badge {
-    margin-left: auto;
-    font-size: 9.5px;
-    font-weight: 800;
-    padding: 1px 6px;
-    border-radius: 4px;
-  }
-  .comment-vis-badge.visible {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-  }
-  .comment-vis-badge.removed {
-    background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
-  }
-  .comment-quote-text {
-    margin: 0;
-    font-size: 13.5px;
-    color: #cbd5e1;
-    line-height: 1.5;
-    padding-left: 10px;
-    border-left: 2px solid rgba(255, 255, 255, 0.15);
-  }
-
-  .mod-reporter-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
     flex-wrap: wrap;
   }
-  .reporter-chip {
+  .pin-icon {
+    color: #a855f7;
+    flex-shrink: 0;
+  }
+  .mod-location-link {
+    color: #c084fc;
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+  .mod-location-link:hover {
+    color: #dfc28d;
+    text-decoration: underline;
+  }
+  .mod-location-text {
+    color: #e2e8f0;
+    font-weight: 650;
+  }
+
+  .mod-status-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .mod-visibility-pill {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11.5px;
-    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
   }
-  .reporter-chip strong {
-    color: #94a3b8;
+  .mod-visibility-pill.visible {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
   }
-  .mod-actions-cluster {
+  .mod-visibility-pill.hidden {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.38);
+  }
+  .mod-visibility-pill.deleted {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.38);
+  }
+
+  .mod-content-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .parent-comment-context-box {
+    background: rgba(168, 85, 247, 0.06);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .parent-context-label {
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 11.5px;
+    color: #c084fc;
+    font-weight: 700;
+  }
+  .parent-quote-body {
+    margin: 0;
+    font-size: 12.5px;
+    color: #cbd5e1;
+    font-style: italic;
+    line-height: 1.4;
+    padding-left: 8px;
+    border-left: 2px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .reported-quote-card {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+  }
+  .reported-quote-card.card-hidden {
+    border-style: dashed;
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.04);
+  }
+  .quote-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .quote-icon-crimson {
+    color: #f43f5e;
+  }
+  .quote-header-title {
+    font-size: 11px;
+    font-weight: 850;
+    letter-spacing: 0.06em;
+    color: #f43f5e;
+  }
+  .reported-quote-text {
+    margin: 0;
+    font-size: 14.5px;
+    color: #f8fafc;
+    line-height: 1.5;
+    font-weight: 550;
+  }
+  .reported-comment-deleted {
+    margin: 0;
+    font-size: 13px;
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .mod-audit-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     flex-wrap: wrap;
+    font-size: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .mod-reason-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #fb7185;
+  }
+  .mod-reason-badge strong {
+    color: #f8fafc;
+  }
+  .mod-reporter-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #cbd5e1;
+    font-style: italic;
+  }
+  .note-label {
+    color: #94a3b8;
+    font-style: normal;
+  }
+  .mod-reporter-chip {
+    color: #64748b;
+  }
+  .mod-reporter-chip strong {
+    color: #94a3b8;
+  }
+
+  .resolution-notes-callout.crimson-tint {
+    background: rgba(244, 63, 94, 0.08);
+    border-color: rgba(244, 63, 94, 0.25);
+    color: #fda4af;
+  }
+
+  .mod-action-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .btn-primary-site-view {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    border: 1px solid #8b5cf6;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4);
+    transition: all 0.18s ease;
+    cursor: pointer;
+  }
+  .btn-primary-site-view:hover {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    box-shadow: 0 6px 22px rgba(139, 92, 246, 0.55);
+    transform: translateY(-1px);
+    color: #ffffff;
+  }
+  .mod-buttons-cluster {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-mod-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+  .btn-mod-action.btn-hide {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+  }
+  .btn-mod-action.btn-hide:hover {
+    background: rgba(245, 158, 11, 0.25);
+  }
+  .btn-mod-action.btn-restore {
+    background: rgba(148, 163, 184, 0.15);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #f1f5f9;
+  }
+  .btn-mod-action.btn-restore:hover {
+    background: rgba(148, 163, 184, 0.25);
+  }
+  .btn-mod-action.btn-delete {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+  .btn-mod-action.btn-delete:hover {
+    background: rgba(239, 68, 68, 0.25);
+  }
+  .btn-mod-action.btn-suspend {
+    background: rgba(159, 18, 57, 0.3);
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #fda4af;
+  }
+  .btn-mod-action.btn-suspend:hover {
+    background: rgba(159, 18, 57, 0.45);
+  }
+  .btn-mod-action.btn-resolve {
+    background: rgba(34, 197, 94, 0.18);
+    border-color: rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+  }
+  .btn-mod-action.btn-resolve:hover {
+    background: rgba(34, 197, 94, 0.28);
+  }
+  .btn-mod-action.btn-dismiss {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+  }
+  .btn-mod-action.btn-dismiss:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
   }
 
   /* Modals */
@@ -2394,19 +2984,39 @@
     .stats-grid {
       grid-template-columns: 1fr 1fr;
     }
-    .cluster-header {
+    .ticket-top-row, .mod-header-row {
       flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
     }
-    .cluster-actions-bar {
+    .ticket-status-box {
+      align-items: flex-start;
+      flex-direction: row;
+      gap: 10px;
+    }
+    .ticket-actions-bar, .mod-action-footer {
       flex-direction: column;
       align-items: stretch;
+      gap: 10px;
     }
-    .left-actions, .right-actions {
-      justify-content: stretch;
-    }
-    .btn-action-ghost, .btn-action-warning, .btn-action-success, .btn-action-danger {
-      flex: 1;
+    .btn-primary-problem, .btn-primary-site-view {
+      width: 100%;
       justify-content: center;
+    }
+    .ticket-workflow-actions, .mod-buttons-cluster {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .btn-mod-action, .btn-action-warning, .btn-action-success, .btn-action-danger {
+      flex: 1;
+      min-width: 120px;
+      justify-content: center;
+      text-align: center;
+    }
+    .partner-cards-grid {
+      grid-template-columns: 1fr;
     }
     .mock-profile-strip {
       flex-direction: column;
@@ -2419,6 +3029,23 @@
     }
     .dossier-dl dt {
       margin-top: 8px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+    .ticket-target-info, .mod-author-group {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .ticket-top-row, .mod-header-row {
+      gap: 10px;
+    }
+    .ticket-badges-row, .mod-author-name-line {
+      flex-wrap: wrap;
     }
   }
 </style>
