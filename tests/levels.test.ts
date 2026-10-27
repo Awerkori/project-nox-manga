@@ -4,7 +4,6 @@ import {
   getXpForLevel,
   getLevelFromXp,
   getLevelProgress,
-  NOX_TITLES,
   NOX_SEASON_ACHIEVEMENT_TITLES,
   NOX_BADGES,
   getUnlockedTitles,
