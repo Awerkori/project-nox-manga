@@ -22,7 +22,8 @@
     Trash2,
     Flag,
     Send,
-    CornerDownRight
+    CornerDownRight,
+    LayoutDashboard
   } from "@lucide/svelte";
   import { enhance } from "$app/forms";
   import WorkCard from "$lib/components/WorkCard.svelte";
@@ -191,6 +192,16 @@
 
           <!-- Socials & Actions -->
           <div class="hero-actions">
+            {#if data.canAccessScanPanel}
+              <a
+                href={data.scanPanelUrl}
+                class="btn-staff-panel"
+                title="Acessar painel de gerenciamento interno desta scan"
+              >
+                <LayoutDashboard size={15} />
+                <span>Painel da Scan</span>
+              </a>
+            {/if}
             {#if isRecruiting}
               <button
                 type="button"
@@ -449,11 +460,8 @@
                   {#each owners as member (member.id)}
                     <div class="member-card is-owner">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
+                        user={member}
                         size={56}
-                        frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
@@ -494,11 +502,8 @@
                   {#each admins as member (member.id)}
                     <div class="member-card is-admin">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
+                        user={member}
                         size={52}
-                        frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
@@ -536,11 +541,8 @@
                   {#each otherMembers as member (member.id)}
                     <div class="member-card">
                       <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
+                        user={member}
                         size={48}
-                        frameId={member.frame_id}
                       />
                       <div class="member-info">
                         <div class="member-name-row">
@@ -751,7 +753,7 @@
             >
               <input type="hidden" name="scan_id" value={data.scan.id} />
               <div class="composer-top">
-                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} crop={data.viewer.avatarCrop || data.viewer.avatar_crop} size={38} />
+                <UserAvatar user={data.viewer} size={42} />
                 <div class="composer-input-wrap">
                   <textarea
                     name="body"
@@ -798,10 +800,8 @@
                   <div class="comment-main">
                     <div class="comment-avatar">
                       <UserAvatar
-                        displayName={comment.author?.display_name || comment.author?.username || 'Usuário'}
-                        avatarId={comment.author?.avatar_id}
-                        frameId={comment.author?.avatar_frame_id}
-                        size={38}
+                        user={comment.author}
+                        size={40}
                       />
                     </div>
                     <div class="comment-body-wrap">
@@ -955,10 +955,8 @@
                               <CornerDownRight size={14} class="reply-turn-icon" />
                               <div class="reply-avatar">
                                 <UserAvatar
-                                  displayName={reply.author?.display_name || reply.author?.username || 'Usuário'}
-                                  avatarId={reply.author?.avatar_id}
-                                  frameId={reply.author?.avatar_frame_id}
-                                  size={28}
+                                  user={reply.author}
+                                  size={30}
                                 />
                               </div>
                               <div class="reply-body-wrap">
@@ -1470,6 +1468,31 @@
     align-items: center;
     gap: 0.6rem;
     flex-wrap: wrap;
+  }
+
+  .btn-staff-panel {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1.15rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.28) 0%, rgba(99, 102, 241, 0.22) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.55);
+    border-radius: 10px;
+    color: #f5f3ff;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.25);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-staff-panel:hover {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.45) 0%, rgba(124, 58, 237, 0.35) 100%);
+    border-color: rgba(192, 132, 252, 0.85);
+    color: #ffffff;
+    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.45);
+    transform: translateY(-1px);
   }
 
   .btn-hero-recruit {
@@ -2784,6 +2807,7 @@
       margin-top: 0.5rem;
     }
 
+    .btn-staff-panel,
     .btn-hero-recruit {
       width: 100%;
       justify-content: center;
@@ -2796,24 +2820,29 @@
   }
 
   @media (max-width: 640px) {
-    /* The public profile has six equally important destinations. A compact
-       touch grid is more discoverable than a clipped horizontal tab strip. */
     .profile-tabs-nav {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      overflow: visible;
-      gap: 0.4rem;
-      padding-bottom: 0.75rem;
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 0.5rem;
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .profile-tabs-nav::-webkit-scrollbar {
+      display: none;
     }
 
     .tab-btn {
-      min-width: 0;
-      min-height: 2.75rem;
-      justify-content: center;
-      white-space: normal;
-      text-align: center;
-      padding: 0.55rem 0.45rem;
-      font-size: 0.8rem;
+      flex-shrink: 0;
+      white-space: nowrap;
+      min-height: 2.5rem;
+      padding: 0.55rem 0.95rem;
+      font-size: 0.85rem;
+      border-radius: 8px;
     }
   }
 </style>

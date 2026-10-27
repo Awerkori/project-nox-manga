@@ -26,6 +26,8 @@
   );
 
   let totalScans = $derived((data.scans || []).length);
+  let officialCount = $derived((data.scans || []).filter((s: any) => s.is_official).length);
+  let partnerCount = $derived((data.scans || []).filter((s: any) => !s.is_official).length);
   let recruitingCount = $derived((data.scans || []).filter((s: any) => s.isRecruiting).length);
 </script>
 
@@ -48,7 +50,7 @@
         </div>
         <h1 class="hero-title">Scans & Grupos Parceiros</h1>
         <p class="hero-subtitle">
-          Descubra as equipes editoriais e os grupos independentes que trazem as melhores traduções para a comunidade do Project Nox.
+          Conheça as equipes editoriais e os grupos independentes que trazem as melhores traduções para a comunidade do Project Nox.
         </p>
 
         <!-- Search Bar -->
@@ -77,12 +79,12 @@
           </button>
           <button
             type="button"
-            class="filter-chip"
+            class="filter-chip chip-official"
             class:active={filterTab === "official"}
             onclick={() => (filterTab = "official")}
           >
-            <Star size={13} />
-            <span>Oficiais</span>
+            <Star size={13} fill={filterTab === "official" ? "#dfc28d" : "currentColor"} />
+            <span>Oficiais ({officialCount})</span>
           </button>
           <button
             type="button"
@@ -90,11 +92,11 @@
             class:active={filterTab === "partner"}
             onclick={() => (filterTab = "partner")}
           >
-            <span>Parceiras</span>
+            <span>Parceiras ({partnerCount})</span>
           </button>
           <button
             type="button"
-            class="filter-chip"
+            class="filter-chip chip-recruiting"
             class:active={filterTab === "recruiting"}
             onclick={() => (filterTab = "recruiting")}
           >
@@ -107,12 +109,15 @@
       <!-- Partner CTA Card -->
       <aside class="partner-cta-card">
         <div class="cta-inner">
-          <div class="cta-icon-wrap">
-            <ShieldCheck size={26} />
+          <div class="cta-header-line">
+            <div class="cta-icon-wrap">
+              <ShieldCheck size={24} />
+            </div>
+            <span class="cta-badge">Para Equipes</span>
           </div>
           <h2 class="cta-title">Tem um grupo de scan?</h2>
           <p class="cta-text">
-            Publique suas obras com atribuição real de direitos, página dedicada, métricas e sistema próprio de recrutamento.
+            Publique suas obras com atribuição de direitos, página dedicada, métricas reais e ferramentas de recrutamento.
           </p>
           <a href="/scan" class="cta-button">
             <span>Acessar Painel de Scan</span>
@@ -125,7 +130,7 @@
     <!-- Scans Grid -->
     <main class="scans-grid-wrap">
       {#if filteredScans.length > 0}
-        <div class="scans-grid">
+        <div class="scans-grid" class:single-item={filteredScans.length === 1}>
           {#each filteredScans as scan (scan.id)}
             <article class="scan-card" class:official={scan.is_official}>
               <!-- Card Banner Header -->
@@ -134,11 +139,13 @@
                   <img src="/media/{scan.banner_id}" alt="Banner de {scan.name}" class="banner-img" loading="lazy" />
                   <div class="banner-gradient"></div>
                 {:else}
-                  <div class="banner-placeholder" class:official-bg={scan.is_official}></div>
+                  <div class="banner-placeholder" class:official-bg={scan.is_official}>
+                    <div class="banner-grid-overlay"></div>
+                  </div>
                 {/if}
               </div>
 
-              <!-- Card Body (z-index: 2 ensures logo never gets clipped by banner) -->
+              <!-- Card Body -->
               <div class="card-body">
                 <!-- Avatar Row -->
                 <div class="avatar-row">
@@ -155,7 +162,7 @@
                   <div class="badges-cluster">
                     {#if scan.is_official}
                       <span class="badge-official">
-                        <Star size={12} fill="#dfc28d" />
+                        <Star size={11} fill="#dfc28d" />
                         <span>OFICIAL</span>
                       </span>
                     {:else}
@@ -187,7 +194,7 @@
                 {#if scan.isRecruiting && scan.recruitingPositions.length > 0}
                   <div class="recruiting-positions-wrap">
                     <div class="recruiting-label">
-                      <UserPlus size={13} />
+                      <UserPlus size={12} />
                       <span>Vagas abertas:</span>
                     </div>
                     <div class="recruiting-tags">
@@ -243,7 +250,7 @@
                     {#if scan.isRecruiting}
                       <a href="/scans/{scan.slug}#recrutamento" class="btn-apply" title="Ver vagas disponíveis">
                         <UserPlus size={13} />
-                        <span>Candidatar-se</span>
+                        <span>Vagas</span>
                       </a>
                     {/if}
                     <a href="/scans/{scan.slug}" class="btn-view-works">
@@ -261,7 +268,7 @@
           <BookOpen size={42} />
           <h3>Não foi possível carregar as scans agora</h3>
           <p>As equipes e grupos parceiros continuam registrados na plataforma, mas ocorreu uma lentidão temporária na conexão. Tente recarregar.</p>
-          <button type="button" class="btn-retry" onclick={() => window.location.reload()} style="margin-top: 1rem; padding: 0.5rem 1rem; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+          <button type="button" class="btn-retry" onclick={() => window.location.reload()}>
             Recarregar scans
           </button>
         </div>
@@ -279,33 +286,35 @@
 <style>
   .scans-page {
     min-height: 100vh;
-    padding: 2rem 1.5rem 5rem;
+    padding: 2.5rem 1.5rem 5rem;
     color: #e2e8f0;
   }
 
   .scans-container {
-    max-width: 1440px;
+    max-width: 1360px;
     margin: 0 auto;
   }
 
   /* Hero Section */
   .scans-hero {
     display: grid;
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 320px;
     gap: 2rem;
     align-items: stretch;
-    background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.1), transparent 65%),
-      linear-gradient(180deg, rgba(17, 21, 37, 0.85) 0%, rgba(10, 13, 23, 0.95) 100%);
+    background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.12), transparent 70%),
+      linear-gradient(180deg, rgba(19, 23, 39, 0.95) 0%, rgba(11, 14, 25, 0.98) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
-    padding: 2.5rem;
+    padding: 2.25rem;
     margin-bottom: 2.5rem;
     backdrop-filter: blur(16px);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
   }
 
   .hero-left {
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
 
   .badge-tag {
@@ -316,19 +325,20 @@
     background: rgba(139, 92, 246, 0.15);
     border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: 9999px;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #c4b5fd;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.75rem;
     align-self: flex-start;
+    letter-spacing: 0.02em;
   }
 
   .hero-title {
     font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 2.25rem;
+    font-size: 2.15rem;
     font-weight: 800;
     color: #ffffff;
-    margin: 0 0 0.6rem;
+    margin: 0 0 0.5rem;
     letter-spacing: -0.025em;
   }
 
@@ -336,8 +346,8 @@
     font-size: 0.95rem;
     color: #94a3b8;
     line-height: 1.6;
-    margin: 0 0 1.5rem;
-    max-width: 680px;
+    margin: 0 0 1.35rem;
+    max-width: 650px;
   }
 
   /* Search Box */
@@ -345,8 +355,8 @@
     position: relative;
     display: flex;
     align-items: center;
-    max-width: 620px;
-    margin-bottom: 1.25rem;
+    max-width: 580px;
+    margin-bottom: 1.15rem;
   }
 
   :global(.search-icon) {
@@ -358,12 +368,12 @@
 
   .search-input {
     width: 100%;
-    padding: 0.85rem 1rem 0.85rem 2.75rem;
-    background: rgba(10, 12, 22, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.8rem 1rem 0.8rem 2.65rem;
+    background: rgba(9, 11, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     color: #f8fafc;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     outline: none;
     transition: all 0.2s ease;
   }
@@ -371,18 +381,25 @@
   .search-input:focus {
     border-color: #8b5cf6;
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+    background: rgba(13, 16, 28, 0.95);
   }
 
   .btn-clear {
     position: absolute;
     right: 12px;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.75rem;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.72rem;
     color: #94a3b8;
     background: rgba(255, 255, 255, 0.08);
     border: none;
     border-radius: 6px;
     cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .btn-clear:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
   }
 
   /* Filter Chips */
@@ -397,7 +414,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.45rem 0.95rem;
+    padding: 0.42rem 0.9rem;
     border-radius: 10px;
     font-size: 0.82rem;
     font-weight: 600;
@@ -411,13 +428,20 @@
   .filter-chip:hover {
     color: #f1f5f9;
     background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .filter-chip.active {
     color: #ffffff;
-    background: rgba(139, 92, 246, 0.25);
+    background: rgba(139, 92, 246, 0.22);
     border-color: rgba(139, 92, 246, 0.5);
     box-shadow: 0 2px 10px rgba(139, 92, 246, 0.2);
+  }
+
+  .filter-chip.chip-official.active {
+    background: rgba(223, 194, 141, 0.16);
+    border-color: rgba(223, 194, 141, 0.45);
+    color: #dfc28d;
   }
 
   /* Pulse Dot */
@@ -437,10 +461,10 @@
 
   /* Partner CTA Card */
   .partner-cta-card {
-    background: linear-gradient(145deg, rgba(30, 27, 75, 0.45) 0%, rgba(17, 21, 37, 0.9) 100%);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: linear-gradient(145deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 18, 32, 0.95) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 16px;
-    padding: 1.6rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -454,16 +478,33 @@
     justify-content: space-between;
   }
 
+  .cta-header-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .cta-icon-wrap {
-    width: 46px;
-    height: 46px;
+    width: 44px;
+    height: 44px;
     border-radius: 12px;
-    background: rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.18);
     border: 1px solid rgba(139, 92, 246, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #c4b5fd;
+  }
+
+  .cta-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #a78bfa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(139, 92, 246, 0.12);
+    padding: 0.25rem 0.55rem;
+    border-radius: 6px;
   }
 
   .cta-title {
@@ -474,9 +515,9 @@
   }
 
   .cta-text {
-    font-size: 0.85rem;
+    font-size: 0.83rem;
     color: #94a3b8;
-    line-height: 1.55;
+    line-height: 1.5;
     margin: 0;
   }
 
@@ -485,15 +526,15 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
+    padding: 0.7rem 1.15rem;
     background: #8b5cf6;
     color: #ffffff;
     border-radius: 10px;
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.2s ease;
-    margin-top: 0.5rem;
+    margin-top: 0.4rem;
   }
 
   .cta-button:hover {
@@ -503,10 +544,20 @@
   }
 
   /* Grid & Cards */
+  .scans-grid-wrap {
+    width: 100%;
+  }
+
   .scans-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(340px, 420px));
     gap: 1.75rem;
+    justify-content: start;
+  }
+
+  /* When only 1 scan is active, prevent it from floating weirdly or stretching to billboard size */
+  .scans-grid.single-item {
+    max-width: 440px;
   }
 
   .scan-card {
@@ -518,6 +569,7 @@
     flex-direction: column;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   }
 
   .scan-card:hover {
@@ -527,18 +579,18 @@
   }
 
   .scan-card.official {
-    border-color: rgba(223, 194, 141, 0.35);
+    border-color: rgba(223, 194, 141, 0.32);
     background: radial-gradient(circle at top right, rgba(223, 194, 141, 0.06), transparent 70%), #0d101a;
   }
 
   .scan-card.official:hover {
-    border-color: rgba(223, 194, 141, 0.65);
+    border-color: rgba(223, 194, 141, 0.6);
     box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.8), 0 0 24px -4px rgba(223, 194, 141, 0.2);
   }
 
   /* Banner */
   .card-banner {
-    height: 110px;
+    height: 115px;
     width: 100%;
     position: relative;
     background: #141829;
@@ -560,14 +612,23 @@
   .banner-placeholder {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #171b2d 0%, #0d101b 100%);
+    background: linear-gradient(135deg, #161a2e 0%, #0d101b 100%);
+    position: relative;
   }
 
   .banner-placeholder.official-bg {
-    background: linear-gradient(135deg, rgba(60, 48, 25, 0.4) 0%, #0d101b 100%);
+    background: linear-gradient(135deg, rgba(65, 52, 28, 0.4) 0%, #0d101b 100%);
   }
 
-  /* Card Body - CRITICAL FIX: relative with z-index: 2 prevents banner clipping the avatar */
+  .banner-grid-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 16px 16px;
+    opacity: 0.6;
+  }
+
+  /* Card Body */
   .card-body {
     position: relative;
     z-index: 2;
@@ -603,7 +664,7 @@
 
   .logo-wrap.official-border {
     border-color: #0d101a;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(223, 194, 141, 0.4);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65), 0 0 0 1.5px rgba(223, 194, 141, 0.5);
   }
 
   .logo-img {
@@ -635,19 +696,19 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
 
   .badge-official {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.25rem 0.65rem;
+    padding: 0.22rem 0.6rem;
     background: rgba(223, 194, 141, 0.15);
     border: 1px solid rgba(223, 194, 141, 0.35);
     border-radius: 8px;
     color: #dfc28d;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 800;
     letter-spacing: 0.03em;
   }
@@ -656,12 +717,12 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.25rem 0.65rem;
+    padding: 0.22rem 0.6rem;
     background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 8px;
     color: #c4b5fd;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.03em;
   }
@@ -670,12 +731,12 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.25rem 0.65rem;
+    padding: 0.22rem 0.6rem;
     background: rgba(168, 85, 247, 0.16);
     border: 1px solid rgba(168, 85, 247, 0.4);
     border-radius: 8px;
     color: #e9d5ff;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 800;
     letter-spacing: 0.03em;
   }
@@ -703,85 +764,77 @@
     color: #c4b5fd;
   }
 
-  .scan-card.official .scan-name a:hover {
-    color: #dfc28d;
-  }
-
   .scan-desc {
-    font-size: 0.86rem;
+    font-size: 0.85rem;
     color: #94a3b8;
     line-height: 1.5;
     margin: 0;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  /* Recruiting Tags */
+  /* Recruiting Positions */
   .recruiting-positions-wrap {
+    margin-bottom: 0.85rem;
+    padding: 0.5rem 0.65rem;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px dashed rgba(168, 85, 247, 0.3);
+    border-radius: 10px;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.65rem 0.85rem;
-    background: rgba(168, 85, 247, 0.08);
-    border: 1px solid rgba(168, 85, 247, 0.2);
-    border-radius: 10px;
-    margin-bottom: 0.85rem;
+    gap: 0.35rem;
   }
 
   .recruiting-label {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    font-size: 0.75rem;
+    font-size: 0.73rem;
     font-weight: 700;
     color: #d8b4fe;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 
   .recruiting-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: 0.3rem;
   }
 
   .pos-tag {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #f3e8ff;
-    background: rgba(147, 51, 234, 0.25);
-    border: 1px solid rgba(147, 51, 234, 0.4);
-    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    padding: 0.18rem 0.5rem;
+    background: rgba(255, 255, 255, 0.07);
     border-radius: 6px;
+    color: #f3e8ff;
+    font-weight: 500;
   }
 
   .pos-tag.more {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: #cbd5e1;
+    background: rgba(168, 85, 247, 0.2);
+    color: #e9d5ff;
+    font-weight: 700;
   }
 
-  /* Stats Bar */
-    .stats-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-    gap: 0.75rem;
-    padding: 0.6rem 0.85rem;
+  /* Stats Row */
+  .stats-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem;
     background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 10px;
     margin-bottom: 1rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
   }
 
   .stat-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.82rem;
-    color: #94a3b8;
+    gap: 0.35rem;
   }
 
   .stat-item strong {
@@ -790,10 +843,10 @@
 
   .stat-dot {
     color: #475569;
-    font-size: 0.85rem;
+    font-weight: 700;
   }
 
-  /* Card Footer */
+  /* Footer */
   .card-footer {
     display: flex;
     align-items: center;
@@ -806,17 +859,18 @@
   .social-links {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
   }
 
   .social-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     width: 32px;
     height: 32px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #94a3b8;
     text-decoration: none;
     transition: all 0.2s ease;
@@ -824,7 +878,18 @@
 
   .social-btn:hover {
     color: #ffffff;
-    background: rgba(139, 92, 246, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .social-btn.discord:hover {
+    color: #5865f2;
+    border-color: rgba(88, 101, 242, 0.4);
+  }
+
+  .social-btn.fluxer:hover {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.4);
   }
 
   .action-buttons {
@@ -836,20 +901,20 @@
   .btn-apply {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.3rem;
     padding: 0.45rem 0.8rem;
-    background: rgba(168, 85, 247, 0.2);
-    border: 1px solid rgba(168, 85, 247, 0.4);
     border-radius: 8px;
+    background: rgba(168, 85, 247, 0.18);
+    border: 1px solid rgba(168, 85, 247, 0.35);
     color: #e9d5ff;
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: 0.78rem;
+    font-weight: 600;
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .btn-apply:hover {
-    background: rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.3);
     color: #ffffff;
   }
 
@@ -857,52 +922,87 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.45rem 0.85rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.45rem 0.95rem;
     border-radius: 8px;
-    color: #f1f5f9;
-    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    font-size: 0.82rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.2s ease;
   }
 
   .btn-view-works:hover {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.4);
+    background: #8b5cf6;
+    border-color: #8b5cf6;
     color: #ffffff;
-    transform: translateX(2px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
   }
 
-  .scan-card.official .btn-view-works:hover {
-    background: rgba(223, 194, 141, 0.2);
-    border-color: rgba(223, 194, 141, 0.5);
-    color: #dfc28d;
-  }
-
-  /* Empty State */
+  /* Empty / Degraded States */
   .empty-state {
-    padding: 4.5rem 2rem;
     text-align: center;
+    padding: 4rem 2rem;
+    background: rgba(13, 16, 26, 0.6);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
     color: #64748b;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .empty-state h3 {
-    color: #f1f5f9;
-    margin: 1rem 0 0.5rem;
-    font-size: 1.15rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 0;
   }
 
-  /* Responsiveness */
-  @media (max-width: 992px) {
+  .empty-state p {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin: 0;
+    max-width: 480px;
+  }
+
+  .empty-state.degraded-state {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.05);
+  }
+
+  .btn-retry {
+    margin-top: 1rem;
+    padding: 0.55rem 1.15rem;
+    background: #6366f1;
+    border: none;
+    border-radius: 8px;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .btn-retry:hover {
+    background: #4f46e5;
+  }
+
+  /* Responsive Rules */
+  @media (max-width: 1024px) {
     .scans-hero {
       grid-template-columns: 1fr;
-      padding: 2rem 1.5rem;
-      gap: 1.75rem;
+      padding: 1.75rem;
+    }
+
+    .partner-cta-card {
+      margin-top: 0.5rem;
+    }
+
+    .scans-grid {
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
   }
 
@@ -911,8 +1011,14 @@
       padding: 1.25rem 1rem 4rem;
     }
 
+    .scans-hero {
+      padding: 1.25rem;
+      border-radius: 16px;
+      margin-bottom: 1.5rem;
+    }
+
     .hero-title {
-      font-size: 1.75rem;
+      font-size: 1.65rem;
     }
 
     .hero-subtitle {
@@ -921,56 +1027,11 @@
 
     .scans-grid {
       grid-template-columns: 1fr;
+      gap: 1.25rem;
     }
 
-    .avatar-row {
-      margin-top: -30px;
-    }
-
-    .logo-wrap {
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-    }
-
-    .action-buttons {
-      width: 100%;
-      justify-content: flex-end;
-    }
-  }
-
-  /* Keep public recruiting actions comfortably tappable on narrow phones.
-     A card has room for the full vacancy CTA; it should not be sacrificed to
-     an icon row or wrap into an ambiguous two-line button. */
-  @media (max-width: 430px) {
-    .card-footer {
-      align-items: stretch;
-      flex-direction: column;
-      gap: 0.7rem;
-    }
-
-    .social-links {
-      justify-content: space-between;
-    }
-
-    .social-btn {
-      width: 2.5rem;
-      height: 2.5rem;
-    }
-
-    .action-buttons {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.55rem;
-    }
-
-    .btn-apply,
-    .btn-view-works {
-      min-width: 0;
-      min-height: 2.65rem;
-      justify-content: center;
-      padding-inline: 0.5rem;
-      white-space: nowrap;
+    .scans-grid.single-item {
+      max-width: 100%;
     }
   }
 </style>
