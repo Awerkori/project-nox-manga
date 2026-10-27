@@ -313,20 +313,6 @@
         </a>
 
         {#if profile}
-          {#if hasAnyPanels}
-            {#if isStaffAdmin}
-              <a href="/admin" class="desktop-panel-pill admin-pill" title="Painel de Controle">
-                <Shield size={13} />
-                <span>Painel</span>
-              </a>
-            {:else if hasScanPanelAccess}
-              <a href="/scan" class="desktop-panel-pill scan-pill" title="Painel da Scan">
-                <Users size={13} />
-                <span>Scan</span>
-              </a>
-            {/if}
-          {/if}
-
           <a
             class="icon-button notification-link"
             href="/notificacoes"
@@ -898,8 +884,9 @@
       gap: 5px;
     }
     .header-community-btn {
-      height: 38px;
-      width: 38px;
+      height: 36px;
+      width: 36px;
+      min-width: 36px;
       padding: 0;
       justify-content: center;
       border-radius: 50%;
@@ -907,18 +894,17 @@
     .header-community-btn .community-btn-text {
       display: none !important;
     }
+    .header-community-btn .community-svg {
+      width: 17px;
+      height: 17px;
+    }
     .header-actions {
-      gap: 6px;
+      gap: 5px;
     }
     .header-actions .icon-button {
-      width: 38px;
-      height: 38px;
-    }
-  }
-
-  @media (max-width: 600px) {
-    .header-community-group {
-      display: none !important;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
     }
   }
 
@@ -978,53 +964,6 @@
   @keyframes badgePop {
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
-  }
-
-  .desktop-panel-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-  }
-
-  .desktop-panel-pill.admin-pill {
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.4);
-    color: #ddd6fe;
-  }
-
-  .desktop-panel-pill.admin-pill:hover {
-    background: rgba(139, 92, 246, 0.28);
-    border-color: #a78bfa;
-    color: #ffffff;
-    box-shadow: 0 0 14px rgba(139, 92, 246, 0.3);
-    transform: translateY(-1px);
-  }
-
-  .desktop-panel-pill.scan-pill {
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    color: #fde68a;
-  }
-
-  .desktop-panel-pill.scan-pill:hover {
-    background: rgba(245, 158, 11, 0.28);
-    border-color: #f59e0b;
-    color: #ffffff;
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
-    transform: translateY(-1px);
-  }
-
-  @media (max-width: 768px) {
-    .desktop-panel-pill {
-      display: none !important;
-    }
   }
 
   .btn-login-nav {
@@ -1575,26 +1514,27 @@
 
   @media (max-width: 768px) {
     .site-header {
-      height: 68px;
+      height: 64px;
     }
 
     .header-inner {
-      padding: 0 16px;
-      gap: 12px;
+      padding: 0 12px;
+      gap: 8px;
     }
 
     .brand {
-      gap: 10px;
+      gap: 8px;
+      flex-shrink: 0;
     }
 
     .header-symbol {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
     }
 
     .brand-project,
     .brand-nox {
-      font-size: 17.5px;
+      font-size: 16.5px;
     }
 
     .desktop-nav {
@@ -1602,26 +1542,56 @@
     }
 
     .header-actions {
-      gap: 10px;
+      gap: 6px;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
     }
 
-    .header-actions .icon-button {
-      width: 38px;
-      height: 38px;
+    .header-community-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
     }
 
-    .header-search-btn {
+    .header-community-btn {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .header-community-btn .community-btn-text {
       display: none !important;
     }
 
+    .header-community-btn .community-svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .header-actions .icon-button {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+    }
+
+    .header-search-btn {
+      display: inline-flex !important;
+    }
+
     .btn-login-nav {
-      padding: 7px 16px;
-      font-size: 13px;
+      padding: 6px 14px;
+      font-size: 12.5px;
     }
 
     .avatar-btn {
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
     }
 
     .mobile-menu-btn {
@@ -1631,7 +1601,7 @@
     .mobile-drawer {
       display: block;
       position: absolute;
-      top: 68px;
+      top: 64px;
       left: 0;
       right: 0;
       background: rgba(8, 10, 18, 0.97);
@@ -1661,7 +1631,67 @@
     .mobile-drawer-nav a.active {
       color: #b59af5;
     }
+  }
 
+  @media (max-width: 400px) {
+    .header-inner {
+      padding: 0 8px;
+      gap: 4px;
+    }
+
+    .brand {
+      gap: 6px;
+    }
+
+    .header-symbol {
+      width: 30px;
+      height: 30px;
+    }
+
+    .brand-project {
+      display: none;
+    }
+
+    .brand-nox {
+      font-size: 16px;
+    }
+
+    .header-actions {
+      gap: 3.5px;
+    }
+
+    .header-community-group {
+      gap: 3.5px;
+    }
+
+    .header-community-btn,
+    .header-actions .icon-button,
+    .avatar-btn {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+    }
+
+    .header-community-btn .community-svg {
+      width: 15.5px;
+      height: 15.5px;
+    }
+
+    .notification-badge {
+      min-width: 15px;
+      height: 15px;
+      font-size: 9px;
+      line-height: 15px;
+      padding: 0 3px;
+    }
+
+    .btn-login-nav {
+      padding: 5px 10px;
+      font-size: 11.5px;
+    }
+  }
+
+  @media (max-width: 768px) {
     .site-footer {
       padding: 40px 0 calc(96px + env(safe-area-inset-bottom));
       margin-top: 48px;
