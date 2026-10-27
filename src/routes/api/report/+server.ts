@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
+import { notifyAdminsForModeration, notifyStaffForReport } from '$lib/server/notifications';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }: any) => {
   if (!locals.user) {
     throw error(401, 'Autenticação necessária para enviar uma denúncia.');
   }
@@ -80,6 +81,55 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   if (insertError) {
     throw error(500, 'Erro ao registrar denúncia: ' + insertError.message);
+  }
+
+  // Real-time notification dispatch
+  try {
+    if (targetType === 'COMMENT' || targetType === 'USER') {
+      let snippet: string | undefined = undefined;
+      if (commentId) {
+        const { data: comm } = await locals.db
+          .from('comments')
+          .select('body')
+          .eq('id', commentId)
+          .maybeSingle();
+        snippet = comm?.body;
+      }
+      await notifyAdminsForModeration({
+        reason: cleanReason,
+        details: cleanDetails,
+        targetType: targetType,
+        commentSnippet: snippet,
+        platform
+      });
+    } else {
+      let targetTitle = 'Conteúdo';
+      if (targetType === 'CHAPTER' && chapterId) {
+        const { data: chap } = await locals.db
+          .from('chapters')
+          .select('number, title, works(title)')
+          .eq('id', chapterId)
+          .maybeSingle();
+        const num = chap?.number ?? '';
+        targetTitle = `${(chap?.works as any)?.title || 'Obra'} — Cap. ${num}`;
+      } else if (targetType === 'WORK' && workId) {
+        const { data: wk } = await locals.db
+          .from('works')
+          .select('title')
+          .eq('id', workId)
+          .maybeSingle();
+        targetTitle = wk?.title || 'Obra';
+      }
+      await notifyStaffForReport({
+        reason: cleanReason,
+        details: cleanDetails,
+        targetTitle,
+        targetType: targetType as 'WORK' | 'CHAPTER',
+        platform
+      });
+    }
+  } catch (notifErr: any) {
+    console.warn('[NOTIF] Falha ao enviar notificação de ticket:', notifErr?.message);
   }
 
   return json({

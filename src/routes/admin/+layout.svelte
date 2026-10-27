@@ -36,7 +36,9 @@
     Headphones,
     Scan,
     Flag,
-    Trophy
+    Trophy,
+    Ticket,
+    FileCheck
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
@@ -49,20 +51,20 @@
 
   // Role & Capabilities
   let role = $derived((data.role || 'LEITOR').toUpperCase());
+  let isAdmin = $derived(role === 'ADMIN');
   let isOwnerOrAdmin = $derived(role === 'ADMIN' || role === 'GERENTE');
   let canViewOverview = $derived(true);
+  let canViewTickets = $derived(true);
   let canManageWorks = $derived(true);
   let canManageTags = $derived(true);
-  let canViewContentReports = $derived(true);
   let canManageShop = $derived(isOwnerOrAdmin);
   let canViewImporter = $derived(true);
-  let canViewCommunity = $derived(isOwnerOrAdmin);
-  // Global Scan Management is an ADMIN-only route. Do not advertise a control
-  // to roles that the server must reject.
-  let canManageScans = $derived(role === 'ADMIN');
+  let canManageMembers = $derived(isAdmin);
+  // Global Scan Management is an ADMIN-only route.
+  let canManageScans = $derived(isAdmin);
   let canViewStaff = $derived(isOwnerOrAdmin);
-  let canViewSystem = $derived(role === 'ADMIN');
-  let canManageConfig = $derived(role === 'ADMIN');
+  let canViewSystem = $derived(isAdmin);
+  let canManageConfig = $derived(isAdmin);
 
   // Role metadata
   const roleMeta = $derived.by(() => {
@@ -119,6 +121,14 @@
   }
 
   function isActive(path: string, exact = false, tabParam?: string) {
+    if (path === '/admin/tickets') {
+      const isTicketsRoute = currentPath === '/admin/tickets' || currentPath === '/admin/reports' || currentPath === '/admin/relatorios';
+      if (!isTicketsRoute) return false;
+      if (tabParam === 'relatorios') {
+        return currentTab === 'relatorios' || !currentTab;
+      }
+      return currentTab === tabParam;
+    }
     if (tabParam !== undefined) {
       const isBase = currentPath === path || currentPath.startsWith(path + '/');
       return isBase && currentTab === tabParam;
@@ -274,8 +284,76 @@
         </div>
       {/if}
 
-      <!-- 2. CONTEÚDO -->
-      {#if canManageWorks || canManageTags || canViewContentReports}
+      <!-- 2. TICKETS -->
+      {#if canViewTickets}
+        <div class="nav-category">
+          <button
+            type="button"
+            class="category-toggle"
+            onclick={() => toggleCategory('tickets')}
+          >
+            <div class="category-title-group">
+              <span class="category-label">TICKETS</span>
+              {#if (data.totalTicketsCount ?? 0) > 0}
+                <span class="category-badge alert">{(data.totalTicketsCount ?? 0)}</span>
+              {/if}
+            </div>
+            {#if isCategoryOpen('tickets', ['/admin/tickets', '/admin/reports', '/admin/relatorios'])}
+              <ChevronDown size={14} />
+            {:else}
+              <ChevronRight size={14} />
+            {/if}
+          </button>
+
+          {#if isCategoryOpen('tickets', ['/admin/tickets', '/admin/reports', '/admin/relatorios'])}
+            <div class="category-links">
+              <a
+                href="/admin/tickets?tab=relatorios"
+                class="nav-link"
+                class:active={isActive('/admin/tickets', false, 'relatorios')}
+                onclick={closeMobile}
+              >
+                <Flag size={16} class="nav-icon" />
+                <span>Relatórios</span>
+                {#if (data.pendingReportsCount ?? 0) > 0}
+                  <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
+                {/if}
+              </a>
+
+              {#if isAdmin}
+                <a
+                  href="/admin/tickets?tab=scans"
+                  class="nav-link"
+                  class:active={isActive('/admin/tickets', false, 'scans')}
+                  onclick={closeMobile}
+                >
+                  <FileCheck size={16} class="nav-icon" />
+                  <span>Inscrições de Scans</span>
+                  {#if (data.pendingScansCount ?? 0) > 0}
+                    <span class="nav-badge alert">{(data.pendingScansCount ?? 0)}</span>
+                  {/if}
+                </a>
+
+                <a
+                  href="/admin/tickets?tab=moderacao"
+                  class="nav-link"
+                  class:active={isActive('/admin/tickets', false, 'moderacao')}
+                  onclick={closeMobile}
+                >
+                  <ShieldAlert size={16} class="nav-icon" />
+                  <span>Moderação</span>
+                  {#if (data.pendingModerationCount ?? 0) > 0}
+                    <span class="nav-badge alert">{(data.pendingModerationCount ?? 0)}</span>
+                  {/if}
+                </a>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- 3. CONTEÚDO -->
+      {#if canManageWorks || canManageTags}
         <div class="nav-category">
           <button
             type="button"
@@ -283,14 +361,14 @@
             onclick={() => toggleCategory('conteudo')}
           >
             <span class="category-label">CONTEÚDO</span>
-            {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags', '/admin/reports', '/admin/relatorios'])}
+            {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags'])}
               <ChevronDown size={14} />
             {:else}
               <ChevronRight size={14} />
             {/if}
           </button>
 
-          {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags', '/admin/reports', '/admin/relatorios'])}
+          {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags'])}
             <div class="category-links">
               {#if canManageWorks}
                 <a
@@ -312,20 +390,6 @@
                 >
                   <Tags size={16} class="nav-icon" />
                   <span>Gêneros & Tags</span>
-                </a>
-              {/if}
-              {#if canViewContentReports}
-                <a
-                  href="/admin/reports"
-                  class="nav-link"
-                  class:active={isActive('/admin/reports') || isActive('/admin/relatorios')}
-                  onclick={closeMobile}
-                >
-                  <Flag size={16} class="nav-icon" />
-                  <span>Relatórios</span>
-                  {#if (data.pendingReportsCount ?? 0) > 0}
-                    <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
-                  {/if}
                 </a>
               {/if}
             </div>
@@ -505,52 +569,8 @@
         </div>
       {/if}
 
-      <!-- 5. COMUNIDADE 🔒 (Admin e Gerente) -->
-      {#if canViewCommunity}
-        <div class="nav-category">
-          <button
-            type="button"
-            class="category-toggle"
-            onclick={() => toggleCategory('comunidade')}
-          >
-            <span class="category-label">COMUNIDADE 🔒</span>
-            {#if isCategoryOpen('comunidade', ['/admin/gestao', '/admin/reports', '/admin/comunidade'])}
-              <ChevronDown size={14} />
-            {:else}
-              <ChevronRight size={14} />
-            {/if}
-          </button>
-
-          {#if isCategoryOpen('comunidade', ['/admin/gestao', '/admin/reports', '/admin/comunidade'])}
-            <div class="category-links">
-              <a
-                href="/admin/gestao"
-                class="nav-link"
-                class:active={isActive('/admin/gestao') || isActive('/admin/comunidade/membros')}
-                onclick={closeMobile}
-              >
-                <Users size={16} class="nav-icon" />
-                <span>Membros</span>
-              </a>
-              <a
-                href="/admin/reports"
-                class="nav-link"
-                class:active={isActive('/admin/reports') || isActive('/admin/comunidade/moderacao')}
-                onclick={closeMobile}
-              >
-                <ShieldAlert size={16} class="nav-icon" />
-                <span>Moderação</span>
-                {#if (data.pendingReportsCount ?? 0) > 0}
-                  <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
-                {/if}
-              </a>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- 6. ADMINISTRAÇÃO 🔒 -->
-      {#if canManageScans || canViewStaff || canViewSystem || canManageConfig}
+      <!-- 6. ADMINISTRAÇÃO 🔒 (Posicionada no final do menu) -->
+      {#if canManageMembers || canManageScans || canViewStaff || canViewSystem || canManageConfig}
         <div class="nav-category">
           <button
             type="button"
@@ -558,15 +578,26 @@
             onclick={() => toggleCategory('administracao')}
           >
             <span class="category-label">ADMINISTRAÇÃO 🔒</span>
-            {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
+            {#if isCategoryOpen('administracao', ['/admin/gestao', '/admin/rankings', '/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
               <ChevronDown size={14} />
             {:else}
               <ChevronRight size={14} />
             {/if}
           </button>
 
-          {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes', '/admin/rankings'])}
+          {#if isCategoryOpen('administracao', ['/admin/gestao', '/admin/rankings', '/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
             <div class="category-links">
+              {#if canManageMembers}
+                <a
+                  href="/admin/gestao"
+                  class="nav-link"
+                  class:active={isActive('/admin/gestao')}
+                  onclick={closeMobile}
+                >
+                  <Users size={16} class="nav-icon" />
+                  <span>Membros</span>
+                </a>
+              {/if}
               {#if canManageConfig}
                 <a
                   href="/admin/rankings"
@@ -586,7 +617,7 @@
                   onclick={closeMobile}
                 >
                   <Scan size={16} class="nav-icon" />
-                  <span>Scans</span>
+                  <span>Diretório de Scans</span>
                 </a>
               {/if}
               {#if canViewStaff}
@@ -881,6 +912,24 @@
   .category-toggle:hover {
     color: #94a3b8;
     background: rgba(255, 255, 255, 0.03);
+  }
+
+  .category-title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .category-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+  .category-badge.alert {
+    background: rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
   }
 
   .category-links {
