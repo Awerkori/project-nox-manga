@@ -80,9 +80,33 @@ export function generateEmailHtml({
       badgeText = 'MURAL';
       subject = `[Mural] ${title}`;
       break;
+
+    case 'TICKET_SCAN_APPLICATION':
+      badgeColor = '#dfc28d';
+      badgeText = 'INSCRIÇÃO DE SCAN';
+      subject = '[Project Nox] Nova inscrição de Scan aguardando aprovação';
+      break;
+
+    case 'TICKET_REPORT':
+      badgeColor = '#f59e0b';
+      badgeText = 'RELATÓRIO DE CONTEÚDO';
+      subject = '[Project Nox] Novo relatório de problema';
+      break;
+
+    case 'TICKET_MODERATION':
+      badgeColor = '#ef4444';
+      badgeText = 'MODERAÇÃO';
+      subject = '[Project Nox] Nova ocorrência aguardando moderação';
+      break;
   }
 
-  const ctaLabel = type === 'MENTION' || type === 'ROLE_MENTION' || type === 'REPLY_CHAT'
+  const ctaLabel = type === 'TICKET_SCAN_APPLICATION'
+    ? 'Revisar Inscrição'
+    : type === 'TICKET_REPORT'
+    ? 'Verificar Relatório'
+    : type === 'TICKET_MODERATION'
+    ? 'Analisar Ocorrência'
+    : type === 'MENTION' || type === 'ROLE_MENTION' || type === 'REPLY_CHAT'
     ? 'Ver mensagem'
     : type.includes('CHAPTER')
     ? 'Ler agora'

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import {
     LayoutDashboard,
@@ -36,7 +37,9 @@
     Headphones,
     Scan,
     Flag,
-    Trophy
+    Trophy,
+    Ticket,
+    FileCheck
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
@@ -47,22 +50,41 @@
   let currentTab = $derived(page.url.searchParams.get('tab') || '');
   let activeImporterTab = $state(page.url.searchParams.get('tab') || 'resumo');
 
+  const sectionLabel = $derived.by(() => {
+    if (currentPath === '/admin') return 'Início';
+    if (currentPath.startsWith('/admin/tickets')) {
+      if (currentTab === 'scans') return 'Inscrições';
+      if (currentTab === 'moderacao') return 'Moderação';
+      return 'Relatórios';
+    }
+    if (currentPath.startsWith('/admin/obras')) return 'Obras';
+    if (currentPath.startsWith('/admin/tags')) return 'Tags';
+    if (currentPath.startsWith('/admin/loja')) return 'Loja';
+    if (currentPath.startsWith('/admin/importer')) return 'Importer';
+    if (currentPath.startsWith('/admin/rankings')) return 'Rankings';
+    if (currentPath.startsWith('/admin/scans')) return 'Scans';
+    if (currentPath.startsWith('/admin/staff')) return 'Staff';
+    if (currentPath.startsWith('/admin/health') || currentPath.startsWith('/admin/sistema')) return 'Sistema';
+    if (currentPath.startsWith('/admin/gestao')) return 'Gestão';
+    return currentPath.replace(/^\/admin\/?/, '').replace(/\//g, ' / ') || 'Painel';
+  });
+
   // Role & Capabilities
   let role = $derived((data.role || 'LEITOR').toUpperCase());
+  let isAdmin = $derived(role === 'ADMIN');
   let isOwnerOrAdmin = $derived(role === 'ADMIN' || role === 'GERENTE');
   let canViewOverview = $derived(true);
+  let canViewTickets = $derived(true);
   let canManageWorks = $derived(true);
   let canManageTags = $derived(true);
-  let canViewContentReports = $derived(true);
   let canManageShop = $derived(isOwnerOrAdmin);
   let canViewImporter = $derived(true);
-  let canViewCommunity = $derived(isOwnerOrAdmin);
-  // Global Scan Management is an ADMIN-only route. Do not advertise a control
-  // to roles that the server must reject.
-  let canManageScans = $derived(role === 'ADMIN');
+  let canManageMembers = $derived(isAdmin);
+  // Global Scan Management is an ADMIN-only route.
+  let canManageScans = $derived(isAdmin);
   let canViewStaff = $derived(isOwnerOrAdmin);
-  let canViewSystem = $derived(role === 'ADMIN');
-  let canManageConfig = $derived(role === 'ADMIN');
+  let canViewSystem = $derived(isAdmin);
+  let canManageConfig = $derived(isAdmin);
 
   // Role metadata
   const roleMeta = $derived.by(() => {
@@ -98,7 +120,90 @@
       activeImporterTab = (event as CustomEvent<string>).detail || 'resumo';
     };
     window.addEventListener('nox:importer-tab', syncImporterTab);
-    return () => window.removeEventListener('nox:importer-tab', syncImporterTab);
+
+    // --- GESTURE NAVIGATION FOR MOBILE SIDEBAR ---
+    let startX = 0;
+    let startY = 0;
+    let isTracking = false;
+    let isEdgeSwipe = false;
+
+    const EDGE_THRESHOLD = 45; // px from the left edge of viewport
+    const MIN_SWIPE_DISTANCE = 50; // px
+    const HORIZONTAL_BIAS = 1.5; // horizontal movement must dominate vertical
+
+    function isInteractiveOrScrollable(el: HTMLElement | null): boolean {
+      if (!el || typeof el.closest !== 'function') return false;
+      return Boolean(
+        el.closest(
+          'input, textarea, select, [contenteditable="true"], .table-responsive, .table-container, .horizontal-scroll, pre, code'
+        )
+      );
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+
+      if (!mobileDrawerOpen) {
+        // Only start tracking if gesture begins near left viewport edge
+        if (startX <= EDGE_THRESHOLD) {
+          const target = e.target as HTMLElement;
+          if (!isInteractiveOrScrollable(target)) {
+            isTracking = true;
+            isEdgeSwipe = true;
+          }
+        }
+      } else {
+        // When drawer is open, any swipe to the left on sidebar or backdrop closes it
+        isTracking = true;
+        isEdgeSwipe = false;
+      }
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      if (!isTracking) return;
+      isTracking = false;
+
+      if (e.changedTouches.length === 0) return;
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absX >= MIN_SWIPE_DISTANCE && absX > absY * HORIZONTAL_BIAS) {
+        if (!mobileDrawerOpen && isEdgeSwipe && deltaX > 0) {
+          // Swipe right from left edge -> OPEN drawer
+          mobileDrawerOpen = true;
+        } else if (mobileDrawerOpen && deltaX < 0) {
+          // Swipe left -> CLOSE drawer
+          mobileDrawerOpen = false;
+        }
+      }
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && mobileDrawerOpen) {
+        closeMobile();
+      }
+    }
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('nox:importer-tab', syncImporterTab);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
+  afterNavigate(() => {
+    mobileDrawerOpen = false;
   });
 
   function toggleCategory(cat: string) {
@@ -119,6 +224,14 @@
   }
 
   function isActive(path: string, exact = false, tabParam?: string) {
+    if (path === '/admin/tickets') {
+      const isTicketsRoute = currentPath === '/admin/tickets' || currentPath === '/admin/reports' || currentPath === '/admin/relatorios';
+      if (!isTicketsRoute) return false;
+      if (tabParam === 'relatorios') {
+        return currentTab === 'relatorios' || !currentTab;
+      }
+      return currentTab === tabParam;
+    }
     if (tabParam !== undefined) {
       const isBase = currentPath === path || currentPath.startsWith(path + '/');
       return isBase && currentTab === tabParam;
@@ -274,8 +387,76 @@
         </div>
       {/if}
 
-      <!-- 2. CONTEÚDO -->
-      {#if canManageWorks || canManageTags || canViewContentReports}
+      <!-- 2. TICKETS -->
+      {#if canViewTickets}
+        <div class="nav-category">
+          <button
+            type="button"
+            class="category-toggle"
+            onclick={() => toggleCategory('tickets')}
+          >
+            <div class="category-title-group">
+              <span class="category-label">TICKETS</span>
+              {#if (data.totalTicketsCount ?? 0) > 0}
+                <span class="category-badge alert">{(data.totalTicketsCount ?? 0)}</span>
+              {/if}
+            </div>
+            {#if isCategoryOpen('tickets', ['/admin/tickets', '/admin/reports', '/admin/relatorios'])}
+              <ChevronDown size={14} />
+            {:else}
+              <ChevronRight size={14} />
+            {/if}
+          </button>
+
+          {#if isCategoryOpen('tickets', ['/admin/tickets', '/admin/reports', '/admin/relatorios'])}
+            <div class="category-links">
+              <a
+                href="/admin/tickets?tab=relatorios"
+                class="nav-link"
+                class:active={isActive('/admin/tickets', false, 'relatorios')}
+                onclick={closeMobile}
+              >
+                <Flag size={16} class="nav-icon" />
+                <span>Relatórios</span>
+                {#if (data.pendingReportsCount ?? 0) > 0}
+                  <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
+                {/if}
+              </a>
+
+              {#if isAdmin}
+                <a
+                  href="/admin/tickets?tab=scans"
+                  class="nav-link"
+                  class:active={isActive('/admin/tickets', false, 'scans')}
+                  onclick={closeMobile}
+                >
+                  <FileCheck size={16} class="nav-icon" />
+                  <span>Inscrições de Scans</span>
+                  {#if (data.pendingScansCount ?? 0) > 0}
+                    <span class="nav-badge alert">{(data.pendingScansCount ?? 0)}</span>
+                  {/if}
+                </a>
+
+                <a
+                  href="/admin/tickets?tab=moderacao"
+                  class="nav-link"
+                  class:active={isActive('/admin/tickets', false, 'moderacao')}
+                  onclick={closeMobile}
+                >
+                  <ShieldAlert size={16} class="nav-icon" />
+                  <span>Moderação</span>
+                  {#if (data.pendingModerationCount ?? 0) > 0}
+                    <span class="nav-badge alert">{(data.pendingModerationCount ?? 0)}</span>
+                  {/if}
+                </a>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- 3. CONTEÚDO -->
+      {#if canManageWorks || canManageTags}
         <div class="nav-category">
           <button
             type="button"
@@ -283,14 +464,14 @@
             onclick={() => toggleCategory('conteudo')}
           >
             <span class="category-label">CONTEÚDO</span>
-            {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags', '/admin/reports', '/admin/relatorios'])}
+            {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags'])}
               <ChevronDown size={14} />
             {:else}
               <ChevronRight size={14} />
             {/if}
           </button>
 
-          {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags', '/admin/reports', '/admin/relatorios'])}
+          {#if isCategoryOpen('conteudo', ['/admin/obras', '/admin/tags'])}
             <div class="category-links">
               {#if canManageWorks}
                 <a
@@ -312,20 +493,6 @@
                 >
                   <Tags size={16} class="nav-icon" />
                   <span>Gêneros & Tags</span>
-                </a>
-              {/if}
-              {#if canViewContentReports}
-                <a
-                  href="/admin/reports"
-                  class="nav-link"
-                  class:active={isActive('/admin/reports') || isActive('/admin/relatorios')}
-                  onclick={closeMobile}
-                >
-                  <Flag size={16} class="nav-icon" />
-                  <span>Relatórios</span>
-                  {#if (data.pendingReportsCount ?? 0) > 0}
-                    <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
-                  {/if}
                 </a>
               {/if}
             </div>
@@ -505,52 +672,8 @@
         </div>
       {/if}
 
-      <!-- 5. COMUNIDADE 🔒 (Admin e Gerente) -->
-      {#if canViewCommunity}
-        <div class="nav-category">
-          <button
-            type="button"
-            class="category-toggle"
-            onclick={() => toggleCategory('comunidade')}
-          >
-            <span class="category-label">COMUNIDADE 🔒</span>
-            {#if isCategoryOpen('comunidade', ['/admin/gestao', '/admin/reports', '/admin/comunidade'])}
-              <ChevronDown size={14} />
-            {:else}
-              <ChevronRight size={14} />
-            {/if}
-          </button>
-
-          {#if isCategoryOpen('comunidade', ['/admin/gestao', '/admin/reports', '/admin/comunidade'])}
-            <div class="category-links">
-              <a
-                href="/admin/gestao"
-                class="nav-link"
-                class:active={isActive('/admin/gestao') || isActive('/admin/comunidade/membros')}
-                onclick={closeMobile}
-              >
-                <Users size={16} class="nav-icon" />
-                <span>Membros</span>
-              </a>
-              <a
-                href="/admin/reports"
-                class="nav-link"
-                class:active={isActive('/admin/reports') || isActive('/admin/comunidade/moderacao')}
-                onclick={closeMobile}
-              >
-                <ShieldAlert size={16} class="nav-icon" />
-                <span>Moderação</span>
-                {#if (data.pendingReportsCount ?? 0) > 0}
-                  <span class="nav-badge alert">{(data.pendingReportsCount ?? 0)}</span>
-                {/if}
-              </a>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- 6. ADMINISTRAÇÃO 🔒 -->
-      {#if canManageScans || canViewStaff || canViewSystem || canManageConfig}
+      <!-- 6. ADMINISTRAÇÃO 🔒 (Posicionada no final do menu) -->
+      {#if canManageMembers || canManageScans || canViewStaff || canViewSystem || canManageConfig}
         <div class="nav-category">
           <button
             type="button"
@@ -558,15 +681,26 @@
             onclick={() => toggleCategory('administracao')}
           >
             <span class="category-label">ADMINISTRAÇÃO 🔒</span>
-            {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
+            {#if isCategoryOpen('administracao', ['/admin/gestao', '/admin/rankings', '/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
               <ChevronDown size={14} />
             {:else}
               <ChevronRight size={14} />
             {/if}
           </button>
 
-          {#if isCategoryOpen('administracao', ['/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes', '/admin/rankings'])}
+          {#if isCategoryOpen('administracao', ['/admin/gestao', '/admin/rankings', '/admin/scans', '/admin/staff', '/admin/health', '/admin/sistema', '/admin/gestao/configuracoes', '/admin/configuracoes'])}
             <div class="category-links">
+              {#if canManageMembers}
+                <a
+                  href="/admin/gestao"
+                  class="nav-link"
+                  class:active={isActive('/admin/gestao')}
+                  onclick={closeMobile}
+                >
+                  <Users size={16} class="nav-icon" />
+                  <span>Membros</span>
+                </a>
+              {/if}
               {#if canManageConfig}
                 <a
                   href="/admin/rankings"
@@ -586,7 +720,7 @@
                   onclick={closeMobile}
                 >
                   <Scan size={16} class="nav-icon" />
-                  <span>Scans</span>
+                  <span>Diretório de Scans</span>
                 </a>
               {/if}
               {#if canViewStaff}
@@ -639,21 +773,57 @@
 
   <!-- Main Workspace -->
   <main class="admin-content">
-    <!-- Mobile Header Trigger -->
-    <div class="mobile-admin-header">
-      <button
-        type="button"
-        class="mobile-expand-btn"
-        onclick={() => (mobileDrawerOpen = true)}
-        aria-label="Menu do painel de controle"
-      >
-        <Menu size={18} />
-        <span>Menu do Painel</span>
-      </button>
-      <span class="mobile-page-crumb">
-        {currentPath.replace(/^\/admin\/?/, '').replace(/\//g, ' / ') || 'Início'}
-      </span>
-    </div>
+    <!-- Mobile Header (Clean, Unified Topbar on Phones & Small Tablets) -->
+    <header class="mobile-admin-header">
+      <div class="mobile-brand-group">
+        <a href="/" class="mobile-brand-link" title="Voltar ao site público">
+          <img
+            src="/brand/nox-symbol-64.webp"
+            alt="Project Nox"
+            width="34"
+            height="34"
+            class="mobile-nox-symbol"
+          />
+        </a>
+        <div class="mobile-brand-titles">
+          <span class="mobile-brand-name">PROJECT NOX</span>
+          <span class="mobile-brand-sub">Painel de Controle</span>
+        </div>
+      </div>
+
+      <div class="mobile-header-actions">
+        <span class="mobile-section-badge" title={sectionLabel}>
+          {sectionLabel}
+        </span>
+
+        {#if (data.totalTicketsCount ?? 0) > 0}
+          <a
+            href="/admin/tickets"
+            class="mobile-tickets-alert"
+            title="Existem {(data.totalTicketsCount ?? 0)} tickets pendentes de atenção"
+          >
+            <Ticket size={14} />
+            <span>{data.totalTicketsCount}</span>
+          </a>
+        {/if}
+
+        <button
+          type="button"
+          class="mobile-drawer-toggle"
+          class:is-open={mobileDrawerOpen}
+          onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
+          aria-label={mobileDrawerOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'}
+        >
+          {#if mobileDrawerOpen}
+            <X size={18} />
+            <span class="mobile-drawer-toggle-label">Fechar</span>
+          {:else}
+            <Menu size={18} />
+            <span class="mobile-drawer-toggle-label">Menu</span>
+          {/if}
+        </button>
+      </div>
+    </header>
 
     <!-- Active Page Content -->
     <div class="admin-page-container">
@@ -883,6 +1053,24 @@
     background: rgba(255, 255, 255, 0.03);
   }
 
+  .category-title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .category-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+  .category-badge.alert {
+    background: rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+
   .category-links {
     display: flex;
     flex-direction: column;
@@ -961,36 +1149,124 @@
     min-width: 0;
   }
 
-  /* Mobile Layout */
+  /* Mobile Topbar & Layout */
   .mobile-admin-header {
     display: none;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .mobile-expand-btn {
-    display: inline-flex;
+  .mobile-brand-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .mobile-brand-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+
+  .mobile-nox-symbol {
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(223, 194, 141, 0.2);
+  }
+
+  .mobile-brand-titles {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.15;
+  }
+
+  .mobile-brand-name {
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    color: #dfc28d;
+    white-space: nowrap;
+  }
+
+  .mobile-brand-sub {
+    font-size: 10.5px;
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .mobile-header-actions {
+    display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 14px;
-    border-radius: 9px;
-    background: rgba(18, 22, 34, 0.9);
-    border: 1px solid rgba(223, 194, 141, 0.3);
-    color: #dfc28d;
-    font-weight: 700;
-    font-size: 13px;
-    cursor: pointer;
+    flex-shrink: 0;
   }
 
-  .mobile-page-crumb {
+  .mobile-section-badge {
+    display: inline-block;
+    max-width: 110px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-tickets-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(225, 29, 72, 0.15);
+    border: 1px solid rgba(225, 29, 72, 0.35);
+    color: #fb7185;
+    font-size: 11px;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .mobile-drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 9px;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.35);
+    color: #dfc28d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .mobile-drawer-toggle.is-open {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+
+  .mobile-drawer-toggle-label {
     font-size: 12px;
-    color: #64748b;
-    font-weight: 600;
-    text-transform: capitalize;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .mobile-drawer-toggle:active {
+    transform: scale(0.96);
+    background: rgba(223, 194, 141, 0.2);
   }
 
   @media (max-width: 950px) {
@@ -998,10 +1274,24 @@
       grid-template-columns: 1fr;
       padding: 0 12px;
       gap: 0;
+      min-height: 100vh;
     }
 
     .mobile-admin-header {
       display: flex;
+      position: sticky;
+      top: 0;
+      z-index: 95;
+      min-height: 56px;
+      margin: 0 -12px 14px;
+      padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+      background: #07090f;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .admin-content {
+      padding-top: 0;
     }
 
     .admin-sidebar {
@@ -1038,22 +1328,9 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(4px);
       z-index: 999;
     }
 
-    .mobile-admin-header {
-      position: sticky;
-      top: 0;
-      z-index: 90;
-      min-height: 48px;
-      margin: 0 -12px 16px;
-      padding: max(10px, env(safe-area-inset-top)) 12px 10px;
-      background: rgba(7, 9, 15, 0.94);
-      backdrop-filter: blur(12px);
-    }
-
-    .mobile-expand-btn,
     .nav-link,
     .category-toggle {
       min-height: 44px;
@@ -1061,6 +1338,12 @@
 
     .sidebar-nav {
       padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (max-width: 370px) {
+    .mobile-section-badge {
+      display: none;
     }
   }
 </style>

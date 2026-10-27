@@ -6,17 +6,65 @@ export const load = async ({ locals }) => {
     throw redirect(303, '/entrar?redirect=/admin');
   }
 
-  const reportsRes = await withTimeout(
+  const isAdmin = locals.role === 'ADMIN';
+
+  // 1. Pending content reports (Work & Chapter issues)
+  const pendingReportsPromise = withTimeout(
     locals.db
       .from('reports')
       .select('id', { count: 'exact', head: true })
-      .in('status', ['NOVO', 'EM_ANALISE']),
+      .in('status', ['NOVO', 'EM_ANALISE'])
+      .is('deleted_at', null)
+      .not('target_type', 'in', '("COMMENT","USER")'),
     1500,
     { count: 0 } as any,
-    'admin_pending_reports'
+    'admin_pending_content_reports'
   );
 
+  // 2. Pending scan partner applications (ADMIN only)
+  const pendingScansPromise = isAdmin
+    ? withTimeout(
+        locals.db
+          .from('scan_partner_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'PENDING')
+          .is('deleted_at', null),
+        1500,
+        { count: 0 } as any,
+        'admin_pending_scans'
+      )
+    : Promise.resolve({ count: 0 });
+
+  // 3. Pending moderation issues (Comment & User issues) (ADMIN only)
+  const pendingModerationPromise = isAdmin
+    ? withTimeout(
+        locals.db
+          .from('reports')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['NOVO', 'EM_ANALISE'])
+          .is('deleted_at', null)
+          .in('target_type', ['COMMENT', 'USER']),
+        1500,
+        { count: 0 } as any,
+        'admin_pending_moderation'
+      )
+    : Promise.resolve({ count: 0 });
+
+  const [reportsRes, scansRes, modRes] = await Promise.all([
+    pendingReportsPromise,
+    pendingScansPromise,
+    pendingModerationPromise
+  ]);
+
+  const pendingReportsCount = reportsRes?.count || 0;
+  const pendingScansCount = scansRes?.count || 0;
+  const pendingModerationCount = modRes?.count || 0;
+  const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0);
+
   return {
-    pendingReportsCount: reportsRes?.count || 0
+    pendingReportsCount,
+    pendingScansCount,
+    pendingModerationCount,
+    totalTicketsCount
   };
 };

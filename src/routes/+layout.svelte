@@ -217,10 +217,12 @@
 
 <AgeGateModal status={data.ageStatus} isLoggedIn={!!profile} />
 
-{#if !reader}
+{#if !reader && !currentPath.startsWith('/admin')}
   <ParticleBackground />
+{/if}
 
-  <header class="site-header" class:scrolled class:menu-open={menu}>
+{#if !reader}
+  <header class="site-header" class:scrolled class:menu-open={menu} class:admin-header={currentPath.startsWith('/admin')}>
     <div class="header-inner">
       <a href="/" class="brand" aria-label="Project Nox, início" onclick={() => (menu = false)}>
         <div class="brand-symbol-wrap">
@@ -602,7 +604,9 @@
       <span class="footer-credit">Feito para quem vive histórias.</span>
     </div>
   </footer>
+{/if}
 
+{#if !reader && !currentPath.startsWith('/admin')}
   <nav class="mobile-bottom" aria-label="Navegação Principal" data-sveltekit-preload-data="tap">
     <a href="/" class:active={currentPath === '/'}>
       <BookOpen size={20} />
@@ -870,6 +874,12 @@
     }
     .header-community-btn .community-btn-text {
       display: none;
+    }
+  }
+
+  @media (max-width: 950px) {
+    .site-header.admin-header {
+      display: none !important;
     }
   }
 
@@ -1369,6 +1379,12 @@
     .header-symbol {
       width: 42px;
       height: 42px;
+    }
+  }
+
+  @media (max-width: 950px) {
+    .site-header.admin-header {
+      display: none !important;
     }
   }
 

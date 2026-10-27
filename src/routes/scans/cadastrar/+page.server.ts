@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { parsePartnerRequestMeta, type ScanPartnerRequestMeta } from '$lib/scans';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { notifyAdminsForScanApplication } from '$lib/server/notifications';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -166,6 +167,19 @@ export const actions: Actions = {
       );
     } catch (ysqlErr: any) {
       console.warn('YSQL partner request sync error (non-fatal):', ysqlErr?.message);
+    }
+
+    // Dispatch real-time in-app & transactional email notification to Admins
+    try {
+      const applicantName = (locals.user as any)?.display_name || (locals.user as any)?.username || 'Candidato';
+      await notifyAdminsForScanApplication({
+        scanName: name,
+        applicantName,
+        scanSlug: slug,
+        platform
+      });
+    } catch (notifErr: any) {
+      console.warn('[NOTIF] Erro ao disparar notificação de inscrição de scan:', notifErr?.message);
     }
 
     return { success: true, submitted: true };

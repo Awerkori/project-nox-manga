@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
+import { notifyAdminsForModeration, notifyStaffForReport } from '$lib/server/notifications';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }: any) => {
   if (!locals.user) {
     throw error(401, 'Autenticação necessária para enviar uma denúncia.');
   }
@@ -62,13 +63,36 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     });
   }
 
+  // Context auto-resolution: guarantee work_id and chapter_id are populated
+  let resolvedWorkId = workId || null;
+  let resolvedChapterId = chapterId || null;
+
+  if (targetType === 'CHAPTER' && resolvedChapterId && !resolvedWorkId) {
+    const { data: ch } = await locals.db
+      .from('chapters')
+      .select('work_id')
+      .eq('id', resolvedChapterId)
+      .maybeSingle();
+    if (ch?.work_id) resolvedWorkId = ch.work_id;
+  } else if (targetType === 'COMMENT' && commentId) {
+    const { data: comm } = await locals.db
+      .from('comments')
+      .select('work_id, chapter_id')
+      .eq('id', commentId)
+      .maybeSingle();
+    if (comm) {
+      if (!resolvedWorkId && comm.work_id) resolvedWorkId = comm.work_id;
+      if (!resolvedChapterId && comm.chapter_id) resolvedChapterId = comm.chapter_id;
+    }
+  }
+
   const { data: inserted, error: insertError } = await locals.db
     .from('reports')
     .insert({
       reporter_id: locals.user.id,
       target_type: targetType,
-      work_id: workId || null,
-      chapter_id: chapterId || null,
+      work_id: resolvedWorkId,
+      chapter_id: resolvedChapterId,
       comment_id: commentId || null,
       target_user_id: targetUserId || null,
       reason: cleanReason,
@@ -80,6 +104,55 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   if (insertError) {
     throw error(500, 'Erro ao registrar denúncia: ' + insertError.message);
+  }
+
+  // Real-time notification dispatch
+  try {
+    if (targetType === 'COMMENT' || targetType === 'USER') {
+      let snippet: string | undefined = undefined;
+      if (commentId) {
+        const { data: comm } = await locals.db
+          .from('comments')
+          .select('body')
+          .eq('id', commentId)
+          .maybeSingle();
+        snippet = comm?.body;
+      }
+      await notifyAdminsForModeration({
+        reason: cleanReason,
+        details: cleanDetails,
+        targetType: targetType,
+        commentSnippet: snippet,
+        platform
+      });
+    } else {
+      let targetTitle = 'Conteúdo';
+      if (targetType === 'CHAPTER' && chapterId) {
+        const { data: chap } = await locals.db
+          .from('chapters')
+          .select('number, title, works(title)')
+          .eq('id', chapterId)
+          .maybeSingle();
+        const num = chap?.number ?? '';
+        targetTitle = `${(chap?.works as any)?.title || 'Obra'} — Cap. ${num}`;
+      } else if (targetType === 'WORK' && workId) {
+        const { data: wk } = await locals.db
+          .from('works')
+          .select('title')
+          .eq('id', workId)
+          .maybeSingle();
+        targetTitle = wk?.title || 'Obra';
+      }
+      await notifyStaffForReport({
+        reason: cleanReason,
+        details: cleanDetails,
+        targetTitle,
+        targetType: targetType as 'WORK' | 'CHAPTER',
+        platform
+      });
+    }
+  } catch (notifErr: any) {
+    console.warn('[NOTIF] Falha ao enviar notificação de ticket:', notifErr?.message);
   }
 
   return json({

@@ -20,6 +20,9 @@ export type NotificationType =
   | 'APPLICATION'
   | 'APPLICATION_UPDATE'
   | 'MURAL_POST'
+  | 'TICKET_SCAN_APPLICATION'
+  | 'TICKET_REPORT'
+  | 'TICKET_MODERATION'
   | 'GENERIC'
   | 'SYSTEM';
 
@@ -228,9 +231,16 @@ export async function createNotification(
         actorName
       });
 
-      const outboxPriority = (type === 'STAGE_READY' || type === 'TASK_ASSIGNED' || type === 'QC_ISSUE' || type === 'REWORK' || type === 'MENTION' || type === 'ROLE_MENTION')
-        ? 'HIGH'
-        : 'NORMAL';
+      const outboxPriority = (
+        type === 'STAGE_READY' ||
+        type === 'TASK_ASSIGNED' ||
+        type === 'QC_ISSUE' ||
+        type === 'REWORK' ||
+        type === 'MENTION' ||
+        type === 'ROLE_MENTION' ||
+        type === 'TICKET_SCAN_APPLICATION' ||
+        type === 'TICKET_MODERATION'
+      ) ? 'HIGH' : 'NORMAL';
 
       const emailIdempotencyKey = `email:${notificationId}`;
 
@@ -694,4 +704,132 @@ export function triggerImmediateOutboxDispatch() {
       console.error('[OUTBOX] Erro no disparo imediato:', err);
     });
   }, 100);
+}
+
+/**
+ * Busca todos os administradores globais (role = 'ADMIN' não suspensos)
+ * Garante lista única de IDs sem repetição
+ */
+export async function getGlobalAdminUserIds(): Promise<string[]> {
+  const db = privileged();
+  try {
+    const { data } = await db
+      .from('access_roles')
+      .select('user_id')
+      .eq('role', 'ADMIN')
+      .eq('suspended', false);
+    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
+  } catch (e) {
+    console.warn('[NOTIF] Erro ao buscar admins:', e);
+    return [];
+  }
+}
+
+/**
+ * Busca todos os membros com acesso editorial/staff (ADMIN e STAFF_SITE não suspensos)
+ * Garante lista única de IDs sem repetição, mesmo se um usuário possuir múltiplos papéis
+ */
+export async function getStaffAndAdminUserIds(): Promise<string[]> {
+  const db = privileged();
+  try {
+    const { data } = await db
+      .from('access_roles')
+      .select('user_id')
+      .in('role', ['ADMIN', 'STAFF_SITE'])
+      .eq('suspended', false);
+    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
+  } catch (e) {
+    console.warn('[NOTIF] Erro ao buscar staff e admins:', e);
+    return [];
+  }
+}
+
+/**
+ * Notifica administradores sobre nova inscrição de scan
+ */
+export async function notifyAdminsForScanApplication(params: {
+  scanName: string;
+  applicantName?: string;
+  scanSlug: string;
+  platform?: any;
+}) {
+  const adminIds = await getGlobalAdminUserIds();
+  const results = [];
+  const senderName = params.applicantName || 'Um usuário';
+  for (const adminId of adminIds) {
+    const res = await createNotification({
+      recipientUserId: adminId,
+      type: 'TICKET_SCAN_APPLICATION',
+      title: `Nova Inscrição de Scan: ${params.scanName}`,
+      body: `A scan "${params.scanName}" enviou uma candidatura para parceria no Project Nox enviada por ${senderName}.`,
+      deepLink: '/admin/tickets?tab=scans',
+      context: params.scanName,
+      priority: 'URGENT',
+      platform: params.platform
+    });
+    results.push(res);
+  }
+  return results;
+}
+
+/**
+ * Notifica administradores sobre ocorrência de moderação
+ */
+export async function notifyAdminsForModeration(params: {
+  reason: string;
+  details?: string;
+  targetType: 'COMMENT' | 'USER';
+  reporterName?: string;
+  commentSnippet?: string;
+  platform?: any;
+}) {
+  const adminIds = await getGlobalAdminUserIds();
+  const results = [];
+  const snippet = params.commentSnippet ? ` "${params.commentSnippet.slice(0, 50)}..."` : '';
+  const bodyText = `Nova denúncia de ${params.targetType === 'COMMENT' ? 'comentário' : 'usuário'}${snippet}. Motivo: ${params.reason}.${params.details ? ' Detalhes: ' + params.details.slice(0, 100) : ''}`;
+
+  for (const adminId of adminIds) {
+    const res = await createNotification({
+      recipientUserId: adminId,
+      type: 'TICKET_MODERATION',
+      title: `Nova ocorrência de moderação: ${params.reason}`,
+      body: bodyText,
+      deepLink: '/admin/tickets?tab=moderacao',
+      context: params.targetType === 'COMMENT' ? 'Comentário Reportado' : 'Usuário Reportado',
+      priority: 'URGENT',
+      platform: params.platform
+    });
+    results.push(res);
+  }
+  return results;
+}
+
+/**
+ * Notifica admins e staff site sobre relatório de conteúdo
+ */
+export async function notifyStaffForReport(params: {
+  reason: string;
+  details?: string;
+  targetTitle: string;
+  targetType: 'WORK' | 'CHAPTER';
+  platform?: any;
+}) {
+  const staffIds = await getStaffAndAdminUserIds();
+  const results = [];
+  const bodyText = `Problema reportado em ${params.targetTitle}. Motivo: ${params.reason}.${params.details ? ' Detalhes: ' + params.details.slice(0, 100) : ''}`;
+
+  for (const staffId of staffIds) {
+    const res = await createNotification({
+      recipientUserId: staffId,
+      type: 'TICKET_REPORT',
+      title: `Novo relatório de problema: ${params.reason}`,
+      body: bodyText,
+      deepLink: '/admin/tickets?tab=relatorios',
+      context: params.targetTitle,
+      priority: 'NORMAL',
+      platform: params.platform
+    });
+    results.push(res);
+  }
+  return results;
 }
