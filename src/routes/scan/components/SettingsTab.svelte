@@ -13,7 +13,9 @@
     Upload,
     Palette,
     Check,
-    X
+    X,
+    CheckCircle2,
+    Crop
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
@@ -60,6 +62,11 @@
   let pendingBannerFile = $state<File | null>(null);
   let pendingBannerPreviewUrl = $state<string | null>(null);
   let isSavingBanner = $state(false);
+  let bannerCropX = $state(50);
+  let bannerCropY = $state(50);
+  let bannerCropZoom = $state(1);
+  let bannerViewMode = $state<'cover' | 'contain'>('cover');
+  let bannerCropMode = $state<'preserve_original' | 'custom_crop'>('preserve_original');
 
   function handleLogoUpload(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -141,6 +148,64 @@
     }
   }
 
+  async function generateCroppedBannerBlob(file: File, x: number, y: number, zoom: number): Promise<Blob> {
+    if (file.type === 'image/gif') return file;
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const targetWidth = 1600;
+        const targetHeight = 500;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        const targetRatio = targetWidth / targetHeight; // 3.2
+        const imgRatio = img.width / img.height;
+
+        let sWidth: number;
+        let sHeight: number;
+
+        if (imgRatio > targetRatio) {
+          sHeight = img.height / zoom;
+          sWidth = sHeight * targetRatio;
+        } else {
+          sWidth = img.width / zoom;
+          sHeight = sWidth / targetRatio;
+        }
+
+        const maxSX = Math.max(0, img.width - sWidth);
+        const maxSY = Math.max(0, img.height - sHeight);
+
+        const sX = maxSX * (x / 100);
+        const sY = maxSY * (y / 100);
+
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, sX, sY, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else resolve(file);
+          },
+          file.type === 'image/png' ? 'image/png' : 'image/webp',
+          0.95
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
   function handleBannerUpload(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -157,6 +222,11 @@
 
     bannerError = '';
     bannerSuccess = '';
+    bannerCropX = 50;
+    bannerCropY = 50;
+    bannerCropZoom = 1;
+    bannerViewMode = 'cover';
+    bannerCropMode = 'preserve_original';
     if (pendingBannerPreviewUrl) URL.revokeObjectURL(pendingBannerPreviewUrl);
     pendingBannerPreviewUrl = URL.createObjectURL(file);
     pendingBannerFile = file;
@@ -170,6 +240,11 @@
     }
     pendingBannerFile = null;
     bannerError = '';
+    bannerCropX = 50;
+    bannerCropY = 50;
+    bannerCropZoom = 1;
+    bannerViewMode = 'cover';
+    bannerCropMode = 'preserve_original';
   }
 
   async function confirmSaveBanner() {
@@ -177,9 +252,13 @@
     bannerError = '';
     isSavingBanner = true;
     try {
+      const uploadPayload = (bannerCropMode === 'custom_crop') && pendingBannerFile.type !== 'image/gif'
+        ? await generateCroppedBannerBlob(pendingBannerFile, bannerCropX, bannerCropY, bannerCropZoom)
+        : pendingBannerFile;
+
       const res = await fetch(`/api/upload?purpose=scan_banner&scan_id=${currentScan.id}`, {
         method: 'POST',
-        body: pendingBannerFile,
+        body: uploadPayload,
         headers: {
           'x-scan-id': currentScan.id,
           'x-media-purpose': 'scan_banner'
@@ -320,107 +399,233 @@
         <input type="hidden" name="logo_id" value={logoId} />
         <input type="hidden" name="banner_id" value={bannerId} />
 
-        <div class="media-upload-grid">
-          <!-- Logo Card -->
-          <div class="media-upload-card">
+        <div class="branding-media-layout">
+          <!-- Logo Card: Compacto e não toma a largura do banner -->
+          <div class="media-upload-card logo-upload-card">
             <div class="media-card-title-row">
               <span class="media-card-title">Logo da Scan</span>
-              <span class="media-type-pill">GIF / PNG / WEBP</span>
+              <span class="media-type-pill">GIF / PNG / WEBP · ATÉ 5MB</span>
             </div>
-            <p class="media-card-hint">Suporta GIF animado (preserva animação) ou imagem estática até 5MB.</p>
             
-            <div class="logo-preview-box">
-              {#if pendingLogoPreviewUrl}
-                <img src={pendingLogoPreviewUrl} alt="Prévia do novo logo" class="logo-preview-img is-pending-preview" />
-                <span class="preview-badge-pill">PRÉVIA</span>
-              {:else if logoId}
-                <img src="/media/{logoId}" alt="Logo da {currentScan?.name}" class="logo-preview-img" />
-              {:else}
-                <div class="logo-placeholder">
-                  <Image size={32} />
-                  <span>Sem logo</span>
-                </div>
-              {/if}
-            </div>
-
-            {#if logoError}
-              <span class="upload-err-msg">{logoError}</span>
-            {/if}
-            {#if logoSuccess}
-              <span class="upload-success-msg">{logoSuccess}</span>
-            {/if}
-
-            <div class="media-actions-row">
-              {#if pendingLogoFile}
-                <button
-                  type="button"
-                  class="btn-save-staged"
-                  onclick={confirmSaveLogo}
-                  disabled={isSavingLogo}
-                  title="Confirmar e salvar novo logo"
-                >
-                  <Check size={14} />
-                  <span>{isSavingLogo ? 'Salvando...' : 'Salvar Logo'}</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn-cancel-staged"
-                  onclick={cancelLogoPreview}
-                  disabled={isSavingLogo}
-                  title="Descartar prévia"
-                >
-                  <X size={14} />
-                  <span>Cancelar</span>
-                </button>
-              {:else}
-                <label class="btn-secondary sm cursor-pointer" class:disabled={isSavingLogo}>
-                  <Upload size={14} />
-                  <span>{logoId ? 'Alterar Logo (GIF/PNG)' : 'Enviar Logo (GIF/PNG)'}</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    class="hidden-file-input"
-                    onchange={handleLogoUpload}
-                    disabled={isSavingLogo}
-                  />
-                </label>
-
-                {#if logoId}
-                  <button
-                    type="button"
-                    class="btn-danger-xs"
-                    onclick={() => (logoId = '')}
-                    title="Remover logo atual"
-                  >
-                    <Trash2 size={13} />
-                    <span>Remover</span>
-                  </button>
+            <div class="logo-card-body">
+              <div class="logo-preview-box">
+                {#if pendingLogoPreviewUrl}
+                  <img src={pendingLogoPreviewUrl} alt="Prévia do novo logo" class="logo-preview-img is-pending-preview" />
+                  <span class="preview-badge-pill">PRÉVIA</span>
+                {:else if logoId}
+                  <img src="/media/{logoId}" alt="Logo da {currentScan?.name}" class="logo-preview-img" />
+                {:else}
+                  <div class="logo-placeholder">
+                    <Image size={32} />
+                    <span>Sem logo</span>
+                  </div>
                 {/if}
-              {/if}
+              </div>
+
+              <div class="logo-actions-col">
+                <p class="media-card-hint">
+                  Exibido na vitrine, perfil público e cabeçalhos oficiais. Preserva transparência e animação GIF.
+                </p>
+
+                {#if logoError}
+                  <span class="upload-err-msg">{logoError}</span>
+                {/if}
+                {#if logoSuccess}
+                  <span class="upload-success-msg">{logoSuccess}</span>
+                {/if}
+
+                <div class="media-actions-row">
+                  {#if pendingLogoFile}
+                    <button
+                      type="button"
+                      class="btn-save-staged"
+                      onclick={confirmSaveLogo}
+                      disabled={isSavingLogo}
+                      title="Confirmar e salvar novo logo"
+                    >
+                      <Check size={14} />
+                      <span>{isSavingLogo ? 'Salvando...' : 'Salvar Logo'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-cancel-staged"
+                      onclick={cancelLogoPreview}
+                      disabled={isSavingLogo}
+                      title="Descartar prévia"
+                    >
+                      <X size={14} />
+                      <span>Cancelar</span>
+                    </button>
+                  {:else}
+                    <label class="btn-secondary sm cursor-pointer" class:disabled={isSavingLogo}>
+                      <Upload size={14} />
+                      <span>{logoId ? 'Alterar Logo' : 'Enviar Logo'}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        class="hidden-file-input"
+                        onchange={handleLogoUpload}
+                        disabled={isSavingLogo}
+                      />
+                    </label>
+
+                    {#if logoId}
+                      <button
+                        type="button"
+                        class="btn-danger-xs"
+                        onclick={() => (logoId = '')}
+                        title="Remover logo atual"
+                      >
+                        <Trash2 size={13} />
+                        <span>Remover</span>
+                      </button>
+                    {/if}
+                  {/if}
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Banner Card -->
-          <div class="media-upload-card">
-            <div class="media-card-title-row">
-              <span class="media-card-title">Banner da Scan</span>
-              <span class="media-type-pill">GIF / JPG / WEBP</span>
-            </div>
-            <p class="media-card-hint">Suporta GIF animado panorâmico ou imagem estática até 10MB.</p>
+          <!-- Banner Card com Área Ampla, Preview Grande e Enquadrador -->
+          <div class="media-upload-card banner-media-card banner-master-card">
+            <div class="media-card-title-row banner-card-head">
+              <div class="banner-title-group">
+                <span class="media-card-title">Banner Panorâmico da Scan</span>
+                <span class="media-type-pill">GIF / JPG / WEBP · ÁREA AMPLA</span>
+              </div>
 
-            <div class="banner-preview-box">
+              <!-- Alternador de Visão de Pré-visualização -->
+              <div class="banner-view-toggle">
+                <button
+                  type="button"
+                  class="view-toggle-btn"
+                  class:is-active={bannerViewMode === 'cover'}
+                  onclick={() => (bannerViewMode = 'cover')}
+                  title="Visualizar enquadramento panorâmico widescreen"
+                >
+                  Enquadramento Widescreen
+                </button>
+                <button
+                  type="button"
+                  class="view-toggle-btn"
+                  class:is-active={bannerViewMode === 'contain'}
+                  onclick={() => (bannerViewMode = 'contain')}
+                  title="Visualizar a imagem inteira sem nenhum corte"
+                >
+                  Ver Arte Completa
+                </button>
+              </div>
+            </div>
+
+            <p class="media-card-hint">
+              Exibido no topo do perfil público e na vitrine de scans. Suba imagens em alta resolução até 10MB.
+            </p>
+
+            <!-- Grande Palco de Pré-visualização do Banner (280px altura desktop, 180px mobile) -->
+            <div class="banner-preview-box large-stage" class:is-contain-mode={bannerViewMode === 'contain'}>
               {#if pendingBannerPreviewUrl}
-                <img src={pendingBannerPreviewUrl} alt="Prévia do novo banner" class="banner-preview-img is-pending-preview" />
-                <span class="preview-badge-pill">PRÉVIA</span>
+                <div class="banner-crop-viewport">
+                  <img
+                    src={pendingBannerPreviewUrl}
+                    alt="Prévia do novo banner"
+                    class="banner-preview-img is-pending-preview"
+                    class:img-contain={bannerViewMode === 'contain'}
+                    style={bannerViewMode === 'cover' ? `object-position: ${bannerCropX}% ${bannerCropY}%; transform: scale(${bannerCropZoom}); transform-origin: center center;` : ''}
+                  />
+                  {#if bannerViewMode === 'cover'}
+                    <div class="crop-guides-overlay">
+                      <span class="aspect-pill">ENQUADRAMENTO PANORÂMICO</span>
+                    </div>
+                  {/if}
+                </div>
+                <span class="preview-badge-pill">PRÉVIA EM EDIÇÃO</span>
               {:else if bannerId}
-                <img src="/media/{bannerId}" alt="Banner da {currentScan?.name}" class="banner-preview-img" />
+                <img
+                  src="/media/{bannerId}"
+                  alt="Banner da {currentScan?.name}"
+                  class="banner-preview-img"
+                  class:img-contain={bannerViewMode === 'contain'}
+                />
               {:else}
                 <div class="banner-placeholder">
-                  <Image size={36} />
-                  <span>Sem banner personalizado</span>
+                  <Image size={44} />
+                  <span>Nenhum banner personalizado configurado</span>
                 </div>
               {/if}
             </div>
+
+            <!-- Controles e Modo de Envio (Quando há arquivo staged) -->
+            {#if pendingBannerFile}
+              <div class="banner-edit-dashboard">
+                <div class="banner-mode-selector">
+                  <span class="mode-select-label">Modo de Processamento do Banner:</span>
+                  <div class="mode-pills-row">
+                    <button
+                      type="button"
+                      class="mode-pill-btn"
+                      class:is-selected={bannerCropMode === 'preserve_original'}
+                      onclick={() => (bannerCropMode = 'preserve_original')}
+                    >
+                      <CheckCircle2 size={15} />
+                      <span>Preservar Imagem Completa (Sem perda de resolução)</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="mode-pill-btn"
+                      class:is-selected={bannerCropMode === 'custom_crop'}
+                      onclick={() => (bannerCropMode = 'custom_crop')}
+                    >
+                      <Crop size={15} />
+                      <span>Recorte & Enquadramento Manual</span>
+                    </button>
+                  </div>
+                </div>
+
+                {#if bannerCropMode === 'custom_crop'}
+                  <div class="banner-crop-controls-card">
+                    <div class="crop-controls-top">
+                      <span class="crop-controls-title">Ajuste Manual de Enquadramento:</span>
+                      <div class="crop-presets-row">
+                        <button type="button" class="preset-btn" onclick={() => { bannerCropY = 15; }}>Topo</button>
+                        <button type="button" class="preset-btn" onclick={() => { bannerCropY = 50; }}>Centro</button>
+                        <button type="button" class="preset-btn" onclick={() => { bannerCropY = 85; }}>Base</button>
+                        <button type="button" class="preset-btn" onclick={() => { bannerCropX = 50; bannerCropY = 50; bannerCropZoom = 1; }}>Resetar</button>
+                      </div>
+                    </div>
+
+                    <div class="crop-sliders-grid">
+                      <div class="crop-slider-group">
+                        <div class="slider-label-line">
+                          <span>Posição Vertical</span>
+                          <span class="val-pill">{bannerCropY}%</span>
+                        </div>
+                        <input type="range" min="0" max="100" step="1" bind:value={bannerCropY} class="range-slider" />
+                      </div>
+
+                      <div class="crop-slider-group">
+                        <div class="slider-label-line">
+                          <span>Posição Horizontal</span>
+                          <span class="val-pill">{bannerCropX}%</span>
+                        </div>
+                        <input type="range" min="0" max="100" step="1" bind:value={bannerCropX} class="range-slider" />
+                      </div>
+
+                      <div class="crop-slider-group">
+                        <div class="slider-label-line">
+                          <span>Zoom</span>
+                          <span class="val-pill">{bannerCropZoom.toFixed(2)}x</span>
+                        </div>
+                        <input type="range" min="1" max="2.5" step="0.05" bind:value={bannerCropZoom} class="range-slider" />
+                      </div>
+                    </div>
+                  </div>
+                {:else}
+                  <div class="preserve-original-note">
+                    <span>✓ O arquivo original será preservado em alta resolução sem nenhum corte permanente. A centralização responsiva automática será utilizada na exibição pública.</span>
+                  </div>
+                {/if}
+              </div>
+            {/if}
 
             {#if bannerError}
               <span class="upload-err-msg">{bannerError}</span>
@@ -454,7 +659,7 @@
               {:else}
                 <label class="btn-secondary sm cursor-pointer" class:disabled={isSavingBanner}>
                   <Upload size={14} />
-                  <span>{bannerId ? 'Alterar Banner (GIF/PNG)' : 'Enviar Banner (GIF/PNG)'}</span>
+                  <span>{bannerId ? 'Alterar Banner (GIF/PNG/JPG)' : 'Enviar Banner (GIF/PNG/JPG)'}</span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
@@ -1331,46 +1536,125 @@
     gap: 1.25rem;
   }
 
-  .media-upload-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-    gap: 1.25rem;
+  /* Branding Media Layout: Logo compacto + Banner Master Card de Largura Total */
+  .branding-media-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
   }
 
   .media-upload-card {
-    background: rgba(15, 23, 42, 0.4);
+    background: rgba(15, 23, 42, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
+    border-radius: 1rem;
+    padding: 1.35rem;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.75rem;
     min-width: 0;
   }
 
+  /* 1. Logo Card: Compacto e Objetivo */
+  .logo-upload-card {
+    max-width: 620px;
+  }
+
+  .logo-card-body {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .logo-actions-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 2. Banner Master Card: Área Ampla (100% largura), Preview Grande e Enquadrador */
+  .banner-master-card {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 1.15rem;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
+    padding: 1.5rem;
+  }
+
+  .banner-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .banner-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .banner-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.2rem;
+    gap: 0.25rem;
+  }
+
+  .view-toggle-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .view-toggle-btn:hover {
+    color: #ffffff;
+  }
+
+  .view-toggle-btn.is-active {
+    background: rgba(168, 85, 247, 0.3);
+    color: #f3e8ff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+
   .media-card-title {
-    font-size: 0.9375rem;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 700;
     color: #f1f5f9;
   }
 
   .media-card-hint {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     color: #94a3b8;
     margin: 0;
   }
 
   .logo-preview-box {
-    width: 100px;
-    height: 100px;
-    border-radius: 0.75rem;
-    background: rgba(0, 0, 0, 0.4);
+    width: 96px;
+    height: 96px;
+    border-radius: 1rem;
+    background: rgba(0, 0, 0, 0.5);
     border: 1px dashed rgba(255, 255, 255, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    margin: 0.5rem 0;
+    flex-shrink: 0;
+    position: relative;
   }
 
   .logo-preview-img {
@@ -1384,29 +1668,222 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
     color: #64748b;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     text-align: center;
   }
 
-  .banner-preview-box {
+  /* Palco de Pré-visualização do Banner - Amplo, Alto e Confortável */
+  .banner-preview-box.large-stage {
     width: 100%;
-    height: 150px;
-    border-radius: 0.75rem;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
+    height: 290px;
+    border-radius: 1rem;
+    background: #060810;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    margin: 0.5rem 0;
+    margin: 0.35rem 0;
+    position: relative;
+    box-shadow: inset 0 2px 14px rgba(0, 0, 0, 0.7);
+  }
+
+  .banner-preview-box.large-stage.is-contain-mode {
+    background: #000000;
+  }
+
+  .banner-crop-viewport {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
   }
 
   .banner-preview-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.1s ease, object-position 0.1s ease;
+  }
+
+  .banner-preview-img.img-contain {
+    object-fit: contain !important;
+    transform: none !important;
+  }
+
+  .crop-guides-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 1px dashed rgba(168, 85, 247, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 0.65rem;
+  }
+
+  /* Painel de Configuração e Modo de Envio */
+  .banner-edit-dashboard {
+    background: rgba(10, 14, 26, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .banner-mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .mode-select-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .mode-pills-row {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .mode-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.5rem 0.95rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mode-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .mode-pill-btn.is-selected {
+    background: rgba(16, 185, 129, 0.16);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #34d399;
+  }
+
+  .preserve-original-note {
+    font-size: 0.82rem;
+    color: #a7f3d0;
+    margin: 0;
+    padding: 0.6rem 0.85rem;
+    background: rgba(16, 185, 129, 0.08);
+    border-radius: 8px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .aspect-pill {
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #c4b5fd;
+    backdrop-filter: blur(6px);
+  }
+
+  /* Banner Crop Controls */
+  .banner-crop-controls-card {
+    background: rgba(13, 17, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 0.75rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .crop-controls-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .crop-controls-title {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .crop-presets-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .preset-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .preset-btn:hover {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #ffffff;
+  }
+
+  .crop-sliders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .crop-slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .slider-label-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+  }
+
+  .val-pill {
+    color: #a78bfa;
+    font-family: monospace;
+  }
+
+  .range-slider {
+    width: 100%;
+    accent-color: #8b5cf6;
+    cursor: pointer;
   }
 
   .media-actions-row {

@@ -148,140 +148,138 @@
 </svelte:head>
 
 <div class="scan-profile-page">
-  <!-- Immersive Cinematic Header Backdrop -->
-  <header class="profile-hero-backdrop">
-    <div class="hero-banner-image-wrap">
-      {#if data.scan.banner_id}
-        <img src="/media/{data.scan.banner_id}" alt="Banner de {data.scan.name}" class="hero-banner-img" />
-      {:else}
-        <div class="hero-banner-fallback" class:official-bg={data.scan.is_official}></div>
-      {/if}
-      <div class="hero-banner-fade"></div>
-    </div>
+  <!-- Top Utility Bar: Navegação e Acesso ao Painel da Scan (sem sobrepor a arte) -->
+  <div class="profile-top-bar">
+    <a href="/scans" class="btn-back-catalog">
+      <ArrowLeft size={15} />
+      <span>Voltar ao Hub de Scans</span>
+    </a>
 
-    <!-- Navigation Breadcrumb -->
-    <div class="profile-top-bar">
-      <a href="/scans" class="btn-back-catalog">
-        <ArrowLeft size={15} />
-        <span>Voltar ao Hub de Scans</span>
+    {#if data.canAccessScanPanel}
+      <a
+        href={data.scanPanelUrl}
+        class="btn-staff-cockpit"
+        title="Acessar painel interno de gerenciamento desta scan"
+      >
+        <LayoutDashboard size={15} />
+        <span>Painel da Scan</span>
       </a>
+    {/if}
+  </div>
 
-      {#if data.canAccessScanPanel}
-        <a
-          href={data.scanPanelUrl}
-          class="btn-staff-cockpit"
-          title="Acessar painel interno de gerenciamento desta scan"
-        >
-          <LayoutDashboard size={15} />
-          <span>Painel da Scan</span>
-        </a>
+  <!-- 1. PRIMEIRO: BANNER COMPLETO (Sozinho no topo, 100% desimpedido e sem informações cobrindo) -->
+  <section class="profile-banner-stage" aria-label="Banner da Scan">
+    <div class="profile-banner-container">
+      {#if data.scan.banner_id}
+        <img src="/media/{data.scan.banner_id}" alt="Banner de {data.scan.name}" class="profile-banner-img" />
+      {:else}
+        <div class="profile-banner-fallback" class:official-bg={data.scan.is_official}>
+          <div class="fallback-glow"></div>
+        </div>
       {/if}
+      <div class="banner-glass-edge"></div>
     </div>
+  </section>
 
-    <!-- Hero Profile Identity Card -->
-    <div class="profile-identity-container">
-      <div class="profile-identity-card" class:is-official-card={data.scan.is_official}>
-        <!-- Floating Logo Emblem -->
-        <div class="profile-logo-frame" class:official-logo-rim={data.scan.is_official}>
-          {#if data.scan.logo_id}
-            <img src="/media/{data.scan.logo_id}" alt="Logo de {data.scan.name}" class="profile-logo-img" />
+  <!-- 2. SEGUNDO: IDENTIDADE DA SCAN (Logo abaixo do banner, compacto, alinhado e elegante) -->
+  <section class="profile-identity-section">
+    <div class="profile-identity-card" class:is-official-card={data.scan.is_official}>
+      <div class="profile-logo-frame" class:official-logo-rim={data.scan.is_official}>
+        {#if data.scan.logo_id}
+          <img src="/media/{data.scan.logo_id}" alt="Logo de {data.scan.name}" class="profile-logo-img" />
+        {:else}
+          <div class="profile-logo-fallback">
+            {data.scan.name.charAt(0).toUpperCase()}
+          </div>
+        {/if}
+      </div>
+
+      <div class="identity-info-group">
+        <div class="verification-badges-row">
+          {#if data.scan.is_official}
+            <span class="seal-official-gold">
+              <Star size={12} fill="#f59e0b" color="#f59e0b" />
+              <span>NÚCLEO OFICIAL PROJECT NOX</span>
+            </span>
           {:else}
-            <div class="profile-logo-fallback">
-              {data.scan.name.charAt(0).toUpperCase()}
-            </div>
+            <span class="seal-partner-cyan">
+              <ShieldCheck size={12} />
+              <span>SCAN PARCEIRA VERIFICADA</span>
+            </span>
+          {/if}
+
+          {#if isRecruiting}
+            <button
+              type="button"
+              class="seal-recruiting-beacon"
+              onclick={() => selectPublicTab("recruitment")}
+              title="Ver vagas disponíveis para esta equipe"
+            >
+              <span class="pulse-beacon green"></span>
+              <span>RECRUTANDO NOVOS TALENTOS</span>
+            </button>
           {/if}
         </div>
 
-        <!-- Identity Meta & Details -->
-        <div class="profile-identity-content">
-          <div class="identity-header-row">
-            <div class="title-and-badges">
-              <h1 class="profile-title">{data.scan.name}</h1>
-              <div class="verification-badges-row">
-                {#if data.scan.is_official}
-                  <span class="seal-official-gold">
-                    <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                    <span>NÚCLEO OFICIAL PROJECT NOX</span>
-                  </span>
-                {:else}
-                  <span class="seal-partner-cyan">
-                    <ShieldCheck size={12} />
-                    <span>SCAN PARCEIRA VERIFICADA</span>
-                  </span>
-                {/if}
+        <h1 class="profile-title">{data.scan.name}</h1>
 
-                {#if isRecruiting}
-                  <button
-                    type="button"
-                    class="seal-recruiting-beacon"
-                    onclick={() => selectPublicTab("recruitment")}
-                    title="Ver vagas disponíveis para esta equipe"
-                  >
-                    <span class="pulse-beacon green"></span>
-                    <span>RECRUTANDO NOVOS TALENTOS</span>
-                  </button>
-                {/if}
-              </div>
-            </div>
+        <p class="profile-description">
+          {data.scan.description || (data.scan.is_official ? "Scan oficial e núcleo editorial de traduções do Project Nox. Equipe dedicada à localização e diagramação de alta fidelidade." : "Grupo independente de tradução e edição parceiro da comunidade Project Nox.")}
+        </p>
 
-            <!-- Social Links Cluster -->
-            <div class="profile-social-dock">
-              {#if data.scan.discord}
-                <a href={data.scan.discord} target="_blank" rel="noopener noreferrer" class="social-dock-btn discord" title="Servidor oficial no Discord">
-                  <DiscordIcon size={15} />
-                  <span>Discord</span>
-                </a>
-              {/if}
-              {#if data.scan.fluxer}
-                <a href={data.scan.fluxer} target="_blank" rel="noopener noreferrer" class="social-dock-btn fluxer" title="Comunidade oficial no Fluxer">
-                  <FluxerIcon size={15} />
-                  <span>Fluxer</span>
-                </a>
-              {/if}
-              {#if data.scan.website}
-                <a href={data.scan.website} target="_blank" rel="noopener noreferrer" class="social-dock-btn website" title="Website oficial">
-                  <Globe size={15} />
-                  <span>Website</span>
-                </a>
-              {/if}
-            </div>
-          </div>
-
-          <!-- Description -->
-          <p class="profile-description">
-            {data.scan.description || (data.scan.is_official ? "Scan oficial e núcleo editorial de traduções do Project Nox. Equipe dedicada à localização e diagramação de alta fidelidade." : "Grupo independente de tradução e edição parceiro da comunidade Project Nox.")}
-          </p>
-
-          <!-- Integrated Stats Dock (Sem caixas soltas e redundantes) -->
-          <div class="profile-stats-dock">
-            <div class="stat-dock-item">
-              <span class="stat-dock-val">{data.works.length}</span>
-              <span class="stat-dock-lbl">{data.works.length === 1 ? "Obra Ativa" : "Obras Ativas"}</span>
-            </div>
-            <div class="stat-dock-sep"></div>
-            <div class="stat-dock-item">
-              <span class="stat-dock-val">{formatNumber(data.totalViews)}</span>
-              <span class="stat-dock-lbl">Leituras Totais</span>
-            </div>
-            <div class="stat-dock-sep"></div>
-            <div class="stat-dock-item">
-              <span class="stat-dock-val">{data.members.length}</span>
-              <span class="stat-dock-lbl">{data.members.length === 1 ? "Integrante" : "Integrantes"}</span>
-            </div>
-            {#if isRecruiting}
-              <div class="stat-dock-sep"></div>
-              <div class="stat-dock-item stat-highlight-recruiting">
-                <span class="stat-dock-val">{data.openings.length}</span>
-                <span class="stat-dock-lbl">{data.openings.length === 1 ? "Vaga Aberta" : "Vagas Abertas"}</span>
-              </div>
-            {/if}
-          </div>
+        <!-- Social Links Cluster -->
+        <div class="profile-social-dock">
+          {#if data.scan.discord}
+            <a href={data.scan.discord} target="_blank" rel="noopener noreferrer" class="social-dock-btn discord" title="Servidor oficial no Discord">
+              <DiscordIcon size={14} />
+              <span>Discord</span>
+            </a>
+          {/if}
+          {#if data.scan.fluxer}
+            <a href={data.scan.fluxer} target="_blank" rel="noopener noreferrer" class="social-dock-btn fluxer" title="Comunidade oficial no Fluxer">
+              <FluxerIcon size={14} />
+              <span>Fluxer</span>
+            </a>
+          {/if}
+          {#if data.scan.website}
+            <a href={data.scan.website} target="_blank" rel="noopener noreferrer" class="social-dock-btn website" title="Website oficial">
+              <Globe size={14} />
+              <span>Website</span>
+            </a>
+          {/if}
         </div>
       </div>
     </div>
-  </header>
+  </section>
 
-  <!-- 4 NAVIGATION TABS: Obras | Equipe | Recrutamento | Comentários -->
+  <!-- 3. TERCEIRO: MÉTRICAS ORGANIZADAS (Abaixo da identidade, centralizadas e valorizadas) -->
+  <section class="profile-metrics-section">
+    <div class="metrics-dock-box">
+      <div class="metric-cell">
+        <span class="metric-hero-val">{data.works.length}</span>
+        <span class="metric-hero-lbl">{data.works.length === 1 ? "Obra Ativa" : "Obras Ativas"}</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-cell">
+        <span class="metric-hero-val">{formatNumber(data.totalViews)}</span>
+        <span class="metric-hero-lbl">Leituras Totais</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-cell">
+        <span class="metric-hero-val">{data.members.length}</span>
+        <span class="metric-hero-lbl">{data.members.length === 1 ? "Integrante" : "Integrantes"}</span>
+      </div>
+      {#if isRecruiting}
+        <div class="metric-divider"></div>
+        <div class="metric-cell is-recruiting-stat">
+          <span class="metric-hero-val text-emerald">{data.openings.length}</span>
+          <span class="metric-hero-lbl text-emerald">{data.openings.length === 1 ? "Vaga Aberta" : "Vagas Abertas"}</span>
+        </div>
+      {/if}
+    </div>
+  </section>
+
+  <!-- 4. QUARTO: NAVEGAÇÃO E CONTEÚDO (4 Abas Públicas) -->
   <main class="profile-body-container">
     <nav class="profile-navigation-bar" aria-label="Abas da scan">
       <div class="nav-tabs-segmented">
@@ -1260,64 +1258,16 @@
     padding-bottom: 6rem;
   }
 
-  .profile-hero-backdrop {
-    position: relative;
-    width: 100%;
-    background: #0d111d;
-    padding-top: 1.5rem;
-    padding-bottom: 2.5rem;
-  }
-
-  .hero-banner-image-wrap {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 320px;
-    overflow: hidden;
-    z-index: 0;
-  }
-
-  .hero-banner-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 30%;
-  }
-
-  .hero-banner-fallback {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
-  }
-
-  .hero-banner-fallback.official-bg {
-    background: radial-gradient(circle at 70% 30%, rgba(245, 158, 11, 0.22), transparent 70%),
-      linear-gradient(135deg, #2b1f14 0%, #1e1b4b 60%, #0f172a 100%);
-  }
-
-  .hero-banner-fade {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(9, 12, 21, 0.2) 0%,
-      rgba(9, 12, 21, 0.6) 50%,
-      rgba(9, 12, 21, 0.98) 95%,
-      #090c15 100%
-    );
-  }
-
-  /* Top Bar: Back & Staff Cockpit */
+  /* Top Bar: Back & Staff Cockpit (Sleek, Clean, Unobtrusive) */
   .profile-top-bar {
-    position: relative;
-    z-index: 2;
     max-width: 1280px;
     margin: 0 auto;
-    padding: 0 1.5rem 1.5rem;
+    padding: 1.25rem 1.5rem 1rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    position: relative;
+    z-index: 5;
   }
 
   .btn-back-catalog {
@@ -1369,24 +1319,77 @@
     box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
   }
 
-  /* Identity Container */
-  .profile-identity-container {
-    position: relative;
-    z-index: 2;
+  /* 1. BANNER COMPLETO: Sozinho no topo, desimpedido */
+  .profile-banner-stage {
     max-width: 1280px;
     margin: 0 auto;
     padding: 0 1.5rem;
   }
 
+  .profile-banner-container {
+    position: relative;
+    width: 100%;
+    height: 350px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #080b15;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
+  }
+
+  .profile-banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    display: block;
+  }
+
+  .profile-banner-fallback {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .profile-banner-fallback.official-bg {
+    background: radial-gradient(circle at 70% 30%, rgba(245, 158, 11, 0.22), transparent 70%),
+      linear-gradient(135deg, #2b1f14 0%, #1e1b4b 60%, #0f172a 100%);
+  }
+
+  .fallback-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+  }
+
+  .banner-glass-edge {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 20px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* 2. IDENTIDADE DA SCAN: Logo abaixo do banner */
+  .profile-identity-section {
+    max-width: 1280px;
+    margin: 1.5rem auto 0;
+    padding: 0 1.5rem;
+  }
+
   .profile-identity-card {
     display: flex;
-    align-items: flex-start;
-    gap: 2rem;
+    align-items: center;
+    gap: 1.75rem;
     background: linear-gradient(135deg, rgba(17, 22, 39, 0.95) 0%, rgba(11, 15, 27, 0.98) 100%);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 24px;
-    padding: 2.25rem;
-    box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+    border-radius: 20px;
+    padding: 1.35rem 1.75rem;
+    box-shadow: 0 14px 35px -8px rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(20px);
   }
 
@@ -1394,21 +1397,29 @@
     border-color: rgba(245, 158, 11, 0.3);
   }
 
-  /* Logo Frame */
+  .identity-info-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Logo Frame Proporcional */
   .profile-logo-frame {
-    width: 110px;
-    height: 110px;
-    border-radius: 24px;
+    width: 84px;
+    height: 84px;
+    border-radius: 20px;
     overflow: hidden;
     background: #0b0e19;
     border: 3px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
     flex-shrink: 0;
   }
 
   .profile-logo-frame.official-logo-rim {
     border-color: #f59e0b;
-    box-shadow: 0 0 28px rgba(245, 158, 11, 0.35), 0 16px 32px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.35), 0 12px 24px rgba(0, 0, 0, 0.5);
   }
 
   .profile-logo-img {
@@ -1423,37 +1434,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.85rem;
+    font-size: 2.25rem;
     font-weight: 900;
     background: linear-gradient(135deg, #7c3aed 0%, #4338ca 100%);
     color: #ffffff;
   }
 
-  /* Identity Content */
-  .profile-identity-content {
-    flex: 1;
+  .identity-meta-group {
     display: flex;
     flex-direction: column;
-    gap: 1.15rem;
-  }
-
-  .identity-header-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-  }
-
-  .title-and-badges {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
+    min-width: 0;
   }
 
   .profile-title {
     font-family: "Manrope", sans-serif;
-    font-size: 2.35rem;
+    font-size: 1.85rem;
     font-weight: 850;
     color: #ffffff;
     line-height: 1.15;
@@ -1465,7 +1461,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
   }
 
   .seal-official-gold {
@@ -1475,8 +1471,8 @@
     background: rgba(245, 158, 11, 0.16);
     border: 1px solid rgba(245, 158, 11, 0.45);
     border-radius: 6px;
-    padding: 0.22rem 0.65rem;
-    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #fbbf24;
     letter-spacing: 0.04em;
@@ -1489,8 +1485,8 @@
     background: rgba(14, 165, 233, 0.16);
     border: 1px solid rgba(14, 165, 233, 0.45);
     border-radius: 6px;
-    padding: 0.22rem 0.65rem;
-    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #38bdf8;
     letter-spacing: 0.04em;
@@ -1499,12 +1495,12 @@
   .seal-recruiting-beacon {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
     background: rgba(16, 185, 129, 0.14);
     border: 1px solid rgba(16, 185, 129, 0.4);
     border-radius: 6px;
-    padding: 0.22rem 0.65rem;
-    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #34d399;
     cursor: pointer;
@@ -1532,18 +1528,19 @@
   .profile-social-dock {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
+    margin-top: 0.15rem;
   }
 
   .social-dock-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 9999px;
-    padding: 0.4rem 0.85rem;
-    font-size: 0.82rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #cbd5e1;
     text-decoration: none;
@@ -1576,57 +1573,65 @@
 
   /* Description */
   .profile-description {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: #94a3b8;
-    line-height: 1.65;
-    margin: 0;
-    max-width: 860px;
+    line-height: 1.5;
+    margin: 0.15rem 0 0.35rem;
+    max-width: 580px;
   }
 
-  /* Integrated Stats Dock */
-  .profile-stats-dock {
-    display: inline-flex;
+  /* 3. MÉTRICAS ORGANIZADAS: Abaixo da identidade, centralizadas e valorizadas */
+  .profile-metrics-section {
+    max-width: 1280px;
+    margin: 1.25rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .metrics-dock-box {
+    display: flex;
     align-items: center;
+    justify-content: space-around;
     gap: 1.5rem;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    padding: 0.75rem 1.25rem;
-    align-self: flex-start;
+    background: linear-gradient(135deg, rgba(16, 20, 36, 0.95) 0%, rgba(10, 14, 25, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 1.15rem 2rem;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   }
 
-  .stat-dock-item {
+  .metric-cell {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 90px;
   }
 
-  .stat-dock-val {
+  .metric-hero-val {
     font-family: "Manrope", sans-serif;
-    font-size: 1.25rem;
+    font-size: 1.65rem;
     font-weight: 850;
     color: #ffffff;
     line-height: 1;
   }
 
-  .stat-dock-lbl {
-    font-size: 0.74rem;
+  .metric-hero-lbl {
+    font-size: 0.72rem;
+    font-weight: 750;
     color: #64748b;
-    margin-top: 0.25rem;
-    font-weight: 600;
+    margin-top: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .stat-dock-sep {
+  .metric-divider {
     width: 1px;
-    height: 28px;
+    height: 36px;
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .stat-highlight-recruiting .stat-dock-val {
+  .is-recruiting-stat .text-emerald {
     color: #34d399;
-  }
-
-  .stat-highlight-recruiting .stat-dock-lbl {
-    color: #a7f3d0;
   }
 
   /* ==========================================================================
@@ -1634,7 +1639,7 @@
      ========================================================================== */
   .profile-body-container {
     max-width: 1280px;
-    margin: 2.25rem auto 0;
+    margin: 2rem auto 0;
     padding: 0 1.5rem;
   }
 
@@ -2787,40 +2792,60 @@
   /* ==========================================================================
      RESPONSIVE BREAKPOINTS
      ========================================================================== */
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
+    .profile-banner-container {
+      height: 260px;
+    }
+
     .profile-identity-card {
       flex-direction: column;
       align-items: center;
       text-align: center;
-      gap: 1.5rem;
-      padding: 1.75rem;
+      gap: 1.25rem;
+      padding: 1.35rem;
     }
 
-    .identity-header-row {
-      flex-direction: column;
+    .identity-info-group {
       align-items: center;
-      gap: 1rem;
+      text-align: center;
     }
 
     .verification-badges-row {
       justify-content: center;
     }
 
-    .profile-stats-dock {
-      align-self: center;
-    }
-
     .profile-social-dock {
       justify-content: center;
+    }
+
+    .metrics-dock-box {
+      width: 100%;
+      justify-content: space-around;
+      padding: 0.85rem 1rem;
     }
   }
 
   @media (max-width: 680px) {
     .profile-top-bar {
-      padding: 0 1rem 1rem;
+      padding: 0.85rem 1rem 0.65rem;
     }
 
-    .profile-identity-container {
+    .profile-banner-stage {
+      padding: 0 1rem;
+    }
+
+    .profile-banner-container {
+      height: 190px;
+      border-radius: 14px;
+    }
+
+    .profile-identity-section {
+      margin-top: 1.25rem;
+      padding: 0 1rem;
+    }
+
+    .profile-metrics-section {
+      margin-top: 1rem;
       padding: 0 1rem;
     }
 
@@ -2830,20 +2855,37 @@
     }
 
     .profile-title {
-      font-size: 1.85rem;
+      font-size: 1.6rem;
     }
 
     .profile-logo-frame {
-      width: 82px;
-      height: 82px;
+      width: 72px;
+      height: 72px;
       border-radius: 18px;
     }
 
-    .profile-stats-dock {
-      width: 100%;
-      justify-content: space-around;
-      gap: 0.75rem;
-      padding: 0.65rem 0.85rem;
+    .metrics-dock-box {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.85rem;
+      padding: 1rem;
+      border-radius: 16px;
+    }
+
+    .metric-divider {
+      display: none;
+    }
+
+    .metric-cell {
+      min-width: 60px;
+    }
+
+    .metric-hero-val {
+      font-size: 1.35rem;
+    }
+
+    .metric-hero-lbl {
+      font-size: 0.65rem;
     }
 
     .nav-tabs-segmented {
