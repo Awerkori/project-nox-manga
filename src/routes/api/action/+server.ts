@@ -76,6 +76,34 @@ export const POST = async ({ request, locals, platform }: any) => {
     }
   }
 
+  // Handle 'read_notification' action
+  if (body.scope === 'member' && body.action === 'read_notification') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const notifId = body.data?.id ? String(body.data.id) : null;
+    if (!notifId) error(400, 'ID da notificação obrigatório');
+    const { error: notifErr } = await locals.db
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notifId)
+      .eq('user_id', locals.user.id);
+    if (notifErr) error(400, notifErr.message);
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true, markedReadId: notifId });
+  }
+
+  // Handle 'read_all_notifications' action
+  if (body.scope === 'member' && body.action === 'read_all_notifications') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const { error: notifErr } = await locals.db
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('user_id', locals.user.id)
+      .is('read_at', null);
+    if (notifErr) error(400, notifErr.message);
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true });
+  }
+
   // Handle 'like' action using member_action RPC
   if (body.scope === 'member' && body.action === 'like') {
     if (!locals.user?.id) error(401, 'Entre em sua conta');

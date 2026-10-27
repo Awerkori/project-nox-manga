@@ -242,9 +242,9 @@
           <!-- Actions: Follow / Edit -->
           <div class="action-buttons">
             {#if data.isSelf}
-              <a href="/me" class="btn-profile-action self">
+              <a href="/me" class="btn-profile-action self edit-profile-btn" title="Editar foto, banner, bio e configurações da sua conta">
                 <Settings size={16} />
-                <span>Meu Espaço</span>
+                <span>Editar Meu Perfil</span>
               </a>
             {:else}
               <button
@@ -1235,14 +1235,18 @@
   }
 
   .btn-profile-action.self {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #e2e8f0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(139, 92, 246, 0.16) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    color: #f1f5f9;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);
   }
 
   .btn-profile-action.self:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.28) 100%);
+    border-color: rgba(168, 85, 247, 0.65);
     color: #ffffff;
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+    transform: translateY(-1px);
   }
 
   .btn-profile-action.follow {

@@ -157,12 +157,12 @@
 
     {#if data.canAccessScanPanel}
       <a
-        href={data.scanPanelUrl}
+        href="/scan?id={data.scan.id}"
         class="btn-staff-cockpit"
-        title="Acessar painel interno de gerenciamento desta scan"
+        title="Gerenciar esta scan no painel administrativo"
       >
         <LayoutDashboard size={15} />
-        <span>Painel da Scan</span>
+        <span>Gerenciar Scan</span>
       </a>
     {/if}
   </div>
@@ -229,6 +229,12 @@
 
         <!-- Social Links Cluster -->
         <div class="profile-social-dock">
+          {#if data.canAccessScanPanel}
+            <a href="/scan?id={data.scan.id}" class="social-dock-btn manage-scan" title="Gerenciar esta scan no painel administrativo">
+              <LayoutDashboard size={14} />
+              <span>Gerenciar Scan</span>
+            </a>
+          {/if}
           {#if data.scan.discord}
             <a href={data.scan.discord} target="_blank" rel="noopener noreferrer" class="social-dock-btn discord" title="Servidor oficial no Discord">
               <DiscordIcon size={14} />
@@ -1569,6 +1575,19 @@
     background: rgba(168, 85, 247, 0.25);
     border-color: rgba(168, 85, 247, 0.5);
     color: #f3e8ff;
+  }
+
+  .social-dock-btn.manage-scan {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(99, 102, 241, 0.22) 100%);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fde68a;
+    font-weight: 700;
+  }
+
+  .social-dock-btn.manage-scan:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(99, 102, 241, 0.38) 100%);
+    border-color: #f59e0b;
+    color: #ffffff;
   }
 
   /* Description */
