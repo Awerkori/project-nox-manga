@@ -6,8 +6,6 @@
     Library,
     UserRound,
     Bell,
-    Menu,
-    X,
     ArrowUpRight,
     BookOpen,
     Trophy,
@@ -42,7 +40,6 @@
     registerCustomFrames(data.customFrames);
   });
   let currentPath = $derived(page.url.pathname);
-  let menu = $state(false);
   let userMenuOpen = $state(false);
   let scrolled = $state(false);
   let reader = $derived(currentPath.startsWith('/ler/'));
@@ -191,7 +188,6 @@
   onkeydown={(e) => {
     if (e.key === 'Escape') {
       userMenuOpen = false;
-      menu = false;
     }
   }}
   onclick={(e) => {
@@ -239,9 +235,9 @@
 {/if}
 
 {#if !reader}
-  <header class="site-header" class:scrolled class:menu-open={menu} class:admin-header={currentPath.startsWith('/admin')}>
+  <header class="site-header" class:scrolled class:admin-header={currentPath.startsWith('/admin')}>
     <div class="header-inner">
-      <a href="/" class="brand" aria-label="Project Nox, início" onclick={() => (menu = false)}>
+      <a href="/" class="brand" aria-label="Project Nox, início">
         <div class="brand-symbol-wrap">
           <img
             src="/brand/nox-symbol-64.webp"
@@ -454,107 +450,8 @@
             <ArrowUpRight size={14} />
           </a>
         {/if}
-
-        <button
-          class="icon-button mobile-menu-btn"
-          aria-label={menu ? 'Fechar menu' : 'Abrir menu'}
-          onclick={() => (menu = !menu)}
-        >
-          {#if menu}<X size={20} />{:else}<Menu size={20} />{/if}
-        </button>
       </div>
     </div>
-
-    <!-- Mobile Drawer Dropdown -->
-    {#if menu}
-      <div class="mobile-drawer" role="dialog" aria-modal="true">
-        <nav class="mobile-drawer-nav" aria-label="Menu móvel" data-sveltekit-preload-data="tap">
-          <a class:active={currentPath === '/'} href="/" onclick={() => (menu = false)}>
-            <BookOpen size={18} />
-            <span>Início</span>
-          </a>
-          <a class:active={currentPath.startsWith('/catalogo')} href="/catalogo" onclick={() => (menu = false)}>
-            <Search size={18} />
-            <span>Catálogo</span>
-          </a>
-          <a class:active={currentPath === '/ranking'} href="/ranking" onclick={() => (menu = false)}>
-            <Trophy size={18} />
-            <span>Ranking</span>
-          </a>
-          <a class:active={currentPath.startsWith('/scans')} href="/scans" onclick={() => (menu = false)}>
-            <Users size={18} />
-            <span>Scans Parceiras</span>
-          </a>
-          <a class:active={currentPath.startsWith('/loja')} href="/loja" onclick={() => (menu = false)}>
-            <ShoppingBag size={18} />
-            <span>Loja de Cosméticos</span>
-          </a>
-          {#if profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
-            {#if profile?.username}
-              <a class:active={currentPath === `/u/${profile.username}`} href="/u/{profile.username}" onclick={() => (menu = false)}>
-                <UserRound size={18} />
-                <span>Meu Perfil</span>
-              </a>
-            {/if}
-            <a class:active={currentPath === '/notificacoes'} href="/notificacoes" onclick={() => (menu = false)}>
-              <Bell size={18} />
-              <span>Notificações</span>
-              {#if localUnread > 0}
-                <span class="drawer-unread-pill">{localUnread > 99 ? '99+' : localUnread}</span>
-              {/if}
-            </a>
-            <a class:active={currentPath === '/me' && page.url.searchParams.get('tab') === 'conquistas'} href="/me?tab=conquistas" onclick={() => (menu = false)}>
-              <Trophy size={18} />
-              <span>Conquistas</span>
-            </a>
-            <a class:active={currentPath === '/me' && page.url.searchParams.get('tab') === 'biblioteca'} href="/me?tab=biblioteca" onclick={() => (menu = false)}>
-              <Library size={18} />
-              <span>Minha Biblioteca</span>
-            </a>
-            {#if hasAnyPanels}
-              <div class="mobile-drawer-divider"></div>
-              <div class="mobile-drawer-title">SEUS PAINÉIS</div>
-              {#if hasScanPanelAccess}
-                {#if data.userScans && data.userScans.length === 1}
-                  <a href="/scan?id={data.userScans[0].id}" class="mobile-partner-link" onclick={() => (menu = false)}>
-                    <Users size={18} />
-                    <span>Painel da Scan ({data.userScans[0].name})</span>
-                  </a>
-                {:else if data.userScans && data.userScans.length > 1}
-                  <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
-                    <Users size={18} />
-                    <span>Painel da Scan ({data.userScans.length} scans)</span>
-                  </a>
-                {:else if data.role === 'ADMIN'}
-                  <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
-                    <Users size={18} />
-                    <span>Painéis de Scan</span>
-                  </a>
-                {/if}
-              {/if}
-              {#if isStaffAdmin}
-                <a href="/admin" class="mobile-admin-link" onclick={() => (menu = false)}>
-                  <Shield size={18} />
-                  <span>Painel de Controle</span>
-                </a>
-              {/if}
-            {/if}
-            <div class="mobile-drawer-divider"></div>
-            <form method="POST" action="/auth/sair" class="mobile-logout-form">
-              <button type="submit" class="mobile-logout-btn">
-                <LogOut size={18} />
-                <span>Sair da conta</span>
-              </button>
-            </form>
-          {:else}
-            <a href="/entrar" onclick={() => (menu = false)}>
-              <UserRound size={18} />
-              <span>Entrar / Criar Conta</span>
-            </a>
-          {/if}
-        </nav>
-      </div>
-    {/if}
   </header>
 {/if}
 
@@ -1518,23 +1415,32 @@
     }
 
     .header-inner {
-      padding: 0 12px;
-      gap: 8px;
+      padding: 0 16px;
+      gap: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
     .brand {
-      gap: 8px;
+      gap: 9px;
       flex-shrink: 0;
     }
 
     .header-symbol {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
     }
 
-    .brand-project,
+    .brand-project {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      display: block !important;
+    }
+
     .brand-nox {
-      font-size: 16.5px;
+      font-size: 16px;
+      letter-spacing: 0.18em;
     }
 
     .desktop-nav {
@@ -1542,7 +1448,7 @@
     }
 
     .header-actions {
-      gap: 6px;
+      gap: 7px;
       display: flex;
       align-items: center;
       flex-shrink: 0;
@@ -1551,7 +1457,7 @@
     .header-community-group {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       flex-shrink: 0;
     }
 
@@ -1579,8 +1485,9 @@
       min-width: 36px;
     }
 
+    /* Exclusive Mobile: search removed from header in favor of bottom nav Catálogo */
     .header-search-btn {
-      display: inline-flex !important;
+      display: none !important;
     }
 
     .btn-login-nav {
@@ -1594,74 +1501,48 @@
       min-width: 36px;
     }
 
+    /* Exclusive Mobile: hamburger menu removed from header in favor of bottom nav and avatar menu */
     .mobile-menu-btn {
-      display: inline-flex !important;
+      display: none !important;
     }
 
     .mobile-drawer {
-      display: block;
-      position: absolute;
-      top: 64px;
-      left: 0;
-      right: 0;
-      background: rgba(8, 10, 18, 0.97);
-      border-bottom: 1px solid rgba(181, 154, 245, 0.2);
-      backdrop-filter: blur(20px);
-      padding: 20px 24px;
-      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.7);
-    }
-
-    .mobile-drawer-nav {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .mobile-drawer-nav a {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 16px;
-      font-weight: 500;
-      color: #c2bed4;
-      text-decoration: none;
-      padding: 8px 0;
-    }
-
-    .mobile-drawer-nav a.active {
-      color: #b59af5;
+      display: none !important;
     }
   }
 
   @media (max-width: 400px) {
     .header-inner {
-      padding: 0 8px;
-      gap: 4px;
-    }
-
-    .brand {
+      padding: 0 10px;
       gap: 6px;
     }
 
+    .brand {
+      gap: 7px;
+    }
+
     .header-symbol {
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
     }
 
     .brand-project {
-      display: none;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      display: block !important;
     }
 
     .brand-nox {
-      font-size: 16px;
+      font-size: 15px;
+      letter-spacing: 0.16em;
     }
 
     .header-actions {
-      gap: 3.5px;
+      gap: 5px;
     }
 
     .header-community-group {
-      gap: 3.5px;
+      gap: 4px;
     }
 
     .header-community-btn,
@@ -1673,14 +1554,14 @@
     }
 
     .header-community-btn .community-svg {
-      width: 15.5px;
-      height: 15.5px;
+      width: 15px;
+      height: 15px;
     }
 
     .notification-badge {
       min-width: 15px;
       height: 15px;
-      font-size: 9px;
+      font-size: 8.5px;
       line-height: 15px;
       padding: 0 3px;
     }
