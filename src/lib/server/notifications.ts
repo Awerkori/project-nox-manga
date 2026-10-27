@@ -761,7 +761,7 @@ export async function notifyAdminsForScanApplication(params: {
       recipientUserId: adminId,
       type: 'TICKET_SCAN_APPLICATION',
       title: `Nova Inscrição de Scan: ${params.scanName}`,
-      body: `A scan "${params.scanName}" enviou uma candidatura para parceria no Project Nox enviada por ${senderName}.`,
+      body: `A equipe de tradução "${params.scanName}" enviou uma nova proposta de parceria no Project Nox através do responsável ${senderName}.\n\nAcesse a Central de Tickets para revisar o portfólio, redes e histórico da equipe antes da homologação.`,
       deepLink: '/admin/tickets?tab=scans',
       context: params.scanName,
       priority: 'URGENT',
@@ -785,14 +785,14 @@ export async function notifyAdminsForModeration(params: {
 }) {
   const adminIds = await getGlobalAdminUserIds();
   const results = [];
-  const snippet = params.commentSnippet ? ` "${params.commentSnippet.slice(0, 50)}..."` : '';
-  const bodyText = `Nova denúncia de ${params.targetType === 'COMMENT' ? 'comentário' : 'usuário'}${snippet}. Motivo: ${params.reason}.${params.details ? ' Detalhes: ' + params.details.slice(0, 100) : ''}`;
+  const snippet = params.commentSnippet ? ` "${params.commentSnippet.slice(0, 80)}..."` : '';
+  const bodyText = `Uma nova ocorrência foi reportada pela comunidade para análise administrativa.\n\nAlvo: ${params.targetType === 'COMMENT' ? 'Comentário' : 'Perfil de Usuário'}\nMotivo: ${params.reason}${snippet ? '\nTrecho reportado: ' + snippet : ''}${params.details ? '\nObservações: ' + params.details : ''}\n\nAcesse a Central de Moderação para inspecionar o contexto e aplicar as medidas necessárias.`;
 
   for (const adminId of adminIds) {
     const res = await createNotification({
       recipientUserId: adminId,
       type: 'TICKET_MODERATION',
-      title: `Nova ocorrência de moderação: ${params.reason}`,
+      title: `Ocorrência de Moderação: ${params.reason}`,
       body: bodyText,
       deepLink: '/admin/tickets?tab=moderacao',
       context: params.targetType === 'COMMENT' ? 'Comentário Reportado' : 'Usuário Reportado',
@@ -816,13 +816,13 @@ export async function notifyStaffForReport(params: {
 }) {
   const staffIds = await getStaffAndAdminUserIds();
   const results = [];
-  const bodyText = `Problema reportado em ${params.targetTitle}. Motivo: ${params.reason}.${params.details ? ' Detalhes: ' + params.details.slice(0, 100) : ''}`;
+  const bodyText = `Um leitor identificou um problema em "${params.targetTitle}".\n\nTipo do problema: ${params.reason}${params.details ? '\nDetalhes informados: ' + params.details : ''}\n\nAcesse a Central de Tickets para verificar a obra, inspecionar o capítulo e corrigir o erro reportado.`;
 
   for (const staffId of staffIds) {
     const res = await createNotification({
       recipientUserId: staffId,
       type: 'TICKET_REPORT',
-      title: `Novo relatório de problema: ${params.reason}`,
+      title: `Relatório de Conteúdo: ${params.targetTitle}`,
       body: bodyText,
       deepLink: '/admin/tickets?tab=relatorios',
       context: params.targetTitle,
