@@ -9,10 +9,11 @@ export const POST = async ({ request, locals }) => {
   const itemId = String(body.itemId || '').trim();
 
   if (!kind && itemId) {
+    const baseItemId = itemId.includes(':') ? itemId.split(':')[0] : itemId;
     const { data: item } = await locals.db
       .from('shop_items')
       .select('kind')
-      .eq('id', itemId)
+      .eq('id', baseItemId)
       .maybeSingle();
     if (item?.kind) kind = item.kind;
   }

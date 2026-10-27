@@ -182,7 +182,7 @@
     if (parsedFrameId === 'frame_sovereign_wyrm') return 'sovereignwyrm';
     if (parsedFrameId === 'frame_nox_singularity') return 'noxsingularity';
 
-    return 'legacy';
+    return null;
   });
 
   $effect(() => {
@@ -303,7 +303,9 @@
   class:tint-magenta={parsedFrameColor === 'magenta' || parsedFrameColor === 'pink'}
   class:tint-green={parsedFrameColor === 'green'}
   class:tint-orange={parsedFrameColor === 'orange' || parsedFrameColor === 'hazard'}
-  class:tint-silver={parsedFrameColor === 'silver' || parsedFrameColor === 'alva'}
+  class:tint-silver={parsedFrameColor === 'silver' || parsedFrameColor === 'alva' || parsedFrameColor === 'steel'}
+  class:tint-white={parsedFrameColor === 'white' || parsedFrameColor === 'pure' || parsedFrameColor === 'light'}
+  class:tint-rose={parsedFrameColor === 'rose' || parsedFrameColor === 'sakura'}
   style="--avatar-size: {size}px;"
 >
   <div class="avatar-inner">
@@ -1629,8 +1631,6 @@
           <circle cx="50" cy="92" r="3" fill="var(--frame-secondary, #ffffff)" filter="drop-shadow(0 0 5px var(--frame-glow, #eab308))" />
         </svg>
 
-      {:else}
-        <div class="avatar-frame-overlay-legacy"></div>
       {/if}
     </div>
   {/if}
@@ -1731,12 +1731,7 @@
     z-index: 2;
   }
 
-  .avatar-frame-overlay-legacy {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid #a78bfa;
-  }
+
 
   /* =========================================================================
      1. COSMIC NOX
@@ -2114,6 +2109,26 @@
   .tint-green { --frame-primary: #22c55e; --frame-secondary: #16a34a; --frame-glow: rgba(34, 197, 94, 0.85); --frame-light: #dcfce7; }
   .tint-orange { --frame-primary: #f97316; --frame-secondary: #c2410c; --frame-glow: rgba(249, 115, 22, 0.85); --frame-light: #ffedd5; }
   .tint-silver { --frame-primary: #e2e8f0; --frame-secondary: #94a3b8; --frame-glow: rgba(226, 232, 240, 0.85); --frame-light: #ffffff; }
+  .tint-white { --frame-primary: #ffffff; --frame-secondary: #cbd5e1; --frame-glow: rgba(255, 255, 255, 0.9); --frame-light: #ffffff; }
+  .tint-rose { --frame-primary: #fb7185; --frame-secondary: #e11d48; --frame-glow: rgba(251, 113, 133, 0.85); --frame-light: #ffe4e6; }
+
+  /* Universal reactive tint styling for procedural and new frames */
+  [class*="tint-"] [class*="ring-"][class*="-base"] {
+    stroke: var(--frame-primary) !important;
+    filter: drop-shadow(0 0 6px var(--frame-glow, var(--frame-primary))) !important;
+  }
+  [class*="tint-"] [class*="ring-"][class*="-pulse"] {
+    stroke: var(--frame-secondary) !important;
+  }
+  [class*="tint-"] [class*="nodes-"] * {
+    fill: var(--frame-primary) !important;
+  }
+  [class*="tint-"] [class*="frame-svg-"] > path {
+    stroke: var(--frame-primary) !important;
+  }
+  [class*="tint-"] [class*="frame-svg-"] > polygon {
+    fill: var(--frame-secondary) !important;
+  }
 
   .frame-base-ring { fill: none; stroke: var(--frame-primary, #a855f7); stroke-width: 2.2; filter: drop-shadow(0 0 6px var(--frame-glow, rgba(168, 85, 247, 0.85))); }
   .frame-orbit-ring { fill: none; stroke: var(--frame-secondary, #c084fc); stroke-width: 1.5; animation: rotateCw 8s linear infinite; transform-origin: 50px 50px; }
