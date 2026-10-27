@@ -397,6 +397,21 @@
       if (typeof res?.liked === 'boolean') {
         optimisticLiked = res.liked;
       }
+      if (res?.xp_award?.awarded && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('nox-xp-awarded', {
+            detail: {
+              amount: res.xp_award.amount,
+              total_xp: res.xp_award.total_xp,
+              title: 'Obra curtida',
+              kind: 'LIKE_WORK'
+            }
+          })
+        );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Obra curtida');
+        }
+      }
       await invalidateAll();
       optimisticLiked = null;
       optimisticLikeDelta = 0;

@@ -4,6 +4,7 @@ import { withTimeout } from '$lib/server/resilience';
 import { normalizeAvatarCrop } from '$lib/avatar';
 import { storeImage, RateLimitError } from '$lib/server/media';
 import { invalidateUserSession } from '$lib/server/session-cache';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -167,7 +168,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-  updateProfile: async ({ request, locals }) => {
+  updateProfile: async ({ request, locals, platform }: { request: Request; locals: App.Locals; platform?: any }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const displayName = (formData.get('display_name') as string)?.trim();
@@ -237,6 +238,26 @@ export const actions: Actions = {
     if (error || !updatedMember) {
       console.error('ME_PROFILE_COMMIT_ERROR:', error);
       return fail(500, { message: 'Não foi possível salvar seu perfil. Nenhuma mídia nova foi ativada.' });
+    }
+
+    // Also sync profile name and avatar to Yugabyte to eliminate cross-catalog lag
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members
+         SET display_name = COALESCE($1, display_name),
+             avatar_id = COALESCE($2, avatar_id),
+             avatar_crop = COALESCE($3, avatar_crop)
+         WHERE id = $4`,
+        [
+          updatedMember.display_name,
+          updatedMember.avatar_id,
+          updatedMember.avatar_crop ? JSON.stringify(updatedMember.avatar_crop) : null,
+          locals.user.id
+        ],
+        platform?.env
+      );
+    } catch (ybProblem) {
+      console.warn('me_profile_yugabyte_sync_warning', ybProblem);
     }
 
     // The root layout uses this cache for the header avatar. Evict it before

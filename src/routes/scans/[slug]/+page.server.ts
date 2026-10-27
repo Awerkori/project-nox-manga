@@ -207,14 +207,76 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     }
   }
 
+  // Collect all distinct user IDs from comments, team members, activities, and the viewer
+  const rawComments = (commentsRes.rows || []) as any[];
+  const commentUserIds = rawComments.map((c: any) => c.user_id).filter(Boolean);
+  const teamUserIds = (membersRes.rows || []).map((r: any) => r.member?.id).filter(Boolean);
+  const activityUserIds = (activitiesRes.rows || []).map((a: any) => a.activity_user?.id || a.user_id).filter(Boolean);
+  const viewerId = locals.user?.id;
+  const allUserIds = Array.from(new Set([...commentUserIds, ...teamUserIds, ...activityUserIds, ...(viewerId ? [viewerId] : [])]));
+
+  // Batch-enrich member identities with authoritative YSQL members table
+  const enrichedMembersMap = new Map<string, any>();
+  if (allUserIds.length > 0) {
+    try {
+      const memberRows = await executeYugabyteSql<any>(
+        `SELECT id, username, display_name, avatar_id, avatar_crop, avatar_frame_id, name_color
+         FROM public.members
+         WHERE id = ANY($1::uuid[])`,
+        [allUserIds],
+        platform?.env
+      );
+      for (const m of memberRows.rows || []) {
+        if (m?.id) enrichedMembersMap.set(m.id, m);
+      }
+    } catch (err: any) {
+      console.warn('scan_enrich_members_ysql_failed', { message: String(err?.message || err).slice(0, 200) });
+    }
+  }
+
+  // Always blend active session profile for the current authenticated viewer
+  if (viewerId && locals.sessionCache?.profile) {
+    const cachedProfile = locals.sessionCache.profile;
+    const existing = enrichedMembersMap.get(viewerId) || {};
+    enrichedMembersMap.set(viewerId, {
+      ...existing,
+      id: viewerId,
+      username: cachedProfile.username || existing.username,
+      display_name: cachedProfile.display_name || existing.display_name,
+      avatar_id: cachedProfile.avatar_id ?? existing.avatar_id,
+      avatar_crop: cachedProfile.avatar_crop ?? existing.avatar_crop,
+      avatar_frame_id: cachedProfile.avatar_frame_id ?? existing.avatar_frame_id,
+      name_color: cachedProfile.name_color ?? existing.name_color
+    });
+  }
+
   const members = (membersRes.rows || []).map((row: any) => {
     const userPositions = positionsByUser.get(row.member?.id) || [];
     const primary = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
+    const dbm = enrichedMembersMap.get(row.member?.id);
+    const resolvedAvatarId = dbm?.avatar_id ?? row.member?.avatar_id ?? null;
+    const resolvedAvatarCrop = dbm?.avatar_crop ?? row.member?.avatar_crop ?? null;
+    const resolvedFrameId = dbm?.avatar_frame_id ?? row.member?.avatar_frame_id ?? null;
+    const resolvedDisplayName = dbm?.display_name || row.member?.display_name || row.member?.username || 'Membro';
+    const resolvedUsername = dbm?.username || row.member?.username || 'membro';
+    const resolvedNameColor = dbm?.name_color ?? row.member?.name_color ?? null;
+
     return {
       role: row.role,
       joined_at: row.created_at,
       ...row.member,
-      frame_id: row.member?.avatar_frame_id,
+      id: row.member?.id,
+      username: resolvedUsername,
+      display_name: resolvedDisplayName,
+      displayName: resolvedDisplayName,
+      avatar_id: resolvedAvatarId,
+      avatarId: resolvedAvatarId,
+      avatar_crop: resolvedAvatarCrop,
+      avatarCrop: resolvedAvatarCrop,
+      avatar_frame_id: resolvedFrameId,
+      frame_id: resolvedFrameId,
+      frameId: resolvedFrameId,
+      name_color: resolvedNameColor,
       positions: userPositions,
       primaryPosition: primary
     };
@@ -225,10 +287,16 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     positionName: o.position?.name || "Geral"
   }));
 
-  const activities = (activitiesRes.rows || []).map((a: any) => ({
-    ...a,
-    userName: a.activity_user?.display_name || a.activity_user?.username || null
-  }));
+  const activities = (activitiesRes.rows || []).map((a: any) => {
+    const actorId = a.user_id || a.activity_user?.id;
+    const dbm = actorId ? enrichedMembersMap.get(actorId) : null;
+    return {
+      ...a,
+      userName: dbm?.display_name || dbm?.username || a.activity_user?.display_name || a.activity_user?.username || null,
+      userAvatarId: dbm?.avatar_id ?? a.activity_user?.avatar_id ?? null,
+      userAvatarCrop: dbm?.avatar_crop ?? a.activity_user?.avatar_crop ?? null
+    };
+  });
 
   const userApplications = userAppsRes.rows || [];
   const userAppOpenings = new Set(userApplications.map((a: any) => a.opening_id));
@@ -236,15 +304,41 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
   // Calculate total views for this scan works
   const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
 
-  const rawComments = (commentsRes.rows || []) as any[];
   const memberUserIds = new Set(members.map((m: any) => m.id));
-  const viewerId = locals.user?.id;
+  const isViewerScanMember = Boolean(viewerId && memberUserIds.has(viewerId));
   const isViewerScanAdmin = members.some((m: any) => m.id === viewerId && ['OWNER', 'ADMIN'].includes(m.role));
   const isViewerGlobalAdmin = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
+  const isPlatformOwner =
+    ['ADMIN', 'STAFF_SITE'].includes(locals.role || '') ||
+    (viewerId && viewerId === '732fbe87-5040-41fb-9983-0aedb2af44c8');
   const canModerateComments = isViewerScanAdmin || isViewerGlobalAdmin;
+  const canAccessScanPanel = Boolean(locals.user && (isPlatformOwner || isViewerScanMember));
+  const scanPanelUrl = `/scans/${scan.slug}/painel`;
 
   const comments = rawComments.map((c: any) => {
     const likes = c.scan_comment_likes || [];
+    const dbm = enrichedMembersMap.get(c.user_id);
+    const resolvedAvatarId = dbm?.avatar_id ?? c.members?.avatar_id ?? null;
+    const resolvedAvatarCrop = dbm?.avatar_crop ?? c.members?.avatar_crop ?? null;
+    const resolvedFrameId = dbm?.avatar_frame_id ?? c.members?.avatar_frame_id ?? null;
+    const resolvedDisplayName = dbm?.display_name || c.members?.display_name || c.members?.username || 'Usuário';
+    const resolvedUsername = dbm?.username || c.members?.username || 'usuario';
+    const resolvedNameColor = dbm?.name_color ?? c.members?.name_color ?? null;
+
+    const author = {
+      id: c.user_id,
+      username: resolvedUsername,
+      display_name: resolvedDisplayName,
+      displayName: resolvedDisplayName,
+      avatar_id: resolvedAvatarId,
+      avatarId: resolvedAvatarId,
+      avatar_crop: resolvedAvatarCrop,
+      avatarCrop: resolvedAvatarCrop,
+      avatar_frame_id: resolvedFrameId,
+      frameId: resolvedFrameId,
+      name_color: resolvedNameColor
+    };
+
     return {
       id: c.id,
       scan_id: c.scan_id,
@@ -254,7 +348,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
       pinned: !!c.pinned,
       created_at: c.created_at,
       updated_at: c.updated_at,
-      author: c.members || { username: 'desconhecido', display_name: 'Usuário' },
+      author,
       likesCount: likes.length,
       isLiked: viewerId ? likes.some((l: any) => l.user_id === viewerId) : false,
       isStaff: memberUserIds.has(c.user_id),
@@ -262,6 +356,25 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
       canModerate: canModerateComments
     };
   });
+
+  // Build complete viewer profile matching UserAvatar interface
+  const viewerProfile = viewerId ? (enrichedMembersMap.get(viewerId) || locals.sessionCache?.profile || null) : null;
+  const viewer = locals.user
+    ? {
+        id: locals.user.id,
+        username: viewerProfile?.username || locals.user.email?.split('@')[0] || "leitor",
+        displayName: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
+        display_name: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
+        avatarId: viewerProfile?.avatar_id || null,
+        avatar_id: viewerProfile?.avatar_id || null,
+        avatarCrop: viewerProfile?.avatar_crop || null,
+        avatar_crop: viewerProfile?.avatar_crop || null,
+        avatar_frame_id: viewerProfile?.avatar_frame_id || null,
+        frameId: viewerProfile?.avatar_frame_id || null,
+        name_color: viewerProfile?.name_color || null,
+        role: locals.role || null
+      }
+    : null;
 
   return {
     scan,
@@ -272,19 +385,15 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     activities,
     comments,
     canModerateComments,
+    canAccessScanPanel,
+    scanPanelUrl,
+    isViewerScanAdmin,
+    isViewerScanMember,
     userApplications,
     userAppOpenings: Array.from(userAppOpenings),
     recruitmentQuestions: questionsRes.rows || [],
     totalViews,
-    viewer: locals.user
-      ? {
-          id: locals.user.id,
-          username: (locals.user as any).username || "",
-          displayName: (locals.user as any).display_name || "",
-          avatarId: (locals.user as any).avatar_id || null,
-          role: locals.role || null
-        }
-      : null
+    viewer
   };
 };
 

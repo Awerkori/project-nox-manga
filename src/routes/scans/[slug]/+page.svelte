@@ -1,15 +1,11 @@
 <script lang="ts">
   import {
     ShieldCheck,
-    Sparkles,
     BookOpen,
-    Layers,
-    Eye,
     Users,
     Globe,
     MessageSquare,
     ArrowLeft,
-    Clock,
     UserPlus,
     Briefcase,
     CheckCircle2,
@@ -22,7 +18,8 @@
     Trash2,
     Flag,
     Send,
-    CornerDownRight
+    CornerDownRight,
+    LayoutDashboard
   } from "@lucide/svelte";
   import { enhance } from "$app/forms";
   import WorkCard from "$lib/components/WorkCard.svelte";
@@ -32,26 +29,35 @@
   import { relativeTime } from "$lib/types";
   import { onMount } from "svelte";
 
-  // The generated database schema is intentionally incomplete for scan
-  // extensions. Keep this presentation component independent from that global
-  // type debt; its server loader remains the contract boundary.
   let { data, form }: { data: any; form: any } = $props();
 
-  type PublicScanTab = "works" | "chapters" | "members" | "recruitment" | "activity" | "comments";
+  // ONLY 4 PUBLIC TABS: Obras, Equipe, Recrutamento, Comentários
+  type PublicScanTab = "works" | "members" | "recruitment" | "comments";
+
   const TAB_HASH: Record<PublicScanTab, string> = {
     works: "",
-    chapters: "#capitulos",
     members: "#equipe",
     recruitment: "#recrutamento",
-    activity: "#atividade",
     comments: "#comentarios"
   };
-  const HASH_TAB: Record<string, PublicScanTab | undefined> = Object.fromEntries(
-    Object.entries(TAB_HASH).map(([tab, hash]) => [hash, tab as PublicScanTab]).filter(([hash]) => Boolean(hash))
-  );
+
+  const HASH_TAB: Record<string, PublicScanTab | undefined> = {
+    "": "works",
+    "#obras": "works",
+    "#capitulos": "works",   // Graceful redirect of legacy chapters hash
+    "#equipe": "members",
+    "#membros": "members",
+    "#recrutamento": "recruitment",
+    "#vagas": "recruitment",
+    "#atividade": "works",   // Graceful redirect of legacy activity hash
+    "#comentarios": "comments"
+  };
+
   let activeTab = $state<PublicScanTab>("works");
   let applyingOpening = $state<any>(null);
-  let openingQuestions = $derived((data.recruitmentQuestions || []).filter((q: any) => q.opening_id === applyingOpening?.id));
+  let openingQuestions = $derived(
+    (data.recruitmentQuestions || []).filter((q: any) => q.opening_id === applyingOpening?.id)
+  );
   let isSubmitting = $state(false);
 
   // Comments interaction state
@@ -64,17 +70,18 @@
   }
 
   let currentWorks = $derived(
-    data.works.filter((w: any) => !w.scan_status || w.scan_status === "ACTIVE" || w.scan_status === "PAUSED")
+    (data.works || []).filter((w: any) => !w.scan_status || w.scan_status === "ACTIVE" || w.scan_status === "PAUSED")
   );
   let pastWorks = $derived(
-    data.works.filter((w: any) => w.scan_status === "COMPLETED" || w.scan_status === "ABANDONED")
+    (data.works || []).filter((w: any) => w.scan_status === "COMPLETED" || w.scan_status === "ABANDONED")
   );
 
-
   // Group members logically
-  let owners = $derived(data.members.filter((m: any) => m.role === "OWNER"));
-  let admins = $derived(data.members.filter((m: any) => m.role === "ADMIN"));
-  let otherMembers = $derived(data.members.filter((m: any) => m.role !== "OWNER" && m.role !== "ADMIN"));
+  let owners = $derived((data.members || []).filter((m: any) => m.role === "OWNER"));
+  let admins = $derived((data.members || []).filter((m: any) => m.role === "ADMIN"));
+  let otherMembers = $derived(
+    (data.members || []).filter((m: any) => m.role !== "OWNER" && m.role !== "ADMIN")
+  );
 
   let isRecruiting = $derived((data.openings || []).length > 0);
 
@@ -101,6 +108,7 @@
   }
 
   function syncTabFromHash() {
+    if (typeof window === "undefined") return;
     const tab = HASH_TAB[window.location.hash];
     if (tab) activeTab = tab;
   }
@@ -109,7 +117,19 @@
     activeTab = tab;
     if (typeof window === "undefined") return;
     const nextHash = TAB_HASH[tab];
-    if (window.location.hash !== nextHash) history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    if (window.location.hash !== nextHash) {
+      history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+  }
+
+  function getPositionColor(posName: string = ""): string {
+    const p = posName.toLowerCase();
+    if (p.includes("trad") || p.includes("trans")) return "role-cyan";
+    if (p.includes("rev") || p.includes("proof")) return "role-emerald";
+    if (p.includes("type") || p.includes("diag") || p.includes("letra")) return "role-purple";
+    if (p.includes("clean") || p.includes("redr") || p.includes("raw")) return "role-amber";
+    if (p.includes("qual") || p.includes("qc")) return "role-indigo";
+    return "role-slate";
   }
 
   onMount(() => {
@@ -123,247 +143,238 @@
   <title>{data.scan.name} — Scan {data.scan.is_official ? "Oficial" : "Parceira"} | Project Nox</title>
   <meta
     name="description"
-    content={data.scan.description || `Página oficial de traduções de ${data.scan.name} no Project Nox.`}
+    content={data.scan.description || `Perfil oficial de traduções de ${data.scan.name} no Project Nox.`}
   />
 </svelte:head>
 
 <div class="scan-profile-page">
-  <div class="profile-container">
-    <!-- Back Link -->
-    <nav class="back-nav">
-      <a href="/scans" class="back-link">
-        <ArrowLeft size={16} />
-        <span>Voltar para todas as scans</span>
-      </a>
-    </nav>
+  <!-- Top Utility Bar: Navegação e Acesso ao Painel da Scan (sem sobrepor a arte) -->
+  <div class="profile-top-bar">
+    <a href="/scans" class="btn-back-catalog">
+      <ArrowLeft size={15} />
+      <span>Voltar ao Hub de Scans</span>
+    </a>
 
-    <!-- Hero Card -->
-    <header class="scan-hero">
-      <div class="hero-banner">
-        {#if data.scan.banner_id}
-          <img src="/media/{data.scan.banner_id}" alt="Banner de {data.scan.name}" class="banner-img" />
-          <div class="banner-gradient"></div>
+    {#if data.canAccessScanPanel}
+      <a
+        href={data.scanPanelUrl}
+        class="btn-staff-cockpit"
+        title="Acessar painel interno de gerenciamento desta scan"
+      >
+        <LayoutDashboard size={15} />
+        <span>Painel da Scan</span>
+      </a>
+    {/if}
+  </div>
+
+  <!-- 1. PRIMEIRO: BANNER COMPLETO (Sozinho no topo, 100% desimpedido e sem informações cobrindo) -->
+  <section class="profile-banner-stage" aria-label="Banner da Scan">
+    <div class="profile-banner-container">
+      {#if data.scan.banner_id}
+        <img src="/media/{data.scan.banner_id}" alt="Banner de {data.scan.name}" class="profile-banner-img" />
+      {:else}
+        <div class="profile-banner-fallback" class:official-bg={data.scan.is_official}>
+          <div class="fallback-glow"></div>
+        </div>
+      {/if}
+      <div class="banner-glass-edge"></div>
+    </div>
+  </section>
+
+  <!-- 2. SEGUNDO: IDENTIDADE DA SCAN (Logo abaixo do banner, compacto, alinhado e elegante) -->
+  <section class="profile-identity-section">
+    <div class="profile-identity-card" class:is-official-card={data.scan.is_official}>
+      <div class="profile-logo-frame" class:official-logo-rim={data.scan.is_official}>
+        {#if data.scan.logo_id}
+          <img src="/media/{data.scan.logo_id}" alt="Logo de {data.scan.name}" class="profile-logo-img" />
         {:else}
-          <div class="banner-placeholder" class:official-bg={data.scan.is_official}></div>
+          <div class="profile-logo-fallback">
+            {data.scan.name.charAt(0).toUpperCase()}
+          </div>
         {/if}
       </div>
 
-      <div class="hero-body">
-        <div class="hero-identity-row">
-          <!-- Logo Wrap: relative z-2 prevents any banner cut-off -->
-          <div class="scan-logo-wrap" class:official-logo={data.scan.is_official}>
-            {#if data.scan.logo_id}
-              <img src="/media/{data.scan.logo_id}" alt="Logo de {data.scan.name}" class="logo-img" />
-            {:else}
-              <div class="logo-placeholder">
-                {data.scan.name.charAt(0).toUpperCase()}
-              </div>
-            {/if}
-          </div>
-
-          <div class="identity-meta">
-            <div class="name-line">
-              <h1 class="scan-title">{data.scan.name}</h1>
-              {#if data.scan.is_official}
-                <span class="badge-official">
-                  <Star size={13} fill="#dfc28d" />
-                  <span>Scan Oficial</span>
-                </span>
-              {:else}
-                <span class="badge-partner">
-                  <Sparkles size={13} />
-                  <span>Scan Parceira</span>
-                </span>
-              {/if}
-
-              {#if isRecruiting}
-                <span class="badge-recruiting">
-                  <span class="pulse-dot"></span>
-                  <span>Recrutando</span>
-                </span>
-              {/if}
-            </div>
-
-            <p class="scan-bio">
-              {data.scan.description || (data.scan.is_official ? "Scan oficial e núcleo editorial de traduções do Project Nox." : "Grupo independente de tradução e edição parceiro do Project Nox.")}
-            </p>
-          </div>
-
-          <!-- Socials & Actions -->
-          <div class="hero-actions">
-            {#if isRecruiting}
-              <button
-                type="button"
-                class="btn-hero-recruit"
-                onclick={() => selectPublicTab("recruitment")}
-              >
-                <UserPlus size={16} />
-                <span>Vagas Abertas</span>
-              </button>
-            {/if}
-            {#if data.scan.discord}
-              <a href={data.scan.discord} target="_blank" rel="noopener noreferrer" class="btn-social discord" title="Discord oficial">
-                <DiscordIcon size={16} />
-                <span>Discord</span>
-              </a>
-            {/if}
-            {#if data.scan.fluxer}
-              <a href={data.scan.fluxer} target="_blank" rel="noopener noreferrer" class="btn-social fluxer" title="Fluxer oficial">
-                <FluxerIcon size={16} />
-                <span>Fluxer</span>
-              </a>
-            {/if}
-            {#if data.scan.website}
-              <a href={data.scan.website} target="_blank" rel="noopener noreferrer" class="btn-social website" title="Website oficial">
-                <Globe size={16} />
-                <span>Website</span>
-              </a>
-            {/if}
-          </div>
-        </div>
-
-        <!-- Metrics Strip -->
-        <div class="metrics-strip">
-          <div class="metric-card">
-            <BookOpen size={18} class="metric-icon" />
-            <div class="metric-info">
-              <span class="metric-val">{data.works.length}</span>
-              <span class="metric-label">{data.works.length === 1 ? "Obra Ativa" : "Obras Ativas"}</span>
-            </div>
-          </div>
-
-          <div class="metric-card">
-            <Layers size={18} class="metric-icon" />
-            <div class="metric-info">
-              <span class="metric-val">{data.chapters.length}</span>
-              <span class="metric-label">{data.chapters.length === 1 ? "Capítulo" : "Capítulos"}</span>
-            </div>
-          </div>
-
-          <div class="metric-card">
-            <Eye size={18} class="metric-icon" />
-            <div class="metric-info">
-              <span class="metric-val">{formatNumber(data.totalViews)}</span>
-              <span class="metric-label">Leituras Totais</span>
-            </div>
-          </div>
-
-          <div class="metric-card">
-            <Users size={18} class="metric-icon" />
-            <div class="metric-info">
-              <span class="metric-val">{data.members.length}</span>
-              <span class="metric-label">{data.members.length === 1 ? "Membro" : "Membros"}</span>
-            </div>
-          </div>
+      <div class="identity-info-group">
+        <div class="verification-badges-row">
+          {#if data.scan.is_official}
+            <span class="seal-official-gold">
+              <Star size={12} fill="#f59e0b" color="#f59e0b" />
+              <span>NÚCLEO OFICIAL PROJECT NOX</span>
+            </span>
+          {:else}
+            <span class="seal-partner-cyan">
+              <ShieldCheck size={12} />
+              <span>SCAN PARCEIRA VERIFICADA</span>
+            </span>
+          {/if}
 
           {#if isRecruiting}
-            <div class="metric-card recruiting-metric">
-              <Briefcase size={18} class="metric-icon text-purple" />
-              <div class="metric-info">
-                <span class="metric-val text-purple">{data.openings.length}</span>
-                <span class="metric-label">{data.openings.length === 1 ? "Vaga Aberta" : "Vagas Abertas"}</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              class="seal-recruiting-beacon"
+              onclick={() => selectPublicTab("recruitment")}
+              title="Ver vagas disponíveis para esta equipe"
+            >
+              <span class="pulse-beacon green"></span>
+              <span>RECRUTANDO NOVOS TALENTOS</span>
+            </button>
+          {/if}
+        </div>
+
+        <h1 class="profile-title">{data.scan.name}</h1>
+
+        <p class="profile-description">
+          {data.scan.description || (data.scan.is_official ? "Scan oficial e núcleo editorial de traduções do Project Nox. Equipe dedicada à localização e diagramação de alta fidelidade." : "Grupo independente de tradução e edição parceiro da comunidade Project Nox.")}
+        </p>
+
+        <!-- Social Links Cluster -->
+        <div class="profile-social-dock">
+          {#if data.scan.discord}
+            <a href={data.scan.discord} target="_blank" rel="noopener noreferrer" class="social-dock-btn discord" title="Servidor oficial no Discord">
+              <DiscordIcon size={14} />
+              <span>Discord</span>
+            </a>
+          {/if}
+          {#if data.scan.fluxer}
+            <a href={data.scan.fluxer} target="_blank" rel="noopener noreferrer" class="social-dock-btn fluxer" title="Comunidade oficial no Fluxer">
+              <FluxerIcon size={14} />
+              <span>Fluxer</span>
+            </a>
+          {/if}
+          {#if data.scan.website}
+            <a href={data.scan.website} target="_blank" rel="noopener noreferrer" class="social-dock-btn website" title="Website oficial">
+              <Globe size={14} />
+              <span>Website</span>
+            </a>
           {/if}
         </div>
       </div>
-    </header>
+    </div>
+  </section>
 
-    <!-- Navigation Tabs -->
-    <nav class="profile-tabs-nav">
-      <button
-        class="tab-btn"
-        class:active={activeTab === "works"}
-        onclick={() => selectPublicTab("works")}
-        type="button"
-      >
-        <BookOpen size={16} />
-        <span>Obras ({data.works.length})</span>
-      </button>
+  <!-- 3. TERCEIRO: MÉTRICAS ORGANIZADAS (Abaixo da identidade, centralizadas e valorizadas) -->
+  <section class="profile-metrics-section">
+    <div class="metrics-dock-box">
+      <div class="metric-cell">
+        <span class="metric-hero-val">{data.works.length}</span>
+        <span class="metric-hero-lbl">{data.works.length === 1 ? "Obra Ativa" : "Obras Ativas"}</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-cell">
+        <span class="metric-hero-val">{formatNumber(data.totalViews)}</span>
+        <span class="metric-hero-lbl">Leituras Totais</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-cell">
+        <span class="metric-hero-val">{data.members.length}</span>
+        <span class="metric-hero-lbl">{data.members.length === 1 ? "Integrante" : "Integrantes"}</span>
+      </div>
+      {#if isRecruiting}
+        <div class="metric-divider"></div>
+        <div class="metric-cell is-recruiting-stat">
+          <span class="metric-hero-val text-emerald">{data.openings.length}</span>
+          <span class="metric-hero-lbl text-emerald">{data.openings.length === 1 ? "Vaga Aberta" : "Vagas Abertas"}</span>
+        </div>
+      {/if}
+    </div>
+  </section>
 
-      <button
-        class="tab-btn"
-        class:active={activeTab === "chapters"}
-        onclick={() => selectPublicTab("chapters")}
-        type="button"
-      >
-        <Layers size={16} />
-        <span>Capítulos ({data.chapters.length})</span>
-      </button>
+  <!-- 4. QUARTO: NAVEGAÇÃO E CONTEÚDO (4 Abas Públicas) -->
+  <main class="profile-body-container">
+    <nav class="profile-navigation-bar" aria-label="Abas da scan">
+      <div class="nav-tabs-segmented">
+        <!-- 1. Obras -->
+        <button
+          type="button"
+          class="nav-tab-item"
+          class:is-active={activeTab === "works"}
+          onclick={() => selectPublicTab("works")}
+        >
+          <BookOpen size={16} class="tab-icon" />
+          <span>Obras</span>
+          <span class="tab-count-badge">{data.works.length}</span>
+        </button>
 
-      <button
-        class="tab-btn"
-        class:active={activeTab === "members"}
-        onclick={() => selectPublicTab("members")}
-        type="button"
-      >
-        <Users size={16} />
-        <span>Equipe ({data.members.length})</span>
-      </button>
+        <!-- 2. Equipe -->
+        <button
+          type="button"
+          class="nav-tab-item"
+          class:is-active={activeTab === "members"}
+          onclick={() => selectPublicTab("members")}
+        >
+          <Users size={16} class="tab-icon" />
+          <span>Equipe</span>
+          <span class="tab-count-badge">{data.members.length}</span>
+        </button>
 
-      <button
-        class="tab-btn"
-        id="recrutamento"
-        class:active={activeTab === "recruitment"}
-        onclick={() => selectPublicTab("recruitment")}
-        type="button"
-      >
-        <Briefcase size={16} />
-        <span>Recrutamento {#if isRecruiting}({data.openings.length}){/if}</span>
-        {#if isRecruiting}
-          <span class="tab-pulse-dot"></span>
-        {/if}
-      </button>
+        <!-- 3. Recrutamento -->
+        <button
+          type="button"
+          class="nav-tab-item tab-recruiting-btn"
+          class:is-active={activeTab === "recruitment"}
+          onclick={() => selectPublicTab("recruitment")}
+        >
+          <Briefcase size={16} class="tab-icon" />
+          <span>Recrutamento</span>
+          {#if isRecruiting}
+            <span class="tab-count-badge badge-green">{data.openings.length}</span>
+            <span class="pulse-beacon green small"></span>
+          {:else}
+            <span class="tab-count-badge">0</span>
+          {/if}
+        </button>
 
-      <button
-        class="tab-btn"
-        class:active={activeTab === "activity"}
-        onclick={() => selectPublicTab("activity")}
-        type="button"
-      >
-        <Clock size={16} />
-        <span>Atividade ({data.activities.length})</span>
-      </button>
-
-      <button
-        class="tab-btn"
-        class:active={activeTab === "comments"}
-        onclick={() => selectPublicTab("comments")}
-        type="button"
-      >
-        <MessageSquare size={16} />
-        <span>Comentários ({(data.comments || []).length})</span>
-      </button>
+        <!-- 4. Comentários -->
+        <button
+          type="button"
+          class="nav-tab-item"
+          class:is-active={activeTab === "comments"}
+          onclick={() => selectPublicTab("comments")}
+        >
+          <MessageSquare size={16} class="tab-icon" />
+          <span>Comentários</span>
+          <span class="tab-count-badge">{(data.comments || []).length}</span>
+        </button>
+      </div>
     </nav>
 
-    <!-- Feedback Message on Form Submit -->
+    <!-- Feedback Banner on Form Submission -->
     {#if form?.applicationSent}
-      <div class="success-banner">
-        <CheckCircle2 size={20} class="success-icon" />
-        <div>
+      <div class="feedback-alert success-alert" role="alert">
+        <CheckCircle2 size={22} class="alert-icon" />
+        <div class="alert-body">
           <strong>Candidatura enviada com sucesso!</strong>
-          <p>A equipe de <strong>{data.scan.name}</strong> recebeu sua inscrição e responderá em breve.</p>
+          <p>A equipe de liderança de <strong>{data.scan.name}</strong> recebeu suas respostas e analisará seu perfil.</p>
         </div>
       </div>
     {:else if form?.message}
-      <div class="error-banner">
-        <AlertCircle size={20} class="error-icon" />
-        <span>{form.message}</span>
+      <div class="feedback-alert error-alert" role="alert">
+        <AlertCircle size={22} class="alert-icon" />
+        <div class="alert-body">
+          <strong>Atenção</strong>
+          <p>{form.message}</p>
+        </div>
       </div>
     {/if}
 
-    <!-- Tab Contents -->
-    <div class="tab-viewport">
-      <!-- 1. WORKS TAB -->
+    <!-- TAB VIEWPORT -->
+    <div class="tab-pane-container">
+      <!-- ====================================================================
+           1. ABA: OBRAS
+           ==================================================================== -->
       {#if activeTab === "works"}
-        <div class="tab-pane">
+        <section class="tab-section works-section">
           {#if currentWorks.length > 0}
-            <div class="section-block">
-              <div class="section-title-wrap">
-                <h2 class="section-title">Projetos Atuais ({currentWorks.length})</h2>
-                <p class="section-subtitle">Obras ativas e em lançamento contínuo por {data.scan.name}</p>
+            <div class="works-group-block">
+              <div class="block-header-line">
+                <div>
+                  <h2 class="block-title">Projetos em Andamento</h2>
+                  <p class="block-subtitle">Obras com publicação e tradução ativa por {data.scan.name}</p>
+                </div>
+                <span class="block-counter">{currentWorks.length} {currentWorks.length === 1 ? "título" : "títulos"}</span>
               </div>
-              <div class="works-grid">
+
+              <div class="works-catalog-grid">
                 {#each currentWorks as work (work.id)}
                   <WorkCard {work} />
                 {/each}
@@ -372,12 +383,16 @@
           {/if}
 
           {#if pastWorks.length > 0}
-            <div class="section-block past-works-block">
-              <div class="section-title-wrap">
-                <h2 class="section-title">Projetos Anteriores ({pastWorks.length})</h2>
-                <p class="section-subtitle">Obras concluídas ou encerradas no catálogo</p>
+            <div class="works-group-block past-works-block">
+              <div class="block-header-line">
+                <div>
+                  <h2 class="block-title">Projetos Concluídos & Anteriores</h2>
+                  <p class="block-subtitle">Obras finalizadas ou temporadas anteriores do catálogo</p>
+                </div>
+                <span class="block-counter">{pastWorks.length} {pastWorks.length === 1 ? "título" : "títulos"}</span>
               </div>
-              <div class="works-grid">
+
+              <div class="works-catalog-grid">
                 {#each pastWorks as work (work.id)}
                   <WorkCard {work} />
                 {/each}
@@ -386,283 +401,253 @@
           {/if}
 
           {#if data.works.length === 0}
-            <div class="empty-state">
-              <BookOpen size={40} />
-              <h3>Nenhuma obra associada</h3>
-              <p>Esta scan ainda não possui obras públicas atribuídas no catálogo do Project Nox.</p>
+            <div class="empty-state-view">
+              <BookOpen size={48} class="empty-icon" />
+              <h3 class="empty-title">Nenhuma obra associada no catálogo</h3>
+              <p class="empty-desc">Esta equipe ainda não possui obras públicas atribuídas no momento.</p>
             </div>
           {/if}
-        </div>
+        </section>
 
-      <!-- 2. CHAPTERS TAB -->
-      {:else if activeTab === "chapters"}
-        <div class="tab-pane">
-          {#if data.chapters.length > 0}
-            <div class="chapters-list">
-              {#each data.chapters as ch (ch.id)}
-                <div class="chapter-card">
-                  <div class="chapter-left">
-                    <a href="/obra/{ch.works.slug}" class="chapter-work-link">
-                      {ch.works.title}
-                    </a>
-                    <div class="chapter-title-line">
-                      <span class="chapter-number">Cap. {ch.number}</span>
-                      {#if ch.title}
-                        <span class="chapter-name">{ch.title}</span>
-                      {/if}
-                    </div>
-                  </div>
-
-                  <div class="chapter-right">
-                    <span class="chapter-date">
-                      <Clock size={13} />
-                      <span>{relativeTime(ch.published_at)}</span>
-                    </span>
-                    <a href="/ler/{ch.id}" class="btn-read">
-                      <span>Ler Capítulo</span>
-                    </a>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="empty-state">
-              <Layers size={40} />
-              <h3>Nenhum capítulo disponível</h3>
-              <p>Esta scan ainda não possui lançamentos recentes registrados.</p>
-            </div>
-          {/if}
-        </div>
-
-      <!-- 3. MEMBERS TAB -->
+      <!-- ====================================================================
+           2. ABA: EQUIPE
+           ==================================================================== -->
       {:else if activeTab === "members"}
-        <div class="tab-pane">
+        <section class="tab-section team-section">
+          <div class="team-header-intro">
+            <div>
+              <h2 class="block-title">Integrantes da Equipe</h2>
+              <p class="block-subtitle">Profissionais e voluntários dedicados à tradução, edição e revisão</p>
+            </div>
+            <span class="block-counter">{data.members.length} {data.members.length === 1 ? "membro" : "membros"}</span>
+          </div>
+
           {#if data.members.length > 0}
-            <!-- Owners Section -->
+            <!-- 1. Liderança / Dono -->
             {#if owners.length > 0}
-              <div class="members-group">
-                <h3 class="group-title">
-                  <Star size={16} fill="#dfc28d" color="#dfc28d" />
-                  <span>Liderança & Propriedade</span>
-                </h3>
-                <div class="members-grid">
+              <div class="team-tier-block">
+                <div class="tier-label-row">
+                  <Star size={15} fill="#f59e0b" color="#f59e0b" />
+                  <span class="tier-label-text gold">Liderança & Direção</span>
+                </div>
+
+                <div class="team-grid leadership-grid">
                   {#each owners as member (member.id)}
-                    <div class="member-card is-owner">
-                      <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
-                        size={56}
-                        frameId={member.frame_id}
-                      />
-                      <div class="member-info">
-                        <div class="member-name-row">
-                          <a href="/u/{member.username}" class="member-name">
+                    <article class="member-profile-card is-leadership">
+                      <div class="member-avatar-cell">
+                        <UserAvatar user={member} size={58} />
+                      </div>
+                      <div class="member-info-cell">
+                        <div class="member-name-badge-row">
+                          <a href="/u/{member.username}" class="member-display-name">
                             {member.display_name || member.username}
                           </a>
-                          <span class="owner-badge">
-                            👑 Dono
-                          </span>
+                          <span class="badge-role-gold">👑 Líder</span>
                         </div>
-                        <span class="member-handle">@{member.username}</span>
+                        <span class="member-username">@{member.username}</span>
 
-                        <!-- Positions -->
-                        <div class="member-positions-tags">
+                        <div class="member-positions-cluster">
                           {#if member.positions && member.positions.length > 0}
                             {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
-                              <span class="position-badge">{pos.name}</span>
+                              <span class="pos-chip {getPositionColor(pos.name)}">{pos.name}</span>
                             {/each}
                           {:else}
-                            <span class="position-badge">Líder da Equipe</span>
+                            <span class="pos-chip role-amber">Diretor Editorial</span>
                           {/if}
                         </div>
                       </div>
-                    </div>
+                    </article>
                   {/each}
                 </div>
               </div>
             {/if}
 
-            <!-- Admins Section -->
+            <!-- 2. Administração -->
             {#if admins.length > 0}
-              <div class="members-group">
-                <h3 class="group-title">
-                  <ShieldCheck size={16} color="#c084fc" />
-                  <span>Administração</span>
-                </h3>
-                <div class="members-grid">
+              <div class="team-tier-block">
+                <div class="tier-label-row">
+                  <ShieldCheck size={15} color="#818cf8" />
+                  <span class="tier-label-text purple">Administração & Coordenação</span>
+                </div>
+
+                <div class="team-grid">
                   {#each admins as member (member.id)}
-                    <div class="member-card is-admin">
-                      <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
-                        size={52}
-                        frameId={member.frame_id}
-                      />
-                      <div class="member-info">
-                        <div class="member-name-row">
-                          <a href="/u/{member.username}" class="member-name">
+                    <article class="member-profile-card is-admin">
+                      <div class="member-avatar-cell">
+                        <UserAvatar user={member} size={52} />
+                      </div>
+                      <div class="member-info-cell">
+                        <div class="member-name-badge-row">
+                          <a href="/u/{member.username}" class="member-display-name">
                             {member.display_name || member.username}
                           </a>
-                          <span class="admin-badge">Admin</span>
+                          <span class="badge-role-admin">Admin</span>
                         </div>
-                        <span class="member-handle">@{member.username}</span>
+                        <span class="member-username">@{member.username}</span>
 
-                        <div class="member-positions-tags">
+                        <div class="member-positions-cluster">
                           {#if member.positions && member.positions.length > 0}
                             {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
-                              <span class="position-badge">{pos.name}</span>
+                              <span class="pos-chip {getPositionColor(pos.name)}">{pos.name}</span>
                             {/each}
                           {:else}
-                            <span class="position-badge">Administrador</span>
+                            <span class="pos-chip role-indigo">Administrador</span>
                           {/if}
                         </div>
                       </div>
-                    </div>
+                    </article>
                   {/each}
                 </div>
               </div>
             {/if}
 
-            <!-- General Staff Section -->
+            <!-- 3. Corpo Editorial -->
             {#if otherMembers.length > 0}
-              <div class="members-group">
-                <h3 class="group-title">
-                  <Users size={16} color="#94a3b8" />
-                  <span>Equipe Editorial</span>
-                </h3>
-                <div class="members-grid">
+              <div class="team-tier-block">
+                <div class="tier-label-row">
+                  <Users size={15} color="#94a3b8" />
+                  <span class="tier-label-text">Corpo Editorial & Tradução</span>
+                </div>
+
+                <div class="team-grid">
                   {#each otherMembers as member (member.id)}
-                    <div class="member-card">
-                      <UserAvatar
-                        avatarId={member.avatar_id}
-                        crop={member.avatar_crop}
-                        displayName={member.display_name || member.username}
-                        size={48}
-                        frameId={member.frame_id}
-                      />
-                      <div class="member-info">
-                        <div class="member-name-row">
-                          <a href="/u/{member.username}" class="member-name">
+                    <article class="member-profile-card">
+                      <div class="member-avatar-cell">
+                        <UserAvatar user={member} size={48} />
+                      </div>
+                      <div class="member-info-cell">
+                        <div class="member-name-badge-row">
+                          <a href="/u/{member.username}" class="member-display-name">
                             {member.display_name || member.username}
                           </a>
                           {#if member.role === "UPLOADER"}
-                            <span class="uploader-badge">Uploader</span>
+                            <span class="badge-role-uploader">Uploader</span>
                           {/if}
                         </div>
-                        <span class="member-handle">@{member.username}</span>
+                        <span class="member-username">@{member.username}</span>
 
-                        <div class="member-positions-tags">
+                        <div class="member-positions-cluster">
                           {#if member.positions && member.positions.length > 0}
                             {#each member.positions as pos (pos.id ?? pos.slug ?? pos.name)}
-                              <span class="position-badge">{pos.name}</span>
+                              <span class="pos-chip {getPositionColor(pos.name)}">{pos.name}</span>
                             {/each}
                           {:else}
-                            <span class="position-badge">Membro da Equipe</span>
+                            <span class="pos-chip role-slate">Membro Editorial</span>
                           {/if}
                         </div>
                       </div>
-                    </div>
+                    </article>
                   {/each}
                 </div>
               </div>
             {/if}
+
           {:else}
-            <div class="empty-state">
-              <Users size={40} />
-              <h3>Nenhum membro público registrado</h3>
-              <p>Os dados de membros desta equipe estão ocultos ou em atualização.</p>
+            <div class="empty-state-view">
+              <Users size={48} class="empty-icon" />
+              <h3 class="empty-title">Nenhum membro público registrado</h3>
+              <p class="empty-desc">Os dados de equipe estão sendo atualizados pela administração da scan.</p>
             </div>
           {/if}
-        </div>
+        </section>
 
-      <!-- 4. RECRUITMENT TAB -->
+      <!-- ====================================================================
+           3. ABA: RECRUTAMENTO (TOTALMENTE REDESENHADO)
+           ==================================================================== -->
       {:else if activeTab === "recruitment"}
-        <div class="tab-pane">
-          {#if isRecruiting}
-            <div class="recruitment-header">
-              <div>
-                <h2 class="recruitment-title">Vagas Abertas em {data.scan.name}</h2>
-                <p class="recruitment-subtitle">
-                  Faça parte da equipe! Candidate-se preenchendo o formulário específico para a vaga desejada.
-                </p>
+        <section class="tab-section recruitment-section">
+          <!-- Recruitment Hero Banner -->
+          <div class="recruitment-banner-card">
+            <div class="recruitment-banner-info">
+              <div class="recruitment-beacon-tag">
+                <span class="pulse-beacon green"></span>
+                <span>QUADRO DE OPORTUNIDADES</span>
               </div>
+              <h2 class="recruitment-main-title">Faça parte da equipe {data.scan.name}</h2>
+              <p class="recruitment-main-lead">
+                Trabalhe na tradução, revisão, limpeza e diagramação de mangás e webtoons no Project Nox. Ganhe experiência real, visibilidade na comunidade e participe de projetos de ponta.
+              </p>
             </div>
+          </div>
 
-            <div class="openings-grid">
+          {#if isRecruiting}
+            <div class="openings-cards-grid">
               {#each data.openings as opening (opening.id)}
-                {@const alreadyApplied = data.userAppOpenings.includes(opening.id)}
-                <div class="opening-card">
-                  <div class="opening-top">
-                    <div class="opening-role-badge">
-                      <Briefcase size={14} />
-                      <span>{opening.positionName}</span>
+                {@const alreadyApplied = (data.userAppOpenings || []).includes(opening.id)}
+                <article class="opening-detail-card">
+                  <div class="opening-card-top-bar">
+                    <div class="opening-pos-indicator">
+                      <Briefcase size={15} />
+                      <span>{opening.positionName || "Função Editorial"}</span>
                     </div>
-                    <span class="badge-status-open">Vaga Aberta</span>
+
+                    <span class="opening-active-pill">
+                      <span class="pulse-beacon green"></span>
+                      <span>Vaga Disponível</span>
+                    </span>
                   </div>
 
-                  <h3 class="opening-card-title">{opening.title}</h3>
+                  <h3 class="opening-title-head">{opening.title}</h3>
 
                   {#if opening.description}
-                    <p class="opening-card-desc">{opening.description}</p>
+                    <p class="opening-description-text">{opening.description}</p>
                   {/if}
 
-                  <div class="opening-meta-list">
+                  <!-- Meta Details Grid -->
+                  <div class="opening-specs-grid">
                     {#if opening.language}
-                      <div class="meta-row">
-                        <span class="meta-label">Idioma:</span>
-                        <span class="meta-val">{opening.language}</span>
+                      <div class="spec-cell">
+                        <span class="spec-name">Idioma de Origem</span>
+                        <span class="spec-value">{opening.language}</span>
                       </div>
                     {/if}
+
                     {#if opening.experience_level && opening.experience_level !== "QUALQUER"}
-                      <div class="meta-row">
-                        <span class="meta-label">Experiência:</span>
-                        <span class="meta-val">{opening.experience_level}</span>
+                      <div class="spec-cell">
+                        <span class="spec-name">Nível Desejado</span>
+                        <span class="spec-value">{opening.experience_level}</span>
                       </div>
                     {/if}
+
                     {#if opening.availability}
-                      <div class="meta-row">
-                        <span class="meta-label">Disponibilidade:</span>
-                        <span class="meta-val">{opening.availability}</span>
+                      <div class="spec-cell">
+                        <span class="spec-name">Disponibilidade</span>
+                        <span class="spec-value">{opening.availability}</span>
                       </div>
                     {/if}
-                    <div class="meta-row">
-                      <span class="meta-label">Vagas:</span>
-                      <span class="meta-val">{opening.slots ? `${opening.slots} ${opening.slots === 1 ? 'posição' : 'posições'}` : 'Fluxo contínuo'}</span>
+
+                    <div class="spec-cell">
+                      <span class="spec-name">Fluxo de Vagas</span>
+                      <span class="spec-value">{opening.slots ? `${opening.slots} ${opening.slots === 1 ? 'posição' : 'posições'}` : 'Seleção Contínua'}</span>
                     </div>
-                    {#if opening.created_at}
-                      <div class="meta-row">
-                        <span class="meta-label">Aberta:</span>
-                        <span class="meta-val">{relativeTime(opening.created_at)}</span>
-                      </div>
-                    {/if}
-                    {#if opening.requirements}
-                      <div class="meta-requirements">
-                        <strong>Requisitos:</strong>
-                        <p>{opening.requirements}</p>
-                      </div>
-                    {/if}
                   </div>
 
-                  <div class="opening-card-footer">
+                  {#if opening.requirements}
+                    <div class="opening-requirements-block">
+                      <span class="req-title">Requisitos & Conhecimentos:</span>
+                      <p class="req-text">{opening.requirements}</p>
+                    </div>
+                  {/if}
+
+                  <!-- Card Action Footer -->
+                  <div class="opening-footer-action">
                     {#if alreadyApplied}
-                      <div class="applied-badge">
-                        <CheckCircle2 size={15} />
-                        <span>Candidatura Enviada</span>
+                      <div class="applied-status-badge">
+                        <CheckCircle2 size={16} />
+                        <span>Candidatura Já Enviada</span>
                       </div>
                     {:else if !data.viewer}
                       <a
                         href={`/auth?redirect=${encodeURIComponent(`/scans/${data.scan.slug}#recrutamento`)}`}
-                        class="btn-apply-action"
+                        class="btn-apply-primary"
                       >
                         <UserPlus size={15} />
-                        <span>Conectar-se para Candidatar</span>
+                        <span>Entrar para Candidatar-se</span>
                       </a>
                     {:else}
                       <button
                         type="button"
-                        class="btn-apply-action"
+                        class="btn-apply-primary"
                         onclick={() => openApplyModal(opening)}
                       >
                         <UserPlus size={15} />
@@ -670,72 +655,34 @@
                       </button>
                     {/if}
                   </div>
-                </div>
+                </article>
               {/each}
             </div>
           {:else}
-            <div class="empty-state">
-              <Briefcase size={40} />
-              <h3>Nenhuma vaga aberta no momento</h3>
-              <p>A equipe de {data.scan.name} não possui vagas de recrutamento abertas no momento. Volte em breve!</p>
+            <div class="empty-state-view">
+              <Briefcase size={48} class="empty-icon" />
+              <h3 class="empty-title">Nenhuma vaga aberta no momento</h3>
+              <p class="empty-desc">A equipe de {data.scan.name} está com o quadro completo no momento. Fique atento a futuros comunicados!</p>
             </div>
           {/if}
-        </div>
+        </section>
 
-      <!-- 5. ACTIVITY TAB -->
-      {:else if activeTab === "activity"}
-        <div class="tab-pane">
-          {#if data.activities.length > 0}
-            <div class="activity-timeline">
-              {#each data.activities as act (act.id)}
-                <div class="timeline-item">
-                  <div class="timeline-dot"></div>
-                  <div class="timeline-content">
-                    <div class="timeline-header">
-                      <span class="timeline-action">
-                        {#if act.action === "APPLICATION_RECEIVED"}
-                          Nova candidatura recebida para <strong>{act.details?.position_name || "vaga"}</strong>
-                        {:else if act.action === "MEMBER_ADDED"}
-                          <strong>{act.details?.user_name}</strong> entrou para a equipe como <strong>{act.details?.position_name || "Membro"}</strong>
-                        {:else if act.action === "OPENING_CREATED"}
-                          Nova vaga aberta para <strong>{act.details?.position_name || "equipe"}</strong>
-                        {:else if act.action === "APPLICATION_STATUS"}
-                          Candidatura de <strong>{act.details?.applicant_name}</strong> atualizada para <strong>{act.details?.status}</strong>
-                        {:else}
-                          Atividade registrada na scan
-                        {/if}
-                      </span>
-                      <span class="timeline-time">{relativeTime(act.created_at)}</span>
-                    </div>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="empty-state">
-              <Clock size={40} />
-              <h3>Nenhuma atividade recente</h3>
-              <p>As atualizações da equipe aparecerão aqui conforme novos lançamentos e membros forem registrados.</p>
-            </div>
-          {/if}
-        </div>
-
-      <!-- 6. COMMENTS TAB -->
+      <!-- ====================================================================
+           4. ABA: COMENTÁRIOS (COM AVATARES REAIS PRESERVADOS)
+           ==================================================================== -->
       {:else if activeTab === "comments"}
-        <div class="tab-pane comments-pane">
-          <div class="comments-header">
+        <section class="tab-section comments-section">
+          <div class="comments-section-header">
             <div>
-              <h2 class="section-title">Comentários & Mural da Comunidade</h2>
-              <p class="section-subtitle">
-                Deixe seu apoio, feedback ou recado para a equipe de {data.scan.name}.
-              </p>
+              <h2 class="block-title">Mural da Comunidade</h2>
+              <p class="block-subtitle">Envie mensagens de apoio, feedback sobre capítulos e recados para a equipe</p>
             </div>
-            <span class="comments-count-badge">
-              {(data.comments || []).length} comentário{(data.comments || []).length === 1 ? "" : "s"}
+            <span class="block-counter">
+              {(data.comments || []).length} {(data.comments || []).length === 1 ? "comentário" : "comentários"}
             </span>
           </div>
 
-          <!-- New Comment Box -->
+          <!-- New Comment Composer -->
           {#if data.viewer}
             <form
               method="POST"
@@ -747,89 +694,101 @@
                   await update();
                 };
               }}
-              class="comment-composer-card"
+              class="composer-panel"
             >
               <input type="hidden" name="scan_id" value={data.scan.id} />
-              <div class="composer-top">
-                <UserAvatar displayName={data.viewer.displayName || data.viewer.username} avatarId={data.viewer.avatarId} crop={data.viewer.avatarCrop || data.viewer.avatar_crop} size={38} />
-                <div class="composer-input-wrap">
+
+              <div class="composer-body-row">
+                <div class="composer-avatar-slot">
+                  <!-- Canonical UserAvatar: Preserves user's equipped avatar & frame -->
+                  <UserAvatar user={data.viewer} size={44} />
+                </div>
+
+                <div class="composer-input-area">
                   <textarea
                     name="body"
                     rows="3"
                     maxlength="2000"
-                    placeholder="Escreva um comentário ou mensagem para a scan {data.scan.name}..."
+                    placeholder="Deixe um recado para a equipe de {data.scan.name}..."
                     required
-                    class="composer-textarea"
+                    class="composer-input-field"
                   ></textarea>
+
+                  <div class="composer-dock-footer">
+                    <span class="composer-dock-hint">
+                      Respeite a equipe editorial e as diretrizes do Project Nox.
+                    </span>
+                    <button type="submit" class="btn-send-comment" disabled={isSubmitting}>
+                      <Send size={14} />
+                      <span>{isSubmitting ? "Enviando..." : "Publicar Comentário"}</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div class="composer-footer">
-                <span class="composer-hint">Seja respeitoso e apoie os tradutores e editores!</span>
-                <button type="submit" class="btn-post-comment" disabled={isSubmitting}>
-                  <Send size={15} />
-                  <span>Publicar Comentário</span>
-                </button>
               </div>
             </form>
           {:else}
-            <div class="login-to-comment-card">
-              <MessageSquare size={24} />
-              <div class="login-msg-text">
-                <strong>Quer deixar um recado para a equipe?</strong>
-                <p>Faça login ou crie sua conta no Project Nox para comentar e interagir com as scans parceiras.</p>
+            <div class="composer-login-prompt">
+              <MessageSquare size={26} class="prompt-icon" />
+              <div class="prompt-text">
+                <strong>Deseja enviar uma mensagem para a equipe?</strong>
+                <p>Faça login ou crie sua conta para participar do mural de recados desta scan.</p>
               </div>
-              <a href={`/auth?redirect=${encodeURIComponent(`/scans/${data.scan.slug}#comentarios`)}`} class="btn-login-comment">Entrar no Project Nox</a>
+              <a
+                href={`/auth?redirect=${encodeURIComponent(`/scans/${data.scan.slug}#comentarios`)}`}
+                class="btn-prompt-login"
+              >
+                Conectar-se
+              </a>
             </div>
           {/if}
 
-          <!-- Comments List -->
+          <!-- Comments List Feed -->
           {#if rootComments.length > 0}
-            <div class="comments-thread-list">
+            <div class="comments-feed">
               {#each rootComments as comment (comment.id)}
                 {@const replies = repliesMap[comment.id] || []}
-                <article class="comment-item" class:is-pinned={comment.pinned}>
+                <article class="comment-bubble-card" class:is-pinned-card={comment.pinned}>
                   {#if comment.pinned}
-                    <div class="pinned-indicator">
-                      <Pin size={12} />
-                      <span>Comentário Fixado pela Staff</span>
+                    <div class="pinned-notice-bar">
+                      <Pin size={13} />
+                      <span>Comentário Fixado pela Moderação</span>
                     </div>
                   {/if}
 
-                  <div class="comment-main">
-                    <div class="comment-avatar">
-                      <UserAvatar
-                        displayName={comment.author?.display_name || comment.author?.username || 'Usuário'}
-                        avatarId={comment.author?.avatar_id}
-                        frameId={comment.author?.avatar_frame_id}
-                        size={38}
-                      />
+                  <div class="comment-layout-row">
+                    <div class="comment-avatar-slot">
+                      <UserAvatar user={comment.author} size={42} />
                     </div>
-                    <div class="comment-body-wrap">
-                      <div class="comment-meta-header">
-                        <div class="comment-author-info">
-                          <a href="/u/{comment.author?.username}" class="comment-author-name">
-                            {comment.author?.display_name || comment.author?.username || 'Usuário'}
+
+                    <div class="comment-content-slot">
+                      <!-- Author Meta -->
+                      <div class="comment-author-bar">
+                        <div class="author-info-group">
+                          <a href="/u/{comment.author?.username}" class="author-name-link">
+                            {comment.author?.display_name || comment.author?.username || "Leitor"}
                           </a>
                           {#if comment.isStaff}
-                            <span class="comment-staff-pill" title="Membro desta scan">Staff</span>
+                            <span class="staff-author-badge">Equipe Scan</span>
                           {/if}
                         </div>
-                        <time class="comment-timestamp">{relativeTime(comment.created_at)}</time>
+                        <time class="comment-time-stamp">{relativeTime(comment.created_at)}</time>
                       </div>
 
-                      <p class="comment-text">{comment.body}</p>
+                      <!-- Text -->
+                      <p class="comment-text-body">{comment.body}</p>
 
-                      <div class="comment-actions-bar">
+                      <!-- Actions Bar -->
+                      <div class="comment-actions-dock">
                         <!-- Like Form -->
-                        <form method="POST" action="?/likeComment" use:enhance class="action-form">
+                        <form method="POST" action="?/likeComment" use:enhance class="action-inline-form">
                           <input type="hidden" name="comment_id" value={comment.id} />
                           <button
                             type="submit"
-                            class="btn-comment-action"
-                            class:active={comment.isLiked}
+                            class="action-dock-btn"
+                            class:is-active-heart={comment.isLiked}
                             title={comment.isLiked ? "Descurtir" : "Curtir"}
                           >
-                            <Heart size={14} fill={comment.isLiked ? "currentColor" : "none"} />
+                            <Heart size={14} fill={comment.isLiked ? "#f43f5e" : "none"} color={comment.isLiked ? "#f43f5e" : "currentColor"} />
                             <span>{comment.likesCount}</span>
                           </button>
                         </form>
@@ -837,7 +796,7 @@
                         {#if data.viewer}
                           <button
                             type="button"
-                            class="btn-comment-action"
+                            class="action-dock-btn"
                             onclick={() => (replyToId = replyToId === comment.id ? null : comment.id)}
                           >
                             <MessageSquare size={14} />
@@ -846,7 +805,7 @@
                         {/if}
 
                         {#if comment.canModerate}
-                          <form method="POST" action="?/moderateComment" use:enhance class="action-form">
+                          <form method="POST" action="?/moderateComment" use:enhance class="action-inline-form">
                             <input type="hidden" name="comment_id" value={comment.id} />
                             <input
                               type="hidden"
@@ -855,7 +814,7 @@
                             />
                             <button
                               type="submit"
-                              class="btn-comment-action btn-mod-pin"
+                              class="action-dock-btn mod-btn"
                               title={comment.pinned ? "Desafixar comentário" : "Fixar comentário no topo"}
                             >
                               {#if comment.pinned}
@@ -874,20 +833,20 @@
                             method="POST"
                             action="?/moderateComment"
                             use:enhance={() => {
-                              if (!confirm("Tem certeza que deseja remover este comentário?")) return () => {};
+                              if (!confirm("Tem certeza que deseja excluir este comentário?")) return () => {};
                               return async ({ update }) => { await update(); };
                             }}
-                            class="action-form"
+                            class="action-inline-form"
                           >
                             <input type="hidden" name="comment_id" value={comment.id} />
                             <input type="hidden" name="action_type" value="REMOVE" />
                             <button
                               type="submit"
-                              class="btn-comment-action btn-mod-delete"
-                              title="Remover comentário"
+                              class="action-dock-btn delete-btn"
+                              title="Excluir comentário"
                             >
                               <Trash2 size={14} />
-                              <span>Remover</span>
+                              <span>Excluir</span>
                             </button>
                           </form>
                         {/if}
@@ -895,16 +854,16 @@
                         {#if data.viewer && comment.user_id !== data.viewer.id}
                           <button
                             type="button"
-                            class="btn-comment-action btn-report"
+                            class="action-dock-btn report-btn"
                             onclick={() => (reportingComment = comment)}
-                            title="Denunciar comentário inadequado"
+                            title="Denunciar este comentário"
                           >
                             <Flag size={13} />
                           </button>
                         {/if}
                       </div>
 
-                      <!-- Inline Reply Form -->
+                      <!-- Inline Reply Composer -->
                       {#if replyToId === comment.id && data.viewer}
                         <form
                           method="POST"
@@ -917,29 +876,29 @@
                               await update();
                             };
                           }}
-                          class="reply-composer-inline"
+                          class="reply-composer-box"
                         >
                           <input type="hidden" name="scan_id" value={data.scan.id} />
                           <input type="hidden" name="parent_id" value={comment.id} />
-                          <div class="reply-input-wrap">
-                            <textarea
-                              name="body"
-                              rows="2"
-                              maxlength="2000"
-                              placeholder="Escreva sua resposta para @{comment.author?.username || 'usuário'}..."
-                              required
-                              class="composer-textarea reply-textarea"
-                            ></textarea>
-                          </div>
-                          <div class="reply-actions">
+
+                          <textarea
+                            name="body"
+                            rows="2"
+                            maxlength="2000"
+                            placeholder="Escreva sua resposta para @{comment.author?.username || 'usuário'}..."
+                            required
+                            class="reply-textarea-field"
+                          ></textarea>
+
+                          <div class="reply-composer-actions">
                             <button
                               type="button"
-                              class="btn-cancel-reply"
+                              class="btn-reply-cancel"
                               onclick={() => (replyToId = null)}
                             >
                               Cancelar
                             </button>
-                            <button type="submit" class="btn-post-reply" disabled={isSubmitting}>
+                            <button type="submit" class="btn-reply-send" disabled={isSubmitting}>
                               <Send size={13} />
                               <span>Enviar Resposta</span>
                             </button>
@@ -947,45 +906,44 @@
                         </form>
                       {/if}
 
-                      <!-- Nested Replies -->
+                      <!-- Nested Replies Feed -->
                       {#if replies.length > 0}
-                        <div class="nested-replies-list">
+                        <div class="nested-replies-feed">
                           {#each replies as reply (reply.id)}
-                            <div class="nested-reply-item">
-                              <CornerDownRight size={14} class="reply-turn-icon" />
-                              <div class="reply-avatar">
-                                <UserAvatar
-                                  displayName={reply.author?.display_name || reply.author?.username || 'Usuário'}
-                                  avatarId={reply.author?.avatar_id}
-                                  frameId={reply.author?.avatar_frame_id}
-                                  size={28}
-                                />
+                            <div class="nested-reply-card">
+                              <div class="reply-turn-indicator">
+                                <CornerDownRight size={14} />
                               </div>
-                              <div class="reply-body-wrap">
-                                <div class="comment-meta-header">
-                                  <div class="comment-author-info">
-                                    <a href="/u/{reply.author?.username}" class="comment-author-name">
-                                      {reply.author?.display_name || reply.author?.username || 'Usuário'}
+
+                              <div class="reply-avatar-slot">
+                                <UserAvatar user={reply.author} size={32} />
+                              </div>
+
+                              <div class="reply-content-slot">
+                                <div class="comment-author-bar">
+                                  <div class="author-info-group">
+                                    <a href="/u/{reply.author?.username}" class="author-name-link">
+                                      {reply.author?.display_name || reply.author?.username || "Leitor"}
                                     </a>
                                     {#if reply.isStaff}
-                                      <span class="comment-staff-pill">Staff</span>
+                                      <span class="staff-author-badge">Equipe Scan</span>
                                     {/if}
                                   </div>
-                                  <time class="comment-timestamp">{relativeTime(reply.created_at)}</time>
+                                  <time class="comment-time-stamp">{relativeTime(reply.created_at)}</time>
                                 </div>
 
-                                <p class="comment-text">{reply.body}</p>
+                                <p class="comment-text-body">{reply.body}</p>
 
-                                <div class="comment-actions-bar">
-                                  <form method="POST" action="?/likeComment" use:enhance class="action-form">
+                                <div class="comment-actions-dock">
+                                  <form method="POST" action="?/likeComment" use:enhance class="action-inline-form">
                                     <input type="hidden" name="comment_id" value={reply.id} />
                                     <button
                                       type="submit"
-                                      class="btn-comment-action"
-                                      class:active={reply.isLiked}
+                                      class="action-dock-btn"
+                                      class:is-active-heart={reply.isLiked}
                                       title={reply.isLiked ? "Descurtir" : "Curtir"}
                                     >
-                                      <Heart size={13} fill={reply.isLiked ? "currentColor" : "none"} />
+                                      <Heart size={13} fill={reply.isLiked ? "#f43f5e" : "none"} color={reply.isLiked ? "#f43f5e" : "currentColor"} />
                                       <span>{reply.likesCount}</span>
                                     </button>
                                   </form>
@@ -995,14 +953,14 @@
                                       method="POST"
                                       action="?/moderateComment"
                                       use:enhance={() => {
-                                        if (!confirm("Excluir resposta?")) return () => {};
+                                        if (!confirm("Excluir esta resposta?")) return () => {};
                                         return async ({ update }) => { await update(); };
                                       }}
-                                      class="action-form"
+                                      class="action-inline-form"
                                     >
                                       <input type="hidden" name="comment_id" value={reply.id} />
                                       <input type="hidden" name="action_type" value="REMOVE" />
-                                      <button type="submit" class="btn-comment-action btn-mod-delete">
+                                      <button type="submit" class="action-dock-btn delete-btn">
                                         <Trash2 size={13} />
                                         <span>Excluir</span>
                                       </button>
@@ -1012,9 +970,9 @@
                                   {#if data.viewer && reply.user_id !== data.viewer.id}
                                     <button
                                       type="button"
-                                      class="btn-comment-action btn-report"
+                                      class="action-dock-btn report-btn"
                                       onclick={() => (reportingComment = reply)}
-                                      title="Denunciar"
+                                      title="Denunciar resposta"
                                     >
                                       <Flag size={12} />
                                     </button>
@@ -1031,32 +989,41 @@
               {/each}
             </div>
           {:else}
-            <div class="empty-state">
-              <MessageSquare size={40} />
-              <h3>Nenhum comentário ainda</h3>
-              <p>Seja o primeiro a deixar uma mensagem de incentivo ou feedback para {data.scan.name}!</p>
+            <div class="empty-state-view">
+              <MessageSquare size={48} class="empty-icon" />
+              <h3 class="empty-title">Nenhum comentário publicado ainda</h3>
+              <p class="empty-desc">Seja o primeiro a deixar uma mensagem de incentivo ou feedback para {data.scan.name}!</p>
             </div>
           {/if}
-        </div>
+        </section>
       {/if}
     </div>
-  </div>
+  </main>
 </div>
 
-<!-- Application Modal -->
+<!-- ==========================================================================
+     APPLICATION MODAL
+     ========================================================================== -->
 {#if applyingOpening}
-  <div class="modal-backdrop" onclick={closeApplyModal} onkeydown={(event) => event.key === 'Escape' && closeApplyModal()} role="dialog" aria-modal="true" tabindex="-1">
-    <div class="modal-card" onclick={(e) => e.stopPropagation()} role="presentation">
-      <div class="modal-header">
-        <div class="modal-title-wrap">
-          <div class="modal-badge">
+  <div
+    class="modal-backdrop-layer"
+    onclick={closeApplyModal}
+    onkeydown={(e) => e.key === "Escape" && closeApplyModal()}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div class="modal-dialog-box" onclick={(e) => e.stopPropagation()} role="presentation">
+      <div class="modal-dialog-header">
+        <div class="modal-head-titles">
+          <div class="modal-role-pill">
             <Briefcase size={14} />
-            <span>{applyingOpening.positionName}</span>
+            <span>{applyingOpening.positionName || "Vaga Editorial"}</span>
           </div>
-          <h2 class="modal-title">Candidatar-se: {applyingOpening.title}</h2>
-          <span class="modal-scan-tag">Equipe: {data.scan.name}</span>
+          <h2 class="modal-dialog-title">Candidatar-se: {applyingOpening.title}</h2>
+          <span class="modal-team-tag">Equipe: {data.scan.name}</span>
         </div>
-        <button class="btn-close-modal" onclick={closeApplyModal} type="button">
+        <button class="modal-close-btn" onclick={closeApplyModal} type="button" aria-label="Fechar">
           <X size={18} />
         </button>
       </div>
@@ -1072,12 +1039,12 @@
             await update();
           };
         }}
-        class="modal-form"
+        class="modal-form-content"
       >
         <input type="hidden" name="opening_id" value={applyingOpening.id} />
 
-        <div class="form-group">
-          <label for="experience" class="form-label">
+        <div class="form-field-group">
+          <label for="experience" class="form-field-label">
             Experiência Prévia *
           </label>
           <textarea
@@ -1086,12 +1053,12 @@
             rows="3"
             required
             placeholder="Conte se já trabalhou com tradução/edição de mangás ou se é iniciante dedicado..."
-            class="form-textarea"
+            class="form-field-textarea"
           ></textarea>
         </div>
 
-        <div class="form-group">
-          <label for="availability" class="form-label">
+        <div class="form-field-group">
+          <label for="availability" class="form-field-label">
             Disponibilidade de Tempo *
           </label>
           <input
@@ -1099,13 +1066,13 @@
             name="availability"
             type="text"
             required
-            placeholder="Ex: 2 a 3 capítulos por semana, noites e finais de semana..."
-            class="form-input"
+            placeholder="Ex: 2 a 3 capítulos por semana, noites ou finais de semana..."
+            class="form-field-input"
           />
         </div>
 
-        <div class="form-group">
-          <label for="presentation" class="form-label">
+        <div class="form-field-group">
+          <label for="presentation" class="form-field-label">
             Mensagem / Apresentação *
           </label>
           <textarea
@@ -1113,63 +1080,63 @@
             name="presentation"
             rows="3"
             required
-            placeholder="Apresente-se para os líderes e comente por que deseja fazer parte desta scan..."
-            class="form-textarea"
+            placeholder="Apresente-se para os líderes da scan e explique por que deseja fazer parte..."
+            class="form-field-textarea"
           ></textarea>
         </div>
 
-        <div class="form-group">
-          <label for="portfolio_url" class="form-label">
+        <div class="form-field-group">
+          <label for="portfolio_url" class="form-field-label">
             Link de Portfólio / Amostra de Trabalho (Opcional)
           </label>
           <input
             id="portfolio_url"
             name="portfolio_url"
             type="url"
-            placeholder="https://drive.google.com/... ou link do seu trabalho"
-            class="form-input"
+            placeholder="https://drive.google.com/... ou link de trabalhos anteriores"
+            class="form-field-input"
           />
         </div>
 
-        <div class="form-group">
-          <label for="contact_info" class="form-label">
+        <div class="form-field-group">
+          <label for="contact_info" class="form-field-label">
             Contato Adicional (Opcional)
           </label>
           <input
             id="contact_info"
             name="contact_info"
             type="text"
-            placeholder="Discord (ex: usuario#0000) ou email de contato..."
-            class="form-input"
+            placeholder="Discord (ex: usuario#0000) ou email preferencial..."
+            class="form-field-input"
           />
         </div>
 
         {#if openingQuestions.length > 0}
-          <div class="custom-questions-box">
-            <h4 class="custom-questions-heading">Perguntas Específicas da Vaga</h4>
+          <div class="custom-questions-card">
+            <h4 class="custom-questions-title">Perguntas Específicas da Vaga</h4>
             {#each openingQuestions as q (q.id)}
-              <div class="form-group">
-                <label for="q-{q.id}" class="form-label">
-                  {q.question} {q.required ? '*' : '(Opcional)'}
+              <div class="form-field-group">
+                <label for="q-{q.id}" class="form-field-label">
+                  {q.question} {q.required ? "*" : "(Opcional)"}
                 </label>
-                {#if q.question_type === 'TEXT_LONG'}
+                {#if q.question_type === "TEXT_LONG"}
                   <textarea
                     id="q-{q.id}"
                     name="question_{q.id}"
                     rows="3"
                     required={q.required}
-                    class="form-textarea"
+                    class="form-field-textarea"
                     placeholder="Sua resposta..."
                   ></textarea>
-                {:else if q.question_type === 'YES_NO'}
-                  <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
+                {:else if q.question_type === "YES_NO"}
+                  <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-field-select">
                     <option value="">Selecione...</option>
                     <option value="Sim">Sim</option>
                     <option value="Não">Não</option>
                   </select>
-                {:else if q.question_type === 'SINGLE_CHOICE'}
+                {:else if q.question_type === "SINGLE_CHOICE"}
                   {@const opts = Array.isArray(q.options) ? q.options : []}
-                  <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-select">
+                  <select id="q-{q.id}" name="question_{q.id}" required={q.required} class="form-field-select">
                     <option value="">Selecione uma opção...</option>
                     {#each opts as opt (opt)}
                       <option value={opt}>{opt}</option>
@@ -1181,7 +1148,7 @@
                     name="question_{q.id}"
                     type="text"
                     required={q.required}
-                    class="form-input"
+                    class="form-field-input"
                     placeholder="Sua resposta..."
                   />
                 {/if}
@@ -1190,9 +1157,9 @@
           </div>
         {/if}
 
-        <div class="modal-actions">
-          <button type="button" class="btn-cancel" onclick={closeApplyModal}>Cancelar</button>
-          <button type="submit" class="btn-submit" disabled={isSubmitting}>
+        <div class="modal-dialog-actions">
+          <button type="button" class="btn-dialog-cancel" onclick={closeApplyModal}>Cancelar</button>
+          <button type="submit" class="btn-dialog-submit" disabled={isSubmitting}>
             <UserPlus size={15} />
             <span>{isSubmitting ? "Enviando..." : "Enviar Candidatura"}</span>
           </button>
@@ -1202,19 +1169,28 @@
   </div>
 {/if}
 
-<!-- Comment Report Modal -->
+<!-- ==========================================================================
+     COMMENT REPORT MODAL
+     ========================================================================== -->
 {#if reportingComment}
-  <div class="modal-backdrop" onclick={() => (reportingComment = null)} onkeydown={(event) => event.key === 'Escape' && (reportingComment = null)} role="dialog" aria-modal="true" tabindex="-1">
-    <div class="modal-card modal-small" onclick={(e) => e.stopPropagation()} role="presentation">
-      <div class="modal-header">
-        <div class="modal-title-wrap">
-          <div class="modal-badge report-badge">
+  <div
+    class="modal-backdrop-layer"
+    onclick={() => (reportingComment = null)}
+    onkeydown={(e) => e.key === "Escape" && (reportingComment = null)}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div class="modal-dialog-box modal-compact" onclick={(e) => e.stopPropagation()} role="presentation">
+      <div class="modal-dialog-header">
+        <div class="modal-head-titles">
+          <div class="modal-role-pill report-pill">
             <Flag size={14} />
-            <span>Denunciar Comentário</span>
+            <span>Denúncia de Comentário</span>
           </div>
-          <h2 class="modal-title">Denunciar comentário de @{reportingComment.author?.username}</h2>
+          <h2 class="modal-dialog-title">Denunciar @{reportingComment.author?.username}</h2>
         </div>
-        <button class="btn-close-modal" onclick={() => (reportingComment = null)} type="button">
+        <button class="modal-close-btn" onclick={() => (reportingComment = null)} type="button">
           <X size={18} />
         </button>
       </div>
@@ -1231,14 +1207,16 @@
             await update();
           };
         }}
-        class="modal-form"
+        class="modal-form-content"
       >
         <input type="hidden" name="comment_id" value={reportingComment.id} />
-        <div class="comment-preview-quote">
+
+        <div class="reported-quote-box">
           <p>"{reportingComment.body}"</p>
         </div>
-        <div class="form-group">
-          <label for="report_reason" class="form-label">Motivo da denúncia *</label>
+
+        <div class="form-field-group">
+          <label for="report_reason" class="form-field-label">Motivo da Denúncia *</label>
           <textarea
             id="report_reason"
             name="reason"
@@ -1246,15 +1224,20 @@
             required
             maxlength="500"
             bind:value={reportReason}
-            placeholder="Descreva o motivo (ex: spam, assédio, spoiler sem aviso, conteúdo ofensivo)..."
-            class="form-textarea"
+            placeholder="Descreva o motivo (ex: spam, ofensas, assédio, spoiler indevido)..."
+            class="form-field-textarea"
           ></textarea>
         </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-cancel" onclick={() => (reportingComment = null)}>
+
+        <div class="modal-dialog-actions">
+          <button type="button" class="btn-dialog-cancel" onclick={() => (reportingComment = null)}>
             Cancelar
           </button>
-          <button type="submit" class="btn-submit btn-submit-report" disabled={isSubmitting || reportReason.trim().length < 2}>
+          <button
+            type="submit"
+            class="btn-dialog-submit report-submit"
+            disabled={isSubmitting || reportReason.trim().length < 2}
+          >
             <Flag size={14} />
             <span>Enviar Denúncia</span>
           </button>
@@ -1265,547 +1248,634 @@
 {/if}
 
 <style>
+  /* ==========================================================================
+     PAGE WRAPPER & CINEMATIC BACKDROP
+     ========================================================================== */
   .scan-profile-page {
     min-height: 100vh;
-    padding: 1.75rem 1.5rem 5rem;
     color: #e2e8f0;
+    background: #090c15;
+    padding-bottom: 6rem;
   }
 
-  .profile-container {
-    max-width: 1440px;
+  /* Top Bar: Back & Staff Cockpit (Sleek, Clean, Unobtrusive) */
+  .profile-top-bar {
+    max-width: 1280px;
     margin: 0 auto;
-  }
-
-  /* Back Nav */
-  .back-nav {
-    margin-bottom: 1.25rem;
-  }
-
-  .back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #94a3b8;
-    text-decoration: none;
-    font-size: 0.88rem;
-    font-weight: 600;
-    transition: color 0.2s ease;
-  }
-
-  .back-link:hover {
-    color: #f8fafc;
-  }
-
-  /* Hero Section */
-  .scan-hero {
-    background: #0d101a;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    overflow: hidden;
-    margin-bottom: 2rem;
-  }
-
-  .hero-banner {
-    height: clamp(180px, 18vw, 260px);
-    width: 100%;
-    position: relative;
-    background: #141829;
-    overflow: hidden;
-  }
-
-  .banner-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .banner-gradient {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 20%, rgba(13, 16, 26, 0.95) 100%);
-  }
-
-  .banner-placeholder {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0d101a 100%);
-  }
-
-  .banner-placeholder.official-bg {
-    background: linear-gradient(135deg, rgba(60, 48, 25, 0.5) 0%, #0d101a 100%);
-  }
-
-  .hero-body {
-    position: relative;
-    z-index: 2;
-    padding: 0 2rem 1.75rem;
-  }
-
-  .hero-identity-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 1.5rem;
-    margin-top: -50px;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
-
-  /* Scan Logo */
-  .scan-logo-wrap {
-    width: 96px;
-    height: 96px;
-    border-radius: 22px;
-    background: #131728;
-    border: 4px solid #0d101a;
-    overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .scan-logo-wrap.official-logo {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(223, 194, 141, 0.4);
-  }
-
-  .logo-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .logo-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #3b0764, #1e1b4b);
-    color: #f1f5f9;
-    font-size: 2.25rem;
-    font-weight: 800;
-  }
-
-  .identity-meta {
-    flex: 1;
-    min-width: 260px;
-  }
-
-  .name-line {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.4rem;
-  }
-
-  .scan-title {
-    font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1.75rem;
-    font-weight: 800;
-    color: #ffffff;
-    margin: 0;
-    letter-spacing: -0.02em;
-  }
-
-  .badge-official {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.7rem;
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.35);
-    border-radius: 8px;
-    color: #dfc28d;
-    font-size: 0.75rem;
-    font-weight: 800;
-  }
-
-  .badge-partner {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.7rem;
-    background: rgba(139, 92, 246, 0.12);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 8px;
-    color: #c4b5fd;
-    font-size: 0.75rem;
-    font-weight: 700;
-  }
-
-  .badge-recruiting {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.7rem;
-    background: rgba(168, 85, 247, 0.18);
-    border: 1px solid rgba(168, 85, 247, 0.45);
-    border-radius: 8px;
-    color: #f3e8ff;
-    font-size: 0.75rem;
-    font-weight: 800;
-  }
-
-  .pulse-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #a855f7;
-    box-shadow: 0 0 8px #a855f7;
-  }
-
-  .scan-bio {
-    font-size: 0.92rem;
-    color: #94a3b8;
-    line-height: 1.55;
-    margin: 0;
-    max-width: 820px;
-  }
-
-  /* Actions */
-  .hero-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-
-  .btn-hero-recruit {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.6rem 1.1rem;
-    background: #9333ea;
-    color: #ffffff;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-hero-recruit:hover {
-    background: #a855f7;
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
-    transform: translateY(-1px);
-  }
-
-  .btn-social {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.6rem 0.95rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    color: #e2e8f0;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s ease;
-  }
-
-  .btn-social:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-  }
-
-  /* Metrics Strip */
-  .metrics-strip {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    padding-top: 1.25rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .metric-card {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.65rem 1.1rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-  }
-
-  .metric-card.recruiting-metric {
-    background: rgba(168, 85, 247, 0.08);
-    border-color: rgba(168, 85, 247, 0.25);
-  }
-
-  .text-purple {
-    color: #c084fc;
-  }
-
-  .metric-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .metric-val {
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #ffffff;
-    line-height: 1.1;
-  }
-
-  .metric-label {
-    font-size: 0.72rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  /* Tabs Nav */
-  .profile-tabs-nav {
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-    margin-bottom: 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .tab-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.65rem 1.25rem;
-    background: transparent;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: #94a3b8;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    position: relative;
-  }
-
-  .tab-btn:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  .tab-btn.active {
-    color: #ffffff;
-    background: rgba(139, 92, 246, 0.2);
-    box-shadow: 0 2px 12px rgba(139, 92, 246, 0.25);
-  }
-
-  .tab-pulse-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #a855f7;
-    margin-left: 0.25rem;
-  }
-
-  /* Banners */
-  .success-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 12px;
-    margin-bottom: 2rem;
-    color: #6ee7b7;
-  }
-
-  .error-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 12px;
-    margin-bottom: 2rem;
-    color: #fca5a5;
-  }
-
-  /* Tab Viewport */
-  .tab-viewport {
-    min-height: 400px;
-  }
-
-  .section-block {
-    margin-bottom: 2.5rem;
-  }
-
-  .section-title {
-    font-size: 1.25rem;
-    font-weight: 800;
-    color: #ffffff;
-    margin: 0 0 1.25rem;
-  }
-
-  .works-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1.25rem;
-  }
-
-  /* Chapters List */
-  .chapters-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .chapter-card {
+    padding: 1.25rem 1.5rem 1rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 0.9rem 1.25rem;
-    background: #0e111d;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    transition: all 0.2s ease;
+    position: relative;
+    z-index: 5;
   }
 
-  .chapter-card:hover {
-    background: #131728;
-    border-color: rgba(139, 92, 246, 0.3);
-  }
-
-  .chapter-left {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .chapter-work-link {
+  .btn-back-catalog {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    padding: 0.45rem 0.95rem;
     font-size: 0.82rem;
-    color: #94a3b8;
-    text-decoration: none;
-    font-weight: 600;
-  }
-
-  .chapter-work-link:hover {
-    color: #c4b5fd;
-  }
-
-  .chapter-title-line {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .chapter-number {
-    font-size: 0.95rem;
     font-weight: 700;
-    color: #ffffff;
-  }
-
-  .chapter-name {
-    font-size: 0.85rem;
-    color: #64748b;
-  }
-
-  .chapter-right {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .chapter-date {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.78rem;
-    color: #64748b;
-  }
-
-  .btn-read {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.85rem;
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 8px;
-    color: #c4b5fd;
-    font-size: 0.8rem;
-    font-weight: 700;
+    color: #cbd5e1;
     text-decoration: none;
+    backdrop-filter: blur(12px);
     transition: all 0.2s ease;
   }
 
-  .btn-read:hover {
-    background: #8b5cf6;
+  .btn-back-catalog:hover {
+    background: rgba(0, 0, 0, 0.8);
     color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateX(-2px);
   }
 
-  /* Members Group */
-  .members-group {
-    margin-bottom: 2.25rem;
-  }
-
-  .group-title {
-    display: flex;
+  /* Executive Staff Cockpit Button */
+  .btn-staff-cockpit {
+    display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #e2e8f0;
-    margin: 0 0 1rem;
-  }
-
-  .members-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
-  }
-
-  .member-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: #0e111d;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(124, 58, 237, 0.2) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 9999px;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #fde68a;
+    text-decoration: none;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.2);
     transition: all 0.2s ease;
   }
 
-  .member-card:hover {
-    background: #131728;
-    border-color: rgba(139, 92, 246, 0.25);
+  .btn-staff-cockpit:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.28) 0%, rgba(124, 58, 237, 0.35) 100%);
+    border-color: #f59e0b;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
   }
 
-  .member-card.is-owner {
-    border-color: rgba(223, 194, 141, 0.3);
-    background: radial-gradient(circle at top right, rgba(223, 194, 141, 0.06), transparent 70%), #0e111d;
+  /* 1. BANNER COMPLETO: Sozinho no topo, desimpedido */
+  .profile-banner-stage {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
   }
 
-  .member-card.is-admin {
-    border-color: rgba(192, 132, 252, 0.25);
+  .profile-banner-container {
+    position: relative;
+    width: 100%;
+    height: 350px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #080b15;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
   }
 
-  .member-info {
+  .profile-banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    display: block;
+  }
+
+  .profile-banner-fallback {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .profile-banner-fallback.official-bg {
+    background: radial-gradient(circle at 70% 30%, rgba(245, 158, 11, 0.22), transparent 70%),
+      linear-gradient(135deg, #2b1f14 0%, #1e1b4b 60%, #0f172a 100%);
+  }
+
+  .fallback-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+  }
+
+  .banner-glass-edge {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 20px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* 2. IDENTIDADE DA SCAN: Logo abaixo do banner */
+  .profile-identity-section {
+    max-width: 1280px;
+    margin: 1.5rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .profile-identity-card {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+    background: linear-gradient(135deg, rgba(17, 22, 39, 0.95) 0%, rgba(11, 15, 27, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 20px;
+    padding: 1.35rem 1.75rem;
+    box-shadow: 0 14px 35px -8px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(20px);
+  }
+
+  .profile-identity-card.is-official-card {
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+
+  .identity-info-group {
     display: flex;
     flex-direction: column;
+    gap: 0.35rem;
     flex: 1;
     min-width: 0;
   }
 
-  .member-name-row {
+  /* Logo Frame Proporcional */
+  .profile-logo-frame {
+    width: 84px;
+    height: 84px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #0b0e19;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+  }
+
+  .profile-logo-frame.official-logo-rim {
+    border-color: #f59e0b;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.35), 0 12px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .profile-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-logo-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.25rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #7c3aed 0%, #4338ca 100%);
+    color: #ffffff;
+  }
+
+  .identity-meta-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .profile-title {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.85rem;
+    font-weight: 850;
+    color: #ffffff;
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.025em;
+  }
+
+  .verification-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .seal-official-gold {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(245, 158, 11, 0.16);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #fbbf24;
+    letter-spacing: 0.04em;
+  }
+
+  .seal-partner-cyan {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(14, 165, 233, 0.16);
+    border: 1px solid rgba(14, 165, 233, 0.45);
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #38bdf8;
+    letter-spacing: 0.04em;
+  }
+
+  .seal-recruiting-beacon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #34d399;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .seal-recruiting-beacon:hover {
+    background: rgba(16, 185, 129, 0.25);
+  }
+
+  .pulse-beacon {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+
+  .pulse-beacon.small {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Social Dock */
+  .profile-social-dock {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.15rem;
+  }
+
+  .social-dock-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .social-dock-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .social-dock-btn.discord:hover {
+    background: rgba(88, 101, 242, 0.25);
+    border-color: rgba(88, 101, 242, 0.5);
+    color: #c7d2fe;
+  }
+
+  .social-dock-btn.fluxer:hover {
+    background: rgba(14, 165, 233, 0.25);
+    border-color: rgba(14, 165, 233, 0.5);
+    color: #bae6fd;
+  }
+
+  .social-dock-btn.website:hover {
+    background: rgba(168, 85, 247, 0.25);
+    border-color: rgba(168, 85, 247, 0.5);
+    color: #f3e8ff;
+  }
+
+  /* Description */
+  .profile-description {
+    font-size: 0.88rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0.15rem 0 0.35rem;
+    max-width: 580px;
+  }
+
+  /* 3. MÉTRICAS ORGANIZADAS: Abaixo da identidade, centralizadas e valorizadas */
+  .profile-metrics-section {
+    max-width: 1280px;
+    margin: 1.25rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .metrics-dock-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 1.5rem;
+    background: linear-gradient(135deg, rgba(16, 20, 36, 0.95) 0%, rgba(10, 14, 25, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 1.15rem 2rem;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  }
+
+  .metric-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 90px;
+  }
+
+  .metric-hero-val {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.65rem;
+    font-weight: 850;
+    color: #ffffff;
+    line-height: 1;
+  }
+
+  .metric-hero-lbl {
+    font-size: 0.72rem;
+    font-weight: 750;
+    color: #64748b;
+    margin-top: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .metric-divider {
+    width: 1px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .is-recruiting-stat .text-emerald {
+    color: #34d399;
+  }
+
+  /* ==========================================================================
+     4 NAVIGATION TABS (SEGMENTED BAR)
+     ========================================================================== */
+  .profile-body-container {
+    max-width: 1280px;
+    margin: 2rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .profile-navigation-bar {
+    margin-bottom: 2.25rem;
+  }
+
+  .nav-tabs-segmented {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(17, 21, 38, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 0.4rem;
+    backdrop-filter: blur(16px);
+  }
+
+  .nav-tab-item {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    padding: 0.75rem 1.15rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .nav-tab-item:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .nav-tab-item.is-active {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+  }
+
+  .tab-count-badge {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 9999px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: inherit;
+  }
+
+  .badge-green {
+    background: rgba(16, 185, 129, 0.25);
+    color: #34d399;
+  }
+
+  /* Feedback Alert */
+  .feedback-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .success-alert {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+  }
+
+  .error-alert {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+
+  .alert-body strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .alert-body p {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+  }
+
+  /* ==========================================================================
+     TAB PANE: OBRAS
+     ========================================================================== */
+  .works-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .block-header-line {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 0.85rem;
+  }
+
+  .block-title {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 850;
+    color: #ffffff;
+    margin: 0 0 0.25rem;
+  }
+
+  .block-subtitle {
+    font-size: 0.86rem;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  .block-counter {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #64748b;
+  }
+
+  .works-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* ==========================================================================
+     TAB PANE: EQUIPE
+     ========================================================================== */
+  .team-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .team-header-intro {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 0.85rem;
+  }
+
+  .team-tier-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .tier-label-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
 
-  .member-name {
+  .tier-label-text {
+    font-family: "Manrope", sans-serif;
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .tier-label-text.gold {
+    color: #fbbf24;
+  }
+
+  .tier-label-text.purple {
+    color: #c084fc;
+  }
+
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .member-profile-card {
+    background: linear-gradient(135deg, rgba(17, 21, 38, 0.85) 0%, rgba(12, 16, 28, 0.92) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1.15rem;
+    transition: all 0.2s ease;
+  }
+
+  .member-profile-card:hover {
+    background: rgba(20, 26, 46, 0.95);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  }
+
+  .member-profile-card.is-leadership {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: linear-gradient(135deg, rgba(30, 24, 16, 0.9) 0%, rgba(14, 18, 30, 0.95) 100%);
+  }
+
+  .member-profile-card.is-admin {
+    border-color: rgba(129, 140, 248, 0.35);
+  }
+
+  .member-info-cell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .member-name-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .member-display-name {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
     color: #ffffff;
     text-decoration: none;
     white-space: nowrap;
@@ -1813,1007 +1883,1048 @@
     text-overflow: ellipsis;
   }
 
-  .member-name:hover {
-    color: #c4b5fd;
-  }
-
-  .member-handle {
-    font-size: 0.78rem;
-    color: #64748b;
-    margin-bottom: 0.4rem;
-  }
-
-  .owner-badge {
-    font-size: 0.7rem;
-    font-weight: 800;
-    padding: 0.15rem 0.5rem;
-    background: rgba(223, 194, 141, 0.2);
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    border-radius: 6px;
-    color: #dfc28d;
-  }
-
-  .admin-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.15rem 0.5rem;
-    background: rgba(192, 132, 252, 0.15);
-    border: 1px solid rgba(192, 132, 252, 0.3);
-    border-radius: 6px;
+  .member-display-name:hover {
     color: #c084fc;
   }
 
-  .uploader-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.15rem 0.5rem;
-    background: rgba(59, 130, 246, 0.15);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 6px;
-    color: #93c5fd;
+  .badge-role-gold {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #fbbf24;
+    white-space: nowrap;
   }
 
-  .member-positions-tags {
+  .badge-role-admin {
+    background: rgba(129, 140, 248, 0.2);
+    border: 1px solid rgba(129, 140, 248, 0.45);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #c7d2fe;
+    white-space: nowrap;
+  }
+
+  .badge-role-uploader {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #38bdf8;
+    white-space: nowrap;
+  }
+
+  .member-username {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-bottom: 0.6rem;
+  }
+
+  .member-positions-cluster {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
   }
 
-  .position-badge {
+  .pos-chip {
     font-size: 0.72rem;
-    font-weight: 600;
-    padding: 0.15rem 0.45rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-weight: 700;
     border-radius: 6px;
+    padding: 0.15rem 0.5rem;
+  }
+
+  .role-cyan {
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    color: #67e8f9;
+  }
+
+  .role-emerald {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+  }
+
+  .role-purple {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #d8b4fe;
+  }
+
+  .role-amber {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fde68a;
+  }
+
+  .role-indigo {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #c7d2fe;
+  }
+
+  .role-slate {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #cbd5e1;
   }
 
-  /* Openings / Recruitment Tab */
-  .recruitment-header {
-    margin-bottom: 1.75rem;
+  /* ==========================================================================
+     TAB PANE: RECRUTAMENTO (TOTALMENTE REDESENHADO)
+     ========================================================================== */
+  .recruitment-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
   }
 
-  .recruitment-title {
-    font-size: 1.4rem;
+  .recruitment-banner-card {
+    background: linear-gradient(135deg, rgba(20, 26, 46, 0.95) 0%, rgba(13, 17, 30, 0.98) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .recruitment-banner-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5px;
+    height: 100%;
+    background: linear-gradient(180deg, #10b981 0%, #06b6d4 100%);
+  }
+
+  .recruitment-beacon-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 9999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.72rem;
     font-weight: 800;
+    color: #34d399;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.75rem;
+  }
+
+  .recruitment-main-title {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.65rem;
+    font-weight: 850;
     color: #ffffff;
-    margin: 0 0 0.35rem;
+    margin: 0 0 0.5rem;
   }
 
-  .recruitment-subtitle {
-    font-size: 0.92rem;
+  .recruitment-main-lead {
+    font-size: 0.94rem;
     color: #94a3b8;
+    line-height: 1.6;
     margin: 0;
+    max-width: 750px;
   }
 
-  .openings-grid {
+  .openings-cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 1.5rem;
   }
 
-  .opening-card {
-    background: #0e111d;
-    border: 1px solid rgba(168, 85, 247, 0.25);
+  .opening-detail-card {
+    background: linear-gradient(180deg, rgba(16, 21, 38, 0.9) 0%, rgba(11, 15, 27, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: all 0.2s ease;
+    transition: all 0.25s ease;
   }
 
-  .opening-card:hover {
-    border-color: rgba(168, 85, 247, 0.5);
-    box-shadow: 0 8px 24px -6px rgba(168, 85, 247, 0.15);
+  .opening-detail-card:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.6);
   }
 
-  .opening-top {
+  .opening-card-top-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
   }
 
-  .opening-role-badge {
+  .opening-pos-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.76rem;
+    font-weight: 750;
+    color: #c4b5fd;
+  }
+
+  .opening-active-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.25rem 0.65rem;
-    background: rgba(168, 85, 247, 0.15);
-    border: 1px solid rgba(168, 85, 247, 0.35);
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: #d8b4fe;
-  }
-
-  .badge-status-open {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 9999px;
+    padding: 0.2rem 0.55rem;
     font-size: 0.72rem;
     font-weight: 700;
     color: #34d399;
-    padding: 0.2rem 0.55rem;
-    background: rgba(52, 211, 153, 0.12);
-    border-radius: 6px;
   }
 
-  .opening-card-title {
-    font-size: 1.2rem;
+  .opening-title-head {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.25rem;
     font-weight: 800;
     color: #ffffff;
     margin: 0 0 0.5rem;
   }
 
-  .opening-card-desc {
+  .opening-description-text {
     font-size: 0.88rem;
     color: #94a3b8;
-    line-height: 1.5;
-    margin: 0 0 1rem;
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
   }
 
-  .opening-meta-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+  .opening-specs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
     padding: 0.85rem;
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 10px;
     margin-bottom: 1.25rem;
   }
 
-  .meta-row {
+  .spec-cell {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.82rem;
+    flex-direction: column;
   }
 
-  .meta-label {
+  .spec-name {
+    font-size: 0.7rem;
     color: #64748b;
-    font-weight: 600;
-  }
-
-  .meta-val {
-    color: #e2e8f0;
-    font-weight: 600;
-  }
-
-  .meta-requirements {
-    margin-top: 0.4rem;
-    font-size: 0.82rem;
-    color: #94a3b8;
-    line-height: 1.5;
-  }
-
-  .meta-requirements strong {
-    color: #cbd5e1;
-  }
-
-  .meta-requirements p {
-    margin: 0.2rem 0 0;
-  }
-
-  .btn-apply-action {
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    background: #9333ea;
-    color: #ffffff;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.9rem;
+    text-transform: uppercase;
     font-weight: 700;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.2s ease;
   }
 
-  .btn-apply-action:hover {
-    background: #a855f7;
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.35);
+  .spec-value {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-top: 0.15rem;
   }
 
-  .applied-badge {
+  .opening-requirements-block {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .req-title {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #fbbf24;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .req-text {
+    font-size: 0.84rem;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .opening-footer-action {
+    margin-top: auto;
+  }
+
+  .applied-status-badge {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    border-radius: 12px;
     padding: 0.75rem;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 10px;
+    font-size: 0.86rem;
+    font-weight: 750;
     color: #34d399;
-    font-size: 0.88rem;
-    font-weight: 700;
   }
 
-  /* Activity Timeline */
-  .activity-timeline {
+  .btn-apply-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #ffffff;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    transition: all 0.2s ease;
+  }
+
+  .btn-apply-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.5);
+  }
+
+  /* ==========================================================================
+     TAB PANE: COMENTÁRIOS (COM AVATARES REAIS)
+     ========================================================================== */
+  .comments-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .comments-section-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 0.85rem;
+  }
+
+  .composer-panel {
+    background: linear-gradient(135deg, rgba(17, 22, 39, 0.95) 0%, rgba(12, 16, 28, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 1.5rem;
+  }
+
+  .composer-body-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .composer-avatar-slot {
+    flex-shrink: 0;
+  }
+
+  .composer-input-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .composer-input-field {
+    width: 100%;
+    background: rgba(10, 13, 24, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    color: #ffffff;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+  }
+
+  .composer-input-field:focus {
+    outline: none;
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+  }
+
+  .composer-dock-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .composer-dock-hint {
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .btn-send-comment {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    border: none;
+    border-radius: 10px;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+    transition: all 0.2s ease;
+  }
+
+  .btn-send-comment:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5);
+  }
+
+  .composer-login-prompt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    background: rgba(17, 22, 39, 0.7);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 1.5rem;
+  }
+
+  :global(.prompt-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .prompt-text strong {
+    display: block;
+    font-size: 0.95rem;
+    color: #ffffff;
+    margin-bottom: 0.2rem;
+  }
+
+  .prompt-text p {
+    font-size: 0.84rem;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  .btn-prompt-login {
+    background: rgba(139, 92, 246, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 10px;
+    padding: 0.6rem 1.15rem;
+    font-size: 0.86rem;
+    font-weight: 750;
+    color: #c4b5fd;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .btn-prompt-login:hover {
+    background: rgba(139, 92, 246, 0.35);
+    color: #ffffff;
+  }
+
+  /* Comments Feed & Cards */
+  .comments-feed {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    position: relative;
-    padding-left: 1.5rem;
   }
 
-  .activity-timeline::before {
-    content: "";
-    position: absolute;
-    left: 6px;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    background: rgba(255, 255, 255, 0.08);
+  .comment-bubble-card {
+    background: linear-gradient(135deg, rgba(16, 21, 38, 0.85) 0%, rgba(11, 15, 27, 0.92) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+    padding: 1.35rem;
+    transition: border-color 0.2s ease;
   }
 
-  .timeline-item {
-    position: relative;
+  .comment-bubble-card.is-pinned-card {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: linear-gradient(135deg, rgba(28, 22, 14, 0.85) 0%, rgba(13, 17, 30, 0.92) 100%);
+  }
+
+  .pinned-notice-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #fbbf24;
+    margin-bottom: 0.85rem;
+  }
+
+  .comment-layout-row {
     display: flex;
     align-items: flex-start;
+    gap: 1.15rem;
   }
 
-  .timeline-dot {
-    position: absolute;
-    left: -1.5rem;
-    top: 4px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #8b5cf6;
-    border: 3px solid #0a0d18;
+  .comment-content-slot {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
-  .timeline-content {
-    background: #0e111d;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    padding: 0.75rem 1rem;
-    width: 100%;
-  }
-
-  .timeline-header {
+  .comment-author-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
+    margin-bottom: 0.5rem;
   }
 
-  .timeline-action {
-    font-size: 0.88rem;
-    color: #e2e8f0;
-  }
-
-  .timeline-time {
-    font-size: 0.75rem;
-    color: #64748b;
-    white-space: nowrap;
-  }
-
-  /* Modal */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
+  .author-info-group {
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    z-index: 100;
+    gap: 0.55rem;
   }
 
-  .modal-card {
-    background: #0d101b;
-    border: 1px solid rgba(168, 85, 247, 0.3);
-    border-radius: 20px;
-    width: 100%;
-    max-width: 540px;
-    max-height: 90vh;
-    overflow-y: auto;
-    padding: 1.75rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+  .author-name-link {
+    font-family: "Manrope", sans-serif;
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #ffffff;
+    text-decoration: none;
   }
 
-  .modal-header {
+  .author-name-link:hover {
+    color: #c084fc;
+  }
+
+  .staff-author-badge {
+    background: rgba(139, 92, 246, 0.18);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #c4b5fd;
+  }
+
+  .comment-time-stamp {
+    font-size: 0.76rem;
+    color: #64748b;
+  }
+
+  .comment-text-body {
+    font-size: 0.92rem;
+    color: #cbd5e1;
+    line-height: 1.6;
+    margin: 0 0 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .comment-actions-dock {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
+    align-items: center;
+    gap: 0.65rem;
   }
 
-  .modal-badge {
+  .action-dock-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.2rem 0.6rem;
-    background: rgba(168, 85, 247, 0.15);
-    border: 1px solid rgba(168, 85, 247, 0.3);
-    border-radius: 6px;
-    font-size: 0.72rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    color: #d8b4fe;
-    margin-bottom: 0.35rem;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
   }
 
-  .modal-title {
+  .action-dock-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .action-dock-btn.is-active-heart {
+    color: #f43f5e;
+  }
+
+  .action-dock-btn.delete-btn:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .action-dock-btn.mod-btn:hover {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  /* Inline Reply Composer */
+  .reply-composer-box {
+    margin-top: 1rem;
+    background: rgba(10, 13, 24, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .reply-textarea-field {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    resize: none;
+  }
+
+  .reply-textarea-field:focus {
+    outline: none;
+  }
+
+  .reply-composer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .btn-reply-cancel {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0.35rem 0.75rem;
+  }
+
+  .btn-reply-send {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  /* Nested Replies */
+  .nested-replies-feed {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .nested-reply-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding-left: 0.5rem;
+  }
+
+  :global(.reply-turn-indicator) {
+    color: #64748b;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .reply-content-slot {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ==========================================================================
+     EMPTY STATES
+     ========================================================================== */
+  .empty-state-view {
+    text-align: center;
+    padding: 4.5rem 2rem;
+    background: rgba(16, 21, 38, 0.4);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    max-width: 580px;
+    margin: 1.5rem auto;
+  }
+
+  :global(.empty-icon) {
+    color: #64748b;
+    margin-bottom: 1rem;
+  }
+
+  .empty-title {
     font-size: 1.25rem;
     font-weight: 800;
     color: #ffffff;
-    margin: 0 0 0.25rem;
+    margin: 0 0 0.5rem;
   }
 
-  .modal-scan-tag {
-    font-size: 0.82rem;
+  .empty-desc {
+    font-size: 0.88rem;
+    color: #94a3b8;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* ==========================================================================
+     MODAL DIALOG LAYOUT
+     ========================================================================== */
+  .modal-backdrop-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+
+  .modal-dialog-box {
+    background: linear-gradient(135deg, #13182b 0%, #0d111d 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 22px;
+    width: 100%;
+    max-width: 620px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+    padding: 2rem;
+  }
+
+  .modal-dialog-box.modal-compact {
+    max-width: 480px;
+  }
+
+  .modal-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 1rem;
+  }
+
+  .modal-role-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.74rem;
+    font-weight: 750;
+    color: #c4b5fd;
+    margin-bottom: 0.4rem;
+  }
+
+  .modal-role-pill.report-pill {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+
+  .modal-dialog-title {
+    font-family: "Manrope", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 850;
+    color: #ffffff;
+    margin: 0 0 0.2rem;
+  }
+
+  .modal-team-tag {
+    font-size: 0.8rem;
     color: #94a3b8;
   }
 
-  .btn-close-modal {
+  .modal-close-btn {
     background: rgba(255, 255, 255, 0.06);
     border: none;
-    border-radius: 8px;
-    color: #94a3b8;
+    border-radius: 9999px;
     width: 32px;
     height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: #94a3b8;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
   }
 
-  .btn-close-modal:hover {
+  .modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
     color: #ffffff;
-    background: rgba(255, 255, 255, 0.12);
   }
 
-  .modal-form {
+  .modal-form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .form-field-label {
+    font-size: 0.82rem;
+    font-weight: 750;
+    color: #cbd5e1;
+  }
+
+  .form-field-input,
+  .form-field-textarea,
+  .form-field-select {
+    width: 100%;
+    background: rgba(10, 13, 24, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.75rem 0.95rem;
+    color: #ffffff;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+
+  .form-field-input:focus,
+  .form-field-textarea:focus,
+  .form-field-select:focus {
+    outline: none;
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+  }
+
+  .custom-questions-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
 
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .form-label {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #cbd5e1;
-  }
-
-  .form-input,
-  .form-textarea {
-    width: 100%;
-    padding: 0.75rem 0.95rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    color: #ffffff;
+  .custom-questions-title {
     font-size: 0.88rem;
-    outline: none;
-    transition: all 0.2s ease;
-    font-family: inherit;
-  }
-
-  .form-input:focus,
-  .form-textarea:focus,
-  .form-select:focus {
-    border-color: #a855f7;
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
-  }
-
-  .form-select {
-    width: 100%;
-    padding: 0.75rem 0.95rem;
-    background: #0f172a;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    color: #ffffff;
-    font-size: 0.88rem;
-    outline: none;
-    transition: all 0.2s ease;
-    font-family: inherit;
-  }
-
-  .custom-questions-box {
-    background: rgba(168, 85, 247, 0.06);
-    border: 1px solid rgba(168, 85, 247, 0.2);
-    border-radius: 10px;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-  }
-
-  .custom-questions-heading {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #c084fc;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-weight: 800;
+    color: #fbbf24;
     margin: 0;
   }
 
-  .modal-actions {
+  .reported-quote-box {
+    background: rgba(0, 0, 0, 0.4);
+    border-left: 3px solid #f87171;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-style: italic;
+    color: #cbd5e1;
+    font-size: 0.86rem;
+  }
+
+  .modal-dialog-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.75rem;
+    gap: 0.85rem;
     margin-top: 1rem;
   }
 
-  .btn-cancel {
-    padding: 0.7rem 1.25rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+  .btn-dialog-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
+    padding: 0.65rem 1.15rem;
+    font-size: 0.86rem;
+    font-weight: 700;
     color: #94a3b8;
-    font-size: 0.88rem;
-    font-weight: 600;
     cursor: pointer;
   }
 
-  .btn-cancel:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .btn-submit {
+  .btn-dialog-submit {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.7rem 1.35rem;
-    background: #9333ea;
-    color: #ffffff;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     border: none;
     border-radius: 10px;
+    padding: 0.65rem 1.35rem;
     font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-submit:hover:not(:disabled) {
-    background: #a855f7;
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
-  }
-
-  .btn-submit:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Empty State */
-  .empty-state {
-    padding: 4.5rem 2rem;
-    text-align: center;
-    color: #64748b;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
-  }
-
-  .empty-state h3 {
-    color: #f1f5f9;
-    margin: 1rem 0 0.5rem;
-    font-size: 1.15rem;
-  }
-
-  .btn-social.discord:hover {
-    background: rgba(88, 101, 242, 0.18);
-    border-color: rgba(88, 101, 242, 0.45);
-    color: #fff;
-  }
-
-  .btn-social.fluxer:hover {
-    background: rgba(0, 218, 143, 0.16);
-    border-color: rgba(0, 218, 143, 0.45);
-    color: #fff;
-  }
-
-  /* Section Titles with Subtitle */
-  .section-title-wrap {
-    margin-bottom: 1.25rem;
-  }
-
-  .section-title {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin: 0 0 0.25rem;
-  }
-
-  .section-subtitle {
-    font-size: 0.88rem;
-    color: #94a3b8;
-    margin: 0;
-  }
-
-  .past-works-block {
-    margin-top: 2.5rem;
-    padding-top: 2rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  /* Comments Pane */
-  .comments-pane {
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .comments-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .comments-count-badge {
-    background: rgba(223, 194, 141, 0.12);
-    border: 1px solid rgba(223, 194, 141, 0.3);
-    color: #dfc28d;
-    padding: 0.35rem 0.85rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 700;
-  }
-
-  .comment-composer-card {
-    background: rgba(18, 22, 34, 0.85);
-    border: 1px solid rgba(181, 154, 245, 0.18);
-    border-radius: 16px;
-    padding: 1.25rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  }
-
-  .composer-top {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
-  .composer-input-wrap {
-    flex: 1;
-  }
-
-  .composer-textarea {
-    width: 100%;
-    background: rgba(10, 13, 22, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px;
-    color: #f1f5f9;
-    padding: 0.85rem 1rem;
-    font-family: inherit;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    resize: vertical;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .composer-textarea:focus {
-    outline: none;
-    border-color: rgba(223, 194, 141, 0.6);
-    box-shadow: 0 0 0 3px rgba(223, 194, 141, 0.15);
-  }
-
-  .composer-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 0.85rem;
-    padding-top: 0.85rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .composer-hint {
-    font-size: 0.78rem;
-    color: #64748b;
-  }
-
-  .btn-post-comment {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: linear-gradient(135deg, #dfc28d, #bda16b);
-    color: #0d101a;
-    border: none;
-    border-radius: 10px;
-    padding: 0.6rem 1.25rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-post-comment:hover:not(:disabled) {
-    box-shadow: 0 4px 14px rgba(223, 194, 141, 0.35);
-    transform: translateY(-1px);
-  }
-
-  .btn-post-comment:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .login-to-comment-card {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    padding: 1.25rem 1.5rem;
-    background: rgba(18, 22, 34, 0.7);
-    border: 1px dashed rgba(223, 194, 141, 0.3);
-    border-radius: 14px;
-    margin-bottom: 2rem;
-    color: #dfc28d;
-    flex-wrap: wrap;
-  }
-
-  .login-msg-text {
-    flex: 1;
-    min-width: 240px;
-  }
-
-  .login-msg-text strong {
-    display: block;
-    color: #f1f5f9;
-    font-size: 0.95rem;
-    margin-bottom: 0.2rem;
-  }
-
-  .login-msg-text p {
-    margin: 0;
-    font-size: 0.82rem;
-    color: #94a3b8;
-  }
-
-  .btn-login-comment {
-    background: rgba(223, 194, 141, 0.15);
-    border: 1px solid rgba(223, 194, 141, 0.4);
-    color: #dfc28d;
-    text-decoration: none;
-    padding: 0.55rem 1.1rem;
-    border-radius: 10px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-  }
-
-  .btn-login-comment:hover {
-    background: #dfc28d;
-    color: #0d101a;
-  }
-
-  /* Comments List */
-  .comments-thread-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-  }
-
-  .comment-item {
-    background: rgba(18, 22, 34, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 1.25rem;
-    transition: border-color 0.2s ease;
-  }
-
-  .comment-item.is-pinned {
-    border-color: rgba(223, 194, 141, 0.45);
-    background: rgba(223, 194, 141, 0.04);
-  }
-
-  .pinned-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #dfc28d;
-    margin-bottom: 0.85rem;
-    padding: 0.2rem 0.6rem;
-    background: rgba(223, 194, 141, 0.12);
-    border-radius: 6px;
-  }
-
-  .comment-main {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
-  .comment-avatar {
-    flex-shrink: 0;
-  }
-
-  .comment-body-wrap {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .comment-meta-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.4rem;
-    gap: 0.5rem;
-  }
-
-  .comment-author-info {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .comment-author-name {
-    color: #f1f5f9;
-    font-weight: 700;
-    font-size: 0.92rem;
-    text-decoration: none;
-    transition: color 0.15s ease;
-  }
-
-  .comment-author-name:hover {
-    color: #dfc28d;
-    text-decoration: underline;
-  }
-
-  .comment-staff-pill {
-    background: linear-gradient(135deg, rgba(223, 194, 141, 0.25), rgba(168, 85, 247, 0.25));
-    border: 1px solid rgba(223, 194, 141, 0.45);
-    color: #dfc28d;
-    font-size: 0.68rem;
     font-weight: 800;
-    padding: 1px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .comment-timestamp {
-    font-size: 0.78rem;
-    color: #64748b;
-  }
-
-  .comment-text {
-    margin: 0 0 0.85rem;
-    font-size: 0.92rem;
-    color: #cbd5e1;
-    line-height: 1.55;
-    word-break: break-word;
-  }
-
-  .comment-actions-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-
-  .action-form {
-    display: inline-flex;
-    margin: 0;
-  }
-
-  .btn-comment-action {
-    background: transparent;
-    border: none;
-    padding: 0.35rem 0.65rem;
-    border-radius: 8px;
-    color: #94a3b8;
-    font-family: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
+    color: #ffffff;
     cursor: pointer;
-    transition: all 0.15s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
   }
 
-  .btn-comment-action:hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: #f1f5f9;
+  .btn-dialog-submit.report-submit {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
   }
 
-  .btn-comment-action.active {
-    color: #f43f5e;
-  }
-
-  .btn-mod-pin:hover {
-    color: #dfc28d;
-  }
-
-  .btn-mod-delete:hover {
-    color: #ef4444;
-  }
-
-  .btn-report:hover {
-    color: #f59e0b;
-  }
-
-  /* Inline Reply Composer */
-  .reply-composer-inline {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: rgba(10, 13, 22, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-  }
-
-  .reply-textarea {
-    font-size: 0.85rem;
-    padding: 0.6rem 0.85rem;
-  }
-
-  .reply-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.6rem;
-    margin-top: 0.6rem;
-  }
-
-  .btn-cancel-reply {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #94a3b8;
-    border-radius: 8px;
-    padding: 0.4rem 0.85rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn-post-reply {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #dfc28d;
-    color: #0d101a;
-    border: none;
-    border-radius: 8px;
-    padding: 0.4rem 0.95rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  /* Nested Replies */
-  .nested-replies-list {
-    margin-top: 1rem;
-    padding-left: 1rem;
-    border-left: 2px solid rgba(255, 255, 255, 0.08);
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-  }
-
-  .nested-reply-item {
-    display: flex;
-    gap: 0.65rem;
-    align-items: flex-start;
-    padding: 0.75rem;
-    background: rgba(10, 13, 22, 0.4);
-    border-radius: 10px;
-  }
-
-  .reply-avatar {
-    flex-shrink: 0;
-  }
-
-  .reply-body-wrap {
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* Report Modal */
-  .modal-small {
-    max-width: 480px;
-  }
-
-  .report-badge {
-    background: rgba(239, 68, 68, 0.15) !important;
-    border-color: rgba(239, 68, 68, 0.4) !important;
-    color: #ef4444 !important;
-  }
-
-  .comment-preview-quote {
-    background: rgba(0, 0, 0, 0.3);
-    border-left: 3px solid #dfc28d;
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    margin-bottom: 1.25rem;
-  }
-
-  .comment-preview-quote p {
-    margin: 0;
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-style: italic;
-  }
-
-  .btn-submit-report {
-    background: #ef4444 !important;
-    color: #fff !important;
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .scan-hero {
-      border-radius: 16px;
+  /* ==========================================================================
+     RESPONSIVE BREAKPOINTS
+     ========================================================================== */
+  @media (max-width: 1024px) {
+    .profile-banner-container {
+      height: 260px;
     }
 
-    .hero-banner {
-      height: 180px;
+    .profile-identity-card {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1.25rem;
+      padding: 1.35rem;
     }
 
-    .hero-body {
-      padding: 0 1.25rem 1.5rem;
+    .identity-info-group {
+      align-items: center;
+      text-align: center;
     }
 
-    .hero-identity-row {
-      margin-top: -40px;
-      gap: 1rem;
+    .verification-badges-row {
+      justify-content: center;
     }
 
-    .scan-logo-wrap {
-      width: 76px;
-      height: 76px;
+    .profile-social-dock {
+      justify-content: center;
+    }
+
+    .metrics-dock-box {
+      width: 100%;
+      justify-content: space-around;
+      padding: 0.85rem 1rem;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .profile-top-bar {
+      padding: 0.85rem 1rem 0.65rem;
+    }
+
+    .profile-banner-stage {
+      padding: 0 1rem;
+    }
+
+    .profile-banner-container {
+      height: 190px;
+      border-radius: 14px;
+    }
+
+    .profile-identity-section {
+      margin-top: 1.25rem;
+      padding: 0 1rem;
+    }
+
+    .profile-metrics-section {
+      margin-top: 1rem;
+      padding: 0 1rem;
+    }
+
+    .profile-body-container {
+      padding: 0 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .profile-title {
+      font-size: 1.6rem;
+    }
+
+    .profile-logo-frame {
+      width: 72px;
+      height: 72px;
       border-radius: 18px;
     }
 
-    .scan-title {
-      font-size: 1.45rem;
+    .metrics-dock-box {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.85rem;
+      padding: 1rem;
+      border-radius: 16px;
     }
 
-    .hero-actions {
-      width: 100%;
-      margin-top: 0.5rem;
+    .metric-divider {
+      display: none;
     }
 
-    .btn-hero-recruit {
-      width: 100%;
-      justify-content: center;
+    .metric-cell {
+      min-width: 60px;
     }
 
-    .members-grid,
-    .openings-grid {
+    .metric-hero-val {
+      font-size: 1.35rem;
+    }
+
+    .metric-hero-lbl {
+      font-size: 0.65rem;
+    }
+
+    .nav-tabs-segmented {
+      overflow-x: auto;
+      scrollbar-width: none;
+      white-space: nowrap;
+      justify-content: flex-start;
+      padding: 0.3rem;
+    }
+
+    .nav-tab-item {
+      flex: none;
+      padding: 0.65rem 1rem;
+      font-size: 0.84rem;
+    }
+
+    .works-catalog-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .team-grid {
       grid-template-columns: 1fr;
     }
-  }
 
-  @media (max-width: 640px) {
-    /* The public profile has six equally important destinations. A compact
-       touch grid is more discoverable than a clipped horizontal tab strip. */
-    .profile-tabs-nav {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      overflow: visible;
-      gap: 0.4rem;
-      padding-bottom: 0.75rem;
+    .openings-cards-grid {
+      grid-template-columns: 1fr;
     }
 
-    .tab-btn {
-      min-width: 0;
-      min-height: 2.75rem;
-      justify-content: center;
-      white-space: normal;
-      text-align: center;
-      padding: 0.55rem 0.45rem;
-      font-size: 0.8rem;
+    .composer-panel {
+      padding: 1rem;
+    }
+
+    .composer-body-row {
+      gap: 0.85rem;
+    }
+
+    .comment-bubble-card {
+      padding: 1rem;
     }
   }
 </style>

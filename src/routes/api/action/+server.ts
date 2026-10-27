@@ -83,7 +83,11 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     const { data: rpcRes, error: rpcProblem } = await locals.db.rpc('member_action', {
       p_action: 'like',
-      p_data: { work_id: targetWorkId }
+      p_data: {
+        work_id: targetWorkId,
+        work_slug: body.data?.work_slug,
+        work_title: body.data?.work_title
+      }
     });
     if (rpcProblem) error(rpcProblem.code === '42501' ? 403 : 400, rpcProblem.message);
 
@@ -94,11 +98,17 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     invalidateObraAuxCache(targetWorkId);
 
+    if (locals.user?.id && (rpcRes as any)?.xp_award?.awarded) {
+      invalidateUserSession(locals.user.id);
+      invalidateRankingCache();
+    }
+
     const isLiked = Boolean((rpcRes as any)?.liked);
     return json({
       ok: true,
       liked: isLiked,
-      count: totalLikes ?? (isLiked ? 1 : 0)
+      count: totalLikes ?? (isLiked ? 1 : 0),
+      xp_award: (rpcRes as any)?.xp_award
     });
   }
 
