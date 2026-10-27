@@ -85,7 +85,7 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   });
 
   // 4. Fetch Top 3 for the Olympic Podium
-  let top3 = [];
+  let top3: any[];
   if (currentPage === 1 && members.length > 0) {
     top3 = members.slice(0, 3);
   } else {

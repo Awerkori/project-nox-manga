@@ -1,6 +1,6 @@
 <script lang="ts">
   import UserAvatar from '$lib/components/UserAvatar.svelte';
-  import { Sparkles, Trophy, Award, Shield, ArrowLeft, Calendar, ExternalLink } from '@lucide/svelte';
+  import { Sparkles, Trophy, ArrowLeft, Calendar } from '@lucide/svelte';
   import { NOX_HALL_OF_FAME_TITLES } from '$lib/levels';
 
   let { data }: { data: any } = $props();

@@ -39,7 +39,7 @@ export const POST = async ({ request, locals }) => {
         p_kind: companionKind,
         p_item_id: itemId
       });
-    } catch (_) {
+    } catch {
       // Ignore if column update already covered
     }
   }

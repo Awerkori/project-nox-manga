@@ -1,5 +1,3 @@
-import { safeDbQuery } from '$lib/server/resilience';
-
 export const load = async ({ locals, setHeaders }: any) => {
   setHeaders({
     'cache-control': 'public, max-age=60, stale-while-revalidate=300'

@@ -1,5 +1,4 @@
 import { error } from '@sveltejs/kit';
-import { safeDbQuery } from '$lib/server/resilience';
 
 export const load = async ({ locals }: any) => {
   if (locals.role !== 'ADMIN') {

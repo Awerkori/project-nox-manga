@@ -65,21 +65,6 @@
     }
   }
 
-  function applyToLivePreview(item: any) {
-    if (item.kind === 'AVATAR_FRAME') {
-      previewFrame = item.id;
-      const v = selectedCardVariants[item.id];
-      previewFrameColor = v && v !== 'default' ? v : null;
-    } else if (item.kind === 'NAME_COLOR') {
-      previewColor = item.id;
-    } else if (item.kind === 'TITLE') {
-      previewTitle = item.name;
-    } else if (item.kind === 'PROFILE_BANNER') {
-      previewBanner = item.id;
-    }
-    showToast(`Testando "${item.name}" no provador do topo!`, 'success');
-  }
-
   function resetLivePreview() {
     previewFrame = null;
     previewFrameColor = null;
@@ -728,7 +713,7 @@
           >
             Todas
           </button>
-          {#each Object.entries(RARITY_CONFIG) as [rarityKey, conf]}
+          {#each Object.entries(RARITY_CONFIG) as [rarityKey, conf] (rarityKey)}
             <button
               type="button"
               class="rarity-pill"
@@ -869,7 +854,7 @@
                 <div class="card-color-swatches" role="group" aria-label="Variações de cor para {item.name}">
                   <span class="swatches-label">Cor:</span>
                   <div class="swatches-list">
-                    {#each item.color_variants as variant}
+                    {#each item.color_variants as variant (variant.id)}
                       <button
                         type="button"
                         class="swatch-btn"
@@ -1205,7 +1190,7 @@
                       <span class="variants-heading">Variações de Cor da Moldura:</span>
                     </div>
                     <div class="modal-swatches-grid">
-                      {#each item.color_variants as variant}
+                      {#each item.color_variants as variant (variant.id)}
                         <button
                           type="button"
                           class="modal-swatch-chip"

@@ -185,7 +185,7 @@
 
     {#if data.metrics.topContenders && data.metrics.topContenders.length > 0}
       <div class="top-contenders-row">
-        {#each data.metrics.topContenders as contender, idx}
+        {#each data.metrics.topContenders as contender, idx (contender.id || idx)}
           <div class="contender-box place-{idx + 1}">
             <div class="contender-rank-pill">
               {#if idx === 0}👑 1º Lugar{:else if idx === 1}🥈 2º Lugar{:else if idx === 2}🥉 3º Lugar{:else}#{idx + 1}{/if}
@@ -298,7 +298,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each data.resets as reset}
+            {#each data.resets as reset (reset.id)}
               <tr>
                 <td>{formatDateTime(reset.executed_at)}</td>
                 <td><span class="season-id-pill">{reset.season_id}</span></td>

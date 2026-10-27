@@ -6,8 +6,6 @@
     Calendar,
     Clock,
     ShieldCheck,
-    ChevronDown,
-    ChevronUp,
     ChevronLeft,
     ChevronRight,
     Search,
@@ -15,7 +13,6 @@
     Award,
     HelpCircle,
     Crosshair,
-    ExternalLink,
     Lock,
     Check
   } from '@lucide/svelte';
@@ -54,16 +51,6 @@
   let hoursLeft = $derived(
     Math.max(0, Math.floor(((seasonEndTime - Date.now()) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)))
   );
-
-  function formatDate(isoStr: string) {
-    if (!isoStr) return '';
-    try {
-      const d = new Date(isoStr);
-      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch {
-      return isoStr;
-    }
-  }
 
   function formatNumber(num: number | string | null | undefined) {
     const val = typeof num === 'number' ? num : Number(num) || 0;
@@ -678,7 +665,7 @@
 
             <!-- Page Number Pills -->
             <div class="page-pills">
-              {#each Array(data.pagination.totalPages) as _, i}
+              {#each Array(data.pagination.totalPages) as _, i (i)}
                 {@const pNum = i + 1}
                 {#if pNum === 1 || pNum === data.pagination.totalPages || Math.abs(pNum - data.pagination.page) <= 1}
                   <a
