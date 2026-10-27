@@ -4,7 +4,12 @@
 -- Inserts high-quality, verified, aesthetic items with complete visual styles.
 -- =========================================================================
 
--- 1. Archive legacy empty/broken/placeholder items
+-- 1. Ensure shop_items kind check accepts all valid cosmetic slots
+ALTER TABLE public.shop_items DROP CONSTRAINT IF EXISTS shop_items_kind_check;
+ALTER TABLE public.shop_items ADD CONSTRAINT shop_items_kind_check
+  CHECK (kind IN ('AVATAR_FRAME', 'COMMENT_BANNER', 'PROFILE_BANNER', 'NAME_COLOR', 'TITLE', 'BADGE'));
+
+-- 2. Archive legacy empty/broken/placeholder items
 UPDATE public.shop_items
 SET is_active = false, status = 'ARCHIVED'
 WHERE id IN (
