@@ -49,6 +49,25 @@
   let currentTab = $derived(page.url.searchParams.get('tab') || '');
   let activeImporterTab = $state(page.url.searchParams.get('tab') || 'resumo');
 
+  const sectionLabel = $derived.by(() => {
+    if (currentPath === '/admin') return 'Início';
+    if (currentPath.startsWith('/admin/tickets')) {
+      if (currentTab === 'scans') return 'Inscrições';
+      if (currentTab === 'moderacao') return 'Moderação';
+      return 'Relatórios';
+    }
+    if (currentPath.startsWith('/admin/obras')) return 'Obras';
+    if (currentPath.startsWith('/admin/tags')) return 'Tags';
+    if (currentPath.startsWith('/admin/loja')) return 'Loja';
+    if (currentPath.startsWith('/admin/importer')) return 'Importer';
+    if (currentPath.startsWith('/admin/rankings')) return 'Rankings';
+    if (currentPath.startsWith('/admin/scans')) return 'Scans';
+    if (currentPath.startsWith('/admin/staff')) return 'Staff';
+    if (currentPath.startsWith('/admin/health') || currentPath.startsWith('/admin/sistema')) return 'Sistema';
+    if (currentPath.startsWith('/admin/gestao')) return 'Gestão';
+    return currentPath.replace(/^\/admin\/?/, '').replace(/\//g, ' / ') || 'Painel';
+  });
+
   // Role & Capabilities
   let role = $derived((data.role || 'LEITOR').toUpperCase());
   let isAdmin = $derived(role === 'ADMIN');
@@ -670,21 +689,54 @@
 
   <!-- Main Workspace -->
   <main class="admin-content">
-    <!-- Mobile Header Trigger -->
-    <div class="mobile-admin-header">
-      <button
-        type="button"
-        class="mobile-expand-btn"
-        onclick={() => (mobileDrawerOpen = true)}
-        aria-label="Menu do painel de controle"
-      >
-        <Menu size={18} />
-        <span>Menu do Painel</span>
-      </button>
-      <span class="mobile-page-crumb">
-        {currentPath.replace(/^\/admin\/?/, '').replace(/\//g, ' / ') || 'Início'}
-      </span>
-    </div>
+    <!-- Mobile Header (Clean, Unified Topbar on Phones & Small Tablets) -->
+    <header class="mobile-admin-header">
+      <div class="mobile-brand-group">
+        <a href="/" class="mobile-brand-link" title="Voltar ao site público">
+          <img
+            src="/brand/nox-symbol-64.webp"
+            alt="Project Nox"
+            width="34"
+            height="34"
+            class="mobile-nox-symbol"
+          />
+        </a>
+        <div class="mobile-brand-titles">
+          <span class="mobile-brand-name">PROJECT NOX</span>
+          <span class="mobile-brand-sub">Painel de Controle</span>
+        </div>
+      </div>
+
+      <div class="mobile-header-actions">
+        <span class="mobile-section-badge" title={sectionLabel}>
+          {sectionLabel}
+        </span>
+
+        {#if (data.totalTicketsCount ?? 0) > 0}
+          <a
+            href="/admin/tickets"
+            class="mobile-tickets-alert"
+            title="Existem {(data.totalTicketsCount ?? 0)} tickets pendentes de atenção"
+          >
+            <Ticket size={14} />
+            <span>{data.totalTicketsCount}</span>
+          </a>
+        {/if}
+
+        <button
+          type="button"
+          class="mobile-drawer-toggle"
+          onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
+          aria-label={mobileDrawerOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'}
+        >
+          {#if mobileDrawerOpen}
+            <X size={20} />
+          {:else}
+            <Menu size={20} />
+          {/if}
+        </button>
+      </div>
+    </header>
 
     <!-- Active Page Content -->
     <div class="admin-page-container">
@@ -1010,36 +1062,109 @@
     min-width: 0;
   }
 
-  /* Mobile Layout */
+  /* Mobile Topbar & Layout */
   .mobile-admin-header {
     display: none;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .mobile-expand-btn {
-    display: inline-flex;
+  .mobile-brand-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .mobile-brand-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+
+  .mobile-nox-symbol {
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(223, 194, 141, 0.2);
+  }
+
+  .mobile-brand-titles {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.15;
+  }
+
+  .mobile-brand-name {
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    color: #dfc28d;
+    white-space: nowrap;
+  }
+
+  .mobile-brand-sub {
+    font-size: 10.5px;
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .mobile-header-actions {
+    display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 14px;
-    border-radius: 9px;
-    background: rgba(18, 22, 34, 0.9);
-    border: 1px solid rgba(223, 194, 141, 0.3);
-    color: #dfc28d;
-    font-weight: 700;
-    font-size: 13px;
-    cursor: pointer;
+    flex-shrink: 0;
   }
 
-  .mobile-page-crumb {
-    font-size: 12px;
-    color: #64748b;
-    font-weight: 600;
-    text-transform: capitalize;
+  .mobile-section-badge {
+    display: inline-block;
+    max-width: 110px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-tickets-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(225, 29, 72, 0.15);
+    border: 1px solid rgba(225, 29, 72, 0.35);
+    color: #fb7185;
+    font-size: 11px;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .mobile-drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    background: rgba(18, 22, 34, 0.95);
+    border: 1px solid rgba(223, 194, 141, 0.3);
+    color: #dfc28d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-drawer-toggle:active {
+    transform: scale(0.96);
+    background: rgba(223, 194, 141, 0.15);
   }
 
   @media (max-width: 950px) {
@@ -1047,10 +1172,24 @@
       grid-template-columns: 1fr;
       padding: 0 12px;
       gap: 0;
+      min-height: 100vh;
     }
 
     .mobile-admin-header {
       display: flex;
+      position: sticky;
+      top: 0;
+      z-index: 95;
+      min-height: 56px;
+      margin: 0 -12px 14px;
+      padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+      background: #07090f;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .admin-content {
+      padding-top: 0;
     }
 
     .admin-sidebar {
@@ -1087,22 +1226,9 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(4px);
       z-index: 999;
     }
 
-    .mobile-admin-header {
-      position: sticky;
-      top: 0;
-      z-index: 90;
-      min-height: 48px;
-      margin: 0 -12px 16px;
-      padding: max(10px, env(safe-area-inset-top)) 12px 10px;
-      background: rgba(7, 9, 15, 0.94);
-      backdrop-filter: blur(12px);
-    }
-
-    .mobile-expand-btn,
     .nav-link,
     .category-toggle {
       min-height: 44px;
@@ -1110,6 +1236,12 @@
 
     .sidebar-nav {
       padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (max-width: 370px) {
+    .mobile-section-badge {
+      display: none;
     }
   }
 </style>

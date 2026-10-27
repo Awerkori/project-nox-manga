@@ -64,6 +64,109 @@
   // Scan Partner Realistic Preview modal state
   let previewPartnerReq = $state<any>(null);
 
+  // Administrative Ticket Deletion Modal state (ADMIN ONLY)
+  let deleteModalOpen = $state(false);
+  let deleteTicketId = $state<string | null>(null);
+  let deleteTicketType = $state<'report' | 'scan' | 'moderation'>('report');
+  let deleteTicketTitle = $state('');
+  let deleteConfirmationText = $state('');
+  let deleteReason = $state('');
+
+  function formatTicketDate(isoStr?: string | null): string {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  async function claimTicket(ticketId: string, ticketType: 'report' | 'scan' | 'moderation') {
+    busy = true;
+    try {
+      const fd = new FormData();
+      fd.append('ticket_id', ticketId);
+      fd.append('ticket_type', ticketType);
+
+      const res = await fetch('?/claimTicket', {
+        method: 'POST',
+        body: fd
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData?.message || 'Falha ao assumir ticket');
+      showFeedback('success', 'Ticket assumido com sucesso!');
+      await invalidateAll();
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Erro ao assumir ticket');
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function releaseTicket(ticketId: string, ticketType: 'report' | 'scan' | 'moderation') {
+    busy = true;
+    try {
+      const fd = new FormData();
+      fd.append('ticket_id', ticketId);
+      fd.append('ticket_type', ticketType);
+
+      const res = await fetch('?/releaseTicket', {
+        method: 'POST',
+        body: fd
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData?.message || 'Falha ao liberar ticket');
+      showFeedback('success', 'Ticket liberado para atendimento.');
+      await invalidateAll();
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Erro ao liberar ticket');
+    } finally {
+      busy = false;
+    }
+  }
+
+  function openDeleteTicketModal(ticketId: string, ticketType: 'report' | 'scan' | 'moderation', title: string) {
+    deleteTicketId = ticketId;
+    deleteTicketType = ticketType;
+    deleteTicketTitle = title;
+    deleteConfirmationText = '';
+    deleteReason = '';
+    deleteModalOpen = true;
+  }
+
+  async function confirmDeleteTicket() {
+    if (deleteConfirmationText.trim() !== 'EXCLUIR' || !deleteTicketId) return;
+    busy = true;
+    try {
+      const fd = new FormData();
+      fd.append('ticket_id', deleteTicketId);
+      fd.append('ticket_type', deleteTicketType);
+      fd.append('confirmation', deleteConfirmationText.trim());
+      if (deleteReason) fd.append('reason', deleteReason.trim());
+
+      const res = await fetch('?/deleteTicket', {
+        method: 'POST',
+        body: fd
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData?.message || 'Falha ao excluir ticket');
+      deleteModalOpen = false;
+      showFeedback('success', 'Ticket excluído com sucesso.');
+      await invalidateAll();
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Erro ao excluir ticket');
+    } finally {
+      busy = false;
+    }
+  }
+
   // Selected reports for batch action
   let selectedReportIds = $state<string[]>([]);
 
@@ -725,6 +828,70 @@
                   {/if}
                 </div>
               </div>
+              <!-- Responsible Admin & Review Audit Strip -->
+              <div class="ticket-operator-strip">
+                <div class="operator-left">
+                  {#if cluster.assigned}
+                    <div class="assignee-badge claimed">
+                      <UserAvatar
+                        avatarId={cluster.assigned.avatar_id}
+                        crop={cluster.assigned.avatar_crop}
+                        displayName={cluster.assigned.display_name || cluster.assigned.username}
+                        size={20}
+                      />
+                      <div class="assignee-meta">
+                        <span class="assignee-label">Responsável:</span>
+                        <strong class="assignee-username">@{cluster.assigned.username || cluster.assigned.display_name}</strong>
+                        {#if cluster.assigned_at}
+                          <span class="assignee-time">({formatTicketDate(cluster.assigned_at)})</span>
+                        {/if}
+                      </div>
+                    </div>
+                    {#if cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO' && (data.isAdmin || cluster.assigned.id === data.user?.id)}
+                      <button
+                        type="button"
+                        class="btn-ticket-release"
+                        disabled={busy}
+                        onclick={() => releaseTicket(cluster.reportIds.join(','), 'report')}
+                        title="Liberar ticket para outro operador"
+                      >
+                        Liberar
+                      </button>
+                    {/if}
+                  {:else if cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO'}
+                    <button
+                      type="button"
+                      class="btn-ticket-claim"
+                      disabled={busy}
+                      onclick={() => claimTicket(cluster.reportIds.join(','), 'report')}
+                      title="Assumir o atendimento deste relatório"
+                    >
+                      <User size={13} />
+                      <span>Assumir Ticket</span>
+                    </button>
+                  {/if}
+
+                  {#if cluster.resolver && (cluster.status === 'RESOLVIDO' || cluster.status === 'REJEITADO')}
+                    <div class="resolver-tag">
+                      <CheckCircle2 size={13} />
+                      <span>{cluster.status === 'RESOLVIDO' ? 'Resolvido' : 'Rejeitado'} por <strong>@{cluster.resolver.username || cluster.resolver.display_name}</strong> {cluster.resolved_at ? `em ${formatTicketDate(cluster.resolved_at)}` : ''}</span>
+                    </div>
+                  {/if}
+                </div>
+
+                {#if data.isAdmin}
+                  <button
+                    type="button"
+                    class="btn-ticket-delete"
+                    disabled={busy}
+                    onclick={() => openDeleteTicketModal(cluster.reportIds.join(','), 'report', cluster.targetTitle)}
+                    title="Excluir ticket definitivamente das listagens administrativas"
+                  >
+                    <Trash2 size={13} />
+                    <span>Excluir Ticket</span>
+                  </button>
+                {/if}
+              </div>
             </article>
           {/each}
         </div>
@@ -924,6 +1091,70 @@
                     </div>
                   {/if}
                 </div>
+              </div>
+              <!-- Responsible Admin & Review Audit Strip -->
+              <div class="ticket-operator-strip">
+                <div class="operator-left">
+                  {#if req.assignee}
+                    <div class="assignee-badge claimed">
+                      <UserAvatar
+                        avatarId={req.assignee.avatar_id}
+                        crop={req.assignee.avatar_crop}
+                        displayName={req.assignee.display_name || req.assignee.username}
+                        size={20}
+                      />
+                      <div class="assignee-meta">
+                        <span class="assignee-label">Avaliador:</span>
+                        <strong class="assignee-username">@{req.assignee.username || req.assignee.display_name}</strong>
+                        {#if req.assigned_at}
+                          <span class="assignee-time">({formatTicketDate(req.assigned_at)})</span>
+                        {/if}
+                      </div>
+                    </div>
+                    {#if req.status === 'PENDING' && (data.isAdmin || req.assignee.id === data.user?.id)}
+                      <button
+                        type="button"
+                        class="btn-ticket-release"
+                        disabled={busy}
+                        onclick={() => releaseTicket(req.id, 'scan')}
+                        title="Liberar candidatura para outro administrador"
+                      >
+                        Liberar
+                      </button>
+                    {/if}
+                  {:else if req.status === 'PENDING'}
+                    <button
+                      type="button"
+                      class="btn-ticket-claim"
+                      disabled={busy}
+                      onclick={() => claimTicket(req.id, 'scan')}
+                      title="Assumir a avaliação desta candidatura de scan"
+                    >
+                      <User size={13} />
+                      <span>Assumir Avaliação</span>
+                    </button>
+                  {/if}
+
+                  {#if req.reviewer && (req.status === 'APPROVED' || req.status === 'REJECTED')}
+                    <div class="resolver-tag">
+                      <CheckCircle2 size={13} />
+                      <span>{req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'} por <strong>@{req.reviewer.username || req.reviewer.display_name}</strong> {req.reviewed_at ? `em ${formatTicketDate(req.reviewed_at)}` : ''}</span>
+                    </div>
+                  {/if}
+                </div>
+
+                {#if data.isAdmin}
+                  <button
+                    type="button"
+                    class="btn-ticket-delete"
+                    disabled={busy}
+                    onclick={() => openDeleteTicketModal(req.id, 'scan', req.scan_name)}
+                    title="Excluir ticket definitivamente das listagens administrativas"
+                  >
+                    <Trash2 size={13} />
+                    <span>Excluir Ticket</span>
+                  </button>
+                {/if}
               </div>
             </article>
           {/each}
@@ -1238,6 +1469,70 @@
                   {/if}
                 </div>
               </div>
+              <!-- Responsible Admin & Review Audit Strip -->
+              <div class="ticket-operator-strip">
+                <div class="operator-left">
+                  {#if rep.assigned}
+                    <div class="assignee-badge claimed">
+                      <UserAvatar
+                        avatarId={rep.assigned.avatar_id}
+                        crop={rep.assigned.avatar_crop}
+                        displayName={rep.assigned.display_name || rep.assigned.username}
+                        size={20}
+                      />
+                      <div class="assignee-meta">
+                        <span class="assignee-label">Moderador:</span>
+                        <strong class="assignee-username">@{rep.assigned.username || rep.assigned.display_name}</strong>
+                        {#if rep.assigned_at}
+                          <span class="assignee-time">({formatTicketDate(rep.assigned_at)})</span>
+                        {/if}
+                      </div>
+                    </div>
+                    {#if rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO' && (data.isAdmin || rep.assigned.id === data.user?.id)}
+                      <button
+                        type="button"
+                        class="btn-ticket-release"
+                        disabled={busy}
+                        onclick={() => releaseTicket(rep.id, 'moderation')}
+                        title="Liberar moderação para outro operador"
+                      >
+                        Liberar
+                      </button>
+                    {/if}
+                  {:else if rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO'}
+                    <button
+                      type="button"
+                      class="btn-ticket-claim"
+                      disabled={busy}
+                      onclick={() => claimTicket(rep.id, 'moderation')}
+                      title="Assumir a moderação desta denúncia"
+                    >
+                      <User size={13} />
+                      <span>Assumir Moderação</span>
+                    </button>
+                  {/if}
+
+                  {#if rep.resolver && (rep.status === 'RESOLVIDO' || rep.status === 'REJEITADO')}
+                    <div class="resolver-tag">
+                      <CheckCircle2 size={13} />
+                      <span>{rep.status === 'RESOLVIDO' ? 'Resolvido' : 'Dispensado'} por <strong>@{rep.resolver.username || rep.resolver.display_name}</strong> {rep.resolved_at ? `em ${formatTicketDate(rep.resolved_at)}` : ''}</span>
+                    </div>
+                  {/if}
+                </div>
+
+                {#if data.isAdmin}
+                  <button
+                    type="button"
+                    class="btn-ticket-delete"
+                    disabled={busy}
+                    onclick={() => openDeleteTicketModal(rep.id, 'moderation', rep.comment?.content ? `Denúncia: "${rep.comment.content.slice(0, 32)}..."` : 'Denúncia em comentário')}
+                    title="Excluir ticket definitivamente das listagens administrativas"
+                  >
+                    <Trash2 size={13} />
+                    <span>Excluir Ticket</span>
+                  </button>
+                {/if}
+              </div>
             </article>
           {/each}
         </div>
@@ -1418,7 +1713,272 @@
   </div>
 {/if}
 
+<!-- MODAL: Exclusão Administrativa de Ticket (ADMIN ONLY) -->
+{#if deleteModalOpen}
+  <div class="modal-backdrop" onclick={() => (deleteModalOpen = false)}></div>
+  <div class="modal-dialog delete-dialog" role="dialog" aria-modal="true">
+    <div class="modal-header modal-header-danger">
+      <div class="danger-title-box">
+        <Trash2 size={20} class="text-danger" />
+        <h3>Excluir Ticket Administrativo</h3>
+      </div>
+      <button type="button" class="btn-close" onclick={() => (deleteModalOpen = false)}><X size={18} /></button>
+    </div>
+    <form onsubmit={(e) => { e.preventDefault(); confirmDeleteTicket(); }} class="modal-form">
+      <div class="alert-box-danger">
+        <p><strong>Atenção:</strong> Esta ação removerá o ticket permanentemente de todas as filas operacionais e listagens do painel administrativo.</p>
+        <p class="sub-alert">A exclusão do ticket é estritamente administrativa: não altera, deleta nem afeta obras, capítulos, scans parceiras ou comentários no catálogo.</p>
+      </div>
+
+      <div class="delete-ticket-summary">
+        <span class="delete-summary-label">Ticket selecionado:</span>
+        <strong class="delete-summary-title">{deleteTicketTitle}</strong>
+        <span class="delete-summary-type">Tipo: {deleteTicketType === 'scan' ? 'Inscrição de Scan' : deleteTicketType === 'moderation' ? 'Denúncia de Moderação' : 'Relatório de Conteúdo'}</span>
+      </div>
+
+      <div class="form-group">
+        <label for="delete-reason-input">Motivo da exclusão (opcional):</label>
+        <input
+          id="delete-reason-input"
+          type="text"
+          bind:value={deleteReason}
+          placeholder="Ex: Spam duplicado / Ticket criado por engano / Teste"
+          class="form-input"
+        />
+      </div>
+
+      <div class="form-group confirm-group">
+        <label for="delete-confirm-input">
+          Para prosseguir, digite <strong>EXCLUIR</strong> no campo abaixo:
+        </label>
+        <input
+          id="delete-confirm-input"
+          type="text"
+          bind:value={deleteConfirmationText}
+          placeholder="Digite EXCLUIR"
+          class="confirm-input"
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick={() => (deleteModalOpen = false)}>Cancelar</button>
+        <button
+          type="submit"
+          class="btn-danger-solid"
+          disabled={busy || deleteConfirmationText.trim() !== 'EXCLUIR'}
+        >
+          {busy ? 'Excluindo...' : 'Confirmar Exclusão'}
+        </button>
+      </div>
+    </form>
+  </div>
+{/if}
+
 <style>
+  /* Ticket Operator Strip & Assignment */
+  .ticket-operator-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+  }
+  .operator-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .assignee-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #cbd5e1;
+  }
+  .assignee-badge.claimed {
+    background: rgba(223, 194, 141, 0.08);
+    border-color: rgba(223, 194, 141, 0.3);
+  }
+  .assignee-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .assignee-label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .assignee-username {
+    color: #dfc28d;
+    font-weight: 750;
+  }
+  .assignee-time {
+    font-size: 11px;
+    color: #64748b;
+    margin-left: 2px;
+  }
+  .btn-ticket-claim {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #60a5fa;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-ticket-claim:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: #60a5fa;
+    color: #93c5fd;
+  }
+  .btn-ticket-release {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #94a3b8;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-ticket-release:hover:not(:disabled) {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #ef4444;
+  }
+  .resolver-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .btn-ticket-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: auto;
+  }
+  .btn-ticket-delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #fca5a5;
+  }
+
+  /* Delete Modal Specifics */
+  .modal-header-danger {
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  }
+  .danger-title-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ef4444;
+  }
+  .alert-box-danger {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #fca5a5;
+    line-height: 1.45;
+  }
+  .alert-box-danger p {
+    margin: 0;
+  }
+  .alert-box-danger .sub-alert {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #f87171;
+    opacity: 0.9;
+  }
+  .delete-ticket-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 12px;
+    border-radius: 6px;
+  }
+  .delete-summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .delete-summary-title {
+    font-size: 14px;
+    color: #f8fafc;
+  }
+  .delete-summary-type {
+    font-size: 12px;
+    color: #dfc28d;
+  }
+  .confirm-group {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px dashed rgba(239, 68, 68, 0.3);
+    padding: 12px;
+    border-radius: 8px;
+  }
+  .confirm-group label {
+    font-size: 13px;
+    color: #fca5a5;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .confirm-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0b0f19;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 6px;
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-sizing: border-box;
+  }
+  .confirm-input:focus {
+    outline: none;
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  }
+
   .tickets-workspace {
     display: flex;
     flex-direction: column;

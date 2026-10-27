@@ -58,13 +58,19 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       details,
       status,
       resolution_notes,
+      assigned_to,
+      assigned_at,
+      resolved_by,
+      resolved_at,
       created_at,
       updated_at,
       reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-      assigned:members!reports_assigned_to_fkey(id, username, display_name),
+      assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+      resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
       work:works(id, title, slug, cover_id),
       chapter:chapters(id, number, display_number, title, work_id, works(id, title, slug, cover_id))
     `)
+    .is('deleted_at', null)
     .not('target_type', 'in', '("COMMENT","USER")')
     .order('created_at', { ascending: false })
     .limit(200);
@@ -80,8 +86,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         .from('scan_partner_requests')
         .select(`
           *,
-          applicant:members!user_id(id, username, display_name, avatar_id, avatar_crop)
+          applicant:members!user_id(id, username, display_name, avatar_id, avatar_crop),
+          assignee:members!scan_partner_requests_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+          reviewer:members!scan_partner_requests_reviewed_by_fkey(id, username, display_name, avatar_id, avatar_crop)
         `)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(100)
     : Promise.resolve({ data: [] });
@@ -104,10 +113,15 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
           details,
           status,
           resolution_notes,
+          assigned_to,
+          assigned_at,
+          resolved_by,
+          resolved_at,
           created_at,
           updated_at,
           reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-          assigned:members!reports_assigned_to_fkey(id, username, display_name),
+          assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+          resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
           comment:comments(
             id,
             body,
@@ -122,6 +136,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
           ),
           target_user:members!reports_target_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
         `)
+        .is('deleted_at', null)
         .in('target_type', ['COMMENT', 'USER'])
         .order('created_at', { ascending: false })
         .limit(100)
@@ -136,8 +151,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     contentQuery,
     partnerQuery,
     moderationQuery,
-    db.from('reports').select('id, status, target_type'),
-    isAdmin ? db.from('scan_partner_requests').select('id, status') : Promise.resolve({ data: [] })
+    db.from('reports').select('id, status, target_type').is('deleted_at', null),
+    isAdmin ? db.from('scan_partner_requests').select('id, status').is('deleted_at', null) : Promise.resolve({ data: [] })
   ]);
 
   const rawReports = (contentReportsRes.data as any[]) || [];
@@ -247,11 +262,24 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         newCount: 0,
         status: rep.status,
         latestCreatedAt: rep.created_at,
+        assigned: rep.assigned,
+        assigned_at: rep.assigned_at,
+        resolver: rep.resolver,
+        resolved_at: rep.resolved_at,
         reasons: [],
         reportIds: [],
         reports: []
       };
       clustersMap.set(key, cluster);
+    }
+
+    if (!cluster.assigned && rep.assigned) {
+      cluster.assigned = rep.assigned;
+      cluster.assigned_at = rep.assigned_at;
+    }
+    if (!cluster.resolver && rep.resolver) {
+      cluster.resolver = rep.resolver;
+      cluster.resolved_at = rep.resolved_at;
     }
 
     cluster.count += 1;
@@ -434,8 +462,13 @@ export const actions: Actions = {
       updated_at: new Date().toISOString()
     };
 
+    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      updatePayload.resolved_by = locals.user.id;
+      updatePayload.resolved_at = new Date().toISOString();
+    }
     if (newStatus === 'EM_ANALISE') {
       updatePayload.assigned_to = locals.user.id;
+      updatePayload.assigned_at = new Date().toISOString();
     }
     if (notes) {
       updatePayload.resolution_notes = notes;
@@ -494,8 +527,13 @@ export const actions: Actions = {
       updated_at: new Date().toISOString()
     };
 
+    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      updatePayload.resolved_by = locals.user.id;
+      updatePayload.resolved_at = new Date().toISOString();
+    }
     if (newStatus === 'EM_ANALISE') {
       updatePayload.assigned_to = locals.user.id;
+      updatePayload.assigned_at = new Date().toISOString();
     }
     if (notes) {
       updatePayload.resolution_notes = notes;
@@ -775,5 +813,266 @@ export const actions: Actions = {
     }
 
     return fail(400, { message: 'Ação de moderação desconhecida.' });
+  },
+
+  claimTicket: async ({ request, locals, platform }) => {
+    if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+      return fail(403, { message: 'Não autorizado.' });
+    }
+
+    const formData = await request.formData();
+    const ticketId = formData.get('ticket_id') as string;
+    const ticketType = formData.get('ticket_type') as string; // 'report' | 'scan' | 'moderation'
+
+    if (!ticketId || !ticketType) {
+      return fail(400, { message: 'Dados incompletos para assumir ticket.' });
+    }
+
+    const isAdmin = locals.role === 'ADMIN';
+
+    // Permission: Scans and Moderation are ADMIN ONLY
+    if ((ticketType === 'scan' || ticketType === 'moderation') && !isAdmin) {
+      return fail(403, { message: 'Apenas Administradores Globais podem assumir este tipo de ticket.' });
+    }
+
+    const db = getAdminDb(locals, platform);
+    const nowIso = new Date().toISOString();
+
+    if (ticketType === 'scan') {
+      const { data: current } = await db
+        .from('scan_partner_requests')
+        .select('id, assigned_to')
+        .eq('id', ticketId)
+        .maybeSingle();
+
+      if (!current) return fail(404, { message: 'Solicitação de scan não encontrada.' });
+      if (current.assigned_to && current.assigned_to !== locals.user.id && !isAdmin) {
+        return fail(409, { message: 'Este ticket já está sendo atendido por outro operador.' });
+      }
+
+      const { error: updErr } = await db
+        .from('scan_partner_requests')
+        .update({
+          assigned_to: locals.user.id,
+          assigned_at: nowIso
+        })
+        .eq('id', ticketId);
+
+      if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_claim',
+        target_id: ticketId,
+        metadata: { ticket_type: 'scan' }
+      }).catch(() => {});
+
+      return { success: true, action: 'claim', ticketId };
+    } else {
+      // Content report or Moderation report (can be single ID or comma-separated cluster IDs)
+      const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
+      if (ids.length === 0) return fail(400, { message: 'Nenhum ID de relatório fornecido.' });
+
+      const { data: currents } = await db
+        .from('reports')
+        .select('id, assigned_to, status')
+        .in('id', ids);
+
+      if (!currents || currents.length === 0) return fail(404, { message: 'Relatório não encontrado.' });
+      
+      const alreadyAssignedOther = currents.find(c => c.assigned_to && c.assigned_to !== locals.user.id);
+      if (alreadyAssignedOther && !isAdmin) {
+        return fail(409, { message: 'Este ticket já está sendo atendido por outro operador.' });
+      }
+
+      const hasNew = currents.some(c => c.status === 'NOVO');
+      const updateData: any = {
+        assigned_to: locals.user.id,
+        assigned_at: nowIso,
+        updated_at: nowIso
+      };
+      if (hasNew) {
+        updateData.status = 'EM_ANALISE';
+      }
+
+      const { error: updErr } = await db
+        .from('reports')
+        .update(updateData)
+        .in('id', ids);
+
+      if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_claim',
+        target_id: ids[0],
+        metadata: { ticket_type: ticketType, count: ids.length, ids }
+      }).catch(() => {});
+
+      return { success: true, action: 'claim', ticketId };
+    }
+  },
+
+  releaseTicket: async ({ request, locals, platform }) => {
+    if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+      return fail(403, { message: 'Não autorizado.' });
+    }
+
+    const formData = await request.formData();
+    const ticketId = formData.get('ticket_id') as string;
+    const ticketType = formData.get('ticket_type') as string;
+
+    if (!ticketId || !ticketType) {
+      return fail(400, { message: 'Dados incompletos para liberar ticket.' });
+    }
+
+    const isAdmin = locals.role === 'ADMIN';
+    const db = getAdminDb(locals, platform);
+    const nowIso = new Date().toISOString();
+
+    if (ticketType === 'scan') {
+      const { data: current } = await db
+        .from('scan_partner_requests')
+        .select('id, assigned_to')
+        .eq('id', ticketId)
+        .maybeSingle();
+
+      if (!current) return fail(404, { message: 'Solicitação não encontrada.' });
+      if (current.assigned_to !== locals.user.id && !isAdmin) {
+        return fail(403, { message: 'Você não tem permissão para liberar o ticket de outro operador.' });
+      }
+
+      await db
+        .from('scan_partner_requests')
+        .update({
+          assigned_to: null,
+          assigned_at: null
+        })
+        .eq('id', ticketId);
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_release',
+        target_id: ticketId,
+        metadata: { ticket_type: 'scan' }
+      }).catch(() => {});
+
+      return { success: true, action: 'release', ticketId };
+    } else {
+      const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
+      if (ids.length === 0) return fail(400, { message: 'Nenhum ID de relatório fornecido.' });
+
+      const { data: currents } = await db
+        .from('reports')
+        .select('id, assigned_to, status')
+        .in('id', ids);
+
+      if (!currents || currents.length === 0) return fail(404, { message: 'Relatório não encontrado.' });
+      
+      const assignedToOther = currents.find(c => c.assigned_to && c.assigned_to !== locals.user.id);
+      if (assignedToOther && !isAdmin) {
+        return fail(403, { message: 'Você não tem permissão para liberar o ticket de outro operador.' });
+      }
+
+      await db
+        .from('reports')
+        .update({
+          assigned_to: null,
+          assigned_at: null,
+          status: 'NOVO',
+          updated_at: nowIso
+        })
+        .in('id', ids)
+        .eq('status', 'EM_ANALISE');
+
+      // Also reset any that were not in EM_ANALISE if assigned
+      await db
+        .from('reports')
+        .update({
+          assigned_to: null,
+          assigned_at: null,
+          updated_at: nowIso
+        })
+        .in('id', ids)
+        .neq('status', 'EM_ANALISE');
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_release',
+        target_id: ids[0],
+        metadata: { ticket_type: ticketType, count: ids.length, ids }
+      }).catch(() => {});
+
+      return { success: true, action: 'release', ticketId };
+    }
+  },
+
+  deleteTicket: async ({ request, locals, platform }) => {
+    // STRICT ACCESS: Only Global ADMIN can delete tickets
+    if (locals.role !== 'ADMIN') {
+      return fail(403, { message: 'Apenas Administradores Globais podem excluir tickets.' });
+    }
+
+    const formData = await request.formData();
+    const ticketId = formData.get('ticket_id') as string;
+    const ticketType = formData.get('ticket_type') as string;
+    const confirmation = (formData.get('confirmation') as string || '').trim().toUpperCase();
+    const reason = (formData.get('reason') as string || '').trim();
+
+    if (!ticketId || !ticketType) {
+      return fail(400, { message: 'Identificador do ticket não informado.' });
+    }
+
+    if (confirmation !== 'EXCLUIR') {
+      return fail(400, { message: 'Confirmação incorreta. Digite EXCLUIR para confirmar a exclusão do ticket.' });
+    }
+
+    const db = getAdminDb(locals, platform);
+    const nowIso = new Date().toISOString();
+
+    if (ticketType === 'scan') {
+      const { error: delErr } = await db
+        .from('scan_partner_requests')
+        .update({
+          deleted_at: nowIso,
+          deleted_by: locals.user.id,
+          deletion_reason: reason || 'Exclusão administrativa de ticket'
+        })
+        .eq('id', ticketId);
+
+      if (delErr) return fail(500, { message: 'Erro ao excluir ticket de scan: ' + delErr.message });
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_delete',
+        target_id: ticketId,
+        metadata: { ticket_type: 'scan', reason }
+      }).catch(() => {});
+
+      return { success: true, action: 'delete', ticketId };
+    } else {
+      const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
+      if (ids.length === 0) return fail(400, { message: 'Nenhum ID informado para exclusão.' });
+
+      const { error: delErr } = await db
+        .from('reports')
+        .update({
+          deleted_at: nowIso,
+          deleted_by: locals.user.id,
+          deletion_reason: reason || 'Exclusão administrativa de ticket'
+        })
+        .in('id', ids);
+
+      if (delErr) return fail(500, { message: 'Erro ao excluir ticket: ' + delErr.message });
+
+      await db.from('audit_log').insert({
+        actor_id: locals.user.id,
+        action: 'ticket_delete',
+        target_id: ids[0],
+        metadata: { ticket_type: ticketType, count: ids.length, ids, reason }
+      }).catch(() => {});
+
+      return { success: true, action: 'delete', ticketId };
+    }
   }
 };

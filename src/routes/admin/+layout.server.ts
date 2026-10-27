@@ -14,6 +14,7 @@ export const load = async ({ locals }) => {
       .from('reports')
       .select('id', { count: 'exact', head: true })
       .in('status', ['NOVO', 'EM_ANALISE'])
+      .is('deleted_at', null)
       .not('target_type', 'in', '("COMMENT","USER")'),
     1500,
     { count: 0 } as any,
@@ -26,7 +27,8 @@ export const load = async ({ locals }) => {
         locals.db
           .from('scan_partner_requests')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'PENDING'),
+          .eq('status', 'PENDING')
+          .is('deleted_at', null),
         1500,
         { count: 0 } as any,
         'admin_pending_scans'
@@ -40,6 +42,7 @@ export const load = async ({ locals }) => {
           .from('reports')
           .select('id', { count: 'exact', head: true })
           .in('status', ['NOVO', 'EM_ANALISE'])
+          .is('deleted_at', null)
           .in('target_type', ['COMMENT', 'USER']),
         1500,
         { count: 0 } as any,
