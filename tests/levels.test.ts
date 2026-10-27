@@ -4,7 +4,7 @@ import {
   getXpForLevel,
   getLevelFromXp,
   getLevelProgress,
-  NOX_TITLES,
+  NOX_SEASON_ACHIEVEMENT_TITLES,
   NOX_BADGES,
   getUnlockedTitles,
   getUnlockedBadges,
@@ -65,16 +65,16 @@ describe('Project Nox Level System (1 to 100)', () => {
 
   it('unlocks titles strictly based on required levels', () => {
     const titlesLvl1 = getUnlockedTitles(1);
-    expect(titlesLvl1.some((t) => t.id === 'nox-reader')).toBe(true);
-    expect(titlesLvl1.some((t) => t.id === 'apex-nox')).toBe(false);
+    expect(titlesLvl1.some((t) => t.id === 'titulo-nv1-centelha-veu')).toBe(true);
+    expect(titlesLvl1.some((t) => t.id === 'titulo-nv100-apex-nox')).toBe(false);
 
     const titlesLvl20 = getUnlockedTitles(20);
-    expect(titlesLvl20.some((t) => t.id === 'bibliofilo')).toBe(true);
-    expect(titlesLvl20.some((t) => t.id === 'vanguarda')).toBe(false);
+    expect(titlesLvl20.some((t) => t.id === 'titulo-nv20-peregrino-eter')).toBe(true);
+    expect(titlesLvl20.some((t) => t.id === 'titulo-nv30-eco-profundo')).toBe(false);
 
     const titlesLvl100 = getUnlockedTitles(100);
-    expect(titlesLvl100.length).toBe(NOX_TITLES.length);
-    expect(titlesLvl100.some((t) => t.id === 'apex-nox')).toBe(true);
+    expect(titlesLvl100.length).toBe(NOX_SEASON_ACHIEVEMENT_TITLES.length);
+    expect(titlesLvl100.some((t) => t.id === 'titulo-nv100-apex-nox')).toBe(true);
   });
 
   it('unlocks badges strictly based on required levels', () => {
@@ -93,17 +93,17 @@ describe('Project Nox Level System (1 to 100)', () => {
 
   it('resolves member rank with equipped items or falls back safely', () => {
     // Level 1 member tries to equip Level 100 title -> falls back to highest unlocked
-    const rank1 = resolveMemberRank(0, 'apex-nox', 'brasao-apex');
+    const rank1 = resolveMemberRank(0, 'titulo-nv100-apex-nox', 'brasao-apex');
     expect(rank1.level).toBe(1);
-    expect(rank1.title).toBe('Nox Reader');
+    expect(rank1.title).toBe('Primeiro Desperto');
     expect(rank1.badge).toBe('◈');
     expect(rank1.badgeSvg).toBe('/badges/badge-marca-inicial.svg');
 
     // Level 20 member equips valid title and badge
     const xpLvl20 = getXpForLevel(20);
-    const rank20 = resolveMemberRank(xpLvl20, 'bibliofilo', 'sigilo-prateado');
+    const rank20 = resolveMemberRank(xpLvl20, 'titulo-nv20-peregrino-eter', 'sigilo-prateado');
     expect(rank20.level).toBe(20);
-    expect(rank20.title).toBe('Bibliófilo');
+    expect(rank20.title).toBe('Navegador do Éter');
     expect(rank20.badgeIcon).toBe('⬡');
     expect(rank20.badgeSvg).toBe('/badges/badge-sigilo-prateado.svg');
     expect(rank20.badgeTier).toBe('rare');

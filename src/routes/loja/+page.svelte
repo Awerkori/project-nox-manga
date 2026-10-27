@@ -65,21 +65,6 @@
     }
   }
 
-  function applyToLivePreview(item: any) {
-    if (item.kind === 'AVATAR_FRAME') {
-      previewFrame = item.id;
-      const v = selectedCardVariants[item.id];
-      previewFrameColor = v && v !== 'default' ? v : null;
-    } else if (item.kind === 'NAME_COLOR') {
-      previewColor = item.id;
-    } else if (item.kind === 'TITLE') {
-      previewTitle = item.name;
-    } else if (item.kind === 'PROFILE_BANNER') {
-      previewBanner = item.id;
-    }
-    showToast(`Testando "${item.name}" no provador do topo!`, 'success');
-  }
-
   function resetLivePreview() {
     previewFrame = null;
     previewFrameColor = null;
@@ -92,12 +77,21 @@
   let currentXp = $derived(data.profile?.xp ?? 0);
   let userLevel = $derived(Math.floor(Math.sqrt(1 + currentXp / 50)));
 
-  let equippedFrame = $derived(data.profile?.frame_id ?? null);
+  let equippedFrame = $derived(data.profile?.avatar_frame_id ?? data.profile?.frame_id ?? null);
   let equippedColor = $derived(data.profile?.name_color ?? null);
   let heroColorInfo = $derived(getNameColorInfo(previewColor || equippedColor));
   let equippedColorInfo = $derived(getNameColorInfo(equippedColor));
   let equippedTitle = $derived(data.profile?.title_id ?? null);
   let equippedBanner = $derived(data.profile?.equipped_banner_id ?? null);
+
+  $effect(() => {
+    if (equippedFrame && equippedFrame.includes(':')) {
+      const [baseId, variant] = equippedFrame.split(':');
+      if (baseId && variant && !selectedCardVariants[baseId]) {
+        selectedCardVariants[baseId] = variant;
+      }
+    }
+  });
 
   let inventorySet = $derived(new Set(data.inventory || []));
 
@@ -166,11 +160,22 @@
   function checkEquipped(item: any): boolean {
     if (!item) return false;
     const style = getStyle(item);
-    if (item.kind === 'AVATAR_FRAME') return equippedFrame === item.id;
+    if (item.kind === 'AVATAR_FRAME') {
+      return equippedFrame === item.id || equippedFrame?.split(':')[0] === item.id;
+    }
     if (item.kind === 'NAME_COLOR') return equippedColor === item.id || equippedColor === (style.color || style.backgroundImage);
     if (item.kind === 'TITLE') return equippedTitle === item.id || equippedTitle === item.name;
     if (item.kind === 'PROFILE_BANNER') return equippedBanner === item.id;
     return false;
+  }
+
+  function isExactVariantEquipped(item: any): boolean {
+    if (!checkEquipped(item)) return false;
+    if (item.kind !== 'AVATAR_FRAME') return true;
+    if (!equippedFrame) return false;
+    const currentVar = equippedFrame.includes(':') ? equippedFrame.split(':')[1] : 'default';
+    const selectedVar = selectedCardVariants[item.id] || 'default';
+    return currentVar === selectedVar;
   }
 
   async function handlePurchase(item: any) {
@@ -210,12 +215,18 @@
     if (!data.profile) return;
     busyItemId = item.id;
     try {
+      const selectedVariant = selectedCardVariants[item.id];
+      const equipItemId = equip
+        ? (item.kind === 'AVATAR_FRAME' && selectedVariant && selectedVariant !== 'default'
+            ? `${item.id}:${selectedVariant}`
+            : item.id)
+        : '';
       const res = await fetch('/api/shop/equip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kind: item.kind,
-          itemId: equip ? item.id : ''
+          itemId: equipItemId
         })
       });
       const result = await res.json();
@@ -541,7 +552,17 @@
               </h4>
               <p>
                 O XP é a energia cósmica conquistada por sua atividade legítima no site. Seu saldo atual é de
-                <strong>{formatXp(currentXp)} XP</strong> (Nível {userLevel}). Cada cosmético na loja possui um preço em XP e uma exigência mínima de nível. Ao adquirir um item, o valor é debitado de forma permanente e o cosmético é adicionado ao seu inventário para sempre.
+                <strong>{formatXp(currentXp)} XP</strong> (Nível {userLevel}). Cada cosmético na loja possui um preço em XP e uma exigência mínima de nível. Ao adquirir um item, o valor é debitado e o cosmético é adicionado ao seu inventário para sempre.
+              </p>
+            </div>
+
+            <div class="rule-box season-reset-rule">
+              <h4 class="rule-title">
+                <Sparkles size={16} class="rule-icon" />
+                <span>Ciclo Sazonal de XP: Gaste antes do reset!</span>
+              </h4>
+              <p>
+                As temporadas do Project Nox duram 90 dias. Ao final de cada ciclo, o saldo de XP e o nível de temporada são zerados para iniciar uma nova disputa justa. <strong>Gaste seu XP acumulado na Loja Cósmica antes do fim da temporada!</strong> Todos os cosméticos comprados (molduras, banners, cores de nome e títulos de loja) permanecem no seu inventário para sempre.
               </p>
             </div>
 
@@ -692,7 +713,7 @@
           >
             Todas
           </button>
-          {#each Object.entries(RARITY_CONFIG) as [rarityKey, conf]}
+          {#each Object.entries(RARITY_CONFIG) as [rarityKey, conf] (rarityKey)}
             <button
               type="button"
               class="rarity-pill"
@@ -833,7 +854,7 @@
                 <div class="card-color-swatches" role="group" aria-label="Variações de cor para {item.name}">
                   <span class="swatches-label">Cor:</span>
                   <div class="swatches-list">
-                    {#each item.color_variants as variant}
+                    {#each item.color_variants as variant (variant.id)}
                       <button
                         type="button"
                         class="swatch-btn"
@@ -876,7 +897,7 @@
                   <span>Visualizar</span>
                 </button>
 
-                {#if isEquipped}
+                {#if isEquipped && isExactVariantEquipped(item)}
                   <button
                     type="button"
                     class="btn-action unequip"
@@ -884,6 +905,17 @@
                     onclick={() => handleEquip(item, false)}
                   >
                     {isBusy ? 'Salvando...' : 'Desequipar'}
+                  </button>
+                {:else if isEquipped && !isExactVariantEquipped(item)}
+                  <button
+                    type="button"
+                    class="btn-action equip"
+                    disabled={isBusy}
+                    onclick={() => handleEquip(item, true)}
+                    title="Aplicar a variante de cor selecionada"
+                  >
+                    <Check size={14} />
+                    <span>{isBusy ? 'Salvando...' : 'Trocar Cor'}</span>
                   </button>
                 {:else if isOwned}
                   <button
@@ -1158,7 +1190,7 @@
                       <span class="variants-heading">Variações de Cor da Moldura:</span>
                     </div>
                     <div class="modal-swatches-grid">
-                      {#each item.color_variants as variant}
+                      {#each item.color_variants as variant (variant.id)}
                         <button
                           type="button"
                           class="modal-swatch-chip"
@@ -1214,7 +1246,7 @@
 
               <!-- Modal Actions -->
               <div class="modal-actions-wrap">
-                {#if isEquipped}
+                {#if isEquipped && isExactVariantEquipped(item)}
                   <button
                     type="button"
                     class="btn-modal-action unequip"
@@ -1222,6 +1254,16 @@
                     onclick={() => handleEquip(item, false)}
                   >
                     {busyItemId === item.id ? 'Salvando...' : 'Desequipar Cosmético'}
+                  </button>
+                {:else if isEquipped && !isExactVariantEquipped(item)}
+                  <button
+                    type="button"
+                    class="btn-modal-action equip"
+                    disabled={busyItemId === item.id}
+                    onclick={() => handleEquip(item, true)}
+                  >
+                    <Check size={16} />
+                    <span>{busyItemId === item.id ? 'Salvando...' : 'Aplicar Nova Cor'}</span>
                   </button>
                 {:else if isOwned}
                   <button

@@ -1,10 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { member } from '$lib/server/db';
+import { member, privileged } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
+import { invalidateObraAuxCache } from '$lib/server/obra-cache';
+import { fetchWorkFromYugabyte } from '$lib/server/yugabyte';
 import type { Json } from '$lib/database.types';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
@@ -22,6 +24,84 @@ export const POST = async ({ request, locals, platform }: any) => {
   } catch {
     error(400, 'Solicitação inválida');
   }
+
+  // Ensure work exists in Supabase public.works for foreign key integrity
+  const targetWorkId = body.data?.work_id ? String(body.data.work_id) : null;
+  if (body.scope === 'member' && targetWorkId && ['like', 'library', 'comment', 'rate_work'].includes(body.action)) {
+    try {
+      const adminDb = privileged();
+      const { data: wExists } = await adminDb.from('works').select('id').eq('id', targetWorkId).maybeSingle();
+      if (!wExists) {
+        let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
+        let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+
+        try {
+          const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
+          if (ybWork) {
+            cleanSlug = ybWork.slug || cleanSlug;
+            cleanTitle = ybWork.title || cleanTitle;
+          }
+        } catch (fetchErr) {
+          console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
+        }
+
+        // Sanitize slug to match constraint ^[a-z0-9]+(-[a-z0-9]+)*$
+        let sanitizedSlug = (cleanSlug || targetWorkId)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        if (!sanitizedSlug) sanitizedSlug = `obra-${targetWorkId.slice(0, 8)}`;
+
+        // Verify uniqueness of slug
+        const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
+        if (slugOwner && slugOwner.id !== targetWorkId) {
+          sanitizedSlug = `${sanitizedSlug}-${targetWorkId.slice(0, 6)}`;
+        }
+
+        await adminDb.from('works').upsert(
+          {
+            id: targetWorkId,
+            slug: sanitizedSlug,
+            title: (cleanTitle || 'Obra').slice(0, 200),
+            published: true,
+            content_rating: 'GENERAL',
+            kind: 'MANHWA',
+            status: 'ONGOING'
+          },
+          { onConflict: 'id' }
+        );
+      }
+    } catch (err) {
+      console.error('[ACTION] Error ensuring work exists in Supabase:', err);
+    }
+  }
+
+  // Handle 'like' action using member_action RPC
+  if (body.scope === 'member' && body.action === 'like') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    if (!targetWorkId) error(400, 'work_id obrigatório');
+
+    const { data: rpcRes, error: rpcProblem } = await locals.db.rpc('member_action', {
+      p_action: 'like',
+      p_data: { work_id: targetWorkId }
+    });
+    if (rpcProblem) error(rpcProblem.code === '42501' ? 403 : 400, rpcProblem.message);
+
+    const { count: totalLikes } = await locals.db
+      .from('likes')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('work_id', targetWorkId);
+
+    invalidateObraAuxCache(targetWorkId);
+
+    const isLiked = Boolean((rpcRes as any)?.liked);
+    return json({
+      ok: true,
+      liked: isLiked,
+      count: totalLikes ?? (isLiked ? 1 : 0)
+    });
+  }
+
   const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
   const { data, error: problem } = isCanonicalChapterWrite
     ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
@@ -30,6 +110,10 @@ export const POST = async ({ request, locals, platform }: any) => {
         p_data: body.data as Json
       });
   if (problem) error(problem.code === '42501' ? 403 : 400, problem.message);
+
+  if (targetWorkId) {
+    invalidateObraAuxCache(targetWorkId);
+  }
 
   if (body.scope === 'member' && body.action === 'comment' && locals.user) {
     const commentBody = String(body.data.body || '');

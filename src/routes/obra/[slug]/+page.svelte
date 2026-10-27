@@ -315,17 +315,38 @@
 
   let resume = $derived(data.progress[0]?.chapter_id || data.chapters.at(-1)?.id);
 
+  let optimisticFavorite = $state<boolean | null>(null);
+  let isFavorite = $derived(
+    optimisticFavorite !== null ? optimisticFavorite : Boolean(data.library?.favorite)
+  );
+
+  let optimisticLiked = $state<boolean | null>(null);
+  let optimisticLikeDelta = $state<number>(0);
+  let serverLikesCount = $derived((data.likes || []).length);
+  let isLiked = $derived.by(() => {
+    if (optimisticLiked !== null) return optimisticLiked;
+    if (!data.profile?.id || !data.likes) return false;
+    return data.likes.some((like: any) => like.user_id === data.profile?.id);
+  });
+  let likeCount = $derived(Math.max(0, serverLikesCount + optimisticLikeDelta));
+
   async function library(update: Record<string, unknown>) {
     if (!data.profile) {
       goto('/entrar');
       return;
     }
+    const previousFavorite = isFavorite;
+    if ('favorite' in update) {
+      optimisticFavorite = Boolean(update.favorite);
+    }
     busy = true;
     try {
       const res = (await action('member', 'library', {
         work_id: data.work.id,
+        work_slug: data.work.slug,
+        work_title: data.work.title,
         status: data.library?.status || 'READING',
-        favorite: data.library?.favorite || false,
+        favorite: update.favorite !== undefined ? update.favorite : (data.library?.favorite || false),
         following: data.library?.following ?? true,
         ...update
       })) as any;
@@ -346,8 +367,10 @@
         }
       }
       await invalidateAll();
+      optimisticFavorite = null;
       notice = 'Biblioteca atualizada com sucesso.';
     } catch (e) {
+      optimisticFavorite = previousFavorite;
       notice = (e as Error).message;
     } finally {
       busy = false;
@@ -360,11 +383,26 @@
       return;
     }
     if (busy) return;
+    const previousLiked = isLiked;
+    const nextLiked = !previousLiked;
+    optimisticLiked = nextLiked;
+    optimisticLikeDelta += nextLiked ? 1 : -1;
     busy = true;
     try {
-      await action('member', 'like', { work_id: data.work.id });
+      const res = (await action('member', 'like', {
+        work_id: data.work.id,
+        work_slug: data.work.slug,
+        work_title: data.work.title
+      })) as any;
+      if (typeof res?.liked === 'boolean') {
+        optimisticLiked = res.liked;
+      }
       await invalidateAll();
+      optimisticLiked = null;
+      optimisticLikeDelta = 0;
     } catch (e) {
+      optimisticLiked = previousLiked;
+      optimisticLikeDelta += previousLiked ? 1 : -1;
       notice = (e as Error).message;
     } finally {
       busy = false;
@@ -474,25 +512,25 @@
           <button
             type="button"
             class="btn-action-control"
-            class:is-active={data.library?.favorite}
-            onclick={() => library({ favorite: !data.library?.favorite })}
+            class:is-active={isFavorite}
+            onclick={() => library({ favorite: !isFavorite })}
             disabled={busy}
-            title={data.library?.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+            title={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
           >
-            <Bookmark size={18} fill={data.library?.favorite ? 'currentColor' : 'none'} />
-            <span>{data.library?.favorite ? 'Favoritado' : 'Favoritar'}</span>
+            <Bookmark size={18} fill={isFavorite ? 'currentColor' : 'none'} />
+            <span>{isFavorite ? 'Favoritado' : 'Favoritar'}</span>
           </button>
 
           <button
             type="button"
             class="btn-action-control btn-like"
-            class:is-active={data.likes.some((like: any) => like.user_id === data.profile?.id)}
+            class:is-active={isLiked}
             onclick={like}
             disabled={busy}
-            title={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'Descurtir obra' : 'Curtir obra'}
+            title={isLiked ? 'Descurtir obra' : 'Curtir obra'}
           >
-            <Heart size={18} fill={data.likes.some((like: any) => like.user_id === data.profile?.id) ? 'currentColor' : 'none'} />
-            <span>{data.likes.length}</span>
+            <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
+            <span>{likeCount}</span>
           </button>
 
           <button

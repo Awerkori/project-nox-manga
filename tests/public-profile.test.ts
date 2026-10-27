@@ -184,14 +184,14 @@ describe('Public Profile: Business Logic & Privacy Rules', () => {
       const member = {
         created_at: '2026-01-01',
         avatar_frame_id: 'frame-1', // duplicate of inventory
-        equipped_title_id: 'aficionado', // from NOX_TITLES
+        equipped_title_id: 'titulo-nv1-centelha-veu', // from NOX_TITLES
         name_color: '#8b5cf6' // custom color
       };
 
       const cosmetics = deduplicateCosmetics(inventory, member);
-      expect(cosmetics).toHaveLength(3); // frame-1 (once), aficionado, #8b5cf6
+      expect(cosmetics).toHaveLength(3); // frame-1 (once), titulo-nv1-centelha-veu, #8b5cf6
       expect(cosmetics.some((c) => c.id === 'frame-1')).toBe(true);
-      expect(cosmetics.some((c) => c.name === 'Aficionado')).toBe(true);
+      expect(cosmetics.some((c) => c.name === 'Primeiro Desperto')).toBe(true);
       expect(cosmetics.some((c) => c.kind === 'NAME_COLOR')).toBe(true);
     });
   });
