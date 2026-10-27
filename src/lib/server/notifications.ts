@@ -708,6 +708,7 @@ export function triggerImmediateOutboxDispatch() {
 
 /**
  * Busca todos os administradores globais (role = 'ADMIN' não suspensos)
+ * Garante lista única de IDs sem repetição
  */
 export async function getGlobalAdminUserIds(): Promise<string[]> {
   const db = privileged();
@@ -717,7 +718,7 @@ export async function getGlobalAdminUserIds(): Promise<string[]> {
       .select('user_id')
       .eq('role', 'ADMIN')
       .eq('suspended', false);
-    return (data || []).map((r: any) => r.user_id);
+    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
   } catch (e) {
     console.warn('[NOTIF] Erro ao buscar admins:', e);
     return [];
@@ -726,6 +727,7 @@ export async function getGlobalAdminUserIds(): Promise<string[]> {
 
 /**
  * Busca todos os membros com acesso editorial/staff (ADMIN e STAFF_SITE não suspensos)
+ * Garante lista única de IDs sem repetição, mesmo se um usuário possuir múltiplos papéis
  */
 export async function getStaffAndAdminUserIds(): Promise<string[]> {
   const db = privileged();
@@ -735,7 +737,7 @@ export async function getStaffAndAdminUserIds(): Promise<string[]> {
       .select('user_id')
       .in('role', ['ADMIN', 'STAFF_SITE'])
       .eq('suspended', false);
-    return (data || []).map((r: any) => r.user_id);
+    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
   } catch (e) {
     console.warn('[NOTIF] Erro ao buscar staff e admins:', e);
     return [];

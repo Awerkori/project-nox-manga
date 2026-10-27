@@ -29,6 +29,7 @@
     X,
     Sparkles,
     User,
+    UserCheck,
     BookOpen,
     Layers,
     MapPin,
@@ -88,6 +89,29 @@
     }
   }
 
+  async function parseActionResult(res: Response) {
+    const text = await res.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // not direct JSON
+    }
+    if (!res.ok) {
+      const msg = data?.message || data?.error || (data?.data && (data.data.message || data.data.error)) || `Erro HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    if (data && data.type === 'failure') {
+      const msg = data?.data?.message || data?.data?.error || data?.message || 'Operação recusada pelo servidor';
+      throw new Error(msg);
+    }
+    if (data && data.type === 'error') {
+      const msg = data?.error?.message || 'Erro interno no servidor';
+      throw new Error(msg);
+    }
+    return data;
+  }
+
   async function claimTicket(ticketId: string, ticketType: 'report' | 'scan' | 'moderation') {
     busy = true;
     try {
@@ -99,8 +123,7 @@
         method: 'POST',
         body: fd
       });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData?.message || 'Falha ao assumir ticket');
+      await parseActionResult(res);
       showFeedback('success', 'Ticket assumido com sucesso!');
       await invalidateAll();
     } catch (e: any) {
@@ -121,8 +144,7 @@
         method: 'POST',
         body: fd
       });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData?.message || 'Falha ao liberar ticket');
+      await parseActionResult(res);
       showFeedback('success', 'Ticket liberado para atendimento.');
       await invalidateAll();
     } catch (e: any) {
@@ -155,9 +177,11 @@
         method: 'POST',
         body: fd
       });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData?.message || 'Falha ao excluir ticket');
+      await parseActionResult(res);
       deleteModalOpen = false;
+      deleteTicketId = null;
+      deleteConfirmationText = '';
+      deleteReason = '';
       showFeedback('success', 'Ticket excluído com sucesso.');
       await invalidateAll();
     } catch (e: any) {
@@ -219,7 +243,7 @@
         method: 'POST',
         body: fd
       });
-      if (!res.ok) throw new Error('Falha ao atualizar relatório');
+      await parseActionResult(res);
       showFeedback('success', `Relatório atualizado para ${status === 'RESOLVIDO' ? 'Resolvido' : status === 'REJEITADO' ? 'Rejeitado' : 'Em Análise'}`);
       await invalidateAll();
     } catch (e: any) {
@@ -266,8 +290,7 @@
         method: 'POST',
         body: fd
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Falha ao aprovar scan');
+      await parseActionResult(res);
       showFeedback('success', `Scan "${req.scan_name}" aprovada com sucesso!`);
       await invalidateAll();
     } catch (e: any) {
@@ -291,8 +314,7 @@
         method: 'POST',
         body: fd
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Falha ao recusar solicitação');
+      await parseActionResult(res);
       showFeedback('success', `Solicitação de "${rejectScanName}" recusada.`);
       rejectScanModalOpen = false;
       await invalidateAll();
@@ -326,8 +348,7 @@
         method: 'POST',
         body: fd
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Falha na moderação');
+      await parseActionResult(res);
       showFeedback('success', 'Ação de moderação aplicada com sucesso.');
       await invalidateAll();
     } catch (e: any) {
@@ -446,11 +467,24 @@
           <FileCheck size={20} />
         </div>
         <div class="stat-meta">
-          <span class="stat-label">Pendentes de Avaliação</span>
+          <span class="stat-label">Novas / Aguardando</span>
           <span class="stat-value">{data.partnerStatusCounts.PENDING}</span>
         </div>
         <span class="stat-pill {data.partnerStatusCounts.PENDING > 0 ? 'gold' : 'clean'}">
           {data.partnerStatusCounts.PENDING > 0 ? 'Aguardando Análise' : 'Em Dia'}
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-analise">
+          <Clock size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Em Análise</span>
+          <span class="stat-value">{data.partnerStatusCounts.EM_ANALISE}</span>
+        </div>
+        <span class="stat-pill {data.partnerStatusCounts.EM_ANALISE > 0 ? 'info' : 'clean'}">
+          {data.partnerStatusCounts.EM_ANALISE} em avaliação
         </span>
       </div>
 
@@ -774,111 +808,103 @@
                 </div>
               {/if}
 
-              <!-- Actions Strip -->
-              <div class="ticket-actions-bar">
-                <!-- MANDATORY PRIMARY ACTION: Ir para o Problema -->
-                {#if cluster.targetLink}
-                  <a
-                    href={cluster.targetLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn-primary-problem"
-                  >
-                    <ExternalLink size={15} />
-                    <span>Ir para o Problema</span>
-                  </a>
-                {/if}
-
-                <div class="ticket-workflow-actions">
-                  {#if cluster.status === 'NOVO'}
-                    <button
-                      type="button"
-                      class="btn-action-warning"
-                      disabled={busy}
-                      onclick={() => quickUpdateReportStatus(cluster.reportIds[0], 'EM_ANALISE')}
-                      title="Atribuir a si mesmo e iniciar atendimento"
+              <!-- Unified Ticket Action Bar (Mandatory Lifecycle) -->
+              <div class="ticket-action-footer">
+                <div class="footer-left-group">
+                  <!-- Mandatory Context Link: Ir para o Problema -->
+                  {#if cluster.targetLink}
+                    <a
+                      href={cluster.targetLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="btn-context-link"
+                      title="Abrir o leitor diretamente no capítulo e página reportados"
                     >
-                      <Clock size={14} />
-                      <span>Em Análise</span>
-                    </button>
+                      <ExternalLink size={14} />
+                      <span>Ir para o Problema</span>
+                    </a>
                   {/if}
 
-                  {#if cluster.status !== 'RESOLVIDO'}
+                  <!-- STAGE 1: UNASSIGNED (NOVO / PENDENTE) -->
+                  {#if cluster.status === 'NOVO' || (!cluster.assigned && cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO')}
                     <button
                       type="button"
-                      class="btn-action-success"
-                      disabled={busy}
-                      onclick={() => openResolveModal(cluster.reportIds[0], 'RESOLVIDO')}
-                    >
-                      <Check size={14} />
-                      <span>Resolver</span>
-                    </button>
-                  {/if}
-
-                  {#if cluster.status !== 'REJEITADO'}
-                    <button
-                      type="button"
-                      class="btn-action-danger"
-                      disabled={busy}
-                      onclick={() => openResolveModal(cluster.reportIds[0], 'REJEITADO')}
-                    >
-                      <X size={14} />
-                      <span>Rejeitar</span>
-                    </button>
-                  {/if}
-                </div>
-              </div>
-              <!-- Responsible Admin & Review Audit Strip -->
-              <div class="ticket-operator-strip">
-                <div class="operator-left">
-                  {#if cluster.assigned}
-                    <div class="assignee-badge claimed">
-                      <UserAvatar
-                        avatarId={cluster.assigned.avatar_id}
-                        crop={cluster.assigned.avatar_crop}
-                        displayName={cluster.assigned.display_name || cluster.assigned.username}
-                        size={20}
-                      />
-                      <div class="assignee-meta">
-                        <span class="assignee-label">Responsável:</span>
-                        <strong class="assignee-username">@{cluster.assigned.username || cluster.assigned.display_name}</strong>
-                        {#if cluster.assigned_at}
-                          <span class="assignee-time">({formatTicketDate(cluster.assigned_at)})</span>
-                        {/if}
-                      </div>
-                    </div>
-                    {#if cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO' && (data.isAdmin || cluster.assigned.id === data.user?.id)}
-                      <button
-                        type="button"
-                        class="btn-ticket-release"
-                        disabled={busy}
-                        onclick={() => releaseTicket(cluster.reportIds.join(','), 'report')}
-                        title="Liberar ticket para outro operador"
-                      >
-                        Liberar
-                      </button>
-                    {/if}
-                  {:else if cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO'}
-                    <button
-                      type="button"
-                      class="btn-ticket-claim"
+                      class="btn-primary-claim"
                       disabled={busy}
                       onclick={() => claimTicket(cluster.reportIds.join(','), 'report')}
-                      title="Assumir o atendimento deste relatório"
+                      title="Assumir o atendimento deste relatório para poder analisá-lo e resolvê-lo"
                     >
-                      <User size={13} />
-                      <span>Assumir Ticket</span>
+                      <UserCheck size={14} />
+                      <span>Assumir Atendimento</span>
                     </button>
-                  {/if}
 
-                  {#if cluster.resolver && (cluster.status === 'RESOLVIDO' || cluster.status === 'REJEITADO')}
-                    <div class="resolver-tag">
-                      <CheckCircle2 size={13} />
-                      <span>{cluster.status === 'RESOLVIDO' ? 'Resolvido' : 'Rejeitado'} por <strong>@{cluster.resolver.username || cluster.resolver.display_name}</strong> {cluster.resolved_at ? `em ${formatTicketDate(cluster.resolved_at)}` : ''}</span>
+                  <!-- STAGE 2: IN REVIEW (EM ANÁLISE) -->
+                  {:else if cluster.status === 'EM_ANALISE' || (cluster.assigned && cluster.status !== 'RESOLVIDO' && cluster.status !== 'REJEITADO')}
+                    <div class="active-operator-pill">
+                      <UserAvatar
+                        avatarId={cluster.assigned?.avatar_id}
+                        crop={cluster.assigned?.avatar_crop}
+                        displayName={cluster.assigned?.display_name || cluster.assigned?.username}
+                        size={20}
+                      />
+                      <div class="operator-meta">
+                        <span class="operator-role-tag">Em atendimento:</span>
+                        <strong class="operator-name">@{cluster.assigned?.username || cluster.assigned?.display_name}</strong>
+                        {#if cluster.assigned_at}
+                          <span class="operator-time">({formatTicketDate(cluster.assigned_at)})</span>
+                        {/if}
+                      </div>
+                      {#if data.isAdmin || cluster.assigned?.id === data.user?.id}
+                        <button
+                          type="button"
+                          class="btn-release-subtle"
+                          disabled={busy}
+                          onclick={() => releaseTicket(cluster.reportIds.join(','), 'report')}
+                          title="Liberar ticket de volta para a fila geral"
+                        >
+                          Liberar
+                        </button>
+                      {/if}
+                    </div>
+
+                    <div class="verdict-btn-group">
+                      <button
+                        type="button"
+                        class="btn-verdict-success"
+                        disabled={busy}
+                        onclick={() => openResolveModal(cluster.reportIds[0], 'RESOLVIDO')}
+                        title="Marcar defeito como corrigido/resolvido"
+                      >
+                        <Check size={14} />
+                        <span>Resolver</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-verdict-danger"
+                        disabled={busy}
+                        onclick={() => openResolveModal(cluster.reportIds[0], 'REJEITADO')}
+                        title="Dispensar relatório por não procedência"
+                      >
+                        <X size={14} />
+                        <span>Rejeitar</span>
+                      </button>
+                    </div>
+
+                  <!-- STAGE 3: CONCLUDED (RESOLVIDO OU REJEITADO) -->
+                  {:else}
+                    <div class="concluded-audit-tag {cluster.status.toLowerCase()}">
+                      {#if cluster.status === 'RESOLVIDO'}
+                        <CheckCircle2 size={14} />
+                        <span>Resolvido por <strong>@{cluster.resolver?.username || cluster.resolver?.display_name || 'Admin'}</strong> {cluster.resolved_at ? `em ${formatTicketDate(cluster.resolved_at)}` : ''}</span>
+                      {:else}
+                        <XCircle size={14} />
+                        <span>Rejeitado por <strong>@{cluster.resolver?.username || cluster.resolver?.display_name || 'Admin'}</strong> {cluster.resolved_at ? `em ${formatTicketDate(cluster.resolved_at)}` : ''}</span>
+                      {/if}
                     </div>
                   {/if}
                 </div>
 
+                <!-- Admin Delete Action -->
                 {#if data.isAdmin}
                   <button
                     type="button"
@@ -915,6 +941,14 @@
           </button>
           <button
             type="button"
+            class="filter-pill pill-warn"
+            class:active={currentStatus === 'EM_ANALISE'}
+            onclick={() => setStatusFilter('EM_ANALISE')}
+          >
+            Em Análise ({data.partnerStatusCounts.EM_ANALISE})
+          </button>
+          <button
+            type="button"
             class="filter-pill pill-success"
             class:active={currentStatus === 'APPROVED'}
             onclick={() => setStatusFilter('APPROVED')}
@@ -945,8 +979,24 @@
         <div class="empty-state">
           {#if currentStatus === 'PENDING'}
             <FileCheck size={42} class="empty-icon text-gold" />
-            <h3>Nenhuma nova pendência. Tudo em dia!</h3>
-            <p>Todas as candidaturas de scans parceiras foram avaliadas.</p>
+            <h3>Nenhuma nova inscrição pendente. Tudo em dia!</h3>
+            <p>Não há candidaturas de scans parceiras aguardando atendimento inicial.</p>
+            {#if data.partnerStatusCounts.EM_ANALISE > 0}
+              <button type="button" class="btn-empty-shortcut" onclick={() => setStatusFilter('EM_ANALISE')}>
+                <span>Ver {data.partnerStatusCounts.EM_ANALISE} {data.partnerStatusCounts.EM_ANALISE === 1 ? 'inscrição em análise' : 'inscrições em análise'}</span>
+                <ArrowRight size={14} />
+              </button>
+            {/if}
+          {:else if currentStatus === 'EM_ANALISE'}
+            <Clock size={42} class="empty-icon text-amber" />
+            <h3>Nenhuma candidatura em análise</h3>
+            <p>Nenhuma inscrição está sendo avaliada por um operador no momento.</p>
+            {#if data.partnerStatusCounts.PENDING > 0}
+              <button type="button" class="btn-empty-shortcut" onclick={() => setStatusFilter('PENDING')}>
+                <span>Ver {data.partnerStatusCounts.PENDING} {data.partnerStatusCounts.PENDING === 1 ? 'inscrição pendente' : 'inscrições pendentes'}</span>
+                <ArrowRight size={14} />
+              </button>
+            {/if}
           {:else}
             <FileCheck size={40} class="empty-icon" />
             <h3>Nenhuma inscrição encontrada</h3>
@@ -1057,104 +1107,113 @@
                   </div>
                 {/if}
 
-                <!-- Actions -->
-                <div class="partner-card-actions">
-                  <button
-                    type="button"
-                    class="btn-action-preview"
-                    onclick={() => (previewPartnerReq = req)}
-                  >
-                    <Eye size={14} />
-                    <span>Pré-Visualizar Página</span>
-                  </button>
-
-                  {#if req.status === 'PENDING'}
-                    <div class="review-btn-group">
-                      <button
-                        type="button"
-                        class="btn-action-success"
-                        disabled={busy}
-                        onclick={() => approveScan(req)}
-                      >
-                        <Check size={14} />
-                        <span>Aprovar Scan</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-action-danger"
-                        disabled={busy}
-                        onclick={() => openRejectScanModal(req)}
-                      >
-                        <X size={14} />
-                        <span>Recusar</span>
-                      </button>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-              <!-- Responsible Admin & Review Audit Strip -->
-              <div class="ticket-operator-strip">
-                <div class="operator-left">
-                  {#if req.assignee}
-                    <div class="assignee-badge claimed">
-                      <UserAvatar
-                        avatarId={req.assignee.avatar_id}
-                        crop={req.assignee.avatar_crop}
-                        displayName={req.assignee.display_name || req.assignee.username}
-                        size={20}
-                      />
-                      <div class="assignee-meta">
-                        <span class="assignee-label">Avaliador:</span>
-                        <strong class="assignee-username">@{req.assignee.username || req.assignee.display_name}</strong>
-                        {#if req.assigned_at}
-                          <span class="assignee-time">({formatTicketDate(req.assigned_at)})</span>
-                        {/if}
-                      </div>
-                    </div>
-                    {#if req.status === 'PENDING' && (data.isAdmin || req.assignee.id === data.user?.id)}
-                      <button
-                        type="button"
-                        class="btn-ticket-release"
-                        disabled={busy}
-                        onclick={() => releaseTicket(req.id, 'scan')}
-                        title="Liberar candidatura para outro administrador"
-                      >
-                        Liberar
-                      </button>
-                    {/if}
-                  {:else if req.status === 'PENDING'}
+                <!-- Unified Ticket Action Bar for Scan Partners -->
+                <div class="ticket-action-footer">
+                  <div class="footer-left-group">
+                    <!-- Mandatory Context Preview: Pré-Visualizar Página -->
                     <button
                       type="button"
-                      class="btn-ticket-claim"
-                      disabled={busy}
-                      onclick={() => claimTicket(req.id, 'scan')}
-                      title="Assumir a avaliação desta candidatura de scan"
+                      class="btn-context-link"
+                      onclick={() => (previewPartnerReq = req)}
+                      title="Abrir pré-visualização completa da página da scan"
                     >
-                      <User size={13} />
-                      <span>Assumir Avaliação</span>
+                      <Eye size={14} />
+                      <span>Pré-Visualizar Página</span>
+                    </button>
+
+                    <!-- STAGE 1: UNASSIGNED PENDING (PENDING && !req.assignee) -->
+                    {#if req.status === 'PENDING' && !req.assignee}
+                      <button
+                        type="button"
+                        class="btn-primary-claim gold-claim"
+                        disabled={busy}
+                        onclick={() => claimTicket(req.id, 'scan')}
+                        title="Assumir avaliação desta candidatura de scan parceira"
+                      >
+                        <UserCheck size={14} />
+                        <span>Assumir Avaliação</span>
+                      </button>
+
+                    <!-- STAGE 2: IN REVIEW (PENDING && req.assignee) -->
+                    {:else if req.status === 'PENDING' && req.assignee}
+                      <div class="active-operator-pill">
+                        <UserAvatar
+                          avatarId={req.assignee.avatar_id}
+                          crop={req.assignee.avatar_crop}
+                          displayName={req.assignee.display_name || req.assignee.username}
+                          size={20}
+                        />
+                        <div class="operator-meta">
+                          <span class="operator-role-tag">Avaliador:</span>
+                          <strong class="operator-name">@{req.assignee.username || req.assignee.display_name}</strong>
+                          {#if req.assigned_at}
+                            <span class="operator-time">({formatTicketDate(req.assigned_at)})</span>
+                          {/if}
+                        </div>
+                        {#if data.isAdmin || req.assignee.id === data.user?.id}
+                          <button
+                            type="button"
+                            class="btn-release-subtle"
+                            disabled={busy}
+                            onclick={() => releaseTicket(req.id, 'scan')}
+                            title="Liberar candidatura para outro administrador"
+                          >
+                            Liberar
+                          </button>
+                        {/if}
+                      </div>
+
+                      <div class="verdict-btn-group">
+                        <button
+                          type="button"
+                          class="btn-verdict-success"
+                          disabled={busy}
+                          onclick={() => approveScan(req)}
+                          title="Aprovar scan e torná-la parceira oficial"
+                        >
+                          <Check size={14} />
+                          <span>Aprovar Scan</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-verdict-danger"
+                          disabled={busy}
+                          onclick={() => openRejectScanModal(req)}
+                          title="Recusar candidatura com justificativa"
+                        >
+                          <X size={14} />
+                          <span>Recusar</span>
+                        </button>
+                      </div>
+
+                    <!-- STAGE 3: CONCLUDED (APPROVED OU REJECTED) -->
+                    {:else}
+                      <div class="concluded-audit-tag {req.status.toLowerCase()}">
+                        {#if req.status === 'APPROVED'}
+                          <CheckCircle2 size={14} />
+                          <span>Aprovada por <strong>@{req.reviewer?.username || req.reviewer?.display_name || 'Admin'}</strong> {req.reviewed_at ? `em ${formatTicketDate(req.reviewed_at)}` : ''}</span>
+                        {:else}
+                          <XCircle size={14} />
+                          <span>Recusada por <strong>@{req.reviewer?.username || req.reviewer?.display_name || 'Admin'}</strong> {req.reviewed_at ? `em ${formatTicketDate(req.reviewed_at)}` : ''}</span>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+
+                  <!-- Admin Delete Action -->
+                  {#if data.isAdmin}
+                    <button
+                      type="button"
+                      class="btn-ticket-delete"
+                      disabled={busy}
+                      onclick={() => openDeleteTicketModal(req.id, 'scan', req.scan_name)}
+                      title="Excluir ticket definitivamente das listagens administrativas"
+                    >
+                      <Trash2 size={13} />
+                      <span>Excluir Ticket</span>
                     </button>
                   {/if}
-
-                  {#if req.reviewer && (req.status === 'APPROVED' || req.status === 'REJECTED')}
-                    <div class="resolver-tag">
-                      <CheckCircle2 size={13} />
-                      <span>{req.status === 'APPROVED' ? 'Aprovada' : 'Recusada'} por <strong>@{req.reviewer.username || req.reviewer.display_name}</strong> {req.reviewed_at ? `em ${formatTicketDate(req.reviewed_at)}` : ''}</span>
-                    </div>
-                  {/if}
                 </div>
-
-                {#if data.isAdmin}
-                  <button
-                    type="button"
-                    class="btn-ticket-delete"
-                    disabled={busy}
-                    onclick={() => openDeleteTicketModal(req.id, 'scan', req.scan_name)}
-                    title="Excluir ticket definitivamente das listagens administrativas"
-                  >
-                    <Trash2 size={13} />
-                    <span>Excluir Ticket</span>
-                  </button>
-                {/if}
               </div>
             </article>
           {/each}
@@ -1357,175 +1416,178 @@
                 </div>
               {/if}
 
-              <!-- Actions Strip: Primary Visualizar no Site + Moderation Actions Suite -->
-              <div class="mod-action-footer">
-                <!-- PRIMARY ACTION: Visualizar no Site (Disabled with label if deleted) -->
-                {#if rep.visibilityStatus !== 'DELETED' && rep.siteLink}
-                  <a
-                    href={rep.siteLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn-primary-site-view"
-                    title="Abrir o comentário diretamente na obra ou capítulo"
-                  >
-                    <ExternalLink size={15} />
-                    <span>Visualizar no Site</span>
-                  </a>
-                {:else}
-                  <span class="btn-primary-site-view btn-site-view-disabled" title="Comentário excluído não está mais acessível no site público">
-                    <EyeOff size={15} />
-                    <span>Removido do Site</span>
-                  </span>
-                {/if}
-
-                <div class="mod-buttons-cluster">
-                  {#if rep.visibilityStatus === 'DELETED'}
-                    <span class="mod-status-text alert-text">
-                      <Trash2 size={13} />
-                      <span>Comentário já excluído</span>
+              <!-- Unified Ticket Action Bar for Moderation -->
+              <div class="ticket-action-footer">
+                <div class="footer-left-group">
+                  <!-- Context: Visualizar no Site -->
+                  {#if rep.visibilityStatus !== 'DELETED' && rep.siteLink}
+                    <a
+                      href={rep.siteLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="btn-context-link"
+                      title="Abrir o comentário diretamente na obra ou capítulo"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Visualizar no Site</span>
+                    </a>
+                  {:else}
+                    <span class="btn-context-link btn-link-disabled" title="Comentário excluído não está mais acessível no site público">
+                      <EyeOff size={14} />
+                      <span>Removido do Site</span>
                     </span>
-                    <button
-                      type="button"
-                      class="btn-mod-action btn-restore"
-                      disabled={busy}
-                      onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment?.id })}
-                      title="Restaurar visibilidade do comentário"
-                    >
-                      <Eye size={14} />
-                      <span>Restaurar</span>
-                    </button>
-                  {:else if rep.comment}
-                    {#if rep.comment.removed}
-                      <button
-                        type="button"
-                        class="btn-mod-action btn-restore"
-                        disabled={busy}
-                        onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment.id })}
-                        title="Restaurar comentário ocultado"
-                      >
-                        <Eye size={14} />
-                        <span>Restaurar</span>
-                      </button>
-                    {:else}
-                      <button
-                        type="button"
-                        class="btn-mod-action btn-hide"
-                        disabled={busy}
-                        onclick={() => moderate('hide', { reportId: rep.id, commentId: rep.comment.id })}
-                        title="Ocultar comentário do site público"
-                      >
-                        <EyeOff size={14} />
-                        <span>Ocultar Comentário</span>
-                      </button>
-                    {/if}
-
-                    <button
-                      type="button"
-                      class="btn-mod-action btn-delete"
-                      disabled={busy}
-                      onclick={() => moderate('delete', { reportId: rep.id, commentId: rep.comment.id })}
-                      title="Excluir comentário permanentemente e resolver denúncia"
-                    >
-                      <Trash2 size={14} />
-                      <span>Excluir</span>
-                    </button>
-
-                    {#if rep.comment.author?.id && !rep.isAuthorSuspended}
-                      <button
-                        type="button"
-                        class="btn-mod-action btn-suspend"
-                        disabled={busy}
-                        onclick={() => moderate('suspend_user', { reportId: rep.id, targetUserId: rep.comment.author.id })}
-                        title="Suspender este usuário do Project Nox"
-                      >
-                        <UserX size={14} />
-                        <span>Suspender Autor</span>
-                      </button>
-                    {/if}
                   {/if}
 
-                  {#if rep.status !== 'RESOLVIDO'}
+                  <!-- STAGE 1: UNASSIGNED (NOVO / PENDENTE) -->
+                  {#if rep.status === 'NOVO' || (!rep.assigned && rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO')}
                     <button
                       type="button"
-                      class="btn-mod-action btn-resolve"
-                      disabled={busy}
-                      onclick={() => moderate('resolve_report', { reportId: rep.id })}
-                    >
-                      <Check size={14} />
-                      <span>Resolver</span>
-                    </button>
-                  {/if}
-
-                  {#if rep.status !== 'REJEITADO'}
-                    <button
-                      type="button"
-                      class="btn-mod-action btn-dismiss"
-                      disabled={busy}
-                      onclick={() => moderate('dismiss_report', { reportId: rep.id })}
-                    >
-                      <X size={14} />
-                      <span>Dispensar</span>
-                    </button>
-                  {/if}
-                </div>
-              </div>
-              <!-- Responsible Admin & Review Audit Strip -->
-              <div class="ticket-operator-strip">
-                <div class="operator-left">
-                  {#if rep.assigned}
-                    <div class="assignee-badge claimed">
-                      <UserAvatar
-                        avatarId={rep.assigned.avatar_id}
-                        crop={rep.assigned.avatar_crop}
-                        displayName={rep.assigned.display_name || rep.assigned.username}
-                        size={20}
-                      />
-                      <div class="assignee-meta">
-                        <span class="assignee-label">Moderador:</span>
-                        <strong class="assignee-username">@{rep.assigned.username || rep.assigned.display_name}</strong>
-                        {#if rep.assigned_at}
-                          <span class="assignee-time">({formatTicketDate(rep.assigned_at)})</span>
-                        {/if}
-                      </div>
-                    </div>
-                    {#if rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO' && (data.isAdmin || rep.assigned.id === data.user?.id)}
-                      <button
-                        type="button"
-                        class="btn-ticket-release"
-                        disabled={busy}
-                        onclick={() => releaseTicket(rep.id, 'moderation')}
-                        title="Liberar moderação para outro operador"
-                      >
-                        Liberar
-                      </button>
-                    {/if}
-                  {:else if rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO'}
-                    <button
-                      type="button"
-                      class="btn-ticket-claim"
+                      class="btn-primary-claim mod-claim"
                       disabled={busy}
                       onclick={() => claimTicket(rep.id, 'moderation')}
-                      title="Assumir a moderação desta denúncia"
+                      title="Assumir a moderação desta ocorrência"
                     >
-                      <User size={13} />
+                      <UserCheck size={14} />
                       <span>Assumir Moderação</span>
                     </button>
-                  {/if}
 
-                  {#if rep.resolver && (rep.status === 'RESOLVIDO' || rep.status === 'REJEITADO')}
-                    <div class="resolver-tag">
-                      <CheckCircle2 size={13} />
-                      <span>{rep.status === 'RESOLVIDO' ? 'Resolvido' : 'Dispensado'} por <strong>@{rep.resolver.username || rep.resolver.display_name}</strong> {rep.resolved_at ? `em ${formatTicketDate(rep.resolved_at)}` : ''}</span>
+                  <!-- STAGE 2: IN REVIEW (EM ANÁLISE) -->
+                  {:else if rep.status === 'EM_ANALISE' || (rep.assigned && rep.status !== 'RESOLVIDO' && rep.status !== 'REJEITADO')}
+                    <div class="active-operator-pill">
+                      <UserAvatar
+                        avatarId={rep.assigned?.avatar_id}
+                        crop={rep.assigned?.avatar_crop}
+                        displayName={rep.assigned?.display_name || rep.assigned?.username}
+                        size={20}
+                      />
+                      <div class="operator-meta">
+                        <span class="operator-role-tag">Moderador:</span>
+                        <strong class="operator-name">@{rep.assigned?.username || rep.assigned?.display_name}</strong>
+                        {#if rep.assigned_at}
+                          <span class="operator-time">({formatTicketDate(rep.assigned_at)})</span>
+                        {/if}
+                      </div>
+                      {#if data.isAdmin || rep.assigned?.id === data.user?.id}
+                        <button
+                          type="button"
+                          class="btn-release-subtle"
+                          disabled={busy}
+                          onclick={() => releaseTicket(rep.id, 'moderation')}
+                          title="Liberar moderação para outro operador"
+                        >
+                          Liberar
+                        </button>
+                      {/if}
+                    </div>
+
+                    <!-- Moderation Content Actions -->
+                    <div class="mod-buttons-cluster">
+                      {#if rep.visibilityStatus === 'DELETED'}
+                        <button
+                          type="button"
+                          class="btn-mod-action btn-restore"
+                          disabled={busy}
+                          onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment?.id })}
+                          title="Restaurar visibilidade do comentário"
+                        >
+                          <Eye size={13} />
+                          <span>Restaurar</span>
+                        </button>
+                      {:else if rep.comment}
+                        {#if rep.comment.removed}
+                          <button
+                            type="button"
+                            class="btn-mod-action btn-restore"
+                            disabled={busy}
+                            onclick={() => moderate('unhide', { reportId: rep.id, commentId: rep.comment.id })}
+                            title="Restaurar comentário ocultado"
+                          >
+                            <Eye size={13} />
+                            <span>Restaurar</span>
+                          </button>
+                        {:else}
+                          <button
+                            type="button"
+                            class="btn-mod-action btn-hide"
+                            disabled={busy}
+                            onclick={() => moderate('hide', { reportId: rep.id, commentId: rep.comment.id })}
+                            title="Ocultar comentário do site público"
+                          >
+                            <EyeOff size={13} />
+                            <span>Ocultar</span>
+                          </button>
+                        {/if}
+
+                        <button
+                          type="button"
+                          class="btn-mod-action btn-delete"
+                          disabled={busy}
+                          onclick={() => moderate('delete', { reportId: rep.id, commentId: rep.comment.id })}
+                          title="Excluir comentário permanentemente e resolver denúncia"
+                        >
+                          <Trash2 size={13} />
+                          <span>Excluir</span>
+                        </button>
+
+                        {#if rep.comment.author?.id && !rep.isAuthorSuspended}
+                          <button
+                            type="button"
+                            class="btn-mod-action btn-suspend"
+                            disabled={busy}
+                            onclick={() => moderate('suspend_user', { reportId: rep.id, targetUserId: rep.comment.author.id })}
+                            title="Suspender este usuário do Project Nox"
+                          >
+                            <UserX size={13} />
+                            <span>Suspender</span>
+                          </button>
+                        {/if}
+                      {/if}
+
+                      <div class="verdict-btn-group">
+                        <button
+                          type="button"
+                          class="btn-verdict-success"
+                          disabled={busy}
+                          onclick={() => moderate('resolve_report', { reportId: rep.id })}
+                          title="Marcar denúncia como resolvida"
+                        >
+                          <Check size={13} />
+                          <span>Resolver</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-verdict-danger"
+                          disabled={busy}
+                          onclick={() => moderate('dismiss_report', { reportId: rep.id })}
+                          title="Dispensar denúncia sem ação"
+                        >
+                          <X size={13} />
+                          <span>Dispensar</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  <!-- STAGE 3: CONCLUDED (RESOLVIDO OU REJEITADO) -->
+                  {:else}
+                    <div class="concluded-audit-tag {rep.status.toLowerCase()}">
+                      {#if rep.status === 'RESOLVIDO'}
+                        <CheckCircle2 size={14} />
+                        <span>Resolvido por <strong>@{rep.resolver?.username || rep.resolver?.display_name || 'Admin'}</strong> {rep.resolved_at ? `em ${formatTicketDate(rep.resolved_at)}` : ''}</span>
+                      {:else}
+                        <XCircle size={14} />
+                        <span>Dispensado por <strong>@{rep.resolver?.username || rep.resolver?.display_name || 'Admin'}</strong> {rep.resolved_at ? `em ${formatTicketDate(rep.resolved_at)}` : ''}</span>
+                      {/if}
                     </div>
                   {/if}
                 </div>
 
+                <!-- Admin Delete Action -->
                 {#if data.isAdmin}
                   <button
                     type="button"
                     class="btn-ticket-delete"
                     disabled={busy}
-                    onclick={() => openDeleteTicketModal(rep.id, 'moderation', rep.comment?.content ? `Denúncia: "${rep.comment.content.slice(0, 32)}..."` : 'Denúncia em comentário')}
+                    onclick={() => openDeleteTicketModal(rep.id, 'moderation', rep.comment?.body ? `Denúncia: "${rep.comment.body.slice(0, 32)}..."` : 'Denúncia em comentário')}
                     title="Excluir ticket definitivamente das listagens administrativas"
                   >
                     <Trash2 size={13} />
@@ -1695,19 +1757,35 @@
     <div class="preview-modal-footer">
       <button type="button" class="btn-secondary" onclick={() => (previewPartnerReq = null)}>Fechar Prévia</button>
       {#if previewPartnerReq.status === 'PENDING'}
-        <button
-          type="button"
-          class="btn-action-success"
-          disabled={busy}
-          onclick={() => {
-            const req = previewPartnerReq;
-            previewPartnerReq = null;
-            approveScan(req);
-          }}
-        >
-          <Check size={16} />
-          <span>Aprovar Scan</span>
-        </button>
+        {#if previewPartnerReq.assignee}
+          <button
+            type="button"
+            class="btn-action-success"
+            disabled={busy}
+            onclick={() => {
+              const req = previewPartnerReq;
+              previewPartnerReq = null;
+              approveScan(req);
+            }}
+          >
+            <Check size={16} />
+            <span>Aprovar Scan</span>
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="btn-primary-claim gold-claim"
+            disabled={busy}
+            onclick={async () => {
+              const id = previewPartnerReq.id;
+              await claimTicket(id, 'scan');
+              previewPartnerReq = null;
+            }}
+          >
+            <UserCheck size={16} />
+            <span>Assumir Avaliação</span>
+          </button>
+        {/if}
       {/if}
     </div>
   </div>
@@ -1776,105 +1854,207 @@
 {/if}
 
 <style>
-  /* Ticket Operator Strip & Assignment */
-  .ticket-operator-strip {
+  /* Unified Ticket Action Footer (Lifecycle Architecture) */
+  .ticket-action-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
     flex-wrap: wrap;
+    padding-top: 14px;
+    margin-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
   }
-  .operator-left {
+  .footer-left-group {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    flex: 1;
   }
-  .assignee-badge {
+  .btn-context-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    font-size: 12.5px;
+    font-weight: 650;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .btn-context-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+  }
+  .btn-context-link.btn-link-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  /* Primary highlighted button for claiming tickets */
+  .btn-primary-claim {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: 1px solid #3b82f6;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transition: all 0.18s ease;
+    user-select: none;
+  }
+  .btn-primary-claim:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5);
+    transform: translateY(-1px);
+    color: #ffffff;
+  }
+  .btn-primary-claim.gold-claim {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+  }
+  .btn-primary-claim.gold-claim:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.5);
+    color: #ffffff;
+  }
+  .btn-primary-claim.mod-claim {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    border-color: #8b5cf6;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  }
+  .btn-primary-claim.mod-claim:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+  }
+
+  /* Active Operator Pill when in review */
+  .active-operator-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(223, 194, 141, 0.08);
+    border: 1px solid rgba(223, 194, 141, 0.28);
     padding: 4px 10px;
     border-radius: 999px;
     font-size: 12px;
     color: #cbd5e1;
   }
-  .assignee-badge.claimed {
-    background: rgba(223, 194, 141, 0.08);
-    border-color: rgba(223, 194, 141, 0.3);
-  }
-  .assignee-meta {
+  .active-operator-pill .operator-meta {
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
     flex-wrap: wrap;
   }
-  .assignee-label {
+  .active-operator-pill .operator-role-tag {
     font-size: 11px;
     color: #94a3b8;
-    font-weight: 650;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
-  .assignee-username {
+  .active-operator-pill .operator-name {
     color: #dfc28d;
     font-weight: 750;
   }
-  .assignee-time {
+  .active-operator-pill .operator-time {
     font-size: 11px;
     color: #64748b;
-    margin-left: 2px;
   }
-  .btn-ticket-claim {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    color: #60a5fa;
-    padding: 5px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 650;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .btn-ticket-claim:hover:not(:disabled) {
-    background: rgba(59, 130, 246, 0.22);
-    border-color: #60a5fa;
-    color: #93c5fd;
-  }
-  .btn-ticket-release {
+  .btn-release-subtle {
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: #94a3b8;
-    padding: 3px 8px;
-    border-radius: 5px;
+    padding: 2px 7px;
+    border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
   }
-  .btn-ticket-release:hover:not(:disabled) {
+  .btn-release-subtle:hover:not(:disabled) {
     border-color: rgba(239, 68, 68, 0.5);
     color: #ef4444;
   }
-  .resolver-tag {
+
+  /* Verdict Button Group */
+  .verdict-btn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-verdict-success {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11.5px;
+    padding: 6px 14px;
+    border-radius: 7px;
+    background: rgba(34, 197, 94, 0.16);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-verdict-success:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.28);
+    border-color: #22c55e;
+    color: #86efac;
+  }
+  .btn-verdict-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-verdict-danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #fca5a5;
+  }
+
+  /* Concluded Tag */
+  .concluded-audit-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     color: #10b981;
     background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    padding: 3px 10px;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 4px 12px;
     border-radius: 999px;
   }
+  .concluded-audit-tag.rejeitado,
+  .concluded-audit-tag.rejected {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
   .btn-ticket-delete {
     display: inline-flex;
     align-items: center;
@@ -1882,7 +2062,7 @@
     background: transparent;
     border: 1px solid rgba(239, 68, 68, 0.22);
     color: #f87171;
-    padding: 4px 10px;
+    padding: 5px 10px;
     border-radius: 6px;
     font-size: 11.5px;
     font-weight: 600;
@@ -3749,26 +3929,40 @@
       flex-direction: row;
       gap: 10px;
     }
-    .ticket-actions-bar, .mod-action-footer {
+    .ticket-action-footer {
       flex-direction: column;
       align-items: stretch;
       gap: 10px;
     }
-    .btn-primary-problem, .btn-primary-site-view {
+    .footer-left-group {
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      gap: 8px;
+    }
+    .btn-context-link, .btn-primary-claim {
       width: 100%;
       justify-content: center;
+      text-align: center;
+      box-sizing: border-box;
     }
-    .ticket-workflow-actions, .mod-buttons-cluster {
+    .verdict-btn-group, .mod-buttons-cluster {
       width: 100%;
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
     }
-    .btn-mod-action, .btn-action-warning, .btn-action-success, .btn-action-danger {
+    .btn-verdict-success, .btn-verdict-danger, .btn-mod-action {
       flex: 1;
-      min-width: 120px;
+      min-width: 110px;
       justify-content: center;
       text-align: center;
+    }
+    .btn-ticket-delete {
+      width: 100%;
+      justify-content: center;
+      margin-left: 0;
+      box-sizing: border-box;
     }
     .partner-cards-grid {
       grid-template-columns: 1fr;

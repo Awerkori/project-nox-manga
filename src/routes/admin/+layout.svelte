@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import {
     LayoutDashboard,
@@ -119,7 +120,90 @@
       activeImporterTab = (event as CustomEvent<string>).detail || 'resumo';
     };
     window.addEventListener('nox:importer-tab', syncImporterTab);
-    return () => window.removeEventListener('nox:importer-tab', syncImporterTab);
+
+    // --- GESTURE NAVIGATION FOR MOBILE SIDEBAR ---
+    let startX = 0;
+    let startY = 0;
+    let isTracking = false;
+    let isEdgeSwipe = false;
+
+    const EDGE_THRESHOLD = 45; // px from the left edge of viewport
+    const MIN_SWIPE_DISTANCE = 50; // px
+    const HORIZONTAL_BIAS = 1.5; // horizontal movement must dominate vertical
+
+    function isInteractiveOrScrollable(el: HTMLElement | null): boolean {
+      if (!el || typeof el.closest !== 'function') return false;
+      return Boolean(
+        el.closest(
+          'input, textarea, select, [contenteditable="true"], .table-responsive, .table-container, .horizontal-scroll, pre, code'
+        )
+      );
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+
+      if (!mobileDrawerOpen) {
+        // Only start tracking if gesture begins near left viewport edge
+        if (startX <= EDGE_THRESHOLD) {
+          const target = e.target as HTMLElement;
+          if (!isInteractiveOrScrollable(target)) {
+            isTracking = true;
+            isEdgeSwipe = true;
+          }
+        }
+      } else {
+        // When drawer is open, any swipe to the left on sidebar or backdrop closes it
+        isTracking = true;
+        isEdgeSwipe = false;
+      }
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      if (!isTracking) return;
+      isTracking = false;
+
+      if (e.changedTouches.length === 0) return;
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absX >= MIN_SWIPE_DISTANCE && absX > absY * HORIZONTAL_BIAS) {
+        if (!mobileDrawerOpen && isEdgeSwipe && deltaX > 0) {
+          // Swipe right from left edge -> OPEN drawer
+          mobileDrawerOpen = true;
+        } else if (mobileDrawerOpen && deltaX < 0) {
+          // Swipe left -> CLOSE drawer
+          mobileDrawerOpen = false;
+        }
+      }
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && mobileDrawerOpen) {
+        closeMobile();
+      }
+    }
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('nox:importer-tab', syncImporterTab);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
+  afterNavigate(() => {
+    mobileDrawerOpen = false;
   });
 
   function toggleCategory(cat: string) {
@@ -726,13 +810,16 @@
         <button
           type="button"
           class="mobile-drawer-toggle"
+          class:is-open={mobileDrawerOpen}
           onclick={() => (mobileDrawerOpen = !mobileDrawerOpen)}
           aria-label={mobileDrawerOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'}
         >
           {#if mobileDrawerOpen}
-            <X size={20} />
+            <X size={18} />
+            <span class="mobile-drawer-toggle-label">Fechar</span>
           {:else}
-            <Menu size={20} />
+            <Menu size={18} />
+            <span class="mobile-drawer-toggle-label">Menu</span>
           {/if}
         </button>
       </div>
@@ -1152,19 +1239,34 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
     border-radius: 9px;
-    background: rgba(18, 22, 34, 0.95);
-    border: 1px solid rgba(223, 194, 141, 0.3);
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.35);
     color: #dfc28d;
     cursor: pointer;
     transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .mobile-drawer-toggle.is-open {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+
+  .mobile-drawer-toggle-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
   }
 
   .mobile-drawer-toggle:active {
     transform: scale(0.96);
-    background: rgba(223, 194, 141, 0.15);
+    background: rgba(223, 194, 141, 0.2);
   }
 
   @media (max-width: 950px) {

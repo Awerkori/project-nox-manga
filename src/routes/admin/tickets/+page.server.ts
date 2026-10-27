@@ -96,7 +96,13 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     : Promise.resolve({ data: [] });
 
   if (isAdmin && activeTab === 'scans' && statusFilter !== 'ALL') {
-    partnerQuery = (partnerQuery as any).eq('status', statusFilter);
+    if (statusFilter === 'PENDING') {
+      partnerQuery = (partnerQuery as any).eq('status', 'PENDING').is('assigned_to', null);
+    } else if (statusFilter === 'EM_ANALISE') {
+      partnerQuery = (partnerQuery as any).eq('status', 'PENDING').not('assigned_to', 'is', null);
+    } else {
+      partnerQuery = (partnerQuery as any).eq('status', statusFilter);
+    }
   }
 
   // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY)
@@ -151,8 +157,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     contentQuery,
     partnerQuery,
     moderationQuery,
-    db.from('reports').select('id, status, target_type').is('deleted_at', null),
-    isAdmin ? db.from('scan_partner_requests').select('id, status').is('deleted_at', null) : Promise.resolve({ data: [] })
+    db.from('reports').select('id, status, target_type, assigned_to').is('deleted_at', null),
+    isAdmin ? db.from('scan_partner_requests').select('id, status, assigned_to').is('deleted_at', null) : Promise.resolve({ data: [] })
   ]);
 
   const rawReports = (contentReportsRes.data as any[]) || [];
@@ -174,7 +180,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   };
 
   const partnerStatusCounts = {
-    PENDING: allScansMeta.filter((s: any) => s.status === 'PENDING').length,
+    PENDING: allScansMeta.filter((s: any) => s.status === 'PENDING' && !s.assigned_to).length,
+    EM_ANALISE: allScansMeta.filter((s: any) => s.status === 'PENDING' && Boolean(s.assigned_to)).length,
     APPROVED: allScansMeta.filter((s: any) => s.status === 'APPROVED').length,
     REJECTED: allScansMeta.filter((s: any) => s.status === 'REJECTED').length,
     ALL: allScansMeta.length
@@ -462,7 +469,26 @@ export const actions: Actions = {
       updated_at: new Date().toISOString()
     };
 
+    const db = getAdminDb(locals, platform);
+
+    const { data: rep } = await db
+      .from('reports')
+      .select('id, reporter_id, target_type, assigned_to')
+      .eq('id', reportId)
+      .maybeSingle();
+
+    if (!rep) {
+      return fail(404, { error: 'Relatório não encontrado.' });
+    }
+
+    // MANDATORY WORKFLOW GUARD: Must assume ticket before issuing a verdict (resolving/rejecting)
     if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      if (!rep.assigned_to) {
+        return fail(400, { error: 'Você precisa assumir este ticket antes de emitir um veredito (Resolver ou Rejeitar).' });
+      }
+      if (rep.assigned_to !== locals.user.id && locals.role !== 'ADMIN') {
+        return fail(403, { error: 'Apenas o operador responsável pode resolver ou rejeitar este ticket.' });
+      }
       updatePayload.resolved_by = locals.user.id;
       updatePayload.resolved_at = new Date().toISOString();
     }
@@ -473,14 +499,6 @@ export const actions: Actions = {
     if (notes) {
       updatePayload.resolution_notes = notes;
     }
-
-    const db = getAdminDb(locals, platform);
-
-    const { data: rep } = await db
-      .from('reports')
-      .select('reporter_id, target_type')
-      .eq('id', reportId)
-      .maybeSingle();
 
     const { error: updErr } = await db
       .from('reports')
@@ -543,8 +561,23 @@ export const actions: Actions = {
 
     const { data: reps } = await db
       .from('reports')
-      .select('id, reporter_id')
+      .select('id, reporter_id, assigned_to')
       .in('id', reportIds);
+
+    if (!reps || reps.length === 0) {
+      return fail(404, { error: 'Relatórios não encontrados.' });
+    }
+
+    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      const unassigned = reps.find((r: any) => !r.assigned_to);
+      if (unassigned) {
+        return fail(400, { error: 'Todos os tickets do lote precisam ser assumidos antes de emitir um veredito.' });
+      }
+      const otherAssigned = reps.find((r: any) => r.assigned_to !== locals.user.id);
+      if (otherAssigned && locals.role !== 'ADMIN') {
+        return fail(403, { error: 'Você só pode resolver relatórios atribuídos a você.' });
+      }
+    }
 
     const { error: updErr } = await db
       .from('reports')
@@ -598,6 +631,14 @@ export const actions: Actions = {
 
     if (reqErr || !partnerReq) {
       return fail(404, { message: 'Solicitação de parceria não encontrada.' });
+    }
+
+    // MANDATORY WORKFLOW GUARD: Must assume ticket before issuing a verdict (Approve/Reject)
+    if (!partnerReq.assigned_to) {
+      return fail(400, { message: 'Você precisa assumir esta candidatura antes de emitir um veredito (Aprovar ou Recusar).' });
+    }
+    if (partnerReq.assigned_to !== locals.user.id && locals.role !== 'ADMIN') {
+      return fail(403, { message: 'Apenas o operador responsável pode avaliar esta candidatura.' });
     }
 
     // 2. Call RPC to approve or reject
@@ -708,6 +749,22 @@ export const actions: Actions = {
     const notes = (formData.get('notes') as string || '').trim();
 
     const privilegedDb = getAdminDb(locals, platform);
+
+    // MANDATORY WORKFLOW GUARD: If operating on a report, must assume it before taking verdict actions
+    if (reportId) {
+      const { data: rep } = await privilegedDb
+        .from('reports')
+        .select('id, assigned_to, status')
+        .eq('id', reportId)
+        .maybeSingle();
+
+      if (rep && !rep.assigned_to) {
+        return fail(400, { message: 'Você precisa assumir esta denúncia antes de executar ações de moderação ou emitir um veredito.' });
+      }
+      if (rep && rep.assigned_to !== locals.user.id && locals.role !== 'ADMIN') {
+        return fail(403, { message: 'Apenas o moderador responsável pode executar decisões nesta denúncia.' });
+      }
+    }
 
     if (actionType === 'hide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
@@ -860,12 +917,16 @@ export const actions: Actions = {
 
       if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_claim',
-        target_id: ticketId,
-        metadata: { ticket_type: 'scan' }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_claim',
+          target_id: ticketId,
+          metadata: { ticket_type: 'scan' }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_claim scan:', logErr);
+      }
 
       return { success: true, action: 'claim', ticketId };
     } else {
@@ -902,12 +963,16 @@ export const actions: Actions = {
 
       if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_claim',
-        target_id: ids[0],
-        metadata: { ticket_type: ticketType, count: ids.length, ids }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_claim',
+          target_id: ids[0],
+          metadata: { ticket_type: ticketType, count: ids.length, ids }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_claim report:', logErr);
+      }
 
       return { success: true, action: 'claim', ticketId };
     }
@@ -950,12 +1015,16 @@ export const actions: Actions = {
         })
         .eq('id', ticketId);
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_release',
-        target_id: ticketId,
-        metadata: { ticket_type: 'scan' }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_release',
+          target_id: ticketId,
+          metadata: { ticket_type: 'scan' }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_release scan:', logErr);
+      }
 
       return { success: true, action: 'release', ticketId };
     } else {
@@ -996,12 +1065,16 @@ export const actions: Actions = {
         .in('id', ids)
         .neq('status', 'EM_ANALISE');
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_release',
-        target_id: ids[0],
-        metadata: { ticket_type: ticketType, count: ids.length, ids }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_release',
+          target_id: ids[0],
+          metadata: { ticket_type: ticketType, count: ids.length, ids }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_release report:', logErr);
+      }
 
       return { success: true, action: 'release', ticketId };
     }
@@ -1042,12 +1115,16 @@ export const actions: Actions = {
 
       if (delErr) return fail(500, { message: 'Erro ao excluir ticket de scan: ' + delErr.message });
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_delete',
-        target_id: ticketId,
-        metadata: { ticket_type: 'scan', reason }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_delete',
+          target_id: ticketId,
+          metadata: { ticket_type: 'scan', reason }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_delete scan:', logErr);
+      }
 
       return { success: true, action: 'delete', ticketId };
     } else {
@@ -1065,12 +1142,16 @@ export const actions: Actions = {
 
       if (delErr) return fail(500, { message: 'Erro ao excluir ticket: ' + delErr.message });
 
-      await db.from('audit_log').insert({
-        actor_id: locals.user.id,
-        action: 'ticket_delete',
-        target_id: ids[0],
-        metadata: { ticket_type: ticketType, count: ids.length, ids, reason }
-      }).catch(() => {});
+      try {
+        await db.from('audit_log').insert({
+          actor_id: locals.user.id,
+          action: 'ticket_delete',
+          target_id: ids[0],
+          metadata: { ticket_type: ticketType, count: ids.length, ids, reason }
+        });
+      } catch (logErr) {
+        console.error('[audit_log] Error in ticket_delete report:', logErr);
+      }
 
       return { success: true, action: 'delete', ticketId };
     }
