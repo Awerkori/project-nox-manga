@@ -1,7 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { createScanNotification } from "$lib/server/scan-notifications";
 import { executeYugabyteSql } from "$lib/server/yugabyte";
-import { withTimeout } from "$lib/server/resilience";
 import type { PageServerLoad, Actions } from "./$types";
 
 export const load: PageServerLoad = async ({ locals, params, platform }) => {
