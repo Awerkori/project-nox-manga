@@ -53,7 +53,7 @@ export const load = async ({ locals, url, cookies }) => {
     const [profileRes, unreadRes, userScansRes] = await withTimeout(
       Promise.all([
         locals.db.from('members').select('*').eq('id', locals.user.id).maybeSingle(),
-        locals.db.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
+        locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user.id).is('read_at', null),
         locals.db
           .from('scan_members')
           .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')

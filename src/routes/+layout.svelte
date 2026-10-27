@@ -50,6 +50,12 @@
   let profile = $derived(profileOverride || data.profile);
   let rank = $derived(profile ? memberRank(profile.xp) : null);
   let dropColorInfo = $derived(getNameColorInfo(profile?.name_color));
+  const isStaffAdmin = $derived(
+    data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'
+  );
+  const hasScans = $derived(Boolean(data.userScans && data.userScans.length > 0));
+  const hasScanPanelAccess = $derived(hasScans || data.role === 'ADMIN');
+  const hasAnyPanels = $derived(isStaffAdmin || hasScanPanelAccess);
   let unreadDelta = $state(0);
   let observedServerUnread = $state<number | null>(null);
   let localUnread = $derived(Math.max(0, (data.unread || 0) + unreadDelta));
@@ -161,11 +167,22 @@
     };
     window.addEventListener('nox-xp-awarded', handleXpAwarded);
 
+    const handleNotificationsUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ unread?: number; delta?: number }>).detail;
+      if (typeof detail?.unread === 'number') {
+        unreadDelta = detail.unread - (data.unread || 0);
+      } else if (typeof detail?.delta === 'number') {
+        unreadDelta += detail.delta;
+      }
+    };
+    window.addEventListener('nox:notifications-updated', handleNotificationsUpdate);
+
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('nox:profile-updated', handleProfileUpdate);
       window.removeEventListener('nox-xp-awarded', handleXpAwarded);
+      window.removeEventListener('nox:notifications-updated', handleNotificationsUpdate);
     };
   });
 </script>
@@ -296,13 +313,32 @@
         </a>
 
         {#if profile}
+          {#if hasAnyPanels}
+            {#if isStaffAdmin}
+              <a href="/admin" class="desktop-panel-pill admin-pill" title="Painel de Controle">
+                <Shield size={13} />
+                <span>Painel</span>
+              </a>
+            {:else if hasScanPanelAccess}
+              <a href="/scan" class="desktop-panel-pill scan-pill" title="Painel da Scan">
+                <Users size={13} />
+                <span>Scan</span>
+              </a>
+            {/if}
+          {/if}
+
           <a
             class="icon-button notification-link"
             href="/notificacoes"
-            aria-label="Notificações"
+            aria-label={localUnread > 0 ? `Notificações (${localUnread} não lidas)` : 'Notificações'}
+            title="Central de Notificações"
           >
             <Bell size={18} />
-            {#if localUnread > 0}<i></i>{/if}
+            {#if localUnread > 0}
+              <span class="notification-badge" aria-hidden="true">
+                {localUnread > 99 ? '99+' : localUnread}
+              </span>
+            {/if}
           </a>
 
           <div class="user-menu-container">
@@ -346,109 +382,74 @@
                 </a>
 
                 <div class="dropdown-divider"></div>
+                <div class="dropdown-section-title">ÁREA PESSOAL</div>
 
                 <div class="dropdown-links">
-                  <a href="/me" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <UserRound size={16} />
-                    <span>Meu Espaço</span>
-                  </a>
                   <a href="/u/{profile.username}" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <BookOpen size={16} />
-                    <span>Perfil Público</span>
-                  </a>
-                  <a href="/me?tab=biblioteca" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <Library size={16} />
-                    <span>Minha Biblioteca</span>
-                  </a>
-                  <a href="/me?tab=favoritos" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <Bookmark size={16} />
-                    <span>Favoritos</span>
-                  </a>
-                  <a href="/me?tab=historico" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <History size={16} />
-                    <span>Histórico</span>
+                    <UserRound size={16} />
+                    <span>Meu Perfil</span>
                   </a>
                   <a href="/me?tab=conquistas" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Trophy size={16} />
                     <span>Conquistas</span>
                   </a>
-                  <a href="/me?tab=notificacoes" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <Bell size={16} />
-                    <span>Notificações</span>
-                    {#if localUnread > 0}
-                      <span class="dropdown-badge">{localUnread}</span>
-                    {/if}
-                  </a>
-                  <a href="/loja" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                    <ShoppingBag size={16} />
-                    <span>Loja de Cosméticos</span>
-                  </a>
-                  {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
-                    {#if data.userScans && data.userScans.length === 1}
-                      <a href="/scan?id={data.userScans[0].id}" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                        <Users size={16} />
-                        <span>Painel: {data.userScans[0].name}</span>
-                      </a>
-                    {:else if data.userScans && data.userScans.length > 1}
-                      <div class="dropdown-scans-title">MINHAS SCANS</div>
-                      {#each data.userScans as uscan (uscan.id)}
-                        <a href="/scan?id={uscan.id}" class="dropdown-partner-link is-sub" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                          <Users size={14} />
-                          <span class="truncate">{uscan.name}</span>
-                          <span class="scan-badge-role">{uscan.role}</span>
+                </div>
+
+                {#if hasAnyPanels}
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-section-title highlight-title">SEUS PAINÉIS</div>
+
+                  <div class="dropdown-panels-cluster">
+                    {#if hasScanPanelAccess}
+                      {#if data.userScans && data.userScans.length === 1}
+                        <a href="/scan?id={data.userScans[0].id}" class="panel-action-card scan-card" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                          <div class="panel-card-icon scan-icon">
+                            <Users size={17} />
+                          </div>
+                          <div class="panel-card-info">
+                            <span class="panel-card-title">Painel da Scan</span>
+                            <span class="panel-card-desc">{data.userScans[0].name}</span>
+                          </div>
                         </a>
-                      {/each}
-                    {:else if data.role === 'ADMIN'}
-                      <a href="/scan" class="dropdown-partner-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                        <Users size={16} />
-                        <span>Painéis de Scan</span>
+                      {:else if data.userScans && data.userScans.length > 1}
+                        <a href="/scan" class="panel-action-card scan-card" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                          <div class="panel-card-icon scan-icon">
+                            <Users size={17} />
+                          </div>
+                          <div class="panel-card-info">
+                            <span class="panel-card-title">Painel da Scan</span>
+                            <span class="panel-card-desc">{data.userScans.length} Scans ativas</span>
+                          </div>
+                        </a>
+                      {:else if data.role === 'ADMIN'}
+                        <a href="/scan" class="panel-action-card scan-card" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                          <div class="panel-card-icon scan-icon">
+                            <Users size={17} />
+                          </div>
+                          <div class="panel-card-info">
+                            <span class="panel-card-title">Painel de Scans</span>
+                            <span class="panel-card-desc">Gerenciamento de Equipes</span>
+                          </div>
+                        </a>
+                      {/if}
+                    {/if}
+
+                    {#if isStaffAdmin}
+                      <a href="/admin" class="panel-action-card admin-card" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                        <div class="panel-card-icon admin-icon">
+                          <Shield size={17} />
+                        </div>
+                        <div class="panel-card-info">
+                          <span class="panel-card-title">Painel de Controle</span>
+                          <span class="panel-card-desc">{data.role === 'ADMIN' ? 'Gestão Geral da Plataforma' : 'Moderação e Conteúdo'}</span>
+                        </div>
                       </a>
                     {/if}
-                  {/if}
-                  {#if data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'}
-                    <a href="/admin" class="dropdown-admin-link" role="menuitem" onclick={() => (userMenuOpen = false)}>
-                      <Shield size={16} />
-                      <span>{data.role === 'ADMIN' ? 'Painel de Controle Global' : 'Painel da Staff'}</span>
-                    </a>
-                  {/if}
-                </div>
+                  </div>
+                {/if}
 
                 <div class="dropdown-divider"></div>
-                <div class="dropdown-section-title">COMUNIDADE</div>
-
-                <div class="dropdown-links">
-                  <a
-                    href="https://web.canary.fluxer.app/invite/q456UCVt"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="community-dropdown-item item-fluxer"
-                    role="menuitem"
-                    onclick={() => (userMenuOpen = false)}
-                  >
-                    <svg viewBox="0 0 512 512" fill="none" class="dropdown-icon-svg" aria-hidden="true">
-                      <path d="M187.53 266.057C171.987 266.057 157.206 269.562 143.187 276.571C129.321 283.581 118.044 294.781 109.359 310.171C103.743 320.3 100.041 332.574 98.2529 346.993C96.5986 360.334 107.829 371.2 121.271 371.2C135.049 371.2 145.336 359.626 148.673 346.259C150.564 338.68 153.612 332.67 157.815 328.229C165.891 319.695 176.101 315.429 188.444 315.429C196.673 315.429 204.216 317.486 211.073 321.6C217.93 325.562 226.844 332.343 237.815 341.943C254.577 356.724 269.359 367.467 282.159 374.171C294.959 380.724 309.13 384 324.673 384C340.216 384 354.997 380.495 369.016 373.486C383.035 366.476 394.387 355.276 403.073 339.886C408.811 329.718 412.521 317.389 414.202 302.899C415.745 289.597 404.498 278.857 391.106 278.857C377.243 278.858 366.904 290.561 363.218 303.927C361.421 310.442 358.706 315.952 355.073 320.457C347.454 329.905 337.016 334.629 323.759 334.629C315.53 334.629 308.063 332.647 301.359 328.686C294.806 324.571 285.816 317.714 274.387 308.114C257.473 293.943 242.615 283.429 229.815 276.571C217.168 269.562 203.073 266.057 187.53 266.057Z" fill="currentColor"/>
-                      <path d="M187.53 128C171.987 128 157.206 131.505 143.187 138.514C129.321 145.524 118.044 156.724 109.359 172.114C103.743 182.243 100.041 194.517 98.2529 208.935C96.5985 222.276 107.829 233.142 121.271 233.143C135.049 233.143 145.336 221.569 148.673 208.202C150.564 200.623 153.612 194.613 157.815 190.171C165.891 181.638 176.101 177.371 188.444 177.371C196.673 177.371 204.216 179.429 211.073 183.543C217.93 187.505 226.844 194.286 237.815 203.886C254.577 218.667 269.359 229.41 282.159 236.114C294.959 242.667 309.13 245.943 324.673 245.943C340.216 245.943 354.997 242.438 369.016 235.429C383.035 228.419 394.387 217.219 403.073 201.829C408.811 191.661 412.521 179.332 414.202 164.842C415.745 151.539 404.498 140.8 391.106 140.8C377.243 140.8 366.904 152.504 363.218 165.87C361.421 172.385 358.706 177.895 355.073 182.4C347.454 191.848 337.016 196.571 323.759 196.571C315.53 196.571 308.063 194.59 301.359 190.629C294.806 186.514 285.816 179.657 274.387 170.057C257.473 155.886 242.615 145.371 229.815 138.514C217.168 131.505 203.073 128 187.53 128Z" fill="currentColor"/>
-                    </svg>
-                    <span>Fluxer Oficial</span>
-                    <ExternalLink size={12} class="ext-badge-icon" />
-                  </a>
-                  <a
-                    href="https://discord.com/invite/qNAMYUEmGj"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="community-dropdown-item item-discord"
-                    role="menuitem"
-                    onclick={() => (userMenuOpen = false)}
-                  >
-                    <svg viewBox="0 0 24 24" fill="currentColor" class="dropdown-icon-svg" aria-hidden="true">
-                      <path d="M19.54 4.46A16.5 16.5 0 0 0 15.4 3.2l-.5 1.02a15.3 15.3 0 0 0-5.8 0L8.6 3.2a16.5 16.5 0 0 0-4.14 1.26C1.84 8.4 1.13 12.24 1.48 16.03A16.65 16.65 0 0 0 6.56 18.6l1.23-1.68a10.33 10.33 0 0 1-1.94-.93l.47-.36a11.92 11.92 0 0 0 11.36 0l.47.36c-.62.37-1.27.69-1.94.93l1.23 1.68a16.62 16.62 0 0 0 5.08-2.57c.41-4.4-.7-8.2-2.98-11.57ZM8.68 13.7c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Zm6.64 0c-1.1 0-2-1.01-2-2.25s.88-2.25 2-2.25 2.02 1.01 2 2.25c0 1.24-.88 2.25-2 2.25Z"/>
-                    </svg>
-                    <span>Discord Oficial</span>
-                    <ExternalLink size={12} class="ext-badge-icon" />
-                  </a>
-                </div>
-
-                <div class="dropdown-divider"></div>
+                <div class="dropdown-section-title">CONTA</div>
 
                 <form method="POST" action="/auth/sair" class="dropdown-logout-form">
                   <button type="submit" class="dropdown-logout-btn" role="menuitem">
@@ -503,54 +504,62 @@
             <span>Loja de Cosméticos</span>
           </a>
           {#if profile || data.authState === 'AUTH_PENDING' || data.authState === 'AUTHENTICATED'}
-            <a class:active={currentPath.startsWith('/me')} href="/me" onclick={() => (menu = false)}>
-              <UserRound size={18} />
-              <span>Meu Espaço</span>
-            </a>
             {#if profile?.username}
-              <a href="/u/{profile.username}" onclick={() => (menu = false)}>
-                <BookOpen size={18} />
-                <span>Perfil Público</span>
+              <a class:active={currentPath === `/u/${profile.username}`} href="/u/{profile.username}" onclick={() => (menu = false)}>
+                <UserRound size={18} />
+                <span>Meu Perfil</span>
               </a>
             {/if}
-            <a href="/me?tab=biblioteca" onclick={() => (menu = false)}>
+            <a class:active={currentPath === '/notificacoes'} href="/notificacoes" onclick={() => (menu = false)}>
+              <Bell size={18} />
+              <span>Notificações</span>
+              {#if localUnread > 0}
+                <span class="drawer-unread-pill">{localUnread > 99 ? '99+' : localUnread}</span>
+              {/if}
+            </a>
+            <a class:active={currentPath === '/me' && page.url.searchParams.get('tab') === 'conquistas'} href="/me?tab=conquistas" onclick={() => (menu = false)}>
+              <Trophy size={18} />
+              <span>Conquistas</span>
+            </a>
+            <a class:active={currentPath === '/me' && page.url.searchParams.get('tab') === 'biblioteca'} href="/me?tab=biblioteca" onclick={() => (menu = false)}>
               <Library size={18} />
               <span>Minha Biblioteca</span>
             </a>
-            <a href="/me?tab=favoritos" onclick={() => (menu = false)}>
-              <Bookmark size={18} />
-              <span>Favoritos</span>
-            </a>
-            <a href="/me?tab=historico" onclick={() => (menu = false)}>
-              <History size={18} />
-              <span>Histórico</span>
-            </a>
-            {#if (data.userScans && data.userScans.length > 0) || data.role === 'ADMIN'}
-              {#if data.userScans && data.userScans.length === 1}
-                <a href="/scan?id={data.userScans[0].id}" class="mobile-partner-link" onclick={() => (menu = false)}>
-                  <Users size={18} />
-                  <span>Painel: {data.userScans[0].name}</span>
-                </a>
-              {:else if data.userScans && data.userScans.length > 1}
-                {#each data.userScans as uscan (uscan.id)}
-                  <a href="/scan?id={uscan.id}" class="mobile-partner-link" onclick={() => (menu = false)}>
+            {#if hasAnyPanels}
+              <div class="mobile-drawer-divider"></div>
+              <div class="mobile-drawer-title">SEUS PAINÉIS</div>
+              {#if hasScanPanelAccess}
+                {#if data.userScans && data.userScans.length === 1}
+                  <a href="/scan?id={data.userScans[0].id}" class="mobile-partner-link" onclick={() => (menu = false)}>
                     <Users size={18} />
-                    <span>Painel: {uscan.name} ({uscan.role})</span>
+                    <span>Painel da Scan ({data.userScans[0].name})</span>
                   </a>
-                {/each}
-              {:else if data.role === 'ADMIN'}
-                <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
-                  <Users size={18} />
-                  <span>Painéis de Scan</span>
+                {:else if data.userScans && data.userScans.length > 1}
+                  <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
+                    <Users size={18} />
+                    <span>Painel da Scan ({data.userScans.length} scans)</span>
+                  </a>
+                {:else if data.role === 'ADMIN'}
+                  <a href="/scan" class="mobile-partner-link" onclick={() => (menu = false)}>
+                    <Users size={18} />
+                    <span>Painéis de Scan</span>
+                  </a>
+                {/if}
+              {/if}
+              {#if isStaffAdmin}
+                <a href="/admin" class="mobile-admin-link" onclick={() => (menu = false)}>
+                  <Shield size={18} />
+                  <span>Painel de Controle</span>
                 </a>
               {/if}
             {/if}
-            {#if data.role === 'ADMIN' || data.role === 'STAFF_SITE' || data.role === 'EDITOR'}
-              <a href="/admin" class="mobile-admin-link" onclick={() => (menu = false)}>
-                <Shield size={18} />
-                <span>{data.role === 'ADMIN' ? 'Painel de Controle Global' : 'Painel da Staff'}</span>
-              </a>
-            {/if}
+            <div class="mobile-drawer-divider"></div>
+            <form method="POST" action="/auth/sair" class="mobile-logout-form">
+              <button type="submit" class="mobile-logout-btn">
+                <LogOut size={18} />
+                <span>Sair da conta</span>
+              </button>
+            </form>
           {:else}
             <a href="/entrar" onclick={() => (menu = false)}>
               <UserRound size={18} />
@@ -938,6 +947,86 @@
     box-shadow: 0 4px 18px rgba(181, 154, 245, 0.2);
   }
 
+  .notification-link {
+    position: relative;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .notification-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #0b0e17;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 9999px;
+    border: 1.5px solid #090a10;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+    pointer-events: none;
+    z-index: 5;
+    animation: badgePop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes badgePop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .desktop-panel-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .desktop-panel-pill.admin-pill {
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #ddd6fe;
+  }
+
+  .desktop-panel-pill.admin-pill:hover {
+    background: rgba(139, 92, 246, 0.28);
+    border-color: #a78bfa;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.3);
+    transform: translateY(-1px);
+  }
+
+  .desktop-panel-pill.scan-pill {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fde68a;
+  }
+
+  .desktop-panel-pill.scan-pill:hover {
+    background: rgba(245, 158, 11, 0.28);
+    border-color: #f59e0b;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 768px) {
+    .desktop-panel-pill {
+      display: none !important;
+    }
+  }
+
   .btn-login-nav {
     display: inline-flex;
     align-items: center;
@@ -1010,7 +1099,7 @@
     position: absolute;
     top: calc(100% + 12px);
     right: 0;
-    width: 260px;
+    width: 275px;
     background: rgba(11, 13, 24, 0.96);
     border: 1px solid rgba(181, 154, 245, 0.22);
     border-radius: 14px;
@@ -1118,43 +1207,139 @@
     color: #ffffff;
   }
 
-  .dropdown-admin-link {
-    color: #dfc28d !important;
-  }
-
-  .dropdown-scans-title {
-    font-size: 10px;
-    font-weight: 700;
-    color: #a78bfa;
-    letter-spacing: 0.08em;
-    padding: 6px 10px 2px;
-    text-transform: uppercase;
-  }
-
-  .dropdown-partner-link.is-sub {
-    padding-left: 14px;
-    font-size: 12px;
-  }
-
-  .scan-badge-role {
-    margin-left: auto;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: rgba(167, 139, 250, 0.15);
-    color: #c4b5fd;
-    text-transform: uppercase;
-  }
-
-  .dropdown-badge {
-    margin-left: auto;
-    font-size: 10px;
+  .dropdown-section-title.highlight-title {
+    color: #f59e0b;
     font-weight: 800;
-    background: #ff4772;
-    color: #ffffff;
-    padding: 1px 6px;
+  }
+
+  .dropdown-panels-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 2px 0 6px;
+  }
+
+  .panel-action-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
     border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    min-height: 44px;
+  }
+
+  .panel-action-card.scan-card {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.08) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .panel-action-card.scan-card:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.16) 100%);
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .panel-action-card.admin-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(139, 92, 246, 0.09) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+  }
+
+  .panel-action-card.admin-card:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.18) 100%);
+    border-color: #818cf8;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .panel-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .panel-card-icon.scan-icon {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fde68a;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+  }
+
+  .panel-card-icon.admin-icon {
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+  }
+
+  .panel-card-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .panel-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1.25;
+  }
+
+  .panel-card-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .drawer-unread-pill {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #0b0e17;
+    padding: 2px 7px;
+    border-radius: 9999px;
+  }
+
+  .mobile-drawer-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 8px 0;
+  }
+
+  .mobile-drawer-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #f59e0b;
+    letter-spacing: 0.08em;
+    padding: 4px 0;
+    text-transform: uppercase;
+  }
+
+  .mobile-logout-form {
+    margin: 0;
+  }
+
+  .mobile-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: #f87171;
+    cursor: pointer;
+    text-align: left;
   }
 
   .dropdown-logout-form {
