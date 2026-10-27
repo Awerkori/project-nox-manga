@@ -1236,6 +1236,11 @@
     display: none;
   }
 
+  main#conteudo {
+    position: relative;
+    z-index: 20;
+  }
+
   /* Footer */
   .site-footer {
     border-top: 1px solid rgba(255, 255, 255, 0.06);

@@ -15,8 +15,10 @@ export const POST = async ({ request, locals, url }) => {
 
   let resolvedPurpose = rawPurpose;
 
-  // If uploading on behalf of a partner scan:
-  if (scanId) {
+  // If uploading candidate media for scan application / admission:
+  if (['scan_candidate_logo', 'scan_candidate_banner', 'scan_candidate_media'].includes(rawPurpose || '')) {
+    resolvedPurpose = rawPurpose || 'scan_candidate_media';
+  } else if (scanId) {
     if (['scan_logo', 'scan_banner', 'scan_media'].includes(rawPurpose || '')) {
       // Check if caller is OWNER, ADMIN or platform ADMIN
       if (locals.role !== 'ADMIN') {

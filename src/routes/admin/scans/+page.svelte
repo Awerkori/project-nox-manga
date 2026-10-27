@@ -21,7 +21,11 @@
     Clock,
     AlertTriangle,
     Check,
-    Ban
+    Ban,
+    Eye,
+    Image,
+    ShieldCheck,
+    Star
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { enhance } from '$app/forms';
@@ -30,6 +34,7 @@
 
   // Navigation sections: Scans, Partner Requests, Project Requests
   let activeSection = $state<'scans' | 'partner_requests' | 'project_requests' | 'audit_log'>('scans');
+  let previewPartnerReq = $state<any>(null);
   let statusModalScan = $state<any>(null);
   let statusModalValue = $state('ACTIVE');
   let statusModalReason = $state('');
@@ -560,6 +565,21 @@
           </div>
 
           <div class="request-body">
+            {#if req.meta?.banner_id || req.meta?.logo_id}
+              <div class="req-media-preview-strip">
+                {#if req.meta?.banner_id}
+                  <div class="req-banner-thumb">
+                    <img src="/media/{req.meta.banner_id}" alt="Banner proposto" />
+                  </div>
+                {/if}
+                {#if req.meta?.logo_id}
+                  <div class="req-logo-thumb">
+                    <img src="/media/{req.meta.logo_id}" alt="Logo proposto" />
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
             <div class="request-target-box">
               <span class="req-target-label">Scan Proposta:</span>
               <strong class="req-target-name">{req.scan_name}</strong>
@@ -588,7 +608,26 @@
               {/if}
             </div>
 
-            {#if req.sample_links}
+            {#if req.meta?.message}
+              <div class="sample-links-box">
+                <span class="sample-lbl">Mensagem para Administração:</span>
+                <p class="sample-txt">{req.meta.message}</p>
+              </div>
+            {/if}
+
+            {#if req.meta?.extra_info}
+              <div class="sample-links-box">
+                <span class="sample-lbl">Equipe & Periodicidade:</span>
+                <p class="sample-txt">{req.meta.extra_info}</p>
+              </div>
+            {/if}
+
+            {#if req.meta?.sample_links}
+              <div class="sample-links-box">
+                <span class="sample-lbl">Amostras / Trabalhos:</span>
+                <p class="sample-txt">{req.meta.sample_links}</p>
+              </div>
+            {:else if req.sample_links && !req.meta?.message}
               <div class="sample-links-box">
                 <span class="sample-lbl">Amostras / Trabalhos:</span>
                 <p class="sample-txt">{req.sample_links}</p>
@@ -603,8 +642,17 @@
             {/if}
           </div>
 
-          {#if req.status === 'PENDING'}
-            <div class="request-actions-row">
+          <div class="request-actions-row">
+            <button
+              type="button"
+              class="btn-action-preview"
+              onclick={() => (previewPartnerReq = req)}
+            >
+              <Eye size={14} />
+              <span>Visualizar Prévia</span>
+            </button>
+
+            {#if req.status === 'PENDING'}
               <form method="POST" action="?/reviewPartner" use:enhance>
                 <input type="hidden" name="request_id" value={req.id} />
                 <input type="hidden" name="action" value="APPROVE" />
@@ -626,8 +674,8 @@
                 <Ban size={14} />
                 <span>Rejeitar</span>
               </button>
-            </div>
-          {/if}
+            {/if}
+          </div>
         </div>
       {/each}
 
@@ -848,6 +896,162 @@
         {/each}
       </div>
     {/if}
+  {/if}
+
+  <!-- Partner Request Preview Modal -->
+  {#if previewPartnerReq}
+    <div class="modal-layer">
+      <button type="button" class="modal-backdrop" aria-label="Fechar pré-visualização" onclick={() => (previewPartnerReq = null)}></button>
+      <div class="modal-card scan-preview-modal-card" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title" tabindex="-1">
+        <div class="modal-header">
+          <div class="preview-modal-title-group">
+            <Eye size={18} color="#38bdf8" />
+            <h2 id="preview-modal-title" class="modal-title">Prévia da Página: {previewPartnerReq.scan_name}</h2>
+            <span class="preview-slug-pill">/{previewPartnerReq.scan_slug}</span>
+          </div>
+          <button type="button" class="btn-close-modal" aria-label="Fechar prévia" onclick={() => (previewPartnerReq = null)}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div class="preview-modal-body">
+          <!-- Mock Banner Stage -->
+          <div class="admin-mock-banner-stage">
+            {#if previewPartnerReq.meta?.banner_id}
+              <img src="/media/{previewPartnerReq.meta.banner_id}" alt="Banner" class="admin-mock-banner-img" />
+            {:else}
+              <div class="admin-mock-banner-fallback">
+                <span>Sem banner personalizado anexado</span>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Mock Identity Box -->
+          <div class="admin-mock-identity-box">
+            <div class="admin-mock-logo-frame">
+              {#if previewPartnerReq.meta?.logo_id}
+                <img src="/media/{previewPartnerReq.meta.logo_id}" alt="Logo" class="admin-mock-logo-img" />
+              {:else}
+                <div class="admin-mock-logo-fallback">
+                  {previewPartnerReq.scan_name.charAt(0).toUpperCase()}
+                </div>
+              {/if}
+            </div>
+
+            <div class="admin-mock-info">
+              <div class="admin-mock-badge">
+                <ShieldCheck size={12} />
+                <span>SCAN PARCEIRA VERIFICADA</span>
+              </div>
+              <h3 class="admin-mock-name">{previewPartnerReq.scan_name}</h3>
+              <p class="admin-mock-desc">
+                {previewPartnerReq.description || 'Nenhuma descrição fornecida pelo candidato.'}
+              </p>
+
+              <div class="admin-mock-socials">
+                {#if previewPartnerReq.discord}
+                  <a href={previewPartnerReq.discord} target="_blank" rel="noopener noreferrer" class="link-chip">
+                    <MessageCircle size={13} />
+                    <span>Discord</span>
+                  </a>
+                {/if}
+                {#if previewPartnerReq.fluxer}
+                  <span class="link-chip">Fluxer: {previewPartnerReq.fluxer}</span>
+                {/if}
+                {#if previewPartnerReq.website}
+                  <a href={previewPartnerReq.website} target="_blank" rel="noopener noreferrer" class="link-chip">
+                    <Globe size={13} />
+                    <span>Website</span>
+                  </a>
+                {/if}
+              </div>
+            </div>
+          </div>
+
+          <!-- Candidate & Context Details -->
+          <div class="admin-candidate-dossier">
+            <div class="dossier-grid">
+              <div class="dossier-item">
+                <span class="dossier-lbl">Candidato / Solicitante:</span>
+                <div class="dossier-user">
+                  <UserAvatar
+                    avatarId={previewPartnerReq.members?.avatar_id}
+                    crop={previewPartnerReq.members?.avatar_crop}
+                    displayName={previewPartnerReq.members?.display_name || previewPartnerReq.members?.username || 'Usuário'}
+                    size={28}
+                  />
+                  <span>{previewPartnerReq.members?.display_name || previewPartnerReq.members?.username} (@{previewPartnerReq.members?.username})</span>
+                </div>
+              </div>
+
+              {#if previewPartnerReq.meta?.extra_info}
+                <div class="dossier-item">
+                  <span class="dossier-lbl">Equipe & Periodicidade:</span>
+                  <p class="dossier-val">{previewPartnerReq.meta.extra_info}</p>
+                </div>
+              {/if}
+
+              {#if previewPartnerReq.meta?.message}
+                <div class="dossier-item full-width">
+                  <span class="dossier-lbl">Mensagem para os Administradores:</span>
+                  <p class="dossier-val">{previewPartnerReq.meta.message}</p>
+                </div>
+              {/if}
+
+              {#if previewPartnerReq.meta?.sample_links || (previewPartnerReq.sample_links && !previewPartnerReq.meta?.message)}
+                <div class="dossier-item full-width">
+                  <span class="dossier-lbl">Amostras de Obras / Capítulos:</span>
+                  <p class="dossier-val">{previewPartnerReq.meta?.sample_links || previewPartnerReq.sample_links}</p>
+                </div>
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions preview-modal-actions">
+          <button type="button" class="btn-secondary" onclick={() => (previewPartnerReq = null)}>
+            Fechar Prévia
+          </button>
+
+          {#if previewPartnerReq.status === 'PENDING'}
+            <button
+              type="button"
+              class="btn-action-reject"
+              onclick={() => {
+                const reqToReject = previewPartnerReq;
+                previewPartnerReq = null;
+                rejectModalId = reqToReject.id;
+                rejectModalType = 'partner';
+                rejectReason = '';
+              }}
+            >
+              <Ban size={15} />
+              <span>Rejeitar</span>
+            </button>
+
+            <form
+              method="POST"
+              action="?/reviewPartner"
+              use:enhance={() => {
+                reviewLoading = true;
+                return async ({ update }) => {
+                  reviewLoading = false;
+                  previewPartnerReq = null;
+                  await update();
+                };
+              }}
+            >
+              <input type="hidden" name="request_id" value={previewPartnerReq.id} />
+              <input type="hidden" name="action" value="APPROVE" />
+              <button type="submit" class="btn-action-approve" disabled={reviewLoading}>
+                <Check size={15} />
+                <span>Aprovar Scan e Nomear Líder</span>
+              </button>
+            </form>
+          {/if}
+        </div>
+      </div>
+    </div>
   {/if}
 
   <!-- Rejection Modal -->
@@ -2016,10 +2220,281 @@
 
   .request-actions-row {
     display: flex;
+    align-items: center;
     gap: 10px;
     margin-top: auto;
     padding-top: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+  }
+
+  .btn-action-preview {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-preview:hover {
+    background: rgba(56, 189, 248, 0.22);
+    color: #7dd3fc;
+  }
+
+  /* Candidate Media Preview Strip in card */
+  .req-media-preview-strip {
+    position: relative;
+    width: 100%;
+    height: 70px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 12px;
+  }
+
+  .req-banner-thumb {
+    width: 100%;
+    height: 100%;
+  }
+
+  .req-banner-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .req-logo-thumb {
+    position: absolute;
+    bottom: 6px;
+    left: 8px;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid rgba(0, 0, 0, 0.8);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+
+  .req-logo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Preview Modal Styles */
+  .scan-preview-modal-card {
+    max-width: 860px;
+    width: 95%;
+    max-height: 85vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #0f1422;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+  }
+
+  .scan-preview-modal-card .modal-header {
+    padding: 16px 20px;
+    margin-bottom: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #13192b;
+    flex-shrink: 0;
+  }
+
+  .preview-modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .preview-slug-pill {
+    font-family: monospace;
+    font-size: 12px;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .preview-modal-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .admin-mock-banner-stage {
+    width: 100%;
+    height: 200px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+  }
+
+  .admin-mock-banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .admin-mock-banner-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 30%, rgba(99, 102, 241, 0.2), transparent 70%), #090d16;
+    color: #64748b;
+  }
+
+  .admin-mock-identity-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .admin-mock-logo-frame {
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #1e1b4b;
+    border: 2px solid rgba(139, 92, 246, 0.4);
+    flex-shrink: 0;
+  }
+
+  .admin-mock-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .admin-mock-logo-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #c4b5fd;
+  }
+
+  .admin-mock-info {
+    flex: 1;
+  }
+
+  .admin-mock-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(6, 182, 212, 0.12);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #38bdf8;
+    margin-bottom: 6px;
+  }
+
+  .admin-mock-name {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 6px;
+  }
+
+  .admin-mock-desc {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0 0 10px;
+  }
+
+  .admin-mock-socials {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Candidate Dossier inside modal */
+  .admin-candidate-dossier {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .dossier-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  .dossier-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .dossier-item.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .dossier-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: #8c899e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .dossier-val {
+    font-size: 13px;
+    color: #e2e8f0;
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .dossier-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .preview-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #13192b;
+    flex-shrink: 0;
   }
 
   .btn-action-approve {

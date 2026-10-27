@@ -1,6 +1,9 @@
 import { error, fail } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { executeYugabyteSql, withYugabyteTransaction } from '$lib/server/yugabyte';
+import { parsePartnerRequestMeta } from '$lib/scans';
+import { createNotification } from '$lib/server/notifications';
+import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals, platform }) => {
@@ -85,7 +88,10 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
   return {
     scans,
-    partnerRequests: partnerReqsRes.data || [],
+    partnerRequests: (partnerReqsRes.data || []).map((r: any) => ({
+      ...r,
+      meta: parsePartnerRequestMeta(r.sample_links)
+    })),
     projectRequests: projectReqsRes.data || [],
     auditLogs: auditLogsRes.data || [],
     users: usersRes.data || []
@@ -302,7 +308,7 @@ export const actions: Actions = {
     }
   },
 
-  reviewPartner: async ({ request, locals }) => {
+  reviewPartner: async ({ request, locals, platform }) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -314,6 +320,20 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados de avaliação inválidos.' });
     }
 
+    const db = locals.db || privileged();
+
+    // 1. Fetch current request to know candidate details & meta
+    const { data: partnerReq, error: reqErr } = await db
+      .from('scan_partner_requests')
+      .select('*')
+      .eq('id', requestId)
+      .maybeSingle();
+
+    if (reqErr || !partnerReq) {
+      return fail(404, { message: 'Solicitação de parceria não encontrada.' });
+    }
+
+    // 2. Call RPC to approve or reject
     const { data, error: rpcErr } = await locals.db.rpc('review_scan_partner_request', {
       p_request_id: requestId,
       p_action: actionType,
@@ -321,6 +341,90 @@ export const actions: Actions = {
     });
 
     if (rpcErr) return fail(400, { message: rpcErr.message });
+
+    const meta = parsePartnerRequestMeta(partnerReq.sample_links);
+
+    // Keep YSQL partner requests table in sync
+    try {
+      if (actionType === 'APPROVE') {
+        await executeYugabyteSql(
+          `UPDATE public.scan_partner_requests
+           SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
+           WHERE id = $1`,
+          [requestId, locals.user!.id],
+          platform?.env
+        );
+      } else {
+        await executeYugabyteSql(
+          `UPDATE public.scan_partner_requests
+           SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
+           WHERE id = $1`,
+          [requestId, locals.user!.id, reason],
+          platform?.env
+        );
+      }
+    } catch (e: any) {
+      console.warn('YSQL partner request sync error (non-fatal):', e?.message);
+    }
+
+    if (actionType === 'APPROVE') {
+      const createdScanId = data?.scan_id;
+
+      // 3. Attach candidate Logo & Banner if provided
+      if (createdScanId && (meta.logo_id || meta.banner_id)) {
+        try {
+          await db
+            .from('scans')
+            .update({
+              logo_id: meta.logo_id || null,
+              banner_id: meta.banner_id || null
+            })
+            .eq('id', createdScanId);
+
+          await executeYugabyteSql(
+            `UPDATE public.scans
+             SET logo_id = COALESCE($2::uuid, logo_id),
+                 banner_id = COALESCE($3::uuid, banner_id),
+                 updated_at = now()
+             WHERE id = $1`,
+            [createdScanId, meta.logo_id || null, meta.banner_id || null],
+            platform?.env
+          );
+        } catch (e: any) {
+          console.warn('Failed to attach candidate media to approved scan:', e?.message);
+        }
+      }
+
+      invalidateScansDirectoryCache();
+
+      // 4. Dispatch congratulatory in-app notification
+      try {
+        await createNotification({
+          recipientUserId: partnerReq.user_id,
+          type: 'SYSTEM_ANNOUNCEMENT',
+          title: 'Parceria de Scan Aprovada! 🎉',
+          body: `Parabéns! Sua solicitação para a scan "${partnerReq.scan_name}" foi aprovada pela administração do Project Nox. Seu painel de gestão (/scan) já está liberado!`,
+          deepLink: '/scan',
+          scanId: createdScanId
+        }, platform);
+      } catch (e: any) {
+        console.warn('Failed to send approval notification:', e?.message);
+      }
+    } else {
+      // Dispatch rejection notification with reason
+      try {
+        await createNotification({
+          recipientUserId: partnerReq.user_id,
+          type: 'SYSTEM_ANNOUNCEMENT',
+          title: 'Solicitação de Parceria de Scan',
+          body: `Sua solicitação para a scan "${partnerReq.scan_name}" foi recusada pela administração.${reason ? ` Motivo: ${reason}` : ''}`,
+          deepLink: '/scans/cadastrar'
+        }, platform);
+      } catch (e: any) {
+        console.warn('Failed to send rejection notification:', e?.message);
+      }
+    }
+
     return { success: true, reviewedPartner: data };
   },
 

@@ -195,3 +195,58 @@ export interface ScanCommentReport {
     display_name?: string | null;
   };
 }
+
+export interface ScanPartnerRequestMeta {
+  logo_id?: string | null;
+  banner_id?: string | null;
+  banner_crop_mode?: 'preserve_original' | 'custom_crop' | null;
+  banner_crop_x?: number;
+  banner_crop_y?: number;
+  banner_crop_zoom?: number;
+  extra_info?: string;
+  message?: string;
+  sample_links?: string;
+}
+
+export function parsePartnerRequestMeta(sampleLinksRaw: string | null | undefined): ScanPartnerRequestMeta {
+  if (!sampleLinksRaw) {
+    return {
+      logo_id: null,
+      banner_id: null,
+      banner_crop_mode: 'preserve_original',
+      banner_crop_x: 50,
+      banner_crop_y: 50,
+      banner_crop_zoom: 1,
+      extra_info: '',
+      message: '',
+      sample_links: ''
+    };
+  }
+  try {
+    const parsed = JSON.parse(sampleLinksRaw);
+    if (typeof parsed === 'object' && parsed !== null) {
+      return {
+        logo_id: parsed.logo_id || null,
+        banner_id: parsed.banner_id || null,
+        banner_crop_mode: parsed.banner_crop_mode || 'preserve_original',
+        banner_crop_x: Number(parsed.banner_crop_x ?? 50),
+        banner_crop_y: Number(parsed.banner_crop_y ?? 50),
+        banner_crop_zoom: Number(parsed.banner_crop_zoom ?? 1),
+        extra_info: parsed.extra_info || '',
+        message: parsed.message || '',
+        sample_links: parsed.sample_links || ''
+      };
+    }
+  } catch {}
+  return {
+    logo_id: null,
+    banner_id: null,
+    banner_crop_mode: 'preserve_original',
+    banner_crop_x: 50,
+    banner_crop_y: 50,
+    banner_crop_zoom: 1,
+    extra_info: '',
+    message: '',
+    sample_links: sampleLinksRaw
+  };
+}

@@ -162,12 +162,20 @@
         </div>
         <h2 class="affiliate-title">Tem uma scan e quer publicar no Project Nox?</h2>
         <p class="affiliate-desc">
-          Integre sua equipe ao ecossistema do Project Nox. Tenha perfil público oficial, proteção autoral de lançamentos, estatísticas consolidadas e sistema integrado de recrutamento.
+          Cadastre sua equipe para ter perfil público oficial, proteção autoral de lançamentos, estatísticas consolidadas e sistema integrado de recrutamento.
         </p>
-        <a href="/scan" class="affiliate-action">
-          <span>Acessar Painel de Scan</span>
-          <ArrowRight size={15} />
-        </a>
+        <div class="affiliate-actions-row">
+          <a href="/scans/cadastrar" class="affiliate-action">
+            <span>Cadastrar Minha Scan</span>
+            <ArrowRight size={15} />
+          </a>
+          {#if (data.userScans || []).length > 0}
+            <a href="/scan" class="affiliate-secondary-action" title="Acessar painel de gerenciamento da sua scan">
+              <span>Ir para Meu Painel</span>
+              <ChevronRight size={14} />
+            </a>
+          {/if}
+        </div>
       </aside>
     </header>
 
@@ -187,7 +195,7 @@
             </div>
 
             <article class="spotlight-card" class:is-official={scan.is_official}>
-              <!-- Banner Header with integrated depth -->
+              <!-- Banner 100% Livre e Desimpedido (Sem elementos poluindo a arte) -->
               <div class="spotlight-banner-hero">
                 {#if scan.banner_id}
                   <img src="/media/{scan.banner_id}" alt="Banner de {scan.name}" class="spotlight-banner-img" />
@@ -195,55 +203,50 @@
                   <div class="spotlight-banner-fallback" class:official-gradient={scan.is_official}></div>
                 {/if}
                 <div class="spotlight-banner-overlay"></div>
+              </div>
 
-                <!-- Floating Emblem inside Banner -->
-                <div class="spotlight-emblem-cluster">
-                  <div class="spotlight-logo-frame" class:official-frame={scan.is_official}>
-                    {#if scan.logo_id}
-                      <img src="/media/{scan.logo_id}" alt="Logo de {scan.name}" class="spotlight-logo-img" />
-                    {:else}
-                      <div class="spotlight-logo-fallback">
-                        {scan.name.charAt(0).toUpperCase()}
-                      </div>
-                    {/if}
-                  </div>
-
-                  <div class="spotlight-header-meta">
-                    <div class="spotlight-badge-row">
-                      {#if scan.is_official}
-                        <span class="seal-official">
-                          <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                          <span>NÚCLEO OFICIAL DO PROJECT NOX</span>
-                        </span>
+              <!-- Spotlight Details Body (Elementos movidos para baixo do banner) -->
+              <div class="spotlight-body">
+                <!-- Identity Header Row: Logo, Badges, Nome e Redes Sociais -->
+                <div class="spotlight-identity-head">
+                  <div class="spotlight-id-left">
+                    <div class="spotlight-logo-frame" class:official-frame={scan.is_official}>
+                      {#if scan.logo_id}
+                        <img src="/media/{scan.logo_id}" alt="Logo de {scan.name}" class="spotlight-logo-img" />
                       {:else}
-                        <span class="seal-partner">
-                          <ShieldCheck size={12} />
-                          <span>GRUPO PARCEIRO VERIFICADO</span>
-                        </span>
-                      {/if}
-
-                      {#if scan.isRecruiting}
-                        <span class="seal-recruiting">
-                          <span class="pulse-beacon green"></span>
-                          <span>RECRUTAMENTO ATIVO</span>
-                        </span>
+                        <div class="spotlight-logo-fallback">
+                          {scan.name.charAt(0).toUpperCase()}
+                        </div>
                       {/if}
                     </div>
 
-                    <h2 class="spotlight-name">
-                      <a href="/scans/{scan.slug}">{scan.name}</a>
-                    </h2>
-                  </div>
-                </div>
-              </div>
+                    <div class="spotlight-header-meta">
+                      <div class="spotlight-badge-row">
+                        {#if scan.is_official}
+                          <span class="seal-official">
+                            <Star size={12} fill="#f59e0b" color="#f59e0b" />
+                            <span>NÚCLEO OFICIAL DO PROJECT NOX</span>
+                          </span>
+                        {:else}
+                          <span class="seal-partner">
+                            <ShieldCheck size={12} />
+                            <span>GRUPO PARCEIRO VERIFICADO</span>
+                          </span>
+                        {/if}
 
-              <!-- Spotlight Details Body -->
-              <div class="spotlight-body">
-                <!-- Bio & Socials Row -->
-                <div class="spotlight-about-section">
-                  <p class="spotlight-bio">
-                    {scan.description || (scan.is_official ? "Scan oficial e núcleo editorial de traduções, revisões e diagramação do Project Nox. Responsável por grandes obras e lançamentos diários." : "Grupo independente de tradução e edição associado ao Project Nox.")}
-                  </p>
+                        {#if scan.isRecruiting}
+                          <span class="seal-recruiting">
+                            <span class="pulse-beacon green"></span>
+                            <span>RECRUTAMENTO ATIVO</span>
+                          </span>
+                        {/if}
+                      </div>
+
+                      <h2 class="spotlight-name">
+                        <a href="/scans/{scan.slug}">{scan.name}</a>
+                      </h2>
+                    </div>
+                  </div>
 
                   <!-- Social Links Bar -->
                   <div class="spotlight-social-bar">
@@ -270,6 +273,11 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Bio Text -->
+                <p class="spotlight-bio">
+                  {scan.description || (scan.is_official ? "Scan oficial e núcleo editorial de traduções, revisões e diagramação do Project Nox. Responsável por grandes obras e lançamentos diários." : "Grupo independente de tradução e edição associado ao Project Nox.")}
+                </p>
 
                 <!-- REDESIGNED RECRUITMENT SECTION: Vagas com estrutura profissional -->
                 {#if scan.isRecruiting && scan.recruitingPositions.length > 0}
@@ -779,6 +787,13 @@
     margin: 0 0 1.25rem;
   }
 
+  .affiliate-actions-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
   .affiliate-action {
     display: inline-flex;
     align-items: center;
@@ -798,6 +813,28 @@
   .affiliate-action:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 24px -4px rgba(124, 58, 237, 0.6);
+  }
+
+  .affiliate-secondary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .affiliate-secondary-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
   }
 
   /* ==========================================================================
@@ -847,10 +884,10 @@
     border-color: rgba(245, 158, 11, 0.3);
   }
 
-  /* Spotlight Banner Hero */
+  /* Spotlight Banner Hero (100% Livre, Desimpedido e Altura Intermediária Equilibrada) */
   .spotlight-banner-hero {
     position: relative;
-    height: 240px;
+    height: 200px;
     width: 100%;
     overflow: hidden;
     background: #0d111e;
@@ -860,7 +897,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center 35%;
+    object-position: center 30%;
   }
 
   .spotlight-banner-fallback {
@@ -877,35 +914,48 @@
   .spotlight-banner-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(10, 13, 24, 0.1) 0%, rgba(10, 13, 24, 0.6) 60%, rgba(10, 13, 24, 0.98) 100%);
+    background: linear-gradient(180deg, rgba(10, 13, 24, 0.15) 0%, transparent 40%, rgba(10, 13, 24, 0.75) 100%);
+    pointer-events: none;
   }
 
-  /* Floating Emblem inside Banner */
-  .spotlight-emblem-cluster {
-    position: absolute;
-    bottom: 1.5rem;
-    left: 2rem;
-    right: 2rem;
+  /* Spotlight Body & Identity Header (Abaixo do Banner - Proporção Intermediária Clean) */
+  .spotlight-body {
+    padding: 1.25rem 1.75rem 1.5rem;
     display: flex;
-    align-items: flex-end;
-    gap: 1.5rem;
-    z-index: 2;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .spotlight-identity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 0.95rem;
+  }
+
+  .spotlight-id-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .spotlight-logo-frame {
-    width: 96px;
-    height: 96px;
-    border-radius: 20px;
+    width: 66px;
+    height: 66px;
+    border-radius: 16px;
     overflow: hidden;
     background: #0b0e19;
-    border: 3px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
     flex-shrink: 0;
   }
 
   .spotlight-logo-frame.official-frame {
     border-color: #f59e0b;
-    box-shadow: 0 0 24px rgba(245, 158, 11, 0.35), 0 16px 32px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.3), 0 8px 18px rgba(0, 0, 0, 0.45);
   }
 
   .spotlight-logo-img {
@@ -920,7 +970,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.5rem;
+    font-size: 1.75rem;
     font-weight: 900;
     background: linear-gradient(135deg, #7c3aed 0%, #4338ca 100%);
     color: #ffffff;
@@ -929,14 +979,14 @@
   .spotlight-header-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.25rem;
   }
 
   .spotlight-badge-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
 
   .seal-official {
@@ -946,8 +996,8 @@
     background: rgba(245, 158, 11, 0.2);
     border: 1px solid rgba(245, 158, 11, 0.45);
     border-radius: 6px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.68rem;
     font-weight: 800;
     color: #fbbf24;
     letter-spacing: 0.04em;
@@ -960,8 +1010,8 @@
     background: rgba(14, 165, 233, 0.18);
     border: 1px solid rgba(14, 165, 233, 0.45);
     border-radius: 6px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.68rem;
     font-weight: 800;
     color: #38bdf8;
     letter-spacing: 0.04em;
@@ -970,12 +1020,12 @@
   .seal-recruiting {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
     background: rgba(16, 185, 129, 0.15);
     border: 1px solid rgba(16, 185, 129, 0.4);
     border-radius: 6px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.68rem;
     font-weight: 800;
     color: #34d399;
     letter-spacing: 0.04em;
@@ -983,7 +1033,7 @@
 
   .spotlight-name {
     font-family: "Manrope", sans-serif;
-    font-size: 2.1rem;
+    font-size: 1.55rem;
     font-weight: 850;
     margin: 0;
     line-height: 1.15;
@@ -999,38 +1049,23 @@
     color: #c084fc;
   }
 
-  /* Spotlight Body */
-  .spotlight-body {
-    padding: 1.85rem 2rem 2.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.75rem;
-  }
-
-  .spotlight-about-section {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 2rem;
-    align-items: center;
-  }
-
   .spotlight-bio {
-    font-size: 0.98rem;
+    font-size: 0.88rem;
     color: #cbd5e1;
-    line-height: 1.65;
+    line-height: 1.5;
     margin: 0;
-    max-width: 820px;
+    max-width: 860px;
   }
 
   .spotlight-social-bar {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .social-label {
-    font-size: 0.74rem;
+    font-size: 0.7rem;
     font-weight: 700;
     color: #64748b;
     text-transform: uppercase;
@@ -1040,18 +1075,18 @@
   .social-pills {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
 
   .social-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 9999px;
-    padding: 0.4rem 0.85rem;
-    font-size: 0.82rem;
+    padding: 0.32rem 0.75rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #cbd5e1;
     text-decoration: none;
@@ -1083,13 +1118,13 @@
   }
 
   /* ==========================================================================
-     RECRUITMENT SHOWCASE BOX (TOTALMENTE REDESENHADO)
+     RECRUITMENT SHOWCASE BOX (COMPACTO E EQUILIBRADO)
      ========================================================================== */
   .recruitment-showcase-box {
     background: linear-gradient(135deg, rgba(20, 26, 44, 0.85) 0%, rgba(13, 17, 30, 0.95) 100%);
     border: 1px solid rgba(16, 185, 129, 0.25);
-    border-radius: 18px;
-    padding: 1.5rem;
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
     position: relative;
     overflow: hidden;
   }
@@ -1099,7 +1134,7 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px;
+    width: 3px;
     height: 100%;
     background: linear-gradient(180deg, #10b981 0%, #06b6d4 100%);
   }
@@ -1108,19 +1143,19 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.75rem;
   }
 
   .recruitment-header-left {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
+    gap: 0.75rem;
   }
 
   .beacon-icon-wrap {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     background: rgba(16, 185, 129, 0.15);
     border: 1px solid rgba(16, 185, 129, 0.3);
     color: #34d399;
@@ -1131,7 +1166,7 @@
 
   .recruitment-showcase-title {
     font-family: "Manrope", sans-serif;
-    font-size: 1.1rem;
+    font-size: 0.96rem;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
@@ -1139,16 +1174,16 @@
   }
 
   .recruitment-showcase-sub {
-    font-size: 0.82rem;
+    font-size: 0.76rem;
     color: #94a3b8;
-    margin: 0.2rem 0 0;
+    margin: 0.15rem 0 0;
   }
 
   .recruitment-view-all-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.82rem;
+    gap: 0.3rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #34d399;
     text-decoration: none;
@@ -1160,23 +1195,24 @@
     text-decoration: underline;
   }
 
-  /* Grid of role opportunity cards */
+  /* Grid de Vagas Compacto e Proporcional */
   .roles-opportunity-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.75rem;
   }
 
   .role-opportunity-card {
     background: rgba(11, 15, 26, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 1.15rem;
+    border-radius: 12px;
+    padding: 0.75rem 0.95rem;
     text-decoration: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 110px;
+    min-height: 0;
+    gap: 0.45rem;
     transition: all 0.25s ease;
   }
 
@@ -1191,11 +1227,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.2rem;
   }
 
   .role-dept-tag {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
@@ -1203,28 +1239,28 @@
   }
 
   .role-status-badge {
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-weight: 700;
     color: #34d399;
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.25);
     border-radius: 4px;
-    padding: 0.15rem 0.45rem;
+    padding: 0.12rem 0.4rem;
   }
 
   .role-card-title {
     font-family: "Manrope", sans-serif;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     font-weight: 750;
     color: #ffffff;
-    margin: 0 0 0.75rem;
+    margin: 0;
   }
 
   .role-card-bottom {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 600;
     color: #38bdf8;
   }
@@ -1237,27 +1273,27 @@
     transform: translateX(4px);
   }
 
-  /* Spotlight Footer: Stats + CTAs */
+  /* Spotlight Footer: Stats + CTAs (Compacto) */
   .spotlight-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 1.5rem;
+    gap: 1.25rem;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
-    padding-top: 1.5rem;
+    padding-top: 1rem;
   }
 
   .stats-counter-strip {
     display: flex;
     align-items: center;
-    gap: 1.75rem;
+    gap: 1.5rem;
   }
 
   .stat-pill-box {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.65rem;
   }
 
   :global(.stat-icon) {
@@ -1271,33 +1307,33 @@
 
   .stat-number {
     font-family: "Manrope", sans-serif;
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 850;
     color: #ffffff;
     line-height: 1;
   }
 
   .stat-desc {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     color: #64748b;
-    margin-top: 0.2rem;
+    margin-top: 0.15rem;
   }
 
   .spotlight-cta-dock {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
+    gap: 0.75rem;
   }
 
   .btn-secondary-vagas {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.35);
-    border-radius: 12px;
-    padding: 0.7rem 1.15rem;
-    font-size: 0.88rem;
+    border-radius: 10px;
+    padding: 0.55rem 0.95rem;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #34d399;
     text-decoration: none;
@@ -1312,15 +1348,15 @@
   .btn-primary-explore {
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.5rem;
     background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-    border-radius: 12px;
-    padding: 0.75rem 1.5rem;
-    font-size: 0.92rem;
+    border-radius: 10px;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.86rem;
     font-weight: 800;
     color: #ffffff;
     text-decoration: none;
-    box-shadow: 0 8px 20px -4px rgba(124, 58, 237, 0.5);
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
     transition: all 0.2s ease;
   }
 
@@ -1701,8 +1737,9 @@
       padding: 2rem;
     }
 
-    .spotlight-about-section {
-      grid-template-columns: 1fr;
+    .spotlight-identity-head {
+      flex-direction: column;
+      align-items: flex-start;
       gap: 1.25rem;
     }
 
@@ -1726,29 +1763,22 @@
     }
 
     .spotlight-banner-hero {
-      height: 180px;
-    }
-
-    .spotlight-emblem-cluster {
-      bottom: 1rem;
-      left: 1rem;
-      right: 1rem;
-      gap: 1rem;
+      height: 145px;
     }
 
     .spotlight-logo-frame {
-      width: 72px;
-      height: 72px;
-      border-radius: 16px;
+      width: 58px;
+      height: 58px;
+      border-radius: 14px;
     }
 
     .spotlight-name {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
     }
 
     .spotlight-body {
-      padding: 1.25rem 1rem 1.5rem;
-      gap: 1.25rem;
+      padding: 1rem 1rem 1.25rem;
+      gap: 1rem;
     }
 
     .roles-opportunity-grid {
