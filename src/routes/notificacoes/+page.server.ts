@@ -64,6 +64,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   const notifications = rawNotifications.map((n: any) => {
     const actor = n.actor_user_id ? actorsMap.get(n.actor_user_id) || null : null;
+    const resolvedTitle = n.title?.trim() || (n.body ? (n.body.length > 80 ? n.body.slice(0, 77) + '…' : n.body) : 'Notificação');
+    const resolvedBody = n.body?.trim() || '';
+
     return {
       id: n.id,
       userId: n.user_id,
@@ -81,8 +84,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         : null,
       type: n.type || n.kind || 'GENERIC',
       kind: n.kind || n.type || 'generic',
-      title: n.title || 'Notificação',
-      body: n.body || '',
+      title: resolvedTitle,
+      body: resolvedBody,
       href: n.href || '#',
       readAt: n.read_at,
       isRead: Boolean(n.read_at),

@@ -311,10 +311,10 @@
         badgeColor: '#fde68a'
       };
     }
-    if (t.includes('APPLICATION') || t.includes('RECRUIT') || t.includes('SCAN')) {
+    if (t.includes('APPLICATION') || t.includes('RECRUIT') || t.includes('SCAN') || t.includes('PIPELINE') || t.includes('STAGE') || t.includes('TASK')) {
       return {
         icon: Users,
-        label: 'Scan Parceira',
+        label: t.includes('PIPELINE') || t.includes('STAGE') || t.includes('TASK') ? 'Produção da Scan' : 'Scan Parceira',
         colorClass: 'type-scan',
         badgeBg: 'rgba(16, 185, 129, 0.2)',
         badgeColor: '#6ee7b7'
