@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ARTIFACT_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
-const PREVIEW_URL = 'https://home-preview-manga.project-nox-awerkori.workers.dev';
+const PREVIEW_URL = process.env.TARGET_URL || 'https://home-preview-manga.project-nox-awerkori.workers.dev';
 
 // Load environment variables
 for (const envPath of ['.dev.vars.deploy', '.dev.vars.preview_full', '.env']) {
