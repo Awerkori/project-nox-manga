@@ -226,18 +226,19 @@
       <div class="impact-col will-reset">
         <h4>O QUE É REDEFINIDO NO CICLO TRIMESTRAL:</h4>
         <ul>
-          <li><strong>Season XP:</strong> Redefinido para 0 para todos os leitores ({formatNumber(data.metrics.activeSeasonalMembers)} membros).</li>
-          <li><strong>Pódio e Tabela:</strong> Todos começam uma nova corrida competitiva do zero em igualdade de condições.</li>
-          <li><strong>Hall da Fama:</strong> Os 3 primeiros colocados são arquivados para a posteridade com seus títulos e medalhas.</li>
+          <li><strong>Season XP & Nível:</strong> Redefinido para 0 XP e Nível 0 para todos os leitores ({formatNumber(data.metrics.activeSeasonalMembers)} membros).</li>
+          <li><strong>Saldo de XP na Loja:</strong> Zerado no reset para incentivar compras antes do fim da temporada.</li>
+          <li><strong>Títulos de Marco de Nível:</strong> Temporários (desequipados até o membro reconquistar o nível).</li>
+          <li><strong>Hall da Fama:</strong> Os 3 primeiros colocados são arquivados com títulos permanentes de campeão.</li>
         </ul>
       </div>
 
       <div class="impact-col will-preserve">
         <h4>O QUE NUNCA É RESETADO (100% PRESERVADO):</h4>
         <ul>
-          <li><strong>Nível Permanente de Leitor:</strong> 100% INTACTO (baseado no Lifetime XP acumulado na vida inteira).</li>
-          <li><strong>Saldo de XP da Loja Cósmica:</strong> 100% INTACTO (o usuário não perde moedas de compra).</li>
-          <li><strong>Inventário de Cosméticos:</strong> 100% INTACTO (todas as molduras, títulos, banners e cores permanecem no inventário).</li>
+          <li><strong>Cosméticos Comprados na Loja:</strong> 100% INTACTOS (todas as molduras, banners, cores e títulos de loja são eternos).</li>
+          <li><strong>Títulos Exclusivos do Top 3:</strong> 100% PERMANENTES (concedidos aos vencedores e guardados no inventário para sempre).</li>
+          <li><strong>Histórico e Auditoria:</strong> 100% PRESERVADOS (capítulos lidos e livro-razão de transações permanecem intactos).</li>
         </ul>
       </div>
     </div>
@@ -342,7 +343,7 @@
           <ul>
             <li>Todos os <strong>{formatNumber(data.metrics.activeSeasonalMembers)}</strong> leitores com pontuação terão seu Season XP zerado.</li>
             <li>O Hall da Fama registrará os 3 primeiros colocados.</li>
-            <li><strong>Saldos de Loja e Níveis Permanentes NÃO serão afetados.</strong></li>
+            <li><strong>XP e Nível serão reiniciados para a nova temporada. Cosméticos e títulos do Top 3 são permanentes.</strong></li>
           </ul>
         </div>
 

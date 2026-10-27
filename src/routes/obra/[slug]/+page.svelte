@@ -343,6 +343,8 @@
     try {
       const res = (await action('member', 'library', {
         work_id: data.work.id,
+        work_slug: data.work.slug,
+        work_title: data.work.title,
         status: data.library?.status || 'READING',
         favorite: update.favorite !== undefined ? update.favorite : (data.library?.favorite || false),
         following: data.library?.following ?? true,
@@ -387,7 +389,11 @@
     optimisticLikeDelta += nextLiked ? 1 : -1;
     busy = true;
     try {
-      const res = (await action('member', 'like', { work_id: data.work.id })) as any;
+      const res = (await action('member', 'like', {
+        work_id: data.work.id,
+        work_slug: data.work.slug,
+        work_title: data.work.title
+      })) as any;
       if (typeof res?.liked === 'boolean') {
         optimisticLiked = res.liked;
       }

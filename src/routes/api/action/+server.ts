@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { member } from '$lib/server/db';
+import { member, privileged } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
@@ -25,28 +25,54 @@ export const POST = async ({ request, locals, platform }: any) => {
     error(400, 'Solicitação inválida');
   }
 
-  // Ensure work stub exists in Supabase public.works for foreign key integrity
+  // Ensure work exists in Supabase public.works for foreign key integrity
   const targetWorkId = body.data?.work_id ? String(body.data.work_id) : null;
   if (body.scope === 'member' && targetWorkId && ['like', 'library', 'comment', 'rate_work'].includes(body.action)) {
-    const { data: wExists } = await locals.db.from('works').select('id').eq('id', targetWorkId).maybeSingle();
-    if (!wExists) {
-      try {
-        const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
-        if (ybWork) {
-          await locals.db.from('works').upsert(
-            {
-              id: ybWork.id,
-              slug: ybWork.slug || targetWorkId,
-              title: ybWork.title || 'Obra',
-              published: true,
-              cover_id: ybWork.cover_id || null
-            },
-            { onConflict: 'id' }
-          );
+    try {
+      const adminDb = privileged();
+      const { data: wExists } = await adminDb.from('works').select('id').eq('id', targetWorkId).maybeSingle();
+      if (!wExists) {
+        let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
+        let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+
+        try {
+          const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
+          if (ybWork) {
+            cleanSlug = ybWork.slug || cleanSlug;
+            cleanTitle = ybWork.title || cleanTitle;
+          }
+        } catch (fetchErr) {
+          console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
         }
-      } catch (err) {
-        console.error('[ACTION] Error syncing work stub to Supabase:', err);
+
+        // Sanitize slug to match constraint ^[a-z0-9]+(-[a-z0-9]+)*$
+        let sanitizedSlug = (cleanSlug || targetWorkId)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        if (!sanitizedSlug) sanitizedSlug = `obra-${targetWorkId.slice(0, 8)}`;
+
+        // Verify uniqueness of slug
+        const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
+        if (slugOwner && slugOwner.id !== targetWorkId) {
+          sanitizedSlug = `${sanitizedSlug}-${targetWorkId.slice(0, 6)}`;
+        }
+
+        await adminDb.from('works').upsert(
+          {
+            id: targetWorkId,
+            slug: sanitizedSlug,
+            title: (cleanTitle || 'Obra').slice(0, 200),
+            published: true,
+            content_rating: 'GENERAL',
+            kind: 'MANHWA',
+            status: 'ONGOING'
+          },
+          { onConflict: 'id' }
+        );
       }
+    } catch (err) {
+      console.error('[ACTION] Error ensuring work exists in Supabase:', err);
     }
   }
 

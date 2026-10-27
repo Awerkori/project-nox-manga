@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
-import { getLevelFromXp } from '$lib/levels';
+import { getLevelFromXp, NOX_HALL_OF_FAME_TITLES } from '$lib/levels';
 
 export const POST = async ({ request, locals, platform }: any) => {
   if (locals.role !== 'ADMIN') {
@@ -45,20 +45,23 @@ export const POST = async ({ request, locals, platform }: any) => {
   // Find top 3 winners to immortalize in Hall of Fame
   const { data: topContenders } = await locals.db
     .from('members')
-    .select('id, username, display_name, season_xp, lifetime_xp, avatar_id, avatar_crop, avatar_frame_id, name_color, equipped_title_id')
+    .select('id, username, display_name, season_xp, avatar_id, avatar_crop, avatar_frame_id, name_color, equipped_title_id')
     .gt('season_xp', 0)
     .eq('is_test', false)
     .order('season_xp', { ascending: false })
     .limit(3);
 
-  // Archive top 3 winners
+  // Archive top 3 winners and award exclusive permanent titles
   if (topContenders && topContenders.length > 0) {
     for (let i = 0; i < topContenders.length; i++) {
       const winner = topContenders[i];
+      const place = i + 1;
+      const titleObj = NOX_HALL_OF_FAME_TITLES[i] || NOX_HALL_OF_FAME_TITLES[0];
+
       await locals.db.from('season_winners').upsert(
         {
           season_id: seasonId,
-          place: i + 1,
+          place,
           user_id: winner.id,
           username: winner.username,
           display_name: winner.display_name,
@@ -67,11 +70,25 @@ export const POST = async ({ request, locals, platform }: any) => {
           avatar_frame_id: winner.avatar_frame_id,
           name_color: winner.name_color,
           season_xp: winner.season_xp,
-          final_level: getLevelFromXp(winner.lifetime_xp || 0),
-          equipped_title: winner.equipped_title_id || 'Mestre da Leitura'
+          final_level: getLevelFromXp(winner.season_xp || 0),
+          equipped_title: titleObj.name
         },
         { onConflict: 'season_id,place' }
       );
+
+      // Award exclusive permanent title to inventory
+      await locals.db.from('member_inventory').upsert(
+        {
+          user_id: winner.id,
+          item_id: titleObj.id,
+          origin: 'EVENT',
+          acquired_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id,item_id' }
+      );
+
+      // Equip permanent title
+      await locals.db.from('members').update({ equipped_title_id: titleObj.id }).eq('id', winner.id);
     }
   }
 
@@ -88,21 +105,30 @@ export const POST = async ({ request, locals, platform }: any) => {
     0
   );
 
-  // Record audit log
+  // Record audit log in season_resets
   await locals.db.from('season_resets').insert({
     season_id: seasonId,
     admin_user_id: locals.user?.id,
     admin_email: locals.user?.email || 'admin@nox.internal',
     total_members_reset: totalMembersReset,
     total_season_xp_reset: totalSeasonXpReset,
-    notes: `Reset da ${activeSeason?.name || seasonId} executado via painel administrativo.`
+    notes: `Reset da ${activeSeason?.name || seasonId} executado. Níveis e XP zerados para o novo ciclo.`
   });
 
-  // Reset Season XP to 0 (Preserving lifetime_xp and shop balance xp!)
+  // Unequip temporary milestone titles
   await locals.db
     .from('members')
-    .update({ season_xp: 0 })
-    .gt('season_xp', 0);
+    .update({ equipped_title_id: null })
+    .like('equipped_title_id', 'titulo-nv%');
+
+  // Reset Season XP AND spendable XP to 0
+  await locals.db
+    .from('members')
+    .update({
+      xp: 0,
+      season_xp: 0
+    })
+    .or('xp.gt.0,season_xp.gt.0');
 
   // Close previous season and launch next 90-day season
   if (activeSeason) {
@@ -120,7 +146,8 @@ export const POST = async ({ request, locals, platform }: any) => {
     number: nextNumber,
     starts_at: startsAt,
     ends_at: endsAt,
-    is_active: true
+    is_active: true,
+    rules_text: 'Pontos de Temporada, Nível e saldo de XP são zerados a cada ciclo trimestral (90 dias). Cosméticos comprados na Loja Cósmica e títulos exclusivos do Hall da Fama são permanentes.'
   });
 
   invalidateRankingCache();
