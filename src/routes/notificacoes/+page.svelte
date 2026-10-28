@@ -41,6 +41,8 @@
     localNotifications = [...data.notifications];
   });
 
+  let notifsBc: BroadcastChannel | null = null;
+
   onMount(() => {
     const filterParam = page.url.searchParams.get('filtro') || page.url.searchParams.get('filter');
     if (filterParam === 'nao-lidas' || filterParam === 'unread') {
@@ -48,6 +50,32 @@
     } else if (filterParam === 'lidas' || filterParam === 'read') {
       activeTab = 'lidas';
     }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        notifsBc = new BroadcastChannel('nox_notifications');
+        notifsBc.onmessage = (ev) => {
+          if (ev.data?.type === 'ALL_READ') {
+            localNotifications = localNotifications.map((n) => ({
+              ...n,
+              isRead: true,
+              readAt: n.readAt || new Date().toISOString()
+            }));
+          } else if (ev.data?.type === 'ONE_READ' && ev.data?.id) {
+            const t = localNotifications.find((n) => n.id === ev.data.id);
+            if (t && !t.isRead) {
+              t.isRead = true;
+              t.readAt = new Date().toISOString();
+              localNotifications = [...localNotifications];
+            }
+          }
+        };
+      } catch {}
+    }
+
+    return () => {
+      notifsBc?.close();
+    };
   });
 
   function setFilterTab(tab: 'todas' | 'nao-lidas' | 'lidas') {
@@ -144,6 +172,11 @@
     const target = localNotifications.find((n) => n.id === id);
     if (!target || target.isRead) return;
 
+    // Snapshot for rollback on failure
+    const prevIsRead = target.isRead;
+    const prevReadAt = target.readAt;
+    const prevUnreadCount = unreadCount;
+
     // Optimistic update
     target.isRead = true;
     target.readAt = new Date().toISOString();
@@ -160,6 +193,8 @@
     nextBusy.add(id);
     busyIds = nextBusy;
 
+    let persisted = false;
+
     try {
       const res = await fetch('/api/action', {
         method: 'POST',
@@ -171,15 +206,45 @@
         })
       });
 
-      if (!res.ok) {
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body.ok && body.markedReadId === id) {
+          persisted = true;
+        }
+      }
+
+      if (!persisted) {
         // Fallback to form action
         const form = new FormData();
         form.set('id', id);
-        await fetch('?/markRead', { method: 'POST', body: form });
+        const fbRes = await fetch('?/markRead', { method: 'POST', body: form });
+        if (fbRes.ok) {
+          const fbBody = await fbRes.json().catch(() => ({}));
+          const successData = fbBody?.data ? (typeof fbBody.data === 'string' ? JSON.parse(fbBody.data) : fbBody.data) : fbBody;
+          if (fbBody.type === 'success' || successData?.success) {
+            persisted = true;
+          }
+        }
       }
     } catch (err) {
       console.warn('[NOTIF] Erro ao marcar como lida:', err);
     } finally {
+      if (!persisted) {
+        // Rollback optimistic state on failure
+        target.isRead = prevIsRead;
+        target.readAt = prevReadAt;
+        localNotifications = [...localNotifications];
+        window.dispatchEvent(
+          new CustomEvent('nox:notifications-updated', {
+            detail: { unread: prevUnreadCount }
+          })
+        );
+        showToast('Não foi possível marcar a notificação como lida. Tente novamente.');
+      } else {
+        try {
+          notifsBc?.postMessage({ type: 'ONE_READ', id });
+        } catch {}
+      }
       const updatedBusy = new Set(busyIds);
       updatedBusy.delete(id);
       busyIds = updatedBusy;
@@ -190,6 +255,10 @@
   async function markAllAsRead() {
     if (unreadCount === 0 || busyAll) return;
     busyAll = true;
+
+    // Snapshot for rollback on failure
+    const prevNotifications = localNotifications.map((n) => ({ ...n }));
+    const prevUnreadCount = unreadCount;
 
     // Optimistic update
     localNotifications = localNotifications.map((n) => ({
@@ -205,7 +274,7 @@
       })
     );
 
-    showToast('Todas as notificações foram marcadas como lidas.');
+    let persisted = false;
 
     try {
       const res = await fetch('/api/action', {
@@ -218,12 +287,43 @@
         })
       });
 
-      if (!res.ok) {
-        await fetch('?/markAllRead', { method: 'POST' });
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body.ok) {
+          persisted = true;
+        }
       }
-      await invalidateAll();
+
+      if (!persisted) {
+        const fbRes = await fetch('?/markAllRead', { method: 'POST' });
+        if (fbRes.ok) {
+          const fbBody = await fbRes.json().catch(() => ({}));
+          const successData = fbBody?.data ? (typeof fbBody.data === 'string' ? JSON.parse(fbBody.data) : fbBody.data) : fbBody;
+          if (fbBody.type === 'success' || successData?.success) {
+            persisted = true;
+          }
+        }
+      }
+
+      if (persisted) {
+        showToast('Todas as notificações foram marcadas como lidas.');
+        try {
+          notifsBc?.postMessage({ type: 'ALL_READ' });
+        } catch {}
+        await invalidateAll();
+      } else {
+        throw new Error('Falha na persistência');
+      }
     } catch (err) {
       console.warn('[NOTIF] Erro ao marcar todas como lidas:', err);
+      // Rollback optimistic state
+      localNotifications = prevNotifications;
+      window.dispatchEvent(
+        new CustomEvent('nox:notifications-updated', {
+          detail: { unread: prevUnreadCount }
+        })
+      );
+      showToast('Não foi possível marcar todas as notificações como lidas. Tente novamente.');
     } finally {
       busyAll = false;
     }

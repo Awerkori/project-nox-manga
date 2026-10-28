@@ -81,12 +81,32 @@ export const POST = async ({ request, locals, platform }: any) => {
     if (!locals.user?.id) error(401, 'Entre em sua conta');
     const notifId = body.data?.id ? String(body.data.id) : null;
     if (!notifId) error(400, 'ID da notificação obrigatório');
-    const { error: notifErr } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', notifId)
-      .eq('user_id', locals.user.id);
-    if (notifErr) error(400, notifErr.message);
+
+    let updatedCount = 0;
+    // Prefer atomic SECURITY DEFINER RPC
+    const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_notification_read', {
+      p_notification_id: notifId
+    });
+
+    if (!rpcErr && rpcRes && (rpcRes as any).success) {
+      updatedCount = 1;
+    } else {
+      // Fallback: direct update under RLS with modified row validation
+      const { data: updatedRows, error: notifErr } = await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', notifId)
+        .eq('user_id', locals.user.id)
+        .select('id');
+
+      if (notifErr) error(400, notifErr.message);
+      updatedCount = updatedRows?.length || 0;
+    }
+
+    if (updatedCount === 0) {
+      error(404, 'Notificação não encontrada ou não pertence ao usuário');
+    }
+
     invalidateUserSession(locals.user.id);
     return json({ ok: true, markedReadId: notifId });
   }
@@ -94,14 +114,23 @@ export const POST = async ({ request, locals, platform }: any) => {
   // Handle 'read_all_notifications' action
   if (body.scope === 'member' && body.action === 'read_all_notifications') {
     if (!locals.user?.id) error(401, 'Entre em sua conta');
-    const { error: notifErr } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('user_id', locals.user.id)
-      .is('read_at', null);
-    if (notifErr) error(400, notifErr.message);
+
+    // Prefer atomic SECURITY DEFINER RPC
+    const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_all_notifications_read');
+
+    if (rpcErr) {
+      // Fallback: direct update under RLS
+      const { error: notifErr } = await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', locals.user.id)
+        .is('read_at', null);
+
+      if (notifErr) error(400, notifErr.message);
+    }
+
     invalidateUserSession(locals.user.id);
-    return json({ ok: true });
+    return json({ ok: true, markedCount: (rpcRes as any)?.marked_count ?? null });
   }
 
   // Handle 'like' action using member_action RPC
