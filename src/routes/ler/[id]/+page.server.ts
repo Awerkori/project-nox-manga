@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } from '$lib/server/reader-editorial';
+import { sanitizeComments } from '$lib/comments';
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -38,26 +39,44 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
       }
       let userProgress = null;
-      if (locals.user) {
-        const pRes = await withTimeout(
+      const [commentsRes, pRes] = await Promise.all([
+        withTimeout(
           locals.db
-            .from('reading')
-            .select('page,completed_at')
-            .eq('user_id', locals.user.id)
+            .from('comments')
+            .select(
+              'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+            )
             .eq('chapter_id', params.id)
-            .maybeSingle(),
-          800,
-          { data: null } as any,
-          'reader_cached_progress'
-        );
-        userProgress = pRes?.data || null;
-      } else {
+            .order('created_at', { ascending: false })
+            .limit(100),
+          1500,
+          { data: [] } as any,
+          'reader_cached_comments'
+        ),
+        locals.user
+          ? withTimeout(
+              locals.db
+                .from('reading')
+                .select('page,completed_at')
+                .eq('user_id', locals.user.id)
+                .eq('chapter_id', params.id)
+                .maybeSingle(),
+              800,
+              { data: null } as any,
+              'reader_cached_progress'
+            )
+          : Promise.resolve({ data: null })
+      ]);
+      userProgress = pRes?.data || null;
+      const cachedComments = sanitizeComments(commentsRes?.data || []);
+
+      if (!locals.user) {
         const link = firstPagePreloadHeader(cached.pages);
         const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
           'cache-control': isAdultCached
             ? 'private, no-cache, no-store, must-revalidate'
-            : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+            : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
           ...(link ? { link } : {})
         });
       }
@@ -71,7 +90,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         next: all[index + 1] || null,
         siblings: all,
         progress: userProgress,
-        comments: [],
+        comments: cachedComments,
         scans: cached.scans,
         preview: false
       };
@@ -224,10 +243,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       locals.db
         .from('comments')
         .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+          'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
         )
         .eq('chapter_id', chapter.id)
-        .eq('removed', false)
         .order('created_at', { ascending: false })
         .limit(100),
       locals.db
@@ -300,7 +318,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     setHeaders({
       'cache-control': isAdultChapter
         ? 'private, no-cache, no-store, must-revalidate'
-        : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+        : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
       ...(link ? { link } : {})
     });
   } else if (link) {
@@ -314,7 +332,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     next: all[index + 1] || null,
     siblings: all,
     progress: progress?.data || null,
-    comments: comments?.data || [],
+    comments: sanitizeComments(comments?.data || []),
     scans,
     preview
   };

@@ -14,6 +14,8 @@
     Edit3,
     Trash2,
     EyeOff,
+    Eye,
+    Info,
     Sparkles,
     ArrowUpDown,
     Send,
@@ -37,6 +39,9 @@
     body: string;
     created_at: string;
     parent_id: string | null;
+    is_tombstone?: boolean;
+    removed?: boolean;
+    deleted?: boolean;
     members: {
       username: string;
       display_name: string;
@@ -265,29 +270,104 @@
   };
 
   let visibleCount = $derived(
-    comments?.filter((c) => !deletedCommentIds.has(c.id)).length || 0
+    comments?.filter((c) => !deletedCommentIds.has(c.id) && !c.is_tombstone && !c.removed).length || 0
   );
 
   let threadedGroups = $derived.by<ThreadedGroup[]>(() => {
     if (!comments?.length) return [];
 
-    const rootList: Comment[] = [];
-    const repliesMap = new Map<string, Comment[]>();
-
+    // 1. Identify which parent comments have active (unremoved) replies
+    const activeChildrenParents = new Set<string>();
     for (const c of comments) {
-      if (deletedCommentIds.has(c.id)) continue;
-      if (!c.parent_id) {
-        rootList.push(c);
-      } else {
-        const list = repliesMap.get(c.parent_id) || [];
-        list.push(c);
-        repliesMap.set(c.parent_id, list);
+      if (!deletedCommentIds.has(c.id) && !c.is_tombstone && !c.removed && c.parent_id) {
+        activeChildrenParents.add(c.parent_id);
       }
     }
 
-    // Sort roots
+    const rootList: Comment[] = [];
+    const rootMap = new Map<string, Comment>();
+    const repliesMap = new Map<string, Comment[]>();
+
+    for (const c of comments) {
+      const isLocallyDeleted = deletedCommentIds.has(c.id);
+      const isTombstone = Boolean(
+        c.is_tombstone ||
+        c.removed ||
+        (isLocallyDeleted && activeChildrenParents.has(c.id))
+      );
+
+      // If it's deleted/removed and has NO active replies, prune it entirely
+      if ((isLocallyDeleted || c.removed) && !activeChildrenParents.has(c.id)) {
+        continue;
+      }
+
+      // If it's a tombstone, normalize attributes
+      const item: Comment = isTombstone
+        ? {
+            ...c,
+            is_tombstone: true,
+            body: '[Comentário removido]',
+            members: {
+              username: 'removido',
+              display_name: 'Comentário removido',
+              avatar_id: null,
+              avatar_crop: null,
+              name_color: null,
+              avatar_frame_id: null,
+              equipped_comment_banner_id: null,
+              equipped_banner_id: null,
+              equipped_title_id: null
+            },
+            comment_likes: []
+          }
+        : c;
+
+      if (!item.parent_id) {
+        rootList.push(item);
+        rootMap.set(item.id, item);
+      } else {
+        const list = repliesMap.get(item.parent_id) || [];
+        list.push(item);
+        repliesMap.set(item.parent_id, list);
+      }
+    }
+
+    // 2. ORPHAN RECOVERY GUARD: If any replies exist whose parent was omitted from rootList,
+    // synthesize a tombstone root so the replies are NEVER hidden or lost!
+    for (const [parentId, reps] of repliesMap.entries()) {
+      if (!rootMap.has(parentId) && reps.length > 0) {
+        const synthRoot: Comment = {
+          id: parentId,
+          user_id: '',
+          body: '[Comentário removido]',
+          created_at: reps[0].created_at,
+          parent_id: null,
+          is_tombstone: true,
+          members: {
+            username: 'removido',
+            display_name: 'Comentário removido',
+            avatar_id: null,
+            avatar_crop: null,
+            name_color: null,
+            avatar_frame_id: null,
+            equipped_comment_banner_id: null,
+            equipped_banner_id: null,
+            equipped_title_id: null
+          },
+          comment_likes: []
+        };
+        rootList.push(synthRoot);
+        rootMap.set(parentId, synthRoot);
+      }
+    }
+
+    // 3. Sort roots
     if (sortBy === 'likes') {
-      rootList.sort((a, b) => (b.comment_likes?.length || 0) - (a.comment_likes?.length || 0));
+      rootList.sort((a, b) => {
+        if (a.is_tombstone && !b.is_tombstone) return 1;
+        if (!a.is_tombstone && b.is_tombstone) return -1;
+        return (b.comment_likes?.length || 0) - (a.comment_likes?.length || 0);
+      });
     } else {
       rootList.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
@@ -592,9 +672,16 @@
         {#if attachedMedia}
           <div class="attached-media-chip" role="region" aria-label="Mídia anexada">
             <div class="attached-media-left">
-              <div class="attached-thumb-wrap">
+              <div class="attached-thumb-wrap" class:is-spoiler={attachedMedia.isSpoiler}>
                 <img src={attachedMedia.previewUrl} alt={attachedMedia.alt || 'Prévia'} class="attached-thumb-img" />
-                <span class="attached-thumb-badge">{attachedMedia.isGif ? 'GIF' : 'IMG'}</span>
+                {#if attachedMedia.isSpoiler}
+                  <div class="attached-spoiler-overlay">
+                    <EyeOff size={11} />
+                    <span>SPOILER</span>
+                  </div>
+                {:else}
+                  <span class="attached-thumb-badge">{attachedMedia.isGif ? 'GIF' : 'IMG'}</span>
+                {/if}
               </div>
               <div class="attached-media-meta">
                 <span class="attached-filename" title={attachedMedia.alt || 'Mídia'}>{attachedMedia.alt || 'Mídia anexada'}</span>
@@ -611,13 +698,14 @@
             </div>
 
             <div class="attached-media-controls">
-              <label class="spoiler-check-label" title="Ocultar esta imagem como spoiler até que o usuário clique para ver">
+              <label class="spoiler-check-label" class:is-active={attachedMedia.isSpoiler} title="Ocultar esta imagem como spoiler até que o usuário clique para ver">
                 <input
                   type="checkbox"
                   bind:checked={attachedMedia.isSpoiler}
                   class="spoiler-check-input"
                 />
-                <span>Spoiler</span>
+                <EyeOff size={13} />
+                <span>Ocultar como spoiler</span>
               </label>
 
               <button
@@ -733,23 +821,30 @@
         {@const rootCommentBanner = rootBannerKey ? (CURATED_BANNER_BACKGROUNDS[rootBannerKey] || rootBannerKey) : null}
         {@const hasLiked = profile && root.comment_likes?.some((l) => l.user_id === profile.id)}
         {@const isAuthor = profile && profile.id === root.user_id}
-        {@const repliesOpen = expandedReplies.has(root.id)}
+        {@const repliesOpen = expandedReplies.has(root.id) || root.is_tombstone}
 
         <!-- ROOT COMMENT CARD -->
         <article
           id={'comment-' + root.id}
           class="comment-card-modern root-card"
+          class:tombstone-card={root.is_tombstone}
           class:is-reply-target={reply === root.id}
-          class:has-comment-banner={!!rootCommentBanner}
+          class:has-comment-banner={!!rootCommentBanner && !root.is_tombstone}
         >
-          {#if rootCommentBanner}
+          {#if rootCommentBanner && !root.is_tombstone}
             <div class="comment-banner-bg" style="background: {rootCommentBanner};" aria-hidden="true"></div>
             <div class="comment-banner-mask" aria-hidden="true"></div>
           {/if}
 
           <div class="comment-content-wrap">
-            <!-- Author Row -->
-            <header class="comment-author-row">
+            {#if root.is_tombstone}
+              <div class="tombstone-content">
+                <Info size={16} class="text-slate-400 shrink-0" />
+                <span class="tombstone-text">Este comentário foi removido pelo autor.</span>
+              </div>
+            {:else}
+              <!-- Author Row -->
+              <header class="comment-author-row">
               <UserAvatar
                 avatarId={root.members?.avatar_id}
                 frameId={root.members?.avatar_frame_id}
@@ -809,23 +904,39 @@
                         </div>
                       </button>
                     {:else}
-                      <button
-                        type="button"
-                        class="media-view-btn"
-                        onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
-                        title="Clique para ampliar em tela cheia"
-                      >
-                        <img
-                          src={chunk.mediaUrl}
-                          alt={chunk.mediaAlt || 'Mídia do comentário'}
-                          class="comment-rendered-img"
-                          loading="lazy"
-                          referrerpolicy="no-referrer"
-                        />
-                        {#if chunk.isGif}
-                          <span class="media-type-badge">GIF</span>
+                      <div class="media-view-wrapper">
+                        <button
+                          type="button"
+                          class="media-view-btn"
+                          onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
+                          title="Clique para ampliar em tela cheia"
+                        >
+                          <img
+                            src={chunk.mediaUrl}
+                            alt={chunk.mediaAlt || 'Mídia do comentário'}
+                            class="comment-rendered-img"
+                            loading="lazy"
+                            referrerpolicy="no-referrer"
+                          />
+                          {#if chunk.isGif}
+                            <span class="media-type-badge">GIF</span>
+                          {/if}
+                        </button>
+                        {#if chunk.isSpoiler}
+                          <button
+                            type="button"
+                            class="media-rehide-btn"
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              toggleSpoiler(root.id + ':media:' + idx);
+                            }}
+                            title="Ocultar spoiler novamente"
+                          >
+                            <EyeOff size={11} />
+                            <span>Ocultar</span>
+                          </button>
                         {/if}
-                      </button>
+                      </div>
                     {/if}
                   </div>
                 {:else if chunk.type === 'mention'}
@@ -893,8 +1004,9 @@
                 </button>
               {/if}
             </footer>
+          {/if}
 
-            <!-- NESTED REPLIES TREE -->
+          <!-- NESTED REPLIES TREE -->
             {#if group.replies.length > 0}
               <div class="replies-tree-section">
                 <button
@@ -925,157 +1037,181 @@
                         id={'comment-' + replyItem.id}
                         data-parent-id={root.id}
                         class="comment-card-modern reply-card"
+                        class:tombstone-card={replyItem.is_tombstone}
                         class:is-reply-target={reply === replyItem.id}
-                        class:has-comment-banner={!!repCommentBanner}
+                        class:has-comment-banner={!!repCommentBanner && !replyItem.is_tombstone}
                       >
-                        {#if repCommentBanner}
+                        {#if repCommentBanner && !replyItem.is_tombstone}
                           <div class="comment-banner-bg" style="background: {repCommentBanner};" aria-hidden="true"></div>
                           <div class="comment-banner-mask" aria-hidden="true"></div>
                         {/if}
 
                         <div class="comment-content-wrap">
-                          <header class="comment-author-row">
-                            <UserAvatar
-                              avatarId={replyItem.members?.avatar_id}
-                              frameId={replyItem.members?.avatar_frame_id}
-                              crop={replyItem.members?.avatar_crop}
-                              displayName={replyItem.members?.display_name || 'Leitor'}
-                              size={32}
-                            />
-                            <div class="author-details">
-                              <div class="author-headline">
-                                <a
-                                  href="/u/{replyItem.members?.username}"
-                                  class="author-name {repAuthorColor.className}"
-                                  style={repAuthorColor.style}
-                                >
-                                  {replyItem.members?.display_name || 'Leitor'}
-                                </a>
-                                <span class="author-tag">@{replyItem.members?.username || 'leitor'}</span>
-                                {#if repIsAuthor}
-                                  <span class="badge-self">Você</span>
-                                {/if}
-                              </div>
-                              <time class="comment-time" datetime={replyItem.created_at}>{date(replyItem.created_at)}</time>
+                          {#if replyItem.is_tombstone}
+                            <div class="tombstone-content">
+                              <Info size={14} class="text-slate-400 shrink-0" />
+                              <span class="tombstone-text">Esta resposta foi removida pelo autor.</span>
                             </div>
-                          </header>
-
-                          <div class="comment-text-body">
-                            {#each parseCommentBody(replyItem.body) as chunk, idx (idx)}
-                              {#if chunk.type === 'spoiler'}
-                                <button
-                                  type="button"
-                                  class="discord-spoiler"
-                                  class:is-revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
-                                  onclick={() => toggleSpoiler(replyItem.id + ':' + idx)}
-                                  aria-expanded={revealedSpoilers.has(replyItem.id + ':' + idx)}
-                                  title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
-                                >{chunk.content}</button>
-                              {:else if chunk.type === 'media'}
-                                <div class="comment-media-card">
-                                  {#if chunk.isSpoiler && !revealedSpoilers.has(replyItem.id + ':media:' + idx)}
-                                    <button
-                                      type="button"
-                                      class="media-spoiler-card"
-                                      onclick={() => toggleSpoiler(replyItem.id + ':media:' + idx)}
-                                      title="Spoiler: Toque para ver a imagem"
-                                    >
-                                      <img
-                                        src={chunk.mediaUrl}
-                                        alt={chunk.mediaAlt || 'Mídia com spoiler'}
-                                        class="comment-rendered-img"
-                                        loading="lazy"
-                                        referrerpolicy="no-referrer"
-                                      />
-                                      <div class="media-spoiler-overlay">
-                                        <EyeOff size={16} />
-                                        <span>SPOILER — TOQUE PARA VER</span>
-                                      </div>
-                                    </button>
-                                  {:else}
-                                    <button
-                                      type="button"
-                                      class="media-view-btn"
-                                      onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
-                                      title="Clique para ampliar em tela cheia"
-                                    >
-                                      <img
-                                        src={chunk.mediaUrl}
-                                        alt={chunk.mediaAlt || 'Mídia do comentário'}
-                                        class="comment-rendered-img"
-                                        loading="lazy"
-                                        referrerpolicy="no-referrer"
-                                      />
-                                      {#if chunk.isGif}
-                                        <span class="media-type-badge">GIF</span>
-                                      {/if}
-                                    </button>
+                          {:else}
+                            <header class="comment-author-row">
+                              <UserAvatar
+                                avatarId={replyItem.members?.avatar_id}
+                                frameId={replyItem.members?.avatar_frame_id}
+                                crop={replyItem.members?.avatar_crop}
+                                displayName={replyItem.members?.display_name || 'Leitor'}
+                                size={32}
+                              />
+                              <div class="author-details">
+                                <div class="author-headline">
+                                  <a
+                                    href="/u/{replyItem.members?.username}"
+                                    class="author-name {repAuthorColor.className}"
+                                    style={repAuthorColor.style}
+                                  >
+                                    {replyItem.members?.display_name || 'Leitor'}
+                                  </a>
+                                  <span class="author-tag">@{replyItem.members?.username || 'leitor'}</span>
+                                  {#if repIsAuthor}
+                                    <span class="badge-self">Você</span>
                                   {/if}
                                 </div>
-                              {:else if chunk.type === 'mention'}
-                                <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
-                              {:else}
-                                <span>{chunk.content}</span>
+                                <time class="comment-time" datetime={replyItem.created_at}>{date(replyItem.created_at)}</time>
+                              </div>
+                            </header>
+
+                            <div class="comment-text-body">
+                              {#each parseCommentBody(replyItem.body) as chunk, idx (idx)}
+                                {#if chunk.type === 'spoiler'}
+                                  <button
+                                    type="button"
+                                    class="discord-spoiler"
+                                    class:is-revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
+                                    onclick={() => toggleSpoiler(replyItem.id + ':' + idx)}
+                                    aria-expanded={revealedSpoilers.has(replyItem.id + ':' + idx)}
+                                    title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
+                                  >{chunk.content}</button>
+                                {:else if chunk.type === 'media'}
+                                  <div class="comment-media-card">
+                                    {#if chunk.isSpoiler && !revealedSpoilers.has(replyItem.id + ':media:' + idx)}
+                                      <button
+                                        type="button"
+                                        class="media-spoiler-card"
+                                        onclick={() => toggleSpoiler(replyItem.id + ':media:' + idx)}
+                                        title="Spoiler: Toque para ver a imagem"
+                                      >
+                                        <img
+                                          src={chunk.mediaUrl}
+                                          alt={chunk.mediaAlt || 'Mídia com spoiler'}
+                                          class="comment-rendered-img"
+                                          loading="lazy"
+                                          referrerpolicy="no-referrer"
+                                        />
+                                        <div class="media-spoiler-overlay">
+                                          <EyeOff size={16} />
+                                          <span>SPOILER — TOQUE PARA VER</span>
+                                        </div>
+                                      </button>
+                                    {:else}
+                                      <div class="media-view-wrapper">
+                                        <button
+                                          type="button"
+                                          class="media-view-btn"
+                                          onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
+                                          title="Clique para ampliar em tela cheia"
+                                        >
+                                          <img
+                                            src={chunk.mediaUrl}
+                                            alt={chunk.mediaAlt || 'Mídia do comentário'}
+                                            class="comment-rendered-img"
+                                            loading="lazy"
+                                            referrerpolicy="no-referrer"
+                                          />
+                                          {#if chunk.isGif}
+                                            <span class="media-type-badge">GIF</span>
+                                          {/if}
+                                        </button>
+                                        {#if chunk.isSpoiler}
+                                          <button
+                                            type="button"
+                                            class="media-rehide-btn"
+                                            onclick={(e) => {
+                                              e.stopPropagation();
+                                              toggleSpoiler(replyItem.id + ':media:' + idx);
+                                            }}
+                                            title="Ocultar spoiler novamente"
+                                          >
+                                            <EyeOff size={11} />
+                                            <span>Ocultar</span>
+                                          </button>
+                                        {/if}
+                                      </div>
+                                    {/if}
+                                  </div>
+                                {:else if chunk.type === 'mention'}
+                                  <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
+                                {:else}
+                                  <span>{chunk.content}</span>
+                                {/if}
+                              {/each}
+                            </div>
+
+                            <footer class="comment-footer-actions">
+                              <button
+                                type="button"
+                                class="btn-footer-like"
+                                class:liked={repHasLiked}
+                                onclick={() => mutate('comment_like', replyItem.id)}
+                                disabled={!profile || busy}
+                                title={repHasLiked ? 'Descurtir' : 'Curtir resposta'}
+                              >
+                                <Heart size={13} class={repHasLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                                <span>{replyItem.comment_likes?.length || 0}</span>
+                              </button>
+
+                              {#if profile}
+                                <button
+                                  type="button"
+                                  class="btn-footer-action"
+                                  onclick={() => compose(root)}
+                                >
+                                  <CornerDownRight size={12} />
+                                  <span>Responder</span>
+                                </button>
                               {/if}
-                            {/each}
-                          </div>
 
-                          <footer class="comment-footer-actions">
-                            <button
-                              type="button"
-                              class="btn-footer-like"
-                              class:liked={repHasLiked}
-                              onclick={() => mutate('comment_like', replyItem.id)}
-                              disabled={!profile || busy}
-                              title={repHasLiked ? 'Descurtir' : 'Curtir resposta'}
-                            >
-                              <Heart size={13} class={repHasLiked ? 'fill-rose-500 text-rose-500' : ''} />
-                              <span>{replyItem.comment_likes?.length || 0}</span>
-                            </button>
-
-                            {#if profile}
-                              <button
-                                type="button"
-                                class="btn-footer-action"
-                                onclick={() => compose(root)}
-                              >
-                                <CornerDownRight size={12} />
-                                <span>Responder</span>
-                              </button>
-                            {/if}
-
-                            {#if repIsAuthor}
-                              <button
-                                type="button"
-                                class="btn-footer-action"
-                                onclick={() => compose(replyItem, true)}
-                                title="Editar resposta"
-                              >
-                                <Edit3 size={11} />
-                                <span>Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                class="btn-footer-action text-danger"
-                                disabled={busy || deleteBusy}
-                                onclick={() => (commentToDelete = replyItem)}
-                                title="Excluir resposta"
-                              >
-                                <Trash2 size={11} />
-                                <span>Apagar</span>
-                              </button>
-                            {:else if profile}
-                              <button
-                                type="button"
-                                class="btn-footer-action"
-                                onclick={() => (reportingComment = replyItem)}
-                                title="Denunciar esta resposta"
-                              >
-                                <Flag size={11} />
-                                <span>Denunciar</span>
-                              </button>
-                            {/if}
-                          </footer>
+                              {#if repIsAuthor}
+                                <button
+                                  type="button"
+                                  class="btn-footer-action"
+                                  onclick={() => compose(replyItem, true)}
+                                  title="Editar resposta"
+                                >
+                                  <Edit3 size={11} />
+                                  <span>Editar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn-footer-action text-danger"
+                                  disabled={busy || deleteBusy}
+                                  onclick={() => (commentToDelete = replyItem)}
+                                  title="Excluir resposta"
+                                >
+                                  <Trash2 size={11} />
+                                  <span>Apagar</span>
+                                </button>
+                              {:else if profile}
+                                <button
+                                  type="button"
+                                  class="btn-footer-action"
+                                  onclick={() => (reportingComment = replyItem)}
+                                  title="Denunciar esta resposta"
+                                >
+                                  <Flag size={11} />
+                                  <span>Denunciar</span>
+                                </button>
+                              {/if}
+                            </footer>
+                          {/if}
                         </div>
                       </article>
                     {/each}
@@ -1607,6 +1743,7 @@
     color: #e2e8f0;
     margin-bottom: 12px;
     word-break: break-word;
+    white-space: pre-wrap;
   }
 
   /* Discord-style Inline Spoilers */
@@ -1873,6 +2010,29 @@
     text-transform: uppercase;
   }
 
+  .attached-thumb-wrap.is-spoiler {
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+
+  .attached-thumb-wrap.is-spoiler .attached-thumb-img {
+    filter: blur(4px) brightness(0.6);
+  }
+
+  .attached-spoiler-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: rgba(14, 11, 23, 0.85);
+    color: #c084fc;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+  }
+
   .attached-media-meta {
     display: flex;
     flex-direction: column;
@@ -1910,6 +2070,16 @@
     color: #cbd5e1;
     cursor: pointer;
     user-select: none;
+    padding: 3px 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+
+  .spoiler-check-label.is-active {
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.3);
   }
 
   .spoiler-check-input {
@@ -1938,19 +2108,79 @@
     background: rgba(244, 63, 94, 0.22);
   }
 
+  /* Tombstone Card for Removed Comments */
+  .comment-card-modern.tombstone-card {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px dashed rgba(255, 255, 255, 0.12) !important;
+    box-shadow: none !important;
+    opacity: 0.85;
+  }
+
+  .comment-card-modern.tombstone-card:hover {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+  }
+
+  .tombstone-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  .tombstone-text {
+    user-select: none;
+  }
+
   /* Comment Media Card in Feed (Discord Style Enquadramento) */
   .comment-media-card {
-    display: inline-block;
+    display: block;
     width: fit-content;
     max-width: min(100%, 460px);
     margin-top: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     border-radius: 10px;
     overflow: hidden;
-    background: transparent;
+    background: rgba(0, 0, 0, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    vertical-align: top;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    white-space: normal;
+  }
+
+  .media-view-wrapper {
+    position: relative;
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .media-rehide-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(14, 11, 23, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 6px;
+    color: #c084fc;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 5;
+    transition: all 0.15s ease;
+  }
+
+  .media-rehide-btn:hover {
+    background: rgba(168, 85, 247, 0.25);
+    border-color: rgba(168, 85, 247, 0.6);
+    color: #f1f5f9;
   }
 
   .media-view-btn {

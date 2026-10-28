@@ -17,6 +17,63 @@ export function threadComments<T extends { id: string; parent_id: string | null;
     ]);
 }
 
+/**
+ * Sanitizes comments ensuring deleted/removed comments with active replies
+ * are transformed into safe tombstones without leaking removed content,
+ * while standalone removed comments without active replies are completely pruned.
+ */
+export function sanitizeComments(rawComments: any[]): any[] {
+  if (!Array.isArray(rawComments) || rawComments.length === 0) return [];
+
+  // 1. Identify which comments have active (unremoved) replies
+  const activeParents = new Set<string>();
+  for (const c of rawComments) {
+    if (!c.removed && !c.deleted && c.parent_id) {
+      activeParents.add(c.parent_id);
+    }
+  }
+
+  // 2. Filter & mask tombstones
+  const result: any[] = [];
+  for (const c of rawComments) {
+    const isRemoved = Boolean(c.removed || c.deleted);
+    if (isRemoved) {
+      // Only keep if it has active replies
+      if (activeParents.has(c.id)) {
+        result.push({
+          id: c.id,
+          user_id: '',
+          body: '[Comentário removido]',
+          created_at: c.created_at,
+          parent_id: c.parent_id || null,
+          removed: true,
+          deleted: true,
+          is_tombstone: true,
+          members: {
+            username: 'removido',
+            display_name: 'Comentário removido',
+            avatar_id: null,
+            avatar_crop: null,
+            name_color: null,
+            avatar_frame_id: null,
+            equipped_comment_banner_id: null,
+            equipped_banner_id: null,
+            equipped_title_id: null
+          },
+          comment_likes: []
+        });
+      }
+    } else {
+      result.push({
+        ...c,
+        is_tombstone: false
+      });
+    }
+  }
+
+  return result;
+}
+
 export interface CommentTextChunk {
   type: 'text' | 'spoiler' | 'mention' | 'media';
   content: string;
