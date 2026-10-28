@@ -13,6 +13,7 @@
     CornerDownRight,
     Edit3,
     Trash2,
+    Eye,
     EyeOff,
     Sparkles,
     ArrowUpDown,
@@ -24,7 +25,8 @@
     Loader2,
     Check,
     Minus,
-    Plus
+    Plus,
+    Maximize2
   } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -90,6 +92,7 @@
 
   // Top-Level Main Composer
   let mainBody = $state('');
+  let showMainPreview = $state(false);
   let mainMedia = $state<{
     url: string;
     previewUrl: string;
@@ -127,7 +130,11 @@
   let busy = $state(false);
   let deleteBusy = $state(false);
   let commentToDelete = $state<Comment | null>(null);
-  let reportingComment = $state<Comment | null>(null);
+  let reportingTarget = $state<{
+    commentId: string;
+    mediaUrl?: string;
+    authorName?: string;
+  } | null>(null);
   let lightboxMedia = $state<{ url: string; alt?: string } | null>(null);
   let sortBy = $state<'recent' | 'likes'>('recent');
 
@@ -514,6 +521,7 @@
       } else {
         mainBody = '';
         mainMedia = null;
+        showMainPreview = false;
         autocomplete?.clearTrackedMentions();
       }
 
@@ -703,57 +711,182 @@
           aria-label="Seu comentário"
         ></textarea>
 
-        <!-- Attached Media Preview Chip -->
+        <!-- Sizable Pre-Upload Attachment Card (Adaptive 180-240px, Click-to-Enlarge) -->
         {#if mainMedia}
-          <div class="attached-media-chip" role="region" aria-label="Mídia anexada">
-            <div class="attached-media-left">
-              <div class="attached-thumb-wrap" class:is-spoiler={mainMedia.isSpoiler}>
-                <img src={mainMedia.previewUrl} alt="Prévia" class="attached-thumb-img" />
-                {#if mainMedia.isSpoiler}
-                  <div class="attached-spoiler-overlay">
-                    <EyeOff size={11} />
-                    <span>SPOILER</span>
-                  </div>
-                {:else}
-                  <span class="attached-thumb-badge">{mainMedia.isGif ? 'GIF' : 'IMG'}</span>
+          <div class="pre-upload-attachment-card" role="region" aria-label="Mídia anexada">
+            <div class="pre-upload-preview-viewport">
+              <button
+                type="button"
+                class="pre-upload-zoom-trigger"
+                onclick={() => openLightbox(mainMedia?.previewUrl, mainMedia?.alt)}
+                title="Clique para ampliar e verificar a mídia antes de publicar"
+              >
+                <img
+                  src={mainMedia.previewUrl}
+                  alt={mainMedia.alt || 'Prévia'}
+                  class="pre-upload-img"
+                  class:is-spoiler-blurred={mainMedia.isSpoiler}
+                />
+                <div class="pre-upload-hover-lens">
+                  <Maximize2 size={15} />
+                  <span>Ampliar prévia</span>
+                </div>
+                {#if mainMedia.isGif}
+                  <span class="pre-upload-type-badge">GIF ANIMADO</span>
                 {/if}
-              </div>
-              <div class="attached-media-meta">
-                <span class="attached-filename" title={mainMedia.alt || 'Mídia'}>{mainMedia.alt || 'Mídia anexada'}</span>
-                <span class="attached-status">
+                {#if mainMedia.isSpoiler}
+                  <div class="pre-upload-spoiler-flag">
+                    <EyeOff size={12} />
+                    <span>SPOILER OCULTO</span>
+                  </div>
+                {/if}
+              </button>
+            </div>
+
+            <div class="pre-upload-meta-bar">
+              <div class="pre-upload-info">
+                <span class="pre-upload-name" title={mainMedia.alt || 'Mídia'}>{mainMedia.alt || 'Imagem anexada'}</span>
+                <span class="pre-upload-status">
                   {#if mainMedia.uploading}
-                    <span class="uploading-state"><Loader2 size={11} class="spin-anim inline mr-1" /> Enviando…</span>
+                    <span class="text-amber-400 inline-flex items-center gap-1"><Loader2 size={11} class="spin-anim" /> Enviando imagem…</span>
                   {:else if mainMedia.error}
-                    <span class="error-state text-rose-400">{mainMedia.error}</span>
+                    <span class="text-rose-400">{mainMedia.error}</span>
                   {:else}
-                    <span class="ready-state text-emerald-400">Pronto para publicar</span>
+                    <span class="text-emerald-400 inline-flex items-center gap-1"><Check size={11} /> Pronto para publicar</span>
                   {/if}
                 </span>
               </div>
-            </div>
 
-            <div class="attached-media-controls">
-              <label class="spoiler-check-label" class:is-active={mainMedia.isSpoiler} title="Ocultar como spoiler">
-                <input
-                  type="checkbox"
-                  bind:checked={mainMedia.isSpoiler}
-                  class="spoiler-check-input"
-                />
-                <EyeOff size={13} />
-                <span>Ocultar como spoiler</span>
-              </label>
+              <div class="pre-upload-actions">
+                <label class="spoiler-check-toggle" class:is-active={mainMedia.isSpoiler} title="Ocultar como spoiler">
+                  <input
+                    type="checkbox"
+                    bind:checked={mainMedia.isSpoiler}
+                    class="spoiler-checkbox"
+                  />
+                  <EyeOff size={13} />
+                  <span>Ocultar spoiler</span>
+                </label>
 
-              <button
-                type="button"
-                class="btn-remove-attachment"
-                onclick={() => (mainMedia = null)}
-                title="Remover mídia anexada"
-                aria-label="Remover anexo"
-              >
-                <X size={13} />
-                <span>Remover</span>
-              </button>
+                <button
+                  type="button"
+                  class="btn-remove-pre-upload"
+                  onclick={() => (mainMedia = null)}
+                  title="Remover mídia anexada"
+                  aria-label="Remover anexo"
+                >
+                  <X size={13} />
+                  <span>Remover</span>
+                </button>
+              </div>
             </div>
+          </div>
+        {/if}
+
+        <!-- LIVE FULL COMMENT PREVIEW BOX (SIMULATION BEFORE PUBLISHING) -->
+        {#if showMainPreview}
+          <div class="composer-live-preview-box">
+            <div class="preview-box-badge">
+              <Sparkles size={13} class="text-purple-400" />
+              <span>PRÉ-VISUALIZAÇÃO DO COMENTÁRIO</span>
+              <span class="preview-subtext">(como aparecerá na discussão)</span>
+            </div>
+            {#if !mainBody.trim() && !mainMedia?.previewUrl}
+              <p class="preview-empty-hint">Escreva um comentário ou anexe uma imagem/GIF para ver a pré-visualização completa.</p>
+            {:else}
+              {@const previewRawText = (() => {
+                let text = mainBody.trim();
+                if (mainMedia?.previewUrl) {
+                  const mediaTag = mainMedia.isSpoiler
+                    ? `||![${mainMedia.alt || 'Mídia'}](${mainMedia.previewUrl})||`
+                    : `![${mainMedia.alt || 'Mídia'}](${mainMedia.previewUrl})`;
+                  text = text ? `${text}\n\n${mediaTag}` : mediaTag;
+                }
+                return text;
+              })()}
+              <div class="preview-rendered-card">
+                <header class="comment-author-row">
+                  <UserAvatar
+                    avatarId={profile?.avatar_id}
+                    frameId={profile?.avatar_frame_id}
+                    crop={profile?.avatar_crop}
+                    displayName={profile?.display_name || profile?.username || 'Você'}
+                    size={30}
+                  />
+                  <div class="author-details">
+                    <div class="author-headline">
+                      <span class="author-name">{profile?.display_name || 'Você'}</span>
+                      <span class="author-tag">@{profile?.username || 'voce'}</span>
+                      <span class="badge-self">Você (Prévia)</span>
+                      <time class="comment-time">Agora mesmo</time>
+                    </div>
+                  </div>
+                </header>
+
+                <div class="comment-text-body">
+                  {#each parseCommentBody(previewRawText) as chunk, idx (idx)}
+                    {#if chunk.type === 'spoiler'}
+                      <button
+                        type="button"
+                        class="discord-spoiler"
+                        class:is-revealed={revealedSpoilers.has('preview:' + idx)}
+                        onclick={() => toggleSpoiler('preview:' + idx)}
+                        title={revealedSpoilers.has('preview:' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para testar'}
+                      >{chunk.content}</button>
+                    {:else if chunk.type === 'media'}
+                      <div class="comment-media-card">
+                        {#if chunk.isSpoiler && !revealedSpoilers.has('preview:media:' + idx)}
+                          <button
+                            type="button"
+                            class="media-spoiler-card"
+                            onclick={() => toggleSpoiler('preview:media:' + idx)}
+                            title="Spoiler: Toque para ver"
+                          >
+                            <img src={chunk.mediaUrl} alt={chunk.mediaAlt || 'Mídia'} class="comment-rendered-img" />
+                            <div class="media-spoiler-overlay">
+                              <EyeOff size={16} />
+                              <span>SPOILER — TOQUE PARA VER</span>
+                            </div>
+                          </button>
+                        {:else}
+                          <div class="media-view-wrapper">
+                            <button
+                              type="button"
+                              class="media-view-btn"
+                              onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
+                              title="Clique para ampliar em tela cheia"
+                            >
+                              <img src={chunk.mediaUrl} alt={chunk.mediaAlt || 'Mídia'} class="comment-rendered-img" />
+                              {#if chunk.isGif || mainMedia?.isGif}
+                                <span class="media-type-badge">GIF</span>
+                              {/if}
+                            </button>
+                            {#if chunk.isSpoiler}
+                              <button
+                                type="button"
+                                class="media-rehide-btn"
+                                onclick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSpoiler('preview:media:' + idx);
+                                }}
+                                title="Ocultar spoiler novamente"
+                              >
+                                <EyeOff size={11} />
+                                <span>Ocultar</span>
+                              </button>
+                            {/if}
+                          </div>
+                        {/if}
+                      </div>
+                    {:else if chunk.type === 'mention'}
+                      <span class="mention-chip">@{chunk.content}</span>
+                    {:else}
+                      <span>{chunk.content}</span>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
         {/if}
 
@@ -767,6 +900,21 @@
       <!-- Composer Toolbar -->
       <div class="composer-action-bar">
         <div class="toolbar-helpers">
+          <button
+            type="button"
+            class="helper-btn"
+            class:is-active={showMainPreview}
+            onclick={() => (showMainPreview = !showMainPreview)}
+            title="Pré-visualizar como seu comentário ficará após publicado"
+          >
+            {#if showMainPreview}
+              <EyeOff size={13} />
+              <span>Voltar a Editar</span>
+            {:else}
+              <Eye size={13} />
+              <span>Pré-visualizar</span>
+            {/if}
+          </button>
           <button
             type="button"
             class="helper-btn"
@@ -862,13 +1010,16 @@
           <span class="collapsed-hint">Clique para expandir</span>
         </div>
       {:else}
-        <!-- ACTIVE COMMENT CARD -->
+        <!-- ACTIVE COMMENT CARD (V9 REDESIGNED 3-LEVEL HIERARCHY) -->
         <article
           id={'comment-' + comment.id}
           class="comment-card-modern"
           class:is-reply-target={activeReplyId === comment.id}
           class:has-comment-banner={!!commentBanner}
+          class:is-root-card={node.depth === 0}
           class:is-nested-card={node.depth > 0}
+          class:is-level-1={node.depth === 1}
+          class:is-level-deep={node.depth >= 2}
         >
           {#if commentBanner}
             <div class="comment-banner-bg" style="background: {commentBanner};" aria-hidden="true"></div>
@@ -883,7 +1034,7 @@
                 frameId={comment.members?.avatar_frame_id}
                 crop={comment.members?.avatar_crop}
                 displayName={comment.members?.display_name || 'Leitor'}
-                size={node.depth > 0 ? 26 : 30}
+                size={node.depth === 0 ? 32 : (node.depth === 1 ? 28 : 24)}
               />
               <div class="author-details">
                 <div class="author-headline">
@@ -898,7 +1049,7 @@
                   {#if isAuthor}
                     <span class="badge-self">Você</span>
                   {/if}
-                  {#if node.depth >= 3 && node.parentAuthorName}
+                  {#if node.depth >= 2 && node.parentAuthorName}
                     <span class="parent-mention-tag" title="Em resposta a @{node.parentAuthorName}">
                       ↳ @{node.parentAuthorName}
                     </span>
@@ -1007,20 +1158,42 @@
                               <span class="media-type-badge">GIF</span>
                             {/if}
                           </button>
-                          {#if chunk.isSpoiler}
-                            <button
-                              type="button"
-                              class="media-rehide-btn"
-                              onclick={(e) => {
-                                e.stopPropagation();
-                                toggleSpoiler(comment.id + ':media:' + idx);
-                              }}
-                              title="Ocultar spoiler novamente"
-                            >
-                              <EyeOff size={11} />
-                              <span>Ocultar</span>
-                            </button>
-                          {/if}
+
+                          <div class="media-overlay-actions">
+                            {#if profile && !isAuthor}
+                              <button
+                                type="button"
+                                class="media-action-pill btn-media-report"
+                                onclick={(e) => {
+                                  e.stopPropagation();
+                                  reportingTarget = {
+                                    commentId: comment.id,
+                                    mediaUrl: chunk.mediaUrl,
+                                    authorName: comment.members?.display_name || comment.members?.username
+                                  };
+                                }}
+                                title="Denunciar esta mídia para a moderação"
+                              >
+                                <Flag size={11} />
+                                <span>Denunciar</span>
+                              </button>
+                            {/if}
+
+                            {#if chunk.isSpoiler}
+                              <button
+                                type="button"
+                                class="media-action-pill btn-media-rehide"
+                                onclick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSpoiler(comment.id + ':media:' + idx);
+                                }}
+                                title="Ocultar spoiler novamente"
+                              >
+                                <EyeOff size={11} />
+                                <span>Ocultar</span>
+                              </button>
+                            {/if}
+                          </div>
                         </div>
                       {/if}
                     </div>
@@ -1032,63 +1205,72 @@
                 {/each}
               </div>
 
-              <!-- Footer Action Row -->
+              <!-- Footer Action Row (V9 Redesigned: Balanced, Touch-Friendly, Clear Icons) -->
               <footer class="comment-footer-actions">
-                <button
-                  type="button"
-                  class="btn-footer-like"
-                  class:liked={hasLiked}
-                  onclick={() => mutateLike(comment.id)}
-                  disabled={!profile || busy}
-                  title={hasLiked ? 'Descurtir' : 'Curtir comentário'}
-                >
-                  <Heart size={13} class={hasLiked ? 'fill-rose-500 text-rose-500' : ''} />
-                  <span>{comment.comment_likes?.length || 0}</span>
-                </button>
+                <div class="footer-primary-actions">
+                  <button
+                    type="button"
+                    class="btn-footer-like"
+                    class:liked={hasLiked}
+                    onclick={() => mutateLike(comment.id)}
+                    disabled={!profile || busy}
+                    title={hasLiked ? 'Descurtir comentário' : 'Curtir comentário'}
+                  >
+                    <Heart size={15} class={hasLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                    <span class="like-counter">{comment.comment_likes?.length || 0}</span>
+                  </button>
 
-                {#if profile}
-                  <button
-                    type="button"
-                    class="btn-footer-action"
-                    onclick={() => openInlineReply(comment)}
-                    title="Responder a este comentário"
-                  >
-                    <CornerDownRight size={12} />
-                    <span>Responder</span>
-                  </button>
-                {/if}
+                  {#if profile}
+                    <button
+                      type="button"
+                      class="btn-footer-reply"
+                      onclick={() => openInlineReply(comment)}
+                      title="Responder diretamente a este comentário"
+                    >
+                      <CornerDownRight size={15} />
+                      <span>Responder</span>
+                    </button>
+                  {/if}
+                </div>
 
-                {#if isAuthor}
-                  <button
-                    type="button"
-                    class="btn-footer-action"
-                    onclick={() => startInlineEdit(comment)}
-                    title="Editar comentário"
-                  >
-                    <Edit3 size={11} />
-                    <span>Editar</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-footer-action text-danger"
-                    disabled={busy || deleteBusy}
-                    onclick={() => (commentToDelete = comment)}
-                    title="Excluir comentário"
-                  >
-                    <Trash2 size={11} />
-                    <span>Apagar</span>
-                  </button>
-                {:else if profile}
-                  <button
-                    type="button"
-                    class="btn-footer-action"
-                    onclick={() => (reportingComment = comment)}
-                    title="Denunciar comentário"
-                  >
-                    <Flag size={11} />
-                    <span>Denunciar</span>
-                  </button>
-                {/if}
+                <div class="footer-secondary-actions">
+                  {#if isAuthor}
+                    <button
+                      type="button"
+                      class="btn-footer-secondary"
+                      onclick={() => startInlineEdit(comment)}
+                      title="Editar seu comentário"
+                    >
+                      <Edit3 size={13} />
+                      <span>Editar</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-footer-secondary text-danger"
+                      disabled={busy || deleteBusy}
+                      onclick={() => (commentToDelete = comment)}
+                      title="Excluir seu comentário"
+                    >
+                      <Trash2 size={13} />
+                      <span>Apagar</span>
+                    </button>
+                  {:else if profile}
+                    <button
+                      type="button"
+                      class="btn-footer-secondary text-muted-flag"
+                      onclick={() => {
+                        reportingTarget = {
+                          commentId: comment.id,
+                          authorName: comment.members?.display_name || comment.members?.username
+                        };
+                      }}
+                      title="Denunciar este comentário para a moderação"
+                    >
+                      <Flag size={13} />
+                      <span>Denunciar</span>
+                    </button>
+                  {/if}
+                </div>
               </footer>
             {/if}
           </div>
@@ -1139,40 +1321,62 @@
                 }}
               ></textarea>
 
-              <!-- Attached Media Chip -->
+              <!-- Attached Media Card (Sizable with Zoom Trigger in Inline Composer) -->
               {#if replyMedia}
-                <div class="attached-media-chip inline-chip">
-                  <div class="attached-media-left">
-                    <div class="attached-thumb-wrap" class:is-spoiler={replyMedia.isSpoiler}>
-                      <img src={replyMedia.previewUrl} alt="Prévia" class="attached-thumb-img" />
-                      {#if replyMedia.isSpoiler}
-                        <div class="attached-spoiler-overlay"><EyeOff size={10} /><span>SPOILER</span></div>
-                      {:else}
-                        <span class="attached-thumb-badge">{replyMedia.isGif ? 'GIF' : 'IMG'}</span>
+                <div class="pre-upload-attachment-card is-inline-mode" role="region" aria-label="Mídia anexada à resposta">
+                  <div class="pre-upload-preview-viewport">
+                    <button
+                      type="button"
+                      class="pre-upload-zoom-trigger"
+                      onclick={() => openLightbox(replyMedia?.previewUrl, replyMedia?.alt)}
+                      title="Clique para ampliar prévia em tela cheia"
+                    >
+                      <img
+                        src={replyMedia.previewUrl}
+                        alt={replyMedia.alt || 'Prévia'}
+                        class="pre-upload-img"
+                        class:is-spoiler-blurred={replyMedia.isSpoiler}
+                      />
+                      <div class="pre-upload-hover-lens">
+                        <Maximize2 size={14} />
+                        <span>Ampliar</span>
+                      </div>
+                      {#if replyMedia.isGif}
+                        <span class="pre-upload-type-badge">GIF</span>
                       {/if}
-                    </div>
-                    <div class="attached-media-meta">
-                      <span class="attached-filename">{replyMedia.alt || 'Mídia anexada'}</span>
-                      <span class="attached-status">
+                      {#if replyMedia.isSpoiler}
+                        <div class="pre-upload-spoiler-flag">
+                          <EyeOff size={11} />
+                          <span>SPOILER</span>
+                        </div>
+                      {/if}
+                    </button>
+                  </div>
+
+                  <div class="pre-upload-meta-bar">
+                    <div class="pre-upload-info">
+                      <span class="pre-upload-name">{replyMedia.alt || 'Mídia anexada'}</span>
+                      <span class="pre-upload-status">
                         {#if replyMedia.uploading}
-                          <span class="uploading-state"><Loader2 size={11} class="spin-anim inline mr-1" /> Enviando…</span>
+                          <span class="text-amber-400 inline-flex items-center gap-1"><Loader2 size={11} class="spin-anim" /> Enviando…</span>
                         {:else if replyMedia.error}
                           <span class="text-rose-400">{replyMedia.error}</span>
                         {:else}
-                          <span class="text-emerald-400">Pronto</span>
+                          <span class="text-emerald-400 inline-flex items-center gap-1"><Check size={11} /> Pronto</span>
                         {/if}
                       </span>
                     </div>
-                  </div>
-                  <div class="attached-media-controls">
-                    <label class="spoiler-check-label" class:is-active={replyMedia.isSpoiler}>
-                      <input type="checkbox" bind:checked={replyMedia.isSpoiler} class="spoiler-check-input" />
-                      <EyeOff size={12} />
-                      <span>Spoiler</span>
-                    </label>
-                    <button type="button" class="btn-remove-attachment" onclick={() => (replyMedia = null)}>
-                      <X size={12} />
-                    </button>
+
+                    <div class="pre-upload-actions">
+                      <label class="spoiler-check-toggle" class:is-active={replyMedia.isSpoiler}>
+                        <input type="checkbox" bind:checked={replyMedia.isSpoiler} class="spoiler-checkbox" />
+                        <EyeOff size={12} />
+                        <span>Spoiler</span>
+                      </label>
+                      <button type="button" class="btn-remove-pre-upload" onclick={() => (replyMedia = null)} title="Remover mídia">
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               {/if}
@@ -1276,18 +1480,25 @@
   {:else}
     <div class="comments-thread-container">
       {#each commentTree as rootNode (rootNode.comment.id)}
-        {@render renderCommentNode(rootNode)}
+        <div class="conversation-root-block">
+          {@render renderCommentNode(rootNode)}
+        </div>
       {/each}
     </div>
   {/if}
 
-  <!-- REPORT MODAL -->
-  {#if reportingComment}
+  <!-- REPORT MODAL (INTEGRATED FOR COMMENTS & MULTIMEDIA) -->
+  {#if reportingTarget}
     <ReportModal
+      targetType="COMMENT"
       workId={workId}
       chapterId={chapterId}
-      commentId={reportingComment.id}
-      onclose={() => (reportingComment = null)}
+      commentId={reportingTarget.commentId}
+      reportedMediaUrl={reportingTarget.mediaUrl}
+      targetTitle={reportingTarget.mediaUrl
+        ? `Mídia em comentário de @${reportingTarget.authorName || 'leitor'}`
+        : `Comentário de @${reportingTarget.authorName || 'leitor'}`}
+      onclose={() => (reportingTarget = null)}
     />
   {/if}
 
@@ -1647,7 +1858,17 @@
   .comments-thread-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
+  }
+
+  /* 3-Level Visual Hierarchy: Generous Root Block Spacing (18-24px) */
+  .conversation-root-block {
+    margin-bottom: 22px;
+    width: 100%;
+  }
+
+  .conversation-root-block:last-child {
+    margin-bottom: 0;
   }
 
   .thread-node-wrapper {
@@ -1658,15 +1879,15 @@
   .thread-children-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
   /* Vertical Guide Rail (Reddit Style) */
   .thread-replies-nest {
     position: relative;
-    margin-top: 8px;
-    margin-left: 12px;
-    padding-left: 14px;
+    margin-top: 10px;
+    margin-left: 14px;
+    padding-left: 16px;
   }
 
   .thread-vertical-rail {
@@ -1685,7 +1906,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 3px;
+    left: 4px;
     width: 2px;
     background: rgba(168, 85, 247, 0.22);
     border-radius: 9999px;
@@ -1764,7 +1985,7 @@
   }
 
   /* =========================================================================
-     COMPACT NATURAL COMMENT CARDS (ELIMINATING GIANT EMPTY SPACES)
+     COMPACT NATURAL COMMENT CARDS (3-LEVEL HIERARCHY WITH VISUAL DEPTH)
      ========================================================================= */
 
   .comment-card-modern {
@@ -1776,19 +1997,35 @@
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
   }
 
-  .comment-card-modern.is-nested-card {
-    background: rgba(15, 13, 25, 0.7);
-    border-color: rgba(255, 255, 255, 0.05);
+  /* Level 1: Distinct Root Card with Elevated Presence */
+  .comment-card-modern.is-root-card {
+    background: #0d101d;
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    border-radius: 12px;
+  }
+
+  /* Level 2: Nested Direct Replies Attached to Guide Line */
+  .comment-card-modern.is-nested-card.is-level-1 {
+    background: rgba(16, 13, 26, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 10px;
   }
 
+  /* Level 3: Nested Deeper Replies */
+  .comment-card-modern.is-nested-card.is-level-deep {
+    background: rgba(14, 11, 23, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+  }
+
   .comment-card-modern:hover {
-    border-color: rgba(255, 255, 255, 0.13);
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .comment-card-modern.is-reply-target {
     border-color: #a855f7;
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.35);
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.4);
   }
 
   .comment-banner-bg {
@@ -1812,10 +2049,14 @@
   .comment-content-wrap {
     position: relative;
     z-index: 1;
-    padding: 10px 14px;
+    padding: 12px 16px;
   }
 
   .is-nested-card .comment-content-wrap {
+    padding: 10px 14px;
+  }
+
+  .is-level-deep .comment-content-wrap {
     padding: 8px 12px;
   }
 
@@ -1959,64 +2200,118 @@
     background: rgba(168, 85, 247, 0.2);
   }
 
-  /* Footer Action Row */
+  /* =========================================================================
+     FOOTER ACTION ROW (V9 REDESIGNED: BALANCED, TOUCH-FRIENDLY PILLS)
+     ========================================================================= */
+
   .comment-footer-actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    padding-top: 2px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    flex-wrap: wrap;
+  }
+
+  .footer-primary-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .btn-footer-like {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 7px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 6px;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
     color: #94a3b8;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.18s ease;
+    user-select: none;
   }
 
   .btn-footer-like:hover:not(:disabled) {
-    background: rgba(244, 63, 94, 0.1);
-    border-color: rgba(244, 63, 94, 0.3);
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.35);
     color: #f43f5e;
   }
 
   .btn-footer-like.liked {
-    background: rgba(244, 63, 94, 0.15);
-    border-color: rgba(244, 63, 94, 0.4);
+    background: rgba(244, 63, 94, 0.18);
+    border-color: rgba(244, 63, 94, 0.45);
     color: #f43f5e;
   }
 
-  .btn-footer-action {
+  .like-counter {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .btn-footer-reply {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.22);
+    border-radius: 9999px;
+    color: #d8b4fe;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    user-select: none;
+  }
+
+  .btn-footer-reply:hover {
+    background: rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.45);
+    color: #ffffff;
+  }
+
+  .footer-secondary-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-footer-secondary {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    height: 28px;
+    padding: 0 8px;
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
     color: #94a3b8;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
-    padding: 3px 5px;
-    border-radius: 4px;
     transition: all 0.15s ease;
   }
 
-  .btn-footer-action:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.05);
+  .btn-footer-secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
   }
 
-  .btn-footer-action.text-danger:hover {
+  .btn-footer-secondary.text-danger:hover {
+    background: rgba(244, 63, 94, 0.12);
     color: #f43f5e;
-    background: rgba(244, 63, 94, 0.1);
+  }
+
+  .btn-footer-secondary.text-muted-flag:hover {
+    background: rgba(234, 179, 8, 0.12);
+    color: #facc15;
   }
 
   /* In-Place Inline Edit Box */
@@ -2210,155 +2505,248 @@
     cursor: not-allowed;
   }
 
-  /* Attached Media Preview Bar in Composer */
-  .attached-media-chip {
+  /* =========================================================================
+     SIZABLE PRE-UPLOAD ATTACHMENT CARD (180-240PX ADAPTIVE WITH ZOOM TRIGGER)
+     ========================================================================= */
+
+  .pre-upload-attachment-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(14, 11, 23, 0.9);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    border-radius: 10px;
+    box-sizing: border-box;
+  }
+
+  .pre-upload-attachment-card.is-inline-mode {
+    margin-top: 6px;
+    padding: 8px;
+    background: rgba(10, 8, 18, 0.9);
+  }
+
+  .pre-upload-preview-viewport {
+    position: relative;
+    width: fit-content;
+    max-width: min(100%, 340px);
+    max-height: 220px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .pre-upload-zoom-trigger {
+    position: relative;
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .pre-upload-img {
+    display: block;
+    max-width: min(100%, 340px);
+    max-height: 220px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: filter 0.18s ease;
+  }
+
+  .pre-upload-img.is-spoiler-blurred {
+    filter: blur(14px) brightness(0.5);
+  }
+
+  .pre-upload-hover-lens {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-top: 8px;
-    padding: 6px 10px;
-    background: rgba(168, 85, 247, 0.08);
-    border: 1px solid rgba(168, 85, 247, 0.25);
+    justify-content: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0;
+    transition: opacity 0.18s ease;
     border-radius: 8px;
   }
 
-  .attached-media-chip.inline-chip {
-    margin-top: 4px;
-    padding: 4px 8px;
+  .pre-upload-zoom-trigger:hover .pre-upload-hover-lens {
+    opacity: 1;
   }
 
-  .attached-media-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-  }
-
-  .attached-thumb-wrap {
-    position: relative;
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #000000;
-    flex-shrink: 0;
-  }
-
-  .attached-thumb-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .attached-thumb-badge {
+  .pre-upload-type-badge {
     position: absolute;
-    bottom: 2px;
-    right: 2px;
-    font-size: 8px;
-    font-weight: 800;
-    padding: 1px 3px;
-    border-radius: 2px;
+    bottom: 6px;
+    left: 6px;
+    padding: 1px 5px;
     background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
     color: #38bdf8;
-    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .attached-thumb-wrap.is-spoiler .attached-thumb-img {
-    filter: blur(4px) brightness(0.6);
-  }
-
-  .attached-spoiler-overlay {
+  .pre-upload-spoiler-flag {
     position: absolute;
     inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1px;
+    gap: 4px;
     background: rgba(14, 11, 23, 0.85);
     color: #c084fc;
-    font-size: 7.5px;
+    font-size: 10px;
     font-weight: 800;
+    letter-spacing: 0.05em;
   }
 
-  .attached-media-meta {
+  .pre-upload-meta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .pre-upload-info {
     display: flex;
     flex-direction: column;
+    gap: 1px;
     overflow: hidden;
   }
 
-  .attached-filename {
+  .pre-upload-name {
     font-size: 11.5px;
     font-weight: 600;
     color: #f1f5f9;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 160px;
+    max-width: 220px;
   }
 
-  .attached-status {
-    font-size: 10.5px;
+  .pre-upload-status {
+    font-size: 11px;
     color: #94a3b8;
   }
 
-  .attached-media-controls {
+  .pre-upload-actions {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
   }
 
-  .spoiler-check-label {
-    display: flex;
+  .spoiler-check-toggle {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 6px;
     font-size: 11px;
     font-weight: 600;
     color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     cursor: pointer;
-    user-select: none;
-    padding: 2px 6px;
-    border-radius: 6px;
-    border: 1px solid transparent;
     transition: all 0.15s ease;
+    user-select: none;
   }
 
-  .spoiler-check-label.is-active {
+  .spoiler-check-toggle.is-active {
     color: #c084fc;
     background: rgba(168, 85, 247, 0.15);
-    border-color: rgba(168, 85, 247, 0.3);
+    border-color: rgba(168, 85, 247, 0.35);
   }
 
-  .spoiler-check-input {
+  .spoiler-checkbox {
     accent-color: #a855f7;
     width: 13px;
     height: 13px;
     cursor: pointer;
   }
 
-  .btn-remove-attachment {
-    display: flex;
+  .btn-remove-pre-upload {
+    display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 3px 6px;
-    background: rgba(244, 63, 94, 0.12);
-    border: 1px solid rgba(244, 63, 94, 0.25);
+    gap: 4px;
+    padding: 3px 8px;
     border-radius: 6px;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.28);
     color: #fb7185;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-remove-attachment:hover {
+  .btn-remove-pre-upload:hover {
     background: rgba(244, 63, 94, 0.22);
+    border-color: rgba(244, 63, 94, 0.45);
   }
 
   /* =========================================================================
-     COMMENT MEDIA IN FEED (DISCORD STYLE NATURAL ENQUADRAMENTO)
+     LIVE FULL COMMENT PREVIEW BOX (SIMULATION BEFORE PUBLISHING)
+     ========================================================================= */
+
+  .composer-live-preview-box {
+    margin-top: 10px;
+    padding: 12px;
+    background: rgba(168, 85, 247, 0.04);
+    border: 1px dashed rgba(168, 85, 247, 0.3);
+    border-radius: 10px;
+    box-sizing: border-box;
+  }
+
+  .preview-box-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #c084fc;
+    margin-bottom: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .preview-subtext {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #94a3b8;
+    text-transform: none;
+  }
+
+  .preview-empty-hint {
+    font-size: 12px;
+    color: #64748b;
+    font-style: italic;
+    margin: 6px 0;
+  }
+
+  .preview-rendered-card {
+    background: #0c0e18;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  /* =========================================================================
+     COMMENT MEDIA IN FEED (DISCORD STYLE NATURAL ENQUADRAMENTO + DIRECT REPORT)
      ========================================================================= */
 
   .comment-media-card {
@@ -2382,31 +2770,43 @@
     max-width: 100%;
   }
 
-  .media-rehide-btn {
+  .media-overlay-actions {
     position: absolute;
     top: 6px;
     right: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 5;
+  }
+
+  .media-action-pill {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 7px;
-    background: rgba(14, 11, 23, 0.85);
+    padding: 3px 8px;
+    background: rgba(14, 11, 23, 0.88);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(168, 85, 247, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
-    color: #c084fc;
+    color: #cbd5e1;
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
-    z-index: 5;
     transition: all 0.15s ease;
   }
 
-  .media-rehide-btn:hover {
+  .btn-media-report:hover {
+    background: rgba(244, 63, 94, 0.25);
+    border-color: rgba(244, 63, 94, 0.6);
+    color: #f43f5e;
+  }
+
+  .btn-media-rehide:hover {
     background: rgba(168, 85, 247, 0.25);
     border-color: rgba(168, 85, 247, 0.6);
-    color: #f1f5f9;
+    color: #d8b4fe;
   }
 
   .media-view-btn {
@@ -2752,6 +3152,36 @@
     .comment-rendered-img {
       max-width: 100%;
       max-height: 300px;
+    }
+
+    /* Mobile Touch Comfort for Actions (38-40px Target) */
+    .btn-footer-like,
+    .btn-footer-reply {
+      min-height: 38px;
+      padding: 0 14px;
+      font-size: 12.5px;
+    }
+
+    .btn-footer-secondary {
+      min-height: 36px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .footer-primary-actions {
+      gap: 6px;
+    }
+
+    .footer-secondary-actions {
+      gap: 4px;
+    }
+
+    .pre-upload-preview-viewport {
+      max-width: 100%;
+    }
+
+    .pre-upload-img {
+      max-width: 100%;
     }
   }
 </style>

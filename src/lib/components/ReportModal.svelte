@@ -3,20 +3,22 @@
 
   let {
     open = $bindable(true),
-    targetType,
+    targetType = 'WORK',
     workId,
     chapterId,
     commentId,
+    reportedMediaUrl,
     targetTitle,
     pageNumber,
     onclose,
     onsuccess
   }: {
     open?: boolean;
-    targetType: 'WORK' | 'CHAPTER' | 'COMMENT' | 'USER';
+    targetType?: 'WORK' | 'CHAPTER' | 'COMMENT' | 'USER';
     workId?: string;
     chapterId?: string;
     commentId?: string;
+    reportedMediaUrl?: string;
     targetTitle?: string;
     pageNumber?: number;
     onclose?: () => void;
@@ -51,11 +53,12 @@
       'Outro motivo'
     ],
     COMMENT: [
-      'Spam, divulgação ou link suspeito',
-      'Assédio, ofensas ou discurso de ódio',
-      'Spoiler não marcado',
-      'Conteúdo impróprio ou abusivo',
-      'Impersonação (se passando por outro usuário/staff)',
+      'Conteúdo impróprio, sexual explícito ou violento (texto ou mídia)',
+      'Spoiler publicado sem a devida ocultação (||spoiler||)',
+      'Assédio, ofensas, discriminação ou discurso de ódio',
+      'Spam, bot, links externos suspeitos ou flood',
+      'Imagem ou GIF inadequado ou ofensivo',
+      'Violação das regras e diretrizes da comunidade',
       'Outro motivo'
     ],
     USER: [
@@ -91,7 +94,8 @@
     errorMessage = '';
 
     const pagePrefix = pageNumber ? `[Página ${pageNumber}] ` : '';
-    const finalDetails = details.trim() ? `${pagePrefix}${details.trim()}` : (pagePrefix ? `[Página ${pageNumber}]` : '');
+    const mediaPrefix = reportedMediaUrl ? `[Mídia denunciada: ${reportedMediaUrl}]\n` : '';
+    const finalDetails = `${mediaPrefix}${pagePrefix}${details.trim()}`.trim();
 
     try {
       const res = await fetch('/api/report', {
@@ -165,6 +169,16 @@
             <div class="error-banner">
               <AlertTriangle size={15} />
               <span>{errorMessage}</span>
+            </div>
+          {/if}
+
+          {#if reportedMediaUrl}
+            <div class="reported-media-preview-box">
+              <img src={reportedMediaUrl} alt="Mídia denunciada" class="reported-media-preview-img" />
+              <div class="reported-media-preview-meta">
+                <span class="reported-media-title">Mídia denunciada</span>
+                <span class="reported-media-hint">Esta imagem ou GIF será analisado pela equipe de moderação.</span>
+              </div>
             </div>
           {/if}
 
@@ -467,6 +481,45 @@
     padding: 1px 6px;
     border-radius: 4px;
     margin-top: 3px;
+  }
+
+  .reported-media-preview-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+
+  .reported-media-preview-img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #000000;
+    flex-shrink: 0;
+  }
+
+  .reported-media-preview-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .reported-media-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f43f5e;
+  }
+
+  .reported-media-hint {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.35;
   }
 
   @media (max-width: 600px) {
