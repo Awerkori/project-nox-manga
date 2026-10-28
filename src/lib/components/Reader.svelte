@@ -68,7 +68,7 @@
   let chapterCompleted = $state(false);
 
   // =========================================================================
-  // INTELLIGENT AGGRESSIVE PRELOADING ENGINE ("TURBO MODE" — DEFAULT)
+  // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V3)
   // =========================================================================
   let preloadedCount = $state(0);
   let preloadProgressPct = $state(0);
@@ -78,6 +78,24 @@
   let activePreloadWorkers = 0;
   let preloadAbortController: AbortController | null = null;
 
+  function getAdaptiveConcurrency(): number {
+    if (typeof window === 'undefined') return 2;
+    if (readerSettings.preloadMode === 'eco') return 1;
+
+    const nav = navigator as any;
+    const connection = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
+    const isSaveData = connection?.saveData;
+    const isSlowConn = connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g' || connection?.effectiveType === '3g';
+    const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches;
+    const cores = nav?.hardwareConcurrency || 4;
+    const ram = nav?.deviceMemory || 4;
+
+    if (isSaveData || isSlowConn) return 1;
+    if (isMobile || cores <= 4 || ram <= 3) return 2;
+    if (cores >= 8 && ram >= 6) return 5;
+    return 3;
+  }
+
   function startTurboPreloader() {
     if (typeof window === 'undefined' || !data.pages?.length) return;
     preloadAbortController?.abort();
@@ -85,7 +103,7 @@
     const signal = preloadAbortController.signal;
 
     const isEco = readerSettings.preloadMode === 'eco';
-    const maxConcurrency = isEco ? 2 : 4;
+    const maxConcurrency = getAdaptiveConcurrency();
 
     turboActive = true;
     turboFinished = false;
@@ -128,8 +146,6 @@
       }
 
       activePreloadWorkers++;
-      const img = new Image();
-      img.decoding = 'async';
       const mediaUrl = `/media/${page.media_id}`;
 
       const finish = () => {
@@ -140,15 +156,26 @@
         spawnWorker();
       };
 
-      img.onload = () => {
-        if ('decode' in img) {
-          img.decode().then(finish).catch(finish);
-        } else {
-          finish();
-        }
-      };
-      img.onerror = finish;
-      img.src = mediaUrl;
+      const pageIndex = data.pages.indexOf(page);
+      const isNearViewport = pageIndex >= current - 1 && pageIndex <= current + 2;
+
+      if (typeof fetch === 'function' && !isNearViewport) {
+        fetch(mediaUrl, { signal, priority: 'low' as any })
+          .then(finish)
+          .catch(finish);
+      } else {
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => {
+          if (isNearViewport && 'decode' in img) {
+            img.decode().then(finish).catch(finish);
+          } else {
+            finish();
+          }
+        };
+        img.onerror = finish;
+        img.src = mediaUrl;
+      }
     }
 
     const initialWorkers = Math.min(maxConcurrency, queue.length);
@@ -326,22 +353,45 @@
     chapterCompleted = true;
 
     try {
-      const res = (await action('member', 'complete_reading', {
-        chapter_id: data.chapter.id
+      // 1. Mark reading progress as completed via read_page
+      let res = (await action('member', 'read_page', {
+        work_id: data.chapter.work_id,
+        chapter_id: data.chapter.id,
+        page: data.pages.length,
+        total_pages: data.pages.length,
+        completed: true
       })) as any;
+
+      // 2. If read_page did not award XP (e.g. read session timing requirement), invoke claim_xp
+      if (!res?.xp_award?.awarded && res?.xp_award?.reason !== 'already_awarded') {
+        const claimRes = (await action('member', 'claim_xp', {
+          work_id: data.chapter.work_id,
+          chapter_id: data.chapter.id
+        })) as any;
+        if (claimRes?.xp_award) {
+          res = claimRes;
+        }
+      }
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
         xpAwardConfirmed = true;
+        const amount = res.xp_award.amount || 150;
+        const rewardTitle = `Capítulo ${chapterIdentityLabel(data.chapter)} concluído!`;
         window.dispatchEvent(
           new CustomEvent('nox-xp-awarded', {
             detail: {
-              amount: res.xp_award.amount,
+              amount,
               total_xp: res.xp_award.total_xp,
-              title: `Capítulo ${chapterIdentityLabel(data.chapter)} concluído!`,
+              title: rewardTitle,
               kind: 'CHAPTER_COMPLETION'
             }
           })
         );
+        if (typeof (window as any).__noxTriggerXpReward === 'function') {
+          (window as any).__noxTriggerXpReward(amount, rewardTitle);
+        }
+      } else if (res?.xp_award?.reason === 'already_awarded') {
+        xpAwardConfirmed = true;
       }
     } catch {
       // Non-blocking
@@ -354,9 +404,11 @@
     if (sending || data.preview) return;
     sending = true;
     try {
-      await action('member', 'reading', {
+      await action('member', 'read_page', {
+        work_id: data.chapter.work_id,
         chapter_id: data.chapter.id,
-        page: pageNumber
+        page: pageNumber,
+        total_pages: data.pages.length
       });
     } catch {
       // Non-blocking
@@ -646,23 +698,25 @@
   {/if}
 
   <!-- ======================================================================= -->
-  <!-- 2. RECONSTRUCTED NOX SIGNATURE READING PROGRESS BAR                    -->
+  <!-- 2. NOX READING PROGRESS BAR (DISABLED BY DEFAULT)                       -->
   <!-- ======================================================================= -->
-  <ReadingProgressBar
-    mode={readerSettings.mode}
-    currentPage={current}
-    totalPages={data.pages.length}
-    position={readerSettings.progressPosition}
-    display={readerSettings.progressDisplay}
-    uiVisible={uiVisible}
-    onPageJump={(p) => {
-      current = p;
-      if (readerSettings.mode === 'webtoon') {
-        const el = document.getElementById(`pagina-${p}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }
-    }}
-  />
+  {#if readerSettings.progressPosition !== 'off'}
+    <ReadingProgressBar
+      mode={readerSettings.mode}
+      currentPage={current}
+      totalPages={data.pages.length}
+      position={readerSettings.progressPosition}
+      display={readerSettings.progressDisplay}
+      uiVisible={uiVisible}
+      onPageJump={(p) => {
+        current = p;
+        if (readerSettings.mode === 'webtoon') {
+          const el = document.getElementById(`pagina-${p}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }}
+    />
+  {/if}
 
   <!-- ======================================================================= -->
   <!-- 3. READING CANVAS (WEBTOON & PAGINATED)                                -->
@@ -679,7 +733,7 @@
           <ReaderPage
             {page}
             onSeen={handleSeen}
-            eager={index < 2 || readerSettings.preloadMode === 'turbo'}
+            eager={index < 2}
           />
         {/each}
       </div>
@@ -723,132 +777,84 @@
   </main>
 
   <!-- ======================================================================= -->
-  <!-- 4. RECONSTRUCTED END OF CHAPTER EXPERIENCE                              -->
+  <!-- 4. RECONSTRUCTED COMPACT END OF CHAPTER EXPERIENCE                      -->
   <!-- ======================================================================= -->
   <section class="reader-conclusion-section" id="chapter-end">
-    <!-- Milestone Header Banner -->
-    <div class="milestone-seal-card">
-      <div class="seal-glow"></div>
-      <div class="seal-content">
-        <div class="seal-eyebrow">
-          <Sparkles size={14} class="text-purple-400" />
-          <span>CAPÍTULO FINALIZADO</span>
-        </div>
-        <h2 class="seal-title">
-          Fim do Capítulo {chapterIdentityLabel(data.chapter)}
-        </h2>
-        <p class="seal-work-name">
-          {data.chapter.works?.title} · Tradução oficial Project Nox
-        </p>
+    <!-- UNIFIED NEXT CHAPTER HERO (COMPACT & DIRECT) -->
+    <div class="compact-completion-card">
+      <div class="completion-eyebrow">
+        <span class="conclusion-badge">Fim do Capítulo {chapterIdentityLabel(data.chapter)}</span>
+        {#if data.chapter.works?.title}
+          <span class="work-dot">·</span>
+          <span class="work-label">{data.chapter.works.title}</span>
+        {/if}
       </div>
-    </div>
 
-    <!-- Next Chapter Hero Card (Or All Caught Up) -->
-    {#if data.next}
-      <div class="next-chapter-hero-card">
-        <div class="hero-glow-ambient"></div>
-        <div class="hero-card-inner">
-          <div class="hero-eyebrow">
-            <Zap size={14} class="text-amber-400" />
-            <span>CONTINUAR LEITURA</span>
+      {#if data.next}
+        <div class="next-chapter-core">
+          <div class="next-info">
+            <span class="next-tag">A SEGUIR</span>
+            <h2 class="next-title">Capítulo {chapterIdentityLabel(data.next)}</h2>
           </div>
-          <h3 class="hero-chapter-title">
-            Capítulo {chapterIdentityLabel(data.next)}
-          </h3>
           <a
-            class="btn-hero-next"
+            class="btn-primary-next"
             href="/ler/{data.next.id}"
             onclick={() => void completeChapter()}
           >
             <span>Ler Próximo Capítulo</span>
-            <ArrowRight size={18} class="arrow-glow-anim" />
+            <ArrowRight size={17} class="arrow-bounce" />
           </a>
         </div>
-      </div>
-    {:else}
-      <div class="all-caught-up-card">
-        <div class="caught-up-icon-ring">
-          <PartyPopper size={32} class="text-amber-400" />
-        </div>
-        <div class="caught-up-text">
-          <h3>Você está em dia com a obra!</h3>
-          <p>Este é o capítulo mais recente lançado no Project Nox. Novos capítulos serão lançados em breve.</p>
-        </div>
-      </div>
-    {/if}
-
-    <!-- REINVENTED "VIBE DO CAPÍTULO" REACTIONS -->
-    <div class="vibe-reactions-module">
-      <div class="vibe-header">
-        <div class="vibe-title-group">
-          <span class="vibe-eyebrow">RELAÇÃO COMUNITÁRIA</span>
-          <h3 class="vibe-title">Qual é a vibe deste capítulo?</h3>
-          <p class="vibe-sub">Deixe sua reação para apoiar a scan e ver como a comunidade se sentiu</p>
-        </div>
-      </div>
-
-      <!-- Sentiment Buttons Grid -->
-      <div class="vibe-pills-grid">
-        {#each REACTION_CONFIG as item (item.id)}
-          {@const isActive = userReactions.has(item.id)}
-          {@const count = reactionCounts[item.id] || 0}
-          {@const pct = getReactionPercentage(item.id)}
-          <button
-            type="button"
-            class="vibe-pill-btn"
-            class:active={isActive}
-            class:pop-anim={justReactedEmoji === item.id}
-            onclick={() => toggleReaction(item.id)}
-            style="--vibe-color: {item.color};"
-            aria-label={`${item.label} (${count} votos)`}
-          >
-            <span class="vibe-emoji">{item.emoji}</span>
-            <div class="vibe-text-col">
-              <span class="vibe-label">{item.label}</span>
-              <small class="vibe-hint">{item.vibe}</small>
-            </div>
-            <div class="vibe-stat-box">
-              <span class="vibe-count">{count}</span>
-              {#if totalReactionVotes > 0}
-                <span class="vibe-pct">{pct}%</span>
-              {/if}
-            </div>
-          </button>
-        {/each}
-      </div>
-
-      <!-- Community Sentiment Spectrum Bar -->
-      {#if totalReactionVotes > 0}
-        <div class="vibe-spectrum-container">
-          <div class="spectrum-bar">
-            {#each REACTION_CONFIG as item}
-              {@const pct = getReactionPercentage(item.id)}
-              {#if pct > 0}
-                <div
-                  class="spectrum-segment"
-                  style="width: {pct}%; background-color: {item.color};"
-                  title="{item.label}: {pct}% ({reactionCounts[item.id]} votos)"
-                ></div>
-              {/if}
-            {/each}
-          </div>
-          <div class="spectrum-legend">
-            <span>Sentimento coletivo de {totalReactionVotes} leitores</span>
+      {:else}
+        <div class="caught-up-compact">
+          <PartyPopper size={22} class="text-amber-400 shrink-0" />
+          <div>
+            <strong>Você está em dia com a obra!</strong>
+            <p>Este é o capítulo mais recente lançado. Novos capítulos serão lançados em breve.</p>
           </div>
         </div>
       {/if}
+
+      <!-- DISCREET SECONDARY NAVIGATION BAR -->
+      <nav class="secondary-nav-row" aria-label="Navegação secundária">
+        {#if data.previous}
+          <a class="nav-sub-btn" href="/ler/{data.previous.id}">
+            <ArrowLeft size={14} />
+            <span>Capítulo Anterior</span>
+          </a>
+        {/if}
+
+        {#if data.siblings && data.siblings.length > 1}
+          <button
+            type="button"
+            class="nav-sub-btn"
+            onclick={() => { showChaptersDrawer = true; uiVisible = true; }}
+          >
+            <List size={14} />
+            <span>Capítulos ({data.siblings.length})</span>
+          </button>
+        {/if}
+
+        <a
+          class="nav-sub-btn"
+          href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
+        >
+          <BookOpen size={14} />
+          <span>Sobre a Obra</span>
+        </a>
+      </nav>
     </div>
 
-    <!-- HIGH-VISIBILITY RED "REPORTAR PROBLEMA" BANNER -->
+    <!-- HIGH-VISIBILITY COMPACT RED REPORT CARD -->
     <div class="report-problem-card">
       <div class="report-card-inner">
         <div class="report-left">
           <div class="report-alert-icon">
-            <AlertTriangle size={20} class="text-rose-500" />
+            <AlertTriangle size={18} class="text-rose-400" />
           </div>
           <div class="report-text">
-            <h4>Encontrou algum problema neste capítulo?</h4>
-            <p>Páginas cortadas, fora de ordem, imagens que não carregam ou erro de tradução.</p>
+            <h4>Encontrou algum problema nas páginas?</h4>
+            <p>Páginas cortadas, em branco, fora de ordem ou erro de tradução.</p>
           </div>
         </div>
         <button
@@ -856,39 +862,58 @@
           class="btn-report-red"
           onclick={() => (showReportModal = true)}
         >
-          <Flag size={14} />
+          <Flag size={13} />
           <span>Reportar Problema</span>
         </button>
       </div>
     </div>
 
-    <!-- SECONDARY NAVIGATION BAR -->
-    <div class="secondary-nav-cluster">
-      {#if data.previous}
-        <a class="nav-cluster-pill" href="/ler/{data.previous.id}">
-          <ArrowLeft size={16} />
-          <span>Capítulo Anterior</span>
-        </a>
-      {/if}
+    <!-- BALANCED SENTIMENT REACTIONS DOCK (ZERO GAPS ON MOBILE) -->
+    <div class="reactions-dock-card">
+      <div class="reactions-dock-header">
+        <span class="reactions-badge">REAÇÃO DOS LEITORES</span>
+        <h3 class="reactions-title">Qual foi a vibe da leitura?</h3>
+      </div>
 
-      {#if data.siblings && data.siblings.length > 1}
-        <button
-          type="button"
-          class="nav-cluster-pill"
-          onclick={() => { showChaptersDrawer = true; uiVisible = true; }}
-        >
-          <List size={16} />
-          <span>Todos os Capítulos ({data.siblings.length})</span>
-        </button>
-      {/if}
+      <!-- Balanced Capsules Flex Container: 5 items cleanly centered on mobile without orphan slots -->
+      <div class="reactions-capsules-wrap">
+        {#each REACTION_CONFIG as item (item.id)}
+          {@const isActive = userReactions.has(item.id)}
+          {@const count = reactionCounts[item.id] || 0}
+          <button
+            type="button"
+            class="reaction-capsule"
+            class:active={isActive}
+            class:pop-anim={justReactedEmoji === item.id}
+            onclick={() => toggleReaction(item.id)}
+            style="--vibe-accent: {item.color};"
+            aria-label={`${item.label} (${count} votos)`}
+          >
+            <span class="reaction-emoji">{item.emoji}</span>
+            <span class="reaction-name">{item.label}</span>
+            <span class="reaction-count" class:has-votes={count > 0}>{count}</span>
+          </button>
+        {/each}
+      </div>
 
-      <a
-        class="nav-cluster-pill"
-        href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
-      >
-        <BookOpen size={16} />
-        <span>Página da Obra</span>
-      </a>
+      <!-- Collective Sentiment Spectrum Bar -->
+      {#if totalReactionVotes > 0}
+        <div class="spectrum-bar-wrap">
+          <div class="spectrum-track">
+            {#each REACTION_CONFIG as item}
+              {@const pct = getReactionPercentage(item.id)}
+              {#if pct > 0}
+                <div
+                  class="spectrum-slice"
+                  style="width: {pct}%; background-color: {item.color};"
+                  title="{item.label}: {pct}% ({reactionCounts[item.id]} votos)"
+                ></div>
+              {/if}
+            {/each}
+          </div>
+          <span class="spectrum-count-label">Sentimento coletivo de {totalReactionVotes} leitores</span>
+        </div>
+      {/if}
     </div>
 
     <!-- COMMENTS SECTION INTEGRATION -->
@@ -1292,124 +1317,112 @@
   }
 
   /* --------------------------------------------------------------------------
-     3. CONCLUSION SECTION
+     3. COMPACT RECONSTRUCTED CONCLUSION SECTION
      -------------------------------------------------------------------------- */
   .reader-conclusion-section {
     width: 100%;
-    max-width: 900px;
-    margin: 48px auto 0 auto;
+    max-width: 820px;
+    margin: 32px auto 0 auto;
     padding: 0 16px;
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: 16px;
   }
 
-  /* Milestone Seal */
-  .milestone-seal-card {
+  /* Compact Next Chapter Hero Card */
+  .compact-completion-card {
     position: relative;
-    border-radius: 20px;
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(14, 11, 22, 0.7) 100%);
-    border: 1px solid rgba(168, 85, 247, 0.3);
-    padding: 32px 24px;
-    text-align: center;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  }
-
-  .seal-glow {
-    position: absolute;
-    top: -50%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 300px;
-    height: 120px;
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .seal-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 800;
-    color: #c084fc;
-    letter-spacing: 0.1em;
-    margin-bottom: 6px;
-  }
-
-  .seal-title {
-    font-size: 24px;
-    font-weight: 800;
-    color: #ffffff;
-    margin: 0 0 6px 0;
-  }
-
-  .seal-work-name {
-    font-size: 13px;
-    color: #94a3b8;
-    margin: 0;
-  }
-
-  /* Next Hero Card */
-  .next-chapter-hero-card {
-    position: relative;
-    border-radius: 20px;
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(11, 9, 18, 0.8) 100%);
-    border: 1px solid rgba(168, 85, 247, 0.4);
-    padding: 28px 24px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(168, 85, 247, 0.2);
-    overflow: hidden;
-  }
-
-  .hero-card-inner {
-    position: relative;
-    z-index: 1;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(13, 10, 20, 0.95) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    padding: 18px 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
     gap: 12px;
   }
 
-  .hero-eyebrow {
-    display: inline-flex;
+  .completion-eyebrow {
+    display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 800;
-    color: #fbbf24;
-    letter-spacing: 0.08em;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
   }
 
-  .hero-chapter-title {
-    font-size: 22px;
+  .conclusion-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.15);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .work-dot {
+    color: #64748b;
+  }
+
+  .work-label {
+    color: #94a3b8;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+  }
+
+  .next-chapter-core {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 0 14px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .next-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .next-tag {
+    font-size: 10px;
+    font-weight: 800;
+    color: #fbbf24;
+    letter-spacing: 0.06em;
+  }
+
+  .next-title {
+    font-size: 20px;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
   }
 
-  .btn-hero-next {
+  .btn-primary-next {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 28px;
+    gap: 8px;
+    padding: 11px 22px;
     border-radius: 9999px;
     background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
     color: #ffffff;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     text-decoration: none;
-    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.5);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
     transition: all 0.2s ease;
+    flex-shrink: 0;
   }
 
-  .btn-hero-next:hover {
+  .btn-primary-next:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 28px rgba(168, 85, 247, 0.8);
+    box-shadow: 0 6px 24px rgba(168, 85, 247, 0.7);
   }
 
-  .arrow-glow-anim {
+  .arrow-bounce {
     animation: bounceRight 1.5s ease-in-out infinite;
   }
 
@@ -1418,215 +1431,215 @@
     50% { transform: translateX(4px); }
   }
 
-  /* All Caught Up Card */
-  .all-caught-up-card {
+  .caught-up-compact {
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 24px;
+    gap: 14px;
+    padding: 12px 14px;
     background: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 16px;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 10px;
   }
 
-  .caught-up-icon-ring {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: rgba(245, 158, 11, 0.15);
+  .caught-up-compact strong {
+    display: block;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .caught-up-compact p {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 2px 0 0 0;
+  }
+
+  .secondary-nav-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
-  .caught-up-text h3 {
-    margin: 0 0 4px 0;
-    font-size: 16px;
-    font-weight: 700;
+  .nav-sub-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    color: #cbd5e1;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .nav-sub-btn:hover {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.35);
     color: #ffffff;
-  }
-
-  .caught-up-text p {
-    margin: 0;
-    font-size: 13px;
-    color: #94a3b8;
-    line-height: 1.4;
   }
 
   /* --------------------------------------------------------------------------
-     VIBE DO CAPÍTULO (REACTIONS)
+     BALANCED SENTIMENT REACTIONS DOCK
      -------------------------------------------------------------------------- */
-  .vibe-reactions-module {
-    background: #090b14;
+  .reactions-dock-card {
+    background: #090a12;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    padding: 24px;
+    border-radius: 14px;
+    padding: 16px 18px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
   }
 
-  .vibe-eyebrow {
-    font-size: 10px;
+  .reactions-dock-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .reactions-badge {
+    font-size: 9.5px;
     font-weight: 800;
     color: #a855f7;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
   }
 
-  .vibe-title {
-    font-size: 18px;
-    font-weight: 800;
+  .reactions-title {
+    font-size: 15px;
+    font-weight: 700;
     color: #ffffff;
-    margin: 2px 0 4px 0;
-  }
-
-  .vibe-sub {
-    font-size: 12px;
-    color: #94a3b8;
     margin: 0;
   }
 
-  .vibe-pills-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
+  .reactions-capsules-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
 
-  .vibe-pill-btn {
-    display: flex;
+  .reaction-capsule {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px;
+    gap: 6px;
+    padding: 8px 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
+    border-radius: 9999px;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
-    text-align: left;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .vibe-pill-btn:hover {
-    background: rgba(255, 255, 255, 0.07);
-    transform: translateY(-2px);
+  .reaction-capsule:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    transform: translateY(-1px);
   }
 
-  .vibe-pill-btn.active {
+  .reaction-capsule.active {
     background: rgba(168, 85, 247, 0.15);
-    border-color: var(--vibe-color, #a855f7);
-    box-shadow: 0 0 16px rgba(168, 85, 247, 0.3);
+    border-color: var(--vibe-accent, #a855f7);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
   }
 
-  .vibe-pill-btn.pop-anim {
-    animation: pulsePop 0.4s ease;
+  .reaction-capsule.pop-anim {
+    animation: pulsePop 0.35s ease;
   }
 
   @keyframes pulsePop {
     0% { transform: scale(1); }
-    50% { transform: scale(1.15); }
+    50% { transform: scale(1.12); }
     100% { transform: scale(1); }
   }
 
-  .vibe-emoji {
-    font-size: 24px;
-    flex-shrink: 0;
+  .reaction-emoji {
+    font-size: 16px;
+    line-height: 1;
   }
 
-  .vibe-text-col {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .vibe-label {
-    font-size: 13px;
-    font-weight: 700;
-    color: #f8fafc;
-  }
-
-  .vibe-hint {
-    font-size: 10px;
-    color: #94a3b8;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .vibe-stat-box {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .vibe-count {
+  .reaction-name {
     font-size: 12px;
     font-weight: 700;
+  }
+
+  .reaction-count {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #64748b;
+    padding-left: 2px;
+  }
+
+  .reaction-count.has-votes {
     color: #c084fc;
   }
 
-  .vibe-pct {
-    font-size: 10px;
-    color: #64748b;
-  }
-
-  .vibe-spectrum-container {
+  .spectrum-bar-wrap {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 6px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 4px;
   }
 
-  .spectrum-bar {
-    width: 100%;
-    height: 8px;
+  .spectrum-track {
+    flex: 1;
+    height: 6px;
     border-radius: 9999px;
     overflow: hidden;
     display: flex;
     background: rgba(255, 255, 255, 0.05);
   }
 
-  .spectrum-segment {
+  .spectrum-slice {
     height: 100%;
     transition: width 0.3s ease;
   }
 
-  .spectrum-legend {
-    font-size: 11px;
+  .spectrum-count-label {
+    font-size: 10.5px;
     color: #64748b;
-    text-align: right;
+    white-space: nowrap;
   }
 
   /* --------------------------------------------------------------------------
-     HIGH-VISIBILITY RED "REPORTAR PROBLEMA" BANNER
+     HIGH-VISIBILITY COMPACT RED REPORT CARD
      -------------------------------------------------------------------------- */
   .report-problem-card {
-    background: rgba(220, 38, 38, 0.08);
+    background: rgba(220, 38, 38, 0.09);
     border: 1px solid rgba(239, 68, 68, 0.35);
-    border-radius: 16px;
-    padding: 18px 20px;
-    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.08);
   }
 
   .report-card-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 14px;
     flex-wrap: wrap;
   }
 
   .report-left {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     max-width: 65%;
   }
 
   .report-alert-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     background: rgba(239, 68, 68, 0.15);
     display: flex;
     align-items: center;
@@ -1635,15 +1648,15 @@
   }
 
   .report-text h4 {
-    margin: 0 0 2px 0;
-    font-size: 14px;
+    margin: 0 0 1px 0;
+    font-size: 13px;
     font-weight: 700;
     color: #fca5a5;
   }
 
   .report-text p {
     margin: 0;
-    font-size: 12px;
+    font-size: 11px;
     color: #94a3b8;
     line-height: 1.3;
   }
@@ -1652,12 +1665,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    border-radius: 8px;
+    padding: 7px 14px;
+    border-radius: 7px;
     background: rgba(239, 68, 68, 0.18);
     border: 1px solid rgba(239, 68, 68, 0.4);
     color: #fecaca;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1666,40 +1679,7 @@
   .btn-report-red:hover {
     background: #ef4444;
     color: #ffffff;
-    box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);
-  }
-
-  /* --------------------------------------------------------------------------
-     SECONDARY ACTIONS CLUSTER
-     -------------------------------------------------------------------------- */
-  .secondary-nav-cluster {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .nav-cluster-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 9999px;
-    color: #cbd5e1;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .nav-cluster-pill:hover {
-    background: rgba(168, 85, 247, 0.15);
-    border-color: rgba(168, 85, 247, 0.4);
-    color: #ffffff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
   }
 
   /* --------------------------------------------------------------------------
@@ -1875,16 +1855,30 @@
       display: none;
     }
 
-    .milestone-seal-card {
-      padding: 20px 14px;
+    .compact-completion-card {
+      padding: 14px 16px;
     }
 
-    .seal-title {
-      font-size: 20px;
+    .next-chapter-core {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
     }
 
-    .hero-chapter-title {
-      font-size: 18px;
+    .btn-primary-next {
+      width: 100%;
+      justify-content: center;
+      padding: 12px 18px;
+    }
+
+    .secondary-nav-row {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .nav-sub-btn {
+      width: 100%;
+      justify-content: center;
     }
 
     .report-left {
@@ -1896,14 +1890,13 @@
       justify-content: center;
     }
 
-    .secondary-nav-cluster {
-      flex-direction: column;
-      width: 100%;
+    .reactions-capsules-wrap {
+      gap: 6px;
     }
 
-    .nav-cluster-pill {
-      width: 100%;
-      justify-content: center;
+    .reaction-capsule {
+      padding: 7px 11px;
+      font-size: 11.5px;
     }
   }
 </style>

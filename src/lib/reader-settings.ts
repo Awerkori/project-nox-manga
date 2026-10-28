@@ -28,7 +28,7 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   width: 850,
   gap: false,
   theme: 'dark',
-  progressPosition: 'bottom',
+  progressPosition: 'off',
   progressDisplay: 'percent',
   preloadMode: 'turbo',
   autoHideControls: true
@@ -57,7 +57,7 @@ export function loadReaderSettings(): ReaderSettings {
       return sanitizeSettings({
         ...DEFAULT_READER_SETTINGS,
         ...v2,
-        progressPosition: v2.progressBar === false ? 'off' : (v2.progressPosition === 'left' || v2.progressPosition === 'right' ? v2.progressPosition : 'bottom'),
+        progressPosition: v2.progressBar === true && v2.progressPosition ? v2.progressPosition : (v2.progressPosition === 'left' || v2.progressPosition === 'right' || v2.progressPosition === 'bottom' ? v2.progressPosition : 'off'),
         preloadMode: v2.preload === 'off' ? 'eco' : 'turbo'
       });
     }
@@ -92,7 +92,7 @@ function sanitizeSettings(parsed: any): ReaderSettings {
     width: Math.min(1400, Math.max(400, Number(parsed.width) || 850)),
     gap: Boolean(parsed.gap),
     theme: validThemes.includes(parsed.theme) ? parsed.theme : 'dark',
-    progressPosition: validPositions.includes(parsed.progressPosition) ? parsed.progressPosition : 'bottom',
+    progressPosition: validPositions.includes(parsed.progressPosition) ? parsed.progressPosition : 'off',
     progressDisplay: validDisplays.includes(parsed.progressDisplay) ? parsed.progressDisplay : 'percent',
     preloadMode: parsed.preloadMode === 'eco' ? 'eco' : 'turbo',
     autoHideControls: parsed.autoHideControls !== false

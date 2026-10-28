@@ -140,6 +140,15 @@ export const POST = async ({ request, locals, platform }: any) => {
     });
   }
 
+  // Chapter reading and progression aliases for backwards and forward compatibility
+  if (body.scope === 'member') {
+    if (body.action === 'reading') {
+      body.action = 'read_page';
+    } else if (body.action === 'complete_reading') {
+      body.action = 'claim_xp';
+    }
+  }
+
   const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
   const { data, error: problem } = isCanonicalChapterWrite
     ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
@@ -268,7 +277,7 @@ export const POST = async ({ request, locals, platform }: any) => {
   }
 
   if (locals.user?.id) {
-    if ((data as any)?.xp_award?.awarded || ['read_page', 'library', 'profile'].includes(body.action)) {
+    if ((data as any)?.xp_award?.awarded || ['read_page', 'claim_xp', 'reading', 'complete_reading', 'library', 'profile'].includes(body.action)) {
       invalidateUserSession(locals.user.id);
       invalidateRankingCache();
     }

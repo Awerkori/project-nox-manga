@@ -6,7 +6,7 @@
     mode = 'webtoon',
     currentPage = 1,
     totalPages = 1,
-    position = 'bottom',
+    position = 'off',
     display = 'percent',
     uiVisible = true,
     onPageJump = () => {}
@@ -26,14 +26,13 @@
   let isHovered = $state(false);
 
   function calculateProgress() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || position === 'off') return;
 
     if (mode === 'paginated') {
       scrollPercent = totalPages > 0 ? Math.min(100, Math.max(0, Math.round((currentPage / totalPages) * 100))) : 0;
       return;
     }
 
-    // Webtoon mode: calculate scroll percentage from entire document
     const doc = document.documentElement;
     const body = document.body;
     const scrollTop = window.scrollY || doc.scrollTop || body.scrollTop || 0;
@@ -49,13 +48,12 @@
     if (maxScroll <= 0) {
       scrollPercent = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
     } else {
-      const pct = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
-      scrollPercent = pct;
+      scrollPercent = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
     }
   }
 
   function handleScroll() {
-    if (rafId) return;
+    if (rafId || position === 'off') return;
     rafId = requestAnimationFrame(() => {
       calculateProgress();
       rafId = null;
@@ -63,6 +61,7 @@
   }
 
   $effect(() => {
+    if (position === 'off') return;
     if (mode === 'paginated') {
       scrollPercent = totalPages > 0 ? Math.min(100, Math.max(0, Math.round((currentPage / totalPages) * 100))) : 0;
     } else {
@@ -72,9 +71,11 @@
 
   onMount(() => {
     isMounted = true;
-    calculateProgress();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll, { passive: true });
+    if (position !== 'off') {
+      calculateProgress();
+      window.addEventListener('scroll', handleScroll, { passive: true });
+      window.addEventListener('resize', handleScroll, { passive: true });
+    }
   });
 
   onDestroy(() => {
@@ -86,6 +87,7 @@
   });
 
   function handleTrackClick(e: MouseEvent) {
+    if (position === 'off') return;
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     let ratio = 0;
@@ -113,17 +115,17 @@
 </script>
 
 {#if position !== 'off'}
-  <!-- NOX SIGNATURE READING PROGRESS BAR -->
+  <!-- NOX ULTRA-FINE PROGRESS BAR (DISCREET & ELEGANT) -->
   <aside
     class="nox-progress-system pos-{position}"
     class:ui-active={uiVisible}
     class:is-hovered={isHovered}
     role="region"
-    aria-label="Progresso de leitura Project Nox"
+    aria-label="Progresso de leitura"
     onmouseenter={() => (isHovered = true)}
     onmouseleave={() => (isHovered = false)}
   >
-    <!-- Interactive Clickable Track Container -->
+    <!-- Interactive Track -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="nox-progress-rail"
@@ -135,26 +137,25 @@
       aria-label="Barra de rolagem de leitura"
       onclick={handleTrackClick}
     >
-      <!-- Track Background Bed -->
+      <!-- Track Bed -->
       <div class="rail-bed"></div>
 
-      <!-- Neon Fill Bar -->
+      <!-- Fine Neon Fill -->
       <div
         class="rail-fill"
         style={position === 'left' || position === 'right'
           ? `height: ${scrollPercent}%;`
           : `width: ${scrollPercent}%;`}
       >
-        <!-- Radiant Progress Bead / Head -->
         <span class="rail-bead"></span>
       </div>
     </div>
 
-    <!-- Floating Nox Pill Indicator (shows on hover or when HUD controls are active) -->
+    <!-- Discreet Pill (Shown on hover or when HUD is open) -->
     {#if display !== 'none'}
       <div
         class="nox-progress-pill"
-        class:pill-visible={uiVisible || isHovered}
+        class:pill-visible={isHovered || uiVisible}
         aria-live="polite"
       >
         {#if display === 'percent'}
@@ -170,51 +171,46 @@
 {/if}
 
 <style>
-  /* ==========================================================================
-     NOX SIGNATURE READING PROGRESS BAR (RECONSTRUCTED)
-     Robust across Desktop, Android, and iOS Viewports
-     ========================================================================== */
-
   .nox-progress-system {
     position: fixed;
-    z-index: 85;
+    z-index: 60;
     pointer-events: auto;
-    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     user-select: none;
     -webkit-user-select: none;
   }
 
   /* --------------------------------------------------------------------------
      1. POSITION: BOTTOM
+     Floats comfortably ABOVE Android system gesture / URL bars
      -------------------------------------------------------------------------- */
   .nox-progress-system.pos-bottom {
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 18px;
-    padding: 0 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    width: min(calc(100vw - 36px), 840px);
+    height: 14px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    padding-bottom: env(safe-area-inset-bottom, 2px);
+    justify-content: center;
+    align-items: center;
   }
 
   .nox-progress-system.pos-bottom .nox-progress-rail {
     position: relative;
     width: 100%;
-    height: 6px;
-    background: rgba(18, 14, 28, 0.7);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 9999px;
     cursor: pointer;
     overflow: visible;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    transition: height 0.2s ease;
+    transition: height 0.15s ease, background-color 0.15s ease;
   }
 
   .nox-progress-system.pos-bottom:hover .nox-progress-rail {
-    height: 8px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .nox-progress-system.pos-bottom .rail-fill {
@@ -222,69 +218,62 @@
     top: 0;
     left: 0;
     bottom: 0;
-    background: linear-gradient(90deg, #7c3aed 0%, #a855f7 60%, #c084fc 100%);
+    background: linear-gradient(90deg, #9333ea 0%, #a855f7 60%, #c084fc 100%);
     border-radius: 9999px;
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.75);
-    transition: width 0.12s cubic-bezier(0.1, 0.9, 0.2, 1);
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.5);
+    transition: width 0.1s linear;
     display: flex;
     align-items: center;
     justify-content: flex-end;
   }
 
   .nox-progress-system.pos-bottom .rail-bead {
-    width: 12px;
-    height: 12px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #ffffff;
-    box-shadow: 0 0 8px #c084fc, 0 0 14px rgba(168, 85, 247, 0.9);
-    margin-right: -4px;
+    box-shadow: 0 0 4px #c084fc, 0 0 8px rgba(168, 85, 247, 0.8);
+    margin-right: -2px;
     flex-shrink: 0;
-    transform: scale(0.85);
-    transition: transform 0.2s ease;
-  }
-
-  .nox-progress-system.pos-bottom:hover .rail-bead {
-    transform: scale(1.15);
   }
 
   .nox-progress-system.pos-bottom .nox-progress-pill {
     position: absolute;
     bottom: 18px;
-    right: 20px;
-    transform: translateY(6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
   }
 
   /* --------------------------------------------------------------------------
-     2. POSITION: LATERAL ESQUERDA (LEFT)
+     2. POSITION: LEFT
      -------------------------------------------------------------------------- */
   .nox-progress-system.pos-left {
     top: 50%;
-    left: 8px;
+    left: calc(env(safe-area-inset-left, 0px) + 8px);
     transform: translateY(-50%);
-    width: 22px;
-    height: min(65vh, 480px);
+    width: 16px;
+    height: min(45vh, 280px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-left: env(safe-area-inset-left, 0px);
   }
 
   .nox-progress-system.pos-left .nox-progress-rail {
     position: relative;
-    width: 6px;
+    width: 3px;
     height: 100%;
-    background: rgba(18, 14, 28, 0.7);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 9999px;
     cursor: pointer;
     overflow: visible;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    transition: width 0.2s ease;
+    transition: width 0.15s ease;
   }
 
   .nox-progress-system.pos-left:hover .nox-progress-rail {
-    width: 8px;
+    width: 4px;
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .nox-progress-system.pos-left .rail-fill {
@@ -292,69 +281,62 @@
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(180deg, #7c3aed 0%, #a855f7 60%, #c084fc 100%);
+    background: linear-gradient(180deg, #9333ea 0%, #a855f7 60%, #c084fc 100%);
     border-radius: 9999px;
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.75);
-    transition: height 0.12s cubic-bezier(0.1, 0.9, 0.2, 1);
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.5);
+    transition: height 0.1s linear;
     display: flex;
     justify-content: center;
     align-items: flex-end;
   }
 
   .nox-progress-system.pos-left .rail-bead {
-    width: 12px;
-    height: 12px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #ffffff;
-    box-shadow: 0 0 8px #c084fc, 0 0 14px rgba(168, 85, 247, 0.9);
-    margin-bottom: -4px;
+    box-shadow: 0 0 4px #c084fc, 0 0 8px rgba(168, 85, 247, 0.8);
+    margin-bottom: -2px;
     flex-shrink: 0;
-    transform: scale(0.85);
-    transition: transform 0.2s ease;
-  }
-
-  .nox-progress-system.pos-left:hover .rail-bead {
-    transform: scale(1.15);
   }
 
   .nox-progress-system.pos-left .nox-progress-pill {
     position: absolute;
-    left: 26px;
+    left: 20px;
     top: 50%;
-    transform: translateY(-50%) translateX(-6px);
+    transform: translateY(-50%) translateX(-4px);
   }
 
   /* --------------------------------------------------------------------------
-     3. POSITION: LATERAL DIREITA (RIGHT)
+     3. POSITION: RIGHT
      -------------------------------------------------------------------------- */
   .nox-progress-system.pos-right {
     top: 50%;
-    right: 8px;
+    right: calc(env(safe-area-inset-right, 0px) + 8px);
     transform: translateY(-50%);
-    width: 22px;
-    height: min(65vh, 480px);
+    width: 16px;
+    height: min(45vh, 280px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-right: env(safe-area-inset-right, 0px);
   }
 
   .nox-progress-system.pos-right .nox-progress-rail {
     position: relative;
-    width: 6px;
+    width: 3px;
     height: 100%;
-    background: rgba(18, 14, 28, 0.7);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 9999px;
     cursor: pointer;
     overflow: visible;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    transition: width 0.2s ease;
+    transition: width 0.15s ease;
   }
 
   .nox-progress-system.pos-right:hover .nox-progress-rail {
-    width: 8px;
+    width: 4px;
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .nox-progress-system.pos-right .rail-fill {
@@ -362,106 +344,68 @@
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(180deg, #7c3aed 0%, #a855f7 60%, #c084fc 100%);
+    background: linear-gradient(180deg, #9333ea 0%, #a855f7 60%, #c084fc 100%);
     border-radius: 9999px;
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.75);
-    transition: height 0.12s cubic-bezier(0.1, 0.9, 0.2, 1);
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.5);
+    transition: height 0.1s linear;
     display: flex;
     justify-content: center;
     align-items: flex-end;
   }
 
   .nox-progress-system.pos-right .rail-bead {
-    width: 12px;
-    height: 12px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #ffffff;
-    box-shadow: 0 0 8px #c084fc, 0 0 14px rgba(168, 85, 247, 0.9);
-    margin-bottom: -4px;
+    box-shadow: 0 0 4px #c084fc, 0 0 8px rgba(168, 85, 247, 0.8);
+    margin-bottom: -2px;
     flex-shrink: 0;
-    transform: scale(0.85);
-    transition: transform 0.2s ease;
-  }
-
-  .nox-progress-system.pos-right:hover .rail-bead {
-    transform: scale(1.15);
   }
 
   .nox-progress-system.pos-right .nox-progress-pill {
     position: absolute;
-    right: 26px;
+    right: 20px;
     top: 50%;
-    transform: translateY(-50%) translateX(6px);
+    transform: translateY(-50%) translateX(4px);
   }
 
   /* --------------------------------------------------------------------------
-     FLOATING NOX PILL BADGE
+     DISCREET PILL BADGE
      -------------------------------------------------------------------------- */
   .nox-progress-pill {
     display: inline-flex;
     align-items: center;
-    padding: 4px 10px;
-    background: rgba(14, 11, 22, 0.88);
-    border: 1px solid rgba(168, 85, 247, 0.35);
+    padding: 3px 8px;
+    background: rgba(12, 10, 20, 0.92);
+    border: 1px solid rgba(168, 85, 247, 0.3);
     border-radius: 9999px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), 0 0 8px rgba(168, 85, 247, 0.2);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease;
     white-space: nowrap;
   }
 
   .nox-progress-pill.pill-visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(0) translateX(0) !important;
   }
 
   .pill-value {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #f1f5f9;
+    letter-spacing: 0.03em;
+    color: #e2e8f0;
     font-variant-numeric: tabular-nums;
   }
 
-  /* Mobile responsiveness */
   @media (max-width: 640px) {
     .nox-progress-system.pos-bottom {
-      padding: 0 8px;
-      height: 14px;
-    }
-
-    .nox-progress-system.pos-bottom .nox-progress-rail {
-      height: 4px;
-    }
-
-    .nox-progress-system.pos-bottom .rail-bead {
-      width: 10px;
-      height: 10px;
-    }
-
-    .nox-progress-system.pos-left,
-    .nox-progress-system.pos-right {
-      width: 16px;
-      height: min(55vh, 360px);
-    }
-
-    .nox-progress-system.pos-left .nox-progress-rail,
-    .nox-progress-system.pos-right .nox-progress-rail {
-      width: 4px;
-    }
-
-    .nox-progress-system.pos-left .rail-bead,
-    .nox-progress-system.pos-right .rail-bead {
-      width: 10px;
-      height: 10px;
-    }
-
-    .pill-value {
-      font-size: 10px;
+      width: min(calc(100vw - 28px), 500px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     }
   }
 </style>

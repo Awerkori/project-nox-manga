@@ -7,6 +7,7 @@ import {
   type ReaderSettings
 } from '../src/lib/reader-settings';
 import { parseCommentBody, threadComments } from '../src/lib/comments';
+import { chapterIdentityLabel } from '../src/lib/chapter-identity';
 
 describe('Reader Settings Engine', () => {
   beforeEach(() => {
@@ -17,11 +18,11 @@ describe('Reader Settings Engine', () => {
     }
   });
 
-  it('loads default reader settings when nothing is stored', () => {
+  it('loads default reader settings when nothing is stored with progressPosition off', () => {
     const settings = loadReaderSettings();
     expect(settings.mode).toBe('webtoon');
     expect(settings.width).toBe(850);
-    expect(settings.progressPosition).toBe('bottom');
+    expect(settings.progressPosition).toBe('off');
     expect(settings.progressDisplay).toBe('percent');
     expect(settings.preloadMode).toBe('turbo');
     expect(settings.theme).toBe('dark');
@@ -82,6 +83,20 @@ describe('Reader Settings Engine', () => {
     });
     const reloaded = loadReaderSettings();
     expect(reloaded.width).toBe(1400);
+  });
+});
+
+describe('Chapter Identity Presentation', () => {
+  it('strips redundant pt-BR language qualifiers from chapter presentations', () => {
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', language: 'pt-BR' })).toBe('76');
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', language: 'pt' })).toBe('76');
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', language: 'und' })).toBe('76');
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', language: 'default' })).toBe('76');
+  });
+
+  it('preserves non-default language or edition qualifiers when legitimately required', () => {
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', edition: 'extra', language: 'pt-BR' })).toBe('76 · extra');
+    expect(chapterIdentityLabel({ number: 76, display_number: '76', language: 'en' })).toBe('76 · en');
   });
 });
 

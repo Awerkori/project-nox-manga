@@ -2,18 +2,16 @@
   import {
     X,
     Sliders,
-    Monitor,
-    BookOpen,
-    Eye,
-    Palette,
     Zap,
     RotateCcw,
     Layers,
     AlignJustify,
     ArrowLeftRight,
-    Gauge,
-    Sparkles,
-    Check
+    Palette,
+    Check,
+    Smartphone,
+    Eye,
+    ShieldCheck
   } from '@lucide/svelte';
   import type { ReaderSettings, ProgressPosition, PreloadMode, ReaderTheme, PageFitMode, PagedDirection } from '$lib/reader-settings';
   import { DEFAULT_READER_SETTINGS } from '$lib/reader-settings';
@@ -35,7 +33,7 @@
   } = $props();
 
   let local = $state<ReaderSettings>({ ...settings });
-  let activeTab = $state<'appearance' | 'navigation' | 'progress' | 'performance'>('appearance');
+  let viewSection = $state<'quick' | 'advanced'>('quick');
 
   function update(partial: Partial<ReaderSettings>) {
     local = { ...local, ...partial };
@@ -54,17 +52,17 @@
     { label: '100%', width: 1400, fit: 'full' as PageFitMode }
   ];
 
-  const THEMES: { id: ReaderTheme; label: string; bg: string; border: string; desc: string }[] = [
-    { id: 'dark', label: 'Nox Dark', bg: '#06070c', border: '#7c3aed', desc: 'Escuro equilibrado' },
-    { id: 'oled', label: 'OLED Black', bg: '#000000', border: '#3b82f6', desc: 'Preto puro econômico' },
-    { id: 'sepia', label: 'Sépia Suave', bg: '#1c1917', border: '#f59e0b', desc: 'Conforto visual térmico' }
+  const THEMES: { id: ReaderTheme; label: string; color: string }[] = [
+    { id: 'dark', label: 'Nox Dark', color: '#7c3aed' },
+    { id: 'oled', label: 'OLED Puro', color: '#1e293b' },
+    { id: 'sepia', label: 'Sépia', color: '#b45309' }
   ];
 
-  const PROGRESS_POSITIONS: { id: ProgressPosition; label: string; desc: string }[] = [
-    { id: 'bottom', label: 'Inferior', desc: 'Barra horizontal na base da tela' },
-    { id: 'left', label: 'Esquerda', desc: 'Barra vertical na lateral esquerda' },
-    { id: 'right', label: 'Direita', desc: 'Barra vertical na lateral direita' },
-    { id: 'off', label: 'Desativada', desc: 'Sem barra de progresso na tela' }
+  const PROGRESS_OPTIONS: { id: ProgressPosition; label: string }[] = [
+    { id: 'off', label: 'Desativada (Padrão)' },
+    { id: 'bottom', label: 'Inferior' },
+    { id: 'left', label: 'Esquerda' },
+    { id: 'right', label: 'Direita' }
   ];
 </script>
 
@@ -82,13 +80,12 @@
 <aside class="settings-sheet" role="dialog" aria-modal="true" aria-label="Ajustes de Leitura do Project Nox">
   <!-- Sheet Header -->
   <header class="sheet-header">
-    <div class="sheet-title-row">
-      <div class="sheet-title-badge">
-        <Sliders size={18} class="text-purple-400" />
+    <div class="sheet-title-group">
+      <div class="sheet-icon-pill">
+        <Sliders size={16} class="text-purple-400" />
       </div>
       <div>
         <h2 class="sheet-title">Ajustes do Leitor</h2>
-        <p class="sheet-subtitle">Personalize a sua experiência de leitura</p>
       </div>
     </div>
     <div class="sheet-header-actions">
@@ -97,390 +94,317 @@
         class="btn-reset-defaults"
         onclick={handleReset}
         title="Restaurar padrões de fábrica"
-        aria-label="Restaurar padrões"
       >
-        <RotateCcw size={13} />
+        <RotateCcw size={12} />
         <span>Padrão</span>
       </button>
       <button
         type="button"
         class="btn-close-sheet"
         onclick={onClose}
-        aria-label="Fechar painel de ajustes"
+        aria-label="Fechar"
       >
         <X size={18} />
       </button>
     </div>
   </header>
 
-  <!-- Category Navigation Tabs -->
-  <nav class="settings-tabs-nav" aria-label="Categorias de ajustes">
+  <!-- Clear 2-Way View Selector: Ajustes Rápidos vs Configurações Avançadas -->
+  <div class="settings-view-switcher">
     <button
       type="button"
-      class="nav-tab-btn"
-      class:active={activeTab === 'appearance'}
-      onclick={() => (activeTab = 'appearance')}
-    >
-      <Palette size={14} />
-      <span>Aparência</span>
-    </button>
-    <button
-      type="button"
-      class="nav-tab-btn"
-      class:active={activeTab === 'navigation'}
-      onclick={() => (activeTab = 'navigation')}
-    >
-      <AlignJustify size={14} />
-      <span>Navegação</span>
-    </button>
-    <button
-      type="button"
-      class="nav-tab-btn"
-      class:active={activeTab === 'progress'}
-      onclick={() => (activeTab = 'progress')}
-    >
-      <Gauge size={14} />
-      <span>Progresso</span>
-    </button>
-    <button
-      type="button"
-      class="nav-tab-btn"
-      class:active={activeTab === 'performance'}
-      onclick={() => (activeTab = 'performance')}
+      class="view-switch-btn"
+      class:active={viewSection === 'quick'}
+      onclick={() => (viewSection = 'quick')}
     >
       <Zap size={14} />
-      <span>Turbo / Cache</span>
+      <span>Ajustes Rápidos</span>
     </button>
-  </nav>
+    <button
+      type="button"
+      class="view-switch-btn"
+      class:active={viewSection === 'advanced'}
+      onclick={() => (viewSection = 'advanced')}
+    >
+      <Sliders size={14} />
+      <span>Configurações Avançadas</span>
+    </button>
+  </div>
 
-  <!-- Sheet Scrollable Body -->
+  <!-- Scrollable Sheet Content -->
   <div class="sheet-scroll-body">
-    <!-- ==================================================================== -->
-    <!-- TAB 1: APARÊNCIA                                                     -->
-    <!-- ==================================================================== -->
-    {#if activeTab === 'appearance'}
-      <div class="tab-pane">
-        <!-- Tema de Fundo -->
-        <div class="settings-section">
-          <label class="section-heading">Tema de Fundo</label>
-          <div class="theme-cards-grid">
-            {#each THEMES as theme}
-              <button
-                type="button"
-                class="theme-card-option"
-                class:active={local.theme === theme.id}
-                onclick={() => update({ theme: theme.id })}
-                style="background-color: {theme.bg};"
-              >
-                <div class="theme-card-preview" style="border-color: {theme.border};">
-                  {#if local.theme === theme.id}
-                    <Check size={14} class="theme-check-icon" />
-                  {/if}
-                </div>
-                <div class="theme-card-info">
-                  <span class="theme-name">{theme.label}</span>
-                  <span class="theme-desc">{theme.desc}</span>
-                </div>
-              </button>
-            {/each}
+    {#if viewSection === 'quick'}
+      <!-- ================================================================= -->
+      <!-- 1. AJUSTES RÁPIDOS -->
+      <!-- ================================================================= -->
+      <div class="quick-settings-stack">
+        <!-- Modo de Leitura -->
+        <div class="setting-row">
+          <label class="setting-label">Modo de Leitura</label>
+          <div class="grid-2-segmented">
+            <button
+              type="button"
+              class="seg-btn"
+              class:active={local.mode === 'webtoon'}
+              onclick={() => update({ mode: 'webtoon' })}
+            >
+              <AlignJustify size={14} />
+              <span>Webtoon</span>
+            </button>
+            <button
+              type="button"
+              class="seg-btn"
+              class:active={local.mode === 'paginated'}
+              onclick={() => update({ mode: 'paginated' })}
+            >
+              <Layers size={14} />
+              <span>Paginado</span>
+            </button>
           </div>
         </div>
 
         <!-- Largura das Páginas -->
-        <div class="settings-section">
-          <div class="section-heading-row">
-            <label class="section-heading">Largura Máxima da Imagem</label>
-            <span class="value-chip">{local.fit === 'full' ? '100% (Tela Cheia)' : `${local.width}px`}</span>
+        <div class="setting-row">
+          <div class="label-with-value">
+            <label class="setting-label">Largura da Leitura</label>
+            <span class="value-chip">{local.fit === 'full' ? '100% da Tela' : `${local.width}px`}</span>
           </div>
-
-          <!-- Presets -->
-          <div class="preset-pill-row">
-            {#each WIDTH_PRESETS as p}
+          <div class="presets-row">
+            {#each WIDTH_PRESETS as preset}
               <button
                 type="button"
-                class="preset-pill-btn"
-                class:active={local.fit === p.fit && (p.fit === 'full' || local.width === p.width)}
-                onclick={() => update({ fit: p.fit, width: p.width })}
+                class="preset-pill"
+                class:active={(preset.fit === 'full' && local.fit === 'full') || (local.fit === 'custom' && local.width === preset.width)}
+                onclick={() => update({ fit: preset.fit, width: preset.width })}
               >
-                {p.label}
-              </button>
-            {/each}
-          </div>
-
-          <!-- Custom Slider (Active when not 100%) -->
-          {#if local.fit !== 'full'}
-            <div class="slider-control-box">
-              <input
-                type="range"
-                min="400"
-                max="1400"
-                step="25"
-                value={local.width}
-                oninput={(e) => update({ width: Number((e.target as HTMLInputElement).value), fit: 'custom' })}
-                class="nox-slider"
-                aria-label="Ajustar largura máxima"
-              />
-              <div class="slider-ticks-row">
-                <span>400px</span>
-                <span>850px</span>
-                <span>1400px</span>
-              </div>
-            </div>
-          {/if}
-        </div>
-
-        <!-- Espaçamento Entre Páginas (Webtoon Gap) -->
-        <div class="settings-section">
-          <label class="toggle-card">
-            <div class="toggle-info">
-              <span class="toggle-title">Espaçamento Entre Páginas</span>
-              <span class="toggle-desc">Insere uma fenda suave de 12px entre as páginas no modo cascata</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={local.gap}
-              onchange={(e) => update({ gap: (e.target as HTMLInputElement).checked })}
-              class="nox-switch"
-            />
-          </label>
-        </div>
-      </div>
-    {/if}
-
-    <!-- ==================================================================== -->
-    <!-- TAB 2: NAVEGAÇÃO                                                     -->
-    <!-- ==================================================================== -->
-    {#if activeTab === 'navigation'}
-      <div class="tab-pane">
-        <!-- Modo de Leitura -->
-        <div class="settings-section">
-          <label class="section-heading">Modo de Leitura</label>
-          <div class="segmented-control-large">
-            <button
-              type="button"
-              class="segment-choice"
-              class:active={local.mode === 'webtoon'}
-              onclick={() => update({ mode: 'webtoon' })}
-            >
-              <AlignJustify size={18} />
-              <div>
-                <strong>Cascata Webtoon</strong>
-                <small>Rolagem contínua vertical</small>
-              </div>
-            </button>
-            <button
-              type="button"
-              class="segment-choice"
-              class:active={local.mode === 'paginated'}
-              onclick={() => update({ mode: 'paginated' })}
-            >
-              <BookOpen size={18} />
-              <div>
-                <strong>Modo Paginado</strong>
-                <small>Página a página / Toque</small>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Se estiver em Paginado: Direção de Leitura -->
-        {#if local.mode === 'paginated'}
-          <div class="settings-section">
-            <label class="section-heading">Direção de Leitura Paginada</label>
-            <div class="segmented-control-pills">
-              <button
-                type="button"
-                class="seg-pill"
-                class:active={local.pagedDirection === 'ltr'}
-                onclick={() => update({ pagedDirection: 'ltr' })}
-              >
-                Esquerda ➔ Direita (Ocidental)
-              </button>
-              <button
-                type="button"
-                class="seg-pill"
-                class:active={local.pagedDirection === 'rtl'}
-                onclick={() => update({ pagedDirection: 'rtl' })}
-              >
-                Direita ➔ Esquerda (Mangá)
-              </button>
-            </div>
-          </div>
-        {/if}
-
-        <!-- Pular para Página -->
-        <div class="settings-section">
-          <div class="section-heading-row">
-            <label class="section-heading">Salto Rápido de Página</label>
-            <span class="value-chip">{currentPage} de {totalPages}</span>
-          </div>
-          <div class="page-jump-row">
-            <input
-              type="range"
-              min="1"
-              max={totalPages}
-              step="1"
-              value={currentPage}
-              oninput={(e) => onJumpPage(Number((e.target as HTMLInputElement).value))}
-              class="nox-slider"
-              aria-label="Pular para página específica"
-            />
-          </div>
-        </div>
-
-        <!-- Auto-ocultação dos Controles -->
-        <div class="settings-section">
-          <label class="toggle-card">
-            <div class="toggle-info">
-              <span class="toggle-title">Auto-ocultar Controles</span>
-              <span class="toggle-desc">Oculta cabeçalho e barras durante a rolagem para leitura imersiva. Toque na tela para reexibir.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={local.autoHideControls}
-              onchange={(e) => update({ autoHideControls: (e.target as HTMLInputElement).checked })}
-              class="nox-switch"
-            />
-          </label>
-        </div>
-      </div>
-    {/if}
-
-    <!-- ==================================================================== -->
-    <!-- TAB 3: BARRA DE PROGRESSO                                            -->
-    <!-- ==================================================================== -->
-    {#if activeTab === 'progress'}
-      <div class="tab-pane">
-        <!-- Posição da Barra -->
-        <div class="settings-section">
-          <label class="section-heading">Posição da Barra de Progresso</label>
-          <div class="position-cards-grid">
-            {#each PROGRESS_POSITIONS as pos}
-              <button
-                type="button"
-                class="position-card-btn"
-                class:active={local.progressPosition === pos.id}
-                onclick={() => update({ progressPosition: pos.id })}
-              >
-                <div class="pos-card-header">
-                  <span class="pos-card-title">{pos.label}</span>
-                  {#if local.progressPosition === pos.id}
-                    <Check size={14} class="pos-check-icon" />
-                  {/if}
-                </div>
-                <span class="pos-card-desc">{pos.desc}</span>
+                {preset.label}
               </button>
             {/each}
           </div>
         </div>
 
-        <!-- Formato do Indicador Flutuante -->
-        {#if local.progressPosition !== 'off'}
-          <div class="settings-section">
-            <label class="section-heading">Indicador Flutuante</label>
-            <div class="segmented-control-pills">
+        <!-- Tema de Fundo -->
+        <div class="setting-row">
+          <label class="setting-label">Tema Visual</label>
+          <div class="themes-grid">
+            {#each THEMES as theme}
               <button
                 type="button"
-                class="seg-pill"
-                class:active={local.progressDisplay === 'percent'}
-                onclick={() => update({ progressDisplay: 'percent' })}
+                class="theme-chip-btn"
+                class:active={local.theme === theme.id}
+                onclick={() => update({ theme: theme.id })}
               >
-                Porcentagem (45%)
+                <span class="theme-color-dot" style="background-color: {theme.color};"></span>
+                <span class="theme-chip-label">{theme.label}</span>
+                {#if local.theme === theme.id}
+                  <Check size={12} class="theme-check-icon" />
+                {/if}
               </button>
-              <button
-                type="button"
-                class="seg-pill"
-                class:active={local.progressDisplay === 'pages'}
-                onclick={() => update({ progressDisplay: 'pages' })}
-              >
-                Páginas (12 / 28)
-              </button>
-              <button
-                type="button"
-                class="seg-pill"
-                class:active={local.progressDisplay === 'both'}
-                onclick={() => update({ progressDisplay: 'both' })}
-              >
-                Ambos
-              </button>
-              <button
-                type="button"
-                class="seg-pill"
-                class:active={local.progressDisplay === 'none'}
-                onclick={() => update({ progressDisplay: 'none' })}
-              >
-                Ocultar Pill
-              </button>
-            </div>
+            {/each}
           </div>
-        {/if}
-      </div>
-    {/if}
+        </div>
 
-    <!-- ==================================================================== -->
-    <!-- TAB 4: TURBO / DESEMPENHO                                            -->
-    <!-- ==================================================================== -->
-    {#if activeTab === 'performance'}
-      <div class="tab-pane">
-        <!-- Modos de Pré-carregamento -->
-        <div class="settings-section">
-          <label class="section-heading">Estratégia de Carregamento de Páginas</label>
+        <!-- Barra de Progresso -->
+        <div class="setting-row">
+          <div class="label-with-value">
+            <label class="setting-label">Barra de Progresso</label>
+            {#if local.progressPosition === 'off'}
+              <span class="badge-off">Desativada</span>
+            {/if}
+          </div>
+          <div class="progress-grid">
+            {#each PROGRESS_OPTIONS as opt}
+              <button
+                type="button"
+                class="progress-pill-btn"
+                class:active={local.progressPosition === opt.id}
+                onclick={() => update({ progressPosition: opt.id })}
+              >
+                {#if local.progressPosition === opt.id}
+                  <Check size={12} class="progress-check-icon" />
+                {/if}
+                <span>{opt.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
 
-          <div class="preload-mode-cards">
-            <!-- Modo Turbo / Inteligente (Padrão) -->
+        <!-- Modo de Carregamento (Turbo vs Econômico) -->
+        <div class="setting-row">
+          <label class="setting-label">Carregamento do Capítulo</label>
+          <div class="preload-modes-container">
             <button
               type="button"
-              class="preload-mode-card"
+              class="mode-card-btn"
               class:active={local.preloadMode === 'turbo'}
               onclick={() => update({ preloadMode: 'turbo' })}
             >
-              <div class="preload-card-top">
-                <div class="preload-title-group">
-                  <Zap size={18} class="text-amber-400" />
-                  <div>
-                    <strong>⚡ Modo Turbo / Inteligente (Padrão Recomendado)</strong>
-                    <span class="badge-recommended">RECOMENDADO</span>
-                  </div>
+              <div class="mode-card-header">
+                <div class="mode-card-title">
+                  <Zap size={14} class="text-purple-400" />
+                  <strong>Turbo Inteligente</strong>
                 </div>
-                {#if local.preloadMode === 'turbo'}
-                  <Check size={16} class="text-purple-400" />
-                {/if}
+                <span class="badge-tag purple">Padrão</span>
               </div>
-              <p class="preload-desc">
-                Baixa antecipadamente todas as páginas do capítulo em segundo plano com concorrência adaptativa. Garante rolagem 100% fluida sem paradas para carregar.
+              <p class="mode-card-desc">
+                Baixa todas as páginas antecipadamente de forma adaptativa para leitura sem travamentos.
               </p>
             </button>
 
-            <!-- Modo Econômico -->
             <button
               type="button"
-              class="preload-mode-card"
+              class="mode-card-btn"
               class:active={local.preloadMode === 'eco'}
               onclick={() => update({ preloadMode: 'eco' })}
             >
-              <div class="preload-card-top">
-                <div class="preload-title-group">
-                  <Layers size={18} class="text-emerald-400" />
-                  <div>
-                    <strong>🌱 Modo Econômico</strong>
-                    <span class="badge-eco">DADOS MÓVEIS</span>
-                  </div>
+              <div class="mode-card-header">
+                <div class="mode-card-title">
+                  <ShieldCheck size={14} class="text-emerald-400" />
+                  <strong>Modo Econômico</strong>
                 </div>
-                {#if local.preloadMode === 'eco'}
-                  <Check size={16} class="text-purple-400" />
-                {/if}
+                <span class="badge-tag green">Econômico</span>
               </div>
-              <p class="preload-desc">
-                Carrega apenas as próximas 2 páginas à frente. Economiza plano de dados celulares e consome menos memória RAM em celulares modestos.
+              <p class="mode-card-desc">
+                Carrega somente as páginas próximas. Ideal para conexões limitadas ou pouca memória.
               </p>
             </button>
           </div>
         </div>
+      </div>
+    {:else}
+      <!-- ================================================================= -->
+      <!-- 2. CONFIGURAÇÕES AVANÇADAS -->
+      <!-- ================================================================= -->
+      <div class="advanced-settings-stack">
+        <!-- Direção da Leitura (Paginado) -->
+        {#if local.mode === 'paginated'}
+          <div class="setting-row">
+            <label class="setting-label">Direção da Leitura (Paginado)</label>
+            <div class="grid-2-segmented">
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.pagedDirection === 'ltr'}
+                onclick={() => update({ pagedDirection: 'ltr' })}
+              >
+                <ArrowLeftRight size={14} />
+                <span>Esq. → Dir. (Ocidental)</span>
+              </button>
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.pagedDirection === 'rtl'}
+                onclick={() => update({ pagedDirection: 'rtl' })}
+              >
+                <ArrowLeftRight size={14} />
+                <span>Dir. → Esq. (Mangá)</span>
+              </button>
+            </div>
+          </div>
+        {/if}
 
-        <div class="settings-tip-box">
-          <Sparkles size={16} class="text-purple-400 flex-shrink-0" />
+        <!-- Ajuste Fino de Largura -->
+        <div class="setting-row">
+          <div class="label-with-value">
+            <label class="setting-label">Ajuste Fino de Largura</label>
+            <span class="value-chip">{local.width}px</span>
+          </div>
+          <input
+            type="range"
+            min="480"
+            max="1400"
+            step="20"
+            value={local.width}
+            oninput={(e) => update({ width: Number((e.target as HTMLInputElement).value), fit: 'custom' })}
+            class="nox-range-slider"
+          />
+          <div class="slider-ticks">
+            <span>480px (Celular)</span>
+            <span>850px (Padrão)</span>
+            <span>1400px (Monitor)</span>
+          </div>
+        </div>
+
+        <!-- Espaçamento entre Páginas (Webtoon) -->
+        {#if local.mode === 'webtoon'}
+          <div class="setting-row">
+            <div class="label-with-value">
+              <label class="setting-label">Espaço entre Páginas</label>
+              <span class="value-chip">{local.gap ? 'Ativado (12px)' : 'Sem Espaço (0px)'}</span>
+            </div>
+            <div class="grid-2-segmented">
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={!local.gap}
+                onclick={() => update({ gap: false })}
+              >
+                <span>Contínuo (0px)</span>
+              </button>
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.gap}
+                onclick={() => update({ gap: true })}
+              >
+                <span>Separado (12px)</span>
+              </button>
+            </div>
+          </div>
+        {/if}
+
+        <!-- Indicador de Detalhes da Barra de Progresso -->
+        {#if local.progressPosition !== 'off'}
+          <div class="setting-row">
+            <label class="setting-label">Informação da Barra</label>
+            <div class="grid-3-segmented">
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.progressDisplay === 'percent'}
+                onclick={() => update({ progressDisplay: 'percent' })}
+              >
+                <span>Porcentagem (%)</span>
+              </button>
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.progressDisplay === 'pages'}
+                onclick={() => update({ progressDisplay: 'pages' })}
+              >
+                <span>Página Atual (X/Y)</span>
+              </button>
+              <button
+                type="button"
+                class="seg-btn"
+                class:active={local.progressDisplay === 'none'}
+                onclick={() => update({ progressDisplay: 'none' })}
+              >
+                <span>Sem Texto</span>
+              </button>
+            </div>
+          </div>
+        {/if}
+
+        <!-- Ocultação Automática dos Controles -->
+        <div class="setting-row toggle-row">
+          <div class="toggle-text">
+            <strong class="toggle-title">Ocultar Controles ao Rolar</strong>
+            <small class="toggle-desc">Esconde o cabeçalho e barras flutuantes durante a leitura para foco total.</small>
+          </div>
+          <input
+            type="checkbox"
+            class="nox-checkbox"
+            checked={local.autoHideControls}
+            onchange={(e) => update({ autoHideControls: (e.target as HTMLInputElement).checked })}
+          />
+        </div>
+
+        <!-- Info / Diagnostic Box -->
+        <div class="advanced-info-box">
+          <Eye size={16} class="text-purple-400 shrink-0" />
           <p>
-            O Project Nox memoriza suas preferências de leitura neste dispositivo. Se você salvou este capítulo para leitura offline, o carregamento é instantâneo via IndexedDB.
+            Suas preferências são salvas automaticamente neste navegador e serão mantidas nos próximos capítulos.
           </p>
         </div>
       </div>
@@ -489,82 +413,61 @@
 </aside>
 
 <style>
-  /* Backdrop */
   .settings-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     z-index: 90;
-    transition: opacity 0.25s ease;
   }
 
-  /* Sheet Container */
   .settings-sheet {
     position: fixed;
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(480px, 100vw);
-    background: #090a10;
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.8);
+    width: min(100vw, 420px);
+    background: #090a12;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.85);
     z-index: 95;
     display: flex;
     flex-direction: column;
-    color: #e2e8f0;
-    animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    color: #f1f5f9;
   }
 
-  @keyframes slideInRight {
-    from {
-      transform: translateX(100%);
-    }
-    to {
-      transform: translateX(0);
-    }
-  }
-
-  /* Header */
   .sheet-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(14, 16, 26, 0.6);
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(18, 14, 28, 0.6);
   }
 
-  .sheet-title-row {
+  .sheet-title-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
 
-  .sheet-title-badge {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: rgba(168, 85, 247, 0.15);
-    border: 1px solid rgba(168, 85, 247, 0.3);
+  .sheet-icon-pill {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
   }
 
   .sheet-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
-    color: #ffffff;
+    color: #f8fafc;
     margin: 0;
-    line-height: 1.2;
-  }
-
-  .sheet-subtitle {
-    font-size: 12px;
-    color: #94a3b8;
-    margin: 2px 0 0 0;
   }
 
   .sheet-header-actions {
@@ -577,10 +480,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 4px 10px;
     color: #94a3b8;
     font-size: 11px;
     font-weight: 600;
@@ -589,312 +492,174 @@
   }
 
   .btn-reset-defaults:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
   }
 
   .btn-close-sheet {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #94a3b8;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .btn-close-sheet:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
   }
 
-  /* Category Navigation Tabs */
-  .settings-tabs-nav {
+  /* 2-Way View Switcher */
+  .settings-view-switcher {
     display: flex;
-    background: rgba(14, 16, 26, 0.85);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 6px 12px;
-    gap: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    padding: 10px 16px;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
-  .settings-tabs-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .nav-tab-btn {
+  .view-switch-btn {
+    flex: 1;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 12px;
     border-radius: 8px;
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
     color: #94a3b8;
     font-size: 12px;
     font-weight: 600;
-    white-space: nowrap;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
-  .nav-tab-btn:hover {
+  .view-switch-btn:hover {
     color: #f1f5f9;
     background: rgba(255, 255, 255, 0.04);
   }
 
-  .nav-tab-btn.active {
-    background: rgba(168, 85, 247, 0.18);
+  .view-switch-btn.active {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.35);
     color: #d8b4fe;
-    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.35);
+    font-weight: 700;
   }
 
-  /* Scroll Body */
+  /* Scrollable Body */
   .sheet-scroll-body {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
-    overscroll-behavior: contain;
-  }
-
-  .tab-pane {
+    padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 18px;
   }
 
-  /* Sections */
-  .settings-section {
+  .quick-settings-stack,
+  .advanced-settings-stack {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 18px;
   }
 
-  .section-heading-row {
+  .setting-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .setting-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+  }
+
+  .label-with-value {
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
-
-  .section-heading {
-    font-size: 13px;
-    font-weight: 700;
-    color: #cbd5e1;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   }
 
   .value-chip {
     font-size: 11px;
     font-weight: 700;
     color: #c084fc;
-    background: rgba(168, 85, 247, 0.15);
+    background: rgba(168, 85, 247, 0.12);
     padding: 2px 8px;
-    border-radius: 6px;
-    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 9999px;
   }
 
-  /* Themes */
-  .theme-cards-grid {
+  .badge-off {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* Segmented Controls */
+  .grid-2-segmented {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 
-  .theme-card-option {
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 12px 10px;
-    display: flex;
-    flex-direction: column;
+  .grid-3-segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+
+  .seg-btn {
+    display: inline-flex;
     align-items: center;
-    text-align: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
-  .theme-card-option.active {
-    border-color: #a855f7;
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+  .seg-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
   }
 
-  .theme-card-preview {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 2px solid;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .theme-check-icon {
-    color: #ffffff;
-  }
-
-  .theme-name {
-    font-size: 12px;
-    font-weight: 700;
+  .seg-btn.active {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
     color: #f8fafc;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
   }
 
-  .theme-desc {
-    font-size: 10px;
-    color: #94a3b8;
-  }
-
-  /* Width Presets */
-  .preset-pill-row {
+  /* Presets row */
+  .presets-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 6px;
   }
 
-  .preset-pill-btn {
-    padding: 8px 4px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .preset-pill-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f8fafc;
-  }
-
-  .preset-pill-btn.active {
-    background: rgba(168, 85, 247, 0.18);
-    color: #d8b4fe;
-    border-color: rgba(168, 85, 247, 0.4);
-    font-weight: 700;
-  }
-
-  /* Slider */
-  .slider-control-box {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 0;
-  }
-
-  .nox-slider {
-    width: 100%;
-    accent-color: #a855f7;
-    cursor: pointer;
-  }
-
-  .slider-ticks-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    color: #64748b;
-  }
-
-  /* Toggle Cards */
-  .toggle-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px;
+  .preset-pill {
+    padding: 8px 6px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    cursor: pointer;
-    gap: 12px;
-  }
-
-  .toggle-info {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .toggle-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: #f1f5f9;
-  }
-
-  .toggle-desc {
-    font-size: 11px;
-    color: #94a3b8;
-    line-height: 1.3;
-  }
-
-  .nox-switch {
-    width: 20px;
-    height: 20px;
-    accent-color: #a855f7;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  /* Segmented Controls */
-  .segmented-control-large {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .segment-choice {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    color: #94a3b8;
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .segment-choice strong {
-    display: block;
-    font-size: 13px;
-    color: #e2e8f0;
-  }
-
-  .segment-choice small {
-    display: block;
-    font-size: 10px;
-    color: #64748b;
-    margin-top: 2px;
-  }
-
-  .segment-choice.active {
-    background: rgba(168, 85, 247, 0.15);
-    border-color: rgba(168, 85, 247, 0.4);
-    color: #c084fc;
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
-  }
-
-  .segment-choice.active strong {
-    color: #f8fafc;
-  }
-
-  .segmented-control-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .seg-pill {
-    flex: 1 1 calc(50% - 6px);
-    padding: 10px 8px;
-    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     color: #94a3b8;
@@ -905,29 +670,114 @@
     transition: all 0.2s ease;
   }
 
-  .seg-pill:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f8fafc;
+  .preset-pill:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
   }
 
-  .seg-pill.active {
+  .preset-pill.active {
     background: rgba(168, 85, 247, 0.18);
-    color: #d8b4fe;
     border-color: rgba(168, 85, 247, 0.4);
+    color: #d8b4fe;
+    font-weight: 700;
   }
 
-  /* Progress Positions */
-  .position-cards-grid {
+  /* Themes */
+  .themes-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
-  .position-card-btn {
+  .theme-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .theme-chip-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
+  }
+
+  .theme-chip-btn.active {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #f8fafc;
+  }
+
+  .theme-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .theme-check-icon {
+    margin-left: auto;
+    color: #c084fc;
+  }
+
+  /* Progress grid */
+  .progress-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .progress-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .progress-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
+  }
+
+  .progress-pill-btn.active {
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #d8b4fe;
+    font-weight: 700;
+  }
+
+  .progress-check-icon {
+    color: #c084fc;
+  }
+
+  /* Preload Mode Cards */
+  .preload-modes-container {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 12px;
+    gap: 8px;
+  }
+
+  .mode-card-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
@@ -936,128 +786,116 @@
     transition: all 0.2s ease;
   }
 
-  .position-card-btn:hover {
+  .mode-card-btn:hover {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .position-card-btn.active {
-    background: rgba(168, 85, 247, 0.15);
+  .mode-card-btn.active {
+    background: rgba(168, 85, 247, 0.12);
     border-color: rgba(168, 85, 247, 0.4);
-    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.15);
   }
 
-  .pos-card-header {
+  .mode-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .pos-card-title {
+  .mode-card-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
     font-size: 13px;
-    font-weight: 700;
     color: #f8fafc;
   }
 
-  .pos-check-icon {
+  .badge-tag {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .badge-tag.purple {
+    background: rgba(168, 85, 247, 0.2);
     color: #c084fc;
   }
 
-  .pos-card-desc {
-    font-size: 10px;
-    color: #94a3b8;
-    line-height: 1.3;
-  }
-
-  /* Turbo / Preload Cards */
-  .preload-mode-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .preload-mode-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .preload-mode-card:hover {
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .preload-mode-card.active {
-    background: rgba(168, 85, 247, 0.12);
-    border-color: rgba(168, 85, 247, 0.4);
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
-  }
-
-  .preload-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .preload-title-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .preload-title-group strong {
-    display: block;
-    font-size: 13px;
-    color: #f8fafc;
-  }
-
-  .badge-recommended {
-    display: inline-block;
-    font-size: 9px;
-    font-weight: 800;
-    color: #a855f7;
-    background: rgba(168, 85, 247, 0.2);
-    padding: 1px 6px;
-    border-radius: 4px;
-    margin-top: 2px;
-  }
-
-  .badge-eco {
-    display: inline-block;
-    font-size: 9px;
-    font-weight: 800;
-    color: #34d399;
+  .badge-tag.green {
     background: rgba(52, 211, 153, 0.2);
-    padding: 1px 6px;
-    border-radius: 4px;
-    margin-top: 2px;
+    color: #34d399;
   }
 
-  .preload-desc {
+  .mode-card-desc {
     font-size: 11px;
     color: #94a3b8;
     line-height: 1.4;
     margin: 0;
   }
 
-  .settings-tip-box {
+  /* Sliders and Toggles */
+  .nox-range-slider {
+    width: 100%;
+    accent-color: #a855f7;
+    cursor: pointer;
+    margin: 6px 0;
+  }
+
+  .slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #64748b;
+  }
+
+  .toggle-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+  }
+
+  .toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .toggle-title {
+    font-size: 12.5px;
+    color: #f1f5f9;
+  }
+
+  .toggle-desc {
+    font-size: 10.5px;
+    color: #94a3b8;
+    max-width: 280px;
+  }
+
+  .nox-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #a855f7;
+    cursor: pointer;
+  }
+
+  .advanced-info-box {
     display: flex;
     gap: 10px;
     padding: 12px;
     background: rgba(168, 85, 247, 0.08);
     border: 1px solid rgba(168, 85, 247, 0.2);
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 11px;
     color: #cbd5e1;
     line-height: 1.4;
   }
 
-  .settings-tip-box p {
+  .advanced-info-box p {
     margin: 0;
   }
 </style>

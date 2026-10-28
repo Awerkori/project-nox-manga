@@ -1352,6 +1352,39 @@
       justify-content: space-between;
     }
 
+    .composer-card-premium {
+      padding: 14px 12px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+    }
+
+    .composer-action-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .toolbar-helpers {
+      justify-content: space-between;
+    }
+
+    .toolbar-submit-group {
+      width: 100%;
+    }
+
+    .btn-submit-premium {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .comment-card-modern {
+      border-radius: 12px;
+    }
+
+    .comment-content-wrap {
+      padding: 12px 14px;
+    }
+
     .replies-branch-list {
       margin-left: 6px;
       padding-left: 8px;
