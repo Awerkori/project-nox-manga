@@ -4,14 +4,30 @@
   import { date } from '$lib/types';
   import { tick, onMount, onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { threadComments, parseCommentBody } from '$lib/comments';
-  import { MessageSquare, Flag, X } from '@lucide/svelte';
+  import { parseCommentBody } from '$lib/comments';
+  import {
+    MessageSquare,
+    Flag,
+    X,
+    Heart,
+    CornerDownRight,
+    Edit3,
+    Trash2,
+    Eye,
+    EyeOff,
+    Sparkles,
+    ArrowUpDown,
+    Send,
+    ChevronDown,
+    ChevronUp
+  } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
   import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
-  type Comment = {
+
+  export type Comment = {
     id: string;
     user_id: string;
     body: string;
@@ -30,6 +46,7 @@
     } | null;
     comment_likes: { user_id: string }[];
   };
+
   let {
     comments,
     workId,
@@ -41,24 +58,68 @@
     chapterId?: string | null;
     profile?: { id: string } | null;
   } = $props();
-  let body = $state(''),
-    reply = $state<string | null>(null),
-    edit = $state<string | null>(null),
-    notice = $state(''),
-    busy = $state(false),
-    reportingComment = $state<Comment | null>(null);
+
+  // State
+  let body = $state('');
+  let reply = $state<string | null>(null);
+  let edit = $state<string | null>(null);
+  let notice = $state('');
+  let busy = $state(false);
+  let reportingComment = $state<Comment | null>(null);
+  let sortBy = $state<'recent' | 'likes'>('recent');
   let mentionAutocompleteRef = $state<any>();
+  let composer = $state<HTMLTextAreaElement>();
+
+  // Spoilers and collapsed reply threads
   const revealedSpoilers = new SvelteSet<string>();
+  const expandedReplies = new SvelteSet<string>();
 
   function toggleSpoiler(key: string) {
-    if (revealedSpoilers.has(key)) {
-      revealedSpoilers.delete(key);
-    } else {
-      revealedSpoilers.add(key);
-    }
+    if (revealedSpoilers.has(key)) revealedSpoilers.delete(key);
+    else revealedSpoilers.add(key);
   }
-  let composer = $state<HTMLTextAreaElement>();
-  let threaded = $derived(threadComments(comments));
+
+  function toggleThreadReplies(commentId: string) {
+    if (expandedReplies.has(commentId)) expandedReplies.delete(commentId);
+    else expandedReplies.add(commentId);
+  }
+
+  // Hierarchical Comment Threading
+  type ThreadedGroup = {
+    root: Comment;
+    replies: Comment[];
+  };
+
+  let threadedGroups = $derived.by<ThreadedGroup[]>(() => {
+    if (!comments?.length) return [];
+
+    const rootList: Comment[] = [];
+    const repliesMap = new Map<string, Comment[]>();
+
+    for (const c of comments) {
+      if (!c.parent_id) {
+        rootList.push(c);
+      } else {
+        const list = repliesMap.get(c.parent_id) || [];
+        list.push(c);
+        repliesMap.set(c.parent_id, list);
+      }
+    }
+
+    // Sort roots
+    if (sortBy === 'likes') {
+      rootList.sort((a, b) => (b.comment_likes?.length || 0) - (a.comment_likes?.length || 0));
+    } else {
+      rootList.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+
+    return rootList.map((root) => {
+      const reps = repliesMap.get(root.id) || [];
+      reps.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      return { root, replies: reps };
+    });
+  });
+
   let replyComment = $derived(reply ? comments.find((c) => c.id === reply) : null);
 
   function checkHashAndScroll() {
@@ -68,6 +129,10 @@
       const id = hash.slice(1);
       const el = document.getElementById(id);
       if (el) {
+        // Also auto-expand parent if this comment is a reply
+        const parentId = el.getAttribute('data-parent-id');
+        if (parentId) expandedReplies.add(parentId);
+
         setTimeout(() => {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           el.classList.add('highlight-pulse');
@@ -96,7 +161,9 @@
     composer?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     composer?.focus({ preventScroll: true });
   }
+
   async function send() {
+    if (busy || !body.trim()) return;
     busy = true;
     notice = '';
     try {
@@ -126,6 +193,10 @@
         }
       }
 
+      if (reply) {
+        expandedReplies.add(reply);
+      }
+
       body = '';
       reply = null;
       edit = null;
@@ -137,6 +208,7 @@
       busy = false;
     }
   }
+
   async function mutate(name: string, id: string) {
     if (busy) return;
     busy = true;
@@ -176,192 +248,460 @@
   }
 </script>
 
-<section class="comments">
-  <div class="section-heading">
-    <div>
-      <span class="eyebrow">{chapterId ? 'DEPOIS DA ÚLTIMA PÁGINA' : 'AVALIAÇÕES & DISCUSSÃO'}</span>
-      <h2>{chapterId ? 'O que você achou deste capítulo?' : 'O que você achou desta obra?'}</h2>
+<section class="comments-section-root">
+  <!-- SECTION HEADER -->
+  <div class="comments-header-row">
+    <div class="header-titles">
+      <div class="eyebrow-seal">
+        <MessageSquare size={13} class="text-purple-400" />
+        <span>{chapterId ? 'DISCUSSÃO DO CAPÍTULO' : 'AVALIAÇÕES & DISCUSSÃO'}</span>
+      </div>
+      <h2>{chapterId ? 'Comentários deste Capítulo' : 'Comentários sobre a Obra'}</h2>
     </div>
-    <span class="small muted">{comments.length} comentário{comments.length === 1 ? '' : 's'}</span>
+
+    <div class="header-meta-controls">
+      <div class="comments-count-badge">
+        <span>{comments.length}</span> {comments.length === 1 ? 'comentário' : 'comentários'}
+      </div>
+
+      {#if comments.length > 1}
+        <div class="sort-selector-wrap">
+          <ArrowUpDown size={13} class="sort-icon" />
+          <select
+            value={sortBy}
+            onchange={(e) => (sortBy = e.currentTarget.value as 'recent' | 'likes')}
+            class="sort-dropdown"
+            aria-label="Ordenar comentários"
+          >
+            <option value="recent">Mais Recentes</option>
+            <option value="likes">Mais Curtidos</option>
+          </select>
+        </div>
+      {/if}
+    </div>
   </div>
-  {#if notice}<div class="notice error" role="alert">{notice}</div>{/if}
-  {#if profile}<form use:bindSubmit>
+
+  {#if notice}
+    <div class="notice-alert error" role="alert">
+      <span>{notice}</span>
+    </div>
+  {/if}
+
+  <!-- COMPOSER BOX -->
+  {#if profile}
+    <form use:bindSubmit class="composer-card">
       {#if replyComment}
         <div class="replying-banner">
           <div class="replying-info">
+            <CornerDownRight size={14} class="text-purple-400" />
             <span class="replying-tag">Respondendo a</span>
             <strong class="replying-author">@{replyComment.members?.display_name || replyComment.members?.username || 'leitor'}</strong>
-            <span class="replying-preview">"{replyComment.body.slice(0, 50)}{replyComment.body.length > 50 ? '…' : ''}"</span>
+            <span class="replying-preview">"{replyComment.body.slice(0, 48)}{replyComment.body.length > 48 ? '…' : ''}"</span>
           </div>
           <button
             type="button"
             class="btn-cancel-reply"
             onclick={() => { reply = null; }}
             title="Cancelar resposta"
+            aria-label="Cancelar resposta"
           >
             <X size={14} />
-            <span>Cancelar</span>
           </button>
         </div>
       {/if}
 
       <div class="composer-field-wrapper">
-        <label class="field"
-          >{edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}<textarea
-            bind:value={body}
-            bind:this={composer}
-            rows="3"
-            required
-            maxlength="2000"
-            oninput={(e) => mentionAutocompleteRef?.handleInput((e.target as HTMLTextAreaElement).value)}
-            onkeydown={(e) => {
-              if (mentionAutocompleteRef?.handleKeyDown(e)) return;
-            }}
-            placeholder={edit
-              ? 'Edite seu comentário…'
-              : reply
-                ? `Respondendo a @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
-                : chapterId
-                  ? 'O que achou deste capítulo? Compartilhe suas impressões… Evite spoilers sem aviso.'
-                  : 'O que achou desta obra? Compartilhe suas impressões sobre a história, personagens e arte…'
-            }></textarea></label
-        >
+        <textarea
+          bind:value={body}
+          bind:this={composer}
+          rows="3"
+          required
+          maxlength="2000"
+          oninput={(e) => mentionAutocompleteRef?.handleInput((e.target as HTMLTextAreaElement).value)}
+          onkeydown={(e) => {
+            if (mentionAutocompleteRef?.handleKeyDown(e)) return;
+          }}
+          placeholder={edit
+            ? 'Edite seu comentário…'
+            : reply
+              ? `Sua resposta para @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
+              : chapterId
+                ? 'O que você achou deste capítulo? Compartilhe suas impressões… (evite spoilers sem aviso)'
+                : 'O que você achou desta obra? Fale sobre o enredo, arte e personagens…'
+          }
+          class="composer-textarea"
+          aria-label={edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}
+        ></textarea>
+
         <MentionAutocomplete
           bind:this={mentionAutocompleteRef}
           bind:value={body}
           textareaEl={composer}
         />
       </div>
-      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="button compact" disabled={busy || !body.trim()}>
-          {busy ? 'Enviando…' : edit ? 'Salvar alteração' : reply ? 'Responder' : 'Comentar'}
-        </button>
-        <button
-          type="button"
-          class="btn-insert-spoiler"
-          onclick={() => {
-            body += (body.length ? ' ' : '') + '[spoiler]texto[/spoiler]';
-          }}
-          title="Inserir tag de spoiler oculta"
-        >
-          + Spoiler
-        </button>
-        {#if reply || edit}
+
+      <div class="composer-toolbar">
+        <div class="toolbar-tools">
           <button
             type="button"
-            class="button secondary compact"
+            class="btn-tool-spoiler"
             onclick={() => {
-              reply = null;
-              edit = null;
-              body = '';
+              body += (body.length ? ' ' : '') + '[spoiler]texto com spoiler[/spoiler]';
+              composer?.focus();
             }}
+            title="Inserir texto com spoiler oculto"
           >
-            Cancelar
+            <EyeOff size={13} />
+            <span>+ Spoiler</span>
           </button>
-        {/if}
-        <span class="small muted">{body.length}/2000 · Use [spoiler]texto[/spoiler] para ocultar revelações.</span>
-      </div>
-    </form>{:else}<div class="panel">
-      <p><a class="text-link" href="/entrar">Entre na sua conta</a> para participar da conversa.</p>
-    </div>{/if}
-
-  {#if threaded.length === 0}
-    <div class="empty-comments-state">
-      <MessageSquare size={32} class="empty-comments-icon" />
-      <p class="empty-comments-title">Nenhum comentário por enquanto</p>
-      <span class="empty-comments-subtitle">
-        {chapterId
-          ? 'Seja o primeiro a compartilhar o que achou deste capítulo!'
-          : 'Seja o primeiro a compartilhar sua opinião sobre esta obra!'}
-      </span>
-    </div>
-  {:else}
-    <div class="comment-list">
-      {#each threaded as comment (comment.id)}
-        {@const authorColor = getNameColorInfo(comment.members?.name_color)}
-        {@const bannerKey = comment.members?.equipped_comment_banner_id || comment.members?.equipped_banner_id}
-        {@const commentBanner = bannerKey ? (CURATED_BANNER_BACKGROUNDS[bannerKey] || bannerKey) : null}
-        <article
-          id={'comment-' + comment.id}
-          class:reply={comment.parent_id !== null}
-          class:is-reply-target={reply === comment.id}
-          class:has-comment-banner={!!commentBanner}
-        >
-          {#if commentBanner}
-            <!-- Full card background banner (pure procedural SVG / animated keyframes) -->
-            <div class="comment-banner-background" style="background: {commentBanner};" aria-hidden="true"></div>
-            <!-- High-legibility protective contrast tint overlay -->
-            <div class="comment-banner-overlay" aria-hidden="true"></div>
-          {/if}
-          <div class="comment-content-layer">
-            <div class="comment-author">
-          <UserAvatar
-            avatarId={comment.members?.avatar_id}
-            frameId={comment.members?.avatar_frame_id}
-            crop={comment.members?.avatar_crop}
-            displayName={comment.members?.display_name || 'Leitor'}
-            size={38}
-          />
-          <div>
-            <a href="/u/{comment.members?.username}" class="author-name-link {authorColor.className}" style={authorColor.style}>{comment.members?.display_name || 'Leitor'}</a><time
-              datetime={comment.created_at}>{date(comment.created_at)}</time
-            >
-          </div>
+          <span class="char-count">{body.length} / 2000</span>
         </div>
-        <p class="comment-body">
-          {#each parseCommentBody(comment.body) as chunk, idx (idx)}
-            {#if chunk.type === 'spoiler'}
-              <button
-                type="button"
-                class="spoiler-text"
-                class:revealed={revealedSpoilers.has(comment.id + ':' + idx)}
-                onclick={() => toggleSpoiler(comment.id + ':' + idx)}
-                title={revealedSpoilers.has(comment.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler: clique para revelar'}
-              >
-                {#if revealedSpoilers.has(comment.id + ':' + idx)}
-                  {chunk.content}
-                {:else}
-                  <span class="spoiler-masked">{chunk.content}</span>
-                  <span class="spoiler-badge">SPOILER</span>
-                {/if}
-              </button>
-            {:else if chunk.type === 'mention'}
-              <a href={`/u/${chunk.username || chunk.content}`} class="mention-tag">@{chunk.content}</a>
-            {:else}
-              {chunk.content}
-            {/if}
-          {/each}
-        </p>
-        <div class="row small comment-actions-row">
+
+        <div class="toolbar-actions">
+          {#if reply || edit}
+            <button
+              type="button"
+              class="btn-cancel-action"
+              onclick={() => {
+                reply = null;
+                edit = null;
+                body = '';
+              }}
+            >
+              Cancelar
+            </button>
+          {/if}
           <button
-            class="comment-button"
-            onclick={() => mutate('comment_like', comment.id)}
-            disabled={!profile || busy}>♡ {comment.comment_likes.length}</button
-          >{#if profile}{#if !comment.parent_id}<button
-                class="comment-button"
-                onclick={() => compose(comment)}>Responder</button
-              >{/if}{#if profile.id === comment.user_id}<button
-                class="comment-button"
-                onclick={() => compose(comment, true)}>Editar</button
-              ><button
-                class="comment-button"
-                disabled={busy}
-                onclick={() => mutate('comment_delete', comment.id)}>Apagar</button
-              >{:else}<button
-                type="button"
-                class="comment-button report-btn"
-                onclick={() => (reportingComment = comment)}
-                title="Denunciar este comentário para a moderação"
-              >
-                <Flag size={11} />
-                <span>Denunciar</span>
-              </button>{/if}{/if}
-            </div>
-          </div>
-        </article>{/each}
+            class="btn-submit-comment"
+            disabled={busy || !body.trim()}
+          >
+            <Send size={14} />
+            <span>{busy ? 'Enviando…' : edit ? 'Salvar' : reply ? 'Responder' : 'Publicar'}</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  {:else}
+    <div class="guest-login-card">
+      <MessageSquare size={20} class="text-purple-400" />
+      <p>
+        <a class="text-link" href="/entrar">Entre na sua conta</a> para participar da discussão e ganhar XP de leitura.
+      </p>
     </div>
   {/if}
 
+  <!-- COMMENTS FEED -->
+  {#if threadedGroups.length === 0}
+    <div class="empty-comments-card">
+      <div class="empty-icon-box">
+        <MessageSquare size={32} class="empty-icon text-purple-400" />
+      </div>
+      <h3>Nenhum comentário por enquanto</h3>
+      <p>
+        {chapterId
+          ? 'Seja o primeiro a compartilhar o que achou deste capítulo!'
+          : 'Seja o primeiro a compartilhar sua opinião sobre esta obra!'}
+      </p>
+    </div>
+  {:else}
+    <div class="comments-flow-list">
+      {#each threadedGroups as group (group.root.id)}
+        {@const root = group.root}
+        {@const rootAuthorColor = getNameColorInfo(root.members?.name_color)}
+        {@const rootBannerKey = root.members?.equipped_comment_banner_id || root.members?.equipped_banner_id}
+        {@const rootCommentBanner = rootBannerKey ? (CURATED_BANNER_BACKGROUNDS[rootBannerKey] || rootBannerKey) : null}
+        {@const hasLiked = profile && root.comment_likes?.some((l) => l.user_id === profile.id)}
+        {@const isAuthor = profile && profile.id === root.user_id}
+        {@const repliesOpen = expandedReplies.has(root.id)}
+
+        <!-- ROOT COMMENT CARD -->
+        <article
+          id={'comment-' + root.id}
+          class="comment-card root-comment"
+          class:is-reply-target={reply === root.id}
+          class:has-comment-banner={!!rootCommentBanner}
+        >
+          {#if rootCommentBanner}
+            <div class="comment-banner-background" style="background: {rootCommentBanner};" aria-hidden="true"></div>
+            <div class="comment-banner-overlay" aria-hidden="true"></div>
+          {/if}
+
+          <div class="comment-content-layer">
+            <!-- Author Header -->
+            <div class="comment-author-bar">
+              <UserAvatar
+                avatarId={root.members?.avatar_id}
+                frameId={root.members?.avatar_frame_id}
+                crop={root.members?.avatar_crop}
+                displayName={root.members?.display_name || 'Leitor'}
+                size={38}
+              />
+              <div class="author-meta-info">
+                <div class="author-name-line">
+                  <a
+                    href="/u/{root.members?.username}"
+                    class="author-display-name {rootAuthorColor.className}"
+                    style={rootAuthorColor.style}
+                  >
+                    {root.members?.display_name || 'Leitor'}
+                  </a>
+                  <span class="author-handle">@{root.members?.username || 'leitor'}</span>
+                  {#if isAuthor}
+                    <span class="author-badge-self">Você</span>
+                  {/if}
+                </div>
+                <time class="comment-timestamp" datetime={root.created_at}>{date(root.created_at)}</time>
+              </div>
+            </div>
+
+            <!-- Comment Body with Spoilers & Mentions -->
+            <div class="comment-body-content">
+              {#each parseCommentBody(root.body) as chunk, idx (idx)}
+                {#if chunk.type === 'spoiler'}
+                  <button
+                    type="button"
+                    class="spoiler-block"
+                    class:revealed={revealedSpoilers.has(root.id + ':' + idx)}
+                    onclick={() => toggleSpoiler(root.id + ':' + idx)}
+                    title={revealedSpoilers.has(root.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler: clique para revelar'}
+                  >
+                    {#if revealedSpoilers.has(root.id + ':' + idx)}
+                      <span class="spoiler-revealed-text">{chunk.content}</span>
+                    {:else}
+                      <span class="spoiler-hidden-mask">{chunk.content}</span>
+                      <span class="spoiler-tag-pill"><EyeOff size={11} /> SPOILER</span>
+                    {/if}
+                  </button>
+                {:else if chunk.type === 'mention'}
+                  <a href={`/u/${chunk.username || chunk.content}`} class="mention-pill">@{chunk.content}</a>
+                {:else}
+                  <span>{chunk.content}</span>
+                {/if}
+              {/each}
+            </div>
+
+            <!-- Action Bar -->
+            <div class="comment-actions-bar">
+              <!-- Like Button -->
+              <button
+                type="button"
+                class="btn-action-like"
+                class:liked={hasLiked}
+                onclick={() => mutate('comment_like', root.id)}
+                disabled={!profile || busy}
+                title={hasLiked ? 'Descurtir' : 'Curtir comentário'}
+              >
+                <Heart size={14} class={hasLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                <span>{root.comment_likes?.length || 0}</span>
+              </button>
+
+              <!-- Reply Button -->
+              {#if profile}
+                <button
+                  type="button"
+                  class="btn-action-reply"
+                  onclick={() => compose(root)}
+                >
+                  <CornerDownRight size={13} />
+                  <span>Responder</span>
+                </button>
+              {/if}
+
+              <!-- Author actions (Edit / Delete) -->
+              {#if isAuthor}
+                <button
+                  type="button"
+                  class="btn-action-util"
+                  onclick={() => compose(root, true)}
+                  title="Editar comentário"
+                >
+                  <Edit3 size={12} />
+                  <span>Editar</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-action-util btn-action-delete"
+                  disabled={busy}
+                  onclick={() => mutate('comment_delete', root.id)}
+                  title="Excluir comentário"
+                >
+                  <Trash2 size={12} />
+                  <span>Apagar</span>
+                </button>
+              {:else if profile}
+                <button
+                  type="button"
+                  class="btn-action-util btn-action-report"
+                  onclick={() => (reportingComment = root)}
+                  title="Denunciar este comentário"
+                >
+                  <Flag size={12} />
+                  <span>Denunciar</span>
+                </button>
+              {/if}
+            </div>
+
+            <!-- COLLAPSIBLE REPLIES THREAD -->
+            {#if group.replies.length > 0}
+              <div class="replies-wrapper">
+                <button
+                  type="button"
+                  class="btn-toggle-replies"
+                  onclick={() => toggleThreadReplies(root.id)}
+                  aria-expanded={repliesOpen}
+                >
+                  {#if repliesOpen}
+                    <ChevronUp size={14} />
+                    <span>Ocultar {group.replies.length === 1 ? '1 resposta' : `${group.replies.length} respostas`}</span>
+                  {:else}
+                    <ChevronDown size={14} />
+                    <span>Ver {group.replies.length === 1 ? '1 resposta' : `${group.replies.length} respostas`}</span>
+                  {/if}
+                </button>
+
+                {#if repliesOpen}
+                  <div class="nested-replies-list">
+                    {#each group.replies as replyItem (replyItem.id)}
+                      {@const repAuthorColor = getNameColorInfo(replyItem.members?.name_color)}
+                      {@const repBannerKey = replyItem.members?.equipped_comment_banner_id || replyItem.members?.equipped_banner_id}
+                      {@const repCommentBanner = repBannerKey ? (CURATED_BANNER_BACKGROUNDS[repBannerKey] || repBannerKey) : null}
+                      {@const repHasLiked = profile && replyItem.comment_likes?.some((l) => l.user_id === profile.id)}
+                      {@const repIsAuthor = profile && profile.id === replyItem.user_id}
+
+                      <article
+                        id={'comment-' + replyItem.id}
+                        data-parent-id={root.id}
+                        class="comment-card reply-comment"
+                        class:is-reply-target={reply === replyItem.id}
+                        class:has-comment-banner={!!repCommentBanner}
+                      >
+                        {#if repCommentBanner}
+                          <div class="comment-banner-background" style="background: {repCommentBanner};" aria-hidden="true"></div>
+                          <div class="comment-banner-overlay" aria-hidden="true"></div>
+                        {/if}
+
+                        <div class="comment-content-layer">
+                          <div class="comment-author-bar">
+                            <UserAvatar
+                              avatarId={replyItem.members?.avatar_id}
+                              frameId={replyItem.members?.avatar_frame_id}
+                              crop={replyItem.members?.avatar_crop}
+                              displayName={replyItem.members?.display_name || 'Leitor'}
+                              size={32}
+                            />
+                            <div class="author-meta-info">
+                              <div class="author-name-line">
+                                <a
+                                  href="/u/{replyItem.members?.username}"
+                                  class="author-display-name {repAuthorColor.className}"
+                                  style={repAuthorColor.style}
+                                >
+                                  {replyItem.members?.display_name || 'Leitor'}
+                                </a>
+                                <span class="author-handle">@{replyItem.members?.username || 'leitor'}</span>
+                                {#if repIsAuthor}
+                                  <span class="author-badge-self">Você</span>
+                                {/if}
+                              </div>
+                              <time class="comment-timestamp" datetime={replyItem.created_at}>{date(replyItem.created_at)}</time>
+                            </div>
+                          </div>
+
+                          <div class="comment-body-content">
+                            {#each parseCommentBody(replyItem.body) as chunk, idx (idx)}
+                              {#if chunk.type === 'spoiler'}
+                                <button
+                                  type="button"
+                                  class="spoiler-block"
+                                  class:revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
+                                  onclick={() => toggleSpoiler(replyItem.id + ':' + idx)}
+                                  title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler: clique para revelar'}
+                                >
+                                  {#if revealedSpoilers.has(replyItem.id + ':' + idx)}
+                                    <span class="spoiler-revealed-text">{chunk.content}</span>
+                                  {:else}
+                                    <span class="spoiler-hidden-mask">{chunk.content}</span>
+                                    <span class="spoiler-tag-pill"><EyeOff size={11} /> SPOILER</span>
+                                  {/if}
+                                </button>
+                              {:else if chunk.type === 'mention'}
+                                <a href={`/u/${chunk.username || chunk.content}`} class="mention-pill">@{chunk.content}</a>
+                              {:else}
+                                <span>{chunk.content}</span>
+                              {/if}
+                            {/each}
+                          </div>
+
+                          <div class="comment-actions-bar">
+                            <button
+                              type="button"
+                              class="btn-action-like"
+                              class:liked={repHasLiked}
+                              onclick={() => mutate('comment_like', replyItem.id)}
+                              disabled={!profile || busy}
+                              title={repHasLiked ? 'Descurtir' : 'Curtir resposta'}
+                            >
+                              <Heart size={13} class={repHasLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                              <span>{replyItem.comment_likes?.length || 0}</span>
+                            </button>
+
+                            {#if profile}
+                              <button
+                                type="button"
+                                class="btn-action-reply"
+                                onclick={() => compose(root)}
+                              >
+                                <CornerDownRight size={12} />
+                                <span>Responder</span>
+                              </button>
+                            {/if}
+
+                            {#if repIsAuthor}
+                              <button
+                                type="button"
+                                class="btn-action-util"
+                                onclick={() => compose(replyItem, true)}
+                                title="Editar resposta"
+                              >
+                                <Edit3 size={11} />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-action-util btn-action-delete"
+                                disabled={busy}
+                                onclick={() => mutate('comment_delete', replyItem.id)}
+                                title="Excluir resposta"
+                              >
+                                <Trash2 size={11} />
+                                <span>Apagar</span>
+                              </button>
+                            {:else if profile}
+                              <button
+                                type="button"
+                                class="btn-action-util btn-action-report"
+                                onclick={() => (reportingComment = replyItem)}
+                                title="Denunciar esta resposta"
+                              >
+                                <Flag size={11} />
+                                <span>Denunciar</span>
+                              </button>
+                            {/if}
+                          </div>
+                        </div>
+                      </article>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </article>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- REPORT MODAL -->
   {#if reportingComment}
     <ReportModal
       targetType="COMMENT"
@@ -370,335 +710,192 @@
       onclose={() => (reportingComment = null)}
       onsuccess={() => {
         reportingComment = null;
-        notice = 'Denúncia sobre o comentário enviada à moderação com sucesso.';
+        notice = '✓ Denúncia sobre o comentário enviada à moderação com sucesso.';
+        setTimeout(() => { notice = ''; }, 4000);
       }}
     />
   {/if}
 </section>
 
 <style>
-  .comments {
-    margin: 55px 0;
-  }
-  .comments h2 {
-    font-size: 26px;
-  }
-  .comment-list {
-    margin-top: 30px;
-  }
-  .comment-list article {
-    padding: 25px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .comment-list article.reply {
-    margin-left: 30px;
-    padding-left: 20px;
-    border-left: 2px solid #33263e;
-  }
-  .comment-list article:target {
-    border: 2px solid #a855f7 !important;
-    background: rgba(168, 85, 247, 0.08) !important;
-    border-radius: 12px;
-    padding: 20px !important;
-    box-shadow: 0 0 24px rgba(168, 85, 247, 0.35) !important;
-    scroll-margin-top: 100px;
-    transition: all 0.3s ease;
-  }
-  /* Comment Cards with Full Animated / Curated Banner Background */
-  .comment-list article.has-comment-banner {
-    position: relative;
-    overflow: hidden;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
-    padding: 18px 22px;
-    margin: 16px 0;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .comment-list article.has-comment-banner:hover {
-    border-color: rgba(168, 85, 247, 0.35);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(168, 85, 247, 0.12);
-  }
-  .comment-list article.has-comment-banner.reply {
-    margin-left: 28px;
-    padding-left: 20px;
-    border-left: 3px solid #8b5cf6;
-  }
-  .comment-banner-background {
-    position: absolute;
-    inset: 0;
+  /* ----------------------------------------------------
+     BASE CONTAINER & HEADER
+  ---------------------------------------------------- */
+  .comments-section-root {
     width: 100%;
-    height: 100%;
-    background-size: cover !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
-    z-index: 0;
-    pointer-events: none;
-  }
-  .comment-banner-overlay {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    pointer-events: none;
-    background: linear-gradient(
-      180deg,
-      rgba(10, 14, 26, 0.78) 0%,
-      rgba(10, 14, 26, 0.88) 100%
-    );
-    backdrop-filter: blur(0.5px);
-  }
-  .comment-content-layer {
-    position: relative;
-    z-index: 2;
-    width: 100%;
-  }
-  .has-comment-banner .author-name-link {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
-  }
-  .has-comment-banner .comment-body {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-    color: #f1f5f9;
-  }
-  .has-comment-banner .comment-author time {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-    color: #cbd5e1;
-  }
-  .has-comment-banner .comment-button {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  }
-  .author-name-link {
-    font-weight: 700;
-    transition: opacity 0.2s ease;
-  }
-  .author-name-link:hover {
-    opacity: 0.85;
-  }
-  .comment-author {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font-size: 13px;
-  }
-  .comment-author time {
-    display: block;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 5px;
-  }
-  .comment-body {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font-size: 14px;
-    color: #d7d1e0;
-  }
-  .comment-button {
-    border: 0;
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    padding: 7px;
-  }
-  .comment-button:hover {
-    color: var(--purple);
-  }
-
-  .btn-insert-spoiler {
-    border: 1px solid rgba(181, 154, 245, 0.3);
-    background: rgba(181, 154, 245, 0.08);
-    color: #b59af5;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-insert-spoiler:hover {
-    background: rgba(181, 154, 245, 0.18);
-    border-color: rgba(181, 154, 245, 0.5);
-    color: #ffffff;
-  }
-
-  .spoiler-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    padding: 1px 6px;
-    background: rgba(255, 255, 255, 0.06);
-    color: inherit;
-    cursor: pointer;
-    font-size: inherit;
-    text-align: left;
-    transition: all 0.2s ease;
-    vertical-align: baseline;
-    font-family: inherit;
-  }
-
-  .spoiler-text:not(.revealed) .spoiler-masked {
-    filter: blur(5px);
-    user-select: none;
-    opacity: 0.4;
-  }
-
-  .spoiler-badge {
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    background: #ef4444;
-    color: #fff;
-    padding: 1px 5px;
-    border-radius: 3px;
-    margin-left: 2px;
-  }
-
-  .spoiler-text.revealed {
-    background: rgba(181, 154, 245, 0.12);
-    border-color: rgba(181, 154, 245, 0.3);
-  }
-
-  .empty-comments-state {
-    padding: 44px 20px;
-    text-align: center;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    margin: 30px 0;
+    margin: 40px auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 6px;
+    gap: 24px;
   }
 
-  :global(.empty-comments-icon) {
-    color: #8c889f;
-    opacity: 0.6;
-    margin-bottom: 6px;
-  }
-
-  .empty-comments-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #d1cde0;
-    margin: 0;
-  }
-
-  .empty-comments-subtitle {
-    font-size: 13px;
-    color: #8c889f;
-  }
-
-  .comment-actions-row {
+  .comments-header-row {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-end;
+    justify-content: space-between;
     flex-wrap: wrap;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .report-btn {
+  .header-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .eyebrow-seal {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    color: #8c889f;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #c084fc;
+    letter-spacing: 0.06em;
+  }
+
+  .comments-header-row h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #f2f0f7;
+    margin: 0;
+    line-height: 1.25;
+  }
+
+  .header-meta-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .comments-count-badge {
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    font-size: 12px;
+    color: #9d9aa9;
+    font-weight: 600;
+  }
+
+  .comments-count-badge span {
+    color: #e9d5ff;
+    font-weight: 800;
+  }
+
+  .sort-selector-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .sort-icon {
+    position: absolute;
+    left: 10px;
+    color: #8c899a;
+    pointer-events: none;
+  }
+
+  .sort-dropdown {
+    background: rgba(16, 18, 30, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2dfec;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px 6px 28px;
+    border-radius: 8px;
+    outline: none;
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition: border-color 0.2s;
   }
 
-  .report-btn:hover {
-    color: #ef4444;
+  .sort-dropdown:focus {
+    border-color: #a855f7;
   }
 
-  /* Replying Context Banner */
+  .notice-alert {
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .notice-alert.error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+  }
+
+  /* ----------------------------------------------------
+     COMPOSER CARD
+  ---------------------------------------------------- */
+  .composer-card {
+    background: rgba(11, 13, 23, 0.75);
+    border: 1px solid rgba(181, 154, 245, 0.25);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.2s;
+  }
+
+  .composer-card:focus-within {
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+
   .replying-banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 14px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    background: rgba(139, 92, 246, 0.12);
-    border: 1px solid rgba(139, 92, 246, 0.35);
+    padding: 8px 12px;
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 10px;
   }
 
   .replying-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    font-size: 12px;
     min-width: 0;
-    overflow: hidden;
   }
 
   .replying-tag {
-    font-size: 11px;
-    color: #a78bfa;
-    font-weight: 600;
-    white-space: nowrap;
+    color: #a7a3b6;
   }
 
   .replying-author {
-    font-size: 12.5px;
-    color: #ffffff;
-    font-weight: 750;
-    white-space: nowrap;
+    color: #e9d5ff;
   }
 
   .replying-preview {
-    font-size: 11.5px;
-    color: #9ca3af;
+    color: #7d7a8d;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-style: italic;
   }
 
   .btn-cancel-reply {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     background: transparent;
     border: none;
-    color: #f87171;
-    font-size: 11.5px;
-    font-weight: 600;
+    color: #9d9aa9;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    white-space: nowrap;
-    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.2s;
   }
 
   .btn-cancel-reply:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #fca5a5;
-  }
-
-  /* Target Comment Highlight */
-  .comment-list article.is-reply-target {
-    background: rgba(139, 92, 246, 0.08);
-    border-radius: 12px;
-    padding: 18px 16px;
-    border: 1px solid rgba(139, 92, 246, 0.45);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
-    transition: all 0.25s ease;
-  }
-
-  .comment-list article.highlight-pulse {
-    background: rgba(99, 102, 241, 0.22);
-    border-radius: 12px;
-    padding: 18px 16px;
-    border: 1px solid rgba(99, 102, 241, 0.7);
-    box-shadow: 0 0 25px rgba(99, 102, 241, 0.4);
-    animation: highlightPulseFade 3s ease-out forwards;
-  }
-
-  @keyframes highlightPulseFade {
-    0% { background: rgba(99, 102, 241, 0.35); border-color: #818cf8; }
-    70% { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); }
-    100% { background: transparent; border-color: var(--line); }
+    color: #fff;
   }
 
   .composer-field-wrapper {
@@ -706,19 +903,467 @@
     width: 100%;
   }
 
-  :global(.mention-tag) {
-    display: inline-block;
-    color: #818cf8;
-    background: rgba(99, 102, 241, 0.15);
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.15s ease;
+  .composer-textarea {
+    width: 100%;
+    min-height: 85px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: #f2f0f7;
+    font-family: inherit;
+    font-size: 13.5px;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.2s, background 0.2s;
   }
 
-  :global(.mention-tag:hover) {
-    background: rgba(99, 102, 241, 0.3);
-    color: #a5b4fc;
+  .composer-textarea:focus {
+    border-color: #9333ea;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .composer-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .toolbar-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .btn-tool-spoiler {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #c4c1d3;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-tool-spoiler:hover {
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(192, 132, 252, 0.4);
+    color: #fff;
+  }
+
+  .char-count {
+    font-size: 11px;
+    color: #6b6878;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-cancel-action {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #d1cddc;
+    font-size: 12px;
+    font-weight: 650;
+    padding: 7px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel-action:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  .btn-submit-comment {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+    border: none;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 750;
+    padding: 8px 18px;
+    border-radius: 9px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+    transition: all 0.2s;
+  }
+
+  .btn-submit-comment:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.6);
+  }
+
+  .btn-submit-comment:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .guest-login-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: rgba(16, 18, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    color: #d1cddc;
+    font-size: 13px;
+  }
+
+  .guest-login-card a {
+    color: #c084fc;
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
+  /* ----------------------------------------------------
+     EMPTY STATE
+  ---------------------------------------------------- */
+  .empty-comments-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    background: rgba(11, 13, 23, 0.5);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .empty-icon-box {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+
+  .empty-comments-card h3 {
+    font-size: 16px;
+    font-weight: 750;
+    color: #f2f0f7;
+    margin: 0;
+  }
+
+  .empty-comments-card p {
+    font-size: 13px;
+    color: #8c899a;
+    margin: 0;
+    max-width: 380px;
+  }
+
+  /* ----------------------------------------------------
+     COMMENTS FLOW LIST & CARDS
+  ---------------------------------------------------- */
+  .comments-flow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .comment-card {
+    position: relative;
+    background: rgba(11, 13, 23, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    padding: 16px 18px;
+    overflow: hidden;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .comment-card:hover {
+    border-color: rgba(181, 154, 245, 0.25);
+  }
+
+  .comment-card.is-reply-target {
+    border-color: #9333ea;
+    box-shadow: 0 0 16px rgba(147, 51, 234, 0.3);
+  }
+
+  /* Cosmetic comment banner overlay */
+  .comment-banner-background {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.85;
+  }
+
+  .comment-banner-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: linear-gradient(180deg, rgba(8, 10, 18, 0.7) 0%, rgba(8, 10, 18, 0.92) 100%);
+  }
+
+  .comment-content-layer {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Author Bar */
+  .comment-author-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .author-meta-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .author-name-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .author-display-name {
+    font-size: 13.5px;
+    font-weight: 750;
+    color: #f2f0f7;
+    text-decoration: none;
+    line-height: 1.25;
+    transition: color 0.2s;
+  }
+
+  .author-display-name:hover {
+    color: #c084fc;
+  }
+
+  .author-handle {
+    font-size: 11px;
+    color: #716e7e;
+  }
+
+  .author-badge-self {
+    font-size: 10px;
+    font-weight: 750;
+    color: #dfc28d;
+    background: rgba(201, 170, 115, 0.15);
+    border: 1px solid rgba(201, 170, 115, 0.3);
+    padding: 0 6px;
+    border-radius: 999px;
+  }
+
+  .comment-timestamp {
+    font-size: 11px;
+    color: #716e7e;
+  }
+
+  /* Comment Body */
+  .comment-body-content {
+    font-size: 13.5px;
+    color: #e2dfec;
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  /* Spoilers & Mentions */
+  .spoiler-block {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: inherit;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    vertical-align: baseline;
+    transition: all 0.2s;
+  }
+
+  .spoiler-block.revealed {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(192, 132, 252, 0.4);
+    color: #e9d5ff;
+  }
+
+  .spoiler-hidden-mask {
+    filter: blur(5px);
+    user-select: none;
+  }
+
+  .spoiler-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fde047;
+    background: rgba(234, 179, 8, 0.2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  .mention-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(124, 58, 237, 0.18);
+    color: #c084fc;
+    font-weight: 650;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .mention-pill:hover {
+    background: rgba(124, 58, 237, 0.35);
+    color: #fff;
+  }
+
+  /* Actions Bar */
+  .comment-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .btn-action-like,
+  .btn-action-reply,
+  .btn-action-util {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    color: #8c899a;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.2s, background 0.2s;
+  }
+
+  .btn-action-like:hover,
+  .btn-action-reply:hover,
+  .btn-action-util:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-action-like.liked {
+    color: #fb7185;
+  }
+
+  .btn-action-delete:hover {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.12);
+  }
+
+  .btn-action-report:hover {
+    color: #fde047;
+  }
+
+  /* ----------------------------------------------------
+     NESTED REPLIES
+  ---------------------------------------------------- */
+  .replies-wrapper {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-toggle-replies {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: #c084fc;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    align-self: flex-start;
+    transition: background 0.2s;
+  }
+
+  .btn-toggle-replies:hover {
+    background: rgba(168, 85, 247, 0.15);
+  }
+
+  .nested-replies-list {
+    margin-left: 20px;
+    padding-left: 14px;
+    border-left: 2px solid rgba(168, 85, 247, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reply-comment {
+    background: rgba(16, 18, 30, 0.65);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+
+  /* Highlight target pulse */
+  :global(.highlight-pulse) {
+    animation: commentPulse 2.5s ease-out;
+  }
+
+  @keyframes commentPulse {
+    0% { border-color: #a855f7; box-shadow: 0 0 20px rgba(168, 85, 247, 0.6); }
+    100% { border-color: rgba(255, 255, 255, 0.07); box-shadow: none; }
+  }
+
+  @media (max-width: 640px) {
+    .nested-replies-list {
+      margin-left: 10px;
+      padding-left: 10px;
+    }
+
+    .comment-card {
+      padding: 14px;
+    }
+
+    .comments-header-row h2 {
+      font-size: 18px;
+    }
   }
 </style>
