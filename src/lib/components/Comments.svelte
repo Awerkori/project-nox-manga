@@ -55,11 +55,21 @@
     comments,
     workId,
     chapterId = null,
+    chapterNumber = null,
+    chapterTitle = null,
+    displayNumber = null,
+    workSlug = null,
+    workTitle = null,
     profile = null
   }: {
     comments: Comment[];
     workId: string;
     chapterId?: string | null;
+    chapterNumber?: string | number | null;
+    chapterTitle?: string | null;
+    displayNumber?: string | null;
+    workSlug?: string | null;
+    workTitle?: string | null;
     profile?: { id: string } | null;
   } = $props();
 
@@ -127,7 +137,11 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || err.error || 'Falha ao enviar imagem.');
+        let userMsg = err.error || err.message;
+        if (!userMsg || typeof userMsg !== 'string' || userMsg.includes('constraint') || userMsg.includes('SQL') || userMsg.includes('relation')) {
+          userMsg = 'Não foi possível enviar a mídia. Verifique o formato ou tente novamente.';
+        }
+        throw new Error(userMsg);
       }
       const data = await res.json();
       if (attachedMedia && attachedMedia.previewUrl === objectUrl) {
@@ -347,7 +361,18 @@
         edit ? 'comment_edit' : 'comment',
         edit
           ? { id: edit, body: finalBody, mentionsData }
-          : { work_id: workId, chapter_id: chapterId, parent_id: reply, body: finalBody, mentionsData }
+          : {
+              work_id: workId,
+              chapter_id: chapterId,
+              work_slug: workSlug,
+              work_title: workTitle,
+              chapter_number: chapterNumber,
+              chapter_title: chapterTitle,
+              display_number: displayNumber,
+              parent_id: reply,
+              body: finalBody,
+              mentionsData
+            }
       )) as any;
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
@@ -374,8 +399,13 @@
       edit = null;
       mentionAutocompleteRef?.clearTrackedMentions();
       await invalidateAll();
-    } catch (e) {
-      notice = (e as Error).message;
+    } catch (e: any) {
+      const raw = e?.message || '';
+      if (raw.includes('violates') || raw.includes('constraint') || raw.includes('SQL') || raw.includes('relation')) {
+        notice = 'Não foi possível salvar o comentário. Tente novamente em instantes.';
+      } else {
+        notice = raw || 'Não foi possível publicar seu comentário.';
+      }
     } finally {
       busy = false;
     }

@@ -847,46 +847,61 @@
     id="chapter-end"
     style={readerSettings.fit === 'full' ? 'max-width: 100%;' : `max-width: ${readerSettings.width}px;`}
   >
-    <!-- UNIFIED NEXT CHAPTER HERO (COMPACT & DIRECT) -->
+    <!-- UNIFIED NEXT CHAPTER HERO (REFINED NAVIGATION CONSOLE) -->
     <div class="compact-completion-card">
       <div class="completion-eyebrow">
-        <span class="conclusion-badge">Fim do Capítulo {chapterIdentityLabel(data.chapter)}</span>
+        <div class="completion-status-chip">
+          <CheckCircle2 size={13} class="text-emerald-400" />
+          <span>Fim do Capítulo {chapterIdentityLabel(data.chapter)}</span>
+        </div>
         {#if data.chapter.works?.title}
-          <span class="work-dot">·</span>
-          <span class="work-label">{data.chapter.works.title}</span>
+          <a
+            class="completion-work-link"
+            href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
+          >
+            <BookOpen size={13} />
+            <span class="truncate">{data.chapter.works.title}</span>
+          </a>
         {/if}
       </div>
 
       {#if data.next}
-        <div class="next-chapter-core">
-          <div class="next-info">
-            <span class="next-tag">A SEGUIR</span>
-            <h2 class="next-title">Capítulo {chapterIdentityLabel(data.next)}</h2>
+        <div class="next-hero-banner">
+          <div class="next-hero-left">
+            <span class="next-eyebrow-tag">A SEGUIR</span>
+            <div class="next-title-group">
+              <h2 class="next-chapter-headline">Capítulo {chapterIdentityLabel(data.next)}</h2>
+              {#if data.next.title && data.next.title !== `Capítulo ${data.next.number}` && data.next.title !== `Capitulo ${data.next.number}`}
+                <span class="next-chapter-subhead truncate">{data.next.title}</span>
+              {/if}
+            </div>
           </div>
           <a
-            class="btn-primary-next"
+            class="btn-primary-next-hero"
             href="/ler/{data.next.id}"
             onclick={() => void completeChapter()}
           >
-            <span>Ler Próximo Capítulo</span>
+            <span>Continuar Leitura</span>
             <ArrowRight size={17} class="arrow-bounce" />
           </a>
         </div>
       {:else}
-        <div class="caught-up-compact">
-          <PartyPopper size={22} class="text-amber-400 shrink-0" />
-          <div>
-            <strong>Você está em dia com a obra!</strong>
-            <p>Este é o capítulo mais recente lançado. Novos capítulos serão lançados em breve.</p>
+        <div class="caught-up-banner">
+          <div class="caught-up-icon-wrap">
+            <PartyPopper size={22} class="text-amber-400 shrink-0" />
+          </div>
+          <div class="caught-up-text">
+            <strong class="caught-up-title">Você está em dia com a obra!</strong>
+            <p class="caught-up-desc">Este é o capítulo mais recente lançado. Novos capítulos serão disponibilizados assim que lançados pela scan.</p>
           </div>
         </div>
       {/if}
 
-      <!-- DISCREET SECONDARY NAVIGATION BAR -->
-      <nav class="secondary-nav-row" aria-label="Navegação secundária">
+      <!-- INTEGRATED SECONDARY NAVIGATION CONSOLE -->
+      <nav class="integrated-nav-deck" aria-label="Navegação secundária">
         {#if data.previous}
-          <a class="nav-sub-btn" href="/ler/{data.previous.id}">
-            <ArrowLeft size={14} />
+          <a class="deck-btn deck-btn-prev" href="/ler/{data.previous.id}">
+            <ArrowLeft size={15} />
             <span>Capítulo Anterior</span>
           </a>
         {/if}
@@ -894,19 +909,19 @@
         {#if data.siblings && data.siblings.length > 1}
           <button
             type="button"
-            class="nav-sub-btn"
+            class="deck-btn deck-btn-list"
             onclick={() => { showChaptersDrawer = true; uiVisible = true; }}
           >
-            <List size={14} />
+            <List size={15} />
             <span>Capítulos ({data.siblings.length})</span>
           </button>
         {/if}
 
         <a
-          class="nav-sub-btn"
+          class="deck-btn deck-btn-work"
           href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
         >
-          <BookOpen size={14} />
+          <BookOpen size={15} />
           <span>Sobre a Obra</span>
         </a>
       </nav>
@@ -990,6 +1005,11 @@
           comments={data.comments}
           workId={data.chapter.work_id}
           chapterId={data.chapter.id}
+          chapterNumber={data.chapter.number}
+          chapterTitle={data.chapter.title}
+          displayNumber={data.chapter.display_number}
+          workSlug={data.chapter.works?.slug}
+          workTitle={data.chapter.works?.title}
           profile={data.profile}
         />
       {/if}
@@ -1561,97 +1581,132 @@
     transition: max-width 0.2s ease;
   }
 
-  /* Compact Next Chapter Hero Card */
+  /* Refined Integrated Navigation Console */
   .compact-completion-card {
     position: relative;
     border-radius: 16px;
-    background: linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(13, 10, 20, 0.95) 100%);
-    border: 1px solid rgba(168, 85, 247, 0.28);
-    padding: 18px 20px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    background: #090a12;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
   }
 
   .completion-eyebrow {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 12px;
     flex-wrap: wrap;
-    font-size: 12px;
+    padding-bottom: 2px;
   }
 
-  .conclusion-badge {
-    font-size: 11px;
+  .completion-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
     font-weight: 700;
-    color: #c084fc;
-    background: rgba(168, 85, 247, 0.15);
-    padding: 2px 8px;
-    border-radius: 6px;
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 3px 10px;
+    border-radius: 9999px;
   }
 
-  .work-dot {
-    color: #64748b;
-  }
-
-  .work-label {
+  .completion-work-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: #94a3b8;
+    font-size: 12px;
     font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-decoration: none;
     max-width: 260px;
+    transition: color 0.15s ease;
   }
 
-  .next-chapter-core {
+  .completion-work-link:hover {
+    color: #c084fc;
+  }
+
+  /* Main Hero Next Chapter Banner */
+  .next-hero-banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 6px 0 14px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.12) 0%, rgba(168, 85, 247, 0.04) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    transition: all 0.2s ease;
   }
 
-  .next-info {
+  .next-hero-banner:hover {
+    border-color: rgba(168, 85, 247, 0.45);
+    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.12);
+  }
+
+  .next-hero-left {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    min-width: 0;
   }
 
-  .next-tag {
+  .next-eyebrow-tag {
     font-size: 10px;
     font-weight: 800;
     color: #fbbf24;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
   }
 
-  .next-title {
-    font-size: 20px;
+  .next-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .next-chapter-headline {
+    font-size: 19px;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
+    line-height: 1.2;
   }
 
-  .btn-primary-next {
+  .next-chapter-subhead {
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
+    max-width: 220px;
+  }
+
+  .btn-primary-next-hero {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     padding: 11px 22px;
-    border-radius: 9999px;
+    border-radius: 10px;
     background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
     color: #ffffff;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 800;
     text-decoration: none;
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.38);
     transition: all 0.2s ease;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
-  .btn-primary-next:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(168, 85, 247, 0.7);
+  .btn-primary-next-hero:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(168, 85, 247, 0.6);
   }
 
   .arrow-bounce {
@@ -1663,56 +1718,108 @@
     50% { transform: translateX(4px); }
   }
 
-  .caught-up-compact {
+  /* Caught up celebration banner */
+  .caught-up-banner {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    background: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.25);
-    border-radius: 10px;
+    padding: 14px 16px;
+    background: rgba(245, 158, 11, 0.07);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    border-radius: 12px;
   }
 
-  .caught-up-compact strong {
-    display: block;
-    font-size: 14px;
-    color: #ffffff;
-  }
-
-  .caught-up-compact p {
-    font-size: 12px;
-    color: #94a3b8;
-    margin: 2px 0 0 0;
-  }
-
-  .secondary-nav-row {
+  .caught-up-icon-wrap {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.15);
+    flex-shrink: 0;
   }
 
-  .nav-sub-btn {
+  .caught-up-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .caught-up-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .caught-up-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  /* Structured Secondary Navigation Deck */
+  .integrated-nav-deck {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .deck-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
+    justify-content: center;
+    gap: 7px;
+    flex: 1;
+    min-height: 40px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 9999px;
+    border-radius: 10px;
     color: #cbd5e1;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap;
   }
 
-  .nav-sub-btn:hover {
+  .deck-btn:hover {
     background: rgba(168, 85, 247, 0.12);
     border-color: rgba(168, 85, 247, 0.35);
     color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .deck-btn:active {
+    transform: translateY(0);
+  }
+
+  @media (max-width: 580px) {
+    .next-hero-banner {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding: 12px 14px;
+    }
+
+    .btn-primary-next-hero {
+      width: 100%;
+      min-height: 46px;
+    }
+
+    .integrated-nav-deck {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .deck-btn {
+      min-height: 44px;
+    }
   }
 
   /* --------------------------------------------------------------------------

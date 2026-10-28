@@ -61,10 +61,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       height: info.height,
       isAnimated: Boolean(info.isAnimated)
     });
-  } catch (failure) {
+  } catch (failure: any) {
     if (failure instanceof RateLimitError) {
       return json({ error: 'Muitos uploads simultâneos. Aguarde alguns segundos.' }, { status: 429 });
     }
-    throw failure;
+    console.error('[COMMENT_MEDIA_UPLOAD] Storage error:', failure);
+    return json(
+      { error: 'Não foi possível salvar a imagem. Tente novamente ou use outro arquivo.' },
+      { status: 500 }
+    );
   }
 };

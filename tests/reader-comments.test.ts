@@ -172,4 +172,14 @@ describe('Comments Parsing & Spoilers', () => {
     expect(mentions[0].content).toBe('Preston');
     expect(mentions[1].content).toBe('Yakumo');
   });
+
+  it('parses standalone image, GIF, and Giphy URLs accurately', () => {
+    const text = 'Reação: https://media.giphy.com/media/test1234/giphy.gif e https://site.com/image.webp';
+    const chunks = parseCommentBody(text);
+
+    const media = chunks.filter((c) => c.type === 'media');
+    expect(media.length).toBe(2);
+    expect(media[0].isGif).toBe(true);
+    expect(media[1].isGif).toBe(false);
+  });
 });

@@ -8,6 +8,7 @@ import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
 import { fetchWorkFromYugabyte } from '$lib/server/yugabyte';
+import { readerChapter } from '$lib/server/reader-editorial';
 import type { Json } from '$lib/database.types';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
@@ -26,54 +27,140 @@ export const POST = async ({ request, locals, platform }: any) => {
     error(400, 'Solicitação inválida');
   }
 
-  // Ensure work exists in Supabase public.works for foreign key integrity
+  // Ensure work & chapter exist in Supabase for relational integrity and foreign keys
   const targetWorkId = body.data?.work_id ? String(body.data.work_id) : null;
-  if (body.scope === 'member' && targetWorkId && ['like', 'library', 'comment', 'rate_work'].includes(body.action)) {
+  const targetChapterId = body.data?.chapter_id ? String(body.data.chapter_id) : null;
+  if (
+    body.scope === 'member' &&
+    (targetWorkId || targetChapterId) &&
+    ['like', 'library', 'comment', 'rate_work', 'read_start', 'read_page'].includes(body.action)
+  ) {
     try {
       const adminDb = privileged();
-      const { data: wExists } = await adminDb.from('works').select('id').eq('id', targetWorkId).maybeSingle();
-      if (!wExists) {
-        let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
-        let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+      let resolvedWorkId = targetWorkId;
 
-        try {
-          const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
-          if (ybWork) {
-            cleanSlug = ybWork.slug || cleanSlug;
-            cleanTitle = ybWork.title || cleanTitle;
+      // 1. If chapter is provided, verify against Yugabyte and bridge into Supabase
+      if (targetChapterId) {
+        const { data: cExists } = await adminDb
+          .from('chapters')
+          .select('id, work_id, published_at')
+          .eq('id', targetChapterId)
+          .maybeSingle();
+
+        if (!cExists) {
+          try {
+            const { data: ybChap } = await readerChapter(targetChapterId, false, platform?.env);
+            if (ybChap) {
+              resolvedWorkId = ybChap.work_id || resolvedWorkId;
+
+              // Ensure work exists before inserting chapter (foreign key constraint)
+              if (resolvedWorkId) {
+                const { data: wExists } = await adminDb.from('works').select('id').eq('id', resolvedWorkId).maybeSingle();
+                if (!wExists) {
+                  const cw = (ybChap.works as any) || {};
+                  let cleanSlug = cw.slug || body.data?.work_slug || `obra-${resolvedWorkId.slice(0, 8)}`;
+                  let cleanTitle = cw.title || body.data?.work_title || 'Obra';
+                  let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                  if (!sanitizedSlug) sanitizedSlug = `obra-${resolvedWorkId.slice(0, 8)}`;
+
+                  await adminDb.from('works').upsert(
+                    {
+                      id: resolvedWorkId,
+                      slug: sanitizedSlug,
+                      title: cleanTitle.slice(0, 200),
+                      published: true,
+                      content_rating: cw.content_rating || 'GENERAL',
+                      kind: cw.kind || 'MANHWA',
+                      status: 'ONGOING'
+                    },
+                    { onConflict: 'id' }
+                  );
+                }
+              }
+
+              // Insert verified chapter stub into Supabase
+              await adminDb.from('chapters').upsert(
+                {
+                  id: ybChap.id,
+                  work_id: resolvedWorkId,
+                  number: ybChap.number ?? 1,
+                  title: ybChap.title || `Capítulo ${ybChap.display_number || ybChap.number || ''}`,
+                  published_at: ybChap.published_at || new Date().toISOString(),
+                  canonical_chapter_key: ybChap.canonical_chapter_key || null,
+                  display_number: ybChap.display_number || String(ybChap.number || ''),
+                  chapter_order_key: ybChap.chapter_order_key || null,
+                  chapter_kind: ybChap.chapter_kind || 'chapter',
+                  edition: ybChap.edition || 'default',
+                  language: ybChap.language || 'und',
+                  origin: 'MANUAL'
+                },
+                { onConflict: 'id' }
+              );
+
+              if (body.data) {
+                body.data.work_id = resolvedWorkId;
+                body.data.chapter_number = ybChap.number;
+                body.data.chapter_title = ybChap.title;
+                body.data.display_number = ybChap.display_number;
+              }
+            } else {
+              // Chapter does not exist or is unpublished in authoritative Yugabyte catalog
+              error(404, 'Capítulo indisponível');
+            }
+          } catch (fetchErr: any) {
+            if (fetchErr?.status === 404) throw fetchErr;
+            console.warn('[ACTION] Yugabyte fetch error for chapter stub:', fetchErr);
           }
-        } catch (fetchErr) {
-          console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
+        } else if (cExists.work_id && body.data && !body.data.work_id) {
+          body.data.work_id = cExists.work_id;
         }
-
-        // Sanitize slug to match constraint ^[a-z0-9]+(-[a-z0-9]+)*$
-        let sanitizedSlug = (cleanSlug || targetWorkId)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        if (!sanitizedSlug) sanitizedSlug = `obra-${targetWorkId.slice(0, 8)}`;
-
-        // Verify uniqueness of slug
-        const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
-        if (slugOwner && slugOwner.id !== targetWorkId) {
-          sanitizedSlug = `${sanitizedSlug}-${targetWorkId.slice(0, 6)}`;
-        }
-
-        await adminDb.from('works').upsert(
-          {
-            id: targetWorkId,
-            slug: sanitizedSlug,
-            title: (cleanTitle || 'Obra').slice(0, 200),
-            published: true,
-            content_rating: 'GENERAL',
-            kind: 'MANHWA',
-            status: 'ONGOING'
-          },
-          { onConflict: 'id' }
-        );
       }
-    } catch (err) {
-      console.error('[ACTION] Error ensuring work exists in Supabase:', err);
+
+      // 2. Ensure work exists in Supabase if resolvedWorkId is present
+      if (resolvedWorkId) {
+        const { data: wExists } = await adminDb.from('works').select('id').eq('id', resolvedWorkId).maybeSingle();
+        if (!wExists) {
+          let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
+          let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+
+          try {
+            const ybWork = await fetchWorkFromYugabyte(resolvedWorkId, platform?.env);
+            if (ybWork) {
+              cleanSlug = ybWork.slug || cleanSlug;
+              cleanTitle = ybWork.title || cleanTitle;
+            }
+          } catch (fetchErr) {
+            console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
+          }
+
+          let sanitizedSlug = (cleanSlug || resolvedWorkId)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          if (!sanitizedSlug) sanitizedSlug = `obra-${resolvedWorkId.slice(0, 8)}`;
+
+          const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
+          if (slugOwner && slugOwner.id !== resolvedWorkId) {
+            sanitizedSlug = `${sanitizedSlug}-${resolvedWorkId.slice(0, 6)}`;
+          }
+
+          await adminDb.from('works').upsert(
+            {
+              id: resolvedWorkId,
+              slug: sanitizedSlug,
+              title: (cleanTitle || 'Obra').slice(0, 200),
+              published: true,
+              content_rating: 'GENERAL',
+              kind: 'MANHWA',
+              status: 'ONGOING'
+            },
+            { onConflict: 'id' }
+          );
+        }
+      }
+    } catch (err: any) {
+      if (err?.status) throw err;
+      console.error('[ACTION] Error ensuring work/chapter exists in Supabase:', err);
     }
   }
 

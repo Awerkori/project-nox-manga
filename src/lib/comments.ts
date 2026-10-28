@@ -70,7 +70,7 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
 
   // Next, for each raw chunk, extract media: ![alt](url) or standalone image URLs
   const mediaRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+|\/media\/[a-f0-9-]+)\)/gi;
-  const standaloneUrlRegex = /(^|[\s])(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s]*)?)(?=[\s]|$)/gi;
+  const standaloneUrlRegex = /(^|[\s])(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s]*)?|https?:\/\/(?:media\d*\.giphy\.com\/media\/[^\s]+|c\.tenor\.com\/[^\s]+|media\.tenor\.com\/[^\s]+|i\.imgur\.com\/[^\s]+|giphy\.com\/gifs\/[a-zA-Z0-9_-]+))(?=[\s]|$)/gi;
 
   const intermediateChunks: Array<{
     isMedia: boolean;
@@ -101,8 +101,15 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
         temp.push({ isMedia: false, isSpoiler: item.isSpoiler, text: str.slice(mIdx, mMatch.index) });
       }
       const alt = mMatch[1] || 'Mídia';
-      const url = mMatch[2];
-      const isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('/giphy/') || url.toLowerCase().includes('/tenor/');
+      let url = mMatch[2];
+      let isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy') || url.toLowerCase().includes('tenor');
+
+      const giphyPage = url.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/i);
+      if (giphyPage) {
+        url = `https://media.giphy.com/media/${giphyPage[1]}/giphy.gif`;
+        isGif = true;
+      }
+
       temp.push({ isMedia: true, isSpoiler: item.isSpoiler, mediaUrl: url, mediaAlt: alt, isGif });
       mIdx = mediaRegex.lastIndex;
     }
@@ -120,13 +127,20 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
         const subStr = t.text || '';
         while ((sMatch = standaloneUrlRegex.exec(subStr)) !== null) {
           const prefix = sMatch[1] || '';
-          const url = sMatch[2];
+          let url = sMatch[2];
           const start = sMatch.index + prefix.length;
           const end = start + url.length;
           if (start > sIdx) {
             intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: subStr.slice(sIdx, start) });
           }
-          const isGif = url.toLowerCase().includes('.gif');
+          let isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy') || url.toLowerCase().includes('tenor');
+
+          const giphyPage = url.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/i);
+          if (giphyPage) {
+            url = `https://media.giphy.com/media/${giphyPage[1]}/giphy.gif`;
+            isGif = true;
+          }
+
           intermediateChunks.push({ isMedia: true, isSpoiler: t.isSpoiler, mediaUrl: url, mediaAlt: 'Imagem', isGif });
           sIdx = end;
           standaloneUrlRegex.lastIndex = end;
