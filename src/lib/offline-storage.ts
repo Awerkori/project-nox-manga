@@ -3,6 +3,8 @@
  * Utilizes IndexedDB to cache chapters, pages, and queue offline reading events for idempotent sync.
  */
 
+import { chapterOrderKey } from '$lib/chapter-identity';
+
 const DB_NAME = 'nox_offline_v1';
 const DB_VERSION = 1;
 
@@ -12,6 +14,7 @@ export type OfflineChapter = {
   workTitle: string;
   workSlug: string;
   coverId?: string | null;
+  coverBlobUrl?: string | null;
   // Old IndexedDB records can contain numbers; new records preserve display
   // text so 12.10 is not normalised to 12.1 offline.
   number: number | string;
@@ -23,6 +26,20 @@ export type OfflineChapter = {
   }>;
   downloadedAt: string;
   totalPages: number;
+};
+
+export type DownloadedWorkGroup = {
+  workId: string;
+  workTitle: string;
+  workSlug: string;
+  coverId?: string | null;
+  coverBlobUrl?: string | null;
+  chaptersCount: number;
+  totalStorageBytes: number;
+  latestDownloadedAt: string;
+  isFullyDownloaded: boolean;
+  hasIncomplete: boolean;
+  chapters: OfflineChapter[];
 };
 
 export type OfflineEvent = {
@@ -168,12 +185,32 @@ export async function saveChapterOffline(
     throw new DOMException('Download cancelado pelo usuário', 'AbortError');
   }
 
+  // Attempt to cache cover image offline as base64 (best effort, non-blocking)
+  let coverBlobUrl: string | null = null;
+  if (work.cover_id) {
+    try {
+      const coverRes = await fetch(`/media/${work.cover_id}?size=thumb&v=3`, { signal });
+      if (coverRes.ok) {
+        const coverBlob = await coverRes.blob();
+        coverBlobUrl = await new Promise<string>((resolve) => {
+          const r = new FileReader();
+          r.onloadend = () => resolve((r.result as string) || '');
+          r.onerror = () => resolve('');
+          r.readAsDataURL(coverBlob);
+        });
+      }
+    } catch {
+      // Cover download is optional; chapter reading is unaffected
+    }
+  }
+
   const record: OfflineChapter = {
     chapterId: chapter.id,
     workId: chapter.work_id,
     workTitle: work.title,
     workSlug: work.slug,
     coverId: work.cover_id,
+    coverBlobUrl: coverBlobUrl || null,
     number: chapter.number,
     title: chapter.title,
     pages: fetchedPages,
@@ -236,6 +273,144 @@ export async function removeOfflineChapter(chapterId: string): Promise<void> {
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+}
+
+/**
+ * Removes all downloaded chapters belonging to a specific work.
+ * Returns the count of deleted chapters.
+ */
+export async function removeOfflineWork(workIdOrSlug: string): Promise<number> {
+  if (!isOfflineSupported()) return 0;
+  const allChapters = await getOfflineChapters();
+  const toDelete = allChapters.filter(
+    (c) => c.workId === workIdOrSlug || c.workSlug === workIdOrSlug
+  );
+  if (!toDelete.length) return 0;
+
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('chapters', 'readwrite');
+    const store = tx.objectStore('chapters');
+    for (const ch of toDelete) {
+      store.delete(ch.chapterId);
+    }
+    tx.oncomplete = () => resolve(toDelete.length);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Clears all downloaded offline chapters from storage.
+ */
+export async function clearAllOfflineDownloads(): Promise<void> {
+  if (!isOfflineSupported()) return;
+  const db = await openDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('chapters', 'readwrite');
+    const store = tx.objectStore('chapters');
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Estimates storage size of a chapter in bytes based on base64 content.
+ */
+export function estimateChapterStorageBytes(chapter: OfflineChapter): number {
+  let bytes = 0;
+  if (chapter.coverBlobUrl) {
+    bytes += Math.round(chapter.coverBlobUrl.length * 0.75);
+  }
+  if (chapter.pages && Array.isArray(chapter.pages)) {
+    for (const p of chapter.pages) {
+      if (p.blobUrl) {
+        bytes += Math.round(p.blobUrl.length * 0.75);
+      }
+    }
+  }
+  return bytes;
+}
+
+/**
+ * Human-readable format for byte sizes (B, KB, MB, GB).
+ */
+export function formatStorageBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/**
+ * Groups a flat list of OfflineChapters by work, sorting chapters numerically
+ * and calculating aggregated storage metrics.
+ */
+export function groupOfflineChaptersByWork(chapters: OfflineChapter[]): DownloadedWorkGroup[] {
+  const map = new Map<string, DownloadedWorkGroup>();
+
+  for (const ch of chapters) {
+    const workKey = ch.workId || ch.workSlug || 'unknown';
+    let group = map.get(workKey);
+    if (!group) {
+      group = {
+        workId: ch.workId,
+        workTitle: ch.workTitle || 'Obra Desconhecida',
+        workSlug: ch.workSlug || '',
+        coverId: ch.coverId || null,
+        coverBlobUrl: ch.coverBlobUrl || null,
+        chaptersCount: 0,
+        totalStorageBytes: 0,
+        latestDownloadedAt: ch.downloadedAt,
+        isFullyDownloaded: true,
+        hasIncomplete: false,
+        chapters: []
+      };
+      map.set(workKey, group);
+    }
+
+    if (ch.coverBlobUrl && !group.coverBlobUrl) {
+      group.coverBlobUrl = ch.coverBlobUrl;
+    }
+
+    group.chapters.push(ch);
+    group.chaptersCount++;
+
+    const chBytes = estimateChapterStorageBytes(ch);
+    group.totalStorageBytes += chBytes;
+
+    if (new Date(ch.downloadedAt).getTime() > new Date(group.latestDownloadedAt).getTime()) {
+      group.latestDownloadedAt = ch.downloadedAt;
+    }
+
+    const isIncomplete =
+      !ch.pages || ch.pages.length === 0 || ch.pages.some((p) => !p.blobUrl);
+    if (isIncomplete) {
+      group.hasIncomplete = true;
+      group.isFullyDownloaded = false;
+    }
+  }
+
+  const groups = Array.from(map.values());
+
+  // Sort chapters inside each group in correct numerical order (ascending)
+  for (const g of groups) {
+    g.chapters.sort((a, b) => {
+      const orderA = chapterOrderKey({ displayNumber: a.number, title: a.title });
+      const orderB = chapterOrderKey({ displayNumber: b.number, title: b.title });
+      return orderA.localeCompare(orderB);
+    });
+  }
+
+  // Sort groups by latestDownloadedAt descending (most recent first)
+  groups.sort(
+    (a, b) =>
+      new Date(b.latestDownloadedAt).getTime() - new Date(a.latestDownloadedAt).getTime()
+  );
+
+  return groups;
 }
 
 export async function queueOfflineEvent(event: Omit<OfflineEvent, 'id' | 'timestamp'>): Promise<void> {

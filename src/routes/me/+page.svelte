@@ -1033,6 +1033,14 @@
           <div class="pane-section">
             <div class="sub-header">
               <h2 class="pane-title">Capítulos Salvos Offline ({offlineList.length})</h2>
+              <a
+                href="/downloads"
+                class="btn-text"
+                style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #b59af5;"
+              >
+                <Download size={14} />
+                <span>Nova Biblioteca de Downloads →</span>
+              </a>
             </div>
 
             {#if offlineList.length > 0}

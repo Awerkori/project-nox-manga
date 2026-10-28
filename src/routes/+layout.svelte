@@ -9,6 +9,7 @@
     ArrowUpRight,
     BookOpen,
     Trophy,
+    Download,
     Bookmark,
     History,
     LogOut,
@@ -374,6 +375,10 @@
                   <a href="/me?tab=conquistas" role="menuitem" onclick={() => (userMenuOpen = false)}>
                     <Trophy size={16} />
                     <span>Conquistas</span>
+                  </a>
+                  <a href="/downloads" role="menuitem" onclick={() => (userMenuOpen = false)}>
+                    <Download size={16} />
+                    <span>Downloads</span>
                   </a>
                 </div>
 
