@@ -18,6 +18,7 @@
     Loader2,
     Search,
     ChevronLeft,
+    ChevronRight,
     Sliders,
     Heart,
     Flame,
