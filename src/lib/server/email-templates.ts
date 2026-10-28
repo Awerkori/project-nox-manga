@@ -105,6 +105,7 @@ export function generateEmailHtml({
       badgeText = 'TAREFA DE PRODUÇÃO';
       defaultSubject = `[Scan] Nova Tarefa Atribuída: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Abrir Tarefa no Painel da Scan';
+      headerNotice = 'Atribuição operacional na equipe de produção';
       break;
 
     case 'STAGE_READY':
@@ -114,6 +115,7 @@ export function generateEmailHtml({
       badgeText = 'ETAPA DISPONÍVEL';
       defaultSubject = `[Scan] Etapa Pronta para Produção: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Reivindicar Etapa no Pipeline';
+      headerNotice = 'Etapa liberada para reivindicação no pipeline';
       break;
 
     case 'QC_ISSUE':
@@ -123,6 +125,7 @@ export function generateEmailHtml({
       badgeText = 'CONTROLE DE QUALIDADE';
       defaultSubject = `[Scan] Revisão de QC Pendente: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Verificar Observações de QC';
+      headerNotice = 'Revisão e apontamentos de qualidade do capítulo';
       break;
 
     case 'REWORK':
@@ -132,6 +135,7 @@ export function generateEmailHtml({
       badgeText = 'RETRABALHO SOLICITADO';
       defaultSubject = `[Scan] Retrabalho Solicitado no Capítulo: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Ver Instruções de Retrabalho';
+      headerNotice = 'Retrabalho obrigatório antes da aprovação final';
       break;
 
     case 'APPLICATION':
@@ -141,15 +145,17 @@ export function generateEmailHtml({
       badgeText = 'RECRUTAMENTO DE SCAN';
       defaultSubject = `[Scan] Nova Candidatura de Membro: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Avaliar Candidatura na Scan';
+      headerNotice = 'Nova inscrição de membro recebida para a equipe';
       break;
 
     case 'APPLICATION_UPDATE':
-      badgeColor = '#ec4899';
-      badgeBg = 'rgba(236, 72, 153, 0.14)';
-      badgeBorder = 'rgba(236, 72, 153, 0.4)';
+      badgeColor = '#10b981'; // Emerald
+      badgeBg = 'rgba(16, 185, 129, 0.14)';
+      badgeBorder = 'rgba(16, 185, 129, 0.4)';
       badgeText = 'RESPOSTA DE RECRUTAMENTO';
       defaultSubject = `[Scan] Atualização da sua Candidatura: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Ver Detalhes da Candidatura';
+      headerNotice = 'Atualização oficial do seu processo seletivo';
       break;
 
     case 'MURAL_POST':
@@ -159,25 +165,38 @@ export function generateEmailHtml({
       badgeText = 'MURAL DA SCAN';
       defaultSubject = `[Scan] Comunicado no Mural: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Abrir Mural da Equipe';
+      headerNotice = 'Comunicado interno para os membros da equipe';
       break;
 
     // -------------------------------------------------------------------------
     // 3. Comunidade, Interações e Leitores
     // -------------------------------------------------------------------------
     case 'MENTION':
-    case 'ROLE_MENTION':
-      badgeColor = '#818cf8';
-      badgeBg = 'rgba(129, 140, 248, 0.14)';
-      badgeBorder = 'rgba(129, 140, 248, 0.4)';
-      badgeText = type === 'ROLE_MENTION' ? 'MENÇÃO DE CARGO' : 'MENÇÃO DIRETA';
+      badgeColor = '#06b6d4'; // Cyan
+      badgeBg = 'rgba(6, 182, 212, 0.14)';
+      badgeBorder = 'rgba(6, 182, 212, 0.4)';
+      badgeText = 'MENÇÃO DIRETA';
       defaultSubject = actorName
         ? `${actorName} mencionou você no Project Nox`
         : `Você recebeu uma menção no Project Nox`;
       defaultCtaLabel = 'Ver Mensagem na Plataforma';
+      headerNotice = 'Você foi citado diretamente em uma conversa';
+      break;
+
+    case 'ROLE_MENTION':
+      badgeColor = '#14b8a6'; // Teal
+      badgeBg = 'rgba(20, 184, 166, 0.14)';
+      badgeBorder = 'rgba(20, 184, 166, 0.4)';
+      badgeText = 'MENÇÃO DE CARGO';
+      defaultSubject = actorName
+        ? `${actorName} mencionou seu cargo no Project Nox`
+        : `Menção destinada ao seu cargo no Project Nox`;
+      defaultCtaLabel = 'Ver Mensagem da Equipe';
+      headerNotice = 'Chamado coletivo para a sua função na scan';
       break;
 
     case 'REPLY_CHAT':
-      badgeColor = '#38bdf8';
+      badgeColor = '#38bdf8'; // Sky Blue
       badgeBg = 'rgba(56, 189, 248, 0.14)';
       badgeBorder = 'rgba(56, 189, 248, 0.4)';
       badgeText = 'RESPOSTA NO CHAT';
@@ -185,17 +204,19 @@ export function generateEmailHtml({
         ? `${actorName} respondeu sua mensagem no Project Nox`
         : `Nova resposta para você no chat do Project Nox`;
       defaultCtaLabel = 'Abrir Mensagem no Chat';
+      headerNotice = 'Nova resposta enviada para você no chat da produção';
       break;
 
     case 'REPLY_COMMENT':
-      badgeColor = '#38bdf8';
-      badgeBg = 'rgba(56, 189, 248, 0.14)';
-      badgeBorder = 'rgba(56, 189, 248, 0.4)';
+      badgeColor = '#b59af5'; // Nox Purple
+      badgeBg = 'rgba(181, 154, 245, 0.14)';
+      badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'RESPOSTA EM COMENTÁRIO';
       defaultSubject = actorName
         ? `${actorName} respondeu seu comentário no Project Nox`
         : `Nova resposta no seu comentário no Project Nox`;
       defaultCtaLabel = 'Ver Resposta na Obra';
+      headerNotice = 'Novo comentário publicado na sua conversa';
       break;
 
     case 'NEW_CHAPTER':
@@ -206,6 +227,7 @@ export function generateEmailHtml({
       badgeText = 'NOVO CAPÍTULO';
       defaultSubject = `Novo Capítulo: ${context ? context + ' — ' : ''}${title}`;
       defaultCtaLabel = 'Ler Capítulo Agora';
+      headerNotice = 'Novo lançamento disponível no catálogo oficial';
       break;
 
     // -------------------------------------------------------------------------
@@ -218,15 +240,27 @@ export function generateEmailHtml({
       badgeText = 'LEVEL UP!';
       defaultSubject = `Parabéns! Você alcançou o Nível ${context || title} no Project Nox!`;
       defaultCtaLabel = 'Ver Meu Perfil e Recompensas';
+      headerNotice = 'Evolução de patente reconhecida na comunidade';
       break;
 
     case 'ACHIEVEMENT':
-      badgeColor = '#f59e0b';
-      badgeBg = 'rgba(245, 158, 11, 0.14)';
-      badgeBorder = 'rgba(245, 158, 11, 0.4)';
+      badgeColor = '#dfc28d'; // Gold
+      badgeBg = 'rgba(223, 194, 141, 0.14)';
+      badgeBorder = 'rgba(223, 194, 141, 0.45)';
       badgeText = 'CONQUISTA DESBLOQUEADA';
       defaultSubject = `Nova Conquista: ${title} no Project Nox!`;
       defaultCtaLabel = 'Ver Minhas Conquistas';
+      headerNotice = 'Nova insígnia conquistada na sua jornada';
+      break;
+
+    case 'SYSTEM':
+      badgeColor = '#b59af5';
+      badgeBg = 'rgba(181, 154, 245, 0.14)';
+      badgeBorder = 'rgba(181, 154, 245, 0.4)';
+      badgeText = 'COMUNICADO OFICIAL';
+      defaultSubject = `[Project Nox] ${title}`;
+      defaultCtaLabel = 'Acessar no Project Nox';
+      headerNotice = 'Informativo institucional da administração';
       break;
 
     // -------------------------------------------------------------------------
@@ -236,9 +270,10 @@ export function generateEmailHtml({
       badgeColor = '#b59af5';
       badgeBg = 'rgba(181, 154, 245, 0.14)';
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
-      badgeText = 'CONFIRMAÇÃO DE CONTA';
-      defaultSubject = 'Confirme seu endereço de e-mail — Project Nox';
-      defaultCtaLabel = 'Confirmar Meu E-mail';
+      badgeText = 'CONFIRMAÇÃO DE CADASTRO';
+      defaultSubject = 'Boas-vindas ao Project Nox — Confirme seu e-mail';
+      defaultCtaLabel = 'Confirmar Meu E-mail &rarr;';
+      headerNotice = 'Acesso pessoal à plataforma Project Nox';
       break;
 
     case 'AUTH_RECOVERY':
@@ -247,7 +282,8 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'RECUPERAÇÃO DE CONTA';
       defaultSubject = 'Recupere o acesso à sua conta — Project Nox';
-      defaultCtaLabel = 'Redefinir Minha Senha';
+      defaultCtaLabel = 'Redefinir Minha Senha &rarr;';
+      headerNotice = 'Segurança e controle de acesso à sua conta';
       break;
 
     case 'AUTH_EMAIL_CHANGE':
@@ -256,7 +292,8 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'ALTERAÇÃO DE E-MAIL';
       defaultSubject = 'Confirme seu novo endereço de e-mail — Project Nox';
-      defaultCtaLabel = 'Confirmar Novo E-mail';
+      defaultCtaLabel = 'Confirmar Novo E-mail &rarr;';
+      headerNotice = 'Atualização de credenciais de acesso';
       break;
 
     case 'AUTH_INVITE':
@@ -264,8 +301,9 @@ export function generateEmailHtml({
       badgeBg = 'rgba(223, 194, 141, 0.14)';
       badgeBorder = 'rgba(223, 194, 141, 0.45)';
       badgeText = 'CONVITE DE MEMBRO';
-      defaultSubject = 'Você recebeu um convite para o Project Nox';
-      defaultCtaLabel = 'Aceitar Convite e Acessar';
+      defaultSubject = 'Você recebeu um convite especial para o Project Nox';
+      defaultCtaLabel = 'Aceitar Convite e Acessar &rarr;';
+      headerNotice = 'Acesso exclusivo à comunidade Project Nox';
       break;
 
     default:

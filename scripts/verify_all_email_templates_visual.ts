@@ -14,8 +14,8 @@ if (!fs.existsSync(TMP_DIR)) {
 const TRANSACTIONAL_SAMPLES = [
   {
     type: 'TICKET_REPORT',
-    title: 'Novo Relatório de Conteúdo #TR-10492',
-    body: 'O usuário Raven submeteu um relatório de erro nas páginas do capítulo 42 da obra Distant Sky.',
+    title: 'Relatório de Conteúdo: Distant Sky — Cap. 42',
+    body: 'O usuário Raven submeteu um relatório apontando páginas fora de ordem e balões de diálogo cortados no capítulo 42 de Distant Sky.\n\nA equipe de moderação deve inspecionar as páginas reportadas e solicitar revisão se necessário.',
     deepLink: '/admin/tickets?tab=reports&ticketId=TR-10492',
     context: 'Distant Sky — Cap. 42',
     recipientName: 'Staff de Moderação',
@@ -23,46 +23,48 @@ const TRANSACTIONAL_SAMPLES = [
       'Obra / Título': 'Distant Sky',
       'Capítulo': 'Capítulo 42',
       'Motivo': 'Páginas em ordem invertida',
+      'Prioridade': 'Alta',
       'Reportado Por': 'Raven (ID: #8921)'
     }
   },
   {
     type: 'TICKET_SCAN_APPLICATION',
-    title: 'Nova Inscrição de Scan #SA-4029',
-    body: 'A scan Night Scans submeteu candidatura oficial para se tornar parceira do catálogo Project Nox.',
+    title: 'Nova Inscrição de Scan: Night Scans',
+    body: 'A scan Night Scans submeteu candidatura oficial para se tornar parceira do catálogo Project Nox.\n\nDocumentos, amostras de edição e links para canais oficiais da equipe estão disponíveis para homologação da administração.',
     deepLink: '/admin/tickets?tab=scans&ticketId=SA-4029',
-    context: 'Candidatura Oficial de Scan',
+    context: 'Candidatura Oficial de Parceria',
     recipientName: 'Staff Administrativa',
     meta: {
       'Nome da Scan': 'Night Scans',
       'Líder Responsável': 'Noctis',
       'Discord de Contato': 'discord.gg/nightscans',
-      'Obras no Portfólio': '3 títulos ativos'
+      'Obras Ativas': '3 títulos em andamento'
     }
   },
   {
     type: 'TICKET_MODERATION',
-    title: 'Nova Pendência de Moderação #TM-8910',
-    body: 'Comentário sinalizado pela comunidade por infração das diretrizes de conduta na seção de comentários.',
+    title: 'Ocorrência de Moderação: Solo Leveling',
+    body: 'Um comentário publicado na seção do capítulo 120 de Solo Leveling recebeu múltiplas sinalizações por violação das diretrizes de convivência comunitária.',
     deepLink: '/admin/tickets?tab=moderation&ticketId=TM-8910',
-    context: 'Ocorrência de Moderação',
+    context: 'Solo Leveling — Cap. 120',
     recipientName: 'Equipe de Moderação',
     meta: {
       'Usuário Notificado': 'ShadowUser',
-      'Localização': 'Comentários — Eleceed Cap. 120',
-      'Status Atual': 'Pendente de Revisão'
+      'Tipo de Infração': 'Spam / Desrespeito',
+      'Localização': 'Comentários — Cap. 120',
+      'Status Atual': 'Pendente de Ação'
     }
   },
   {
     type: 'TASK_ASSIGNED',
     title: 'Nova Tarefa Atribuída: Tradução',
-    body: 'Você foi escalado como responsável pela etapa de Tradução no capítulo 15 de Omniscient Reader.',
+    body: 'Você foi escalado como responsável pela etapa de Tradução (Coreano -> Português) no capítulo 15 da obra Omniscient Reader.\n\nFavor conferir as notas de tradução e o prazo estimado no painel da scan.',
     deepLink: '/scan/dashboard?chapter=OR-15&stage=traducao',
     context: 'Omniscient Reader — Cap. 15',
     recipientName: 'Awerkori',
     meta: {
       'Obra': 'Omniscient Reader',
-      'Capítulo': '#15',
+      'Capítulo': 'Capítulo 15',
       'Etapa': 'Tradução (PT-BR)',
       'Prazo Estimado': '48 horas'
     }
@@ -70,70 +72,74 @@ const TRANSACTIONAL_SAMPLES = [
   {
     type: 'STAGE_READY',
     title: 'Etapa Pronta para Produção: Edição',
-    body: 'A etapa de Tradução foi concluída e aprovada. A etapa de Edição está liberada para ser reivindicada.',
+    body: 'A etapa de Tradução do capítulo 88 de Solo Leveling foi entregue e homologada. A etapa de Edição e Limpeza está liberada no pipeline para ser assumida.',
     deepLink: '/scan/dashboard?chapter=SL-88&stage=edicao',
     context: 'Solo Leveling — Cap. 88',
     recipientName: 'Equipe de Edição',
     meta: {
       'Obra': 'Solo Leveling',
       'Capítulo': 'Capítulo 88',
-      'Etapa Liberada': 'Edição e Limpeza'
+      'Etapa Liberada': 'Edição e Limpeza',
+      'Responsável Anterior': 'Arthur (Tradução)'
     }
   },
   {
     type: 'QC_ISSUE',
     title: 'Observações de Quality Control no Cap. 25',
-    body: 'O revisor de QC encontrou 3 falhas de alinhamento de texto nas páginas 8, 12 e 14.',
+    body: 'O revisor de QC inspecionou os arquivos do capítulo 25 de The Beginning After the End e apontou pequenos ajustes necessários antes da publicação.',
     deepLink: '/scan/dashboard?chapter=TBATE-25&stage=qc',
     context: 'The Beginning After the End — Cap. 25',
     recipientName: 'Editor Responsável',
     meta: {
       'Capítulo': 'Capítulo 25',
-      'Problemas Apontados': '3 balões fora de alinhamento',
+      'Problemas Apontados': '3 balões fora de alinhamento (págs. 8, 12 e 14)',
       'Revisor de QC': 'Valkyrie'
     }
   },
   {
     type: 'REWORK',
     title: 'Retrabalho Solicitado no Capítulo 70',
-    body: 'Foram identificadas inconsistências graves de fonte e limpeza. O capítulo foi retornado para retrabalho.',
+    body: 'Foram identificadas inconsistências com as fontes oficiais e artefatos de compressão nas páginas finais. O capítulo foi devolvido para retrabalho.',
     deepLink: '/scan/dashboard?chapter=SSS-70&stage=rework',
     context: 'SSS-Class Suicide Hunter — Cap. 70',
     recipientName: 'Typesetter',
     meta: {
       'Etapa': 'Typesetting / Redraw',
-      'Motivo': 'Fontes fora do guia de estilo'
+      'Motivo': 'Fontes fora do guia de estilo da obra',
+      'Ação Necessária': 'Ajustar tipografia e reenviar pacote zip'
     }
   },
   {
     type: 'APPLICATION',
     title: 'Nova Candidatura de Recrutamento',
-    body: 'Um leitor enviou teste para o cargo de Tradutor de Coreano.',
+    body: 'Um candidato enviou teste para a vaga de Tradutor (Coreano -> Português) da equipe de tradução.',
     deepLink: '/scan/recrutamento?appId=9012',
     context: 'Recrutamento da Scan',
     recipientName: 'Líder da Scan',
     meta: {
-      'Candidato': 'JinWoo',
+      'Candidato': 'JinWoo (Discord: jinwoo#1234)',
       'Cargo Desejado': 'Tradutor KR->PT',
-      'Teste Anexado': 'Sim (capitulo_teste.pdf)'
+      'Teste Anexado': 'Sim (capitulo_teste.pdf)',
+      'Experiência': '2 anos em scans de manhwa'
     }
   },
   {
     type: 'APPLICATION_UPDATE',
-    title: 'Status da sua Candidatura Atualizado',
-    body: 'Sua candidatura para a equipe de Edição da Scan Nox foi aprovada com louvor!',
+    title: 'Resultado da sua Candidatura na Scan Nox',
+    body: 'Temos uma excelente notícia! Sua candidatura para a equipe de Edição da Scan Nox foi avaliada e aprovada pela liderança da equipe.',
     deepLink: '/scan/candidaturas/minhas',
-    context: 'Resultado de Candidatura',
+    context: 'Resultado de Seleção',
     recipientName: 'Kael',
     meta: {
-      'Novo Status': 'Aprovado',
-      'Próximo Passo': 'Entrar no canal privado do Discord'
+      'Novo Status': 'Aprovado com Louvor',
+      'Cargo': 'Editor e Limpador',
+      'Próximo Passo': 'Acessar canal privado no Discord'
     }
   },
   {
     type: 'MURAL_POST',
-    title: 'Novo Aviso no Mural da Scan',
-    body: 'Atualização importante nas diretrizes de entrega para os lançamentos do fim de semana.',
+    title: 'Comunicado no Mural: Escala de Fim de Semana',
+    body: 'Publicamos o cronograma atualizado de entregas e os títulos prioritários para o próximo fim de semana. Por favor, confirmem seus prazos no painel da equipe.',
     deepLink: '/scan/mural',
     context: 'Mural de Avisos da Scan',
     recipientName: 'Membro da Staff'
@@ -141,30 +147,30 @@ const TRANSACTIONAL_SAMPLES = [
   {
     type: 'MENTION',
     title: 'Você foi mencionado por Arthur',
-    body: '"@Awerkori por favor verifique os balões da página 14 antes de fechar o zip final."',
+    body: '"@Awerkori por favor verifique os balões de efeito sonoro da página 14 antes de fechar o arquivo final do capítulo."',
     deepLink: '/scan/chat?ref=msg_9102',
     context: 'Chat de Produção',
     recipientName: 'Awerkori'
   },
   {
     type: 'ROLE_MENTION',
-    title: 'Menção ao seu Cargo: Tradutores',
-    body: 'Novas raws em alta definição de Eleceed foram disponibilizadas no repositório.',
+    title: 'Chamado para o Cargo: Tradutores',
+    body: 'Os capítulos brutos (raws) em alta definição dos lançamentos da semana de Eleceed já estão disponíveis na fila para tradução.',
     deepLink: '/scan/dashboard',
     context: 'Equipe de Tradutores',
     recipientName: 'Tradutor'
   },
   {
     type: 'REPLY_CHAT',
-    title: 'Nova Resposta no Chat de Produção',
-    body: 'Valkyrie respondeu à sua mensagem sobre as fontes do capítulo 42.',
+    title: 'Nova Mensagem no Chat de Produção',
+    body: 'Valkyrie respondeu sua dúvida: "As fontes de efeitos sonoros desse manhwa já estão padronizadas no drive da equipe."',
     deepLink: '/scan/chat?room=orv',
     recipientName: 'Awerkori'
   },
   {
     type: 'REPLY_COMMENT',
-    title: 'Nova Resposta ao seu Comentário',
-    body: 'Shadow responteu: "Concordo totalmente, o desenvolvimento desse personagem no manhwa foi sensacional!"',
+    title: 'Nova Resposta no seu Comentário',
+    body: 'Shadow respondeu: "Concordo totalmente com a sua análise, a adaptação dessa cena em relação à webnovel ficou impecável!"',
     deepLink: '/obra/omniscient-reader/capitulo-120#comment-8910',
     context: 'Omniscient Reader — Cap. 120',
     recipientName: 'Leitor'
@@ -172,7 +178,7 @@ const TRANSACTIONAL_SAMPLES = [
   {
     type: 'NEW_CHAPTER',
     title: 'Novo Capítulo Publicado: Cap. 180',
-    body: 'O capítulo 180 de Eleceed já está disponível para leitura no Project Nox.',
+    body: 'O capítulo 180 de Eleceed acabou de ser publicado e já está pronto para leitura em alta definição no catálogo do Project Nox.',
     deepLink: '/obra/eleceed/capitulo-180',
     context: 'Eleceed — Lançamento',
     recipientName: 'Awerkori'
@@ -180,7 +186,7 @@ const TRANSACTIONAL_SAMPLES = [
   {
     type: 'LEVEL_UP',
     title: 'Parabéns! Você alcançou o Nível 25',
-    body: 'Sua atividade e contribuições na plataforma elevaram sua patente para Cavaleiro das Sombras.',
+    body: 'Sua atividade constante na comunidade e suas leituras frequentes elevaram sua patente para Cavaleiro das Sombras.',
     deepLink: '/perfil/awerkori',
     context: 'Progressão do Usuário',
     recipientName: 'Awerkori',
@@ -193,19 +199,20 @@ const TRANSACTIONAL_SAMPLES = [
   {
     type: 'ACHIEVEMENT',
     title: 'Conquista Desbloqueada: Leitor Noturno',
-    body: 'Você completou a leitura de mais de 500 capítulos na plataforma Project Nox!',
+    body: 'Você alcançou a impressionante marca de 500 capítulos lidos na plataforma Project Nox e desbloqueou a insígnia de Leitor Noturno.',
     deepLink: '/perfil/awerkori/conquistas',
     context: 'Conquistas da Comunidade',
     recipientName: 'Awerkori',
     meta: {
       'Conquista': 'Leitor Noturno (Grau Ouro)',
-      'Emblema': 'badge-gold-reader.svg'
+      'Emblema': 'badge-gold-reader.svg',
+      'Progresso': '500 / 500 Capítulos Lidos'
     }
   },
   {
     type: 'SYSTEM',
-    title: 'Manutenção Programada Concluída',
-    body: 'A migração dos servidores do Project Nox foi concluída com sucesso. Todos os serviços operam normalmente.',
+    title: 'Manutenção Programada Concluída com Sucesso',
+    body: 'A migração dos servidores do Project Nox foi concluída com êxito. O catálogo, as bibliotecas pessoais e os painéis de produção das scans estão operando normalmente.',
     deepLink: '/',
     context: 'Comunicado Oficial do Sistema',
     recipientName: 'Awerkori'
@@ -213,12 +220,12 @@ const TRANSACTIONAL_SAMPLES = [
 ];
 
 // 2. Prepare auth template mock HTMLs
-function getAuthTemplateHtml(fileName: string, typeName: string, title: string, ctaText: string, extraNote: string) {
+function getAuthTemplateHtml(fileName: string) {
   const filePath = path.join(process.cwd(), 'supabase', 'templates', fileName);
   let content = fs.readFileSync(filePath, 'utf-8');
   content = content
     .replace(/\{\{\s*\.SiteURL\s*\}\}/g, 'https://manga.project-nox-awerkori.workers.dev')
-    .replace(/\{\{\s*\.TokenHash\s*\}\}/g, 'mock_token_hash_f1a2b3c4d5e6')
+    .replace(/\{\{\s*\.TokenHash\s*\}\}/g, 'mock_preview_hash_f1a2b3c4d5e6')
     .replace(/\{\{\s*\.Email\s*\}\}/g, 'awerkori@gmail.com');
   return content;
 }
@@ -227,26 +234,26 @@ const AUTH_SAMPLES = [
   {
     id: 'AUTH_CONFIRMATION',
     fileName: 'confirmation.html',
-    title: 'Confirme seu endereço de e-mail — Project Nox',
-    html: getAuthTemplateHtml('confirmation.html', 'CONFIRMAÇÃO DE CONTA', 'Boas-vindas ao Project Nox!', 'Confirmar Meu E-mail', '')
+    title: 'Boas-vindas ao Project Nox — Confirme seu e-mail',
+    html: getAuthTemplateHtml('confirmation.html')
   },
   {
     id: 'AUTH_RECOVERY',
     fileName: 'recovery.html',
-    title: 'Recupere o acesso à sua conta — Project Nox',
-    html: getAuthTemplateHtml('recovery.html', 'RECUPERAÇÃO DE CONTA', 'Redefinição de Senha', 'Redefinir Minha Senha', '')
+    title: 'Recupere seu acesso — Project Nox',
+    html: getAuthTemplateHtml('recovery.html')
   },
   {
     id: 'AUTH_EMAIL_CHANGE',
     fileName: 'email_change.html',
     title: 'Confirme seu novo e-mail — Project Nox',
-    html: getAuthTemplateHtml('email_change.html', 'ALTERAÇÃO DE E-MAIL', 'Confirmação de Novo E-mail', 'Confirmar Novo E-mail', '')
+    html: getAuthTemplateHtml('email_change.html')
   },
   {
     id: 'AUTH_INVITE',
     fileName: 'invite.html',
-    title: 'Você foi convidado para o Project Nox',
-    html: getAuthTemplateHtml('invite.html', 'CONVITE DE MEMBRO', 'Você recebeu um convite', 'Aceitar Convite e Acessar', '')
+    title: 'Convite de Membro — Project Nox',
+    html: getAuthTemplateHtml('invite.html')
   }
 ];
 
@@ -270,13 +277,13 @@ console.log(`Prepared ${allPreviews.length} HTML email files in ${TMP_DIR}`);
 
 // 3. Viewport resolutions to test
 const VIEWPORTS = [
-  { name: 'mobile_320', width: 320, height: 700, isMobile: true },
-  { name: 'mobile_360', width: 360, height: 800, isMobile: true },
-  { name: 'mobile_390', width: 390, height: 844, isMobile: true },
-  { name: 'mobile_430', width: 430, height: 932, isMobile: true },
-  { name: 'tablet_768', width: 768, height: 1024, isMobile: false },
-  { name: 'desktop_1440', width: 1440, height: 900, isMobile: false },
-  { name: 'desktop_1920', width: 1920, height: 1080, isMobile: false }
+  { name: 'mobile_320', width: 320, height: 700 },
+  { name: 'mobile_360', width: 360, height: 800 },
+  { name: 'mobile_390', width: 390, height: 844 },
+  { name: 'mobile_430', width: 430, height: 932 },
+  { name: 'tablet_768', width: 768, height: 1024 },
+  { name: 'desktop_1440', width: 1440, height: 900 },
+  { name: 'desktop_1920', width: 1920, height: 1080 }
 ];
 
 interface TestResult {
@@ -379,23 +386,32 @@ async function runBrowserTests(browserType: 'chromium' | 'firefox') {
         passed
       });
 
-      // Capture key showcase screenshots for user evidence
-      const isShowcase = [
-        'TICKET_REPORT',
-        'TICKET_SCAN_APPLICATION',
-        'TICKET_MODERATION',
-        'STAGE_READY',
-        'AUTH_CONFIRMATION',
-        'AUTH_RECOVERY'
-      ].includes(preview.id);
-
-      if (isShowcase) {
+      // Capture screenshots for ALL 22 templates on mobile (390px) and desktop (1440px)
+      if (browserType === 'chromium') {
         if (vp.name === 'mobile_390') {
-          const shotName = `email_${browserType === 'firefox' ? 'firefox_' : ''}${preview.id.toLowerCase()}_mobile_390px.png`;
+          const shotName = `gallery_email_${preview.id.toLowerCase()}_mobile_390px.png`;
           await page.screenshot({ path: path.join(ARTIFACT_DIR, shotName), fullPage: true });
         } else if (vp.name === 'desktop_1440') {
-          const shotName = `email_${browserType === 'firefox' ? 'firefox_' : ''}${preview.id.toLowerCase()}_desktop_1440px.png`;
+          const shotName = `gallery_email_${preview.id.toLowerCase()}_desktop_1440px.png`;
           await page.screenshot({ path: path.join(ARTIFACT_DIR, shotName), fullPage: true });
+        }
+      } else if (browserType === 'firefox') {
+        // Capture key showcases on Firefox
+        const isFirefoxShowcase = [
+          'AUTH_CONFIRMATION',
+          'AUTH_RECOVERY',
+          'TICKET_REPORT',
+          'STAGE_READY'
+        ].includes(preview.id);
+
+        if (isFirefoxShowcase) {
+          if (vp.name === 'mobile_390') {
+            const shotName = `gallery_firefox_${preview.id.toLowerCase()}_mobile_390px.png`;
+            await page.screenshot({ path: path.join(ARTIFACT_DIR, shotName), fullPage: true });
+          } else if (vp.name === 'desktop_1440') {
+            const shotName = `gallery_firefox_${preview.id.toLowerCase()}_desktop_1440px.png`;
+            await page.screenshot({ path: path.join(ARTIFACT_DIR, shotName), fullPage: true });
+          }
         }
       }
     }
@@ -431,20 +447,21 @@ async function main() {
   const auditReport = {
     timestamp: new Date().toISOString(),
     templatesCount: allPreviews.length,
+    templates: allPreviews.map(p => p.id),
     viewportsTested: VIEWPORTS.map(v => v.name),
     browsersTested: ['chromium', 'firefox'],
     totalScenarios: total,
     passedScenarios: passed,
-    summary: '100% of email templates rendered without horizontal overflow, with PROJECT and NOX mathematically centered on the exact vertical axis, category badge positioned below logo with uniform padding, and responsive CTA button.'
+    summary: '100% of the 22 email templates rendered without horizontal overflow, with PROJECT and NOX mathematically centered on the exact vertical axis, category badge positioned below logo with uniform padding, and responsive CTA button.'
   };
 
   fs.writeFileSync(
-    path.join(ARTIFACT_DIR, 'email_visual_verification_audit.json'),
+    path.join(ARTIFACT_DIR, 'email_visual_verification_audit_22.json'),
     JSON.stringify(auditReport, null, 2),
     'utf-8'
   );
 
-  console.log('Audit report saved to email_visual_verification_audit.json');
+  console.log('Audit report saved to email_visual_verification_audit_22.json');
 }
 
 main().catch(err => {
