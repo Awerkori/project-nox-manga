@@ -6,13 +6,12 @@ import {
   DEFAULT_READER_SETTINGS,
   type ReaderSettings
 } from '../src/lib/reader-settings';
-import { parseCommentBody, threadComments } from '../src/lib/comments';
+import { parseCommentBody, stripSpoilers, threadComments } from '../src/lib/comments';
 import { chapterIdentityLabel } from '../src/lib/chapter-identity';
 
 describe('Reader Settings Engine', () => {
   beforeEach(() => {
     resetReaderSettingsMemory();
-    // Clear localStorage mockup
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
     }
@@ -101,7 +100,7 @@ describe('Chapter Identity Presentation', () => {
 });
 
 describe('Comments Parsing & Spoilers', () => {
-  it('parses inline spoilers and plain text', () => {
+  it('parses inline spoilers and plain text with BBCode', () => {
     const text = 'Olha esse final! [spoiler]Ele é o vilão secreto![/spoiler] Não esperava.';
     const chunks = parseCommentBody(text);
 
@@ -109,6 +108,59 @@ describe('Comments Parsing & Spoilers', () => {
     expect(chunks[0]).toEqual({ type: 'text', content: 'Olha esse final! ' });
     expect(chunks[1]).toEqual({ type: 'spoiler', content: 'Ele é o vilão secreto!' });
     expect(chunks[2]).toEqual({ type: 'text', content: ' Não esperava.' });
+  });
+
+  it('parses Discord style ||spoiler|| syntax seamlessly', () => {
+    const text = 'O protagonista ||descobriu a verdade sobre o clã|| no final!';
+    const chunks = parseCommentBody(text);
+
+    expect(chunks.length).toBe(3);
+    expect(chunks[0]).toEqual({ type: 'text', content: 'O protagonista ' });
+    expect(chunks[1]).toEqual({ type: 'spoiler', content: 'descobriu a verdade sobre o clã' });
+    expect(chunks[2]).toEqual({ type: 'text', content: ' no final!' });
+  });
+
+  it('supports both Discord and BBCode spoilers simultaneously', () => {
+    const text = '||spoiler discord|| e [spoiler]spoiler bbcode[/spoiler]';
+    const chunks = parseCommentBody(text);
+
+    expect(chunks.length).toBe(3);
+    expect(chunks[0]).toEqual({ type: 'spoiler', content: 'spoiler discord' });
+    expect(chunks[1]).toEqual({ type: 'text', content: ' e ' });
+    expect(chunks[2]).toEqual({ type: 'spoiler', content: 'spoiler bbcode' });
+  });
+
+  it('parses embedded media markdown tags and marks GIFs and spoilers accurately', () => {
+    const text = 'Olha esse meme: ![meme](https://nox.site/media/cat.gif) e ||![cena secreta](https://nox.site/media/death.png)||';
+    const chunks = parseCommentBody(text);
+
+    const media = chunks.filter((c) => c.type === 'media');
+    expect(media.length).toBe(2);
+
+    expect(media[0]).toEqual({
+      type: 'media',
+      content: 'https://nox.site/media/cat.gif',
+      mediaUrl: 'https://nox.site/media/cat.gif',
+      mediaAlt: 'meme',
+      isSpoiler: false,
+      isGif: true
+    });
+
+    expect(media[1]).toEqual({
+      type: 'media',
+      content: 'https://nox.site/media/death.png',
+      mediaUrl: 'https://nox.site/media/death.png',
+      mediaAlt: 'cena secreta',
+      isSpoiler: true,
+      isGif: false
+    });
+  });
+
+  it('strips spoilers and media tags cleanly to avoid leaking in notifications', () => {
+    const text = 'Oi @joao! Olha ||isso aqui é muito secreto|| e veja ![foto](https://img.com/a.png)';
+    const clean = stripSpoilers(text);
+    expect(clean).toBe('Oi @joao! Olha [spoiler oculto] e veja [mídia]');
+    expect(clean.includes('secreto')).toBe(false);
   });
 
   it('parses @mentions correctly', () => {

@@ -1,5 +1,6 @@
 import { privileged } from '$lib/server/db';
 import { createNotification } from './notifications';
+import { stripSpoilers } from '$lib/comments';
 
 export interface MentionTarget {
   userId: string;
@@ -299,7 +300,8 @@ export async function dispatchMentions({
   }
 
   // 4. Disparar notificações e e-mails unificados
-  const snippet = text.length > 200 ? text.slice(0, 200) + '...' : text;
+  const safeText = stripSpoilers(text);
+  const snippet = safeText.length > 200 ? safeText.slice(0, 200) + '...' : safeText;
   const notifiedUserIds: string[] = [];
 
   for (const [uid, target] of targetUserMap.entries()) {

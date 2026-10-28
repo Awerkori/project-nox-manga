@@ -20,7 +20,10 @@
     ChevronDown,
     ChevronUp,
     ShieldAlert,
-    AtSign
+    AtSign,
+    Image as ImageIcon,
+    Loader2,
+    Maximize2
   } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -71,6 +74,131 @@
   let mentionAutocompleteRef = $state<any>();
   let composer = $state<HTMLTextAreaElement>();
 
+  // Multimedia Comment Attachments (Images, GIFs, Auto-preview)
+  let attachedMedia = $state<{
+    url: string;
+    alt?: string;
+    isSpoiler: boolean;
+    isGif: boolean;
+    previewUrl: string;
+    uploading?: boolean;
+    error?: string;
+  } | null>(null);
+
+  let fileInputRef: HTMLInputElement | undefined = $state();
+  let lightboxMedia = $state<{ url: string; alt?: string } | null>(null);
+
+  function openLightbox(url?: string, alt?: string) {
+    if (!url) return;
+    lightboxMedia = { url, alt: alt || 'Mídia em tamanho real' };
+  }
+
+  function closeLightbox() {
+    lightboxMedia = null;
+  }
+
+  async function handleFileUpload(file: File) {
+    if (!file) return;
+    const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+    const maxSize = isGif ? 8 * 1024 * 1024 : 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      notice = isGif ? 'O arquivo GIF não pode ultrapassar 8 MB.' : 'A imagem não pode ultrapassar 5 MB.';
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    attachedMedia = {
+      url: '',
+      previewUrl: objectUrl,
+      isSpoiler: false,
+      isGif,
+      alt: file.name.replace(/\.[^/.]+$/, ''),
+      uploading: true
+    };
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/comments/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Falha ao enviar imagem.');
+      }
+      const data = await res.json();
+      if (attachedMedia && attachedMedia.previewUrl === objectUrl) {
+        attachedMedia.url = data.url;
+        attachedMedia.isGif = Boolean(data.isAnimated || isGif);
+        attachedMedia.uploading = false;
+      }
+    } catch (e: any) {
+      if (attachedMedia && attachedMedia.previewUrl === objectUrl) {
+        attachedMedia.error = e.message || 'Erro no envio';
+        attachedMedia.uploading = false;
+      }
+      notice = e.message || 'Erro ao carregar mídia.';
+    }
+  }
+
+  function handleFileInputChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      void handleFileUpload(input.files[0]);
+      input.value = '';
+    }
+  }
+
+  function handlePaste(e: ClipboardEvent) {
+    // 1. Detect pasted image file from clipboard
+    if (e.clipboardData?.files?.length) {
+      const file = e.clipboardData.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        void handleFileUpload(file);
+        return;
+      }
+    }
+
+    // 2. Detect direct image/GIF links (HTTPS) pasted as text
+    const pastedText = e.clipboardData?.getData('text') || '';
+    const imgUrlMatch = pastedText.match(/https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s]*)?/i);
+    const tenorOrGiphyMatch = !imgUrlMatch && pastedText.match(/https?:\/\/(?:media\d*\.giphy\.com\/media\/[^\s]+|c\.tenor\.com\/[^\s]+|i\.imgur\.com\/[^\s]+)/i);
+    const detectedUrl = imgUrlMatch ? imgUrlMatch[0] : tenorOrGiphyMatch ? tenorOrGiphyMatch[0] : null;
+
+    if (detectedUrl && !attachedMedia) {
+      const isGif = detectedUrl.toLowerCase().includes('.gif') || detectedUrl.includes('giphy') || detectedUrl.includes('tenor');
+      attachedMedia = {
+        url: detectedUrl,
+        previewUrl: detectedUrl,
+        isSpoiler: false,
+        isGif,
+        alt: 'Mídia incorporada',
+        uploading: false
+      };
+    }
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer?.files?.length) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        void handleFileUpload(file);
+      }
+    }
+  }
+
+  function removeAttachedMedia() {
+    if (attachedMedia?.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(attachedMedia.previewUrl);
+    }
+    attachedMedia = null;
+  }
+
   // Spoilers and collapsed reply threads
   const revealedSpoilers = new SvelteSet<string>();
   const expandedReplies = new SvelteSet<string>();
@@ -90,11 +218,15 @@
     const start = composer.selectionStart || 0;
     const end = composer.selectionEnd || 0;
     const selected = body.slice(start, end);
-    const replacement = selected ? `[spoiler]${selected}[/spoiler]` : `[spoiler]texto com spoiler[/spoiler]`;
+    const replacement = selected ? `||${selected}||` : `||texto com spoiler||`;
     body = body.slice(0, start) + replacement + body.slice(end);
     tick().then(() => {
       composer?.focus();
-      composer?.setSelectionRange(start + 9, start + replacement.length - 10);
+      if (selected) {
+        composer?.setSelectionRange(start, start + replacement.length);
+      } else {
+        composer?.setSelectionRange(start + 2, start + replacement.length - 2);
+      }
     });
   }
 
@@ -166,14 +298,22 @@
     }
   }
 
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && lightboxMedia) {
+      closeLightbox();
+    }
+  }
+
   onMount(() => {
     checkHashAndScroll();
     window.addEventListener('hashchange', checkHashAndScroll);
+    window.addEventListener('keydown', handleGlobalKeydown);
   });
 
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('hashchange', checkHashAndScroll);
+      window.removeEventListener('keydown', handleGlobalKeydown);
     }
   });
 
@@ -187,17 +327,27 @@
   }
 
   async function send() {
-    if (busy || !body.trim()) return;
+    const hasText = Boolean(body.trim());
+    const hasMedia = Boolean(attachedMedia?.url);
+    if (busy || (!hasText && !hasMedia) || attachedMedia?.uploading) return;
     busy = true;
     notice = '';
     try {
+      let finalBody = body.trim();
+      if (attachedMedia?.url) {
+        const mediaTag = attachedMedia.isSpoiler
+          ? `||![${attachedMedia.alt || 'Mídia'}](${attachedMedia.url})||`
+          : `![${attachedMedia.alt || 'Mídia'}](${attachedMedia.url})`;
+        finalBody = finalBody ? `${finalBody}\n\n${mediaTag}` : mediaTag;
+      }
+
       const mentionsData = mentionAutocompleteRef?.getTrackedMentions() || null;
       const res = (await action(
         'member',
         edit ? 'comment_edit' : 'comment',
         edit
-          ? { id: edit, body, mentionsData }
-          : { work_id: workId, chapter_id: chapterId, parent_id: reply, body, mentionsData }
+          ? { id: edit, body: finalBody, mentionsData }
+          : { work_id: workId, chapter_id: chapterId, parent_id: reply, body: finalBody, mentionsData }
       )) as any;
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
@@ -219,6 +369,7 @@
       }
 
       body = '';
+      removeAttachedMedia();
       reply = null;
       edit = null;
       mentionAutocompleteRef?.clearTrackedMentions();
@@ -333,28 +484,86 @@
         </div>
       {/if}
 
+      <!-- Hidden File Input for Image/GIF Upload -->
+      <input
+        type="file"
+        bind:this={fileInputRef}
+        onchange={handleFileInputChange}
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        style="display: none;"
+        aria-hidden="true"
+      />
+
       <div class="composer-input-area">
         <textarea
           bind:value={body}
           bind:this={composer}
           rows="3"
-          required
           maxlength="2000"
           oninput={(e) => mentionAutocompleteRef?.handleInput((e.target as HTMLTextAreaElement).value)}
           onkeydown={(e) => {
             if (mentionAutocompleteRef?.handleKeyDown(e)) return;
           }}
+          onpaste={handlePaste}
+          ondrop={handleDrop}
+          ondragover={(e) => e.preventDefault()}
           placeholder={edit
             ? 'Edite seu comentário…'
             : reply
               ? `Sua resposta para @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
               : chapterId
-                ? 'O que você achou deste capítulo? Compartilhe suas impressões… (use [spoiler] para esconder revelações)'
+                ? 'O que você achou deste capítulo? Compartilhe suas impressões… (use ||spoiler|| para esconder revelações)'
                 : 'O que você achou desta obra? Fale sobre o enredo, arte e personagens…'
           }
           class="composer-textarea"
           aria-label={edit ? 'Editar comentário' : reply ? 'Sua resposta' : 'Seu comentário'}
         ></textarea>
+
+        <!-- Attached Media Preview Chip -->
+        {#if attachedMedia}
+          <div class="attached-media-chip" role="region" aria-label="Mídia anexada">
+            <div class="attached-media-left">
+              <div class="attached-thumb-wrap">
+                <img src={attachedMedia.previewUrl} alt={attachedMedia.alt || 'Prévia'} class="attached-thumb-img" />
+                <span class="attached-thumb-badge">{attachedMedia.isGif ? 'GIF' : 'IMG'}</span>
+              </div>
+              <div class="attached-media-meta">
+                <span class="attached-filename" title={attachedMedia.alt || 'Mídia'}>{attachedMedia.alt || 'Mídia anexada'}</span>
+                <span class="attached-status">
+                  {#if attachedMedia.uploading}
+                    <span class="uploading-state"><Loader2 size={11} class="spin-anim inline mr-1" /> Enviando…</span>
+                  {:else if attachedMedia.error}
+                    <span class="error-state text-rose-400">{attachedMedia.error}</span>
+                  {:else}
+                    <span class="ready-state text-emerald-400">Pronto para publicar</span>
+                  {/if}
+                </span>
+              </div>
+            </div>
+
+            <div class="attached-media-controls">
+              <label class="spoiler-check-label" title="Ocultar esta imagem como spoiler até que o usuário clique para ver">
+                <input
+                  type="checkbox"
+                  bind:checked={attachedMedia.isSpoiler}
+                  class="spoiler-check-input"
+                />
+                <span>Spoiler</span>
+              </label>
+
+              <button
+                type="button"
+                class="btn-remove-attachment"
+                onclick={removeAttachedMedia}
+                title="Remover mídia anexada"
+                aria-label="Remover anexo"
+              >
+                <X size={13} />
+                <span>Remover</span>
+              </button>
+            </div>
+          </div>
+        {/if}
 
         <MentionAutocomplete
           bind:this={mentionAutocompleteRef}
@@ -370,10 +579,19 @@
             type="button"
             class="helper-btn"
             onclick={insertSpoilerTag}
-            title="Inserir tag de spoiler oculta"
+            title="Inserir tag de spoiler oculta (||spoiler||)"
           >
             <EyeOff size={13} />
-            <span>+ Spoiler</span>
+            <span>+ Spoiler (||)</span>
+          </button>
+          <button
+            type="button"
+            class="helper-btn"
+            onclick={() => fileInputRef?.click()}
+            title="Anexar imagem ou GIF da galeria/computador"
+          >
+            <ImageIcon size={13} />
+            <span>+ Imagem/GIF</span>
           </button>
           <button
             type="button"
@@ -396,6 +614,7 @@
                 reply = null;
                 edit = null;
                 body = '';
+                removeAttachedMedia();
               }}
             >
               Cancelar
@@ -403,7 +622,7 @@
           {/if}
           <button
             class="btn-submit-premium"
-            disabled={busy || !body.trim()}
+            disabled={busy || (!body.trim() && !attachedMedia?.url) || attachedMedia?.uploading}
           >
             <Send size={14} />
             <span>{busy ? 'Enviando…' : edit ? 'Salvar' : reply ? 'Responder' : 'Publicar'}</span>
@@ -505,6 +724,47 @@
                       <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
                     {/if}
                   </button>
+                {:else if chunk.type === 'media'}
+                  <div class="comment-media-card">
+                    {#if chunk.isSpoiler && !revealedSpoilers.has(root.id + ':media:' + idx)}
+                      <button
+                        type="button"
+                        class="media-spoiler-card"
+                        onclick={() => toggleSpoiler(root.id + ':media:' + idx)}
+                        title="Spoiler: Toque para ver a imagem"
+                      >
+                        <img
+                          src={chunk.mediaUrl}
+                          alt={chunk.mediaAlt || 'Mídia com spoiler'}
+                          class="comment-rendered-img"
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                        />
+                        <div class="media-spoiler-overlay">
+                          <EyeOff size={16} />
+                          <span>SPOILER — TOQUE PARA VER</span>
+                        </div>
+                      </button>
+                    {:else}
+                      <button
+                        type="button"
+                        class="media-view-btn"
+                        onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
+                        title="Clique para ampliar em tela cheia"
+                      >
+                        <img
+                          src={chunk.mediaUrl}
+                          alt={chunk.mediaAlt || 'Mídia do comentário'}
+                          class="comment-rendered-img"
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                        />
+                        {#if chunk.isGif}
+                          <span class="media-type-badge">GIF</span>
+                        {/if}
+                      </button>
+                    {/if}
+                  </div>
                 {:else if chunk.type === 'mention'}
                   <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
                 {:else}
@@ -654,6 +914,47 @@
                                     <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
                                   {/if}
                                 </button>
+                              {:else if chunk.type === 'media'}
+                                <div class="comment-media-card">
+                                  {#if chunk.isSpoiler && !revealedSpoilers.has(replyItem.id + ':media:' + idx)}
+                                    <button
+                                      type="button"
+                                      class="media-spoiler-card"
+                                      onclick={() => toggleSpoiler(replyItem.id + ':media:' + idx)}
+                                      title="Spoiler: Toque para ver a imagem"
+                                    >
+                                      <img
+                                        src={chunk.mediaUrl}
+                                        alt={chunk.mediaAlt || 'Mídia com spoiler'}
+                                        class="comment-rendered-img"
+                                        loading="lazy"
+                                        referrerpolicy="no-referrer"
+                                      />
+                                      <div class="media-spoiler-overlay">
+                                        <EyeOff size={16} />
+                                        <span>SPOILER — TOQUE PARA VER</span>
+                                      </div>
+                                    </button>
+                                  {:else}
+                                    <button
+                                      type="button"
+                                      class="media-view-btn"
+                                      onclick={() => openLightbox(chunk.mediaUrl, chunk.mediaAlt)}
+                                      title="Clique para ampliar em tela cheia"
+                                    >
+                                      <img
+                                        src={chunk.mediaUrl}
+                                        alt={chunk.mediaAlt || 'Mídia do comentário'}
+                                        class="comment-rendered-img"
+                                        loading="lazy"
+                                        referrerpolicy="no-referrer"
+                                      />
+                                      {#if chunk.isGif}
+                                        <span class="media-type-badge">GIF</span>
+                                      {/if}
+                                    </button>
+                                  {/if}
+                                </div>
                               {:else if chunk.type === 'mention'}
                                 <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
                               {:else}
@@ -739,15 +1040,46 @@
       onclose={() => (reportingComment = null)}
     />
   {/if}
+
+  <!-- LIGHTBOX MODAL FOR EXPANDED MEDIA -->
+  {#if lightboxMedia}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="lightbox-backdrop"
+      onclick={closeLightbox}
+      role="button"
+      tabindex="0"
+      aria-label="Fechar visualização de imagem"
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="lightbox-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <button
+          type="button"
+          class="btn-close-lightbox"
+          onclick={closeLightbox}
+          aria-label="Fechar"
+        >
+          <X size={16} />
+          <span>Fechar</span>
+        </button>
+        <img
+          src={lightboxMedia.url}
+          alt={lightboxMedia.alt || 'Imagem ampliada'}
+          class="lightbox-img"
+        />
+      </div>
+    </div>
+  {/if}
 </section>
 
 <style>
   /* Root Container */
   .comments-section-root {
     width: 100%;
-    max-width: 900px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 32px 16px 64px 16px;
+    padding: 24px 0 48px 0;
+    box-sizing: border-box;
     color: #e2e8f0;
   }
 
@@ -1389,5 +1721,263 @@
       margin-left: 6px;
       padding-left: 8px;
     }
+  }
+
+  /* Attached Media Preview Bar in Composer */
+  .attached-media-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 10px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .attached-media-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .attached-thumb-wrap {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000000;
+    flex-shrink: 0;
+  }
+
+  .attached-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .attached-thumb-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 8px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #38bdf8;
+    text-transform: uppercase;
+  }
+
+  .attached-media-meta {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .attached-filename {
+    font-size: 12px;
+    font-weight: 600;
+    color: #f1f5f9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+
+  .attached-status {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .attached-media-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .spoiler-check-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .spoiler-check-input {
+    accent-color: #a855f7;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+  }
+
+  .btn-remove-attachment {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 6px;
+    color: #fb7185;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .btn-remove-attachment:hover {
+    background: rgba(244, 63, 94, 0.22);
+  }
+
+  /* Comment Media Card in Feed */
+  .comment-media-card {
+    display: block;
+    max-width: 100%;
+    margin-top: 10px;
+    margin-bottom: 6px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .media-view-btn {
+    position: relative;
+    display: block;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    max-width: 100%;
+  }
+
+  .comment-rendered-img {
+    display: block;
+    max-width: 100%;
+    max-height: 380px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 11px;
+    transition: transform 0.2s ease, filter 0.2s ease;
+  }
+
+  .comment-rendered-img:hover {
+    filter: brightness(1.05);
+  }
+
+  .media-type-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #38bdf8;
+    letter-spacing: 0.05em;
+  }
+
+  .media-spoiler-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    cursor: pointer;
+    border: none;
+    background: #0b0d14;
+    padding: 0;
+    display: block;
+    max-width: 100%;
+  }
+
+  .media-spoiler-card .comment-rendered-img {
+    filter: blur(24px) brightness(0.5);
+    transform: scale(1.08);
+    pointer-events: none;
+  }
+
+  .media-spoiler-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(10, 10, 16, 0.65);
+    backdrop-filter: blur(6px);
+    color: #f1f5f9;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 16px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  /* Lightbox Modal */
+  .lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .lightbox-content {
+    position: relative;
+    max-width: 92vw;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .lightbox-img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  }
+
+  .btn-close-lightbox {
+    position: absolute;
+    top: -44px;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+    color: #ffffff;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-close-lightbox:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
 </style>

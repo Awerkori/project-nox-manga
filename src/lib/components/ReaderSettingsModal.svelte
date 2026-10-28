@@ -898,4 +898,35 @@
   .advanced-info-box p {
     margin: 0;
   }
+
+  @media (max-width: 640px) {
+    .settings-sheet {
+      width: 100vw;
+      border-left: none;
+    }
+
+    .sheet-header {
+      padding: 14px 16px;
+    }
+
+    .settings-view-switcher {
+      padding: 10px 14px;
+    }
+
+    .sheet-scroll-body {
+      padding: 14px 16px 32px 16px;
+    }
+
+    .grid-2-segmented .seg-btn {
+      min-height: 46px;
+    }
+
+    .progress-pill-btn {
+      min-height: 44px;
+    }
+
+    .preset-pill {
+      min-height: 42px;
+    }
+  }
 </style>

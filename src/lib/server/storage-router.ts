@@ -82,6 +82,8 @@ export function resolveStoragePoolForPurpose(purpose: string): StoragePoolKey {
     case 'profile_banner':
     case 'comment_banner':
     case 'profile_media':
+    case 'comment_media':
+    case 'comment_attachment':
       return 'PROFILE_MEDIA';
     case 'scan_logo':
     case 'scan_banner':

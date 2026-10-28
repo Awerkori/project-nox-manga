@@ -571,7 +571,7 @@
   aria-label="Leitor de Capítulos Project Nox"
 >
   <!-- ======================================================================= -->
-  <!-- 1. RECONSTRUCTED FLOATING GLASS HEADER                                 -->
+  <!-- 1. RECONSTRUCTED PREMIER GLASS HEADER                                   -->
   <!-- ======================================================================= -->
   <header
     class="reader-glass-header"
@@ -587,11 +587,17 @@
         title="Voltar para a obra"
       >
         <ChevronLeft size={20} />
+        <span class="btn-back-text">Voltar</span>
       </a>
+
       <div class="header-work-info">
-        <span class="header-work-title" title={data.chapter.works?.title}>
-          {data.chapter.works?.title}
-        </span>
+        <a
+          href={data.preview ? `/admin/obras/${data.chapter.work_id}` : (data.chapter.works?.slug ? `/obra/${data.chapter.works.slug}` : `/obra/${data.chapter.work_id}`)}
+          class="header-work-title-link"
+          title={data.chapter.works?.title}
+        >
+          <span class="header-work-title">{data.chapter.works?.title}</span>
+        </a>
         <div class="header-sub-meta">
           <span class="header-chapter-badge">Capítulo {chapterIdentityLabel(data.chapter)}</span>
           {#if data.preview}
@@ -601,54 +607,108 @@
       </div>
     </div>
 
-    <!-- Center: Page Counter & Turbo Preloader Status -->
+    <!-- Center: Chapter Navigation Quick Shortcuts, Page Counter & Turbo Status -->
     <div class="header-center-col">
-      <div class="page-counter-pill" title="Página atual / Total">
-        <span>{current} / {data.pages.length}</span>
+      <!-- Chapter Switching Controls -->
+      <div class="chapter-nav-cluster">
+        {#if data.previous}
+          <a
+            href="/ler/{data.previous.id}"
+            class="chapter-quick-btn prev"
+            title="Capítulo Anterior ({chapterIdentityLabel(data.previous)})"
+            aria-label="Capítulo Anterior"
+          >
+            <ChevronLeft size={16} />
+          </a>
+        {:else}
+          <span class="chapter-quick-btn prev disabled" aria-disabled="true" title="Primeiro capítulo">
+            <ChevronLeft size={16} />
+          </span>
+        {/if}
+
+        <button
+          type="button"
+          class="chapter-selector-pill"
+          onclick={() => { showChaptersDrawer = true; uiVisible = true; }}
+          title="Ver todos os capítulos desta obra"
+          aria-label="Selecionar capítulo"
+        >
+          <List size={13} class="text-purple-400 shrink-0" />
+          <span class="chapter-selector-label">Cap. {chapterIdentityLabel(data.chapter)}</span>
+          <ChevronDown size={13} class="opacity-60 shrink-0" />
+        </button>
+
+        {#if data.next}
+          <a
+            href="/ler/{data.next.id}"
+            class="chapter-quick-btn next"
+            title="Próximo Capítulo ({chapterIdentityLabel(data.next)})"
+            aria-label="Próximo Capítulo"
+          >
+            <ChevronRight size={16} />
+          </a>
+        {:else}
+          <span class="chapter-quick-btn next disabled" aria-disabled="true" title="Último capítulo lançado">
+            <ChevronRight size={16} />
+          </span>
+        {/if}
       </div>
 
-      {#if turboActive}
-        <div
-          class="turbo-status-pill"
-          class:complete={turboFinished}
-          title={turboFinished ? 'Capítulo 100% carregado em cache (Modo Turbo)' : 'Carregando todas as páginas antecipadamente'}
-        >
-          <Zap size={12} class="zap-icon" />
-          {#if turboFinished}
-            <span>Turbo Pronto</span>
-          {:else}
-            <span>Turbo {preloadedCount}/{data.pages.length}</span>
-          {/if}
+      <div class="header-meta-divider"></div>
+
+      <!-- Page Counter & Turbo Badge -->
+      <div class="reading-meta-cluster">
+        <div class="page-counter-pill" title="Página atual / Total">
+          <BookOpen size={12} class="text-slate-400 mr-1.5" />
+          <span class="current-page-num">{current}</span>
+          <span class="page-sep">/</span>
+          <span class="total-pages-num">{data.pages.length}</span>
         </div>
-      {/if}
+
+        {#if turboActive}
+          <div
+            class="turbo-status-pill"
+            class:complete={turboFinished}
+            title={turboFinished ? 'Turbo Inteligente ativo: todas as páginas estão em cache para leitura imediata' : 'Turbo em andamento: baixando todas as páginas antecipadamente'}
+          >
+            <Zap size={12} class="zap-icon" />
+            {#if turboFinished}
+              <span class="turbo-text">Turbo Pronto</span>
+            {:else}
+              <span class="turbo-text">Turbo {preloadedCount}/{data.pages.length}</span>
+            {/if}
+          </div>
+        {/if}
+      </div>
     </div>
 
-    <!-- Right: Drawer, Offline, Settings, Fullscreen -->
+    <!-- Right: Drawer, Offline Download, Settings, Fullscreen -->
     <div class="header-right-col">
       <!-- Chapter Drawer Button -->
       {#if data.siblings && data.siblings.length > 1}
         <button
           type="button"
-          class="header-action-btn"
+          class="header-action-btn btn-drawer"
           aria-label="Lista de capítulos"
-          title="Ver todos os capítulos desta obra"
+          title="Ver todos os capítulos ({data.siblings.length})"
           onclick={() => {
             showChaptersDrawer = true;
             uiVisible = true;
           }}
         >
           <List size={18} />
+          <span class="action-btn-text">Capítulos</span>
         </button>
       {/if}
 
       <!-- Offline Download Button -->
       <button
         type="button"
-        class="header-action-btn"
+        class="header-action-btn btn-offline"
         class:downloaded={isDownloadedOffline}
         class:loading={downloadingOffline}
         aria-label={isDownloadedOffline ? 'Capítulo salvo offline' : 'Baixar capítulo'}
-        title={isDownloadedOffline ? 'Capítulo disponível offline' : 'Baixar capítulo para ler sem internet'}
+        title={isDownloadedOffline ? 'Capítulo salvo offline' : 'Baixar capítulo para ler sem internet'}
         onclick={downloadingOffline ? handleCancelDownload : handleDownloadChapter}
       >
         {#if downloadingOffline}
@@ -658,6 +718,7 @@
         {:else}
           <Download size={18} />
         {/if}
+        <span class="action-btn-text">{isDownloadedOffline ? 'Salvo' : 'Baixar'}</span>
       </button>
 
       <!-- Settings Button -->
@@ -673,6 +734,7 @@
         }}
       >
         <Sliders size={18} />
+        <span class="action-btn-text">Ajustes</span>
       </button>
 
       <!-- Fullscreen Button -->
@@ -779,7 +841,11 @@
   <!-- ======================================================================= -->
   <!-- 4. RECONSTRUCTED COMPACT END OF CHAPTER EXPERIENCE                      -->
   <!-- ======================================================================= -->
-  <section class="reader-conclusion-section" id="chapter-end">
+  <section
+    class="reader-conclusion-section"
+    id="chapter-end"
+    style={readerSettings.fit === 'full' ? 'max-width: 100%;' : `max-width: ${readerSettings.width}px;`}
+  >
     <!-- UNIFIED NEXT CHAPTER HERO (COMPACT & DIRECT) -->
     <div class="compact-completion-card">
       <div class="completion-eyebrow">
@@ -845,30 +911,7 @@
       </nav>
     </div>
 
-    <!-- HIGH-VISIBILITY COMPACT RED REPORT CARD -->
-    <div class="report-problem-card">
-      <div class="report-card-inner">
-        <div class="report-left">
-          <div class="report-alert-icon">
-            <AlertTriangle size={18} class="text-rose-400" />
-          </div>
-          <div class="report-text">
-            <h4>Encontrou algum problema nas páginas?</h4>
-            <p>Páginas cortadas, em branco, fora de ordem ou erro de tradução.</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          class="btn-report-red"
-          onclick={() => (showReportModal = true)}
-        >
-          <Flag size={13} />
-          <span>Reportar Problema</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- BALANCED SENTIMENT REACTIONS DOCK (ZERO GAPS ON MOBILE) -->
+    <!-- 1. BALANCED SENTIMENT REACTIONS DOCK (ZERO GAPS ON MOBILE) -->
     <div class="reactions-dock-card">
       <div class="reactions-dock-header">
         <span class="reactions-badge">REAÇÃO DOS LEITORES</span>
@@ -914,6 +957,29 @@
           <span class="spectrum-count-label">Sentimento coletivo de {totalReactionVotes} leitores</span>
         </div>
       {/if}
+    </div>
+
+    <!-- 2. HIGH-VISIBILITY COMPACT RED REPORT CARD (BELOW REACTIONS) -->
+    <div class="report-problem-card">
+      <div class="report-card-inner">
+        <div class="report-left">
+          <div class="report-alert-icon">
+            <AlertTriangle size={18} class="text-rose-400" />
+          </div>
+          <div class="report-text">
+            <h4>Encontrou algum problema nas páginas?</h4>
+            <p>Páginas cortadas, em branco, fora de ordem ou erro de tradução.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-report-red"
+          onclick={() => (showReportModal = true)}
+        >
+          <Flag size={13} />
+          <span>Reportar Problema</span>
+        </button>
+      </div>
     </div>
 
     <!-- COMMENTS SECTION INTEGRATION -->
@@ -1058,24 +1124,24 @@
   }
 
   /* --------------------------------------------------------------------------
-     1. FLOATING GLASS HEADER
+     1. PREMIER GLASS HEADER
      -------------------------------------------------------------------------- */
   .reader-glass-header {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 56px;
-    background: rgba(6, 7, 12, 0.82);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    height: 62px;
+    background: rgba(7, 8, 14, 0.88);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
     z-index: 80;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
+    padding: 0 20px;
     padding-top: env(safe-area-inset-top, 0px);
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
   }
@@ -1086,24 +1152,25 @@
     pointer-events: none;
   }
 
+  /* Left: Brand / Work Info */
   .header-left-col {
     display: flex;
     align-items: center;
     gap: 12px;
-    max-width: 45%;
+    max-width: 32%;
     overflow: hidden;
   }
 
   .btn-glass-back {
-    width: 38px;
-    height: 38px;
+    height: 40px;
+    padding: 0 12px 0 8px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.09);
     color: #ffffff;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
     text-decoration: none;
     flex-shrink: 0;
     transition: all 0.2s ease;
@@ -1112,6 +1179,13 @@
   .btn-glass-back:hover {
     background: rgba(168, 85, 247, 0.2);
     border-color: rgba(168, 85, 247, 0.4);
+    transform: translateX(-1px);
+  }
+
+  .btn-back-text {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   .header-work-info {
@@ -1120,20 +1194,30 @@
     overflow: hidden;
   }
 
-  .header-work-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #ffffff;
+  .header-work-title-link {
+    text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .header-work-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #ffffff;
     letter-spacing: -0.01em;
+    transition: color 0.18s ease;
+  }
+
+  .header-work-title-link:hover .header-work-title {
+    color: #c084fc;
   }
 
   .header-sub-meta {
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-top: 1px;
   }
 
   .header-chapter-badge {
@@ -1149,43 +1233,125 @@
     background: rgba(245, 158, 11, 0.15);
     padding: 1px 5px;
     border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
-  /* Center */
+  /* Center: Navigation Shortcuts + Reading Meta */
   .header-center-col {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    justify-content: center;
+    flex: 1;
+    max-width: 44%;
+  }
+
+  .chapter-nav-cluster {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .chapter-quick-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: all 0.18s ease;
+  }
+
+  .chapter-quick-btn:hover:not(.disabled) {
+    background: rgba(168, 85, 247, 0.2);
+    color: #ffffff;
+  }
+
+  .chapter-quick-btn.disabled {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  .chapter-selector-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    height: 32px;
+    border: none;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 7px;
+    color: #f1f5f9;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .chapter-selector-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+
+  .header-meta-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .reading-meta-cluster {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
   .page-counter-pill {
+    display: flex;
+    align-items: center;
     padding: 5px 12px;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 9999px;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 700;
     color: #f1f5f9;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
+  }
+
+  .page-slash {
+    margin: 0 3px;
+    color: #64748b;
+  }
+
+  .total-pages-num {
+    color: #94a3b8;
   }
 
   .turbo-status-pill {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     padding: 4px 10px;
     background: rgba(245, 158, 11, 0.12);
     border: 1px solid rgba(245, 158, 11, 0.3);
     border-radius: 9999px;
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     color: #f59e0b;
+    letter-spacing: 0.02em;
   }
 
   .turbo-status-pill.complete {
     background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.3);
+    border-color: rgba(16, 185, 129, 0.35);
     color: #34d399;
   }
 
@@ -1193,30 +1359,39 @@
     color: currentColor;
   }
 
-  /* Right */
+  /* Right: Actions */
   .header-right-col {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    justify-content: flex-end;
+    max-width: 32%;
   }
 
   .header-action-btn {
-    width: 38px;
-    height: 38px;
+    height: 40px;
+    padding: 0 12px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
     color: #cbd5e1;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 7px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .header-action-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.09);
     color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  .action-btn-text {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   .header-action-btn.btn-settings.active,
@@ -1228,6 +1403,13 @@
 
   .header-action-btn.downloaded {
     border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+  }
+
+  .header-action-btn.btn-fullscreen {
+    padding: 0;
+    width: 40px;
+    justify-content: center;
   }
 
   .spin-anim {
@@ -1237,6 +1419,54 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  /* Responsive header */
+  @media (max-width: 900px) {
+    .btn-back-text,
+    .action-btn-text,
+    .header-meta-divider {
+      display: none;
+    }
+
+    .btn-glass-back,
+    .header-action-btn {
+      padding: 0;
+      width: 40px;
+      justify-content: center;
+    }
+
+    .header-center-col {
+      gap: 8px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .reader-glass-header {
+      height: 58px;
+      padding: 0 12px;
+    }
+
+    .header-left-col {
+      max-width: 42%;
+      gap: 8px;
+    }
+
+    .header-work-title {
+      font-size: 12px;
+    }
+
+    .chapter-nav-cluster {
+      display: none;
+    }
+
+    .turbo-status-pill .turbo-text {
+      display: none;
+    }
+
+    .turbo-status-pill {
+      padding: 5px;
+    }
   }
 
   /* --------------------------------------------------------------------------
@@ -1321,12 +1551,13 @@
      -------------------------------------------------------------------------- */
   .reader-conclusion-section {
     width: 100%;
-    max-width: 820px;
-    margin: 32px auto 0 auto;
+    margin: 36px auto 0 auto;
     padding: 0 16px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
+    transition: max-width 0.2s ease;
   }
 
   /* Compact Next Chapter Hero Card */

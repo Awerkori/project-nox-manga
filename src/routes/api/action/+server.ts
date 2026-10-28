@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
 import { member, privileged } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
+import { stripSpoilers } from '$lib/comments';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
@@ -233,7 +234,7 @@ export const POST = async ({ request, locals, platform }: any) => {
             title: chapterId
               ? `${authorName} respondeu ao seu comentário no capítulo${chapterNumber}`
               : `${authorName} respondeu ao seu comentário em ${workTitle}`,
-            body: commentBody,
+            body: stripSpoilers(commentBody),
             deepLink: replyDeepLink,
             context: workTitle,
             priority: 'NORMAL',
