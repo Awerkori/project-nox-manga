@@ -23,6 +23,7 @@
   let scrollPercent = $state(0);
   let isDragging = $state(false);
   let isHovered = $state(false);
+  let isPastPages = $state(false);
   let showTemporaryPill = $state(false);
   let hidePillTimeout: any = null;
   let rafId: number | null = null;
@@ -55,6 +56,21 @@
 
   function calculateProgress() {
     if (typeof window === 'undefined' || position === 'off' || isDragging) return;
+
+    // Check if user has scrolled past reading pages into chapter-end / comments
+    const endSection = document.getElementById('chapter-end');
+    if (endSection) {
+      const endRect = endSection.getBoundingClientRect();
+      isPastPages = endRect.top < window.innerHeight;
+    } else {
+      const stack = document.querySelector('.webtoon-stack') as HTMLElement | null;
+      if (stack) {
+        const stackRect = stack.getBoundingClientRect();
+        isPastPages = stackRect.bottom < window.innerHeight;
+      } else {
+        isPastPages = false;
+      }
+    }
 
     if (mode === 'paginated') {
       scrollPercent = totalPages > 0 ? Math.min(100, Math.max(0, Math.round((currentPage / totalPages) * 100))) : 0;
@@ -165,6 +181,7 @@
     class="nox-progress-system pos-{position}"
     class:is-active-dragging={isDragging}
     class:is-hovered={isHovered}
+    class:is-past-pages={isPastPages}
     role="region"
     aria-label="Progresso de leitura e navegação"
     onmouseenter={() => (isHovered = true)}
@@ -228,6 +245,24 @@
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+
+  .nox-progress-system.is-past-pages {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .nox-progress-system.pos-bottom.is-past-pages {
+    transform: translateX(-50%) translateY(24px) !important;
+  }
+
+  .nox-progress-system.pos-left.is-past-pages {
+    transform: translateY(-50%) translateX(-24px) !important;
+  }
+
+  .nox-progress-system.pos-right.is-past-pages {
+    transform: translateY(-50%) translateX(24px) !important;
   }
 
   /* --------------------------------------------------------------------------

@@ -1,71 +1,73 @@
 export function threadComments<T extends { id: string; parent_id: string | null; created_at: string }>(
   comments: T[]
 ): T[] {
-  const roots = new Set(comments.filter((c) => !c.parent_id).map((c) => c.id));
-  const children = new Map<string, T[]>();
-  for (const comment of comments)
-    if (comment.parent_id && roots.has(comment.parent_id)) {
-      const siblings = children.get(comment.parent_id) || [];
-      siblings.push(comment);
-      children.set(comment.parent_id, siblings);
+  if (!comments?.length) return [];
+  const map = new Map<string, T>();
+  const childrenMap = new Map<string, T[]>();
+  for (const c of comments) {
+    map.set(c.id, c);
+    if (c.parent_id) {
+      const list = childrenMap.get(c.parent_id) || [];
+      list.push(c);
+      childrenMap.set(c.parent_id, list);
     }
-  return comments
-    .filter((c) => !c.parent_id || !roots.has(c.parent_id))
-    .flatMap((c) => [
-      c,
-      ...(children.get(c.id) || []).sort((a, b) => a.created_at.localeCompare(b.created_at))
-    ]);
+  }
+
+  const result: T[] = [];
+  function addBranch(c: T) {
+    result.push(c);
+    const children = childrenMap.get(c.id) || [];
+    children.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const child of children) {
+      addBranch(child);
+    }
+  }
+
+  const roots = comments.filter((c) => !c.parent_id || !map.has(c.parent_id));
+  for (const root of roots) {
+    addBranch(root);
+  }
+  return result;
 }
 
 /**
- * Sanitizes comments ensuring deleted/removed comments with active replies
- * are transformed into safe tombstones without leaking removed content,
- * while standalone removed comments without active replies are completely pruned.
+ * Sanitizes comments:
+ * - Drops all deleted/removed comments (NO tombstones returned).
+ * - Dynamically reparents surviving active replies to their nearest living ancestor
+ *   so surviving replies are never lost or orphaned.
  */
 export function sanitizeComments(rawComments: any[]): any[] {
   if (!Array.isArray(rawComments) || rawComments.length === 0) return [];
 
-  // 1. Identify which comments have active (unremoved) replies
-  const activeParents = new Set<string>();
+  // Map of all comments by id
+  const allMap = new Map<string, any>();
   for (const c of rawComments) {
-    if (!c.removed && !c.deleted && c.parent_id) {
-      activeParents.add(c.parent_id);
-    }
+    allMap.set(c.id, c);
   }
 
-  // 2. Filter & mask tombstones
+  // Find nearest living ancestor for each comment
+  function getLivingAncestorId(c: any): string | null {
+    let curr = c.parent_id;
+    while (curr) {
+      const parent = allMap.get(curr);
+      if (!parent) return null;
+      if (!parent.removed && !parent.deleted && !parent.is_tombstone) {
+        return parent.id;
+      }
+      curr = parent.parent_id || null;
+    }
+    return null;
+  }
+
   const result: any[] = [];
   for (const c of rawComments) {
-    const isRemoved = Boolean(c.removed || c.deleted);
-    if (isRemoved) {
-      // Only keep if it has active replies
-      if (activeParents.has(c.id)) {
-        result.push({
-          id: c.id,
-          user_id: '',
-          body: '[Comentário removido]',
-          created_at: c.created_at,
-          parent_id: c.parent_id || null,
-          removed: true,
-          deleted: true,
-          is_tombstone: true,
-          members: {
-            username: 'removido',
-            display_name: 'Comentário removido',
-            avatar_id: null,
-            avatar_crop: null,
-            name_color: null,
-            avatar_frame_id: null,
-            equipped_comment_banner_id: null,
-            equipped_banner_id: null,
-            equipped_title_id: null
-          },
-          comment_likes: []
-        });
-      }
-    } else {
+    const isRemoved = Boolean(c.removed || c.deleted || c.is_tombstone);
+    if (!isRemoved) {
+      // Re-parent to nearest living ancestor so children of removed comments are preserved
+      const effectiveParentId = getLivingAncestorId(c);
       result.push({
         ...c,
+        parent_id: effectiveParentId,
         is_tombstone: false
       });
     }
@@ -127,7 +129,7 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
 
   // Next, for each raw chunk, extract media: ![alt](url) or standalone image URLs
   const mediaRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+|\/media\/[a-f0-9-]+)\)/gi;
-  const standaloneUrlRegex = /(^|[\s])(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s]*)?|https?:\/\/(?:media\d*\.giphy\.com\/media\/[^\s]+|c\.tenor\.com\/[^\s]+|media\.tenor\.com\/[^\s]+|i\.imgur\.com\/[^\s]+|giphy\.com\/gifs\/[a-zA-Z0-9_-]+))(?=[\s]|$)/gi;
+  const standaloneUrlRegex = /(^|[\s])(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s)]*)?|https?:\/\/(?:images\.unsplash\.com\/[^\s)]+|media\d*\.giphy\.com\/media\/[^\s)]+|c\.tenor\.com\/[^\s)]+|media\.tenor\.com\/[^\s)]+|i\.imgur\.com\/[^\s)]+|giphy\.com\/gifs\/[a-zA-Z0-9_-]+))(?=[\s]|$)/gi;
 
   const intermediateChunks: Array<{
     isMedia: boolean;
@@ -184,12 +186,16 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
         const subStr = t.text || '';
         while ((sMatch = standaloneUrlRegex.exec(subStr)) !== null) {
           const prefix = sMatch[1] || '';
-          let url = sMatch[2];
+          let rawUrl = sMatch[2];
           const start = sMatch.index + prefix.length;
-          const end = start + url.length;
+          const end = start + rawUrl.length;
           if (start > sIdx) {
             intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: subStr.slice(sIdx, start) });
           }
+
+          let url = rawUrl.replace(/[.,!?:;)]+$/, '');
+          const trailing = rawUrl.slice(url.length);
+
           let isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy') || url.toLowerCase().includes('tenor');
 
           const giphyPage = url.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/i);
@@ -199,6 +205,9 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
           }
 
           intermediateChunks.push({ isMedia: true, isSpoiler: t.isSpoiler, mediaUrl: url, mediaAlt: 'Imagem', isGif });
+          if (trailing) {
+            intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: trailing });
+          }
           sIdx = end;
           standaloneUrlRegex.lastIndex = end;
         }

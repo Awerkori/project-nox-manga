@@ -62,6 +62,7 @@
   let showReportModal = $state(false);
   let showChaptersDrawer = $state(false);
   let chapterFilter = $state('');
+  let isCommentsFocused = $state(false);
 
   const visible = new SvelteSet<number>();
   let sending = false;
@@ -576,7 +577,7 @@
   <!-- ======================================================================= -->
   <header
     class="reader-glass-header"
-    class:ui-hidden={!uiVisible && !showSettingsModal && !showChaptersDrawer}
+    class:ui-hidden={(!uiVisible && !showSettingsModal && !showChaptersDrawer) || isCommentsFocused}
     role="banner"
   >
     <!-- Left: Back to Work & Work Meta -->
@@ -999,7 +1000,15 @@
     </div>
 
     <!-- COMMENTS SECTION INTEGRATION -->
-    <div class="reader-comments-wrap">
+    <div
+      class="reader-comments-wrap"
+      onfocusin={() => (isCommentsFocused = true)}
+      onfocusout={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          isCommentsFocused = false;
+        }
+      }}
+    >
       {#if !data.preview}
         <Comments
           comments={data.comments}
