@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { processPendingEmailOutbox, reconcileUncertainEmailOutbox } from '$lib/server/notifications';
+import { dispatchStaleTaskReminders } from '$lib/server/pipeline-reminders';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -42,11 +43,12 @@ export const GET: RequestHandler = async ({ request, url, locals, platform }) =>
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
   const id = url.searchParams.get('id') || undefined;
 
-  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon] = await Promise.all([
+  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon, staleReminders] = await Promise.all([
     processPendingEmailOutbox(limit, id),
     processPendingEmailOutbox(limit, id, platform?.env),
     reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
+    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
+    dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] }))
   ]);
   const outboxResult = {
     processed: legacyOutbox.processed + scanOutbox.processed,
@@ -64,7 +66,8 @@ export const GET: RequestHandler = async ({ request, url, locals, platform }) =>
     ok: true,
     timestamp: new Date().toISOString(),
     ...outboxResult,
-    reconciliation: reconResult
+    reconciliation: reconResult,
+    staleReminders
   });
 };
 
@@ -74,11 +77,12 @@ export const POST: RequestHandler = async ({ request, url, locals, platform }) =
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
   const id = url.searchParams.get('id') || undefined;
   
-  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon] = await Promise.all([
+  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon, staleReminders] = await Promise.all([
     processPendingEmailOutbox(limit, id),
     processPendingEmailOutbox(limit, id, platform?.env),
     reconcileUncertainEmailOutbox(10).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }))
+    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
+    dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] }))
   ]);
   const outboxResult = {
     processed: legacyOutbox.processed + scanOutbox.processed,
@@ -96,6 +100,7 @@ export const POST: RequestHandler = async ({ request, url, locals, platform }) =
     ok: true,
     timestamp: new Date().toISOString(),
     ...outboxResult,
-    reconciliation: reconResult
+    reconciliation: reconResult,
+    staleReminders
   });
 };

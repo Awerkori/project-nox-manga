@@ -47,7 +47,13 @@ describe('transactional email generator (generateEmailHtml)', () => {
     'NEW_CHAPTER',
     'LEVEL_UP',
     'ACHIEVEMENT',
-    'SYSTEM'
+    'SYSTEM',
+    'TASK_REMINDER_STALE',
+    'STAGE_UNCLAIMED_REMINDER',
+    'SCAN_INVITE',
+    'SCAN_ROLE_UPDATED',
+    'SECURITY_PASSWORD_CHANGED',
+    'SECURITY_EMAIL_CHANGED'
   ];
 
   for (const type of allTypes) {

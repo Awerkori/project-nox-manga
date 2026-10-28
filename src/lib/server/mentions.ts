@@ -303,14 +303,20 @@ export async function dispatchMentions({
   const notifiedUserIds: string[] = [];
 
   for (const [uid, target] of targetUserMap.entries()) {
+    // Não notificar o autor quando ele menciona a si próprio (@seunome)
+    if (uid === authorId) {
+      continue;
+    }
+
     const notifType = target.mentionType === 'ROLE' ? 'ROLE_MENTION' : 'MENTION';
     const notifTitle = target.mentionType === 'ROLE'
       ? `Você foi mencionado pelo cargo @${target.username}`
       : (title || (contextType === 'COMMENT' ? `${authorName} mencionou você em um comentário` : contextType === 'MURAL' ? `${authorName} mencionou você no Mural` : `${authorName} mencionou você no Chat`));
 
-    // Dedupe key estrita por usuário e mensagem (ou URL) para garantir EXATAMENTE 1 notificação e 1 email
+    // Dedupe key estrita por usuário e mensagem (ou URL) para garantir EXATAMENTE 1 notificação
     const dedupeKey = `mention:${uid}:${messageId || deepLink}`;
 
+    // Menções em comentários, chat e mural geram notificação IN-APP apenas, sem disparar e-mail transacional
     const res = await createNotification({
       recipientUserId: uid,
       actorUserId: authorId,
@@ -319,8 +325,9 @@ export async function dispatchMentions({
       body: snippet,
       deepLink,
       scanId,
-      priority: 'URGENT',
+      priority: 'NORMAL',
       dedupeKey,
+      skipEmail: true,
       platform
     });
 

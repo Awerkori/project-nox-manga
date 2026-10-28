@@ -15,6 +15,12 @@ export type NotificationType =
   | 'ACHIEVEMENT'
   | 'TASK_ASSIGNED'
   | 'STAGE_READY'
+  | 'TASK_REMINDER_STALE'
+  | 'STAGE_UNCLAIMED_REMINDER'
+  | 'SECURITY_PASSWORD_CHANGED'
+  | 'SECURITY_EMAIL_CHANGED'
+  | 'SCAN_INVITE'
+  | 'SCAN_ROLE_UPDATED'
   | 'QC_ISSUE'
   | 'REWORK'
   | 'APPLICATION'
@@ -128,8 +134,9 @@ export async function createNotification(
 
   const platform = paramPlatform || platformParam;
 
-  // 1. Auto-notificação permitida para menções (@usuário e @cargo), além de eventos de sistema
-  const isSelfAllowed = type === 'MENTION' || type === 'ROLE_MENTION' || type === 'LEVEL_UP' || type === 'ACHIEVEMENT';
+  // 1. Auto-notificação permitida estritamente para eventos de progressão/sistema do próprio usuário.
+  // Menções a si próprio (@seunome) ou ações originadas pelo próprio usuário NUNCA notificam o autor.
+  const isSelfAllowed = type === 'LEVEL_UP' || type === 'ACHIEVEMENT';
   if (!isSelfAllowed && actorUserId && actorUserId === recipientUserId) {
     return { notificationId: null, emailQueued: false, skippedSelf: true };
   }
@@ -236,10 +243,11 @@ export async function createNotification(
         type === 'TASK_ASSIGNED' ||
         type === 'QC_ISSUE' ||
         type === 'REWORK' ||
-        type === 'MENTION' ||
-        type === 'ROLE_MENTION' ||
         type === 'TICKET_SCAN_APPLICATION' ||
-        type === 'TICKET_MODERATION'
+        type === 'TICKET_MODERATION' ||
+        type === 'SECURITY_PASSWORD_CHANGED' ||
+        type === 'SECURITY_EMAIL_CHANGED' ||
+        type === 'SCAN_INVITE'
       ) ? 'HIGH' : 'NORMAL';
 
       const emailIdempotencyKey = `email:${notificationId}`;

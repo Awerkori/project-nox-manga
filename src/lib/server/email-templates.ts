@@ -118,6 +118,46 @@ export function generateEmailHtml({
       headerNotice = 'Etapa liberada para reivindicação no pipeline';
       break;
 
+    case 'TASK_REMINDER_STALE':
+      badgeColor = '#f59e0b'; // Amber
+      badgeBg = 'rgba(245, 158, 11, 0.14)';
+      badgeBorder = 'rgba(245, 158, 11, 0.4)';
+      badgeText = 'LEMBRETE DE TAREFA';
+      defaultSubject = `[Scan] Lembrete: Tarefa em Andamento — ${context ? context + ' — ' : ''}${title}`;
+      defaultCtaLabel = 'Continuar Trabalho no Painel';
+      headerNotice = 'Acompanhamento de produção da sua equipe de scan';
+      break;
+
+    case 'STAGE_UNCLAIMED_REMINDER':
+      badgeColor = '#f59e0b'; // Amber
+      badgeBg = 'rgba(245, 158, 11, 0.14)';
+      badgeBorder = 'rgba(245, 158, 11, 0.4)';
+      badgeText = 'ETAPA AGUARDANDO RESPONSÁVEL';
+      defaultSubject = `[Scan] Etapa Aguardando Responsável: ${context ? context + ' — ' : ''}${title}`;
+      defaultCtaLabel = 'Assumir Etapa no Pipeline';
+      headerNotice = 'Capítulo disponível aguardando início de produção na scan';
+      break;
+
+    case 'SCAN_INVITE':
+      badgeColor = '#dfc28d'; // Nox Gold
+      badgeBg = 'rgba(223, 194, 141, 0.14)';
+      badgeBorder = 'rgba(223, 194, 141, 0.45)';
+      badgeText = 'CONVITE PARA EQUIPE';
+      defaultSubject = `[Scan] Convite para a Equipe: ${context || title}`;
+      defaultCtaLabel = 'Ver Convite no Painel da Scan';
+      headerNotice = 'Convite oficial para integrar a equipe de uma Scan';
+      break;
+
+    case 'SCAN_ROLE_UPDATED':
+      badgeColor = '#8b5cf6'; // Violet
+      badgeBg = 'rgba(139, 92, 246, 0.14)';
+      badgeBorder = 'rgba(139, 92, 246, 0.4)';
+      badgeText = 'CARGOS ATUALIZADOS';
+      defaultSubject = `[Scan] Cargos Atualizados: ${context || title}`;
+      defaultCtaLabel = 'Acessar Painel da Scan';
+      headerNotice = 'Atualização de funções e permissões editoriais na equipe';
+      break;
+
     case 'QC_ISSUE':
       badgeColor = '#f43f5e'; // Rose / QC Alert
       badgeBg = 'rgba(244, 63, 94, 0.14)';
@@ -304,6 +344,29 @@ export function generateEmailHtml({
       defaultSubject = 'Você recebeu um convite especial para o Project Nox';
       defaultCtaLabel = 'Aceitar Convite e Acessar &rarr;';
       headerNotice = 'Acesso exclusivo à comunidade Project Nox';
+      break;
+
+    // -------------------------------------------------------------------------
+    // 6. Alertas Críticos de Segurança da Conta
+    // -------------------------------------------------------------------------
+    case 'SECURITY_PASSWORD_CHANGED':
+      badgeColor = '#ef4444'; // Red Security Alert
+      badgeBg = 'rgba(239, 68, 68, 0.14)';
+      badgeBorder = 'rgba(239, 68, 68, 0.4)';
+      badgeText = 'ALERTA DE SEGURANÇA';
+      defaultSubject = '[Project Nox] Alerta de Segurança: Senha Alterada com Sucesso';
+      defaultCtaLabel = 'Verificar Segurança da Minha Conta &rarr;';
+      headerNotice = 'Alteração de credenciais críticas na sua conta';
+      break;
+
+    case 'SECURITY_EMAIL_CHANGED':
+      badgeColor = '#ef4444'; // Red Security Alert
+      badgeBg = 'rgba(239, 68, 68, 0.14)';
+      badgeBorder = 'rgba(239, 68, 68, 0.4)';
+      badgeText = 'ALERTA DE SEGURANÇA';
+      defaultSubject = '[Project Nox] Alerta de Segurança: Endereço de E-mail Alterado';
+      defaultCtaLabel = 'Verificar Segurança da Minha Conta &rarr;';
+      headerNotice = 'Alteração do endereço de e-mail principal da sua conta';
       break;
 
     default:
