@@ -9,9 +9,13 @@
     Zap,
     RotateCcw,
     Layers,
-    AlignJustify
+    AlignJustify,
+    ArrowLeftRight,
+    Gauge,
+    Sparkles,
+    Check
   } from '@lucide/svelte';
-  import type { ReaderSettings } from '$lib/reader-settings';
+  import type { ReaderSettings, ProgressPosition, PreloadMode, ReaderTheme, PageFitMode, PagedDirection } from '$lib/reader-settings';
   import { DEFAULT_READER_SETTINGS } from '$lib/reader-settings';
 
   let {
@@ -31,40 +35,10 @@
   } = $props();
 
   let local = $state<ReaderSettings>({ ...settings });
+  let activeTab = $state<'appearance' | 'navigation' | 'progress' | 'performance'>('appearance');
 
-  function setMode(m: 'webtoon' | 'paginated') {
-    local.mode = m;
-    onUpdate({ ...local });
-  }
-
-  function setFit(fit: 'container' | 'full' | 'custom', widthValue?: number) {
-    local.fit = fit;
-    if (widthValue) local.width = widthValue;
-    onUpdate({ ...local });
-  }
-
-  function setTheme(t: 'dark' | 'oled' | 'sepia') {
-    local.theme = t;
-    onUpdate({ ...local });
-  }
-
-  function toggleProgressBar() {
-    local.progressBar = !local.progressBar;
-    onUpdate({ ...local });
-  }
-
-  function setProgressPosition(pos: 'bottom' | 'top') {
-    local.progressPosition = pos;
-    onUpdate({ ...local });
-  }
-
-  function setProgressDisplay(disp: 'percent' | 'pages' | 'both') {
-    local.progressDisplay = disp;
-    onUpdate({ ...local });
-  }
-
-  function toggleGap() {
-    local.gap = !local.gap;
+  function update(partial: Partial<ReaderSettings>) {
+    local = { ...local, ...partial };
     onUpdate({ ...local });
   }
 
@@ -72,748 +46,1018 @@
     local = { ...DEFAULT_READER_SETTINGS };
     onUpdate({ ...local });
   }
+
+  const WIDTH_PRESETS = [
+    { label: 'Compacto', width: 680, fit: 'custom' as PageFitMode },
+    { label: 'Padrão', width: 850, fit: 'custom' as PageFitMode },
+    { label: 'Largo', width: 1100, fit: 'custom' as PageFitMode },
+    { label: '100%', width: 1400, fit: 'full' as PageFitMode }
+  ];
+
+  const THEMES: { id: ReaderTheme; label: string; bg: string; border: string; desc: string }[] = [
+    { id: 'dark', label: 'Nox Dark', bg: '#06070c', border: '#7c3aed', desc: 'Escuro equilibrado' },
+    { id: 'oled', label: 'OLED Black', bg: '#000000', border: '#3b82f6', desc: 'Preto puro econômico' },
+    { id: 'sepia', label: 'Sépia Suave', bg: '#1c1917', border: '#f59e0b', desc: 'Conforto visual térmico' }
+  ];
+
+  const PROGRESS_POSITIONS: { id: ProgressPosition; label: string; desc: string }[] = [
+    { id: 'bottom', label: 'Inferior', desc: 'Barra horizontal na base da tela' },
+    { id: 'left', label: 'Esquerda', desc: 'Barra vertical na lateral esquerda' },
+    { id: 'right', label: 'Direita', desc: 'Barra vertical na lateral direita' },
+    { id: 'off', label: 'Desativada', desc: 'Sem barra de progresso na tela' }
+  ];
 </script>
 
+<!-- Backdrop overlay -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   class="settings-backdrop"
   onclick={onClose}
-  onkeydown={(e) => { if (e.key === 'Escape') onClose(); }}
   role="button"
   tabindex="0"
-  aria-label="Fechar ajustes"
+  aria-label="Fechar ajustes de leitura"
 ></div>
 
-<aside class="settings-sheet" role="dialog" aria-modal="true" aria-label="Ajustes de Leitura">
-  <div class="sheet-header">
+<!-- Settings Sliding Sheet / Modal -->
+<aside class="settings-sheet" role="dialog" aria-modal="true" aria-label="Ajustes de Leitura do Project Nox">
+  <!-- Sheet Header -->
+  <header class="sheet-header">
     <div class="sheet-title-row">
-      <Sliders size={18} class="text-purple-400" />
-      <h2>Ajustes de Leitura</h2>
+      <div class="sheet-title-badge">
+        <Sliders size={18} class="text-purple-400" />
+      </div>
+      <div>
+        <h2 class="sheet-title">Ajustes do Leitor</h2>
+        <p class="sheet-subtitle">Personalize a sua experiência de leitura</p>
+      </div>
     </div>
     <div class="sheet-header-actions">
       <button
         type="button"
         class="btn-reset-defaults"
         onclick={handleReset}
-        title="Restaurar padrões"
-        aria-label="Restaurar configurações padrão"
+        title="Restaurar padrões de fábrica"
+        aria-label="Restaurar padrões"
       >
-        <RotateCcw size={14} />
-        <span>Padrões</span>
+        <RotateCcw size={13} />
+        <span>Padrão</span>
       </button>
       <button
         type="button"
         class="btn-close-sheet"
         onclick={onClose}
-        aria-label="Fechar ajustes de leitura"
+        aria-label="Fechar painel de ajustes"
       >
         <X size={18} />
       </button>
     </div>
-  </div>
+  </header>
 
+  <!-- Category Navigation Tabs -->
+  <nav class="settings-tabs-nav" aria-label="Categorias de ajustes">
+    <button
+      type="button"
+      class="nav-tab-btn"
+      class:active={activeTab === 'appearance'}
+      onclick={() => (activeTab = 'appearance')}
+    >
+      <Palette size={14} />
+      <span>Aparência</span>
+    </button>
+    <button
+      type="button"
+      class="nav-tab-btn"
+      class:active={activeTab === 'navigation'}
+      onclick={() => (activeTab = 'navigation')}
+    >
+      <AlignJustify size={14} />
+      <span>Navegação</span>
+    </button>
+    <button
+      type="button"
+      class="nav-tab-btn"
+      class:active={activeTab === 'progress'}
+      onclick={() => (activeTab = 'progress')}
+    >
+      <Gauge size={14} />
+      <span>Progresso</span>
+    </button>
+    <button
+      type="button"
+      class="nav-tab-btn"
+      class:active={activeTab === 'performance'}
+      onclick={() => (activeTab = 'performance')}
+    >
+      <Zap size={14} />
+      <span>Turbo / Cache</span>
+    </button>
+  </nav>
+
+  <!-- Sheet Scrollable Body -->
   <div class="sheet-scroll-body">
-    <!-- 1. Modo de Leitura -->
-    <div class="settings-group">
-      <div class="group-label">
-        <AlignJustify size={14} />
-        <span>Modo de Leitura</span>
-      </div>
-      <div class="segmented-control">
-        <button
-          type="button"
-          class="segment-btn"
-          class:active={local.mode === 'webtoon'}
-          onclick={() => setMode('webtoon')}
-        >
-          <span class="segment-title">Webtoon</span>
-          <span class="segment-desc">Rolagem Contínua</span>
-        </button>
-        <button
-          type="button"
-          class="segment-btn"
-          class:active={local.mode === 'paginated'}
-          onclick={() => setMode('paginated')}
-        >
-          <span class="segment-title">Por Página</span>
-          <span class="segment-desc">Toque / Teclado</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 2. Barra de Progresso (Mihon) -->
-    <div class="settings-group highlight-box">
-      <div class="group-header-with-toggle">
-        <div class="group-label">
-          <Zap size={14} class="text-amber-400" />
-          <span>Barra de Progresso (Estilo Mihon)</span>
-        </div>
-        <button
-          type="button"
-          class="toggle-switch"
-          class:active={local.progressBar}
-          onclick={toggleProgressBar}
-          role="switch"
-          aria-checked={local.progressBar}
-          aria-label="Ativar barra de progresso"
-        >
-          <span class="toggle-dot"></span>
-        </button>
-      </div>
-
-      {#if local.progressBar}
-        <div class="sub-settings-row">
-          <div class="sub-setting-col">
-            <span class="sub-label">Posição:</span>
-            <div class="mini-segmented">
+    <!-- ==================================================================== -->
+    <!-- TAB 1: APARÊNCIA                                                     -->
+    <!-- ==================================================================== -->
+    {#if activeTab === 'appearance'}
+      <div class="tab-pane">
+        <!-- Tema de Fundo -->
+        <div class="settings-section">
+          <label class="section-heading">Tema de Fundo</label>
+          <div class="theme-cards-grid">
+            {#each THEMES as theme}
               <button
                 type="button"
-                class="mini-btn"
-                class:active={local.progressPosition === 'bottom'}
-                onclick={() => setProgressPosition('bottom')}
+                class="theme-card-option"
+                class:active={local.theme === theme.id}
+                onclick={() => update({ theme: theme.id })}
+                style="background-color: {theme.bg};"
               >
-                Rodapé
+                <div class="theme-card-preview" style="border-color: {theme.border};">
+                  {#if local.theme === theme.id}
+                    <Check size={14} class="theme-check-icon" />
+                  {/if}
+                </div>
+                <div class="theme-card-info">
+                  <span class="theme-name">{theme.label}</span>
+                  <span class="theme-desc">{theme.desc}</span>
+                </div>
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Largura das Páginas -->
+        <div class="settings-section">
+          <div class="section-heading-row">
+            <label class="section-heading">Largura Máxima da Imagem</label>
+            <span class="value-chip">{local.fit === 'full' ? '100% (Tela Cheia)' : `${local.width}px`}</span>
+          </div>
+
+          <!-- Presets -->
+          <div class="preset-pill-row">
+            {#each WIDTH_PRESETS as p}
+              <button
+                type="button"
+                class="preset-pill-btn"
+                class:active={local.fit === p.fit && (p.fit === 'full' || local.width === p.width)}
+                onclick={() => update({ fit: p.fit, width: p.width })}
+              >
+                {p.label}
+              </button>
+            {/each}
+          </div>
+
+          <!-- Custom Slider (Active when not 100%) -->
+          {#if local.fit !== 'full'}
+            <div class="slider-control-box">
+              <input
+                type="range"
+                min="400"
+                max="1400"
+                step="25"
+                value={local.width}
+                oninput={(e) => update({ width: Number((e.target as HTMLInputElement).value), fit: 'custom' })}
+                class="nox-slider"
+                aria-label="Ajustar largura máxima"
+              />
+              <div class="slider-ticks-row">
+                <span>400px</span>
+                <span>850px</span>
+                <span>1400px</span>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Espaçamento Entre Páginas (Webtoon Gap) -->
+        <div class="settings-section">
+          <label class="toggle-card">
+            <div class="toggle-info">
+              <span class="toggle-title">Espaçamento Entre Páginas</span>
+              <span class="toggle-desc">Insere uma fenda suave de 12px entre as páginas no modo cascata</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={local.gap}
+              onchange={(e) => update({ gap: (e.target as HTMLInputElement).checked })}
+              class="nox-switch"
+            />
+          </label>
+        </div>
+      </div>
+    {/if}
+
+    <!-- ==================================================================== -->
+    <!-- TAB 2: NAVEGAÇÃO                                                     -->
+    <!-- ==================================================================== -->
+    {#if activeTab === 'navigation'}
+      <div class="tab-pane">
+        <!-- Modo de Leitura -->
+        <div class="settings-section">
+          <label class="section-heading">Modo de Leitura</label>
+          <div class="segmented-control-large">
+            <button
+              type="button"
+              class="segment-choice"
+              class:active={local.mode === 'webtoon'}
+              onclick={() => update({ mode: 'webtoon' })}
+            >
+              <AlignJustify size={18} />
+              <div>
+                <strong>Cascata Webtoon</strong>
+                <small>Rolagem contínua vertical</small>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="segment-choice"
+              class:active={local.mode === 'paginated'}
+              onclick={() => update({ mode: 'paginated' })}
+            >
+              <BookOpen size={18} />
+              <div>
+                <strong>Modo Paginado</strong>
+                <small>Página a página / Toque</small>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Se estiver em Paginado: Direção de Leitura -->
+        {#if local.mode === 'paginated'}
+          <div class="settings-section">
+            <label class="section-heading">Direção de Leitura Paginada</label>
+            <div class="segmented-control-pills">
+              <button
+                type="button"
+                class="seg-pill"
+                class:active={local.pagedDirection === 'ltr'}
+                onclick={() => update({ pagedDirection: 'ltr' })}
+              >
+                Esquerda ➔ Direita (Ocidental)
               </button>
               <button
                 type="button"
-                class="mini-btn"
-                class:active={local.progressPosition === 'top'}
-                onclick={() => setProgressPosition('top')}
+                class="seg-pill"
+                class:active={local.pagedDirection === 'rtl'}
+                onclick={() => update({ pagedDirection: 'rtl' })}
               >
-                Topo
+                Direita ➔ Esquerda (Mangá)
               </button>
             </div>
           </div>
+        {/if}
 
-          <div class="sub-setting-col">
-            <span class="sub-label">Exibição:</span>
-            <div class="mini-segmented">
+        <!-- Pular para Página -->
+        <div class="settings-section">
+          <div class="section-heading-row">
+            <label class="section-heading">Salto Rápido de Página</label>
+            <span class="value-chip">{currentPage} de {totalPages}</span>
+          </div>
+          <div class="page-jump-row">
+            <input
+              type="range"
+              min="1"
+              max={totalPages}
+              step="1"
+              value={currentPage}
+              oninput={(e) => onJumpPage(Number((e.target as HTMLInputElement).value))}
+              class="nox-slider"
+              aria-label="Pular para página específica"
+            />
+          </div>
+        </div>
+
+        <!-- Auto-ocultação dos Controles -->
+        <div class="settings-section">
+          <label class="toggle-card">
+            <div class="toggle-info">
+              <span class="toggle-title">Auto-ocultar Controles</span>
+              <span class="toggle-desc">Oculta cabeçalho e barras durante a rolagem para leitura imersiva. Toque na tela para reexibir.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={local.autoHideControls}
+              onchange={(e) => update({ autoHideControls: (e.target as HTMLInputElement).checked })}
+              class="nox-switch"
+            />
+          </label>
+        </div>
+      </div>
+    {/if}
+
+    <!-- ==================================================================== -->
+    <!-- TAB 3: BARRA DE PROGRESSO                                            -->
+    <!-- ==================================================================== -->
+    {#if activeTab === 'progress'}
+      <div class="tab-pane">
+        <!-- Posição da Barra -->
+        <div class="settings-section">
+          <label class="section-heading">Posição da Barra de Progresso</label>
+          <div class="position-cards-grid">
+            {#each PROGRESS_POSITIONS as pos}
               <button
                 type="button"
-                class="mini-btn"
+                class="position-card-btn"
+                class:active={local.progressPosition === pos.id}
+                onclick={() => update({ progressPosition: pos.id })}
+              >
+                <div class="pos-card-header">
+                  <span class="pos-card-title">{pos.label}</span>
+                  {#if local.progressPosition === pos.id}
+                    <Check size={14} class="pos-check-icon" />
+                  {/if}
+                </div>
+                <span class="pos-card-desc">{pos.desc}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Formato do Indicador Flutuante -->
+        {#if local.progressPosition !== 'off'}
+          <div class="settings-section">
+            <label class="section-heading">Indicador Flutuante</label>
+            <div class="segmented-control-pills">
+              <button
+                type="button"
+                class="seg-pill"
                 class:active={local.progressDisplay === 'percent'}
-                onclick={() => setProgressDisplay('percent')}
+                onclick={() => update({ progressDisplay: 'percent' })}
               >
-                %
+                Porcentagem (45%)
               </button>
               <button
                 type="button"
-                class="mini-btn"
+                class="seg-pill"
                 class:active={local.progressDisplay === 'pages'}
-                onclick={() => setProgressDisplay('pages')}
+                onclick={() => update({ progressDisplay: 'pages' })}
               >
-                Páginas
+                Páginas (12 / 28)
               </button>
               <button
                 type="button"
-                class="mini-btn"
+                class="seg-pill"
                 class:active={local.progressDisplay === 'both'}
-                onclick={() => setProgressDisplay('both')}
+                onclick={() => update({ progressDisplay: 'both' })}
               >
                 Ambos
               </button>
+              <button
+                type="button"
+                class="seg-pill"
+                class:active={local.progressDisplay === 'none'}
+                onclick={() => update({ progressDisplay: 'none' })}
+              >
+                Ocultar Pill
+              </button>
             </div>
           </div>
-        </div>
-      {/if}
-    </div>
+        {/if}
+      </div>
+    {/if}
 
-    <!-- 3. Largura das Páginas -->
-    <div class="settings-group">
-      <div class="group-label">
-        <Monitor size={14} />
-        <span>Largura das Páginas</span>
-      </div>
-      <div class="preset-pills-row">
-        <button
-          type="button"
-          class="pill-btn"
-          class:active={local.width === 650 && local.fit === 'custom'}
-          onclick={() => setFit('custom', 650)}
-        >
-          650px
-        </button>
-        <button
-          type="button"
-          class="pill-btn"
-          class:active={local.width === 850 && local.fit === 'custom'}
-          onclick={() => setFit('custom', 850)}
-        >
-          850px
-        </button>
-        <button
-          type="button"
-          class="pill-btn"
-          class:active={local.width === 1050 && local.fit === 'custom'}
-          onclick={() => setFit('custom', 1050)}
-        >
-          1050px
-        </button>
-        <button
-          type="button"
-          class="pill-btn"
-          class:active={local.fit === 'full'}
-          onclick={() => setFit('full', 1400)}
-        >
-          100% Tela
-        </button>
-      </div>
+    <!-- ==================================================================== -->
+    <!-- TAB 4: TURBO / DESEMPENHO                                            -->
+    <!-- ==================================================================== -->
+    {#if activeTab === 'performance'}
+      <div class="tab-pane">
+        <!-- Modos de Pré-carregamento -->
+        <div class="settings-section">
+          <label class="section-heading">Estratégia de Carregamento de Páginas</label>
 
-      <div class="slider-box">
-        <div class="slider-header">
-          <span>Ajuste fino:</span>
-          <strong>{local.fit === 'full' ? '100% da tela' : `${local.width}px`}</strong>
-        </div>
-        <input
-          type="range"
-          min="400"
-          max="1400"
-          step="25"
-          value={local.width}
-          disabled={local.fit === 'full'}
-          oninput={(e) => {
-            local.fit = 'custom';
-            local.width = Number((e.target as HTMLInputElement).value);
-            onUpdate({ ...local });
-          }}
-          class="range-slider"
-          aria-label="Largura personalizada das páginas"
-        />
-      </div>
-    </div>
+          <div class="preload-mode-cards">
+            <!-- Modo Turbo / Inteligente (Padrão) -->
+            <button
+              type="button"
+              class="preload-mode-card"
+              class:active={local.preloadMode === 'turbo'}
+              onclick={() => update({ preloadMode: 'turbo' })}
+            >
+              <div class="preload-card-top">
+                <div class="preload-title-group">
+                  <Zap size={18} class="text-amber-400" />
+                  <div>
+                    <strong>⚡ Modo Turbo / Inteligente (Padrão Recomendado)</strong>
+                    <span class="badge-recommended">RECOMENDADO</span>
+                  </div>
+                </div>
+                {#if local.preloadMode === 'turbo'}
+                  <Check size={16} class="text-purple-400" />
+                {/if}
+              </div>
+              <p class="preload-desc">
+                Baixa antecipadamente todas as páginas do capítulo em segundo plano com concorrência adaptativa. Garante rolagem 100% fluida sem paradas para carregar.
+              </p>
+            </button>
 
-    <!-- 4. Tema de Fundo -->
-    <div class="settings-group">
-      <div class="group-label">
-        <Palette size={14} />
-        <span>Cor de Fundo do Leitor</span>
-      </div>
-      <div class="theme-options-row">
-        <button
-          type="button"
-          class="theme-card"
-          class:active={local.theme === 'dark'}
-          onclick={() => setTheme('dark')}
-        >
-          <span class="theme-preview dark-bg"></span>
-          <span class="theme-name">Nox Dark</span>
-        </button>
-        <button
-          type="button"
-          class="theme-card"
-          class:active={local.theme === 'oled'}
-          onclick={() => setTheme('oled')}
-        >
-          <span class="theme-preview oled-bg"></span>
-          <span class="theme-name">OLED Black</span>
-        </button>
-        <button
-          type="button"
-          class="theme-card"
-          class:active={local.theme === 'sepia'}
-          onclick={() => setTheme('sepia')}
-        >
-          <span class="theme-preview sepia-bg"></span>
-          <span class="theme-name">Sépia Noturno</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 5. Espaçamento & Pré-carregamento -->
-    <div class="settings-group">
-      <div class="checkbox-setting-row">
-        <label class="custom-checkbox-label">
-          <input
-            type="checkbox"
-            checked={local.gap}
-            onchange={toggleGap}
-            class="custom-checkbox"
-          />
-          <div class="label-info">
-            <span class="checkbox-title">Espaçamento entre páginas</span>
-            <span class="checkbox-desc">Adiciona intervalo de 20px entre quadros</span>
+            <!-- Modo Econômico -->
+            <button
+              type="button"
+              class="preload-mode-card"
+              class:active={local.preloadMode === 'eco'}
+              onclick={() => update({ preloadMode: 'eco' })}
+            >
+              <div class="preload-card-top">
+                <div class="preload-title-group">
+                  <Layers size={18} class="text-emerald-400" />
+                  <div>
+                    <strong>🌱 Modo Econômico</strong>
+                    <span class="badge-eco">DADOS MÓVEIS</span>
+                  </div>
+                </div>
+                {#if local.preloadMode === 'eco'}
+                  <Check size={16} class="text-purple-400" />
+                {/if}
+              </div>
+              <p class="preload-desc">
+                Carrega apenas as próximas 2 páginas à frente. Economiza plano de dados celulares e consome menos memória RAM em celulares modestos.
+              </p>
+            </button>
           </div>
-        </label>
-      </div>
-
-      <div class="field-select-row">
-        <div class="label-info">
-          <span class="field-title">Carregamento Inteligente</span>
-          <span class="field-desc">Controle de consumo de dados e cache</span>
         </div>
-        <select
-          value={local.preload}
-          onchange={(e) => {
-            local.preload = (e.currentTarget.value as 'full' | 'off');
-            onUpdate({ ...local });
-          }}
-          class="select-control"
-          aria-label="Modo de pré-carregamento"
-        >
-          <option value="full">Capítulo Completo (Rápido)</option>
-          <option value="off">Econômico (Menos dados/RAM)</option>
-        </select>
-      </div>
-    </div>
 
-    <!-- 6. Pular para página -->
-    {#if totalPages > 1}
-      <div class="settings-group">
-        <div class="field-select-row">
-          <div class="label-info">
-            <span class="field-title">Ir para Página</span>
-            <span class="field-desc">Página atual: {currentPage} de {totalPages}</span>
-          </div>
-          <select
-            value={currentPage}
-            onchange={(e) => onJumpPage(Number(e.currentTarget.value))}
-            class="select-control"
-            aria-label="Pular para página específica"
-          >
-            {#each Array.from({ length: totalPages }, (_, i) => i + 1) as p}
-              <option value={p}>Página {p}</option>
-            {/each}
-          </select>
+        <div class="settings-tip-box">
+          <Sparkles size={16} class="text-purple-400 flex-shrink-0" />
+          <p>
+            O Project Nox memoriza suas preferências de leitura neste dispositivo. Se você salvou este capítulo para leitura offline, o carregamento é instantâneo via IndexedDB.
+          </p>
         </div>
       </div>
     {/if}
   </div>
-
-  <div class="sheet-footer">
-    <button type="button" class="btn-done" onclick={onClose}>
-      Concluir Ajustes
-    </button>
-  </div>
 </aside>
 
 <style>
+  /* Backdrop */
   .settings-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    z-index: 100;
-    cursor: pointer;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 90;
+    transition: opacity 0.25s ease;
   }
 
+  /* Sheet Container */
   .settings-sheet {
     position: fixed;
     top: 0;
     right: 0;
     bottom: 0;
-    width: 100%;
-    max-width: 440px;
-    background: #090b14;
-    border-left: 1px solid rgba(181, 154, 245, 0.2);
-    box-shadow: -10px 0 35px rgba(0, 0, 0, 0.85);
-    z-index: 101;
+    width: min(480px, 100vw);
+    background: #090a10;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.8);
+    z-index: 95;
     display: flex;
     flex-direction: column;
-    animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    color: #e2e8f0;
+    animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
   @keyframes slideInRight {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
   }
 
+  /* Header */
   .sheet-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 18px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(11, 13, 23, 0.95);
+    background: rgba(14, 16, 26, 0.6);
   }
 
   .sheet-title-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
 
-  .sheet-title-row h2 {
+  .sheet-title-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sheet-title {
     font-size: 16px;
-    font-weight: 750;
-    color: #f2f0f7;
+    font-weight: 700;
+    color: #ffffff;
     margin: 0;
+    line-height: 1.2;
+  }
+
+  .sheet-subtitle {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 2px 0 0 0;
   }
 
   .sheet-header-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .btn-reset-defaults {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: transparent;
-    border: none;
-    color: #9d9aa9;
-    font-size: 12px;
-    cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 6px;
-    transition: color 0.2s, background 0.2s;
-  }
-
-  .btn-reset-defaults:hover {
-    color: #c084fc;
-    background: rgba(192, 132, 252, 0.1);
-  }
-
-  .btn-close-sheet {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #9d9aa9;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-  }
-
-  .btn-close-sheet:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-  }
-
-  .sheet-scroll-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .settings-group {
-    background: rgba(16, 18, 30, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .settings-group.highlight-box {
-    background: rgba(26, 18, 48, 0.5);
-    border-color: rgba(168, 85, 247, 0.25);
-  }
-
-  .group-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #c4c1d3;
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .group-header-with-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .segmented-control {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    background: rgba(0, 0, 0, 0.35);
-    padding: 4px;
-    border-radius: 10px;
-  }
-
-  .segment-btn {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
-  .segment-btn.active {
-    background: rgba(168, 85, 247, 0.2);
-    border-color: rgba(192, 132, 252, 0.5);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  .btn-reset-defaults:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
   }
 
-  .segment-title {
-    color: #f2f0f7;
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .segment-desc {
-    color: #9d9aa9;
-    font-size: 11px;
-    margin-top: 2px;
-  }
-
-  .segment-btn.active .segment-title {
-    color: #e9d5ff;
-  }
-
-  .toggle-switch {
-    width: 44px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 999px;
-    border: none;
-    position: relative;
+  .btn-close-sheet {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    transition: background 0.25s ease;
+    transition: all 0.2s ease;
   }
 
-  .toggle-switch.active {
-    background: #7c3aed;
+  .btn-close-sheet:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
   }
 
-  .toggle-dot {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Category Navigation Tabs */
+  .settings-tabs-nav {
+    display: flex;
+    background: rgba(14, 16, 26, 0.85);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px 12px;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .toggle-switch.active .toggle-dot {
-    transform: translateX(20px);
+  .settings-tabs-nav::-webkit-scrollbar {
+    display: none;
   }
 
-  .sub-settings-row {
+  .nav-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .nav-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .nav-tab-btn.active {
+    background: rgba(168, 85, 247, 0.18);
+    color: #d8b4fe;
+    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.35);
+  }
+
+  /* Scroll Body */
+  .sheet-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    overscroll-behavior: contain;
+  }
+
+  .tab-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  /* Sections */
+  .settings-section {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 4px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .sub-setting-col {
+  .section-heading-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
   }
 
-  .sub-label {
-    font-size: 12px;
-    color: #a7a3b6;
-    font-weight: 600;
+  .section-heading {
+    font-size: 13px;
+    font-weight: 700;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .mini-segmented {
-    display: flex;
-    gap: 4px;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 3px;
-    border-radius: 7px;
-  }
-
-  .mini-btn {
-    background: transparent;
-    border: none;
-    color: #8c899a;
+  .value-chip {
     font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 5px;
+    font-weight: 700;
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.15);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  /* Themes */
+  .theme-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .theme-card-option {
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
   }
 
-  .mini-btn.active {
-    background: #7c3aed;
-    color: #fff;
+  .theme-card-option.active {
+    border-color: #a855f7;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
   }
 
-  .preset-pills-row {
+  .theme-card-preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .theme-check-icon {
+    color: #ffffff;
+  }
+
+  .theme-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+
+  .theme-desc {
+    font-size: 10px;
+    color: #94a3b8;
+  }
+
+  /* Width Presets */
+  .preset-pill-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 6px;
   }
 
-  .pill-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #d1cddc;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 6px 4px;
-    border-radius: 8px;
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.2s;
-  }
-
-  .pill-btn.active {
-    background: rgba(168, 85, 247, 0.25);
-    border-color: rgba(192, 132, 252, 0.5);
-    color: #e9d5ff;
-  }
-
-  .slider-box {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 4px;
-  }
-
-  .slider-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: #9d9aa9;
-  }
-
-  .slider-header strong {
-    color: #e9d5ff;
-  }
-
-  .range-slider {
-    width: 100%;
-    accent-color: #9333ea;
-    height: 5px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    outline: none;
-  }
-
-  .theme-options-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .theme-card {
+  .preset-pill-btn {
+    padding: 8px 4px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 10px 6px;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .preset-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+  }
+
+  .preset-pill-btn.active {
+    background: rgba(168, 85, 247, 0.18);
+    color: #d8b4fe;
+    border-color: rgba(168, 85, 247, 0.4);
+    font-weight: 700;
+  }
+
+  /* Slider */
+  .slider-control-box {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
+    padding: 8px 0;
   }
 
-  .theme-card.active {
-    border-color: #a855f7;
-    background: rgba(168, 85, 247, 0.15);
-  }
-
-  .theme-preview {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
-
-  .dark-bg { background: #06070c; }
-  .oled-bg { background: #000000; }
-  .sepia-bg { background: #161219; }
-
-  .theme-name {
-    font-size: 11px;
-    font-weight: 600;
-    color: #c4c1d3;
-  }
-
-  .checkbox-setting-row {
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .custom-checkbox-label {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
+  .nox-slider {
+    width: 100%;
+    accent-color: #a855f7;
     cursor: pointer;
   }
 
-  .custom-checkbox {
-    accent-color: #9333ea;
-    width: 16px;
-    height: 16px;
-    margin-top: 2px;
-  }
-
-  .label-info {
+  .slider-ticks-row {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #64748b;
   }
 
-  .checkbox-title, .field-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: #e2dfec;
-  }
-
-  .checkbox-desc, .field-desc {
-    font-size: 11px;
-    color: #8c899a;
-  }
-
-  .field-select-row {
+  /* Toggle Cards */
+  .toggle-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    cursor: pointer;
     gap: 12px;
   }
 
-  .select-control {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #f2f0f7;
-    font-size: 12px;
+  .toggle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .toggle-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+
+  .toggle-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.3;
+  }
+
+  .nox-switch {
+    width: 20px;
+    height: 20px;
+    accent-color: #a855f7;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Segmented Controls */
+  .segmented-control-large {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .segment-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: #94a3b8;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .segment-choice strong {
+    display: block;
+    font-size: 13px;
+    color: #e2e8f0;
+  }
+
+  .segment-choice small {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .segment-choice.active {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #c084fc;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+  }
+
+  .segment-choice.active strong {
+    color: #f8fafc;
+  }
+
+  .segmented-control-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .seg-pill {
+    flex: 1 1 calc(50% - 6px);
+    padding: 10px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    padding: 6px 10px;
-    outline: none;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
   }
 
-  .select-control:focus {
-    border-color: #a855f7;
+  .seg-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
   }
 
-  .sheet-footer {
-    padding: 16px 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(11, 13, 23, 0.95);
+  .seg-pill.active {
+    background: rgba(168, 85, 247, 0.18);
+    color: #d8b4fe;
+    border-color: rgba(168, 85, 247, 0.4);
   }
 
-  .btn-done {
-    width: 100%;
-    padding: 10px;
-    background: linear-gradient(135deg, #7c3aed, #9333ea);
-    border: none;
+  /* Progress Positions */
+  .position-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .position-card-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
+    text-align: left;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
-    transition: transform 0.15s, opacity 0.15s;
+    transition: all 0.2s ease;
   }
 
-  .btn-done:hover {
-    transform: translateY(-1px);
-    opacity: 0.95;
+  .position-card-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .position-card-btn.active {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+  }
+
+  .pos-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pos-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+
+  .pos-check-icon {
+    color: #c084fc;
+  }
+
+  .pos-card-desc {
+    font-size: 10px;
+    color: #94a3b8;
+    line-height: 1.3;
+  }
+
+  /* Turbo / Preload Cards */
+  .preload-mode-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .preload-mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .preload-mode-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .preload-mode-card.active {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
+  }
+
+  .preload-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .preload-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .preload-title-group strong {
+    display: block;
+    font-size: 13px;
+    color: #f8fafc;
+  }
+
+  .badge-recommended {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 2px;
+  }
+
+  .badge-eco {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 2px;
+  }
+
+  .preload-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .settings-tip-box {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 10px;
+    font-size: 11px;
+    color: #cbd5e1;
+    line-height: 1.4;
+  }
+
+  .settings-tip-box p {
+    margin: 0;
   }
 </style>

@@ -13,13 +13,14 @@
     CornerDownRight,
     Edit3,
     Trash2,
-    Eye,
     EyeOff,
     Sparkles,
     ArrowUpDown,
     Send,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    ShieldAlert,
+    AtSign
   } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -84,6 +85,30 @@
     else expandedReplies.add(commentId);
   }
 
+  function insertSpoilerTag() {
+    if (!composer) return;
+    const start = composer.selectionStart || 0;
+    const end = composer.selectionEnd || 0;
+    const selected = body.slice(start, end);
+    const replacement = selected ? `[spoiler]${selected}[/spoiler]` : `[spoiler]texto com spoiler[/spoiler]`;
+    body = body.slice(0, start) + replacement + body.slice(end);
+    tick().then(() => {
+      composer?.focus();
+      composer?.setSelectionRange(start + 9, start + replacement.length - 10);
+    });
+  }
+
+  function insertMentionTag() {
+    if (!composer) return;
+    const start = composer.selectionStart || 0;
+    body = body.slice(0, start) + '@' + body.slice(start);
+    tick().then(() => {
+      composer?.focus();
+      composer?.setSelectionRange(start + 1, start + 1);
+      mentionAutocompleteRef?.handleInput(body);
+    });
+  }
+
   // Hierarchical Comment Threading
   type ThreadedGroup = {
     root: Comment;
@@ -129,7 +154,6 @@
       const id = hash.slice(1);
       const el = document.getElementById(id);
       if (el) {
-        // Also auto-expand parent if this comment is a reply
         const parentId = el.getAttribute('data-parent-id');
         if (parentId) expandedReplies.add(parentId);
 
@@ -188,9 +212,6 @@
             }
           })
         );
-        if (typeof (window as any).__noxTriggerXpReward === 'function') {
-          (window as any).__noxTriggerXpReward(res.xp_award.amount, title);
-        }
       }
 
       if (reply) {
@@ -250,17 +271,19 @@
 
 <section class="comments-section-root">
   <!-- SECTION HEADER -->
-  <div class="comments-header-row">
+  <header class="comments-hero-header">
     <div class="header-titles">
-      <div class="eyebrow-seal">
-        <MessageSquare size={13} class="text-purple-400" />
+      <div class="eyebrow-badge">
+        <MessageSquare size={14} class="text-purple-400" />
         <span>{chapterId ? 'DISCUSSÃO DO CAPÍTULO' : 'AVALIAÇÕES & DISCUSSÃO'}</span>
       </div>
-      <h2>{chapterId ? 'Comentários deste Capítulo' : 'Comentários sobre a Obra'}</h2>
+      <h2 class="section-title">
+        {chapterId ? 'Comentários deste Capítulo' : 'Comentários sobre a Obra'}
+      </h2>
     </div>
 
-    <div class="header-meta-controls">
-      <div class="comments-count-badge">
+    <div class="header-controls">
+      <div class="comments-count-pill">
         <span>{comments.length}</span> {comments.length === 1 ? 'comentário' : 'comentários'}
       </div>
 
@@ -279,7 +302,7 @@
         </div>
       {/if}
     </div>
-  </div>
+  </header>
 
   {#if notice}
     <div class="notice-alert error" role="alert">
@@ -287,9 +310,9 @@
     </div>
   {/if}
 
-  <!-- COMPOSER BOX -->
+  <!-- COMPOSER CARD -->
   {#if profile}
-    <form use:bindSubmit class="composer-card">
+    <form use:bindSubmit class="composer-card-premium">
       {#if replyComment}
         <div class="replying-banner">
           <div class="replying-info">
@@ -310,7 +333,7 @@
         </div>
       {/if}
 
-      <div class="composer-field-wrapper">
+      <div class="composer-input-area">
         <textarea
           bind:value={body}
           bind:this={composer}
@@ -326,7 +349,7 @@
             : reply
               ? `Sua resposta para @${replyComment?.members?.display_name || replyComment?.members?.username || 'leitor'}…`
               : chapterId
-                ? 'O que você achou deste capítulo? Compartilhe suas impressões… (evite spoilers sem aviso)'
+                ? 'O que você achou deste capítulo? Compartilhe suas impressões… (use [spoiler] para esconder revelações)'
                 : 'O que você achou desta obra? Fale sobre o enredo, arte e personagens…'
           }
           class="composer-textarea"
@@ -340,28 +363,35 @@
         />
       </div>
 
-      <div class="composer-toolbar">
-        <div class="toolbar-tools">
+      <!-- Composer Toolbar -->
+      <div class="composer-action-bar">
+        <div class="toolbar-helpers">
           <button
             type="button"
-            class="btn-tool-spoiler"
-            onclick={() => {
-              body += (body.length ? ' ' : '') + '[spoiler]texto com spoiler[/spoiler]';
-              composer?.focus();
-            }}
-            title="Inserir texto com spoiler oculto"
+            class="helper-btn"
+            onclick={insertSpoilerTag}
+            title="Inserir tag de spoiler oculta"
           >
             <EyeOff size={13} />
             <span>+ Spoiler</span>
           </button>
-          <span class="char-count">{body.length} / 2000</span>
+          <button
+            type="button"
+            class="helper-btn"
+            onclick={insertMentionTag}
+            title="Mencionar outro leitor (@)"
+          >
+            <AtSign size={13} />
+            <span>Mencionar</span>
+          </button>
+          <span class="char-counter">{body.length} / 2000</span>
         </div>
 
-        <div class="toolbar-actions">
+        <div class="toolbar-submit-group">
           {#if reply || edit}
             <button
               type="button"
-              class="btn-cancel-action"
+              class="btn-cancel-composer"
               onclick={() => {
                 reply = null;
                 edit = null;
@@ -372,7 +402,7 @@
             </button>
           {/if}
           <button
-            class="btn-submit-comment"
+            class="btn-submit-premium"
             disabled={busy || !body.trim()}
           >
             <Send size={14} />
@@ -382,19 +412,22 @@
       </div>
     </form>
   {:else}
-    <div class="guest-login-card">
-      <MessageSquare size={20} class="text-purple-400" />
-      <p>
-        <a class="text-link" href="/entrar">Entre na sua conta</a> para participar da discussão e ganhar XP de leitura.
-      </p>
+    <div class="guest-auth-card">
+      <MessageSquare size={22} class="text-purple-400" />
+      <div>
+        <h4>Participe da conversa</h4>
+        <p>
+          <a class="text-link" href="/entrar">Entre na sua conta</a> para comentar, interagir e ganhar XP de comunidade.
+        </p>
+      </div>
     </div>
   {/if}
 
   <!-- COMMENTS FEED -->
   {#if threadedGroups.length === 0}
-    <div class="empty-comments-card">
-      <div class="empty-icon-box">
-        <MessageSquare size={32} class="empty-icon text-purple-400" />
+    <div class="empty-discussion-card">
+      <div class="empty-icon-ring">
+        <MessageSquare size={32} class="text-purple-400" />
       </div>
       <h3>Nenhum comentário por enquanto</h3>
       <p>
@@ -404,7 +437,7 @@
       </p>
     </div>
   {:else}
-    <div class="comments-flow-list">
+    <div class="comments-thread-container">
       {#each threadedGroups as group (group.root.id)}
         {@const root = group.root}
         {@const rootAuthorColor = getNameColorInfo(root.members?.name_color)}
@@ -417,18 +450,18 @@
         <!-- ROOT COMMENT CARD -->
         <article
           id={'comment-' + root.id}
-          class="comment-card root-comment"
+          class="comment-card-modern root-card"
           class:is-reply-target={reply === root.id}
           class:has-comment-banner={!!rootCommentBanner}
         >
           {#if rootCommentBanner}
-            <div class="comment-banner-background" style="background: {rootCommentBanner};" aria-hidden="true"></div>
-            <div class="comment-banner-overlay" aria-hidden="true"></div>
+            <div class="comment-banner-bg" style="background: {rootCommentBanner};" aria-hidden="true"></div>
+            <div class="comment-banner-mask" aria-hidden="true"></div>
           {/if}
 
-          <div class="comment-content-layer">
-            <!-- Author Header -->
-            <div class="comment-author-bar">
+          <div class="comment-content-wrap">
+            <!-- Author Row -->
+            <header class="comment-author-row">
               <UserAvatar
                 avatarId={root.members?.avatar_id}
                 frameId={root.members?.avatar_frame_id}
@@ -436,56 +469,55 @@
                 displayName={root.members?.display_name || 'Leitor'}
                 size={38}
               />
-              <div class="author-meta-info">
-                <div class="author-name-line">
+              <div class="author-details">
+                <div class="author-headline">
                   <a
                     href="/u/{root.members?.username}"
-                    class="author-display-name {rootAuthorColor.className}"
+                    class="author-name {rootAuthorColor.className}"
                     style={rootAuthorColor.style}
                   >
                     {root.members?.display_name || 'Leitor'}
                   </a>
-                  <span class="author-handle">@{root.members?.username || 'leitor'}</span>
+                  <span class="author-tag">@{root.members?.username || 'leitor'}</span>
                   {#if isAuthor}
-                    <span class="author-badge-self">Você</span>
+                    <span class="badge-self">Você</span>
                   {/if}
                 </div>
-                <time class="comment-timestamp" datetime={root.created_at}>{date(root.created_at)}</time>
+                <time class="comment-time" datetime={root.created_at}>{date(root.created_at)}</time>
               </div>
-            </div>
+            </header>
 
-            <!-- Comment Body with Spoilers & Mentions -->
-            <div class="comment-body-content">
+            <!-- Body with Spoilers & Mentions -->
+            <div class="comment-text-body">
               {#each parseCommentBody(root.body) as chunk, idx (idx)}
                 {#if chunk.type === 'spoiler'}
                   <button
                     type="button"
-                    class="spoiler-block"
+                    class="spoiler-tag-box"
                     class:revealed={revealedSpoilers.has(root.id + ':' + idx)}
                     onclick={() => toggleSpoiler(root.id + ':' + idx)}
-                    title={revealedSpoilers.has(root.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler: clique para revelar'}
+                    title={revealedSpoilers.has(root.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
                   >
                     {#if revealedSpoilers.has(root.id + ':' + idx)}
-                      <span class="spoiler-revealed-text">{chunk.content}</span>
+                      <span class="spoiler-text-revealed">{chunk.content}</span>
                     {:else}
-                      <span class="spoiler-hidden-mask">{chunk.content}</span>
-                      <span class="spoiler-tag-pill"><EyeOff size={11} /> SPOILER</span>
+                      <span class="spoiler-text-hidden">{chunk.content}</span>
+                      <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
                     {/if}
                   </button>
                 {:else if chunk.type === 'mention'}
-                  <a href={`/u/${chunk.username || chunk.content}`} class="mention-pill">@{chunk.content}</a>
+                  <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
                 {:else}
                   <span>{chunk.content}</span>
                 {/if}
               {/each}
             </div>
 
-            <!-- Action Bar -->
-            <div class="comment-actions-bar">
-              <!-- Like Button -->
+            <!-- Comment Action Bar -->
+            <footer class="comment-footer-actions">
               <button
                 type="button"
-                class="btn-action-like"
+                class="btn-footer-like"
                 class:liked={hasLiked}
                 onclick={() => mutate('comment_like', root.id)}
                 disabled={!profile || busy}
@@ -495,11 +527,10 @@
                 <span>{root.comment_likes?.length || 0}</span>
               </button>
 
-              <!-- Reply Button -->
               {#if profile}
                 <button
                   type="button"
-                  class="btn-action-reply"
+                  class="btn-footer-action"
                   onclick={() => compose(root)}
                 >
                   <CornerDownRight size={13} />
@@ -507,11 +538,10 @@
                 </button>
               {/if}
 
-              <!-- Author actions (Edit / Delete) -->
               {#if isAuthor}
                 <button
                   type="button"
-                  class="btn-action-util"
+                  class="btn-footer-action"
                   onclick={() => compose(root, true)}
                   title="Editar comentário"
                 >
@@ -520,7 +550,7 @@
                 </button>
                 <button
                   type="button"
-                  class="btn-action-util btn-action-delete"
+                  class="btn-footer-action text-danger"
                   disabled={busy}
                   onclick={() => mutate('comment_delete', root.id)}
                   title="Excluir comentário"
@@ -531,7 +561,7 @@
               {:else if profile}
                 <button
                   type="button"
-                  class="btn-action-util btn-action-report"
+                  class="btn-footer-action"
                   onclick={() => (reportingComment = root)}
                   title="Denunciar este comentário"
                 >
@@ -539,14 +569,14 @@
                   <span>Denunciar</span>
                 </button>
               {/if}
-            </div>
+            </footer>
 
-            <!-- COLLAPSIBLE REPLIES THREAD -->
+            <!-- NESTED REPLIES TREE -->
             {#if group.replies.length > 0}
-              <div class="replies-wrapper">
+              <div class="replies-tree-section">
                 <button
                   type="button"
-                  class="btn-toggle-replies"
+                  class="btn-replies-toggle"
                   onclick={() => toggleThreadReplies(root.id)}
                   aria-expanded={repliesOpen}
                 >
@@ -560,7 +590,7 @@
                 </button>
 
                 {#if repliesOpen}
-                  <div class="nested-replies-list">
+                  <div class="replies-branch-list">
                     {#each group.replies as replyItem (replyItem.id)}
                       {@const repAuthorColor = getNameColorInfo(replyItem.members?.name_color)}
                       {@const repBannerKey = replyItem.members?.equipped_comment_banner_id || replyItem.members?.equipped_banner_id}
@@ -571,17 +601,17 @@
                       <article
                         id={'comment-' + replyItem.id}
                         data-parent-id={root.id}
-                        class="comment-card reply-comment"
+                        class="comment-card-modern reply-card"
                         class:is-reply-target={reply === replyItem.id}
                         class:has-comment-banner={!!repCommentBanner}
                       >
                         {#if repCommentBanner}
-                          <div class="comment-banner-background" style="background: {repCommentBanner};" aria-hidden="true"></div>
-                          <div class="comment-banner-overlay" aria-hidden="true"></div>
+                          <div class="comment-banner-bg" style="background: {repCommentBanner};" aria-hidden="true"></div>
+                          <div class="comment-banner-mask" aria-hidden="true"></div>
                         {/if}
 
-                        <div class="comment-content-layer">
-                          <div class="comment-author-bar">
+                        <div class="comment-content-wrap">
+                          <header class="comment-author-row">
                             <UserAvatar
                               avatarId={replyItem.members?.avatar_id}
                               frameId={replyItem.members?.avatar_frame_id}
@@ -589,53 +619,53 @@
                               displayName={replyItem.members?.display_name || 'Leitor'}
                               size={32}
                             />
-                            <div class="author-meta-info">
-                              <div class="author-name-line">
+                            <div class="author-details">
+                              <div class="author-headline">
                                 <a
                                   href="/u/{replyItem.members?.username}"
-                                  class="author-display-name {repAuthorColor.className}"
+                                  class="author-name {repAuthorColor.className}"
                                   style={repAuthorColor.style}
                                 >
                                   {replyItem.members?.display_name || 'Leitor'}
                                 </a>
-                                <span class="author-handle">@{replyItem.members?.username || 'leitor'}</span>
+                                <span class="author-tag">@{replyItem.members?.username || 'leitor'}</span>
                                 {#if repIsAuthor}
-                                  <span class="author-badge-self">Você</span>
+                                  <span class="badge-self">Você</span>
                                 {/if}
                               </div>
-                              <time class="comment-timestamp" datetime={replyItem.created_at}>{date(replyItem.created_at)}</time>
+                              <time class="comment-time" datetime={replyItem.created_at}>{date(replyItem.created_at)}</time>
                             </div>
-                          </div>
+                          </header>
 
-                          <div class="comment-body-content">
+                          <div class="comment-text-body">
                             {#each parseCommentBody(replyItem.body) as chunk, idx (idx)}
                               {#if chunk.type === 'spoiler'}
                                 <button
                                   type="button"
-                                  class="spoiler-block"
+                                  class="spoiler-tag-box"
                                   class:revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
                                   onclick={() => toggleSpoiler(replyItem.id + ':' + idx)}
-                                  title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler: clique para revelar'}
+                                  title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
                                 >
                                   {#if revealedSpoilers.has(replyItem.id + ':' + idx)}
-                                    <span class="spoiler-revealed-text">{chunk.content}</span>
+                                    <span class="spoiler-text-revealed">{chunk.content}</span>
                                   {:else}
-                                    <span class="spoiler-hidden-mask">{chunk.content}</span>
-                                    <span class="spoiler-tag-pill"><EyeOff size={11} /> SPOILER</span>
+                                    <span class="spoiler-text-hidden">{chunk.content}</span>
+                                    <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
                                   {/if}
                                 </button>
                               {:else if chunk.type === 'mention'}
-                                <a href={`/u/${chunk.username || chunk.content}`} class="mention-pill">@{chunk.content}</a>
+                                <a href={`/u/${chunk.username || chunk.content}`} class="mention-chip">@{chunk.content}</a>
                               {:else}
                                 <span>{chunk.content}</span>
                               {/if}
                             {/each}
                           </div>
 
-                          <div class="comment-actions-bar">
+                          <footer class="comment-footer-actions">
                             <button
                               type="button"
-                              class="btn-action-like"
+                              class="btn-footer-like"
                               class:liked={repHasLiked}
                               onclick={() => mutate('comment_like', replyItem.id)}
                               disabled={!profile || busy}
@@ -648,7 +678,7 @@
                             {#if profile}
                               <button
                                 type="button"
-                                class="btn-action-reply"
+                                class="btn-footer-action"
                                 onclick={() => compose(root)}
                               >
                                 <CornerDownRight size={12} />
@@ -659,7 +689,7 @@
                             {#if repIsAuthor}
                               <button
                                 type="button"
-                                class="btn-action-util"
+                                class="btn-footer-action"
                                 onclick={() => compose(replyItem, true)}
                                 title="Editar resposta"
                               >
@@ -668,7 +698,7 @@
                               </button>
                               <button
                                 type="button"
-                                class="btn-action-util btn-action-delete"
+                                class="btn-footer-action text-danger"
                                 disabled={busy}
                                 onclick={() => mutate('comment_delete', replyItem.id)}
                                 title="Excluir resposta"
@@ -679,7 +709,7 @@
                             {:else if profile}
                               <button
                                 type="button"
-                                class="btn-action-util btn-action-report"
+                                class="btn-footer-action"
                                 onclick={() => (reportingComment = replyItem)}
                                 title="Denunciar esta resposta"
                               >
@@ -687,7 +717,7 @@
                                 <span>Denunciar</span>
                               </button>
                             {/if}
-                          </div>
+                          </footer>
                         </div>
                       </article>
                     {/each}
@@ -701,669 +731,630 @@
     </div>
   {/if}
 
-  <!-- REPORT MODAL -->
   {#if reportingComment}
     <ReportModal
-      targetType="COMMENT"
+      workId={workId}
+      chapterId={chapterId}
       commentId={reportingComment.id}
-      targetTitle={`Comentário de @${reportingComment.members?.username || 'leitor'}`}
       onclose={() => (reportingComment = null)}
-      onsuccess={() => {
-        reportingComment = null;
-        notice = '✓ Denúncia sobre o comentário enviada à moderação com sucesso.';
-        setTimeout(() => { notice = ''; }, 4000);
-      }}
     />
   {/if}
 </section>
 
 <style>
-  /* ----------------------------------------------------
-     BASE CONTAINER & HEADER
-  ---------------------------------------------------- */
+  /* Root Container */
   .comments-section-root {
     width: 100%;
-    margin: 40px auto;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 16px 64px 16px;
+    color: #e2e8f0;
   }
 
-  .comments-header-row {
+  /* Hero Header */
+  .comments-hero-header {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    flex-wrap: wrap;
     gap: 16px;
+    margin-bottom: 24px;
     padding-bottom: 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .header-titles {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .eyebrow-seal {
+  .eyebrow-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-size: 11px;
     font-weight: 800;
     color: #c084fc;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
   }
 
-  .comments-header-row h2 {
-    font-size: 22px;
+  .section-title {
+    font-size: 20px;
     font-weight: 800;
-    color: #f2f0f7;
+    color: #ffffff;
     margin: 0;
-    line-height: 1.25;
+    letter-spacing: -0.01em;
   }
 
-  .header-meta-controls {
+  .header-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
 
-  .comments-count-badge {
-    padding: 4px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 999px;
+  .comments-count-pill {
     font-size: 12px;
-    color: #9d9aa9;
-    font-weight: 600;
+    font-weight: 700;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px 12px;
+    border-radius: 9999px;
   }
 
-  .comments-count-badge span {
-    color: #e9d5ff;
-    font-weight: 800;
+  .comments-count-pill span {
+    color: #c084fc;
   }
 
   .sort-selector-wrap {
-    position: relative;
     display: flex;
     align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 4px 10px;
   }
 
   .sort-icon {
-    position: absolute;
-    left: 10px;
-    color: #8c899a;
-    pointer-events: none;
+    color: #a855f7;
   }
 
   .sort-dropdown {
-    background: rgba(16, 18, 30, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #e2dfec;
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
     font-size: 12px;
     font-weight: 600;
-    padding: 6px 12px 6px 28px;
-    border-radius: 8px;
-    outline: none;
     cursor: pointer;
-    transition: border-color 0.2s;
+    outline: none;
   }
 
-  .sort-dropdown:focus {
-    border-color: #a855f7;
+  .sort-dropdown option {
+    background: #0f121d;
+    color: #e2e8f0;
   }
 
-  .notice-alert {
-    padding: 10px 16px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .notice-alert.error {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #fca5a5;
-  }
-
-  /* ----------------------------------------------------
-     COMPOSER CARD
-  ---------------------------------------------------- */
-  .composer-card {
-    background: rgba(11, 13, 23, 0.75);
-    border: 1px solid rgba(181, 154, 245, 0.25);
+  /* Composer Card */
+  .composer-card-premium {
+    background: #0b0d17;
+    border: 1px solid rgba(168, 85, 247, 0.25);
     border-radius: 16px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    transition: border-color 0.2s;
+    padding: 18px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(168, 85, 247, 0.03);
+    margin-bottom: 32px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .composer-card:focus-within {
+  .composer-card-premium:focus-within {
     border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 4px 28px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(168, 85, 247, 0.2);
   }
 
   .replying-banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 8px 12px;
-    background: rgba(124, 58, 237, 0.12);
+    background: rgba(168, 85, 247, 0.1);
     border: 1px solid rgba(168, 85, 247, 0.25);
-    border-radius: 10px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
   }
 
   .replying-info {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    min-width: 0;
-  }
-
-  .replying-tag {
-    color: #a7a3b6;
+    overflow: hidden;
   }
 
   .replying-author {
-    color: #e9d5ff;
+    color: #c084fc;
   }
 
   .replying-preview {
-    color: #7d7a8d;
-    white-space: nowrap;
+    color: #94a3b8;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-style: italic;
+    white-space: nowrap;
   }
 
   .btn-cancel-reply {
     background: transparent;
     border: none;
-    color: #9d9aa9;
+    color: #94a3b8;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    border-radius: 6px;
-    transition: color 0.2s;
   }
 
-  .btn-cancel-reply:hover {
-    color: #fff;
-  }
-
-  .composer-field-wrapper {
+  .composer-input-area {
     position: relative;
-    width: 100%;
   }
 
   .composer-textarea {
     width: 100%;
-    min-height: 85px;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 12px 14px;
-    color: #f2f0f7;
-    font-family: inherit;
-    font-size: 13.5px;
+    background: transparent;
+    border: none;
+    color: #f8fafc;
+    font-size: 14px;
     line-height: 1.5;
     outline: none;
     resize: vertical;
-    transition: border-color 0.2s, background 0.2s;
+    min-height: 80px;
+    font-family: inherit;
   }
 
-  .composer-textarea:focus {
-    border-color: #9333ea;
-    background: rgba(0, 0, 0, 0.5);
+  .composer-textarea::placeholder {
+    color: #64748b;
   }
 
-  .composer-toolbar {
+  .composer-action-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .toolbar-tools {
-    display: flex;
-    align-items: center;
     gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
   }
 
-  .btn-tool-spoiler {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #c4c1d3;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 5px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-tool-spoiler:hover {
-    background: rgba(168, 85, 247, 0.18);
-    border-color: rgba(192, 132, 252, 0.4);
-    color: #fff;
-  }
-
-  .char-count {
-    font-size: 11px;
-    color: #6b6878;
-  }
-
-  .toolbar-actions {
+  .toolbar-helpers {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .btn-cancel-action {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #d1cddc;
-    font-size: 12px;
-    font-weight: 650;
-    padding: 7px 14px;
-    border-radius: 9px;
+  .helper-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
   }
 
-  .btn-cancel-action:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+  .helper-btn:hover {
+    background: rgba(168, 85, 247, 0.15);
+    color: #d8b4fe;
+    border-color: rgba(168, 85, 247, 0.3);
   }
 
-  .btn-submit-comment {
+  .char-counter {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .toolbar-submit-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-cancel-composer {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 12px;
+  }
+
+  .btn-cancel-composer:hover {
+    color: #ffffff;
+  }
+
+  .btn-submit-premium {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: linear-gradient(135deg, #7c3aed, #9333ea);
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
     border: none;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 750;
-    padding: 8px 18px;
-    border-radius: 9px;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
-    transition: all 0.2s;
+    box-shadow: 0 2px 10px rgba(168, 85, 247, 0.4);
+    transition: all 0.2s ease;
   }
 
-  .btn-submit-comment:hover:not(:disabled) {
+  .btn-submit-premium:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.6);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.6);
   }
 
-  .btn-submit-comment:disabled {
-    opacity: 0.45;
+  .btn-submit-premium:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .guest-login-card {
+  /* Guest Auth Card */
+  .guest-auth-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: rgba(16, 18, 30, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 16px;
+    background: rgba(168, 85, 247, 0.06);
+    border: 1px solid rgba(168, 85, 247, 0.2);
     border-radius: 14px;
-    color: #d1cddc;
-    font-size: 13px;
+    padding: 16px 20px;
+    margin-bottom: 32px;
   }
 
-  .guest-login-card a {
+  .guest-auth-card h4 {
+    margin: 0 0 2px 0;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .guest-auth-card p {
+    margin: 0;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  .text-link {
     color: #c084fc;
     font-weight: 700;
     text-decoration: underline;
   }
 
-  /* ----------------------------------------------------
-     EMPTY STATE
-  ---------------------------------------------------- */
-  .empty-comments-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    background: rgba(11, 13, 23, 0.5);
-    border: 1px dashed rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
+  /* Empty Discussion */
+  .empty-discussion-card {
     text-align: center;
-    gap: 8px;
+    padding: 48px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
   }
 
-  .empty-icon-box {
-    width: 60px;
-    height: 60px;
-    border-radius: 16px;
-    background: rgba(124, 58, 237, 0.1);
-    border: 1px solid rgba(168, 85, 247, 0.2);
+  .empty-icon-ring {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 6px;
+    margin: 0 auto 16px auto;
   }
 
-  .empty-comments-card h3 {
+  .empty-discussion-card h3 {
     font-size: 16px;
-    font-weight: 750;
-    color: #f2f0f7;
-    margin: 0;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 4px 0;
   }
 
-  .empty-comments-card p {
+  .empty-discussion-card p {
     font-size: 13px;
-    color: #8c899a;
+    color: #94a3b8;
     margin: 0;
-    max-width: 380px;
   }
 
-  /* ----------------------------------------------------
-     COMMENTS FLOW LIST & CARDS
-  ---------------------------------------------------- */
-  .comments-flow-list {
+  /* Comments List */
+  .comments-thread-container {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
 
-  .comment-card {
+  /* Modern Card */
+  .comment-card-modern {
     position: relative;
-    background: rgba(11, 13, 23, 0.75);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 16px;
-    padding: 16px 18px;
+    background: #0b0d17;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
     overflow: hidden;
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .comment-card:hover {
-    border-color: rgba(181, 154, 245, 0.25);
+  .comment-card-modern:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   }
 
-  .comment-card.is-reply-target {
-    border-color: #9333ea;
-    box-shadow: 0 0 16px rgba(147, 51, 234, 0.3);
+  .comment-card-modern.is-reply-target {
+    border-color: #a855f7;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.35);
   }
 
-  /* Cosmetic comment banner overlay */
-  .comment-banner-background {
+  .comment-banner-bg {
     position: absolute;
     inset: 0;
-    z-index: 1;
-    opacity: 0.85;
+    background-size: cover !important;
+    background-position: center !important;
+    opacity: 0.15;
+    z-index: 0;
+    pointer-events: none;
   }
 
-  .comment-banner-overlay {
+  .comment-banner-mask {
     position: absolute;
     inset: 0;
-    z-index: 2;
-    background: linear-gradient(180deg, rgba(8, 10, 18, 0.7) 0%, rgba(8, 10, 18, 0.92) 100%);
+    background: linear-gradient(180deg, rgba(11, 13, 23, 0.4) 0%, rgba(11, 13, 23, 0.95) 100%);
+    z-index: 0;
+    pointer-events: none;
   }
 
-  .comment-content-layer {
+  .comment-content-wrap {
     position: relative;
-    z-index: 3;
+    z-index: 1;
+    padding: 16px;
+  }
+
+  /* Author Row */
+  .comment-author-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .author-details {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 2px;
   }
 
-  /* Author Bar */
-  .comment-author-bar {
+  .author-headline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .author-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  .author-name:hover {
+    text-decoration: underline;
+  }
+
+  .author-tag {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .badge-self {
+    font-size: 9px;
+    font-weight: 800;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.2);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .comment-time {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  /* Comment Text */
+  .comment-text-body {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #e2e8f0;
+    margin-bottom: 12px;
+    word-break: break-word;
+  }
+
+  /* Spoilers */
+  .spoiler-tag-box {
+    display: inline-block;
+    position: relative;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #1e1b2e;
+    border: 1px dashed rgba(168, 85, 247, 0.4);
+    cursor: pointer;
+    vertical-align: middle;
+    margin: 2px 0;
+    transition: all 0.2s ease;
+  }
+
+  .spoiler-tag-box:hover {
+    background: #27233d;
+    border-color: #a855f7;
+  }
+
+  .spoiler-text-hidden {
+    filter: blur(8px);
+    opacity: 0.15;
+    user-select: none;
+  }
+
+  .spoiler-pill-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #c084fc;
+    letter-spacing: 0.05em;
+  }
+
+  .spoiler-text-revealed {
+    color: #f1f5f9;
+  }
+
+  .mention-chip {
+    color: #a855f7;
+    font-weight: 700;
+    text-decoration: none;
+    background: rgba(168, 85, 247, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .mention-chip:hover {
+    text-decoration: underline;
+    background: rgba(168, 85, 247, 0.2);
+  }
+
+  /* Footer Actions */
+  .comment-footer-actions {
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  .author-meta-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .author-name-line {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .author-display-name {
-    font-size: 13.5px;
-    font-weight: 750;
-    color: #f2f0f7;
-    text-decoration: none;
-    line-height: 1.25;
-    transition: color 0.2s;
-  }
-
-  .author-display-name:hover {
-    color: #c084fc;
-  }
-
-  .author-handle {
-    font-size: 11px;
-    color: #716e7e;
-  }
-
-  .author-badge-self {
-    font-size: 10px;
-    font-weight: 750;
-    color: #dfc28d;
-    background: rgba(201, 170, 115, 0.15);
-    border: 1px solid rgba(201, 170, 115, 0.3);
-    padding: 0 6px;
-    border-radius: 999px;
-  }
-
-  .comment-timestamp {
-    font-size: 11px;
-    color: #716e7e;
-  }
-
-  /* Comment Body */
-  .comment-body-content {
-    font-size: 13.5px;
-    color: #e2dfec;
-    line-height: 1.6;
-    word-break: break-word;
-    white-space: pre-wrap;
-  }
-
-  /* Spoilers & Mentions */
-  .spoiler-block {
+  .btn-footer-like {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
-    padding: 2px 8px;
-    color: inherit;
-    font-family: inherit;
-    font-size: 13px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
     cursor: pointer;
-    vertical-align: baseline;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
   }
 
-  .spoiler-block.revealed {
-    background: rgba(168, 85, 247, 0.15);
-    border-color: rgba(192, 132, 252, 0.4);
-    color: #e9d5ff;
+  .btn-footer-like:hover:not(:disabled) {
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.3);
+    color: #f43f5e;
   }
 
-  .spoiler-hidden-mask {
-    filter: blur(5px);
-    user-select: none;
+  .btn-footer-like.liked {
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #f43f5e;
   }
 
-  .spoiler-tag-pill {
+  .btn-footer-action {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    font-size: 10px;
-    font-weight: 800;
-    color: #fde047;
-    background: rgba(234, 179, 8, 0.2);
-    padding: 1px 5px;
-    border-radius: 4px;
-    letter-spacing: 0.04em;
-  }
-
-  .mention-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: rgba(124, 58, 237, 0.18);
-    color: #c084fc;
-    font-weight: 650;
-    text-decoration: none;
-    transition: background 0.2s, color 0.2s;
-  }
-
-  .mention-pill:hover {
-    background: rgba(124, 58, 237, 0.35);
-    color: #fff;
-  }
-
-  /* Actions Bar */
-  .comment-actions-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  .btn-action-like,
-  .btn-action-reply,
-  .btn-action-util {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+    gap: 4px;
     background: transparent;
     border: none;
-    color: #8c899a;
-    font-size: 12px;
+    color: #94a3b8;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 6px;
-    transition: color 0.2s, background 0.2s;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
   }
 
-  .btn-action-like:hover,
-  .btn-action-reply:hover,
-  .btn-action-util:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.06);
+  .btn-footer-action:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .btn-action-like.liked {
-    color: #fb7185;
+  .btn-footer-action.text-danger:hover {
+    color: #f43f5e;
+    background: rgba(244, 63, 94, 0.1);
   }
 
-  .btn-action-delete:hover {
-    color: #fca5a5;
-    background: rgba(239, 68, 68, 0.12);
+  /* Replies Branch Section */
+  .replies-tree-section {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .btn-action-report:hover {
-    color: #fde047;
-  }
-
-  /* ----------------------------------------------------
-     NESTED REPLIES
-  ---------------------------------------------------- */
-  .replies-wrapper {
-    margin-top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .btn-toggle-replies {
+  .btn-replies-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     background: transparent;
     border: none;
-    color: #c084fc;
+    color: #a855f7;
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 6px;
-    align-self: flex-start;
-    transition: background 0.2s;
+    padding: 4px 0;
   }
 
-  .btn-toggle-replies:hover {
-    background: rgba(168, 85, 247, 0.15);
+  .btn-replies-toggle:hover {
+    text-decoration: underline;
   }
 
-  .nested-replies-list {
-    margin-left: 20px;
+  .replies-branch-list {
+    margin-top: 12px;
+    margin-left: 14px;
     padding-left: 14px;
     border-left: 2px solid rgba(168, 85, 247, 0.3);
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    animation: fadeIn 0.2s ease-out;
+    gap: 12px;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+  .reply-card {
+    background: rgba(18, 20, 32, 0.7);
+    border-radius: 12px;
   }
 
-  .reply-comment {
-    background: rgba(16, 18, 30, 0.65);
-    border-radius: 14px;
-    padding: 12px 14px;
+  .reply-card .comment-content-wrap {
+    padding: 12px;
   }
 
-  /* Highlight target pulse */
-  :global(.highlight-pulse) {
-    animation: commentPulse 2.5s ease-out;
+  .notice-alert {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 16px;
   }
 
-  @keyframes commentPulse {
-    0% { border-color: #a855f7; box-shadow: 0 0 20px rgba(168, 85, 247, 0.6); }
-    100% { border-color: rgba(255, 255, 255, 0.07); box-shadow: none; }
+  .notice-alert.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
   }
 
   @media (max-width: 640px) {
-    .nested-replies-list {
-      margin-left: 10px;
-      padding-left: 10px;
+    .comments-hero-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
     }
 
-    .comment-card {
-      padding: 14px;
+    .header-controls {
+      width: 100%;
+      justify-content: space-between;
     }
 
-    .comments-header-row h2 {
-      font-size: 18px;
+    .replies-branch-list {
+      margin-left: 6px;
+      padding-left: 8px;
     }
   }
 </style>
