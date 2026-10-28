@@ -182,4 +182,26 @@ describe('Comments Parsing & Spoilers', () => {
     expect(media[0].isGif).toBe(true);
     expect(media[1].isGif).toBe(false);
   });
+
+  it('parses single character spoilers (e.g. ||L||) accurately without layout corruption', () => {
+    const text = 'Isso foi incrível! ||L||';
+    const chunks = parseCommentBody(text);
+
+    expect(chunks.length).toBe(2);
+    expect(chunks[0]).toEqual({ type: 'text', content: 'Isso foi incrível! ' });
+    expect(chunks[1]).toEqual({ type: 'spoiler', content: 'L' });
+
+    const masked = stripSpoilers(text);
+    expect(masked).toBe('Isso foi incrível! [spoiler oculto]');
+  });
+
+  it('parses multiple spoilers in the same comment seamlessly', () => {
+    const text = 'O vilão era ||o conde|| e a espiã era ||a princesa||!';
+    const chunks = parseCommentBody(text);
+
+    const spoilers = chunks.filter((c) => c.type === 'spoiler');
+    expect(spoilers.length).toBe(2);
+    expect(spoilers[0].content).toBe('o conde');
+    expect(spoilers[1].content).toBe('a princesa');
+  });
 });

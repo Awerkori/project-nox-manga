@@ -80,6 +80,9 @@
   let notice = $state('');
   let busy = $state(false);
   let reportingComment = $state<Comment | null>(null);
+  let commentToDelete = $state<Comment | null>(null);
+  let deleteBusy = $state(false);
+  let deletedCommentIds = new SvelteSet<string>();
   let sortBy = $state<'recent' | 'likes'>('recent');
   let mentionAutocompleteRef = $state<any>();
   let composer = $state<HTMLTextAreaElement>();
@@ -261,6 +264,10 @@
     replies: Comment[];
   };
 
+  let visibleCount = $derived(
+    comments?.filter((c) => !deletedCommentIds.has(c.id)).length || 0
+  );
+
   let threadedGroups = $derived.by<ThreadedGroup[]>(() => {
     if (!comments?.length) return [];
 
@@ -268,6 +275,7 @@
     const repliesMap = new Map<string, Comment[]>();
 
     for (const c of comments) {
+      if (deletedCommentIds.has(c.id)) continue;
       if (!c.parent_id) {
         rootList.push(c);
       } else {
@@ -292,6 +300,30 @@
   });
 
   let replyComment = $derived(reply ? comments.find((c) => c.id === reply) : null);
+
+  async function confirmDelete() {
+    if (!commentToDelete || deleteBusy) return;
+    const target = commentToDelete;
+    deleteBusy = true;
+    notice = '';
+    try {
+      deletedCommentIds.add(target.id);
+      await action('member', 'comment_delete', {
+        id: target.id,
+        comment_id: target.id,
+        work_id: workId,
+        chapter_id: chapterId
+      });
+      commentToDelete = null;
+      await invalidateAll();
+    } catch (e: any) {
+      deletedCommentIds.delete(target.id);
+      notice = e?.message || 'Não foi possível apagar o comentário.';
+    } finally {
+      deleteBusy = false;
+      commentToDelete = null;
+    }
+  }
 
   function checkHashAndScroll() {
     if (typeof window === 'undefined') return;
@@ -412,11 +444,18 @@
   }
 
   async function mutate(name: string, id: string) {
+    if (name === 'comment_delete') {
+      const target = comments.find((c) => c.id === id);
+      if (target) {
+        commentToDelete = target;
+        return;
+      }
+    }
     if (busy) return;
     busy = true;
     notice = '';
     try {
-      const res = (await action('member', name, { id, comment_id: id })) as any;
+      const res = (await action('member', name, { id, comment_id: id, work_id: workId, chapter_id: chapterId })) as any;
       if (name === 'comment_like' && res?.xp_award?.awarded && typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('nox-xp-awarded', {
@@ -465,7 +504,7 @@
 
     <div class="header-controls">
       <div class="comments-count-pill">
-        <span>{comments.length}</span> {comments.length === 1 ? 'comentário' : 'comentários'}
+        <span>{visibleCount}</span> {visibleCount === 1 ? 'comentário' : 'comentários'}
       </div>
 
       {#if comments.length > 1}
@@ -742,18 +781,12 @@
                 {#if chunk.type === 'spoiler'}
                   <button
                     type="button"
-                    class="spoiler-tag-box"
-                    class:revealed={revealedSpoilers.has(root.id + ':' + idx)}
+                    class="discord-spoiler"
+                    class:is-revealed={revealedSpoilers.has(root.id + ':' + idx)}
                     onclick={() => toggleSpoiler(root.id + ':' + idx)}
+                    aria-expanded={revealedSpoilers.has(root.id + ':' + idx)}
                     title={revealedSpoilers.has(root.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
-                  >
-                    {#if revealedSpoilers.has(root.id + ':' + idx)}
-                      <span class="spoiler-text-revealed">{chunk.content}</span>
-                    {:else}
-                      <span class="spoiler-text-hidden">{chunk.content}</span>
-                      <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
-                    {/if}
-                  </button>
+                  >{chunk.content}</button>
                 {:else if chunk.type === 'media'}
                   <div class="comment-media-card">
                     {#if chunk.isSpoiler && !revealedSpoilers.has(root.id + ':media:' + idx)}
@@ -841,8 +874,8 @@
                 <button
                   type="button"
                   class="btn-footer-action text-danger"
-                  disabled={busy}
-                  onclick={() => mutate('comment_delete', root.id)}
+                  disabled={busy || deleteBusy}
+                  onclick={() => (commentToDelete = root)}
                   title="Excluir comentário"
                 >
                   <Trash2 size={12} />
@@ -932,18 +965,12 @@
                               {#if chunk.type === 'spoiler'}
                                 <button
                                   type="button"
-                                  class="spoiler-tag-box"
-                                  class:revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
+                                  class="discord-spoiler"
+                                  class:is-revealed={revealedSpoilers.has(replyItem.id + ':' + idx)}
                                   onclick={() => toggleSpoiler(replyItem.id + ':' + idx)}
+                                  aria-expanded={revealedSpoilers.has(replyItem.id + ':' + idx)}
                                   title={revealedSpoilers.has(replyItem.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
-                                >
-                                  {#if revealedSpoilers.has(replyItem.id + ':' + idx)}
-                                    <span class="spoiler-text-revealed">{chunk.content}</span>
-                                  {:else}
-                                    <span class="spoiler-text-hidden">{chunk.content}</span>
-                                    <span class="spoiler-pill-label"><EyeOff size={11} /> SPOILER (CLIQUE)</span>
-                                  {/if}
-                                </button>
+                                >{chunk.content}</button>
                               {:else if chunk.type === 'media'}
                                 <div class="comment-media-card">
                                   {#if chunk.isSpoiler && !revealedSpoilers.has(replyItem.id + ':media:' + idx)}
@@ -1030,8 +1057,8 @@
                               <button
                                 type="button"
                                 class="btn-footer-action text-danger"
-                                disabled={busy}
-                                onclick={() => mutate('comment_delete', replyItem.id)}
+                                disabled={busy || deleteBusy}
+                                onclick={() => (commentToDelete = replyItem)}
                                 title="Excluir resposta"
                               >
                                 <Trash2 size={11} />
@@ -1069,6 +1096,57 @@
       commentId={reportingComment.id}
       onclose={() => (reportingComment = null)}
     />
+  {/if}
+
+  <!-- CONFIRM DELETE COMMENT MODAL -->
+  {#if commentToDelete}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="confirm-modal-backdrop"
+      onclick={() => !deleteBusy && (commentToDelete = null)}
+      role="presentation"
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="confirm-modal-box"
+        onclick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="del-modal-title"
+      >
+        <div class="confirm-modal-icon">
+          <Trash2 size={22} class="text-rose-400" />
+        </div>
+        <h3 id="del-modal-title" class="confirm-modal-title">Apagar Comentário</h3>
+        <p class="confirm-modal-desc">
+          Tem certeza que deseja apagar este comentário? Esta ação não pode ser desfeita.
+        </p>
+        <div class="confirm-modal-actions">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            disabled={deleteBusy}
+            onclick={() => (commentToDelete = null)}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn-modal-delete"
+            disabled={deleteBusy}
+            onclick={confirmDelete}
+          >
+            {#if deleteBusy}
+              <Loader2 size={14} class="animate-spin" />
+              <span>Apagando...</span>
+            {:else}
+              <Trash2 size={14} />
+              <span>Sim, Apagar</span>
+            {/if}
+          </button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   <!-- LIGHTBOX MODAL FOR EXPANDED MEDIA -->
@@ -1531,46 +1609,38 @@
     word-break: break-word;
   }
 
-  /* Spoilers */
-  .spoiler-tag-box {
-    display: inline-block;
-    position: relative;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: #1e1b2e;
-    border: 1px dashed rgba(168, 85, 247, 0.4);
+  /* Discord-style Inline Spoilers */
+  .discord-spoiler {
+    display: inline;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background-color: #2b2342;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    color: transparent;
     cursor: pointer;
-    vertical-align: middle;
-    margin: 2px 0;
-    transition: all 0.2s ease;
-  }
-
-  .spoiler-tag-box:hover {
-    background: #27233d;
-    border-color: #a855f7;
-  }
-
-  .spoiler-text-hidden {
-    filter: blur(8px);
-    opacity: 0.15;
     user-select: none;
+    -webkit-user-select: none;
+    vertical-align: baseline;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    font-size: inherit;
+    font-family: inherit;
+    line-height: inherit;
+    text-align: left;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
-  .spoiler-pill-label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    font-size: 10px;
-    font-weight: 800;
-    color: #c084fc;
-    letter-spacing: 0.05em;
+  .discord-spoiler:hover:not(.is-revealed) {
+    background-color: #382d54;
+    border-color: rgba(168, 85, 247, 0.45);
   }
 
-  .spoiler-text-revealed {
+  .discord-spoiler.is-revealed {
+    background-color: rgba(168, 85, 247, 0.14);
+    border-color: rgba(168, 85, 247, 0.28);
     color: #f1f5f9;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   .mention-chip {
@@ -1868,38 +1938,44 @@
     background: rgba(244, 63, 94, 0.22);
   }
 
-  /* Comment Media Card in Feed */
+  /* Comment Media Card in Feed (Discord Style Enquadramento) */
   .comment-media-card {
-    display: block;
-    max-width: 100%;
-    margin-top: 10px;
-    margin-bottom: 6px;
-    border-radius: 12px;
+    display: inline-block;
+    width: fit-content;
+    max-width: min(100%, 460px);
+    margin-top: 8px;
+    margin-bottom: 4px;
+    border-radius: 10px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.3);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: top;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   }
 
   .media-view-btn {
     position: relative;
     display: block;
+    width: fit-content;
+    max-width: 100%;
     border: none;
     background: transparent;
     padding: 0;
     cursor: pointer;
     text-align: left;
-    max-width: 100%;
+    border-radius: 9px;
+    overflow: hidden;
   }
 
   .comment-rendered-img {
     display: block;
-    max-width: 100%;
+    max-width: min(100%, 460px);
     max-height: 380px;
     width: auto;
     height: auto;
     object-fit: contain;
-    border-radius: 11px;
-    transition: transform 0.2s ease, filter 0.2s ease;
+    border-radius: 9px;
+    transition: filter 0.18s ease;
   }
 
   .comment-rendered-img:hover {
@@ -1922,14 +1998,15 @@
 
   .media-spoiler-card {
     position: relative;
-    overflow: hidden;
-    border-radius: 12px;
-    cursor: pointer;
-    border: none;
-    background: #0b0d14;
-    padding: 0;
     display: block;
+    width: fit-content;
     max-width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 9px;
+    overflow: hidden;
   }
 
   .media-spoiler-card .comment-rendered-img {
@@ -1946,15 +2023,123 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    background: rgba(10, 10, 16, 0.65);
-    backdrop-filter: blur(6px);
-    color: #f1f5f9;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
+    background: rgba(14, 11, 23, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #c084fc;
+    font-size: 11px;
+    font-weight: 800;
     letter-spacing: 0.05em;
+    padding: 12px;
+    text-align: center;
+    transition: background-color 0.15s ease;
+  }
+
+  .media-spoiler-card:hover .media-spoiler-overlay {
+    background: rgba(22, 17, 36, 0.95);
+  }
+
+  /* Delete Confirmation Modal */
+  .confirm-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 220;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 16px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: fadeIn 0.15s ease;
+  }
+
+  .confirm-modal-box {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
+    background: #13101e;
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: 14px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(244, 63, 94, 0.12);
+  }
+
+  .confirm-modal-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .confirm-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0 0 8px 0;
+  }
+
+  .confirm-modal-desc {
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0 0 20px 0;
+  }
+
+  .confirm-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .btn-modal-cancel {
+    flex: 1;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .btn-modal-cancel:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .btn-modal-delete {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #e11d48;
+    border: 1px solid #f43f5e;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .btn-modal-delete:hover:not(:disabled) {
+    background: #be123c;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
   }
 
   /* Lightbox Modal */
