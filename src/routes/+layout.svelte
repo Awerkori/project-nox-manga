@@ -3,18 +3,14 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     Search,
-    Library,
     UserRound,
     Bell,
     ArrowUpRight,
     BookOpen,
     Trophy,
     Download,
-    Bookmark,
-    History,
     LogOut,
     Shield,
-    ExternalLink,
     ShoppingBag,
     Users
   } from '@lucide/svelte';
@@ -175,6 +171,22 @@
     };
     window.addEventListener('nox:notifications-updated', handleNotificationsUpdate);
 
+    let notifsBc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        notifsBc = new BroadcastChannel('nox_notifications');
+        notifsBc.onmessage = (ev) => {
+          if (ev.data?.type === 'ALL_READ') {
+            unreadDelta = -(data.unread || 0);
+          } else if (ev.data?.type === 'ONE_READ') {
+            unreadDelta = Math.max(-(data.unread || 0), unreadDelta - 1);
+          }
+        };
+      } catch {
+        // BroadcastChannel unavailable
+      }
+    }
+
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js').catch(() => {});
     }
@@ -185,6 +197,7 @@
       window.removeEventListener('nox:profile-updated', handleProfileUpdate);
       window.removeEventListener('nox-xp-awarded', handleXpAwarded);
       window.removeEventListener('nox:notifications-updated', handleNotificationsUpdate);
+      notifsBc?.close();
     };
   });
 </script>

@@ -113,13 +113,30 @@ export const actions: Actions = {
     const id = String(formData.get('id') || '').trim();
     if (!id) return fail(400, { message: 'ID da notificação obrigatório' });
 
-    const { error } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('user_id', locals.user.id);
+    let updatedCount: number;
+    // Prefer atomic SECURITY DEFINER RPC
+    const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_notification_read', {
+      p_notification_id: id
+    });
 
-    if (error) return fail(400, { message: error.message });
+    if (!rpcErr && rpcRes && (rpcRes as any).success) {
+      updatedCount = 1;
+    } else {
+      const { data: updatedRows, error } = await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('user_id', locals.user.id)
+        .select('id');
+
+      if (error) return fail(400, { message: error.message });
+      updatedCount = updatedRows?.length || 0;
+    }
+
+    if (updatedCount === 0) {
+      return fail(404, { message: 'Notificação não encontrada' });
+    }
+
     invalidateUserSession(locals.user.id);
     return { success: true, markedReadId: id };
   },
@@ -127,13 +144,18 @@ export const actions: Actions = {
   markAllRead: async ({ locals }) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
 
-    const { error } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('user_id', locals.user.id)
-      .is('read_at', null);
+    const { error: rpcErr } = await locals.db.rpc('mark_all_notifications_read');
 
-    if (error) return fail(400, { message: error.message });
+    if (rpcErr) {
+      const { error } = await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', locals.user.id)
+        .is('read_at', null);
+
+      if (error) return fail(400, { message: error.message });
+    }
+
     invalidateUserSession(locals.user.id);
     return { success: true };
   },
@@ -144,13 +166,18 @@ export const actions: Actions = {
     const id = String(formData.get('id') || '').trim();
     if (!id) return fail(400, { message: 'ID da notificação obrigatório' });
 
-    const { error } = await locals.db
+    const { data: deletedRows, error } = await locals.db
       .from('notifications')
       .delete()
       .eq('id', id)
-      .eq('user_id', locals.user.id);
+      .eq('user_id', locals.user.id)
+      .select('id');
 
     if (error) return fail(400, { message: error.message });
+    if (!deletedRows || deletedRows.length === 0) {
+      return fail(404, { message: 'Notificação não encontrada' });
+    }
+
     invalidateUserSession(locals.user.id);
     return { success: true, deletedId: id };
   }
