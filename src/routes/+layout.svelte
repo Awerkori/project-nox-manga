@@ -3,18 +3,14 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     Search,
-    Library,
     UserRound,
     Bell,
     ArrowUpRight,
     BookOpen,
     Trophy,
     Download,
-    Bookmark,
-    History,
     LogOut,
     Shield,
-    ExternalLink,
     ShoppingBag,
     Users
   } from '@lucide/svelte';
@@ -186,7 +182,9 @@
             unreadDelta = Math.max(-(data.unread || 0), unreadDelta - 1);
           }
         };
-      } catch {}
+      } catch {
+        // BroadcastChannel unavailable
+      }
     }
 
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {

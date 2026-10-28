@@ -82,7 +82,7 @@ export const POST = async ({ request, locals, platform }: any) => {
     const notifId = body.data?.id ? String(body.data.id) : null;
     if (!notifId) error(400, 'ID da notificação obrigatório');
 
-    let updatedCount = 0;
+    let updatedCount: number;
     // Prefer atomic SECURITY DEFINER RPC
     const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_notification_read', {
       p_notification_id: notifId

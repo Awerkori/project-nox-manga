@@ -113,7 +113,7 @@ export const actions: Actions = {
     const id = String(formData.get('id') || '').trim();
     if (!id) return fail(400, { message: 'ID da notificação obrigatório' });
 
-    let updatedCount = 0;
+    let updatedCount: number;
     // Prefer atomic SECURITY DEFINER RPC
     const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_notification_read', {
       p_notification_id: id

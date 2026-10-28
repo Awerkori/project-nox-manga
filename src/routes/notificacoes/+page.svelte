@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
@@ -11,17 +12,13 @@
     MessageSquare,
     AtSign,
     Trophy,
-    Sparkles,
-    Shield,
     ShieldAlert,
     Users,
     ArrowRight,
     Clock,
     Inbox,
-    ExternalLink,
     Compass,
-    Layers,
-    Trash2
+    Layers
   } from '@lucide/svelte';
   import type { PageData } from './$types';
 
@@ -30,9 +27,10 @@
   // Filter tab: 'todas' | 'nao-lidas' | 'lidas'
   let activeTab = $state<'todas' | 'nao-lidas' | 'lidas'>('todas');
   let busyAll = $state(false);
-  let busyIds = $state<Set<string>>(new Set());
+  let busyIds = new SvelteSet<string>();
 
   // Optimistic local state
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let localNotifications = $state([...data.notifications]);
   let toastMessage = $state<string | null>(null);
   let toastTimer: any = null;
@@ -70,7 +68,9 @@
             }
           }
         };
-      } catch {}
+      } catch {
+        // BroadcastChannel unavailable
+      }
     }
 
     return () => {
@@ -189,9 +189,7 @@
       })
     );
 
-    const nextBusy = new Set(busyIds);
-    nextBusy.add(id);
-    busyIds = nextBusy;
+    busyIds.add(id);
 
     let persisted = false;
 
@@ -243,11 +241,11 @@
       } else {
         try {
           notifsBc?.postMessage({ type: 'ONE_READ', id });
-        } catch {}
+        } catch {
+          // ignore
+        }
       }
-      const updatedBusy = new Set(busyIds);
-      updatedBusy.delete(id);
-      busyIds = updatedBusy;
+      busyIds.delete(id);
     }
   }
 
@@ -309,7 +307,9 @@
         showToast('Todas as notificações foram marcadas como lidas.');
         try {
           notifsBc?.postMessage({ type: 'ALL_READ' });
-        } catch {}
+        } catch {
+          // ignore
+        }
         await invalidateAll();
       } else {
         throw new Error('Falha na persistência');

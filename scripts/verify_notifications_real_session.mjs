@@ -30,6 +30,9 @@ async function runRealVerification() {
   const userId = authData.user.id;
   console.log('  Authenticated as userId:', userId);
 
+  // Ensure test reproducibility by resetting read_at to null on the user's notifications
+  await admin.from('notifications').update({ read_at: null }).eq('user_id', userId);
+
   // 2. Query initial unread notifications
   console.log('Step 2: Querying unread notifications as authenticated user');
   const { data: unreadBefore, error: unreadErr } = await userClient
