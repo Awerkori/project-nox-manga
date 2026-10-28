@@ -175,6 +175,10 @@
     };
     window.addEventListener('nox:notifications-updated', handleNotificationsUpdate);
 
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    }
+
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
