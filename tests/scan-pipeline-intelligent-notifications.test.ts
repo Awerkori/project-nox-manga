@@ -503,7 +503,9 @@ describe('Scan Pipeline & Intelligent Notifications Audit', () => {
     expect(secEmail.subject).toContain('Alerta de Segurança: Senha Alterada com Sucesso');
     expect(secEmail.html).toContain('ALERTA DE SEGURANÇA');
     expect(secEmail.html).toContain('#ef4444'); // Red alert
-    expect(secEmail.html).toContain('Verificar Segurança da Minha Conta');
+    expect(secEmail.html).toContain('Verificar Segurança da Minha Conta →');
+    expect(secEmail.html).not.toContain('&amp;rarr;');
+    expect(secEmail.html).not.toContain('&rarr; →');
     expect(secEmail.html).toContain('Awerkori');
   });
 });

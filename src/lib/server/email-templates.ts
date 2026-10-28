@@ -312,7 +312,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'CONFIRMAÇÃO DE CADASTRO';
       defaultSubject = 'Boas-vindas ao Project Nox — Confirme seu e-mail';
-      defaultCtaLabel = 'Confirmar Meu E-mail &rarr;';
+      defaultCtaLabel = 'Confirmar Meu E-mail';
       headerNotice = 'Acesso pessoal à plataforma Project Nox';
       break;
 
@@ -322,7 +322,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'RECUPERAÇÃO DE CONTA';
       defaultSubject = 'Recupere o acesso à sua conta — Project Nox';
-      defaultCtaLabel = 'Redefinir Minha Senha &rarr;';
+      defaultCtaLabel = 'Redefinir Minha Senha';
       headerNotice = 'Segurança e controle de acesso à sua conta';
       break;
 
@@ -332,7 +332,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(181, 154, 245, 0.4)';
       badgeText = 'ALTERAÇÃO DE E-MAIL';
       defaultSubject = 'Confirme seu novo endereço de e-mail — Project Nox';
-      defaultCtaLabel = 'Confirmar Novo E-mail &rarr;';
+      defaultCtaLabel = 'Confirmar Novo E-mail';
       headerNotice = 'Atualização de credenciais de acesso';
       break;
 
@@ -342,7 +342,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(223, 194, 141, 0.45)';
       badgeText = 'CONVITE DE MEMBRO';
       defaultSubject = 'Você recebeu um convite especial para o Project Nox';
-      defaultCtaLabel = 'Aceitar Convite e Acessar &rarr;';
+      defaultCtaLabel = 'Aceitar Convite e Acessar';
       headerNotice = 'Acesso exclusivo à comunidade Project Nox';
       break;
 
@@ -355,7 +355,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(239, 68, 68, 0.4)';
       badgeText = 'ALERTA DE SEGURANÇA';
       defaultSubject = '[Project Nox] Alerta de Segurança: Senha Alterada com Sucesso';
-      defaultCtaLabel = 'Verificar Segurança da Minha Conta &rarr;';
+      defaultCtaLabel = 'Verificar Segurança da Minha Conta';
       headerNotice = 'Alteração de credenciais críticas na sua conta';
       break;
 
@@ -365,7 +365,7 @@ export function generateEmailHtml({
       badgeBorder = 'rgba(239, 68, 68, 0.4)';
       badgeText = 'ALERTA DE SEGURANÇA';
       defaultSubject = '[Project Nox] Alerta de Segurança: Endereço de E-mail Alterado';
-      defaultCtaLabel = 'Verificar Segurança da Minha Conta &rarr;';
+      defaultCtaLabel = 'Verificar Segurança da Minha Conta';
       headerNotice = 'Alteração do endereço de e-mail principal da sua conta';
       break;
 
@@ -380,7 +380,10 @@ export function generateEmailHtml({
   }
 
   const subject = defaultSubject;
-  const ctaLabel = customCtaLabel || defaultCtaLabel;
+  const rawCta = (customCtaLabel || defaultCtaLabel).trim();
+  // Strip any trailing &rarr;, &amp;rarr;, →, -> or trailing whitespace to avoid double arrows or literal entities
+  const cleanCta = rawCta.replace(/(&rarr;|&amp;rarr;|→|->|\s)+$/g, '').trim();
+  const ctaButtonHtml = `${escapeHtml(cleanCta)} →`;
 
   // Render metadata rows if provided
   let metaHtml = '';
@@ -530,12 +533,12 @@ export function generateEmailHtml({
                     <!--[if mso]>
                     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${fullUrl}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="20%" stroke="f" fillcolor="#7c3aed">
                       <w:anchorlock/>
-                      <center style="color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:bold;">${escapeHtml(ctaLabel)} &rarr;</center>
+                      <center style="color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:bold;">${ctaButtonHtml}</center>
                     </v:roundrect>
                     <![endif]-->
                     <!--[if !mso]><!-->
                     <a href="${fullUrl}" target="_blank" class="cta-button" style="display: inline-block; padding: 14px 34px; font-size: 14.5px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 10px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: 1px solid #9061f9; letter-spacing: 0.02em; text-align: center; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);">
-                      ${escapeHtml(ctaLabel)} &rarr;
+                      ${ctaButtonHtml}
                     </a>
                     <!--<![endif]-->
                   </td>

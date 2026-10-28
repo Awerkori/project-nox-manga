@@ -151,7 +151,7 @@ const DEMO_EMAILS = [
         body: 'A senha da sua conta Project Nox foi alterada com êxito.\n\nSe você mesmo realizou essa alteração, nenhuma ação é necessária da sua parte.\n\nIMPORTANTE: Se você NÃO realizou essa alteração, acerte o acesso imediatamente redefinindo sua senha e entre em contato com nosso suporte.',
         deepLink: '/perfil?tab=security',
         recipientName: 'Awerkori',
-        ctaLabel: 'Verificar Segurança da Minha Conta &rarr;',
+        ctaLabel: 'Verificar Segurança da Minha Conta',
         meta: {
           'Evento': 'Alteração de Senha',
           'Data e Hora': '27/10/2026, 21:40 (Horário de Brasília)',
@@ -175,7 +175,7 @@ const DEMO_EMAILS = [
         body: 'O endereço de e-mail associado à sua conta Project Nox foi alterado.\n\nUm link de validação foi emitido para certificar a titularidade da nova caixa postal.\n\nCaso você NÃO tenha solicitado esta mudança, sua conta pode estar comprometida. Acesse a área de segurança imediatamente.',
         deepLink: '/perfil?tab=security',
         recipientName: 'Awerkori',
-        ctaLabel: 'Verificar Segurança da Minha Conta &rarr;',
+        ctaLabel: 'Verificar Segurança da Minha Conta',
         meta: {
           'Evento': 'Atualização de E-mail',
           'Data e Hora': '27/10/2026, 21:40 (Horário de Brasília)',
@@ -200,7 +200,7 @@ const DEMO_EMAILS = [
         deepLink: '/scan?id=04872e99-37ad-4d45-aed4-35759d0eae33',
         context: 'Night Scans',
         recipientName: 'Awerkori',
-        ctaLabel: 'Ver Convite no Painel da Scan &rarr;',
+        ctaLabel: 'Ver Convite no Painel da Scan',
         meta: {
           'Scan': 'Night Scans',
           'Convidado por': 'Diretoria Night Scans',
@@ -225,7 +225,7 @@ const DEMO_EMAILS = [
         deepLink: '/scan?id=04872e99-37ad-4d45-aed4-35759d0eae33',
         context: 'Night Scans',
         recipientName: 'Preston',
-        ctaLabel: 'Acessar Painel da Scan &rarr;',
+        ctaLabel: 'Acessar Painel da Scan',
         meta: {
           'Scan': 'Night Scans',
           'Novos Cargos': 'Typer, Revisor (QC)',

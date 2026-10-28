@@ -87,6 +87,12 @@ describe('transactional email generator (generateEmailHtml)', () => {
       expect(res.html).toContain('Distant Sky');
       // Fallback link
       expect(res.html).toContain('https://manga.project-nox-awerkori.workers.dev/admin/tickets');
+      // Button arrow rendering: clean single Unicode arrow, no double escaping or entity leakage
+      expect(res.html).toContain(' →');
+      expect(res.html).not.toContain('&amp;rarr;');
+      expect(res.html).not.toContain('&rarr; →');
+      expect(res.html).not.toContain('→ →');
+      expect(res.html).not.toContain('&amp;amp;');
       // Plain text version
       expect(res.text).toContain('Awerkori');
       expect(res.text).toContain('https://manga.project-nox-awerkori.workers.dev/admin/tickets');
