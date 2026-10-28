@@ -10,6 +10,10 @@ export type ScanNotificationType =
   | 'REPLY_COMMENT'
   | 'TASK_ASSIGNED'
   | 'STAGE_READY'
+  | 'TASK_REMINDER_STALE'
+  | 'STAGE_UNCLAIMED_REMINDER'
+  | 'SCAN_INVITE'
+  | 'SCAN_ROLE_UPDATED'
   | 'QC_ISSUE'
   | 'APPLICATION'
   | 'APPLICATION_UPDATE'
@@ -60,8 +64,13 @@ async function resolveContact(userId: string, platformEnv?: any): Promise<Contac
  * committed by one YSQL function; Realtime clients only observe the result.
  */
 export async function createScanNotification(params: ScanNotificationParams) {
+  // Ações do próprio usuário nunca disparam notificação para si mesmo
+  if (params.actorUserId && params.actorUserId === params.recipientUserId) {
+    return { notificationId: null, emailQueued: false, skippedSelf: true };
+  }
+
   const platformEnv = params.platform?.env;
-  const scanType = (['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED', 'STAGE_READY', 'QC_ISSUE', 'APPLICATION', 'SYSTEM'] as string[]).includes(params.type)
+  const scanType = (['MENTION', 'ROLE_MENTION', 'TASK_ASSIGNED', 'STAGE_READY', 'TASK_REMINDER_STALE', 'STAGE_UNCLAIMED_REMINDER', 'SCAN_INVITE', 'SCAN_ROLE_UPDATED', 'QC_ISSUE', 'APPLICATION', 'SYSTEM'] as string[]).includes(params.type)
     ? params.type
     : 'SYSTEM';
   const result = await executeYugabyteSql<{ result: any }>(

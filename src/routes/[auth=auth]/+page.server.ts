@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
+import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 
 const DEFAULT_SITE_ORIGIN = 'https://manga.project-nox-awerkori.workers.dev';
 
@@ -30,7 +31,7 @@ export const load = ({ params, url }) => ({
       : ''
 });
 export const actions = {
-  default: async ({ request, locals, params, url }) => {
+  default: async ({ request, locals, params, url, platform }) => {
     const f = await request.formData(),
       mode = params.auth;
     const email = String(f.get('email') || '').trim(),
@@ -150,6 +151,28 @@ export const actions = {
     if (!locals.user) return fail(401, { message: 'Abra o link de recuperação enviado para seu e-mail.' });
     const { error } = await locals.db.auth.updateUser({ password });
     if (error) return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
+
+    // Disparar notificação de segurança e e-mail transacional de senha alterada
+    try {
+      await createNotification(
+        {
+          recipientUserId: locals.user.id,
+          type: 'SECURITY_PASSWORD_CHANGED',
+          title: 'Senha alterada com sucesso',
+          body: 'A senha da sua conta Project Nox foi alterada com sucesso. Se você realizou esta alteração, nenhuma ação é necessária. Caso não reconheça, redefina sua senha imediatamente.',
+          deepLink: '/perfil?tab=security',
+          priority: 'URGENT',
+          platform
+        },
+        platform
+      );
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
+      }
+    } catch (notifErr) {
+      console.warn('[AUTH] Falha ao disparar notificação de segurança de senha:', notifErr);
+    }
+
     return { success: true, message: 'Senha alterada. Você já pode acessar sua biblioteca.' };
   }
 };

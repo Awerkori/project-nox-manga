@@ -127,6 +127,9 @@ export async function dispatchScanMentions(params: DispatchScanMentionsParams) {
   const snippet = params.text.length > 200 ? `${params.text.slice(0, 200)}...` : params.text;
   const notifiedUserIds: string[] = [];
   for (const [userId, target] of targets) {
+    // Não notificar o autor quando ele menciona a si próprio
+    if (userId === params.authorId) continue;
+
     const type = target.mentionType === 'ROLE' ? 'ROLE_MENTION' : 'MENTION';
     const title = target.mentionType === 'ROLE'
       ? `Você foi mencionado pelo cargo @${target.username}`
@@ -139,8 +142,9 @@ export async function dispatchScanMentions(params: DispatchScanMentionsParams) {
       body: snippet,
       deepLink: params.deepLink,
       scanId: params.scanId,
-      priority: 'URGENT',
+      priority: 'NORMAL',
       dedupeKey: `mention:${userId}:${params.messageId || params.deepLink}`,
+      skipEmail: true,
       platform: params.platform
     });
     if (result.notificationId) notifiedUserIds.push(userId);
