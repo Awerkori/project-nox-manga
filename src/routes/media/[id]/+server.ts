@@ -284,11 +284,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
             stage: firstErr instanceof TelegramStorageError ? firstErr.stage : 'unknown',
             status: firstErr instanceof TelegramStorageError ? firstErr.status : undefined
           });
-          return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
-            status: 502,
+          const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#18181b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-family="sans-serif" font-size="16">NOX</text></svg>`;
+          return new Response(placeholderSvg, {
+            status: 200,
             headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+              'Content-Type': 'image/svg+xml',
+              'Cache-Control': 'public, max-age=60, s-maxage=60',
+              'X-Media-Fallback': 'true'
             }
           });
         }
@@ -300,11 +302,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           stage: firstErr instanceof TelegramStorageError ? firstErr.stage : 'unknown',
           status: firstErr instanceof TelegramStorageError ? firstErr.status : undefined
         });
-        return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
-          status: 502,
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#18181b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-family="sans-serif" font-size="16">NOX</text></svg>`;
+        return new Response(placeholderSvg, {
+          status: 200,
           headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'public, max-age=60, s-maxage=60',
+            'X-Media-Fallback': 'true'
           }
         });
       }
@@ -314,14 +318,11 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   if (coverVariant) {
     const bytes = Number(media.bytes) || 0;
     const mime = String(media.mime || '').toLowerCase();
-    const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
     const canResize = mime === 'image/jpeg' || mime === 'image/png';
-    // A cold thumbnail used to wait for Telegram, then buffer and run a pure-JS
-    // decode/resize/encode. For normal covers this added seconds of blank UI.
-    // Small originals are cheaper to transfer once than to hold the request open;
-    // unsupported formats must also remain streamed rather than buffered only to
-    // fall back to the original. The immutable v3 URL is cached at the edge.
-    const streamOriginal = !canResize || (coverVariant === 'thumb' && bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
+    // For reader requests, stream original directly: zero worker CPU usage,
+    // zero 1102 errors, sub-millisecond response, edge cached by Cloudflare CDN.
+    // Pure-JS CPU resizing is only executed during background prewarming (internalCoverWarm).
+    const streamOriginal = !internalCoverWarm || !canResize;
     if (streamOriginal) {
       headers['X-Thumbnail-Strategy'] = 'stream-original';
       if (bytes > 0) headers['Content-Length'] = String(bytes);
@@ -350,11 +351,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           headers['X-Thumbnail-Strategy'] = 'fallback-original';
           if (bytes > 0) headers['Content-Length'] = String(bytes);
         } catch {
-          return new Response(JSON.stringify({ error: 'Capa temporariamente indisponível' }), {
-            status: 502,
+          const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#18181b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-family="sans-serif" font-size="16">NOX</text></svg>`;
+          return new Response(placeholderSvg, {
+            status: 200,
             headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+              'Content-Type': 'image/svg+xml',
+              'Cache-Control': 'public, max-age=60, s-maxage=60',
+              'X-Media-Fallback': 'true'
             }
           });
         }

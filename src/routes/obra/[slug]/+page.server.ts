@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
+import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
 import { getObraAuxCache, setObraAuxCache } from '$lib/server/obra-cache';
 
@@ -11,8 +11,43 @@ const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 export const load = async ({ locals, params, url, cookies, platform, setHeaders }: any) => {
   const isTargetUuid = isUuid(params.slug);
 
-  // 1. Authoritative lookup in YugabyteDB
-  let work: any = await fetchWorkFromYugabyte(params.slug, platform?.env);
+  let visitorId = locals.user?.id;
+  if (!visitorId) {
+    visitorId = cookies?.get?.('nox-vid');
+    if (!visitorId && cookies?.set) {
+      visitorId = crypto.randomUUID();
+      cookies.set('nox-vid', visitorId, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 31536000
+      });
+    }
+  }
+
+  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
+  const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
+
+  // 1. Authoritative lookup of complete work bundle in YugabyteDB in a SINGLE round-trip
+  let work: any = null;
+  let chaptersList: any[] = [];
+  let publicTags: any[] = [];
+  let ratingRes: any = null;
+
+  const yugabyteBundle = await fetchFullWorkPageFromYugabyte(
+    params.slug,
+    visitorId,
+    locals.user?.id,
+    preview,
+    platform?.env
+  );
+
+  if (yugabyteBundle && yugabyteBundle.work) {
+    work = yugabyteBundle.work;
+    chaptersList = yugabyteBundle.chapters;
+    publicTags = yugabyteBundle.tags;
+    ratingRes = yugabyteBundle.rating;
+  }
 
   // 2. Resilient fallback to Supabase if not found in Yugabyte
   if (!work) {
@@ -82,8 +117,6 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
     }
   }
-  const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
-  const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
 
   // Check in-memory aux cache for public comments, likes, metrics and scans
   const cachedAuxEntry = getObraAuxCache(work.id);
@@ -155,43 +188,39 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       )
     : Promise.resolve([{ data: null }, { data: [] }]);
 
-  let visitorId = locals.user?.id;
-  if (!visitorId) {
-    visitorId = cookies?.get?.('nox-vid');
-    if (!visitorId && cookies?.set) {
-      visitorId = crypto.randomUUID();
-      cookies.set('nox-vid', visitorId, {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 31536000
+  const chaptersPromise = (chaptersList && chaptersList.length > 0)
+    ? Promise.resolve(chaptersList)
+    : fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
+        if (list && list.length > 0) return list;
+        // Resilient fallback to Supabase if Yugabyte chapters empty
+        let chaptersQuery = locals.db
+          .from('chapters')
+          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
+          .eq('work_id', work.id)
+          .order('chapter_order_key', { ascending: false, nullsFirst: false })
+          .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: false });
+
+        if (!preview) {
+          chaptersQuery = chaptersQuery.not('published_at', 'is', null);
+        }
+
+        const res = await withTimeout(chaptersQuery, 3000, { data: [] } as any, 'obra_chapters_fallback');
+        return res?.data || [];
       });
-    }
-  }
 
-  const ratingPromise = getWorkRating(work.id, visitorId, locals.user?.id, platform?.env);
+  const tagsPromise = (publicTags && publicTags.length > 0)
+    ? Promise.resolve(publicTags)
+    : fetchWorkTagsFromYugabyte(work.id, platform?.env);
 
-  // Concurrently fetch chapters, tags, public auxiliary data, personal data and rating
-  const [chaptersList, publicTags, publicAux, [libraryRes, progressRes], ratingRes] = await Promise.all([
-    fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
-      if (list && list.length > 0) return list;
-      // Resilient fallback to Supabase if Yugabyte chapters empty
-      let chaptersQuery = locals.db
-        .from('chapters')
-        .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
-        .eq('work_id', work.id)
-        .order('chapter_order_key', { ascending: false, nullsFirst: false })
-        .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
-        .order('id', { ascending: false });
+  const ratingPromise = ratingRes
+    ? Promise.resolve(ratingRes)
+    : getWorkRating(work.id, visitorId, locals.user?.id, platform?.env);
 
-      if (!preview) {
-        chaptersQuery = chaptersQuery.not('published_at', 'is', null);
-      }
-
-      const res = await withTimeout(chaptersQuery, 3000, { data: [] } as any, 'obra_chapters_fallback');
-      return res?.data || [];
-    }),
-    fetchWorkTagsFromYugabyte(work.id, platform?.env),
+  // Concurrently resolve remaining data
+  const [resolvedChapters, resolvedTags, publicAux, [libraryRes, progressRes], resolvedRating] = await Promise.all([
+    chaptersPromise,
+    tagsPromise,
     publicAuxPromise,
     personalPromise,
     ratingPromise
@@ -203,7 +232,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const scansList = (publicAux.workScans || []).map((ws: any) => ws.scans).filter(Boolean);
   const library = libraryRes?.data || null;
   const progress = progressRes?.data || [];
-  const tagsList = publicTags || [];
+  const tagsList = resolvedTags || [];
   const isAdult = (work as any).content_rating === 'ADULT_18';
   const coverUrl = work.cover_id
     ? work.cover_id.startsWith('/') || work.cover_id.startsWith('http')
@@ -217,7 +246,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
 
   return {
     work,
-    chapters: chaptersList,
+    chapters: resolvedChapters,
     tags: tagsList,
     scans: scansList,
     structuredData: structuredDataScript(workStructuredData(work, tagsList, url.origin)),
@@ -226,7 +255,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     likes,
     progress,
     metrics,
-    rating: ratingRes,
+    rating: resolvedRating,
     canonical: `${url.origin}/obra/${work.slug}`,
     coverUrl,
     metaImage,
