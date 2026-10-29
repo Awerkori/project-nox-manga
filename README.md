@@ -1,39 +1,88 @@
-# Project Nox Manga
+# Project Nox · Plataforma Web de Mangá
 
-Plataforma pública da Project Nox: SvelteKit com SSR, Supabase Auth/PostgreSQL e publicação preparada para Cloudflare Workers Free.
+Plataforma web oficial e leitor online do **Project Nox**, desenvolvida com **SvelteKit**, renderização no Edge via **Cloudflare Workers** e persistência de dados e autenticação via **Supabase**.
 
-## Estado
+---
 
-Online em produção: https://manga.project-nox-awerkori.workers.dev (redirecionamento ativo em https://project-nox-manga.project-nox-awerkori.workers.dev). Plataforma 100% validada em produção. Consulte [o registro de validação](docs/STATUS.md) para evidências.
+🌐 **Acesse online em produção:** [manga.project-nox-awerkori.workers.dev](https://manga.project-nox-awerkori.workers.dev)  
+*(Espelho alternativo: [project-nox-manga.project-nox-awerkori.workers.dev](https://project-nox-manga.project-nox-awerkori.workers.dev))*
 
-## Rodar
+---
 
-Node 22 ou posterior. `npm ci`, configure `.env` usando `.env.example` e execute `npm run dev`.
+## 🎯 Para quem é este repositório?
 
-`PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_ANON_KEY` são públicos. `SUPABASE_SERVICE_ROLE_KEY` pertence exclusivamente ao banco público novo e só pode existir no servidor. A chave administrativa da central **não é necessária no site nem pode ser enviada à Cloudflare**: `STAFF_BRIDGE_URL` aponta para uma função limitada na própria central, que verifica o JWT e o cargo do usuário. Nunca versionar `.env`, arquivos `.dev.vars*` ou tokens Telegram.
+- **Leitores:** Para quem prefere ler mangás, manhwas e quadrinhos diretamente no navegador web em qualquer dispositivo (desktop, celular, tablet), sem precisar instalar aplicativos Android.
+- **Desenvolvedores:** Para quem deseja explorar ou colaborar em uma aplicação full-stack moderna com Server-Side Rendering (SSR) no Edge, arquitetura orientada a serviços leves e interface responsiva de alta performance.
 
-## Verificar
+> [!NOTE]
+> Se você procura as **extensões para leitores móveis como Mihon / TachiyomiSY**, consulte:  
+> ➡️ [**Project Nox · Extensões de Mangá (Distribuição)**](https://github.com/Awerkori/manga-extensoes)  
+> ➡️ [**Project Nox · Código-fonte das Extensões de Mangá**](https://github.com/Awerkori/manga-fonte-extensoes)
 
+---
+
+## ✨ Recursos da Plataforma
+
+- **Leitor Otimizado:** Modos de leitura contínua (cascata) e página por página com pré-carregamento dinâmico e suporte a atalhos de teclado.
+- **Catálogo Integrado:** Ingestão contínua e atualização automática do catálogo através do serviço autônomo [`project-nox-importer`](https://github.com/Awerkori/project-nox-importer).
+- **Área de Usuário e Gamificação:** Autenticação via Supabase Auth, histórico de leitura sincronizado, conquistas, molduras e cosméticos de perfil.
+- **Arquitetura Serverless Resiliente:** Execução no Cloudflare Workers com uso inteligente de cotas gratuitas e proteção contra custos inesperados.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+- **Framework:** SvelteKit (SSR)
+- **Estilização:** Tailwind CSS
+- **Edge Runtime:** Cloudflare Workers (Adapter Workers)
+- **Banco de Dados & Autenticação:** Supabase (PostgreSQL + Supabase Auth)
+- **Testes & Qualidade:** Vitest, Playwright e scripts customizados de auditoria visual e de banco
+
+---
+
+## 💻 Como Executar Localmente
+
+### Pré-requisitos
+- **Node.js** 22 ou posterior
+- Gerenciador de pacotes `npm`
+
+### Instalação
+```bash
+# Instalar dependências
+npm ci
+
+# Configurar variáveis de ambiente
+cp .env.example .env
+# Preencha as credenciais locais conforme necessário
+
+# Iniciar servidor de desenvolvimento
+npm run dev
 ```
-npm run lint
-npm run check
-npm test
-node scripts/test-database.mjs
-npm run build
-node scripts/scan-secrets.mjs
-git diff --check
+
+### Validações e Testes
+```bash
+npm run lint          # Verificação de formatação e linter
+npm run check         # Checagem de tipos Svelte/TypeScript
+npm test              # Testes unitários
+npm run build         # Build de produção para Cloudflare Workers
 ```
 
-Os testes de banco usam PostgreSQL descartável em memória. Nenhum fixture é criado no projeto remoto. `scripts/visual.mjs` registra navegação pública; `scripts/verify-owner.mjs` valida a conta administrativa real e importa o catálogo real como rascunho. Este último só deve ser executado pelo dono, com suas credenciais legitimamente disponíveis.
+> [!IMPORTANT]
+> `PUBLIC_SUPABASE_URL` e `PUBLIC_SUPABASE_ANON_KEY` são chaves públicas do cliente. A `SUPABASE_SERVICE_ROLE_KEY` pertence exclusivamente ao banco público e **nunca** deve ser versionada no repositório nem exposta publicamente.
 
-## Publicação
+---
 
-Aplique apenas migrations novas no projeto público. Nunca execute reset na central da staff. Para Workers, use `npm run build` e um arquivo de secrets dedicado e revisado, limitado às credenciais do site. **Não envie o `.env` inteiro.** A guarda da chave administrativa do banco público na Cloudflare depende da aprovação específica registrada pelo dono. Não habilite planos pagos. O deploy não está concluído até validar a URL real e os fluxos de Auth, publicação e leitura.
+## 🔗 Ecossistema Project Nox
 
-A função `supabase/functions/nox-public-bridge` deve ficar no projeto da central, não no projeto público. As únicas configurações adicionais dela são `NOX_PUBLIC_URL` e `NOX_PUBLIC_ANON_KEY` (públicas). A verificação padrão de JWT da gateway é substituída pela validação explícita do JWT no Auth do site e consulta do cargo no banco, por serem projetos distintos. Não há SQL genérico, acesso anônimo ou escrita no banco da central.
+- 📦 [**Project Nox · Extensões de Mangá**](https://github.com/Awerkori/manga-extensoes) — Distribuição de extensões para Mihon.
+- 💻 [**Project Nox · Código-fonte das Extensões de Mangá**](https://github.com/Awerkori/manga-fonte-extensoes) — Repositório de fontes e CI.
+- ⚙️ [**Project Nox · Importer**](https://github.com/Awerkori/project-nox-importer) — Daemon de ingestão e sincronização do catálogo 24/7.
+- 🎫 [**Project Nox · Central de Pedidos**](https://github.com/Awerkori/project-nox-requests) — Reporte de bugs e solicitações de conteúdo.
+- 📊 [**Project Nox · Tracker**](https://awerkori.github.io/project-nox-tracker/) — Painel de acompanhamento de demandas.
+- 👥 [**Project Nox · Central Staff**](https://github.com/Awerkori/project-nox-scan-staff) — Painel editorial para a equipe interna.
 
-A API futura para Mihon e a fonte de verdade editorial estão documentadas em [docs/API.md](docs/API.md).
+---
 
-## Limites gratuitos
+## ⚖️ Licença e Responsabilidade
 
-Workers Free e Supabase Free possuem cotas. O código interrompe novos uploads antes de consumir a reserva definida para Supabase Storage; não ativa cobranças. Telegram opera por página abaixo de 19 MB e exige bot/canal configurado exclusivamente no servidor. Um capítulo grande não é enviado ou baixado inteiro pelo leitor.
+O **Project Nox** desenvolve e disponibiliza ferramentas para estudo e uso comunitário. Não hospedamos materiais protegidos de terceiros de forma centralizada. Consulte os termos e diretrizes na documentação interna.
