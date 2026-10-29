@@ -1,6 +1,7 @@
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 
 import {
+  fetchHomeBundleFromYugabyte,
   fetchHomeWorksFromYugabyte,
   fetchMostReadFromYugabyte,
   fetchRecentReleasesFromYugabyte
@@ -110,10 +111,9 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     };
   }
 
-  // Cold cache: fetch public data from authoritative Yugabyte and reading from Supabase
-  const [worksData, chaptersData, readingRes, mostReadData] = await Promise.all([
-    fetchHomeWorksFromYugabyte(platform?.env),
-    fetchRecentReleasesFromYugabyte(15, 4, null, null, platform?.env),
+  // Cold cache: fetch public bundle from authoritative Yugabyte (in ONE single query) and reading from Supabase
+  const [bundle, readingRes] = await Promise.all([
+    fetchHomeBundleFromYugabyte(platform?.env),
     locals.user
       ? safeDbQuery(
           locals.db
@@ -128,11 +128,12 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
           3000,
           'home_reading'
         )
-      : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false }),
-    hasFreshPublicCache
-      ? Promise.resolve(homePublicCache!.mostReadWorks)
-      : fetchMostReadFromYugabyte(platform?.env)
+      : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false })
   ]);
+
+  const worksData = bundle.homeWorks;
+  const chaptersData = bundle.recentReleases;
+  const mostReadData = bundle.mostRead;
 
   const worksRes = { data: worksData, isDegraded: !worksData || worksData.length === 0 };
   const chaptersRes = { data: chaptersData, isDegraded: !chaptersData || chaptersData.length === 0 };

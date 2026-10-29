@@ -256,6 +256,80 @@ const HOME_MOST_READ_SELECT_COLUMNS = `
   id, slug, title, author, kind, status, featured, cover_id, content_rating, views_total
 `;
 
+export interface YugabyteHomeBundle {
+  homeWorks: YugabyteWork[];
+  mostRead: YugabyteWork[];
+  recentReleases: YugabyteReleaseRow[];
+}
+
+/**
+ * Fetch authoritative home page bundle (Novas Obras, Mais Lidos, Recent Releases)
+ * in a SINGLE round-trip query. Eliminates multiple parallel Client TLS handshakes in CF Workers.
+ */
+export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<YugabyteHomeBundle> {
+  return withYugabyteLkg(
+    'home_bundle',
+    async () => {
+      const sql = `
+        SELECT
+          COALESCE((SELECT json_agg(w) FROM (
+            SELECT ${HOME_WORK_SELECT_COLUMNS}
+            FROM works
+            WHERE published = true
+            ORDER BY updated_at DESC
+            LIMIT 24
+          ) w), '[]'::json) AS home_works,
+          COALESCE((SELECT json_agg(mr) FROM (
+            SELECT ${HOME_MOST_READ_SELECT_COLUMNS}
+            FROM works
+            WHERE published = true
+            ORDER BY views_total DESC
+            LIMIT 24
+          ) mr), '[]'::json) AS most_read,
+          COALESCE((SELECT json_agg(rr) FROM (
+            WITH latest_works AS MATERIALIZED (
+              SELECT w.id as work_id, w.slug as work_slug, w.title as work_title, w.cover_id as work_cover_id,
+                     w.kind as work_kind, w.content_rating as work_content_rating,
+                     w.latest_chapter_published_at as latest_published_at
+              FROM works w
+              WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
+              ORDER BY w.latest_chapter_published_at DESC
+              LIMIT 15
+            )
+            SELECT lw.work_id, lw.work_slug, lw.work_title, lw.work_cover_id, lw.work_kind, lw.work_content_rating,
+                   lw.latest_published_at,
+                   c.id AS chapter_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+                   c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+                   c.edition AS chapter_edition, c.language AS chapter_language,
+                   c.title AS chapter_title, c.published_at AS chapter_published_at
+            FROM latest_works lw
+            CROSS JOIN LATERAL (
+              SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                     chapter_kind, edition, language, title, published_at
+              FROM chapters
+              WHERE work_id = lw.work_id AND published_at IS NOT NULL
+              ORDER BY published_at DESC
+              LIMIT 4
+            ) c
+            ORDER BY lw.latest_published_at DESC, c.published_at DESC
+          ) rr), '[]'::json) AS recent_releases;
+      `;
+      const res = await executeYugabyteSql<{
+        home_works: YugabyteWork[];
+        most_read: YugabyteWork[];
+        recent_releases: YugabyteReleaseRow[];
+      }>(sql, [], platformEnv);
+      const row = res.rows[0];
+      return {
+        homeWorks: (row?.home_works || []) as YugabyteWork[],
+        mostRead: (row?.most_read || []) as YugabyteWork[],
+        recentReleases: (row?.recent_releases || []) as YugabyteReleaseRow[]
+      };
+    },
+    { homeWorks: [], mostRead: [], recentReleases: [] }
+  );
+}
+
 /**
  * Fetch top published works ordered by updated_at (Novas Obras).
  */
@@ -414,36 +488,7 @@ export async function fetchPaginatedReleasesFromYugabyte(
   return withYugabyteLkg(
     opKey,
     async () => {
-      let kindClause = '';
-      const paramsCount: any[] = [];
-      if (kind && kind.toUpperCase() !== 'ALL') {
-        paramsCount.push(kind.toUpperCase());
-        kindClause = `AND UPPER(w.kind) = $1`;
-      }
-
-      // 1. Total works count
-      const countSql = `
-        SELECT COUNT(*)::int AS total
-        FROM works w
-        WHERE w.latest_chapter_published_at IS NOT NULL
-          AND w.published = true
-          ${kindClause};
-      `;
-      const countRes = await executeYugabyteSql<{ total: number }>(countSql, paramsCount, platformEnv);
-      const totalWorks = countRes.rows[0]?.total ?? 0;
-      const totalPages = Math.max(1, Math.ceil(totalWorks / safePageSize));
-
-      if (totalWorks === 0 || safePage > totalPages) {
-        return {
-          releases: [],
-          totalWorks,
-          totalPages,
-          currentPage: safePage,
-          pageSize: safePageSize
-        };
-      }
-
-      // 2. Fetch page works and their latest chapters
+      // Fetch page works, total count via window function, and their latest chapters in a SINGLE query
       const paramsQuery: any[] = [safePageSize, offset, chaptersPerWork];
       let pageKindClause = '';
       if (kind && kind.toUpperCase() !== 'ALL') {
@@ -456,7 +501,8 @@ export async function fetchPaginatedReleasesFromYugabyte(
           SELECT w.id AS work_id, w.slug AS work_slug, w.title AS work_title,
                  w.cover_id AS work_cover_id, w.kind AS work_kind,
                  w.content_rating AS work_content_rating,
-                 w.latest_chapter_published_at AS latest_published_at
+                 w.latest_chapter_published_at AS latest_published_at,
+                 COUNT(*) OVER()::int AS total_works
           FROM works w
           WHERE w.latest_chapter_published_at IS NOT NULL
             AND w.published = true
@@ -466,6 +512,7 @@ export async function fetchPaginatedReleasesFromYugabyte(
         )
         SELECT pw.work_id, pw.work_slug, pw.work_title, pw.work_cover_id,
                pw.work_kind, pw.work_content_rating, pw.latest_published_at,
+               pw.total_works,
                c.id AS chapter_id, c.number AS chapter_number,
                c.display_number AS chapter_display_number,
                c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
@@ -483,7 +530,27 @@ export async function fetchPaginatedReleasesFromYugabyte(
         ORDER BY pw.latest_published_at DESC, pw.work_id DESC, c.published_at DESC NULLS LAST, c.id DESC NULLS LAST;
       `;
 
-      const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, paramsQuery, platformEnv);
+      const res = await executeYugabyteSql<YugabyteReleaseRow & { total_works?: number }>(sql, paramsQuery, platformEnv);
+
+      let totalWorks = 0;
+      if (res.rows.length > 0) {
+        totalWorks = Number((res.rows[0] as any).total_works || 0);
+      } else if (safePage > 1) {
+        // Fallback for page beyond bounds to report actual total
+        const paramsCount: any[] = [];
+        let kindClause = '';
+        if (kind && kind.toUpperCase() !== 'ALL') {
+          paramsCount.push(kind.toUpperCase());
+          kindClause = `AND UPPER(w.kind) = $1`;
+        }
+        const countRes = await executeYugabyteSql<{ total: number }>(
+          `SELECT COUNT(*)::int AS total FROM works w WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true ${kindClause};`,
+          paramsCount,
+          platformEnv
+        );
+        totalWorks = countRes.rows[0]?.total ?? 0;
+      }
+      const totalPages = Math.max(1, Math.ceil(totalWorks / safePageSize));
 
       // Group rows into PaginatedReleaseItem objects preserving work order
       const releasesMap = new Map<string, PaginatedReleaseItem>();

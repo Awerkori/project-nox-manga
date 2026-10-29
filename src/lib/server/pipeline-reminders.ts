@@ -98,7 +98,7 @@ export async function dispatchStaleTaskReminders(options: {
         assigned_to,
         claimed_at,
         last_activity_at,
-        scans:scan_id ( id, name, slug, is_active ),
+        scans:scan_id ( id, name, slug, status ),
         scan_production_chapters:production_chapter_id ( id, chapter_number, status, work_id, works:work_id ( id, title, slug ) ),
         scan_workflow_stages:stage_id ( id, name, slug )
       `)

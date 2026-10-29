@@ -11,30 +11,9 @@ export interface RatingSummary {
 const ratingCache = new Map<string, { summary: RatingSummary; timestamp: number }>();
 const CACHE_TTL_MS = 15_000;
 
-let tableEnsured = false;
-async function ensureWorkRatingsTable(platformEnv?: any) {
-  if (tableEnsured) return;
-  try {
-    await executeYugabyteSql(
-      `CREATE TABLE IF NOT EXISTS public.work_ratings (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        work_id uuid NOT NULL REFERENCES public.works(id) ON DELETE CASCADE,
-        visitor_id text NOT NULL,
-        user_id uuid REFERENCES public.members(id) ON DELETE CASCADE,
-        rating smallint NOT NULL CHECK (rating >= 0 AND rating <= 5),
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        UNIQUE (work_id, visitor_id)
-      );
-      CREATE INDEX IF NOT EXISTS idx_work_ratings_work_id ON public.work_ratings(work_id);`,
-      [],
-      platformEnv
-    );
-    tableEnsured = true;
-  } catch (err: any) {
-    // If table already exists or transient permission warning, continue
-    console.warn('[RATINGS_TABLE_ENSURE]', err?.message || err);
-  }
+let tableEnsured = true;
+async function ensureWorkRatingsTable(_platformEnv?: any) {
+  // Table and index are authoritative and verified to exist. No-op on hot SSR path.
 }
 
 export async function getWorkRating(
@@ -49,67 +28,45 @@ export async function getWorkRating(
     return cached.summary;
   }
 
-  await ensureWorkRatingsTable(platformEnv);
-
   return withYugabyteLkg(
     `rating_${workId}`,
     async () => {
-      // 1. Aggregate stats (only valid 1 to 5 stars ratings, safely ignoring legacy 0 ratings)
-      const aggRes = await executeYugabyteSql<{
-        avg_rating: string | null;
-        total_count: string;
-      }>(
-        `SELECT
-          ROUND(AVG(rating)::numeric, 1) as avg_rating,
-          COUNT(*)::int as total_count
+      const sql = `
+        SELECT
+          ROUND(AVG(rating) FILTER (WHERE rating >= 1 AND rating <= 5)::numeric, 1) as avg_rating,
+          COUNT(*) FILTER (WHERE rating >= 1 AND rating <= 5)::int as total_count,
+          MAX(rating) FILTER (WHERE visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL)) as user_rating,
+          COUNT(*) FILTER (WHERE rating = 1)::int as cnt_1,
+          COUNT(*) FILTER (WHERE rating = 2)::int as cnt_2,
+          COUNT(*) FILTER (WHERE rating = 3)::int as cnt_3,
+          COUNT(*) FILTER (WHERE rating = 4)::int as cnt_4,
+          COUNT(*) FILTER (WHERE rating = 5)::int as cnt_5
         FROM public.work_ratings
-        WHERE work_id = $1 AND rating >= 1 AND rating <= 5;`,
-        [workId],
-        platformEnv
-      );
+        WHERE work_id = $1;
+      `;
+      const res = await executeYugabyteSql<{
+        avg_rating: string | null;
+        total_count: number;
+        user_rating: number | null;
+        cnt_1: number;
+        cnt_2: number;
+        cnt_3: number;
+        cnt_4: number;
+        cnt_5: number;
+      }>(sql, [workId, visitorId || '', userId || null], platformEnv);
 
-      const rawAvg = aggRes.rows[0]?.avg_rating;
-      const count = parseInt(aggRes.rows[0]?.total_count || '0', 10);
+      const row = res.rows[0];
+      const rawAvg = row?.avg_rating;
+      const count = row?.total_count ? Number(row.total_count) : 0;
       const average = rawAvg !== null && rawAvg !== undefined ? parseFloat(rawAvg) : null;
-
-      // 2. User specific rating
-      let userRating: number | null = null;
-      if (visitorId || userId) {
-        const userRes = await executeYugabyteSql<{ rating: number }>(
-          `SELECT rating FROM public.work_ratings
-           WHERE work_id = $1 AND (visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL))
-           ORDER BY user_id NULLS LAST
-           LIMIT 1;`,
-          [workId, visitorId || '', userId || null],
-          platformEnv
-        );
-        if (
-          userRes.rows.length > 0 &&
-          userRes.rows[0].rating !== null &&
-          userRes.rows[0].rating !== undefined &&
-          userRes.rows[0].rating >= 1 &&
-          userRes.rows[0].rating <= 5
-        ) {
-          userRating = userRes.rows[0].rating;
-        }
-      }
-
-      // 3. Distribution (1 to 5 stars)
-      const distRes = await executeYugabyteSql<{ rating: number; cnt: string }>(
-        `SELECT rating, COUNT(*)::int as cnt
-         FROM public.work_ratings
-         WHERE work_id = $1 AND rating >= 1 AND rating <= 5
-         GROUP BY rating;`,
-        [workId],
-        platformEnv
-      );
-
-      const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-      for (const row of distRes.rows) {
-        if (row.rating >= 1 && row.rating <= 5) {
-          distribution[row.rating] = parseInt(row.cnt, 10);
-        }
-      }
+      const userRating = row?.user_rating !== null && row?.user_rating !== undefined ? Number(row.user_rating) : null;
+      const distribution: Record<number, number> = {
+        1: row?.cnt_1 ? Number(row.cnt_1) : 0,
+        2: row?.cnt_2 ? Number(row.cnt_2) : 0,
+        3: row?.cnt_3 ? Number(row.cnt_3) : 0,
+        4: row?.cnt_4 ? Number(row.cnt_4) : 0,
+        5: row?.cnt_5 ? Number(row.cnt_5) : 0
+      };
 
       const summary: RatingSummary = {
         average,
