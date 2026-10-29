@@ -1678,14 +1678,14 @@
         <!-- NESTED CHILDREN REPLIES (RECURSIVE BRANCH) -->
         {#if node.children.length > 0}
           <div class="thread-replies-nest" class:max-indent={node.depth >= 2}>
-            <!-- Clickable Nox Golden Guide Rail -->
+            <!-- Clickable Thread Guide Rail -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="thread-vertical-rail"
               onclick={() => toggleCollapse(comment.id)}
               role="button"
               tabindex="0"
-              title="Clique na linha dourada para recolher esta conversa"
+              title="Clique na linha para recolher esta conversa"
             >
               <div class="rail-line"></div>
             </div>
@@ -1693,7 +1693,6 @@
             <div class="thread-children-list">
               {#each node.children as child (child.comment.id)}
                 <div class="thread-child-node">
-                  <div class="thread-connector-elbow" aria-hidden="true"></div>
                   {@render renderCommentNode(child)}
                 </div>
               {/each}
@@ -2257,23 +2256,23 @@
   }
 
   /* =========================================================================
-     PROJECT NOX V11: UNIFIED CONVERSATION BLOCKS & NOX GOLD THREAD RAILS
+     PROJECT NOX V12: REFINED CONVERSATION BLOCKS & CONTINUOUS GUIDE RAILS
      ========================================================================= */
 
   .conversation-root-block {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     width: 100%;
     background: #0d0f18;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
-    padding: 16px 18px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .conversation-root-block:hover {
-    border-color: rgba(168, 85, 247, 0.18);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    border-color: rgba(168, 85, 247, 0.16);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   }
 
   .conversation-root-block:last-child {
@@ -2295,33 +2294,20 @@
     position: relative;
   }
 
-  /* Curved connector elbow linking child reply to the golden rail */
-  .thread-connector-elbow {
-    position: absolute;
-    top: 18px;
-    left: -15px;
-    width: 14px;
-    height: 12px;
-    border-left: 1.5px solid rgba(223, 194, 141, 0.32);
-    border-bottom: 1.5px solid rgba(223, 194, 141, 0.32);
-    border-bottom-left-radius: 8px;
-    pointer-events: none;
-  }
-
-  /* Vertical Guide Rail (Nox Soft Gold - Conectando conversas sem caixas empilhadas) */
+  /* Vertical Guide Rail (Neutral Subtle Slate / Soft Purple Hover - Clean & Continuous) */
   .thread-replies-nest {
     position: relative;
-    margin-top: 10px;
-    margin-left: 18px;
-    padding-left: 18px;
+    margin-top: 8px;
+    margin-left: 14px;
+    padding-left: 14px;
   }
 
   .thread-vertical-rail {
     position: absolute;
-    top: 0;
-    bottom: 0;
+    top: 4px;
+    bottom: 4px;
     left: 0;
-    width: 16px;
+    width: 14px;
     cursor: pointer;
     z-index: 5;
     user-select: none;
@@ -2334,15 +2320,15 @@
     bottom: 0;
     left: 4px;
     width: 1.5px;
-    background: rgba(223, 194, 141, 0.3); /* Dourado Nobre Nox */
+    background: rgba(255, 255, 255, 0.08); /* Cinza neutro muito sutil e discreto */
     border-radius: 9999px;
     transition: background-color 0.18s ease, width 0.18s ease, box-shadow 0.18s ease;
   }
 
   .thread-vertical-rail:hover .rail-line {
-    background: #dfc28d;
-    width: 2.5px;
-    box-shadow: 0 0 8px rgba(223, 194, 141, 0.5);
+    background: rgba(168, 85, 247, 0.65); /* Roxo suave no hover interativo */
+    width: 2px;
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.35);
   }
 
   /* Collapsed Thread Bar */
@@ -2529,8 +2515,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.16);
     border-radius: 6px;
     padding: 2px 7px;
     font-size: 11.5px;
@@ -2539,24 +2525,24 @@
   }
 
   .reply-target-arrow {
-    color: #dfc28d;
+    color: #c084fc;
     font-weight: 700;
   }
 
   .reply-target-label {
-    color: #71717a;
+    color: #a1a1aa;
     font-size: 10.5px;
   }
 
   .reply-target-link {
-    color: #c084fc;
+    color: #d8b4fe;
     text-decoration: none;
     font-weight: 600;
     transition: color 0.15s ease;
   }
 
   .reply-target-link:hover {
-    color: #dfc28d;
+    color: #ffffff;
     text-decoration: underline;
   }
 
@@ -2657,10 +2643,9 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 12px;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 2px;
     flex-wrap: wrap;
   }
 
@@ -3900,12 +3885,6 @@
     .thread-replies-nest.max-indent {
       margin-left: 0;
       padding-left: 6px;
-    }
-
-    .thread-connector-elbow {
-      left: -9px;
-      width: 8px;
-      height: 10px;
     }
 
     .reply-target-tag {
