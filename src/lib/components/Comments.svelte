@@ -1677,7 +1677,24 @@
 
         <!-- NESTED CHILDREN REPLIES (RECURSIVE BRANCH) -->
         {#if node.children.length > 0}
-          <div class="thread-replies-nest" class:max-indent={node.depth >= 2}>
+          {#if node.depth === 0}
+            <!-- Thread Replies Header (V14: Demarcação clara e elegante do início das respostas) -->
+            <div class="thread-replies-header">
+              <div class="thread-replies-chip">
+                <CornerDownRight size={12} class="text-purple-400" />
+                <span class="thread-replies-label">
+                  {descCount === 1 ? '1 resposta' : `${descCount} respostas`}
+                </span>
+              </div>
+              <div class="thread-replies-divider"></div>
+            </div>
+          {/if}
+
+          <div
+            class="thread-replies-nest"
+            class:is-root-replies={node.depth === 0}
+            class:max-indent={node.depth >= 2}
+          >
             <!-- Clickable Thread Guide Rail -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
@@ -2284,22 +2301,69 @@
     width: 100%;
   }
 
+  /* =========================================================================
+     PROJECT NOX V14: THREAD REPLIES HEADER & ENHANCED SEPARATION
+     ========================================================================= */
+
+  .thread-replies-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+
+  .thread-replies-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.22);
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #d8b4fe;
+    letter-spacing: 0.02em;
+    user-select: none;
+    -webkit-user-select: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .thread-replies-divider {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.25) 0%, rgba(255, 255, 255, 0.06) 40%, transparent 100%);
+  }
+
   .thread-children-list {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
 
   .thread-child-node {
     position: relative;
   }
 
+  /* Clear distinction between sibling replies without massive voids */
+  .thread-child-node:not(:last-child) {
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  }
+
   /* Vertical Guide Rail (Neutral Subtle Slate / Soft Purple Hover - Clean & Continuous) */
   .thread-replies-nest {
     position: relative;
-    margin-top: 12px;
+    margin-top: 16px;
     margin-left: 10px;
     padding-left: 10px;
+  }
+
+  /* When immediately preceded by the replies header, sit cleanly below it */
+  .thread-replies-header + .thread-replies-nest {
+    margin-top: 0;
   }
 
   .thread-replies-nest.max-indent {
@@ -2519,30 +2583,39 @@
   .reply-target-tag {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    background: rgba(168, 85, 247, 0.08);
-    border: 1px solid rgba(168, 85, 247, 0.16);
-    border-radius: 6px;
-    padding: 2px 7px;
+    gap: 5px;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    border-radius: 9999px;
+    padding: 2px 8px;
     font-size: 11.5px;
-    line-height: 1.2;
+    line-height: 1.25;
     vertical-align: middle;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .reply-target-tag:hover {
+    background: rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.45);
   }
 
   .reply-target-arrow {
     color: #c084fc;
-    font-weight: 700;
+    font-weight: 800;
+    font-size: 11.5px;
   }
 
   .reply-target-label {
-    color: #a1a1aa;
+    color: #cbd5e1;
     font-size: 10.5px;
+    font-weight: 500;
   }
 
   .reply-target-link {
-    color: #d8b4fe;
+    color: #f1f5f9;
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 700;
     transition: color 0.15s ease;
   }
 
@@ -3812,8 +3885,24 @@
       padding: 0;
     }
 
+    .thread-replies-header {
+      margin-top: 14px;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .thread-replies-chip {
+      padding: 2px 8px;
+      font-size: 10px;
+    }
+
     .thread-children-list {
-      gap: 12px;
+      gap: 14px;
+    }
+
+    .thread-child-node:not(:last-child) {
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
 
     .comment-footer-actions {
