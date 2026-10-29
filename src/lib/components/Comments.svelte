@@ -1391,7 +1391,6 @@
                   bind:this={editMentionRef}
                   bind:value={editBody}
                   textareaEl={editTextareaEl}
-                  scanId={scanId}
                   position="auto"
                 />
                 <textarea
@@ -1660,7 +1659,6 @@
                 bind:this={replyMentionRef}
                 bind:value={replyBody}
                 textareaEl={inlineReplyComposerEl}
-                scanId={scanId}
                 position="auto"
               />
 
