@@ -28,7 +28,9 @@
     Check,
     Minus,
     Plus,
-    Maximize2
+    Maximize2,
+    LayoutList,
+    Layers
   } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -160,6 +162,21 @@
   let lightboxLoading = $state(false);
   let lightboxError = $state(false);
   let sortBy = $state<'recent' | 'likes'>('recent');
+
+  // V15: Natural thread composition comparison (Alternativa A: Reddit Minimalista vs Alternativa B: Agrupada)
+  let threadStyle = $state<'a' | 'b'>('a');
+
+  function setThreadStyle(style: 'a' | 'b') {
+    threadStyle = style;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('nox_thread_style', style);
+        const url = new URL(window.location.href);
+        url.searchParams.set('thread_style', style);
+        window.history.replaceState({}, '', url.toString());
+      } catch {}
+    }
+  }
 
   // Reactivity sets
   const deletedCommentIds = new SvelteSet<string>();
@@ -835,6 +852,19 @@
   }
 
   onMount(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const param = new URL(window.location.href).searchParams.get('thread_style');
+        if (param === 'a' || param === 'b') {
+          threadStyle = param;
+        } else {
+          const saved = localStorage.getItem('nox_thread_style');
+          if (saved === 'a' || saved === 'b') {
+            threadStyle = saved;
+          }
+        }
+      } catch {}
+    }
     checkHashAndScroll();
     window.addEventListener('hashchange', checkHashAndScroll);
     window.addEventListener('keydown', handleGlobalKeydown);
@@ -855,7 +885,7 @@
   }
 </script>
 
-<section class="comments-section-root">
+<section class="comments-section-root" data-thread-style={threadStyle}>
   <!-- SECTION HEADER -->
   <header class="comments-hero-header">
     <div class="header-titles">
@@ -869,6 +899,30 @@
     </div>
 
     <div class="header-controls">
+      <!-- V15: Interactive Thread Style Comparison Switcher -->
+      <div class="thread-style-selector" role="group" aria-label="Estilo de visualização das conversas">
+        <button
+          type="button"
+          class="btn-style-pill"
+          class:is-active={threadStyle === 'a'}
+          onclick={() => setThreadStyle('a')}
+          title="Alternativa A: Reddit Minimalista (linhas verticais discretas e fluxo contínuo)"
+        >
+          <LayoutList size={12} />
+          <span>Estilo A (Reddit)</span>
+        </button>
+        <button
+          type="button"
+          class="btn-style-pill"
+          class:is-active={threadStyle === 'b'}
+          onclick={() => setThreadStyle('b')}
+          title="Alternativa B: Conversa Agrupada (bloco unificado e agrupamento visual)"
+        >
+          <Layers size={12} />
+          <span>Estilo B (Agrupado)</span>
+        </button>
+      </div>
+
       <div class="comments-count-pill">
         <span>{visibleCount}</span> {visibleCount === 1 ? 'comentário' : 'comentários'}
       </div>
@@ -1677,19 +1731,6 @@
 
         <!-- NESTED CHILDREN REPLIES (RECURSIVE BRANCH) -->
         {#if node.children.length > 0}
-          {#if node.depth === 0}
-            <!-- Thread Replies Header (V14: Demarcação clara e elegante do início das respostas) -->
-            <div class="thread-replies-header">
-              <div class="thread-replies-chip">
-                <CornerDownRight size={12} class="text-purple-400" />
-                <span class="thread-replies-label">
-                  {descCount === 1 ? '1 resposta' : `${descCount} respostas`}
-                </span>
-              </div>
-              <div class="thread-replies-divider"></div>
-            </div>
-          {/if}
-
           <div
             class="thread-replies-nest"
             class:is-root-replies={node.depth === 0}
@@ -2043,6 +2084,47 @@
     gap: 10px;
   }
 
+  /* V15: Interactive Thread Style Switcher */
+  .thread-style-selector {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .btn-style-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .btn-style-pill:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-style-pill.is-active {
+    color: #f5f3ff;
+    background: rgba(168, 85, 247, 0.22);
+    border-color: rgba(168, 85, 247, 0.45);
+    box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2);
+  }
+
   .comments-count-pill {
     font-size: 12px;
     font-weight: 700;
@@ -2277,12 +2359,12 @@
      ========================================================================= */
 
   .conversation-root-block {
-    margin-bottom: 18px;
+    margin-bottom: 24px;
     width: 100%;
     background: #0d0f18;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 14px;
-    padding: 14px 16px;
+    padding: 16px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
@@ -2302,68 +2384,19 @@
   }
 
   /* =========================================================================
-     PROJECT NOX V14: THREAD REPLIES HEADER & ENHANCED SEPARATION
+     PROJECT NOX V15: NATURAL THREAD ARCHITECTURE
+     Alternativa A (Reddit Minimalista) & Alternativa B (Conversa Agrupada)
      ========================================================================= */
 
-  .thread-replies-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 18px;
-    margin-bottom: 12px;
-    padding-left: 2px;
-  }
-
-  .thread-replies-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(168, 85, 247, 0.08);
-    border: 1px solid rgba(168, 85, 247, 0.22);
-    border-radius: 9999px;
-    padding: 3px 10px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #d8b4fe;
-    letter-spacing: 0.02em;
-    user-select: none;
-    -webkit-user-select: none;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  }
-
-  .thread-replies-divider {
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(168, 85, 247, 0.25) 0%, rgba(255, 255, 255, 0.06) 40%, transparent 100%);
-  }
-
-  .thread-children-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .thread-child-node {
-    position: relative;
-  }
-
-  /* Clear distinction between sibling replies without massive voids */
-  .thread-child-node:not(:last-child) {
-    padding-bottom: 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-  }
-
-  /* Vertical Guide Rail (Neutral Subtle Slate / Soft Purple Hover - Clean & Continuous) */
+  /* Alternativa A (Padrão / Reddit Minimalista):
+     - Linhas verticais discretas de conexão
+     - Respostas leves e abertas sem caixas pesadas
+     - Separação natural sem divisórias decorativas */
   .thread-replies-nest {
     position: relative;
-    margin-top: 16px;
+    margin-top: 14px;
     margin-left: 10px;
-    padding-left: 10px;
-  }
-
-  /* When immediately preceded by the replies header, sit cleanly below it */
-  .thread-replies-header + .thread-replies-nest {
-    margin-top: 0;
+    padding-left: 12px;
   }
 
   .thread-replies-nest.max-indent {
@@ -2376,7 +2409,7 @@
     top: 4px;
     bottom: 4px;
     left: 0;
-    width: 10px;
+    width: 12px;
     cursor: pointer;
     z-index: 5;
     user-select: none;
@@ -2398,6 +2431,60 @@
     background: rgba(168, 85, 247, 0.65); /* Roxo suave no hover interativo */
     width: 2px;
     box-shadow: 0 0 6px rgba(168, 85, 247, 0.35);
+  }
+
+  .thread-children-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .thread-child-node {
+    position: relative;
+  }
+
+  /* V15: Alternativa B — Conversa Agrupada
+     - Agrupa visualmente o bloco de respostas da raiz em uma área unificada
+     - Borda lateral esquerda elegante em roxo translúcido
+     - Superfície sutil em cada resposta sem excesso de linhas */
+  .comments-section-root[data-thread-style="b"] .thread-replies-nest.is-root-replies {
+    background: rgba(255, 255, 255, 0.012);
+    border-left: 2.5px solid rgba(168, 85, 247, 0.38);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 14px 14px 16px;
+    margin-top: 14px;
+    margin-left: 2px;
+  }
+
+  .comments-section-root[data-thread-style="b"] .thread-replies-nest.is-root-replies > .thread-vertical-rail {
+    display: none;
+  }
+
+  .comments-section-root[data-thread-style="b"] .comment-card-modern.is-nested-card {
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+
+  .comments-section-root[data-thread-style="b"] .comment-card-modern.is-nested-card:hover {
+    background: rgba(255, 255, 255, 0.028);
+    border-color: rgba(168, 85, 247, 0.18);
+  }
+
+  .comments-section-root[data-thread-style="b"] .thread-children-list {
+    gap: 12px;
+  }
+
+  .comments-section-root[data-thread-style="b"] .thread-replies-nest:not(.is-root-replies) {
+    margin-top: 10px;
+    margin-left: 6px;
+    padding-left: 10px;
+    border-left: 1.5px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .comments-section-root[data-thread-style="b"] .thread-replies-nest:not(.is-root-replies) > .thread-vertical-rail {
+    display: none;
   }
 
   /* Collapsed Thread Bar */
@@ -3850,6 +3937,13 @@
     .header-controls {
       width: 100%;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .btn-style-pill {
+      padding: 3px 8px;
+      font-size: 10px;
     }
 
     .composer-card-premium {
@@ -3885,24 +3979,8 @@
       padding: 0;
     }
 
-    .thread-replies-header {
-      margin-top: 14px;
-      margin-bottom: 10px;
-      gap: 8px;
-    }
-
-    .thread-replies-chip {
-      padding: 2px 8px;
-      font-size: 10px;
-    }
-
     .thread-children-list {
       gap: 14px;
-    }
-
-    .thread-child-node:not(:last-child) {
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
 
     .comment-footer-actions {
@@ -3914,12 +3992,29 @@
 
     /* Mobile Indentation Capping: Keep columns readable */
     .thread-replies-nest {
+      margin-top: 12px;
       margin-left: 6px;
       padding-left: 8px;
     }
 
     .thread-replies-nest.max-indent {
       margin-left: 2px;
+      padding-left: 6px;
+    }
+
+    /* Style B mobile adjustments */
+    .comments-section-root[data-thread-style="b"] .thread-replies-nest.is-root-replies {
+      padding: 10px 8px 10px 10px;
+      margin-left: 0;
+      margin-top: 12px;
+    }
+
+    .comments-section-root[data-thread-style="b"] .comment-card-modern.is-nested-card {
+      padding: 8px 10px;
+    }
+
+    .comments-section-root[data-thread-style="b"] .thread-replies-nest:not(.is-root-replies) {
+      margin-left: 4px;
       padding-left: 6px;
     }
 
