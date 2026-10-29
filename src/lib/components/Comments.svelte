@@ -1428,7 +1428,7 @@
                     {#if profile}
                       <button
                         type="button"
-                        class="btn-footer-secondary text-muted-flag"
+                        class="btn-footer-secondary btn-footer-report text-muted-flag"
                         onclick={() => {
                           reportingTarget = {
                             commentId: comment.id,
