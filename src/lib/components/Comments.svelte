@@ -15,6 +15,8 @@
     Trash2,
     Eye,
     EyeOff,
+    ImageOff,
+    Shield,
     Sparkles,
     ArrowUpDown,
     Send,
@@ -61,7 +63,11 @@
     comment: Comment;
     children: CommentNode[];
     depth: number;
-    parentAuthorName?: string;
+    parentAuthor?: {
+      id: string;
+      username: string;
+      displayName: string;
+    } | null;
   };
 
   let {
@@ -216,13 +222,19 @@
     const nodeMap = new Map<string, CommentNode>();
     for (const c of living) {
       const livingParent = getLivingAncestor(c);
-      const parentAuthorName =
-        livingParent?.members?.display_name || livingParent?.members?.username || undefined;
+      let parentAuthor: { id: string; username: string; displayName: string } | null = null;
+      if (livingParent && livingParent.members) {
+        parentAuthor = {
+          id: livingParent.user_id,
+          username: livingParent.members.username || 'usuario',
+          displayName: livingParent.members.display_name || livingParent.members.username || 'Usuário'
+        };
+      }
       nodeMap.set(c.id, {
         comment: c,
         children: [],
         depth: 0,
-        parentAuthorName
+        parentAuthor
       });
     }
 
@@ -762,6 +774,41 @@
     }
   }
 
+  let selectedMediaIdx = $state(0);
+  let moderateBusy = $state(false);
+
+  async function handleModerateMedia(mode: 'remove' | 'spoiler') {
+    if (!commentToDelete || moderateBusy || deleteBusy) return;
+    const target = commentToDelete;
+    const mediaList = getCommentMediaUrls(target);
+    const targetUrl = mediaList[selectedMediaIdx] || mediaList[0];
+    if (!targetUrl) {
+      await confirmDelete();
+      return;
+    }
+
+    moderateBusy = true;
+    notice = '';
+    try {
+      const res = (await action('member', 'comment_moderate_media', {
+        comment_id: target.id,
+        media_url: targetUrl,
+        mode
+      })) as any;
+
+      if (res?.action === 'removed_and_deleted') {
+        deletedCommentIds.add(target.id);
+      }
+
+      commentToDelete = null;
+      await invalidateAll();
+    } catch (e: any) {
+      notice = e?.message || 'Erro ao moderar mídia.';
+    } finally {
+      moderateBusy = false;
+    }
+  }
+
   function checkHashAndScroll() {
     if (typeof window === 'undefined') return;
     const hash = window.location.hash;
@@ -1181,6 +1228,9 @@
             {comment.members?.display_name || 'Leitor'}
           </strong>
           <span class="collapsed-handle">@{comment.members?.username || 'leitor'}</span>
+          {#if node.parentAuthor}
+            <span class="collapsed-parent-tag">↳ @{node.parentAuthor.username}</span>
+          {/if}
           <time class="collapsed-time">{date(comment.created_at)}</time>
           {#if descCount > 0}
             <span class="collapsed-badge">+{descCount} {descCount === 1 ? 'resposta' : 'respostas'}</span>
@@ -1212,7 +1262,7 @@
                 frameId={comment.members?.avatar_frame_id}
                 crop={comment.members?.avatar_crop}
                 displayName={comment.members?.display_name || 'Leitor'}
-                size={node.depth === 0 ? 32 : (node.depth === 1 ? 28 : 24)}
+                size={node.depth === 0 ? 36 : 28}
               />
               <div class="author-details">
                 <div class="author-headline">
@@ -1227,11 +1277,21 @@
                   {#if isAuthor}
                     <span class="badge-self">Você</span>
                   {/if}
-                  {#if node.depth >= 2 && node.parentAuthorName}
-                    <span class="parent-mention-tag" title="Em resposta a @{node.parentAuthorName}">
-                      ↳ @{node.parentAuthorName}
+                  {#if node.parentAuthor}
+                    <span class="reply-target-tag">
+                      <span class="reply-target-arrow" aria-hidden="true">↳</span>
+                      <span class="reply-target-label">em resposta a</span>
+                      <a
+                        href={`/u/${node.parentAuthor.username}`}
+                        class="reply-target-link"
+                        title={`Ver perfil de @${node.parentAuthor.username}`}
+                        onclick={(e) => e.stopPropagation()}
+                      >
+                        @{node.parentAuthor.username}
+                      </a>
                     </span>
                   {/if}
+                  <span class="meta-separator" aria-hidden="true">·</span>
                   <time class="comment-time" datetime={comment.created_at}>{date(comment.created_at)}</time>
                 </div>
               </div>
@@ -1406,7 +1466,10 @@
                       type="button"
                       class="btn-footer-secondary text-danger"
                       disabled={busy || deleteBusy}
-                      onclick={() => (commentToDelete = comment)}
+                      onclick={() => {
+                        selectedMediaIdx = 0;
+                        commentToDelete = comment;
+                      }}
                       title="Excluir seu comentário"
                     >
                       <Trash2 size={13} />
@@ -1418,7 +1481,10 @@
                         type="button"
                         class="btn-footer-secondary text-danger btn-admin-delete"
                         disabled={busy || deleteBusy}
-                        onclick={() => (commentToDelete = comment)}
+                        onclick={() => {
+                          selectedMediaIdx = 0;
+                          commentToDelete = comment;
+                        }}
                         title="Moderação: Apagar comentário de outro usuário"
                       >
                         <Trash2 size={13} />
@@ -1612,21 +1678,24 @@
         <!-- NESTED CHILDREN REPLIES (RECURSIVE BRANCH) -->
         {#if node.children.length > 0}
           <div class="thread-replies-nest" class:max-indent={node.depth >= 2}>
-            <!-- Clickable Reddit-Style Vertical Thread Line -->
+            <!-- Clickable Nox Golden Guide Rail -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="thread-vertical-rail"
               onclick={() => toggleCollapse(comment.id)}
               role="button"
               tabindex="0"
-              title="Clique na linha para recolher esta conversa"
+              title="Clique na linha dourada para recolher esta conversa"
             >
               <div class="rail-line"></div>
             </div>
 
             <div class="thread-children-list">
               {#each node.children as child (child.comment.id)}
-                {@render renderCommentNode(child)}
+                <div class="thread-child-node">
+                  <div class="thread-connector-elbow" aria-hidden="true"></div>
+                  {@render renderCommentNode(child)}
+                </div>
               {/each}
             </div>
           </div>
@@ -1679,53 +1748,175 @@
     />
   {/if}
 
-  <!-- CONFIRM DELETE COMMENT MODAL -->
+  <!-- CONFIRM DELETE & GRANULAR MEDIA MODERATION MODAL -->
   {#if commentToDelete}
+    {@const targetMedia = getCommentMediaUrls(commentToDelete)}
+    {@const hasMedia = targetMedia.length > 0}
+    {@const activeMediaUrl = targetMedia[selectedMediaIdx] || targetMedia[0]}
+    {@const isAlreadySpoiler = hasMedia && parseCommentBody(commentToDelete.body).some((c) => c.type === 'media' && c.mediaUrl === activeMediaUrl && c.isSpoiler)}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="confirm-modal-backdrop"
-      onclick={() => !deleteBusy && (commentToDelete = null)}
+      onclick={() => !deleteBusy && !moderateBusy && (commentToDelete = null)}
       role="presentation"
     >
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="confirm-modal-box"
+        class:is-granular={hasMedia}
         onclick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="del-modal-title"
       >
         <div class="confirm-modal-icon">
-          <Trash2 size={22} class="text-rose-400" />
+          {#if hasMedia}
+            <Shield size={24} class="text-purple-400" />
+          {:else}
+            <Trash2 size={24} class="text-rose-400" />
+          {/if}
         </div>
-        <h3 id="del-modal-title" class="confirm-modal-title">Apagar Comentário</h3>
-        <p class="confirm-modal-desc">
-          Tem certeza que deseja apagar este comentário? Esta ação não pode ser desfeita.
-        </p>
-        <div class="confirm-modal-actions">
-          <button
-            type="button"
-            class="btn-modal-cancel"
-            disabled={deleteBusy}
-            onclick={() => (commentToDelete = null)}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            class="btn-modal-delete"
-            disabled={deleteBusy}
-            onclick={confirmDelete}
-          >
-            {#if deleteBusy}
-              <Loader2 size={14} class="animate-spin" />
-              <span>Apagando...</span>
-            {:else}
-              <Trash2 size={14} />
-              <span>Sim, Apagar</span>
-            {/if}
-          </button>
-        </div>
+
+        <h3 id="del-modal-title" class="confirm-modal-title">
+          {hasMedia ? 'Moderação de Mídia e Comentário' : 'Apagar Comentário'}
+        </h3>
+
+        {#if hasMedia}
+          <p class="confirm-modal-desc">
+            Este comentário contém mídia anexada. Escolha a ação desejada:
+          </p>
+
+          <!-- Media selector if multiple media -->
+          {#if targetMedia.length > 1}
+            <div class="modal-media-selector">
+              <span class="media-selector-label">Mídia selecionada ({selectedMediaIdx + 1}/{targetMedia.length}):</span>
+              <div class="media-selector-strip">
+                {#each targetMedia as url, idx}
+                  <button
+                    type="button"
+                    class="media-selector-item"
+                    class:active={selectedMediaIdx === idx}
+                    onclick={() => (selectedMediaIdx = idx)}
+                  >
+                    <img src={url} alt={`Mídia ${idx + 1}`} class="media-selector-thumb" />
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Media preview thumbnail -->
+          <div class="modal-media-preview-card">
+            <img src={activeMediaUrl} alt="Mídia anexada" class="modal-media-thumb" />
+            <div class="modal-media-info">
+              <span class="modal-media-tag">
+                {activeMediaUrl.toLowerCase().includes('.gif') ? 'GIF ANIMADO' : 'IMAGEM'}
+              </span>
+              <span class="modal-media-author">
+                Comentário de <strong>@{commentToDelete.members?.username || 'autor'}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div class="granular-moderation-options">
+            <!-- Opção A: Remover somente a imagem/GIF -->
+            <button
+              type="button"
+              class="granular-option-card option-remove-media"
+              disabled={deleteBusy || moderateBusy}
+              onclick={() => handleModerateMedia('remove')}
+            >
+              <div class="option-icon-box text-rose-400">
+                <ImageOff size={18} />
+              </div>
+              <div class="option-text-box">
+                <span class="option-title">Opção A — Remover imagem/GIF</span>
+                <span class="option-desc">
+                  Remove somente a mídia. O texto, curtidas e respostas do comentário são 100% preservados.
+                </span>
+              </div>
+            </button>
+
+            <!-- Opção B: Ocultar mídia como spoiler -->
+            <button
+              type="button"
+              class="granular-option-card option-spoiler-media"
+              disabled={deleteBusy || moderateBusy || isAlreadySpoiler}
+              onclick={() => handleModerateMedia('spoiler')}
+            >
+              <div class="option-icon-box text-amber-400">
+                <EyeOff size={18} />
+              </div>
+              <div class="option-text-box">
+                <span class="option-title">
+                  {isAlreadySpoiler ? 'Opção B — Já está oculto como spoiler' : 'Opção B — Ocultar como spoiler'}
+                </span>
+                <span class="option-desc">
+                  {isAlreadySpoiler
+                    ? 'Esta mídia já está devidamente protegida com a tag de spoiler.'
+                    : 'Aplica proteção de spoiler na mídia para que a comunidade precise clicar para visualizar.'}
+                </span>
+              </div>
+            </button>
+
+            <!-- Opção C: Excluir comentário completo -->
+            <button
+              type="button"
+              class="granular-option-card option-delete-all"
+              disabled={deleteBusy || moderateBusy}
+              onclick={confirmDelete}
+            >
+              <div class="option-icon-box text-rose-500">
+                <Trash2 size={18} />
+              </div>
+              <div class="option-text-box">
+                <span class="option-title">Opção C — Excluir comentário inteiro</span>
+                <span class="option-desc">
+                  Apaga o comentário por completo junto com seus anexos. Respostas existentes são preservadas.
+                </span>
+              </div>
+            </button>
+          </div>
+
+          <div class="confirm-modal-actions">
+            <button
+              type="button"
+              class="btn-modal-cancel"
+              disabled={deleteBusy || moderateBusy}
+              onclick={() => (commentToDelete = null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        {:else}
+          <p class="confirm-modal-desc">
+            Tem certeza que deseja apagar este comentário? Esta ação não pode ser desfeita.
+          </p>
+          <div class="confirm-modal-actions">
+            <button
+              type="button"
+              class="btn-modal-cancel"
+              disabled={deleteBusy}
+              onclick={() => (commentToDelete = null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn-modal-delete"
+              disabled={deleteBusy}
+              onclick={confirmDelete}
+            >
+              {#if deleteBusy}
+                <Loader2 size={14} class="animate-spin" />
+                <span>Apagando...</span>
+              {:else}
+                <Trash2 size={14} />
+                <span>Sim, Apagar</span>
+              {/if}
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -2065,10 +2256,24 @@
     gap: 0;
   }
 
-  /* 3-Level Visual Hierarchy: Generous Root Block Spacing (18-24px) */
+  /* =========================================================================
+     PROJECT NOX V11: UNIFIED CONVERSATION BLOCKS & NOX GOLD THREAD RAILS
+     ========================================================================= */
+
   .conversation-root-block {
-    margin-bottom: 22px;
+    margin-bottom: 20px;
     width: 100%;
+    background: #0d0f18;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .conversation-root-block:hover {
+    border-color: rgba(168, 85, 247, 0.18);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   }
 
   .conversation-root-block:last-child {
@@ -2083,15 +2288,32 @@
   .thread-children-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
-  /* Vertical Guide Rail (Reddit Style) */
+  .thread-child-node {
+    position: relative;
+  }
+
+  /* Curved connector elbow linking child reply to the golden rail */
+  .thread-connector-elbow {
+    position: absolute;
+    top: 18px;
+    left: -15px;
+    width: 14px;
+    height: 12px;
+    border-left: 1.5px solid rgba(223, 194, 141, 0.32);
+    border-bottom: 1.5px solid rgba(223, 194, 141, 0.32);
+    border-bottom-left-radius: 8px;
+    pointer-events: none;
+  }
+
+  /* Vertical Guide Rail (Nox Soft Gold - Conectando conversas sem caixas empilhadas) */
   .thread-replies-nest {
     position: relative;
     margin-top: 10px;
-    margin-left: 14px;
-    padding-left: 16px;
+    margin-left: 18px;
+    padding-left: 18px;
   }
 
   .thread-vertical-rail {
@@ -2099,7 +2321,7 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: 14px;
+    width: 16px;
     cursor: pointer;
     z-index: 5;
     user-select: none;
@@ -2111,27 +2333,16 @@
     top: 0;
     bottom: 0;
     left: 4px;
-    width: 2px;
-    background: rgba(168, 85, 247, 0.28);
+    width: 1.5px;
+    background: rgba(223, 194, 141, 0.3); /* Dourado Nobre Nox */
     border-radius: 9999px;
     transition: background-color 0.18s ease, width 0.18s ease, box-shadow 0.18s ease;
   }
 
   .thread-vertical-rail:hover .rail-line {
-    background: #a855f7;
-    width: 3px;
-    box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
-  }
-
-  /* Level 2+ Sub-replies Guide Rail: Soft Nox Gold (Harmonioso, não neon) */
-  .thread-replies-branch.is-deep-branch > .thread-vertical-rail .rail-line {
-    background: rgba(223, 194, 141, 0.45);
-  }
-
-  .thread-replies-branch.is-deep-branch > .thread-vertical-rail:hover .rail-line {
     background: #dfc28d;
-    width: 3px;
-    box-shadow: 0 0 8px rgba(223, 194, 141, 0.6);
+    width: 2.5px;
+    box-shadow: 0 0 8px rgba(223, 194, 141, 0.5);
   }
 
   /* Collapsed Thread Bar */
@@ -2203,48 +2414,44 @@
      COMPACT NATURAL COMMENT CARDS (3-LEVEL HIERARCHY WITH VISUAL DEPTH)
      ========================================================================= */
 
+  /* =========================================================================
+     PROJECT NOX V11: CLEAN COMMENT ENTRIES (SEM CAIXAS EMPILHADAS)
+     ========================================================================= */
+
   .comment-card-modern {
     position: relative;
-    background: #0c0e18;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    transition: background-color 0.15s ease;
   }
 
-  /* Level 1: Distinct Root Card with Elevated Presence */
+  /* Root Comment: Open presentation at top of conversation block */
   .comment-card-modern.is-root-card {
-    background: #0d101d;
-    border: 1px solid rgba(168, 85, 247, 0.2);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-    border-radius: 12px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding-bottom: 4px;
   }
 
-  /* Level 2: Nested Direct Replies Attached to Guide Line */
-  .comment-card-modern.is-nested-card.is-level-1 {
-    background: rgba(16, 13, 26, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+  /* Nested Replies: Clean entries with transparent background, subtle hover */
+  .comment-card-modern.is-nested-card {
+    background: transparent;
+    border: none;
     border-radius: 10px;
+    padding: 6px 8px;
   }
 
-  /* Level 3: Nested Deeper Replies with Soft Gold Accent */
-  .comment-card-modern.is-nested-card.is-level-deep {
-    background: rgba(14, 11, 23, 0.85);
-    border: 1px solid rgba(223, 194, 141, 0.22);
-    border-radius: 8px;
+  .comment-card-modern.is-nested-card:hover {
+    background: rgba(255, 255, 255, 0.02);
   }
 
-  .comment-card-modern.is-nested-card.is-level-deep:hover {
-    border-color: rgba(223, 194, 141, 0.45);
-  }
-
-  .comment-card-modern:hover {
-    border-color: rgba(255, 255, 255, 0.14);
-  }
-
+  /* Active reply target indicator */
   .comment-card-modern.is-reply-target {
-    border-color: #a855f7;
-    box-shadow: 0 0 14px rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.06);
+    border-radius: 10px;
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.25);
   }
 
   .comment-banner-bg {
@@ -2268,15 +2475,7 @@
   .comment-content-wrap {
     position: relative;
     z-index: 1;
-    padding: 12px 16px;
-  }
-
-  .is-nested-card .comment-content-wrap {
-    padding: 10px 14px;
-  }
-
-  .is-level-deep .comment-content-wrap {
-    padding: 8px 12px;
+    padding: 0;
   }
 
   /* Author Row */
@@ -2326,14 +2525,44 @@
     border-radius: 4px;
   }
 
-  .parent-mention-tag {
-    font-size: 10.5px;
-    font-weight: 700;
+  .reply-target-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-size: 11.5px;
+    line-height: 1.2;
+    vertical-align: middle;
+  }
+
+  .reply-target-arrow {
     color: #dfc28d;
-    background: rgba(223, 194, 141, 0.12);
-    border: 1px solid rgba(223, 194, 141, 0.25);
-    padding: 1px 6px;
-    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  .reply-target-label {
+    color: #71717a;
+    font-size: 10.5px;
+  }
+
+  .reply-target-link {
+    color: #c084fc;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease;
+  }
+
+  .reply-target-link:hover {
+    color: #dfc28d;
+    text-decoration: underline;
+  }
+
+  .meta-separator {
+    color: #52525b;
+    font-size: 11px;
   }
 
   .comment-time {
@@ -3180,6 +3409,166 @@
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(244, 63, 94, 0.12);
   }
 
+  .confirm-modal-box.is-granular {
+    max-width: 480px;
+    width: 92%;
+    text-align: left;
+    align-items: stretch;
+    border-color: rgba(168, 85, 247, 0.35);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(168, 85, 247, 0.15);
+  }
+
+  .confirm-modal-box.is-granular .confirm-modal-icon {
+    align-self: center;
+  }
+
+  .confirm-modal-box.is-granular .confirm-modal-title {
+    text-align: center;
+  }
+
+  .confirm-modal-box.is-granular .confirm-modal-desc {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .modal-media-selector {
+    margin-bottom: 10px;
+  }
+
+  .media-selector-label {
+    display: block;
+    font-size: 11px;
+    color: #a1a1aa;
+    margin-bottom: 4px;
+  }
+
+  .media-selector-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .media-selector-item {
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .media-selector-item.active {
+    border-color: #a855f7;
+  }
+
+  .media-selector-thumb {
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  .modal-media-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+
+  .modal-media-thumb {
+    width: 52px;
+    height: 52px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .modal-media-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .modal-media-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+    align-self: flex-start;
+  }
+
+  .modal-media-author {
+    font-size: 12px;
+    color: #a1a1aa;
+  }
+
+  .granular-moderation-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .granular-option-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 11px 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .granular-option-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .option-remove-media:hover {
+    border-color: rgba(244, 63, 94, 0.45);
+  }
+
+  .option-spoiler-media:hover {
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+
+  .option-delete-all:hover {
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  .option-icon-box {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .option-text-box {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .option-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 2px;
+  }
+
+  .option-desc {
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.4;
+  }
+
   .confirm-modal-icon {
     width: 44px;
     height: 44px;
@@ -3492,6 +3881,42 @@
 
     .pre-upload-img {
       max-width: 100%;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .conversation-root-block {
+      padding: 12px 10px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+
+    /* Limit indentation on compact mobile screens to keep thread readable */
+    .thread-replies-nest {
+      margin-left: 6px;
+      padding-left: 8px;
+    }
+
+    .thread-replies-nest.max-indent {
+      margin-left: 0;
+      padding-left: 6px;
+    }
+
+    .thread-connector-elbow {
+      left: -9px;
+      width: 8px;
+      height: 10px;
+    }
+
+    .reply-target-tag {
+      font-size: 10.5px;
+      padding: 1px 5px;
+      gap: 3px;
+    }
+
+    /* Keep compact on mobile by showing ↳ @username */
+    .reply-target-label {
+      display: none;
     }
   }
 </style>

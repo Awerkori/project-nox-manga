@@ -192,6 +192,98 @@ export const POST = async ({ request, locals, platform }: any) => {
     return json({ ok: true });
   }
 
+  // Handle 'comment_moderate_media' action (Granular moderation of attachments / spoilers)
+  if (body.scope === 'member' && body.action === 'comment_moderate_media') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const commentId = body.data?.comment_id ? String(body.data.comment_id) : (body.data?.id ? String(body.data.id) : null);
+    const mediaUrl = body.data?.media_url ? String(body.data.media_url).trim() : null;
+    const mode = body.data?.mode ? String(body.data.mode) : 'remove'; // 'remove' | 'spoiler'
+    if (!commentId || !mediaUrl) error(400, 'comment_id e media_url obrigatórios');
+
+    // Check user permissions
+    const adminDb = privileged();
+    const { data: targetComment } = await adminDb
+      .from('comments')
+      .select('id, user_id, body, removed, deleted, chapter_id, work_id')
+      .eq('id', commentId)
+      .maybeSingle();
+
+    if (!targetComment || targetComment.removed || targetComment.deleted) {
+      error(404, 'Comentário indisponível');
+    }
+
+    // Role check: Author or Staff/Admin
+    let isAuthorized = targetComment.user_id === locals.user.id;
+    if (!isAuthorized) {
+      const { data: roleRow } = await adminDb
+        .from('access_roles')
+        .select('role')
+        .eq('user_id', locals.user.id)
+        .maybeSingle();
+      const r = (roleRow?.role || '').toUpperCase();
+      isAuthorized = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(r) || locals.user.id === 'f730c4f8-132b-42eb-be14-16279f0ce6e6';
+    }
+
+    if (!isAuthorized) {
+      error(403, 'Você não tem permissão para moderar esta mídia');
+    }
+
+    let updatedBody = targetComment.body || '';
+
+    if (mode === 'remove') {
+      // Remove specific media markdown: ![alt](url) or ||![alt](url)|| or direct url
+      const escapedUrl = mediaUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tagRegex = new RegExp(`(?:\\|\\|\\s*)?!\\[[^\\]]*\\]\\(${escapedUrl}\\)(?:\\s*\\|\\|)?|${escapedUrl}`, 'gi');
+      updatedBody = updatedBody.replace(tagRegex, '').trim();
+
+      // Clean up multiple line breaks left behind
+      updatedBody = updatedBody.replace(/\n{3,}/g, '\n\n').trim();
+
+      if (!updatedBody) {
+        // Safe policy when comment had ONLY this media and no text:
+        // Soft delete the comment so it doesn't leave an empty broken shell
+        const { error: delErr } = await adminDb
+          .from('comments')
+          .update({ removed: true, deleted: true, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (delErr) error(400, delErr.message);
+
+        return json({ ok: true, commentId, action: 'removed_and_deleted', empty: true });
+      } else {
+        const { error: upErr } = await adminDb
+          .from('comments')
+          .update({ body: updatedBody, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (upErr) error(400, upErr.message);
+
+        return json({ ok: true, commentId, action: 'removed_media', newBody: updatedBody });
+      }
+    } else if (mode === 'spoiler') {
+      // Wrap media in spoiler ||![alt](url)|| if not already wrapped
+      const escapedUrl = mediaUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const alreadySpoiler = new RegExp(`\\|\\|[\\s\\S]*?${escapedUrl}[\\s\\S]*?\\|\\|`, 'i').test(updatedBody);
+      if (!alreadySpoiler) {
+        const tagRegex = new RegExp(`!\\[([^\\]]*)\\]\\(${escapedUrl}\\)`, 'i');
+        if (tagRegex.test(updatedBody)) {
+          updatedBody = updatedBody.replace(tagRegex, '||![$1](' + mediaUrl + ')||');
+        } else {
+          const plainRegex = new RegExp(`${escapedUrl}`, 'i');
+          updatedBody = updatedBody.replace(plainRegex, `||![](${mediaUrl})||`);
+        }
+
+        const { error: upErr } = await adminDb
+          .from('comments')
+          .update({ body: updatedBody, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (upErr) error(400, upErr.message);
+      }
+
+      return json({ ok: true, commentId, action: 'spoiler_applied', newBody: updatedBody });
+    }
+
+    error(400, 'Modo de moderação de mídia inválido');
+  }
+
   // Handle 'like' action using member_action RPC
   if (body.scope === 'member' && body.action === 'like') {
     if (!locals.user?.id) error(401, 'Entre em sua conta');
