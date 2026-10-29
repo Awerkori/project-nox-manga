@@ -140,10 +140,13 @@
   } | null>(null);
   let replyFileInputRef: HTMLInputElement | undefined = $state();
   let inlineReplyComposerEl = $state<HTMLTextAreaElement>();
+  let replyMentionRef = $state<any>();
 
   // In-Place Inline Edit
   let editingCommentId = $state<string | null>(null);
   let editBody = $state('');
+  let editTextareaEl = $state<HTMLTextAreaElement>();
+  let editMentionRef = $state<any>();
 
   // General discussion state
   let notice = $state('');
@@ -592,7 +595,8 @@
     tick().then(() => {
       textarea.focus();
       textarea.setSelectionRange(start + 1, start + 1);
-      if (!isInline) mainMentionAutocompleteRef?.handleInput(newVal);
+      if (isInline) replyMentionRef?.handleInput(newVal);
+      else mainMentionAutocompleteRef?.handleInput(newVal);
     });
   }
 
@@ -630,16 +634,23 @@
     activeReplyId = null;
     replyBody = '';
     replyMedia = null;
+    replyMentionRef?.closeMenu?.();
+    replyMentionRef?.clearTrackedMentions?.();
   }
 
   function startInlineEdit(comment: Comment) {
     editingCommentId = comment.id;
     editBody = comment.body;
+    tick().then(() => {
+      editTextareaEl?.focus();
+    });
   }
 
   function cancelInlineEdit() {
     editingCommentId = null;
     editBody = '';
+    editMentionRef?.closeMenu?.();
+    editMentionRef?.clearTrackedMentions?.();
   }
 
   async function saveInlineEdit(commentId: string) {
@@ -647,12 +658,15 @@
     busy = true;
     notice = '';
     try {
+      const mentionsData = editMentionRef?.getTrackedMentions() || null;
       await action('member', 'comment_edit', {
         id: commentId,
-        body: editBody.trim()
+        body: editBody.trim(),
+        mentionsData
       });
       editingCommentId = null;
       editBody = '';
+      editMentionRef?.clearTrackedMentions?.();
       await invalidateAll();
     } catch (e: any) {
       notice = e?.message || 'Não foi possível salvar a edição.';
@@ -679,7 +693,7 @@
         finalBody = finalBody ? `${finalBody}\n\n${mediaTag}` : mediaTag;
       }
 
-      const autocomplete = isInline ? null : mainMentionAutocompleteRef;
+      const autocomplete = isInline ? replyMentionRef : mainMentionAutocompleteRef;
       const mentionsData = autocomplete?.getTrackedMentions() || null;
 
       const res = (await action('member', 'comment', {
@@ -713,6 +727,7 @@
         activeReplyId = null;
         replyBody = '';
         replyMedia = null;
+        autocomplete?.clearTrackedMentions();
         if (parentId) collapsedThreads.delete(parentId);
       } else {
         mainBody = '';
@@ -878,6 +893,34 @@
       .filter((c) => c.type === 'media' && c.mediaUrl)
       .map((c) => c.mediaUrl as string);
   }
+
+  function parseMentionSubChunks(text: string): Array<{ type: 'text' | 'mention'; content: string; username?: string }> {
+    if (!text) return [];
+    const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_À-ÿ-]+)/g;
+    const result: Array<{ type: 'text' | 'mention'; content: string; username?: string }> = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const prefix = match[1] || '';
+      const username = match[2];
+      const matchStart = match.index + prefix.length;
+      const matchEnd = matchStart + 1 + username.length;
+
+      if (matchStart > lastIdx) {
+        result.push({ type: 'text', content: text.slice(lastIdx, matchStart) });
+      }
+      result.push({ type: 'mention', content: username, username });
+      lastIdx = matchEnd;
+      mentionRegex.lastIndex = matchEnd;
+    }
+
+    if (lastIdx < text.length) {
+      result.push({ type: 'text', content: text.slice(lastIdx) });
+    }
+
+    return result;
+  }
 </script>
 
 <section class="comments-section-root" data-thread-style={threadStyle}>
@@ -946,6 +989,12 @@
           rows="3"
           maxlength="2000"
           oninput={(e) => mainMentionAutocompleteRef?.handleInput((e.target as HTMLTextAreaElement).value)}
+          onclick={() => mainMentionAutocompleteRef?.handleInput(mainBody)}
+          onkeyup={(e) => {
+            if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+              mainMentionAutocompleteRef?.handleInput(mainBody);
+            }
+          }}
           onkeydown={(e) => {
             if (mainMentionAutocompleteRef?.handleKeyDown(e)) return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') void sendComment();
@@ -1338,12 +1387,32 @@
             <!-- Body or Inline Edit Mode -->
             {#if isEditing}
               <div class="inline-edit-box">
+                <MentionAutocomplete
+                  bind:this={editMentionRef}
+                  bind:value={editBody}
+                  textareaEl={editTextareaEl}
+                  scanId={scanId}
+                  position="auto"
+                />
                 <textarea
                   bind:value={editBody}
+                  bind:this={editTextareaEl}
                   rows="2"
                   maxlength="2000"
                   class="inline-edit-textarea"
                   aria-label="Editar comentário"
+                  oninput={(e) => editMentionRef?.handleInput((e.target as HTMLTextAreaElement).value)}
+                  onclick={() => editMentionRef?.handleInput(editBody)}
+                  onkeyup={(e) => {
+                    if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                      editMentionRef?.handleInput(editBody);
+                    }
+                  }}
+                  onkeydown={(e) => {
+                    if (editMentionRef?.handleKeyDown(e)) return;
+                    if (e.key === 'Escape') cancelInlineEdit();
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') void saveInlineEdit(comment.id);
+                  }}
                 ></textarea>
                 <div class="inline-edit-actions">
                   <button
@@ -1376,7 +1445,23 @@
                       onclick={() => toggleSpoiler(comment.id + ':' + idx)}
                       aria-expanded={revealedSpoilers.has(comment.id + ':' + idx)}
                       title={revealedSpoilers.has(comment.id + ':' + idx) ? 'Clique para ocultar spoiler' : 'Spoiler oculto: clique para ler'}
-                    >{chunk.content}</button>
+                    >
+                      {#if revealedSpoilers.has(comment.id + ':' + idx)}
+                        {#each parseMentionSubChunks(chunk.content) as subChunk}
+                          {#if subChunk.type === 'mention'}
+                            <a
+                              href={`/u/${subChunk.username || subChunk.content}`}
+                              class="mention-chip"
+                              onclick={(e) => e.stopPropagation()}
+                            >@{subChunk.content}</a>
+                          {:else}
+                            <span>{subChunk.content}</span>
+                          {/if}
+                        {/each}
+                      {:else}
+                        {chunk.content}
+                      {/if}
+                    </button>
                   {:else if chunk.type === 'media'}
                     <div class="comment-media-card">
                       {#if chunk.isSpoiler && !revealedSpoilers.has(comment.id + ':media:' + idx)}
@@ -1571,6 +1656,14 @@
                 aria-hidden="true"
               />
 
+              <MentionAutocomplete
+                bind:this={replyMentionRef}
+                bind:value={replyBody}
+                textareaEl={inlineReplyComposerEl}
+                scanId={scanId}
+                position="auto"
+              />
+
               <textarea
                 bind:value={replyBody}
                 bind:this={inlineReplyComposerEl}
@@ -1581,7 +1674,15 @@
                 onpaste={(e) => handlePaste(e, true)}
                 ondrop={(e) => handleDrop(e, true)}
                 ondragover={(e) => e.preventDefault()}
+                oninput={(e) => replyMentionRef?.handleInput((e.target as HTMLTextAreaElement).value)}
+                onclick={() => replyMentionRef?.handleInput(replyBody)}
+                onkeyup={(e) => {
+                  if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    replyMentionRef?.handleInput(replyBody);
+                  }
+                }}
                 onkeydown={(e) => {
+                  if (replyMentionRef?.handleKeyDown(e)) return;
                   if (e.key === 'Escape') cancelInlineReply();
                   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') void sendComment(comment.id);
                 }}
@@ -2899,6 +3000,7 @@
 
   /* In-Place Inline Edit Box */
   .inline-edit-box {
+    position: relative;
     margin-top: 6px;
     margin-bottom: 6px;
   }
@@ -2968,6 +3070,7 @@
   }
 
   .inline-composer-card {
+    position: relative;
     background: #110e20;
     border: 1px solid rgba(168, 85, 247, 0.35);
     border-radius: 10px;

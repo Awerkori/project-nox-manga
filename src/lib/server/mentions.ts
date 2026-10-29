@@ -31,6 +31,7 @@ export interface DispatchMentionsParams {
   workId?: string | null;
   chapterId?: string | null;
   mentionsData?: StructuredMentionInput[] | null;
+  excludeUserIds?: string[];
   platform?: any;
 }
 
@@ -76,6 +77,7 @@ export async function dispatchMentions({
   workId = null,
   chapterId = null,
   mentionsData = null,
+  excludeUserIds = [],
   platform
 }: DispatchMentionsParams): Promise<{ count: number; notifiedUserIds: string[] }> {
   const db = privileged();
@@ -307,6 +309,11 @@ export async function dispatchMentions({
   for (const [uid, target] of targetUserMap.entries()) {
     // Não notificar o autor quando ele menciona a si próprio (@seunome)
     if (uid === authorId) {
+      continue;
+    }
+
+    // Não duplicar notificações para usuários que já foram notificados por outra via (ex: autor do comentário pai em respostas)
+    if (excludeUserIds && excludeUserIds.includes(uid)) {
       continue;
     }
 

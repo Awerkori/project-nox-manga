@@ -342,12 +342,30 @@ export const POST = async ({ request, locals, platform }: any) => {
     invalidateObraAuxCache(targetWorkId);
   }
 
-  if (body.scope === 'member' && body.action === 'comment' && locals.user) {
+  if (body.scope === 'member' && (body.action === 'comment' || body.action === 'comment_edit') && locals.user) {
+    const isEdit = body.action === 'comment_edit';
     const commentBody = String(body.data.body || '');
-    const chapterId = body.data.chapter_id ? String(body.data.chapter_id) : null;
-    const workId = body.data.work_id ? String(body.data.work_id) : null;
-    const parentId = body.data.parent_id ? String(body.data.parent_id) : null;
-    const commentId = (data as any)?.id;
+    let chapterId = body.data.chapter_id ? String(body.data.chapter_id) : null;
+    let workId = body.data.work_id ? String(body.data.work_id) : null;
+    let parentId = body.data.parent_id ? String(body.data.parent_id) : null;
+    const commentId = (data as any)?.id || body.data.id;
+
+    if (isEdit && commentId && (!chapterId || !workId)) {
+      try {
+        const { data: existingComment } = await locals.db
+          .from('comments')
+          .select('chapter_id, work_id, parent_id')
+          .eq('id', commentId)
+          .maybeSingle();
+        if (existingComment) {
+          if (!chapterId) chapterId = existingComment.chapter_id;
+          if (!workId) workId = existingComment.work_id;
+          if (!parentId) parentId = existingComment.parent_id;
+        }
+      } catch (err) {
+        console.warn('[ACTION] Could not retrieve existing comment meta for edit:', err);
+      }
+    }
 
     let workSlug = workId || '';
     let workTitle = 'Obra';
@@ -392,8 +410,10 @@ export const POST = async ({ request, locals, platform }: any) => {
       authorName = authorMem.display_name || authorMem.username || 'Alguém';
     }
 
-    // Notify parent comment author if replying
-    if (parentId) {
+    let parentUserId: string | null = null;
+
+    // Notify parent comment author if replying (apenas para novos comentários, não para edições)
+    if (parentId && !isEdit) {
       try {
         const { data: parent } = await locals.db
           .from('comments')
@@ -402,6 +422,7 @@ export const POST = async ({ request, locals, platform }: any) => {
           .maybeSingle();
 
         if (parent && parent.user_id && parent.user_id !== locals.user.id) {
+          parentUserId = parent.user_id;
           const replyDeepLink = chapterId
             ? `/ler/${chapterId}#comment-${parentId}`
             : `/obra/${workSlug}#comment-${parentId}`;
@@ -445,6 +466,7 @@ export const POST = async ({ request, locals, platform }: any) => {
         workId,
         chapterId,
         mentionsData,
+        excludeUserIds: parentUserId ? [parentUserId] : [],
         platform
       });
     } catch (err) {
