@@ -92,7 +92,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         progress: userProgress,
         comments: cachedComments,
         scans: cached.scans,
-        preview: false
+        preview: false,
+        user: locals.user ? { id: locals.user.id } : null,
+        profile: locals.sessionCache?.profile || null
       };
     }
   }
@@ -334,6 +336,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     progress: progress?.data || null,
     comments: sanitizeComments(comments?.data || []),
     scans,
-    preview
+    preview,
+    user: locals.user ? { id: locals.user.id } : null,
+    profile: locals.sessionCache?.profile || null
   };
 };

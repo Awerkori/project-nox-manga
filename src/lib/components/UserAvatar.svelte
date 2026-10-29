@@ -188,6 +188,16 @@
   $effect(() => {
     if (failedSrc && failedSrc !== resolvedSrc) failedSrc = null;
   });
+
+  function handleImgError(node: HTMLImageElement) {
+    const fn = () => { failedSrc = resolvedSrc; };
+    node.addEventListener('error', fn);
+    return {
+      destroy() {
+        node.removeEventListener('error', fn);
+      }
+    };
+  }
 </script>
 
 <div
@@ -318,7 +328,7 @@
         class="avatar-image"
         style={cropStyle}
         loading={loading}
-        onerror={() => (failedSrc = resolvedSrc)}
+        use:handleImgError
       />
     {:else}
       <span class="avatar-fallback" style="font-size: {Math.max(12, Math.round(size * 0.42))}px;">

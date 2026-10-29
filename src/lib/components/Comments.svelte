@@ -779,14 +779,37 @@
     }
   }
 
+  function getCommentDescendants(commentId: string): string[] {
+    const descendantIds: string[] = [];
+    const queue = [commentId];
+    const visited = new Set<string>([commentId]);
+
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      for (const c of comments) {
+        if (c.parent_id === parentId && !visited.has(c.id) && !deletedCommentIds.has(c.id) && !c.removed && !c.deleted) {
+          visited.add(c.id);
+          descendantIds.push(c.id);
+          queue.push(c.id);
+        }
+      }
+    }
+    return descendantIds;
+  }
+
   async function confirmDelete() {
     if (!commentToDelete || deleteBusy) return;
     const target = commentToDelete;
     deleteBusy = true;
     notice = '';
+    const descendantIds = getCommentDescendants(target.id);
+    const allIds = [target.id, ...descendantIds];
+
     try {
-      // Mark locally deleted immediately so it vanishes without any tombstone!
-      deletedCommentIds.add(target.id);
+      // Mark locally deleted immediately so the entire subtree vanishes without any tombstone!
+      for (const id of allIds) {
+        deletedCommentIds.add(id);
+      }
       await action('member', 'comment_delete', {
         id: target.id,
         comment_id: target.id,
@@ -796,7 +819,9 @@
       commentToDelete = null;
       await invalidateAll();
     } catch (e: any) {
-      deletedCommentIds.delete(target.id);
+      for (const id of allIds) {
+        deletedCommentIds.delete(id);
+      }
       notice = e?.message || 'Não foi possível apagar o comentário.';
     } finally {
       deleteBusy = false;
@@ -1883,6 +1908,7 @@
     {@const hasMedia = targetMedia.length > 0}
     {@const activeMediaUrl = targetMedia[selectedMediaIdx] || targetMedia[0]}
     {@const isAlreadySpoiler = hasMedia && parseCommentBody(commentToDelete.body).some((c) => c.type === 'media' && c.mediaUrl === activeMediaUrl && c.isSpoiler)}
+    {@const descendantCount = getCommentDescendants(commentToDelete.id).length}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="confirm-modal-backdrop"
@@ -1907,7 +1933,13 @@
         </div>
 
         <h3 id="del-modal-title" class="confirm-modal-title">
-          {hasMedia ? 'Moderação de Mídia e Comentário' : 'Apagar Comentário'}
+          {#if hasMedia}
+            Moderação de Mídia e Comentário
+          {:else if descendantCount > 0}
+            Excluir este comentário e suas {descendantCount} {descendantCount === 1 ? 'resposta' : 'respostas'}?
+          {:else}
+            Excluir este comentário?
+          {/if}
         </h3>
 
         {#if hasMedia}
@@ -1988,7 +2020,7 @@
               </div>
             </button>
 
-            <!-- Opção C: Excluir comentário completo -->
+            <!-- Opção C: Excluir comentário completo em cascata -->
             <button
               type="button"
               class="granular-option-card option-delete-all"
@@ -1999,9 +2031,15 @@
                 <Trash2 size={18} />
               </div>
               <div class="option-text-box">
-                <span class="option-title">Opção C — Excluir comentário inteiro</span>
+                <span class="option-title">
+                  {descendantCount > 0
+                    ? `Opção C — Excluir comentário e suas ${descendantCount} ${descendantCount === 1 ? 'resposta' : 'respostas'}`
+                    : 'Opção C — Excluir comentário inteiro'}
+                </span>
                 <span class="option-desc">
-                  Apaga o comentário por completo junto com seus anexos. Respostas existentes são preservadas.
+                  {descendantCount > 0
+                    ? `Apaga permanentemente o comentário e toda a árvore de ${descendantCount} respostas dependentes dele.`
+                    : 'Apaga o comentário por completo junto com seus anexos.'}
                 </span>
               </div>
             </button>
@@ -2019,7 +2057,11 @@
           </div>
         {:else}
           <p class="confirm-modal-desc">
-            Tem certeza que deseja apagar este comentário? Esta ação não pode ser desfeita.
+            {#if descendantCount > 0}
+              Esta ação excluirá permanentemente este comentário e todas as suas <strong>{descendantCount} {descendantCount === 1 ? 'resposta' : 'respostas'}</strong> dependentes. Conversas e comentários independentes continuarão intactos.
+            {:else}
+              Tem certeza que deseja apagar este comentário? Esta ação não pode ser desfeita.
+            {/if}
           </p>
           <div class="confirm-modal-actions">
             <button
@@ -2041,7 +2083,7 @@
                 <span>Apagando...</span>
               {:else}
                 <Trash2 size={14} />
-                <span>Sim, Apagar</span>
+                <span>Sim, Apagar {descendantCount > 0 ? `(${descendantCount + 1})` : ''}</span>
               {/if}
             </button>
           </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { SvelteSet } from 'svelte/reactivity';
   import {
     ArrowLeft,
@@ -53,6 +54,11 @@
   import type { PageData } from '../../routes/ler/[id]/$types';
 
   let { data }: { data: PageData } = $props();
+
+  // User authentication context
+  const currentUser = $derived((page.data as any)?.user || (data as any)?.user);
+  const currentProfile = $derived((page.data as any)?.profile || (data as any)?.profile);
+  const isAuthenticated = $derived(Boolean(currentUser || currentProfile));
 
   // Settings State
   let readerSettings = $state<ReaderSettings>(loadReaderSettings());
@@ -163,8 +169,10 @@
 
         if (!isNearViewport) {
           // Download antecipado puro: carrega bytes no HTTP Cache do navegador sem decodificar bitmaps em RAM
+          const fetchTimeout = AbortSignal.timeout(8000);
+          const fetchSignal = (AbortSignal as any).any ? (AbortSignal as any).any([signal, fetchTimeout]) : signal;
           const res = await fetch(mediaUrl, {
-            signal,
+            signal: fetchSignal,
             cache: 'force-cache',
             priority: page.position <= current + 4 ? 'high' : ('low' as any)
           });
@@ -172,19 +180,41 @@
             throw new Error(`HTTP ${res.status}`);
           }
         } else {
-          // Decodificação assíncrona somente para páginas na visão imediata do leitor
+          // Decodificação assíncrona com timeout de segurança para nunca travar a aba
           await new Promise<void>((resolve, reject) => {
             const img = new Image();
             img.decoding = 'async';
-            img.onload = () => {
+            let settled = false;
+
+            const timer = setTimeout(() => {
+              if (!settled) {
+                settled = true;
+                resolve();
+              }
+            }, 8000);
+
+            const handleSuccess = () => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               if ('decode' in img) {
                 img.decode().then(() => resolve()).catch(() => resolve());
               } else {
                 resolve();
               }
             };
-            img.onerror = () => reject(new Error('Image decode error'));
+
+            img.onload = handleSuccess;
+            img.onerror = () => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              reject(new Error('Image decode error'));
+            };
             img.src = mediaUrl;
+            if (img.complete && img.naturalWidth > 0) {
+              handleSuccess();
+            }
           });
         }
 
@@ -478,11 +508,10 @@
   function recordViewOnce() {
     if (viewRecorded || data.preview) return;
     viewRecorded = true;
-    void action('public', 'view', { work_id: data.chapter.work_id, chapter_id: data.chapter.id });
   }
 
   async function completeChapter() {
-    if (completionClaimInFlight || completionAwardAttempted || data.preview) return;
+    if (completionClaimInFlight || completionAwardAttempted || data.preview || !isAuthenticated) return;
     completionClaimInFlight = true;
     completionAwardAttempted = true;
     chapterCompleted = true;
@@ -496,17 +525,6 @@
         total_pages: data.pages.length,
         completed: true
       })) as any;
-
-      // 2. If read_page did not award XP (e.g. read session timing requirement), invoke claim_xp
-      if (!res?.xp_award?.awarded && res?.xp_award?.reason !== 'already_awarded') {
-        const claimRes = (await action('member', 'claim_xp', {
-          work_id: data.chapter.work_id,
-          chapter_id: data.chapter.id
-        })) as any;
-        if (claimRes?.xp_award) {
-          res = claimRes;
-        }
-      }
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
         xpAwardConfirmed = true;
@@ -528,15 +546,15 @@
       } else if (res?.xp_award?.reason === 'already_awarded') {
         xpAwardConfirmed = true;
       }
-    } catch {
-      // Non-blocking
+    } catch (err) {
+      console.warn('[READER] completeChapter error:', err);
     } finally {
       completionClaimInFlight = false;
     }
   }
 
   async function saveProgress(pageNumber: number) {
-    if (sending || data.preview) return;
+    if (sending || data.preview || !isAuthenticated) return;
     sending = true;
     try {
       await action('member', 'read_page', {
@@ -561,13 +579,12 @@
       visible.delete(page);
     }
     const arr = Array.from(visible).sort((a, b) => a - b);
-    if (arr.length) {
+    if (data.pages?.length && maxSeenPage >= data.pages.length && !chapterCompleted) {
+      if (arr.length) current = arr[0];
+      void completeChapter();
+    } else if (arr.length) {
       current = arr[0];
       void saveProgress(current);
-    }
-
-    if (data.pages?.length && maxSeenPage >= data.pages.length && !chapterCompleted) {
-      void completeChapter();
     }
   }
 

@@ -192,6 +192,95 @@ export const POST = async ({ request, locals, platform }: any) => {
     return json({ ok: true });
   }
 
+  // Handle 'comment_delete' with recursive logical cascade deletion
+  if (body.scope === 'member' && body.action === 'comment_delete') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const commentId = body.data?.comment_id ? String(body.data.comment_id) : (body.data?.id ? String(body.data.id) : null);
+    if (!commentId) error(400, 'ID do comentário obrigatório');
+
+    const adminDb = privileged();
+    const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
+
+    // 1. Fetch target comment
+    const { data: targetComment, error: targetErr } = await adminDb
+      .from('comments')
+      .select('id, user_id, chapter_id, work_id, removed, deleted')
+      .eq('id', commentId)
+      .maybeSingle();
+
+    if (targetErr || !targetComment) {
+      error(404, 'Comentário não encontrado');
+    }
+
+    // 2. Validate author or moderation permission
+    if (targetComment.user_id !== locals.user.id && !isStaff) {
+      error(403, 'Você não tem permissão para excluir este comentário');
+    }
+
+    // 3. Find all candidate comments in the same chapter/work scope
+    let scopeQuery = adminDb.from('comments').select('id, parent_id');
+    if (targetComment.chapter_id) {
+      scopeQuery = scopeQuery.eq('chapter_id', targetComment.chapter_id);
+    } else if (targetComment.work_id) {
+      scopeQuery = scopeQuery.eq('work_id', targetComment.work_id);
+    }
+    const { data: siblingsAndChildren } = await scopeQuery;
+    const allCandidateComments = siblingsAndChildren || [];
+
+    // Group children by parent_id
+    const childrenByParent = new Map<string, string[]>();
+    for (const item of allCandidateComments) {
+      if (item.parent_id) {
+        const list = childrenByParent.get(item.parent_id) || [];
+        list.push(item.id);
+        childrenByParent.set(item.parent_id, list);
+      }
+    }
+
+    // Traverse recursively/iteratively from targetComment.id
+    const descendantIds: string[] = [];
+    const queue = [targetComment.id];
+    const visited = new Set<string>([targetComment.id]);
+
+    while (queue.length > 0) {
+      const currentParent = queue.shift()!;
+      const children = childrenByParent.get(currentParent) || [];
+      for (const childId of children) {
+        if (!visited.has(childId)) {
+          visited.add(childId);
+          descendantIds.push(childId);
+          queue.push(childId);
+        }
+      }
+    }
+
+    const allIdsToDelete = [targetComment.id, ...descendantIds];
+    const nowIso = new Date().toISOString();
+
+    // 4. Perform logical deletion on the selected comment and all its descendants
+    const { error: deleteErr } = await adminDb
+      .from('comments')
+      .update({
+        removed: true,
+        deleted: true,
+        deleted_at: nowIso,
+        updated_at: nowIso
+      })
+      .in('id', allIdsToDelete);
+
+    if (deleteErr) {
+      error(400, 'Falha ao excluir comentários: ' + deleteErr.message);
+    }
+
+    return json({
+      ok: true,
+      deleted_id: targetComment.id,
+      deleted_count: allIdsToDelete.length,
+      descendant_count: descendantIds.length,
+      deleted_ids: allIdsToDelete
+    });
+  }
+
   // Handle 'comment_moderate_media' action (Granular moderation of attachments / spoilers)
   if (body.scope === 'member' && body.action === 'comment_moderate_media') {
     if (!locals.user?.id) error(401, 'Entre em sua conta');
@@ -320,13 +409,101 @@ export const POST = async ({ request, locals, platform }: any) => {
     });
   }
 
-  // Chapter reading and progression aliases for backwards and forward compatibility
-  if (body.scope === 'member') {
-    if (body.action === 'reading') {
-      body.action = 'read_page';
-    } else if (body.action === 'complete_reading') {
-      body.action = 'claim_xp';
+  // Dedicated robust handler for reading progression and chapter completion
+  if (
+    body.scope === 'member' &&
+    ['read_start', 'read_page', 'reading', 'complete_reading'].includes(body.action)
+  ) {
+    if (!locals.user) {
+      error(401, 'Faça login para registrar o progresso de leitura');
     }
+
+    const cid = body.data?.chapter_id ? String(body.data.chapter_id) : null;
+    const wid = body.data?.work_id ? String(body.data.work_id) : null;
+    if (!cid) {
+      error(400, 'chapter_id obrigatório');
+    }
+
+    const page = Math.max(1, Number(body.data?.page) || 1);
+    const isCompleted = Boolean(body.data?.completed || body.action === 'complete_reading');
+
+    const adminDb = privileged();
+
+    // 1. Fetch current reading record to preserve highest page and completed status
+    const { data: existingRead } = await adminDb
+      .from('reading')
+      .select('page, completed, completed_at')
+      .eq('user_id', locals.user.id)
+      .eq('chapter_id', cid)
+      .maybeSingle();
+
+    const maxPage = Math.max(page, existingRead?.page || 0);
+    const wasAlreadyCompleted = Boolean(existingRead?.completed);
+    const finalCompleted = wasAlreadyCompleted || isCompleted;
+
+    // 2. Upsert reading record
+    await adminDb.from('reading').upsert(
+      {
+        user_id: locals.user.id,
+        chapter_id: cid,
+        page: maxPage,
+        completed: finalCompleted,
+        completed_at: finalCompleted ? (existingRead?.completed_at || new Date().toISOString()) : null,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'user_id,chapter_id' }
+    );
+
+    // 3. Award XP if completed
+    let xpAward: any = null;
+    if (finalCompleted) {
+      // Check if already awarded in xp_ledger
+      const { data: existingAward } = await adminDb
+        .from('xp_ledger')
+        .select('id, amount, created_at')
+        .eq('user_id', locals.user.id)
+        .eq('kind', 'READ_CHAPTER')
+        .eq('source_id', cid)
+        .maybeSingle();
+
+      if (existingAward) {
+        const { data: mem } = await adminDb.from('members').select('xp').eq('id', locals.user.id).single();
+        xpAward = {
+          ok: true,
+          awarded: false,
+          reason: 'already_awarded',
+          total_xp: mem?.xp || 0
+        };
+      } else {
+        const { data: xpRes, error: xpErr } = await locals.db.rpc('award_xp', {
+          p_kind: 'READ_CHAPTER',
+          p_source_id: cid,
+          p_meta: {
+            work_id: wid,
+            description: 'Capítulo concluído'
+          }
+        });
+
+        if (!xpErr && xpRes) {
+          xpAward = xpRes;
+          if (xpRes.awarded) {
+            invalidateUserSession(locals.user.id);
+            invalidateRankingCache();
+          }
+        }
+      }
+    }
+
+    if (wid) {
+      invalidateObraAuxCache(wid);
+    }
+
+    return json({
+      ok: true,
+      page: maxPage,
+      completed: finalCompleted,
+      xp_award: xpAward
+    });
   }
 
   const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
