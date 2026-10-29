@@ -316,11 +316,6 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const mime = String(media.mime || '').toLowerCase();
     const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
     const canResize = mime === 'image/jpeg' || mime === 'image/png';
-    // A cold thumbnail used to wait for Telegram, then buffer and run a pure-JS
-    // decode/resize/encode. For normal covers this added seconds of blank UI.
-    // Small originals are cheaper to transfer once than to hold the request open;
-    // unsupported formats must also remain streamed rather than buffered only to
-    // fall back to the original. The immutable v3 URL is cached at the edge.
     const streamOriginal = !canResize || (coverVariant === 'thumb' && bytes > 0 && bytes <= 1_000_000 && pixels > 2_000_000);
     if (streamOriginal) {
       headers['X-Thumbnail-Strategy'] = 'stream-original';

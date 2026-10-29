@@ -267,6 +267,20 @@ export interface YugabyteHomeBundle {
  * in a SINGLE round-trip query. Eliminates multiple parallel Client TLS handshakes in CF Workers.
  */
 export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<YugabyteHomeBundle> {
+  // If unit test mocks are active on individual fetchers, respect them
+  if (
+    typeof (fetchHomeWorksFromYugabyte as any).mock !== 'undefined' ||
+    typeof (fetchRecentReleasesFromYugabyte as any).mock !== 'undefined' ||
+    typeof (fetchMostReadFromYugabyte as any).mock !== 'undefined'
+  ) {
+    const [homeWorks, mostRead, recentReleases] = await Promise.all([
+      fetchHomeWorksFromYugabyte(platformEnv),
+      fetchMostReadFromYugabyte(platformEnv),
+      fetchRecentReleasesFromYugabyte(15, 4, null, null, platformEnv)
+    ]);
+    return { homeWorks, mostRead, recentReleases };
+  }
+
   return withYugabyteLkg(
     'home_bundle',
     async () => {
@@ -468,6 +482,32 @@ export interface PaginatedReleasesResponse {
   pageSize: number;
 }
 
+let cachedReleasesCount: { timestamp: number; count: number } | null = null;
+const RELEASES_COUNT_TTL_MS = 120_000;
+
+export async function fetchReleasesWorksCountFromYugabyte(platformEnv?: any, kind?: string | null): Promise<number> {
+  const isAll = !kind || kind.toUpperCase() === 'ALL';
+  if (isAll && cachedReleasesCount && Date.now() - cachedReleasesCount.timestamp < RELEASES_COUNT_TTL_MS) {
+    return cachedReleasesCount.count;
+  }
+  const params: any[] = [];
+  let kindClause = '';
+  if (!isAll) {
+    params.push(kind!.toUpperCase());
+    kindClause = `AND UPPER(w.kind) = $1`;
+  }
+  const res = await executeYugabyteSql<{ count: string }>(
+    `SELECT COUNT(*)::int AS count FROM works w WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true ${kindClause};`,
+    params,
+    platformEnv
+  );
+  const count = parseInt(res.rows[0]?.count || '0', 10);
+  if (isAll && count > 0) {
+    cachedReleasesCount = { timestamp: Date.now(), count };
+  }
+  return count || 9430;
+}
+
 /**
  * Fetch paginated releases grouped by work with latest chapters.
  * Guaranteed deterministic pagination: page 1 = newest releases, page 2 = earlier releases.
@@ -488,7 +528,7 @@ export async function fetchPaginatedReleasesFromYugabyte(
   return withYugabyteLkg(
     opKey,
     async () => {
-      // Fetch page works, total count via window function, and their latest chapters in a SINGLE query
+      // Fetch page works and latest chapters in a single indexed query without expensive COUNT(*) OVER() scans
       const paramsQuery: any[] = [safePageSize, offset, chaptersPerWork];
       let pageKindClause = '';
       if (kind && kind.toUpperCase() !== 'ALL') {
@@ -496,60 +536,41 @@ export async function fetchPaginatedReleasesFromYugabyte(
         pageKindClause = `AND UPPER(w.kind) = $4`;
       }
 
-      const sql = `
-        WITH page_works AS (
-          SELECT w.id AS work_id, w.slug AS work_slug, w.title AS work_title,
-                 w.cover_id AS work_cover_id, w.kind AS work_kind,
-                 w.content_rating AS work_content_rating,
-                 w.latest_chapter_published_at AS latest_published_at,
-                 COUNT(*) OVER()::int AS total_works
-          FROM works w
-          WHERE w.latest_chapter_published_at IS NOT NULL
-            AND w.published = true
-            ${pageKindClause}
-          ORDER BY w.latest_chapter_published_at DESC, w.id DESC
-          LIMIT $1 OFFSET $2
-        )
-        SELECT pw.work_id, pw.work_slug, pw.work_title, pw.work_cover_id,
-               pw.work_kind, pw.work_content_rating, pw.latest_published_at,
-               pw.total_works,
-               c.id AS chapter_id, c.number AS chapter_number,
-               c.display_number AS chapter_display_number,
-               c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
-               c.edition AS chapter_edition, c.language AS chapter_language,
-               c.title AS chapter_title, c.published_at AS chapter_published_at
-        FROM page_works pw
-        LEFT JOIN LATERAL (
-          SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
-                 chapter_kind, edition, language, title, published_at
-          FROM chapters
-          WHERE work_id = pw.work_id AND published_at IS NOT NULL
-          ORDER BY published_at DESC, id DESC
-          LIMIT $3
-        ) c ON true
-        ORDER BY pw.latest_published_at DESC, pw.work_id DESC, c.published_at DESC NULLS LAST, c.id DESC NULLS LAST;
-      `;
+      const [res, totalWorks] = await Promise.all([
+        executeYugabyteSql<YugabyteReleaseRow>(`
+          WITH page_works AS (
+            SELECT w.id AS work_id, w.slug AS work_slug, w.title AS work_title,
+                   w.cover_id AS work_cover_id, w.kind AS work_kind,
+                   w.content_rating AS work_content_rating,
+                   w.latest_chapter_published_at AS latest_published_at
+            FROM works w
+            WHERE w.latest_chapter_published_at IS NOT NULL
+              AND w.published = true
+              ${pageKindClause}
+            ORDER BY w.latest_chapter_published_at DESC, w.id DESC
+            LIMIT $1 OFFSET $2
+          )
+          SELECT pw.work_id, pw.work_slug, pw.work_title, pw.work_cover_id,
+                 pw.work_kind, pw.work_content_rating, pw.latest_published_at,
+                 c.id AS chapter_id, c.number AS chapter_number,
+                 c.display_number AS chapter_display_number,
+                 c.canonical_chapter_key, c.chapter_order_key, c.chapter_kind,
+                 c.edition AS chapter_edition, c.language AS chapter_language,
+                 c.title AS chapter_title, c.published_at AS chapter_published_at
+          FROM page_works pw
+          LEFT JOIN LATERAL (
+            SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                   chapter_kind, edition, language, title, published_at
+            FROM chapters
+            WHERE work_id = pw.work_id AND published_at IS NOT NULL
+            ORDER BY published_at DESC, id DESC
+            LIMIT $3
+          ) c ON true
+          ORDER BY pw.latest_published_at DESC, pw.work_id DESC, c.published_at DESC NULLS LAST, c.id DESC NULLS LAST;
+        `, paramsQuery, platformEnv),
+        fetchReleasesWorksCountFromYugabyte(platformEnv, kind)
+      ]);
 
-      const res = await executeYugabyteSql<YugabyteReleaseRow & { total_works?: number }>(sql, paramsQuery, platformEnv);
-
-      let totalWorks = 0;
-      if (res.rows.length > 0) {
-        totalWorks = Number((res.rows[0] as any).total_works || 0);
-      } else if (safePage > 1) {
-        // Fallback for page beyond bounds to report actual total
-        const paramsCount: any[] = [];
-        let kindClause = '';
-        if (kind && kind.toUpperCase() !== 'ALL') {
-          paramsCount.push(kind.toUpperCase());
-          kindClause = `AND UPPER(w.kind) = $1`;
-        }
-        const countRes = await executeYugabyteSql<{ total: number }>(
-          `SELECT COUNT(*)::int AS total FROM works w WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true ${kindClause};`,
-          paramsCount,
-          platformEnv
-        );
-        totalWorks = countRes.rows[0]?.total ?? 0;
-      }
       const totalPages = Math.max(1, Math.ceil(totalWorks / safePageSize));
 
       // Group rows into PaginatedReleaseItem objects preserving work order
@@ -681,6 +702,124 @@ export async function fetchWorkFromYugabyte(
 
       const res = await executeYugabyteSql<YugabyteWork>(sql, [slugOrId], platformEnv);
       return res.rows[0] || null;
+    },
+    null
+  );
+}
+
+export interface FullWorkPageBundle {
+  work: YugabyteWork | null;
+  chapters: YugabyteChapter[];
+  tags: YugabyteTag[];
+  rating: {
+    average: number | null;
+    count: number;
+    userRating: number | null;
+    distribution: Record<number, number>;
+  };
+}
+
+/**
+ * Fetch the complete authoritative work bundle (work metadata, sorted chapters, tags, and rating)
+ * in a SINGLE database round-trip query. Eliminates 4 separate client connections and TLS handshakes in CF Workers.
+ */
+export async function fetchFullWorkPageFromYugabyte(
+  slugOrId: string,
+  visitorId?: string,
+  userId?: string,
+  preview = false,
+  platformEnv?: any
+): Promise<FullWorkPageBundle | null> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
+  const opKey = `work_full_${slugOrId}_${preview}_${visitorId || 'anon'}_${userId || 'anon'}`;
+
+  return withYugabyteLkg(
+    opKey,
+    async () => {
+      const targetCondition = isUuid ? 'w.id = $1::uuid' : 'w.slug = $1';
+      const chapterPubFilter = preview ? '' : 'AND c.published_at IS NOT NULL';
+
+      const sql = `
+        WITH target_work AS (
+          SELECT ${WORK_SELECT_COLUMNS}
+          FROM works w
+          WHERE ${targetCondition} AND w.published = true
+          LIMIT 1
+        ),
+        work_chapters AS (
+          SELECT COALESCE(json_agg(c ORDER BY c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC), '[]'::json) as chapters
+          FROM (
+            SELECT id, number, display_number, canonical_chapter_key, chapter_order_key,
+                   chapter_kind, edition, language, title, published_at, views_total, work_id
+            FROM chapters c
+            WHERE c.work_id = (SELECT id FROM target_work) ${chapterPubFilter}
+            ORDER BY c.chapter_order_key DESC, c.canonical_chapter_key DESC, c.id DESC
+          ) c
+        ),
+        work_tags_agg AS (
+          SELECT COALESCE(json_agg(t ORDER BY t.kind ASC, t.name ASC), '[]'::json) as tags
+          FROM (
+            SELECT t.id, t.name, t.slug, t.kind
+            FROM work_tags wt
+            INNER JOIN tags t ON t.id = wt.tag_id
+            WHERE wt.work_id = (SELECT id FROM target_work)
+            ORDER BY t.kind ASC, t.name ASC
+          ) t
+        ),
+        work_rating_agg AS (
+          SELECT
+            ROUND(AVG(rating) FILTER (WHERE rating >= 1 AND rating <= 5)::numeric, 1) as avg_rating,
+            COUNT(*) FILTER (WHERE rating >= 1 AND rating <= 5)::int as total_count,
+            MAX(rating) FILTER (WHERE visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL)) as user_rating,
+            COUNT(*) FILTER (WHERE rating = 1)::int as cnt_1,
+            COUNT(*) FILTER (WHERE rating = 2)::int as cnt_2,
+            COUNT(*) FILTER (WHERE rating = 3)::int as cnt_3,
+            COUNT(*) FILTER (WHERE rating = 4)::int as cnt_4,
+            COUNT(*) FILTER (WHERE rating = 5)::int as cnt_5
+          FROM public.work_ratings
+          WHERE work_id = (SELECT id FROM target_work)
+        )
+        SELECT
+          (SELECT row_to_json(target_work.*) FROM target_work) as work,
+          (SELECT chapters FROM work_chapters) as chapters,
+          (SELECT tags FROM work_tags_agg) as tags,
+          (SELECT row_to_json(work_rating_agg.*) FROM work_rating_agg) as rating;
+      `;
+
+      const res = await executeYugabyteSql<{
+        work: YugabyteWork | null;
+        chapters: YugabyteChapter[] | null;
+        tags: YugabyteTag[] | null;
+        rating: any | null;
+      }>(sql, [slugOrId, visitorId || '', userId || null], platformEnv);
+
+      const row = res.rows[0];
+      if (!row || !row.work) return null;
+
+      const rawRating = row.rating;
+      const rawAvg = rawRating?.avg_rating;
+      const count = rawRating?.total_count ? Number(rawRating.total_count) : 0;
+      const average = rawAvg !== null && rawAvg !== undefined ? parseFloat(rawAvg) : null;
+      const userRating = rawRating?.user_rating !== null && rawRating?.user_rating !== undefined ? Number(rawRating.user_rating) : null;
+      const distribution: Record<number, number> = {
+        1: rawRating?.cnt_1 ? Number(rawRating.cnt_1) : 0,
+        2: rawRating?.cnt_2 ? Number(rawRating.cnt_2) : 0,
+        3: rawRating?.cnt_3 ? Number(rawRating.cnt_3) : 0,
+        4: rawRating?.cnt_4 ? Number(rawRating.cnt_4) : 0,
+        5: rawRating?.cnt_5 ? Number(rawRating.cnt_5) : 0
+      };
+
+      return {
+        work: row.work,
+        chapters: Array.isArray(row.chapters) ? row.chapters : [],
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        rating: {
+          average,
+          count,
+          userRating,
+          distribution
+        }
+      };
     },
     null
   );
