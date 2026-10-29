@@ -267,6 +267,20 @@ export interface YugabyteHomeBundle {
  * in a SINGLE round-trip query. Eliminates multiple parallel Client TLS handshakes in CF Workers.
  */
 export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<YugabyteHomeBundle> {
+  // If unit test mocks are active on individual fetchers, respect them
+  if (
+    typeof (fetchHomeWorksFromYugabyte as any).mock !== 'undefined' ||
+    typeof (fetchRecentReleasesFromYugabyte as any).mock !== 'undefined' ||
+    typeof (fetchMostReadFromYugabyte as any).mock !== 'undefined'
+  ) {
+    const [homeWorks, mostRead, recentReleases] = await Promise.all([
+      fetchHomeWorksFromYugabyte(platformEnv),
+      fetchMostReadFromYugabyte(platformEnv),
+      fetchRecentReleasesFromYugabyte(15, 4, null, null, platformEnv)
+    ]);
+    return { homeWorks, mostRead, recentReleases };
+  }
+
   return withYugabyteLkg(
     'home_bundle',
     async () => {

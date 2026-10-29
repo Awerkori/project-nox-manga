@@ -112,7 +112,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
   }
 
   // Cold cache: fetch public bundle from authoritative Yugabyte (in ONE single query) and reading from Supabase
-  const [bundle, readingRes] = await Promise.all([
+  let [bundle, readingRes] = await Promise.all([
     fetchHomeBundleFromYugabyte(platform?.env),
     locals.user
       ? safeDbQuery(
@@ -130,6 +130,17 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
         )
       : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false })
   ]);
+
+  if (!bundle || (!bundle.homeWorks?.length && !bundle.recentReleases?.length)) {
+    const [homeWorks, mostRead, recentReleases] = await Promise.all([
+      fetchHomeWorksFromYugabyte(platform?.env),
+      fetchMostReadFromYugabyte(platform?.env),
+      fetchRecentReleasesFromYugabyte(15, 4, null, null, platform?.env)
+    ]);
+    if (homeWorks?.length || recentReleases?.length) {
+      bundle = { homeWorks, mostRead, recentReleases };
+    }
+  }
 
   const worksData = bundle.homeWorks;
   const chaptersData = bundle.recentReleases;
