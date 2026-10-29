@@ -2260,7 +2260,7 @@
      ========================================================================= */
 
   .conversation-root-block {
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     width: 100%;
     background: #0d0f18;
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -2287,7 +2287,7 @@
   .thread-children-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 14px;
   }
 
   .thread-child-node {
@@ -2297,9 +2297,14 @@
   /* Vertical Guide Rail (Neutral Subtle Slate / Soft Purple Hover - Clean & Continuous) */
   .thread-replies-nest {
     position: relative;
-    margin-top: 8px;
-    margin-left: 14px;
-    padding-left: 14px;
+    margin-top: 12px;
+    margin-left: 10px;
+    padding-left: 10px;
+  }
+
+  .thread-replies-nest.max-indent {
+    margin-left: 4px;
+    padding-left: 8px;
   }
 
   .thread-vertical-rail {
@@ -2307,7 +2312,7 @@
     top: 4px;
     bottom: 4px;
     left: 0;
-    width: 14px;
+    width: 10px;
     cursor: pointer;
     z-index: 5;
     user-select: none;
@@ -2318,7 +2323,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 4px;
+    left: 2px;
     width: 1.5px;
     background: rgba(255, 255, 255, 0.08); /* Cinza neutro muito sutil e discreto */
     border-radius: 9999px;
@@ -2426,7 +2431,7 @@
     background: transparent;
     border: none;
     border-radius: 10px;
-    padding: 6px 8px;
+    padding: 4px 0;
   }
 
   .comment-card-modern.is-nested-card:hover {
@@ -2582,7 +2587,7 @@
     font-size: 13.5px;
     line-height: 1.5;
     color: #e2e8f0;
-    margin-bottom: 6px;
+    margin-bottom: 0;
     word-break: break-word;
     white-space: pre-wrap;
   }
@@ -2644,8 +2649,8 @@
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    margin-top: 8px;
-    padding-top: 2px;
+    margin-top: 14px;
+    padding-top: 0;
     flex-wrap: wrap;
   }
 
@@ -3209,14 +3214,18 @@
     display: block;
     width: fit-content;
     max-width: min(100%, 460px);
-    margin-top: 6px;
-    margin-bottom: 6px;
+    margin-top: 8px;
+    margin-bottom: 0;
     border-radius: 10px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
     white-space: normal;
+  }
+
+  .comment-media-card:not(:last-child) {
+    margin-bottom: 8px;
   }
 
   .media-view-wrapper {
@@ -3790,17 +3799,26 @@
     }
 
     .comment-content-wrap {
-      padding: 8px 10px;
+      padding: 0;
     }
 
     .is-nested-card .comment-content-wrap {
-      padding: 6px 8px;
+      padding: 0;
+    }
+
+    .thread-children-list {
+      gap: 12px;
+    }
+
+    .comment-footer-actions {
+      margin-top: 12px;
+      gap: 8px;
     }
 
     /* Mobile Indentation Capping: Keep columns readable */
     .thread-replies-nest {
       margin-left: 6px;
-      padding-left: 10px;
+      padding-left: 8px;
     }
 
     .thread-replies-nest.max-indent {
@@ -3809,11 +3827,11 @@
     }
 
     .thread-vertical-rail {
-      width: 10px;
+      width: 8px;
     }
 
     .rail-line {
-      left: 2px;
+      left: 1px;
     }
 
     .author-name {
@@ -3878,13 +3896,21 @@
 
     /* Limit indentation on compact mobile screens to keep thread readable */
     .thread-replies-nest {
-      margin-left: 6px;
-      padding-left: 8px;
+      margin-left: 4px;
+      padding-left: 7px;
     }
 
     .thread-replies-nest.max-indent {
       margin-left: 0;
-      padding-left: 6px;
+      padding-left: 5px;
+    }
+
+    .thread-vertical-rail {
+      width: 7px;
+    }
+
+    .rail-line {
+      left: 1px;
     }
 
     .reply-target-tag {
