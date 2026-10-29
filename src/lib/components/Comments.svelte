@@ -1423,8 +1423,8 @@
                 {/each}
               </div>
 
-              <!-- Footer Action Row (V10: Ergonômico, Curtir e Responder agrupados à esquerda) -->
-              <footer class="comment-footer-actions">
+              <!-- Footer Action Row (V13: Ergonômico, Curtir e Responder alinhados à esquerda) -->
+              <div class="comment-footer-actions">
                 <div class="footer-primary-actions">
                   <button
                     type="button"
@@ -1510,7 +1510,7 @@
                     {/if}
                   {/if}
                 </div>
-              </footer>
+              </div>
             {/if}
           </div>
         </article>
@@ -2641,7 +2641,7 @@
   }
 
   /* =========================================================================
-     FOOTER ACTION ROW (V9 REDESIGNED: BALANCED, TOUCH-FRIENDLY PILLS)
+     FOOTER ACTION ROW (V13: ZERO UNWANTED INDENTS, FLUSH LEFT, NATURAL BREATHING)
      ========================================================================= */
 
   .comment-footer-actions {
@@ -2650,7 +2650,13 @@
     justify-content: flex-start;
     gap: 10px;
     margin-top: 14px;
-    padding-top: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border: none;
+    max-width: none;
+    width: 100%;
     flex-wrap: wrap;
   }
 
@@ -3813,6 +3819,8 @@
     .comment-footer-actions {
       margin-top: 12px;
       gap: 8px;
+      padding: 0;
+      border: none;
     }
 
     /* Mobile Indentation Capping: Keep columns readable */
