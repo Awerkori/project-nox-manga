@@ -26,6 +26,32 @@ const CONTROLLED_TARGET_USER_ID = 'ad61ae4b-b289-4203-ab8e-717b8cd08892'; // awe
 
 const supabase = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+async function screenshotCombined(page, dropdownLocator, composerLocator, outputPath) {
+  try {
+    const dBox = await dropdownLocator.boundingBox();
+    const cBox = await composerLocator.boundingBox();
+    if (!dBox || !cBox) {
+      await composerLocator.screenshot({ path: outputPath });
+      return;
+    }
+    const minX = Math.max(0, Math.min(dBox.x, cBox.x) - 16);
+    const minY = Math.max(0, Math.min(dBox.y, cBox.y) - 16);
+    const maxX = Math.max(dBox.x + dBox.width, cBox.x + cBox.width) + 16;
+    const maxY = Math.max(dBox.y + dBox.height, cBox.y + cBox.height) + 16;
+    await page.screenshot({
+      path: outputPath,
+      clip: {
+        x: Math.round(minX),
+        y: Math.round(minY),
+        width: Math.round(maxX - minX),
+        height: Math.round(maxY - minY)
+      }
+    });
+  } catch (err) {
+    await composerLocator.screenshot({ path: outputPath });
+  }
+}
+
 async function dismissAgeGate(page) {
   try {
     const btn = page.locator('.btn-choice.adult');
@@ -85,9 +111,7 @@ async function run() {
 
     // Screenshot of @P search results
     const composerBox = page.locator('.composer-card-premium').first();
-    await composerBox.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'v16_autocomplete_dropdown_p.png')
-    });
+    await screenshotCombined(page, dropdown, composerBox, path.join(ARTIFACTS_DIR, 'v16_autocomplete_dropdown_p.png'));
     console.log('✓ v16_autocomplete_dropdown_p.png captured.');
 
     // Refine search to @Pris
@@ -107,9 +131,7 @@ async function run() {
     console.log('✓ Query match highlight present:', hasHighlight);
 
     // Screenshot of @Pris refined search results
-    await composerBox.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'v16_autocomplete_dropdown_pris.png')
-    });
+    await screenshotCombined(page, dropdown, composerBox, path.join(ARTIFACTS_DIR, 'v16_autocomplete_dropdown_pris.png'));
     console.log('✓ v16_autocomplete_dropdown_pris.png captured.');
 
     // -----------------------------------------------------------------
@@ -220,9 +242,7 @@ async function run() {
     await inlineDropdown.waitFor({ state: 'visible', timeout: 5000 });
     console.log('✓ Inline reply autocomplete dropdown visible!');
 
-    await inlineComposer.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'v16_autocomplete_inline_reply.png')
-    });
+    await screenshotCombined(page, inlineDropdown, inlineComposer, path.join(ARTIFACTS_DIR, 'v16_autocomplete_inline_reply.png'));
     console.log('✓ v16_autocomplete_inline_reply.png captured.');
 
     // Cancel inline reply
@@ -265,15 +285,12 @@ async function run() {
     await mDropdown.waitFor({ state: 'visible', timeout: 5000 });
 
     const mComposer = mobilePage.locator('.composer-card-premium').first();
-    await mComposer.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'v16_mobile_autocomplete.png')
-    });
+    await screenshotCombined(mobilePage, mDropdown, mComposer, path.join(ARTIFACTS_DIR, 'v16_mobile_autocomplete.png'));
     console.log('✓ v16_mobile_autocomplete.png captured.');
 
-    // Touch candidate on mobile
+    // Touch candidate on mobile (pointerdown selects and inserts without losing input focus)
     const mFirstItem = mDropdown.locator('.mention-candidate-item').first();
     await mFirstItem.dispatchEvent('pointerdown');
-    await mFirstItem.click();
     await mobilePage.waitForTimeout(400);
 
     const mTextAfter = await mTextarea.inputValue();
