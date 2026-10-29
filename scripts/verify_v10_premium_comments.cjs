@@ -22,7 +22,7 @@ const ARTIFACTS_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0
 const CHAPTER_URL = `${PREVIEW_URL}/ler/b88c0c5f-9664-5fae-a6d9-d5ad03af1369`;
 const TEST_GIF_PATH = path.join(ARTIFACTS_DIR, "test_media_sample.gif");
 const TEST_PNG_PATH = path.join(ARTIFACTS_DIR, "test_media_sample.png");
-const EXTERNAL_GIF_URL = 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif';
+const EXTERNAL_GIF_URL = 'https://i.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif';
 
 async function dismissAgeGate(page) {
   try {
@@ -79,14 +79,24 @@ async function run() {
   console.log('✓ Confirmed: ZERO floating report buttons over media. Images are 100% clean!');
 
   // Check if Jonas or any other comment has media
-  const existingMediaCard = page.locator('.comment-media-container').first();
-  if (await existingMediaCard.count() > 0) {
-    await existingMediaCard.scrollIntoViewIfNeeded();
+  const jonasCard = page.locator('.comment-card-modern:has-text("Jonas")').first();
+  if (await jonasCard.count() > 0) {
+    await jonasCard.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
-    await existingMediaCard.screenshot({
+    await jonasCard.screenshot({
       path: path.join(ARTIFACTS_DIR, 'v10_clean_media_no_overlay_buttons.png')
     });
-    console.log('✓ Captured v10_clean_media_no_overlay_buttons.png');
+    console.log('✓ Captured v10_clean_media_no_overlay_buttons.png from Jonas comment.');
+  } else {
+    const existingMediaCard = page.locator('.comment-card-modern:has(.comment-media-card)').first();
+    if (await existingMediaCard.count() > 0) {
+      await existingMediaCard.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      await existingMediaCard.screenshot({
+        path: path.join(ARTIFACTS_DIR, 'v10_clean_media_no_overlay_buttons.png')
+      });
+      console.log('✓ Captured v10_clean_media_no_overlay_buttons.png');
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -196,17 +206,17 @@ async function run() {
   console.log('6. Verifying Print 2: Nested Sub-Replies with Soft Noble Gold Rail & Grouped Footer...');
   const testRunId = Date.now().toString().slice(-6);
 
-  // Set comment text if needed
-  if (!textareaVal.trim()) {
-    await mainComposer.fill(`Análise V10 [${testRunId}]: Testando moderação e trilhas douradas.`);
-  }
+  // Set comment text with testRunId
+  const commentText = `${textareaVal.trim()} [V10-${testRunId}]`;
+  await mainComposer.fill(commentText);
+  await page.waitForTimeout(300);
 
   // Post root comment
   const mainSubmitBtn = page.locator('.btn-submit-premium').first();
   await mainSubmitBtn.click();
   await page.waitForTimeout(4000);
 
-  const rootNode = page.locator(`.conversation-root-block:has-text("${testRunId}")`).first();
+  const rootNode = page.locator(`.conversation-root-block:has-text("V10-${testRunId}")`).first();
   await rootNode.waitFor({ state: 'visible', timeout: 10000 });
   console.log('✓ Root comment published successfully with attached GIF!');
 
