@@ -258,7 +258,7 @@ export async function createNotification(
           scan_id: scanId,
           recipient_user_id: recipientUserId,
           recipient_email: recipientEmail,
-          subject,
+          subject: subject || title || 'Notificação Project Nox',
           html_body: html,
           status: 'PENDING',
           delivery_status: 'QUEUED',
