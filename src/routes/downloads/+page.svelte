@@ -28,6 +28,7 @@
     groupOfflineChaptersByWork,
     formatStorageBytes,
     estimateChapterStorageBytes,
+    subscribeOfflineChanges,
     type OfflineChapter,
     type DownloadedWorkGroup
   } from '$lib/offline-storage';
@@ -295,6 +296,8 @@
     }
   }
 
+  let unsubscribeOfflineSync: (() => void) | null = null;
+
   onMount(() => {
     isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     window.addEventListener('online', handleOnlineStatus);
@@ -302,9 +305,17 @@
     window.addEventListener('popstate', handlePopState);
 
     loadDownloadsData();
+
+    unsubscribeOfflineSync = subscribeOfflineChanges(() => {
+      loadDownloadsData();
+    });
   });
 
   onDestroy(() => {
+    if (unsubscribeOfflineSync) {
+      unsubscribeOfflineSync();
+      unsubscribeOfflineSync = null;
+    }
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', handleOnlineStatus);
       window.removeEventListener('offline', handleOnlineStatus);

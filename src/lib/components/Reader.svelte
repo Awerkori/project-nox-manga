@@ -25,7 +25,8 @@
     Zap,
     Smile,
     PartyPopper,
-    AlertTriangle
+    AlertTriangle,
+    Trash2
   } from '@lucide/svelte';
   import ReaderPage from '$lib/components/ReaderPage.svelte';
   import Comments from '$lib/components/Comments.svelte';
@@ -37,6 +38,9 @@
   import {
     saveChapterOffline,
     getOfflineChapter,
+    isChapterDownloaded,
+    removeOfflineChapter,
+    subscribeOfflineChanges,
     registerDownloadController,
     unregisterDownloadController
   } from '$lib/offline-storage';
@@ -70,32 +74,148 @@
   let chapterCompleted = $state(false);
 
   // =========================================================================
-  // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V3)
+  // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V4)
   // =========================================================================
   let preloadedCount = $state(0);
   let preloadProgressPct = $state(0);
   let turboActive = $state(false);
   let turboFinished = $state(false);
   const preloadedUrls = new SvelteSet<string>();
+  const inFlightDownloads = new Map<string, Promise<void>>();
   let activePreloadWorkers = 0;
   let preloadAbortController: AbortController | null = null;
 
+  // Real telemetry timestamps for load benchmarking
+  let turboStartTime = 0;
+  let turboTimeToFirstPage = 0;
+  let turboTimeToFirst5Pages = 0;
+  let turboTimeToComplete = 0;
+
   function getAdaptiveConcurrency(): number {
     if (typeof window === 'undefined') return 2;
-    if (readerSettings.preloadMode === 'eco') return 1;
+    if (readerSettings.preloadMode === 'eco') return 2;
 
     const nav = navigator as any;
     const connection = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
     const isSaveData = connection?.saveData;
-    const isSlowConn = connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g' || connection?.effectiveType === '3g';
+    const isSlowConn = connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
+    const isMediumConn = connection?.effectiveType === '3g';
     const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches;
     const cores = nav?.hardwareConcurrency || 4;
     const ram = nav?.deviceMemory || 4;
 
     if (isSaveData || isSlowConn) return 1;
-    if (isMobile || cores <= 4 || ram <= 3) return 2;
-    if (cores >= 8 && ram >= 6) return 5;
+    if (isMediumConn) return 2;
+    if (isMobile) {
+      return cores <= 4 || ram <= 3 ? 2 : 3;
+    }
+    // Desktop: High-throughput parallelism without socket starvation
+    if (cores >= 8 && ram >= 6) return 6;
+    if (cores >= 4) return 4;
     return 3;
+  }
+
+  // Reactive Priority Queue
+  let pendingQueue: Array<{ page: any; priority: number }> = [];
+
+  function calculatePagePriority(pagePos: number, currentPos: number): number {
+    if (pagePos === currentPos) return 0;
+    if (pagePos > currentPos && pagePos <= currentPos + 3) {
+      return pagePos - currentPos;
+    }
+    if (pagePos > currentPos) {
+      return 10 + (pagePos - currentPos);
+    }
+    return 50 + (currentPos - pagePos);
+  }
+
+  export function reorderTurboQueue(currentPos: number) {
+    if (!pendingQueue.length) return;
+    for (const item of pendingQueue) {
+      item.priority = calculatePagePriority(item.page.position, currentPos);
+    }
+    pendingQueue.sort((a, b) => a.priority - b.priority);
+  }
+
+  // Re-rank queue whenever active viewing page updates
+  $effect(() => {
+    const cur = current;
+    reorderTurboQueue(cur);
+  });
+
+  async function streamPreloadPage(page: any, signal: AbortSignal, retryCount = 0): Promise<void> {
+    if (signal.aborted || !page?.media_id) return;
+    const mediaId = page.media_id;
+    const mediaUrl = `/media/${mediaId}`;
+
+    if (preloadedUrls.has(mediaId)) return;
+
+    if (inFlightDownloads.has(mediaId)) {
+      try {
+        await inFlightDownloads.get(mediaId);
+      } catch {}
+      return;
+    }
+
+    const downloadPromise = (async () => {
+      try {
+        const isNearViewport = Math.abs(page.position - current) <= 2;
+
+        if (!isNearViewport) {
+          // Download antecipado puro: carrega bytes no HTTP Cache do navegador sem decodificar bitmaps em RAM
+          const res = await fetch(mediaUrl, {
+            signal,
+            cache: 'force-cache',
+            priority: page.position <= current + 4 ? 'high' : ('low' as any)
+          });
+          if (!res.ok && res.status >= 500) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+        } else {
+          // Decodificação assíncrona somente para páginas na visão imediata do leitor
+          await new Promise<void>((resolve, reject) => {
+            const img = new Image();
+            img.decoding = 'async';
+            img.onload = () => {
+              if ('decode' in img) {
+                img.decode().then(() => resolve()).catch(() => resolve());
+              } else {
+                resolve();
+              }
+            };
+            img.onerror = () => reject(new Error('Image decode error'));
+            img.src = mediaUrl;
+          });
+        }
+
+        preloadedUrls.add(mediaId);
+        preloadedCount = preloadedUrls.size;
+        preloadProgressPct = Math.min(100, Math.round((preloadedCount / data.pages.length) * 100));
+
+        const now = performance.now();
+        if (preloadedCount === 1 && !turboTimeToFirstPage) {
+          turboTimeToFirstPage = Math.round(now - turboStartTime);
+        }
+        if (preloadedCount === Math.min(5, data.pages.length) && !turboTimeToFirst5Pages) {
+          turboTimeToFirst5Pages = Math.round(now - turboStartTime);
+        }
+        if (preloadedCount >= data.pages.length && !turboTimeToComplete) {
+          turboTimeToComplete = Math.round(now - turboStartTime);
+          turboFinished = true;
+        }
+      } catch (err: any) {
+        if (signal.aborted) return;
+        if (retryCount < 2) {
+          await new Promise((r) => setTimeout(r, 400 * (retryCount + 1)));
+          return streamPreloadPage(page, signal, retryCount + 1);
+        }
+      } finally {
+        inFlightDownloads.delete(mediaId);
+      }
+    })();
+
+    inFlightDownloads.set(mediaId, downloadPromise);
+    return downloadPromise;
   }
 
   function startTurboPreloader() {
@@ -104,85 +224,56 @@
     preloadAbortController = new AbortController();
     const signal = preloadAbortController.signal;
 
+    turboActive = true;
+    turboFinished = false;
+    turboStartTime = performance.now();
+    turboTimeToFirstPage = 0;
+    turboTimeToFirst5Pages = 0;
+    turboTimeToComplete = 0;
+
     const isEco = readerSettings.preloadMode === 'eco';
     const maxConcurrency = getAdaptiveConcurrency();
 
-    turboActive = true;
-    turboFinished = false;
+    // Eco modo: pré-carrega janela deslizante de 4 páginas
+    // Turbo inteligente padrão: pré-carrega todas as páginas do capítulo
+    const pagesToQueue = isEco
+      ? data.pages.filter((p: any) => p.position >= current && p.position <= current + 4)
+      : [...data.pages];
 
-    // Prioritize pages: current & immediate next first, then entire rest of chapter
-    function buildQueue() {
-      const q: any[] = [];
-      const total = data.pages.length;
-      // Current and next 2 pages first
-      for (let i = current - 1; i < Math.min(total, current + 2); i++) {
-        if (i >= 0 && !preloadedUrls.has(data.pages[i].media_id)) {
-          q.push(data.pages[i]);
-        }
-      }
-      // Remaining pages of chapter
-      for (let i = 0; i < total; i++) {
-        if (!q.includes(data.pages[i]) && !preloadedUrls.has(data.pages[i].media_id)) {
-          q.push(data.pages[i]);
-        }
-      }
-      return isEco ? q.slice(0, 3) : q;
-    }
+    pendingQueue = pagesToQueue
+      .filter((p: any) => !preloadedUrls.has(p.media_id))
+      .map((p: any) => ({
+        page: p,
+        priority: calculatePagePriority(p.position, current)
+      }));
 
-    let queue = buildQueue();
+    pendingQueue.sort((a, b) => a.priority - b.priority);
 
-    function spawnWorker() {
+    async function workerLoop() {
       if (signal.aborted) return;
-      if (queue.length === 0) {
-        if (activePreloadWorkers === 0) {
-          turboFinished = true;
-          preloadProgressPct = 100;
+
+      while (pendingQueue.length > 0) {
+        if (signal.aborted) return;
+        const next = pendingQueue.shift();
+        if (!next || preloadedUrls.has(next.page.media_id)) continue;
+
+        activePreloadWorkers++;
+        try {
+          await streamPreloadPage(next.page, signal);
+        } finally {
+          activePreloadWorkers--;
         }
-        return;
       }
 
-      const page = queue.shift();
-      if (!page || !page.media_id || preloadedUrls.has(page.media_id)) {
-        spawnWorker();
-        return;
-      }
-
-      activePreloadWorkers++;
-      const mediaUrl = `/media/${page.media_id}`;
-
-      const finish = () => {
-        activePreloadWorkers--;
-        preloadedUrls.add(page.media_id);
-        preloadedCount = preloadedUrls.size;
-        preloadProgressPct = Math.min(100, Math.round((preloadedCount / data.pages.length) * 100));
-        spawnWorker();
-      };
-
-      const pageIndex = data.pages.indexOf(page);
-      const isNearViewport = pageIndex >= current - 1 && pageIndex <= current + 2;
-
-      if (typeof fetch === 'function' && !isNearViewport) {
-        fetch(mediaUrl, { signal, priority: 'low' as any })
-          .then(finish)
-          .catch(finish);
-      } else {
-        const img = new Image();
-        img.decoding = 'async';
-        img.onload = () => {
-          if (isNearViewport && 'decode' in img) {
-            img.decode().then(finish).catch(finish);
-          } else {
-            finish();
-          }
-        };
-        img.onerror = finish;
-        img.src = mediaUrl;
+      if (pendingQueue.length === 0 && activePreloadWorkers === 0) {
+        turboFinished = true;
+        preloadProgressPct = 100;
       }
     }
 
-    const initialWorkers = Math.min(maxConcurrency, queue.length);
-    for (let i = 0; i < initialWorkers; i++) {
-      spawnWorker();
+    const workerSlots = Math.min(maxConcurrency, Math.max(1, pendingQueue.length));
+    for (let i = 0; i < workerSlots; i++) {
+      void workerLoop();
     }
   }
 
@@ -263,11 +354,23 @@
   }
 
   // =========================================================================
-  // OFFLINE DOWNLOAD HANDLING (RODADA 19 PRESERVED)
+  // OFFLINE DOWNLOAD HANDLING & SYNC
   // =========================================================================
   let downloadingOffline = $state(false);
   let isDownloadedOffline = $state(false);
+  let showDeleteDownloadModal = $state(false);
   let downloadController: AbortController | null = null;
+  let unsubscribeOfflineSync: (() => void) | null = null;
+
+  function handleOfflineButtonClick() {
+    if (downloadingOffline) {
+      handleCancelDownload();
+    } else if (isDownloadedOffline) {
+      showDeleteDownloadModal = true;
+    } else {
+      handleDownloadChapter();
+    }
+  }
 
   async function handleDownloadChapter() {
     if (downloadingOffline || !data.chapter || !data.pages?.length) return;
@@ -287,6 +390,18 @@
         downloadController.signal
       );
       isDownloadedOffline = true;
+
+      // Hydrate local blobs into page objects for zero-latency instant offline reading
+      const off = await getOfflineChapter(data.chapter.id);
+      if (off?.pages?.length) {
+        const offMap = new Map(off.pages.map((p) => [p.position, p.blobUrl]));
+        for (const p of data.pages) {
+          if (!p.blobUrl && offMap.has(p.position)) {
+            p.blobUrl = offMap.get(p.position);
+          }
+        }
+      }
+
       notice = '✓ Capítulo salvo com sucesso na sua Biblioteca de Downloads!';
       setTimeout(() => { notice = ''; }, 4000);
     } catch (err: any) {
@@ -300,6 +415,24 @@
       if (data.chapter) unregisterDownloadController(data.chapter.id);
       downloadingOffline = false;
       downloadController = null;
+    }
+  }
+
+  async function handleConfirmDeleteDownload() {
+    if (!data.chapter?.id) return;
+    showDeleteDownloadModal = false;
+    try {
+      await removeOfflineChapter(data.chapter.id);
+      isDownloadedOffline = false;
+      // Clear blobUrls from data.pages
+      for (const p of data.pages) {
+        p.blobUrl = undefined;
+      }
+      notice = '✓ Capítulo removido do armazenamento offline.';
+      setTimeout(() => { notice = ''; }, 3500);
+    } catch (err: any) {
+      notice = 'Erro ao remover download: ' + (err?.message || 'Falha local');
+      setTimeout(() => { notice = ''; }, 3500);
     }
   }
 
@@ -504,9 +637,31 @@
   );
 
   onMount(async () => {
-    // Check offline status
+    // Check offline status & hydrate local page blobs if present
     const off = await getOfflineChapter(data.chapter.id);
-    if (off) isDownloadedOffline = true;
+    if (off && off.pages?.length) {
+      isDownloadedOffline = true;
+      const offMap = new Map(off.pages.map((p) => [p.position, p.blobUrl]));
+      for (const p of data.pages) {
+        if (!p.blobUrl && offMap.has(p.position)) {
+          p.blobUrl = offMap.get(p.position);
+        }
+      }
+    }
+
+    // Subscribe to cross-tab / cross-component offline sync
+    unsubscribeOfflineSync = subscribeOfflineChanges(async (event) => {
+      if (!data.chapter?.id) return;
+      if (event.chapterId === data.chapter.id || event.action === 'delete_all') {
+        const isDown = await isChapterDownloaded(data.chapter.id);
+        isDownloadedOffline = isDown;
+        if (!isDown) {
+          for (const p of data.pages) {
+            p.blobUrl = undefined;
+          }
+        }
+      }
+    });
 
     // Load reactions
     loadReactions(data.chapter.id);
@@ -545,6 +700,10 @@
 
     return () => {
       window.removeEventListener('keydown', handleKeydown);
+      if (unsubscribeOfflineSync) {
+        unsubscribeOfflineSync();
+        unsubscribeOfflineSync = null;
+      }
       preloadAbortController?.abort();
       if (hideTimer) clearTimeout(hideTimer);
     };
@@ -658,29 +817,13 @@
 
       <div class="header-meta-divider"></div>
 
-      <!-- Page Counter & Turbo Badge -->
+      <!-- Page Counter (Clean minimal pill) -->
       <div class="reading-meta-cluster">
         <div class="page-counter-pill" title="Página atual / Total">
-          <BookOpen size={12} class="text-slate-400 mr-1.5" />
           <span class="current-page-num">{current}</span>
           <span class="page-sep">/</span>
           <span class="total-pages-num">{data.pages.length}</span>
         </div>
-
-        {#if turboActive}
-          <div
-            class="turbo-status-pill"
-            class:complete={turboFinished}
-            title={turboFinished ? 'Turbo Inteligente ativo: todas as páginas estão em cache para leitura imediata' : 'Turbo em andamento: baixando todas as páginas antecipadamente'}
-          >
-            <Zap size={12} class="zap-icon" />
-            {#if turboFinished}
-              <span class="turbo-text">Turbo Pronto</span>
-            {:else}
-              <span class="turbo-text">Turbo {preloadedCount}/{data.pages.length}</span>
-            {/if}
-          </div>
-        {/if}
       </div>
     </div>
 
@@ -709,18 +852,20 @@
         class="header-action-btn btn-offline"
         class:downloaded={isDownloadedOffline}
         class:loading={downloadingOffline}
-        aria-label={isDownloadedOffline ? 'Capítulo salvo offline' : 'Baixar capítulo'}
-        title={isDownloadedOffline ? 'Capítulo salvo offline' : 'Baixar capítulo para ler sem internet'}
-        onclick={downloadingOffline ? handleCancelDownload : handleDownloadChapter}
+        aria-label={downloadingOffline ? 'Baixando capítulo' : (isDownloadedOffline ? 'Capítulo salvo offline (toque para gerenciar)' : 'Baixar capítulo')}
+        title={downloadingOffline ? 'Baixando para offline (toque para cancelar)' : (isDownloadedOffline ? 'Capítulo salvo offline (toque para remover)' : 'Baixar capítulo para ler sem internet')}
+        onclick={handleOfflineButtonClick}
       >
         {#if downloadingOffline}
-          <Loader2 size={18} class="spin-anim" />
+          <Loader2 size={18} class="spin-anim text-amber-400" />
+          <span class="action-btn-text">Baixando</span>
         {:else if isDownloadedOffline}
           <CheckCircle2 size={18} class="text-emerald-400" />
+          <span class="action-btn-text">Baixado</span>
         {:else}
           <Download size={18} />
+          <span class="action-btn-text">Baixar</span>
         {/if}
-        <span class="action-btn-text">{isDownloadedOffline ? 'Salvo' : 'Baixar'}</span>
       </button>
 
       <!-- Settings Button -->
@@ -1089,6 +1234,47 @@
     </aside>
   {/if}
 
+  <!-- CONFIRM DELETE OFFLINE DOWNLOAD MODAL -->
+  {#if showDeleteDownloadModal}
+    <div
+      class="delete-download-backdrop"
+      onclick={() => (showDeleteDownloadModal = false)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="del-modal-title"
+    >
+      <div class="delete-download-card" onclick={(e) => e.stopPropagation()}>
+        <div class="delete-download-icon-wrap">
+          <Trash2 size={24} class="text-rose-400" />
+        </div>
+        <h3 id="del-modal-title" class="delete-download-title">Remover download offline?</h3>
+        <p class="delete-download-desc">
+          Deseja remover o <strong>Capítulo {chapterIdentityLabel(data.chapter)}</strong> do armazenamento local deste navegador?
+        </p>
+        <p class="delete-download-subdesc">
+          Esta ação liberará armazenamento no seu dispositivo. Seu progresso, favoritos e leitura online não serão afetados.
+        </p>
+        <div class="delete-download-actions">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            onclick={() => (showDeleteDownloadModal = false)}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn-modal-confirm-delete"
+            onclick={handleConfirmDeleteDownload}
+          >
+            <Trash2 size={15} />
+            <span>Remover Download</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- ======================================================================= -->
   <!-- 6. READER SETTINGS MODAL / SHEET                                        -->
   <!-- ======================================================================= -->
@@ -1344,50 +1530,158 @@
   }
 
   .page-counter-pill {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    padding: 5px 12px;
+    justify-content: center;
+    height: 32px;
+    padding: 0 12px;
+    min-width: 58px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 9999px;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 700;
     color: #f1f5f9;
     letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
 
-  .page-slash {
-    margin: 0 3px;
+  .current-page-num {
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .page-sep {
+    margin: 0 4px;
     color: #64748b;
+    font-weight: 500;
   }
 
   .total-pages-num {
     color: #94a3b8;
+    font-weight: 600;
   }
 
-  .turbo-status-pill {
+  /* Modal de Exclusão de Download Offline */
+  .delete-download-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: fadeInModal 0.15s ease-out;
+  }
+
+  .delete-download-card {
+    width: 100%;
+    max-width: 400px;
+    background: #111218;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(244, 63, 94, 0.12);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    animation: scaleInCard 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes fadeInModal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scaleInCard {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .delete-download-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .delete-download-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 8px 0;
+  }
+
+  .delete-download-desc {
+    font-size: 13.5px;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin: 0 0 6px 0;
+  }
+
+  .delete-download-subdesc {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.45;
+    margin: 0 0 20px 0;
+  }
+
+  .delete-download-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .btn-modal-cancel {
+    flex: 1;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .btn-modal-confirm-delete {
+    flex: 1.2;
+    height: 40px;
+    border-radius: 10px;
+    background: #e11d48;
+    border: 1px solid #f43f5e;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 9999px;
-    font-size: 10.5px;
-    font-weight: 700;
-    color: #f59e0b;
-    letter-spacing: 0.02em;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);
   }
 
-  .turbo-status-pill.complete {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.35);
-    color: #34d399;
-  }
-
-  .zap-icon {
-    color: currentColor;
+  .btn-modal-confirm-delete:hover {
+    background: #be123c;
+    box-shadow: 0 6px 20px rgba(225, 29, 72, 0.5);
   }
 
   /* Right: Actions */
@@ -1489,14 +1783,6 @@
 
     .chapter-nav-cluster {
       display: none;
-    }
-
-    .turbo-status-pill .turbo-text {
-      display: none;
-    }
-
-    .turbo-status-pill {
-      padding: 5px;
     }
   }
 
@@ -2186,12 +2472,10 @@
     }
 
     .page-counter-pill {
-      font-size: 10px;
-      padding: 4px 8px;
-    }
-
-    .turbo-status-pill {
-      display: none;
+      font-size: 11px;
+      padding: 0 8px;
+      height: 28px;
+      min-width: 50px;
     }
 
     .btn-glass-back,

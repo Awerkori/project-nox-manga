@@ -7,6 +7,55 @@ import { chapterOrderKey } from '$lib/chapter-identity';
 
 const DB_NAME = 'nox_offline_v1';
 const DB_VERSION = 1;
+const SYNC_CHANNEL_NAME = 'nox_offline_sync';
+
+export function broadcastOfflineChange(
+  action: 'save' | 'delete' | 'delete_all',
+  chapterId?: string,
+  workId?: string
+): void {
+  if (typeof window === 'undefined') return;
+  const payload = { action, chapterId, workId, timestamp: Date.now() };
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel(SYNC_CHANNEL_NAME);
+      bc.postMessage(payload);
+      bc.close();
+    }
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('nox-offline-change', { detail: payload }));
+  } catch {}
+}
+
+export function subscribeOfflineChanges(
+  callback: (event: { action: 'save' | 'delete' | 'delete_all'; chapterId?: string; workId?: string }) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+  let bc: BroadcastChannel | null = null;
+  const onCustomEvent = (e: any) => {
+    if (e?.detail) callback(e.detail);
+  };
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      bc = new BroadcastChannel(SYNC_CHANNEL_NAME);
+      bc.onmessage = (e) => {
+        if (e?.data) callback(e.data);
+      };
+    }
+  } catch {}
+  window.addEventListener('nox-offline-change', onCustomEvent);
+
+  return () => {
+    if (bc) {
+      try {
+        bc.close();
+      } catch {}
+      bc = null;
+    }
+    window.removeEventListener('nox-offline-change', onCustomEvent);
+  };
+}
 
 export type OfflineChapter = {
   chapterId: string;
@@ -223,7 +272,10 @@ export async function saveChapterOffline(
     const store = tx.objectStore('chapters');
     const req = store.put(record);
 
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      broadcastOfflineChange('save', chapter.id, chapter.work_id);
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -270,7 +322,10 @@ export async function removeOfflineChapter(chapterId: string): Promise<void> {
     const store = tx.objectStore('chapters');
     const req = store.delete(chapterId);
 
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      broadcastOfflineChange('delete', chapterId);
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -294,7 +349,10 @@ export async function removeOfflineWork(workIdOrSlug: string): Promise<number> {
     for (const ch of toDelete) {
       store.delete(ch.chapterId);
     }
-    tx.oncomplete = () => resolve(toDelete.length);
+    tx.oncomplete = () => {
+      broadcastOfflineChange('delete_all', undefined, workIdOrSlug);
+      resolve(toDelete.length);
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -310,7 +368,10 @@ export async function clearAllOfflineDownloads(): Promise<void> {
     const tx = db.transaction('chapters', 'readwrite');
     const store = tx.objectStore('chapters');
     const req = store.clear();
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      broadcastOfflineChange('delete_all');
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -427,7 +488,10 @@ export async function queueOfflineEvent(event: Omit<OfflineEvent, 'id' | 'timest
     const store = tx.objectStore('events');
     const req = store.add(record);
 
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      broadcastOfflineChange('save', chapter.id, chapter.work_id);
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
