@@ -48,7 +48,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
             )
             .eq('chapter_id', params.id)
             .order('created_at', { ascending: false })
-            .limit(100),
+            .limit(500),
           1500,
           { data: [] } as any,
           'reader_cached_comments'
@@ -247,7 +247,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         )
         .eq('chapter_id', chapter.id)
         .order('created_at', { ascending: false })
-        .limit(100),
+        .limit(500),
       locals.db
         .from('chapter_scans')
         .select('scans(id,name,slug)')

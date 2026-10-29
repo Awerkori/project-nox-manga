@@ -106,7 +106,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
             .eq('work_id', work.id)
             .is('chapter_id', null)
             .order('created_at', { ascending: false })
-            .limit(100),
+            .limit(500),
           locals.db.from('likes').select('user_id').eq('work_id', work.id),
           locals.db.rpc('work_metrics', { p_work: work.id }),
           locals.db

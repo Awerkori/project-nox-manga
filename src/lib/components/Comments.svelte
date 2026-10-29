@@ -28,9 +28,7 @@
     Check,
     Minus,
     Plus,
-    Maximize2,
-    LayoutList,
-    Layers
+    Maximize2
   } from '@lucide/svelte';
   import ReportModal from '$lib/components/ReportModal.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -854,14 +852,11 @@
   onMount(() => {
     if (typeof window !== 'undefined') {
       try {
-        const param = new URL(window.location.href).searchParams.get('thread_style');
-        if (param === 'a' || param === 'b') {
-          threadStyle = param;
+        const devParam = new URL(window.location.href).searchParams.get('dev_thread_style');
+        if (devParam === 'b') {
+          threadStyle = 'b';
         } else {
-          const saved = localStorage.getItem('nox_thread_style');
-          if (saved === 'a' || saved === 'b') {
-            threadStyle = saved;
-          }
+          threadStyle = 'a';
         }
       } catch {}
     }
@@ -886,50 +881,28 @@
 </script>
 
 <section class="comments-section-root" data-thread-style={threadStyle}>
-  <!-- SECTION HEADER -->
+  <!-- SECTION HEADER (V16: CABEÇALHO PREMIUM REORGANIZADO — TÍTULO E CONTAGEM À ESQUERDA, ORDENAÇÃO À DIREITA) -->
   <header class="comments-hero-header">
     <div class="header-titles">
       <div class="eyebrow-badge">
-        <MessageSquare size={14} class="text-purple-400" />
+        <MessageSquare size={13} class="text-purple-400" />
         <span>{chapterId ? 'DISCUSSÃO DO CAPÍTULO' : 'AVALIAÇÕES & DISCUSSÃO'}</span>
       </div>
-      <h2 class="section-title">
-        {chapterId ? 'Comentários deste Capítulo' : 'Comentários sobre a Obra'}
-      </h2>
+      <div class="title-with-count">
+        <h2 class="section-title">
+          {chapterId ? 'Comentários deste Capítulo' : 'Comentários sobre a Obra'}
+        </h2>
+        <span class="comments-count-pill" title="{visibleCount} {visibleCount === 1 ? 'comentário publicado' : 'comentários publicados'}">
+          <span class="count-number">{visibleCount}</span>
+        </span>
+      </div>
     </div>
 
     <div class="header-controls">
-      <!-- V15: Interactive Thread Style Comparison Switcher -->
-      <div class="thread-style-selector" role="group" aria-label="Estilo de visualização das conversas">
-        <button
-          type="button"
-          class="btn-style-pill"
-          class:is-active={threadStyle === 'a'}
-          onclick={() => setThreadStyle('a')}
-          title="Alternativa A: Reddit Minimalista (linhas verticais discretas e fluxo contínuo)"
-        >
-          <LayoutList size={12} />
-          <span>Estilo A (Reddit)</span>
-        </button>
-        <button
-          type="button"
-          class="btn-style-pill"
-          class:is-active={threadStyle === 'b'}
-          onclick={() => setThreadStyle('b')}
-          title="Alternativa B: Conversa Agrupada (bloco unificado e agrupamento visual)"
-        >
-          <Layers size={12} />
-          <span>Estilo B (Agrupado)</span>
-        </button>
-      </div>
-
-      <div class="comments-count-pill">
-        <span>{visibleCount}</span> {visibleCount === 1 ? 'comentário' : 'comentários'}
-      </div>
-
       {#if comments.length > 1}
         <div class="sort-selector-wrap">
           <ArrowUpDown size={13} class="sort-icon" />
+          <span class="sort-label">Ordenar:</span>
           <select
             value={sortBy}
             onchange={(e) => (sortBy = e.currentTarget.value as 'recent' | 'likes')}
@@ -2058,6 +2031,12 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  .header-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .eyebrow-badge {
     display: inline-flex;
     align-items: center;
@@ -2067,76 +2046,44 @@
     color: #c084fc;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    margin-bottom: 4px;
+  }
+
+  .title-with-count {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .section-title {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  .comments-count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #d8b4fe;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    border-radius: 9999px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   }
 
   .header-controls {
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  /* V15: Interactive Thread Style Switcher */
-  .thread-style-selector {
-    display: inline-flex;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 9999px;
-    padding: 2px;
-    gap: 2px;
-  }
-
-  .btn-style-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #94a3b8;
-    background: transparent;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  .btn-style-pill:hover {
-    color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .btn-style-pill.is-active {
-    color: #f5f3ff;
-    background: rgba(168, 85, 247, 0.22);
-    border-color: rgba(168, 85, 247, 0.45);
-    box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2);
-  }
-
-  .comments-count-pill {
-    font-size: 12px;
-    font-weight: 700;
-    color: #94a3b8;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 5px 12px;
-    border-radius: 9999px;
-  }
-
-  .comments-count-pill span {
-    color: #c084fc;
   }
 
   .sort-selector-wrap {
@@ -2146,18 +2093,30 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 9999px;
-    padding: 3px 10px;
+    padding: 4px 12px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .sort-selector-wrap:hover {
+    border-color: rgba(168, 85, 247, 0.35);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .sort-icon {
     color: #a855f7;
   }
 
+  .sort-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748b;
+  }
+
   .sort-dropdown {
     background: transparent;
     border: none;
     color: #e2e8f0;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
     outline: none;
@@ -2643,10 +2602,11 @@
   }
 
   .author-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
-    color: #ffffff;
+    color: #f8fafc;
     text-decoration: none;
+    letter-spacing: -0.01em;
   }
 
   .author-name:hover {
@@ -2654,28 +2614,30 @@
   }
 
   .author-tag {
-    font-size: 11px;
-    color: #64748b;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 500;
   }
 
   .badge-self {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 800;
-    color: #a855f7;
-    background: rgba(168, 85, 247, 0.2);
-    padding: 1px 5px;
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.18);
+    padding: 1.5px 6px;
     border-radius: 4px;
+    letter-spacing: 0.02em;
   }
 
   .reply-target-tag {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: rgba(168, 85, 247, 0.12);
-    border: 1px solid rgba(168, 85, 247, 0.28);
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.25);
     border-radius: 9999px;
     padding: 2px 8px;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.25;
     vertical-align: middle;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
@@ -2690,19 +2652,20 @@
   .reply-target-arrow {
     color: #c084fc;
     font-weight: 800;
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   .reply-target-label {
     color: #cbd5e1;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 500;
   }
 
   .reply-target-link {
     color: #f1f5f9;
     text-decoration: none;
-    font-weight: 700;
+    font-weight: 600;
+    font-size: 12px;
     transition: color 0.15s ease;
   }
 
@@ -2713,11 +2676,11 @@
 
   .meta-separator {
     color: #52525b;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .comment-time {
-    font-size: 11px;
+    font-size: 12px;
     color: #64748b;
   }
 
@@ -2742,10 +2705,10 @@
     border-color: rgba(255, 255, 255, 0.1);
   }
 
-  /* Comment Text */
+  /* Comment Text (V16: Tipografia Confortável e Linha Balanceada) */
   .comment-text-body {
-    font-size: 13.5px;
-    line-height: 1.5;
+    font-size: 14.5px;
+    line-height: 1.6;
     color: #e2e8f0;
     margin-bottom: 0;
     word-break: break-word;
@@ -2830,14 +2793,14 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 32px;
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 13px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 9999px;
     color: #94a3b8;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.18s ease;
     user-select: none;
@@ -2863,13 +2826,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 32px;
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 13px;
     background: rgba(168, 85, 247, 0.08);
     border: 1px solid rgba(168, 85, 247, 0.22);
     border-radius: 9999px;
     color: #d8b4fe;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.18s ease;
@@ -2907,14 +2870,14 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 28px;
+    height: 30px;
     padding: 0 8px;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 6px;
     color: #94a3b8;
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
   }
@@ -3930,20 +3893,24 @@
   @media (max-width: 640px) {
     .comments-hero-header {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 8px;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .title-with-count {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .section-title {
+      font-size: 16.5px;
     }
 
     .header-controls {
       width: 100%;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .btn-style-pill {
-      padding: 3px 8px;
-      font-size: 10px;
+      justify-content: flex-end;
     }
 
     .composer-card-premium {
@@ -4027,20 +3994,20 @@
     }
 
     .author-name {
-      font-size: 12px;
+      font-size: 13px;
     }
 
     .author-tag {
-      font-size: 10px;
+      font-size: 11.5px;
     }
 
     .comment-time {
-      font-size: 10px;
+      font-size: 11px;
     }
 
     .comment-text-body {
-      font-size: 12.5px;
-      line-height: 1.45;
+      font-size: 13.5px;
+      line-height: 1.55;
     }
 
     .comment-rendered-img {
@@ -4106,8 +4073,8 @@
     }
 
     .reply-target-tag {
-      font-size: 10.5px;
-      padding: 1px 5px;
+      font-size: 11px;
+      padding: 1.5px 6px;
       gap: 3px;
     }
 
