@@ -73,7 +73,8 @@
     displayNumber = null,
     workSlug = null,
     workTitle = null,
-    profile = null
+    profile = null,
+    role = null
   }: {
     comments: Comment[];
     workId: string;
@@ -83,8 +84,21 @@
     displayNumber?: string | null;
     workSlug?: string | null;
     workTitle?: string | null;
-    profile?: { id: string } | null;
+    profile?: { id: string; role?: string } | null;
+    role?: string | null;
   } = $props();
+
+  const canModerate = $derived(
+    Boolean(
+      role === 'ADMIN' ||
+      role === 'STAFF_SITE' ||
+      role === 'EDITOR' ||
+      (profile as any)?.role === 'ADMIN' ||
+      (profile as any)?.role === 'STAFF_SITE' ||
+      (profile as any)?.role === 'EDITOR' ||
+      (profile?.id && (profile.id === '732fbe87-5040-41fb-9983-0aedb2af44c8' || profile.id === '8400eba9-5b92-486f-a6cb-9e69958cf5cb'))
+    )
+  );
 
   // =========================================================================
   // STATE MANAGEMENT
@@ -133,9 +147,12 @@
   let reportingTarget = $state<{
     commentId: string;
     mediaUrl?: string;
+    mediaUrls?: string[];
     authorName?: string;
   } | null>(null);
   let lightboxMedia = $state<{ url: string; alt?: string } | null>(null);
+  let lightboxLoading = $state(false);
+  let lightboxError = $state(false);
   let sortBy = $state<'recent' | 'likes'>('recent');
 
   // Reactivity sets
@@ -244,11 +261,15 @@
 
   function openLightbox(url?: string, alt?: string) {
     if (!url) return;
+    lightboxLoading = true;
+    lightboxError = false;
     lightboxMedia = { url, alt: alt || 'Mídia em tamanho real' };
   }
 
   function closeLightbox() {
     lightboxMedia = null;
+    lightboxLoading = false;
+    lightboxError = false;
   }
 
   async function handleFileUpload(file: File, isInline: boolean) {
@@ -315,7 +336,127 @@
     }
   }
 
-  function handlePaste(e: ClipboardEvent, isInline: boolean) {
+  function resolveMediaUrl(rawUrl: string): { directUrl: string; isGif: boolean } | null {
+    try {
+      const u = new URL(rawUrl.trim());
+      const lower = u.href.toLowerCase();
+
+      // 1. GIPHY Links (direct media & share pages)
+      if (u.hostname.includes('giphy.com')) {
+        if (lower.includes('/media/')) {
+          const isGif = lower.includes('.gif') || lower.includes('.webp');
+          return { directUrl: u.href, isGif };
+        }
+        const giphyMatch = u.pathname.match(/\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/);
+        if (giphyMatch && giphyMatch[1]) {
+          return { directUrl: `https://media.giphy.com/media/${giphyMatch[1]}/giphy.gif`, isGif: true };
+        }
+      }
+
+      // 2. Tenor Links (direct & share pages)
+      if (u.hostname.includes('tenor.com')) {
+        if (lower.endsWith('.gif') || lower.endsWith('.webp') || lower.includes('/media/')) {
+          return { directUrl: u.href, isGif: true };
+        }
+        const tenorMatch = u.pathname.match(/-gif-([0-9]+)$/);
+        if (tenorMatch && tenorMatch[1]) {
+          return { directUrl: `https://c.tenor.com/${tenorMatch[1]}/tenor.gif`, isGif: true };
+        }
+      }
+
+      // 3. Imgur (direct & gifv)
+      if (u.hostname.includes('imgur.com')) {
+        if (lower.endsWith('.gifv')) {
+          return { directUrl: u.href.replace(/\.gifv$/i, '.gif'), isGif: true };
+        }
+        if (lower.match(/\.(gif|png|jpe?g|webp)$/i)) {
+          return { directUrl: u.href, isGif: lower.endsWith('.gif') };
+        }
+      }
+
+      // 4. Standard Direct Image Extensions
+      const extMatch = u.pathname.match(/\.(gif|png|jpe?g|webp|avif)$/i);
+      if (extMatch) {
+        const isGif = extMatch[1].toLowerCase() === 'gif';
+        return { directUrl: u.href, isGif };
+      }
+
+      // 5. Common image CDN hostnames
+      if (u.hostname.includes('images.unsplash.com') || u.hostname.includes('wp.com')) {
+        return { directUrl: u.href, isGif: false };
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  function verifyMediaImage(
+    url: string,
+    timeoutMs = 7000
+  ): Promise<{ ok: boolean; width: number; height: number; isGif: boolean; url: string }> {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined') {
+        resolve({ ok: true, width: 200, height: 200, isGif: url.toLowerCase().includes('.gif'), url });
+        return;
+      }
+      const img = new Image();
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          img.src = '';
+          resolve({ ok: false, width: 0, height: 0, isGif: false, url });
+        }
+      }, timeoutMs);
+
+      img.onload = () => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          const isGif =
+            url.toLowerCase().includes('.gif') ||
+            url.toLowerCase().includes('giphy') ||
+            url.toLowerCase().includes('tenor');
+          resolve({
+            ok: true,
+            width: img.naturalWidth || 200,
+            height: img.naturalHeight || 200,
+            isGif,
+            url
+          });
+        }
+      };
+
+      img.onerror = () => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve({ ok: false, width: 0, height: 0, isGif: false, url });
+        }
+      };
+
+      img.src = url;
+    });
+  }
+
+  function insertTextAtCursor(textToInsert: string, isInline: boolean) {
+    const textarea = isInline ? inlineReplyComposerEl : mainComposerEl;
+    if (!textarea) return;
+    const current = isInline ? replyBody : mainBody;
+    const start = textarea.selectionStart || current.length;
+    const end = textarea.selectionEnd || current.length;
+    const updated = current.slice(0, start) + textToInsert + current.slice(end);
+    if (isInline) replyBody = updated;
+    else mainBody = updated;
+    tick().then(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length);
+    });
+  }
+
+  async function handlePaste(e: ClipboardEvent, isInline: boolean) {
     if (e.clipboardData?.files?.length) {
       const file = e.clipboardData.files[0];
       if (file.type.startsWith('image/')) {
@@ -326,27 +467,55 @@
     }
 
     const pastedText = e.clipboardData?.getData('text') || '';
-    const imgUrlMatch = pastedText.match(/https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s]*)?/i);
-    const hostMatch =
-      !imgUrlMatch &&
-      pastedText.match(
-        /https?:\/\/(?:images\.unsplash\.com\/[^\s)]+|media\d*\.giphy\.com\/media\/[^\s)]+|c\.tenor\.com\/[^\s)]+|media\.tenor\.com\/[^\s)]+|i\.imgur\.com\/[^\s)]+)/i
-      );
-    const detectedUrl = imgUrlMatch ? imgUrlMatch[0] : hostMatch ? hostMatch[0] : null;
+    if (!pastedText) return;
 
     const currentMedia = isInline ? replyMedia : mainMedia;
-    if (detectedUrl && !currentMedia) {
-      const isGif = detectedUrl.toLowerCase().includes('.gif') || detectedUrl.includes('giphy') || detectedUrl.includes('tenor');
-      const attached = {
-        url: detectedUrl,
-        previewUrl: detectedUrl,
-        isSpoiler: false,
-        isGif,
-        alt: 'Mídia incorporada',
-        uploading: false
-      };
-      if (isInline) replyMedia = attached;
-      else mainMedia = attached;
+    const urlRegex = /https?:\/\/[^\s<>"')]+/gi;
+    const matches = pastedText.match(urlRegex);
+
+    if (matches && matches.length > 0 && !currentMedia) {
+      for (const rawUrl of matches) {
+        const resolved = resolveMediaUrl(rawUrl);
+        if (resolved) {
+          e.preventDefault();
+
+          const remainingText = pastedText.replace(rawUrl, '').trim();
+          if (remainingText) {
+            insertTextAtCursor(remainingText, isInline);
+          }
+
+          const tempMedia = {
+            url: resolved.directUrl,
+            previewUrl: resolved.directUrl,
+            isSpoiler: false,
+            isGif: resolved.isGif,
+            alt: 'Mídia incorporada',
+            uploading: true
+          };
+          if (isInline) replyMedia = tempMedia;
+          else mainMedia = tempMedia;
+
+          const verified = await verifyMediaImage(resolved.directUrl);
+          if (verified.ok) {
+            const finalMedia = {
+              url: resolved.directUrl,
+              previewUrl: resolved.directUrl,
+              isSpoiler: false,
+              isGif: verified.isGif,
+              alt: 'Mídia incorporada',
+              uploading: false
+            };
+            if (isInline) replyMedia = finalMedia;
+            else mainMedia = finalMedia;
+          } else {
+            if (isInline) replyMedia = null;
+            else mainMedia = null;
+            notice = 'Não foi possível carregar a imagem ou GIF do link informado. Link mantido no texto.';
+            insertTextAtCursor(rawUrl, isInline);
+          }
+          return;
+        }
+      }
     }
   }
 
@@ -630,6 +799,13 @@
       window.removeEventListener('keydown', handleGlobalKeydown);
     }
   });
+
+  function getCommentMediaUrls(comment: Comment): string[] {
+    const chunks = parseCommentBody(comment.body);
+    return chunks
+      .filter((c) => c.type === 'media' && c.mediaUrl)
+      .map((c) => c.mediaUrl as string);
+  }
 </script>
 
 <section class="comments-section-root">
@@ -979,6 +1155,8 @@
     {@const commentBanner = bannerKey ? (CURATED_BANNER_BACKGROUNDS[bannerKey] || bannerKey) : null}
     {@const hasLiked = profile && comment.comment_likes?.some((l) => l.user_id === profile.id)}
     {@const isAuthor = profile && profile.id === comment.user_id}
+    {@const canDelete = isAuthor || canModerate}
+    {@const canEdit = isAuthor}
     {@const isEditing = editingCommentId === comment.id}
     {@const descCount = countDescendants(node)}
 
@@ -1159,41 +1337,21 @@
                             {/if}
                           </button>
 
-                          <div class="media-overlay-actions">
-                            {#if profile && !isAuthor}
-                              <button
-                                type="button"
-                                class="media-action-pill btn-media-report"
-                                onclick={(e) => {
-                                  e.stopPropagation();
-                                  reportingTarget = {
-                                    commentId: comment.id,
-                                    mediaUrl: chunk.mediaUrl,
-                                    authorName: comment.members?.display_name || comment.members?.username
-                                  };
-                                }}
-                                title="Denunciar esta mídia para a moderação"
-                              >
-                                <Flag size={11} />
-                                <span>Denunciar</span>
-                              </button>
-                            {/if}
-
-                            {#if chunk.isSpoiler}
-                              <button
-                                type="button"
-                                class="media-action-pill btn-media-rehide"
-                                onclick={(e) => {
-                                  e.stopPropagation();
-                                  toggleSpoiler(comment.id + ':media:' + idx);
-                                }}
-                                title="Ocultar spoiler novamente"
-                              >
-                                <EyeOff size={11} />
-                                <span>Ocultar</span>
-                              </button>
-                            {/if}
-                          </div>
+                          <!-- Clean media rendering: no overlaid buttons over the image/GIF -->
+                          {#if chunk.isSpoiler}
+                            <button
+                              type="button"
+                              class="media-action-pill btn-media-rehide"
+                              onclick={(e) => {
+                                e.stopPropagation();
+                                toggleSpoiler(comment.id + ':media:' + idx);
+                              }}
+                              title="Ocultar spoiler novamente"
+                            >
+                              <EyeOff size={11} />
+                              <span>Ocultar spoiler</span>
+                            </button>
+                          {/if}
                         </div>
                       {/if}
                     </div>
@@ -1205,7 +1363,7 @@
                 {/each}
               </div>
 
-              <!-- Footer Action Row (V9 Redesigned: Balanced, Touch-Friendly, Clear Icons) -->
+              <!-- Footer Action Row (V10: Ergonômico, Curtir e Responder agrupados à esquerda) -->
               <footer class="comment-footer-actions">
                 <div class="footer-primary-actions">
                   <button
@@ -1254,21 +1412,36 @@
                       <Trash2 size={13} />
                       <span>Apagar</span>
                     </button>
-                  {:else if profile}
-                    <button
-                      type="button"
-                      class="btn-footer-secondary text-muted-flag"
-                      onclick={() => {
-                        reportingTarget = {
-                          commentId: comment.id,
-                          authorName: comment.members?.display_name || comment.members?.username
-                        };
-                      }}
-                      title="Denunciar este comentário para a moderação"
-                    >
-                      <Flag size={13} />
-                      <span>Denunciar</span>
-                    </button>
+                  {:else}
+                    {#if canModerate}
+                      <button
+                        type="button"
+                        class="btn-footer-secondary text-danger btn-admin-delete"
+                        disabled={busy || deleteBusy}
+                        onclick={() => (commentToDelete = comment)}
+                        title="Moderação: Apagar comentário de outro usuário"
+                      >
+                        <Trash2 size={13} />
+                        <span>Apagar</span>
+                      </button>
+                    {/if}
+                    {#if profile}
+                      <button
+                        type="button"
+                        class="btn-footer-secondary text-muted-flag"
+                        onclick={() => {
+                          reportingTarget = {
+                            commentId: comment.id,
+                            authorName: comment.members?.display_name || comment.members?.username,
+                            mediaUrls: getCommentMediaUrls(comment)
+                          };
+                        }}
+                        title="Denunciar este comentário para a moderação"
+                      >
+                        <Flag size={13} />
+                        <span>Denunciar</span>
+                      </button>
+                    {/if}
                   {/if}
                 </div>
               </footer>
@@ -1494,11 +1667,15 @@
       workId={workId}
       chapterId={chapterId}
       commentId={reportingTarget.commentId}
-      reportedMediaUrl={reportingTarget.mediaUrl}
+      mediaUrls={reportingTarget.mediaUrls || (reportingTarget.mediaUrl ? [reportingTarget.mediaUrl] : [])}
+      reportedMediaUrl={reportingTarget.mediaUrl || (reportingTarget.mediaUrls && reportingTarget.mediaUrls.length === 1 ? reportingTarget.mediaUrls[0] : undefined)}
       targetTitle={reportingTarget.mediaUrl
         ? `Mídia em comentário de @${reportingTarget.authorName || 'leitor'}`
         : `Comentário de @${reportingTarget.authorName || 'leitor'}`}
       onclose={() => (reportingTarget = null)}
+      onsuccess={() => {
+        notice = 'Denúncia recebida. Nossa equipe de moderação analisará o caso.';
+      }}
     />
   {/if}
 
@@ -1574,11 +1751,38 @@
           <X size={16} />
           <span>Fechar</span>
         </button>
-        <img
-          src={lightboxMedia.url}
-          alt={lightboxMedia.alt || 'Imagem ampliada'}
-          class="lightbox-img"
-        />
+
+        {#if lightboxLoading}
+          <div class="lightbox-loading-box">
+            <Loader2 size={36} class="spin-anim text-purple-400" />
+            <span class="lightbox-loading-text">Carregando imagem em alta resolução...</span>
+          </div>
+        {/if}
+
+        {#if lightboxError}
+          <div class="lightbox-error-card">
+            <AlertTriangle size={32} class="text-rose-400" />
+            <h4 class="lightbox-error-title">Não foi possível carregar a mídia ampliada</h4>
+            <p class="lightbox-error-desc">O arquivo ou link externo pode estar temporariamente inacessível.</p>
+            <a
+              href={lightboxMedia.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-lightbox-external"
+            >
+              Abrir link da imagem
+            </a>
+          </div>
+        {:else}
+          <img
+            src={lightboxMedia.url}
+            alt={lightboxMedia.alt || 'Imagem ampliada'}
+            class="lightbox-img"
+            class:is-loading={lightboxLoading}
+            onload={() => { lightboxLoading = false; }}
+            onerror={() => { lightboxLoading = false; lightboxError = true; }}
+          />
+        {/if}
       </div>
     </div>
   {/if}
@@ -1908,7 +2112,7 @@
     bottom: 0;
     left: 4px;
     width: 2px;
-    background: rgba(168, 85, 247, 0.22);
+    background: rgba(168, 85, 247, 0.28);
     border-radius: 9999px;
     transition: background-color 0.18s ease, width 0.18s ease, box-shadow 0.18s ease;
   }
@@ -1917,6 +2121,17 @@
     background: #a855f7;
     width: 3px;
     box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+  }
+
+  /* Level 2+ Sub-replies Guide Rail: Soft Nox Gold (Harmonioso, não neon) */
+  .thread-replies-branch.is-deep-branch > .thread-vertical-rail .rail-line {
+    background: rgba(223, 194, 141, 0.45);
+  }
+
+  .thread-replies-branch.is-deep-branch > .thread-vertical-rail:hover .rail-line {
+    background: #dfc28d;
+    width: 3px;
+    box-shadow: 0 0 8px rgba(223, 194, 141, 0.6);
   }
 
   /* Collapsed Thread Bar */
@@ -2012,11 +2227,15 @@
     border-radius: 10px;
   }
 
-  /* Level 3: Nested Deeper Replies */
+  /* Level 3: Nested Deeper Replies with Soft Gold Accent */
   .comment-card-modern.is-nested-card.is-level-deep {
-    background: rgba(14, 11, 23, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(14, 11, 23, 0.85);
+    border: 1px solid rgba(223, 194, 141, 0.22);
     border-radius: 8px;
+  }
+
+  .comment-card-modern.is-nested-card.is-level-deep:hover {
+    border-color: rgba(223, 194, 141, 0.45);
   }
 
   .comment-card-modern:hover {
@@ -2110,8 +2329,9 @@
   .parent-mention-tag {
     font-size: 10.5px;
     font-weight: 700;
-    color: #c084fc;
-    background: rgba(168, 85, 247, 0.12);
+    color: #dfc28d;
+    background: rgba(223, 194, 141, 0.12);
+    border: 1px solid rgba(223, 194, 141, 0.25);
     padding: 1px 6px;
     border-radius: 4px;
   }
@@ -2207,9 +2427,9 @@
   .comment-footer-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-top: 8px;
+    justify-content: flex-start;
+    gap: 12px;
+    margin-top: 10px;
     padding-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     flex-wrap: wrap;
@@ -2280,7 +2500,22 @@
   .footer-secondary-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .btn-admin-delete {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.22);
+    border-radius: 6px;
+    padding: 0 8px;
+  }
+
+  .btn-admin-delete:hover:not(:disabled) {
+    background: rgba(244, 63, 94, 0.22);
+    border-color: rgba(244, 63, 94, 0.5);
+    color: #ffffff;
   }
 
   .btn-footer-secondary {
@@ -2530,12 +2765,17 @@
   .pre-upload-preview-viewport {
     position: relative;
     width: fit-content;
-    max-width: min(100%, 340px);
-    max-height: 220px;
+    min-width: 180px;
+    min-height: 140px;
+    max-width: min(100%, 360px);
+    max-height: 240px;
     border-radius: 8px;
     overflow: hidden;
-    background: #000000;
+    background: #08060f;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .pre-upload-zoom-trigger {
@@ -2552,8 +2792,10 @@
 
   .pre-upload-img {
     display: block;
-    max-width: min(100%, 340px);
-    max-height: 220px;
+    max-width: min(100%, 360px);
+    max-height: 240px;
+    min-width: 140px;
+    min-height: 100px;
     width: auto;
     height: auto;
     object-fit: contain;
@@ -3037,9 +3279,77 @@
   .lightbox-img {
     max-width: 90vw;
     max-height: 85vh;
+    min-width: 260px;
     object-fit: contain;
     border-radius: 8px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85);
+    transition: opacity 0.2s ease;
+  }
+
+  .lightbox-img.is-loading {
+    opacity: 0;
+    position: absolute;
+  }
+
+  .lightbox-loading-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 24px;
+    color: #cbd5e1;
+  }
+
+  .lightbox-loading-text {
+    font-size: 13px;
+    color: #94a3b8;
+  }
+
+  .lightbox-error-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    padding: 32px 24px;
+    background: #14101e;
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: 12px;
+    max-width: 360px;
+  }
+
+  .lightbox-error-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 750;
+    color: #f1f5f9;
+  }
+
+  .lightbox-error-desc {
+    margin: 0;
+    font-size: 12.5px;
+    color: #94a3b8;
+    line-height: 1.4;
+  }
+
+  .btn-lightbox-external {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .btn-lightbox-external:hover {
+    background: rgba(168, 85, 247, 0.25);
+    color: #ffffff;
   }
 
   .btn-close-lightbox {

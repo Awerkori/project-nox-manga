@@ -1048,7 +1048,7 @@
     </section>
 
   <!-- Comments Section -->
-  <Comments comments={data.comments} workId={data.work.id} profile={data.profile} />
+  <Comments comments={data.comments} workId={data.work.id} profile={data.profile} role={data.role} />
 
   <!-- Report Modal -->
   {#if showReportModal}

@@ -9,7 +9,7 @@ export default {
         'script-src': ['self'],
         'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
         'font-src': ['self', 'https://fonts.gstatic.com'],
-        'img-src': ['self', 'blob:', 'data:'],
+        'img-src': ['self', 'blob:', 'data:', 'https:', 'http:'],
         'connect-src': ['self', 'https://*.supabase.co', 'wss://*.supabase.co'],
         'frame-ancestors': ['none'],
         'object-src': ['none'],

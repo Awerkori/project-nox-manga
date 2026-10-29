@@ -1020,6 +1020,7 @@
           workSlug={data.chapter.works?.slug}
           workTitle={data.chapter.works?.title}
           profile={data.profile}
+          role={data.role}
         />
       {/if}
     </div>
