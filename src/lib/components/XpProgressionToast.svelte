@@ -41,20 +41,20 @@
       created: now
     };
 
-    // Exactly 2.5 seconds total duration requested
+    // Exactly 4.5 seconds duration for clear, comfortable visibility
     dismissTimer = setTimeout(() => {
       if (toast?.id === id) {
         toast = null;
       }
       dismissTimer = null;
-    }, 2500);
+    }, 4500);
   }
 
   function handleCustomEvent(e: Event) {
-    const custom = e as CustomEvent<{ amount?: number; title?: string; message?: string; kind?: string }>;
+    const custom = e as CustomEvent<{ amount?: number; title?: string; label?: string; message?: string; kind?: string }>;
     if (!custom.detail) return;
     const amount = Number(custom.detail.amount) || 0;
-    const title = custom.detail.title || custom.detail.message || 'Capítulo concluído';
+    const title = custom.detail.title || custom.detail.label || custom.detail.message || 'Capítulo concluído';
     if (amount > 0) {
       triggerXpReward(amount, title);
     }
@@ -67,6 +67,7 @@
   onMount(() => {
     if (typeof window !== 'undefined') {
       window.addEventListener('nox-xp-awarded', handleCustomEvent);
+      window.addEventListener('nox:xp_award', handleCustomEvent);
       (window as any).__noxTriggerXpReward = triggerXpReward;
     }
   });
@@ -75,6 +76,7 @@
     if (dismissTimer) clearTimeout(dismissTimer);
     if (typeof window !== 'undefined') {
       window.removeEventListener('nox-xp-awarded', handleCustomEvent);
+      window.removeEventListener('nox:xp_award', handleCustomEvent);
       if ((window as any).__noxTriggerXpReward === triggerXpReward) {
         delete (window as any).__noxTriggerXpReward;
       }
@@ -83,7 +85,7 @@
 </script>
 
 {#if toast}
-  <div class="xp-toast-container" aria-live="polite" aria-atomic="true">
+  <div class="xp-toast-container xp-progression-toast" aria-live="polite" aria-atomic="true">
     <div class="xp-toast-card" key={toast.id}>
       <div class="xp-glow-backdrop"></div>
       <div class="xp-toast-content">
@@ -126,7 +128,7 @@
       inset 0 0 12px rgba(245, 158, 11, 0.2);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    animation: xpNaturalFloatFade 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: xpNaturalFloatFade 4.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .xp-glow-backdrop {
@@ -188,12 +190,12 @@
       transform: translate3d(24px, 12px, 0) scale(0.92);
       filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.2));
     }
-    14% {
+    10% {
       opacity: 1;
       transform: translate3d(0, 0, 0) scale(1);
       filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.6));
     }
-    75% {
+    82% {
       opacity: 1;
       transform: translate3d(0, -6px, 0) scale(1);
       filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.45));

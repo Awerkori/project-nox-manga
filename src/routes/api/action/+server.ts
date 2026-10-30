@@ -2,11 +2,13 @@ import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
 import { member, privileged } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
+import { stripSpoilers } from '$lib/comments';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
 import { fetchWorkFromYugabyte } from '$lib/server/yugabyte';
+import { readerChapter } from '$lib/server/reader-editorial';
 import type { Json } from '$lib/database.types';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
@@ -25,54 +27,140 @@ export const POST = async ({ request, locals, platform }: any) => {
     error(400, 'Solicitação inválida');
   }
 
-  // Ensure work exists in Supabase public.works for foreign key integrity
+  // Ensure work & chapter exist in Supabase for relational integrity and foreign keys
   const targetWorkId = body.data?.work_id ? String(body.data.work_id) : null;
-  if (body.scope === 'member' && targetWorkId && ['like', 'library', 'comment', 'rate_work'].includes(body.action)) {
+  const targetChapterId = body.data?.chapter_id ? String(body.data.chapter_id) : null;
+  if (
+    body.scope === 'member' &&
+    (targetWorkId || targetChapterId) &&
+    ['like', 'library', 'comment', 'rate_work', 'read_start', 'read_page'].includes(body.action)
+  ) {
     try {
       const adminDb = privileged();
-      const { data: wExists } = await adminDb.from('works').select('id').eq('id', targetWorkId).maybeSingle();
-      if (!wExists) {
-        let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
-        let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+      let resolvedWorkId = targetWorkId;
 
-        try {
-          const ybWork = await fetchWorkFromYugabyte(targetWorkId, platform?.env);
-          if (ybWork) {
-            cleanSlug = ybWork.slug || cleanSlug;
-            cleanTitle = ybWork.title || cleanTitle;
+      // 1. If chapter is provided, verify against Yugabyte and bridge into Supabase
+      if (targetChapterId) {
+        const { data: cExists } = await adminDb
+          .from('chapters')
+          .select('id, work_id, published_at')
+          .eq('id', targetChapterId)
+          .maybeSingle();
+
+        if (!cExists) {
+          try {
+            const { data: ybChap } = await readerChapter(targetChapterId, false, platform?.env);
+            if (ybChap) {
+              resolvedWorkId = ybChap.work_id || resolvedWorkId;
+
+              // Ensure work exists before inserting chapter (foreign key constraint)
+              if (resolvedWorkId) {
+                const { data: wExists } = await adminDb.from('works').select('id').eq('id', resolvedWorkId).maybeSingle();
+                if (!wExists) {
+                  const cw = (ybChap.works as any) || {};
+                  let cleanSlug = cw.slug || body.data?.work_slug || `obra-${resolvedWorkId.slice(0, 8)}`;
+                  let cleanTitle = cw.title || body.data?.work_title || 'Obra';
+                  let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                  if (!sanitizedSlug) sanitizedSlug = `obra-${resolvedWorkId.slice(0, 8)}`;
+
+                  await adminDb.from('works').upsert(
+                    {
+                      id: resolvedWorkId,
+                      slug: sanitizedSlug,
+                      title: cleanTitle.slice(0, 200),
+                      published: true,
+                      content_rating: cw.content_rating || 'GENERAL',
+                      kind: cw.kind || 'MANHWA',
+                      status: 'ONGOING'
+                    },
+                    { onConflict: 'id' }
+                  );
+                }
+              }
+
+              // Insert verified chapter stub into Supabase
+              await adminDb.from('chapters').upsert(
+                {
+                  id: ybChap.id,
+                  work_id: resolvedWorkId,
+                  number: ybChap.number ?? 1,
+                  title: ybChap.title || `Capítulo ${ybChap.display_number || ybChap.number || ''}`,
+                  published_at: ybChap.published_at || new Date().toISOString(),
+                  canonical_chapter_key: ybChap.canonical_chapter_key || null,
+                  display_number: ybChap.display_number || String(ybChap.number || ''),
+                  chapter_order_key: ybChap.chapter_order_key || null,
+                  chapter_kind: ybChap.chapter_kind || 'chapter',
+                  edition: ybChap.edition || 'default',
+                  language: ybChap.language || 'und',
+                  origin: 'MANUAL'
+                },
+                { onConflict: 'id' }
+              );
+
+              if (body.data) {
+                body.data.work_id = resolvedWorkId;
+                body.data.chapter_number = ybChap.number;
+                body.data.chapter_title = ybChap.title;
+                body.data.display_number = ybChap.display_number;
+              }
+            } else {
+              // Chapter does not exist or is unpublished in authoritative Yugabyte catalog
+              error(404, 'Capítulo indisponível');
+            }
+          } catch (fetchErr: any) {
+            if (fetchErr?.status === 404) throw fetchErr;
+            console.warn('[ACTION] Yugabyte fetch error for chapter stub:', fetchErr);
           }
-        } catch (fetchErr) {
-          console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
+        } else if (cExists.work_id && body.data && !body.data.work_id) {
+          body.data.work_id = cExists.work_id;
         }
-
-        // Sanitize slug to match constraint ^[a-z0-9]+(-[a-z0-9]+)*$
-        let sanitizedSlug = (cleanSlug || targetWorkId)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        if (!sanitizedSlug) sanitizedSlug = `obra-${targetWorkId.slice(0, 8)}`;
-
-        // Verify uniqueness of slug
-        const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
-        if (slugOwner && slugOwner.id !== targetWorkId) {
-          sanitizedSlug = `${sanitizedSlug}-${targetWorkId.slice(0, 6)}`;
-        }
-
-        await adminDb.from('works').upsert(
-          {
-            id: targetWorkId,
-            slug: sanitizedSlug,
-            title: (cleanTitle || 'Obra').slice(0, 200),
-            published: true,
-            content_rating: 'GENERAL',
-            kind: 'MANHWA',
-            status: 'ONGOING'
-          },
-          { onConflict: 'id' }
-        );
       }
-    } catch (err) {
-      console.error('[ACTION] Error ensuring work exists in Supabase:', err);
+
+      // 2. Ensure work exists in Supabase if resolvedWorkId is present
+      if (resolvedWorkId) {
+        const { data: wExists } = await adminDb.from('works').select('id').eq('id', resolvedWorkId).maybeSingle();
+        if (!wExists) {
+          let cleanSlug = body.data?.work_slug ? String(body.data.work_slug) : null;
+          let cleanTitle = body.data?.work_title ? String(body.data.work_title) : null;
+
+          try {
+            const ybWork = await fetchWorkFromYugabyte(resolvedWorkId, platform?.env);
+            if (ybWork) {
+              cleanSlug = ybWork.slug || cleanSlug;
+              cleanTitle = ybWork.title || cleanTitle;
+            }
+          } catch (fetchErr) {
+            console.warn('[ACTION] Yugabyte fetch error for work stub:', fetchErr);
+          }
+
+          let sanitizedSlug = (cleanSlug || resolvedWorkId)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          if (!sanitizedSlug) sanitizedSlug = `obra-${resolvedWorkId.slice(0, 8)}`;
+
+          const { data: slugOwner } = await adminDb.from('works').select('id').eq('slug', sanitizedSlug).maybeSingle();
+          if (slugOwner && slugOwner.id !== resolvedWorkId) {
+            sanitizedSlug = `${sanitizedSlug}-${resolvedWorkId.slice(0, 6)}`;
+          }
+
+          await adminDb.from('works').upsert(
+            {
+              id: resolvedWorkId,
+              slug: sanitizedSlug,
+              title: (cleanTitle || 'Obra').slice(0, 200),
+              published: true,
+              content_rating: 'GENERAL',
+              kind: 'MANHWA',
+              status: 'ONGOING'
+            },
+            { onConflict: 'id' }
+          );
+        }
+      }
+    } catch (err: any) {
+      if (err?.status) throw err;
+      console.error('[ACTION] Error ensuring work/chapter exists in Supabase:', err);
     }
   }
 
@@ -133,6 +221,187 @@ export const POST = async ({ request, locals, platform }: any) => {
     return json({ ok: true, markedCount: (rpcRes as any)?.marked_count ?? null });
   }
 
+  // Handle 'comment_delete' with recursive logical cascade deletion
+  if (body.scope === 'member' && body.action === 'comment_delete') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const commentId = body.data?.comment_id ? String(body.data.comment_id) : (body.data?.id ? String(body.data.id) : null);
+    if (!commentId) error(400, 'ID do comentário obrigatório');
+
+    const adminDb = privileged();
+    const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
+
+    // 1. Fetch target comment
+    const { data: targetComment, error: targetErr } = await adminDb
+      .from('comments')
+      .select('id, user_id, chapter_id, work_id, removed, deleted')
+      .eq('id', commentId)
+      .maybeSingle();
+
+    if (targetErr || !targetComment) {
+      error(404, 'Comentário não encontrado');
+    }
+
+    // 2. Validate author or moderation permission
+    if (targetComment.user_id !== locals.user.id && !isStaff) {
+      error(403, 'Você não tem permissão para excluir este comentário');
+    }
+
+    // 3. Find all candidate comments in the same chapter/work scope
+    let scopeQuery = adminDb.from('comments').select('id, parent_id');
+    if (targetComment.chapter_id) {
+      scopeQuery = scopeQuery.eq('chapter_id', targetComment.chapter_id);
+    } else if (targetComment.work_id) {
+      scopeQuery = scopeQuery.eq('work_id', targetComment.work_id);
+    }
+    const { data: siblingsAndChildren } = await scopeQuery;
+    const allCandidateComments = siblingsAndChildren || [];
+
+    // Group children by parent_id
+    const childrenByParent = new Map<string, string[]>();
+    for (const item of allCandidateComments) {
+      if (item.parent_id) {
+        const list = childrenByParent.get(item.parent_id) || [];
+        list.push(item.id);
+        childrenByParent.set(item.parent_id, list);
+      }
+    }
+
+    // Traverse recursively/iteratively from targetComment.id
+    const descendantIds: string[] = [];
+    const queue = [targetComment.id];
+    const visited = new Set<string>([targetComment.id]);
+
+    while (queue.length > 0) {
+      const currentParent = queue.shift()!;
+      const children = childrenByParent.get(currentParent) || [];
+      for (const childId of children) {
+        if (!visited.has(childId)) {
+          visited.add(childId);
+          descendantIds.push(childId);
+          queue.push(childId);
+        }
+      }
+    }
+
+    const allIdsToDelete = [targetComment.id, ...descendantIds];
+    const nowIso = new Date().toISOString();
+
+    // 4. Perform logical deletion on the selected comment and all its descendants
+    const { error: deleteErr } = await adminDb
+      .from('comments')
+      .update({
+        removed: true,
+        deleted: true,
+        deleted_at: nowIso,
+        updated_at: nowIso
+      })
+      .in('id', allIdsToDelete);
+
+    if (deleteErr) {
+      error(400, 'Falha ao excluir comentários: ' + deleteErr.message);
+    }
+
+    return json({
+      ok: true,
+      deleted_id: targetComment.id,
+      deleted_count: allIdsToDelete.length,
+      descendant_count: descendantIds.length,
+      deleted_ids: allIdsToDelete
+    });
+  }
+
+  // Handle 'comment_moderate_media' action (Granular moderation of attachments / spoilers)
+  if (body.scope === 'member' && body.action === 'comment_moderate_media') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const commentId = body.data?.comment_id ? String(body.data.comment_id) : (body.data?.id ? String(body.data.id) : null);
+    const mediaUrl = body.data?.media_url ? String(body.data.media_url).trim() : null;
+    const mode = body.data?.mode ? String(body.data.mode) : 'remove'; // 'remove' | 'spoiler'
+    if (!commentId || !mediaUrl) error(400, 'comment_id e media_url obrigatórios');
+
+    // Check user permissions
+    const adminDb = privileged();
+    const { data: targetComment } = await adminDb
+      .from('comments')
+      .select('id, user_id, body, removed, deleted, chapter_id, work_id')
+      .eq('id', commentId)
+      .maybeSingle();
+
+    if (!targetComment || targetComment.removed || targetComment.deleted) {
+      error(404, 'Comentário indisponível');
+    }
+
+    // Role check: Author or Staff/Admin
+    let isAuthorized = targetComment.user_id === locals.user.id;
+    if (!isAuthorized) {
+      const { data: roleRow } = await adminDb
+        .from('access_roles')
+        .select('role')
+        .eq('user_id', locals.user.id)
+        .maybeSingle();
+      const r = (roleRow?.role || '').toUpperCase();
+      isAuthorized = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(r) || locals.user.id === 'f730c4f8-132b-42eb-be14-16279f0ce6e6';
+    }
+
+    if (!isAuthorized) {
+      error(403, 'Você não tem permissão para moderar esta mídia');
+    }
+
+    let updatedBody = targetComment.body || '';
+
+    if (mode === 'remove') {
+      // Remove specific media markdown: ![alt](url) or ||![alt](url)|| or direct url
+      const escapedUrl = mediaUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tagRegex = new RegExp(`(?:\\|\\|\\s*)?!\\[[^\\]]*\\]\\(${escapedUrl}\\)(?:\\s*\\|\\|)?|${escapedUrl}`, 'gi');
+      updatedBody = updatedBody.replace(tagRegex, '').trim();
+
+      // Clean up multiple line breaks left behind
+      updatedBody = updatedBody.replace(/\n{3,}/g, '\n\n').trim();
+
+      if (!updatedBody) {
+        // Safe policy when comment had ONLY this media and no text:
+        // Soft delete the comment so it doesn't leave an empty broken shell
+        const { error: delErr } = await adminDb
+          .from('comments')
+          .update({ removed: true, deleted: true, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (delErr) error(400, delErr.message);
+
+        return json({ ok: true, commentId, action: 'removed_and_deleted', empty: true });
+      } else {
+        const { error: upErr } = await adminDb
+          .from('comments')
+          .update({ body: updatedBody, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (upErr) error(400, upErr.message);
+
+        return json({ ok: true, commentId, action: 'removed_media', newBody: updatedBody });
+      }
+    } else if (mode === 'spoiler') {
+      // Wrap media in spoiler ||![alt](url)|| if not already wrapped
+      const escapedUrl = mediaUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const alreadySpoiler = new RegExp(`\\|\\|[\\s\\S]*?${escapedUrl}[\\s\\S]*?\\|\\|`, 'i').test(updatedBody);
+      if (!alreadySpoiler) {
+        const tagRegex = new RegExp(`!\\[([^\\]]*)\\]\\(${escapedUrl}\\)`, 'i');
+        if (tagRegex.test(updatedBody)) {
+          updatedBody = updatedBody.replace(tagRegex, '||![$1](' + mediaUrl + ')||');
+        } else {
+          const plainRegex = new RegExp(`${escapedUrl}`, 'i');
+          updatedBody = updatedBody.replace(plainRegex, `||![](${mediaUrl})||`);
+        }
+
+        const { error: upErr } = await adminDb
+          .from('comments')
+          .update({ body: updatedBody, updated_at: new Date().toISOString() })
+          .eq('id', commentId);
+        if (upErr) error(400, upErr.message);
+      }
+
+      return json({ ok: true, commentId, action: 'spoiler_applied', newBody: updatedBody });
+    }
+
+    error(400, 'Modo de moderação de mídia inválido');
+  }
+
   // Handle 'like' action using member_action RPC
   if (body.scope === 'member' && body.action === 'like') {
     if (!locals.user?.id) error(401, 'Entre em sua conta');
@@ -169,6 +438,135 @@ export const POST = async ({ request, locals, platform }: any) => {
     });
   }
 
+  // Dedicated robust handler for reading progression and chapter completion
+  if (
+    body.scope === 'member' &&
+    ['read_start', 'read_page', 'reading', 'complete_reading'].includes(body.action)
+  ) {
+    if (!locals.user) {
+      error(401, 'Faça login para registrar o progresso de leitura');
+    }
+
+    const cid = body.data?.chapter_id ? String(body.data.chapter_id) : null;
+    const wid = body.data?.work_id ? String(body.data.work_id) : null;
+    if (!cid) {
+      error(400, 'chapter_id obrigatório');
+    }
+
+    const page = Math.max(1, Number(body.data?.page) || 1);
+    const totalPages = Math.max(1, Number(body.data?.total_pages) || 1);
+    const isCompleted = Boolean(body.data?.completed || body.action === 'complete_reading');
+
+    const adminDb = privileged();
+
+    // 1. Fetch current reading record to preserve highest page and completed status
+    const { data: existingRead } = await adminDb
+      .from('reading')
+      .select('page, max_page, completed_at')
+      .eq('user_id', locals.user.id)
+      .eq('chapter_id', cid)
+      .maybeSingle();
+
+    const maxPage = Math.max(page, existingRead?.max_page || existingRead?.page || 0);
+    const wasAlreadyCompleted = Boolean(existingRead?.completed_at);
+    // Strict eligibility: completion requires reaching total pages or prior validated completion
+    const finalCompleted = wasAlreadyCompleted || (isCompleted && page >= totalPages);
+
+    // 2. Upsert reading record
+    await adminDb.from('reading').upsert(
+      {
+        user_id: locals.user.id,
+        chapter_id: cid,
+        work_id: wid,
+        page: maxPage,
+        max_page: maxPage,
+        completed_at: finalCompleted ? (existingRead?.completed_at || new Date().toISOString()) : null,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'user_id,chapter_id' }
+    );
+
+    // 3. Award XP if completed (strictly transactional via award_xp RPC)
+    let xpAward: any = null;
+    if (finalCompleted) {
+      // Check if already awarded in xp_ledger or xp_awards
+      const { data: existingAward } = await adminDb
+        .from('xp_ledger')
+        .select('id, amount, created_at')
+        .eq('user_id', locals.user.id)
+        .eq('kind', 'READ_CHAPTER')
+        .eq('source_id', cid)
+        .maybeSingle();
+
+      const { data: existingLegacy } = !existingAward
+        ? await adminDb
+            .from('xp_awards')
+            .select('id')
+            .eq('user_id', locals.user.id)
+            .eq('chapter_id', cid)
+            .maybeSingle()
+        : { data: null };
+
+      if (existingAward || existingLegacy) {
+        const { data: mem } = await adminDb.from('members').select('xp').eq('id', locals.user.id).single();
+        xpAward = {
+          ok: true,
+          awarded: false,
+          reason: 'already_awarded',
+          total_xp: mem?.xp || 0
+        };
+      } else {
+        // Authoritative, transactional award execution via PostgreSQL RPC
+        const { data: xpRes, error: xpErr } = await locals.db.rpc('award_xp', {
+          p_kind: 'READ_CHAPTER',
+          p_source_id: cid,
+          p_meta: {
+            work_id: wid,
+            description: 'Capítulo concluído'
+          }
+        });
+
+        if (!xpErr && xpRes) {
+          xpAward = xpRes;
+          if (xpRes.awarded) {
+            try {
+              await adminDb.from('xp_awards').insert({
+                user_id: locals.user.id,
+                chapter_id: cid,
+                work_id: wid || '00000000-0000-0000-0000-000000000000',
+                amount: 150,
+                source: 'web',
+                created_at: new Date().toISOString()
+              });
+            } catch {}
+            invalidateUserSession(locals.user.id);
+            invalidateRankingCache();
+          }
+        } else {
+          console.warn('[ACTION] award_xp RPC error:', xpErr);
+          const { data: mem } = await adminDb.from('members').select('xp').eq('id', locals.user.id).single();
+          xpAward = {
+            ok: false,
+            awarded: false,
+            reason: xpErr?.message || 'rpc_error',
+            total_xp: mem?.xp || 0
+          };
+        }
+      }
+    }
+
+    if (wid) {
+      invalidateObraAuxCache(wid);
+    }
+
+    return json({
+      ok: true,
+      page: maxPage,
+      completed: finalCompleted,
+      xp_award: xpAward
+    });
+  }
+
   const isCanonicalChapterWrite = body.scope === 'editor' && body.action === 'chapter';
   const { data, error: problem } = isCanonicalChapterWrite
     ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
@@ -182,12 +580,30 @@ export const POST = async ({ request, locals, platform }: any) => {
     invalidateObraAuxCache(targetWorkId);
   }
 
-  if (body.scope === 'member' && body.action === 'comment' && locals.user) {
+  if (body.scope === 'member' && (body.action === 'comment' || body.action === 'comment_edit') && locals.user) {
+    const isEdit = body.action === 'comment_edit';
     const commentBody = String(body.data.body || '');
-    const chapterId = body.data.chapter_id ? String(body.data.chapter_id) : null;
-    const workId = body.data.work_id ? String(body.data.work_id) : null;
-    const parentId = body.data.parent_id ? String(body.data.parent_id) : null;
-    const commentId = (data as any)?.id;
+    let chapterId = body.data.chapter_id ? String(body.data.chapter_id) : null;
+    let workId = body.data.work_id ? String(body.data.work_id) : null;
+    let parentId = body.data.parent_id ? String(body.data.parent_id) : null;
+    const commentId = (data as any)?.id || body.data.id;
+
+    if (isEdit && commentId && (!chapterId || !workId)) {
+      try {
+        const { data: existingComment } = await locals.db
+          .from('comments')
+          .select('chapter_id, work_id, parent_id')
+          .eq('id', commentId)
+          .maybeSingle();
+        if (existingComment) {
+          if (!chapterId) chapterId = existingComment.chapter_id;
+          if (!workId) workId = existingComment.work_id;
+          if (!parentId) parentId = existingComment.parent_id;
+        }
+      } catch (err) {
+        console.warn('[ACTION] Could not retrieve existing comment meta for edit:', err);
+      }
+    }
 
     let workSlug = workId || '';
     let workTitle = 'Obra';
@@ -232,8 +648,10 @@ export const POST = async ({ request, locals, platform }: any) => {
       authorName = authorMem.display_name || authorMem.username || 'Alguém';
     }
 
-    // Notify parent comment author if replying
-    if (parentId) {
+    let parentUserId: string | null = null;
+
+    // Notify parent comment author if replying (apenas para novos comentários, não para edições)
+    if (parentId && !isEdit) {
       try {
         const { data: parent } = await locals.db
           .from('comments')
@@ -242,6 +660,7 @@ export const POST = async ({ request, locals, platform }: any) => {
           .maybeSingle();
 
         if (parent && parent.user_id && parent.user_id !== locals.user.id) {
+          parentUserId = parent.user_id;
           const replyDeepLink = chapterId
             ? `/ler/${chapterId}#comment-${parentId}`
             : `/obra/${workSlug}#comment-${parentId}`;
@@ -253,7 +672,7 @@ export const POST = async ({ request, locals, platform }: any) => {
             title: chapterId
               ? `${authorName} respondeu ao seu comentário no capítulo${chapterNumber}`
               : `${authorName} respondeu ao seu comentário em ${workTitle}`,
-            body: commentBody,
+            body: stripSpoilers(commentBody),
             deepLink: replyDeepLink,
             context: workTitle,
             priority: 'NORMAL',
@@ -285,6 +704,7 @@ export const POST = async ({ request, locals, platform }: any) => {
         workId,
         chapterId,
         mentionsData,
+        excludeUserIds: parentUserId ? [parentUserId] : [],
         platform
       });
     } catch (err) {
@@ -297,7 +717,7 @@ export const POST = async ({ request, locals, platform }: any) => {
   }
 
   if (locals.user?.id) {
-    if ((data as any)?.xp_award?.awarded || ['read_page', 'library', 'profile'].includes(body.action)) {
+    if ((data as any)?.xp_award?.awarded || ['read_page', 'claim_xp', 'reading', 'complete_reading', 'library', 'profile'].includes(body.action)) {
       invalidateUserSession(locals.user.id);
       invalidateRankingCache();
     }

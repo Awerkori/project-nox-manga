@@ -1,5 +1,6 @@
 import { privileged } from '$lib/server/db';
 import { createNotification } from './notifications';
+import { stripSpoilers } from '$lib/comments';
 
 export interface MentionTarget {
   userId: string;
@@ -30,6 +31,7 @@ export interface DispatchMentionsParams {
   workId?: string | null;
   chapterId?: string | null;
   mentionsData?: StructuredMentionInput[] | null;
+  excludeUserIds?: string[];
   platform?: any;
 }
 
@@ -75,6 +77,7 @@ export async function dispatchMentions({
   workId = null,
   chapterId = null,
   mentionsData = null,
+  excludeUserIds = [],
   platform
 }: DispatchMentionsParams): Promise<{ count: number; notifiedUserIds: string[] }> {
   const db = privileged();
@@ -299,12 +302,18 @@ export async function dispatchMentions({
   }
 
   // 4. Disparar notificações e e-mails unificados
-  const snippet = text.length > 200 ? text.slice(0, 200) + '...' : text;
+  const safeText = stripSpoilers(text);
+  const snippet = safeText.length > 200 ? safeText.slice(0, 200) + '...' : safeText;
   const notifiedUserIds: string[] = [];
 
   for (const [uid, target] of targetUserMap.entries()) {
     // Não notificar o autor quando ele menciona a si próprio (@seunome)
     if (uid === authorId) {
+      continue;
+    }
+
+    // Não duplicar notificações para usuários que já foram notificados por outra via (ex: autor do comentário pai em respostas)
+    if (excludeUserIds && excludeUserIds.includes(uid)) {
       continue;
     }
 

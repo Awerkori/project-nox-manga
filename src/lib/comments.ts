@@ -1,60 +1,252 @@
 export function threadComments<T extends { id: string; parent_id: string | null; created_at: string }>(
   comments: T[]
 ): T[] {
-  const roots = new Set(comments.filter((c) => !c.parent_id).map((c) => c.id));
-  const children = new Map<string, T[]>();
-  for (const comment of comments)
-    if (comment.parent_id && roots.has(comment.parent_id)) {
-      const siblings = children.get(comment.parent_id) || [];
-      siblings.push(comment);
-      children.set(comment.parent_id, siblings);
+  if (!comments?.length) return [];
+  const map = new Map<string, T>();
+  const childrenMap = new Map<string, T[]>();
+  for (const c of comments) {
+    map.set(c.id, c);
+    if (c.parent_id) {
+      const list = childrenMap.get(c.parent_id) || [];
+      list.push(c);
+      childrenMap.set(c.parent_id, list);
     }
-  return comments
-    .filter((c) => !c.parent_id || !roots.has(c.parent_id))
-    .flatMap((c) => [
-      c,
-      ...(children.get(c.id) || []).sort((a, b) => a.created_at.localeCompare(b.created_at))
-    ]);
+  }
+
+  const result: T[] = [];
+  function addBranch(c: T) {
+    result.push(c);
+    const children = childrenMap.get(c.id) || [];
+    children.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const child of children) {
+      addBranch(child);
+    }
+  }
+
+  const roots = comments.filter((c) => !c.parent_id || !map.has(c.parent_id));
+  for (const root of roots) {
+    addBranch(root);
+  }
+  return result;
+}
+
+/**
+ * Sanitizes comments:
+ * - Drops all deleted/removed comments (NO tombstones returned).
+ * - Dynamically reparents surviving active replies to their nearest living ancestor
+ *   so surviving replies are never lost or orphaned.
+ */
+export function sanitizeComments(rawComments: any[]): any[] {
+  if (!Array.isArray(rawComments) || rawComments.length === 0) return [];
+
+  // Map of all comments by id
+  const allMap = new Map<string, any>();
+  for (const c of rawComments) {
+    allMap.set(c.id, c);
+  }
+
+  // Find nearest living ancestor for each comment
+  function getLivingAncestorId(c: any): string | null {
+    let curr = c.parent_id;
+    while (curr) {
+      const parent = allMap.get(curr);
+      if (!parent) return null;
+      if (!parent.removed && !parent.deleted && !parent.is_tombstone) {
+        return parent.id;
+      }
+      curr = parent.parent_id || null;
+    }
+    return null;
+  }
+
+  const result: any[] = [];
+  for (const c of rawComments) {
+    const isRemoved = Boolean(c.removed || c.deleted || c.is_tombstone);
+    if (!isRemoved) {
+      // Re-parent to nearest living ancestor so children of removed comments are preserved
+      const effectiveParentId = getLivingAncestorId(c);
+      result.push({
+        ...c,
+        parent_id: effectiveParentId,
+        is_tombstone: false
+      });
+    }
+  }
+
+  return result;
 }
 
 export interface CommentTextChunk {
-  type: 'text' | 'spoiler' | 'mention';
+  type: 'text' | 'spoiler' | 'mention' | 'media';
   content: string;
   username?: string;
+  mediaUrl?: string;
+  mediaAlt?: string;
+  isSpoiler?: boolean;
+  isGif?: boolean;
 }
 
+/**
+ * Strips hidden spoiler content and media tags for safe previews, email excerpts, and notifications.
+ */
+export function stripSpoilers(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/(?:\|\|[\s\S]*?\|\||\[spoiler\][\s\S]*?\[\/spoiler\])/gi, '[spoiler oculto]')
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s\)]+|\/media\/[a-f0-9-]+)\)/gi, '[mídia]');
+}
+
+/**
+ * Parses comment body supporting:
+ * - Discord syntax spoilers: ||texto||
+ * - BBCode backwards compatibility: [spoiler]texto[/spoiler]
+ * - Markdown media tags: ![alt](url) (supports spoiler wrapping ||![alt](url)||)
+ * - Standalone image/GIF links (HTTPS ending in .gif, .png, .jpg, .jpeg, .webp, .avif or Tenor/Giphy CDN)
+ * - Clickable @mentions: @username
+ * - Plain text
+ */
 export function parseCommentBody(text: string): CommentTextChunk[] {
   if (!text) return [];
-  const spoilerRegex = /\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi;
-  const initialChunks: CommentTextChunk[] = [];
+
+  // Match spoilers: Discord ||...|| and BBCode [spoiler]...[/spoiler]
+  const spoilerRegex = /(?:\|\|([\s\S]+?)\|\||\[spoiler\]([\s\S]+?)\[\/spoiler\])/gi;
+  const rawChunks: Array<{ isSpoiler: boolean; raw: string }> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = spoilerRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      initialChunks.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+      rawChunks.push({ isSpoiler: false, raw: text.slice(lastIndex, match.index) });
     }
-    initialChunks.push({ type: 'spoiler', content: match[1] });
+    const spoilerContent = match[1] !== undefined ? match[1] : match[2];
+    rawChunks.push({ isSpoiler: true, raw: spoilerContent });
     lastIndex = spoilerRegex.lastIndex;
   }
 
   if (lastIndex < text.length) {
-    initialChunks.push({ type: 'text', content: text.slice(lastIndex) });
+    rawChunks.push({ isSpoiler: false, raw: text.slice(lastIndex) });
   }
 
-  // Split plain text chunks by @mention
-  const finalChunks: CommentTextChunk[] = [];
-  const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_À-ÿ-]+)/g;
+  // Next, for each raw chunk, extract media: ![alt](url) or standalone image URLs
+  const mediaRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+|\/media\/[a-f0-9-]+)\)/gi;
+  const standaloneUrlRegex = /(^|[\s])(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp|avif)(?:\?[^\s)]*)?|https?:\/\/(?:images\.unsplash\.com\/[^\s)]+|media\d*\.giphy\.com\/media\/[^\s)]+|c\.tenor\.com\/[^\s)]+|media\.tenor\.com\/[^\s)]+|i\.imgur\.com\/[^\s)]+|giphy\.com\/gifs\/[a-zA-Z0-9_-]+))(?=[\s]|$)/gi;
 
-  for (const chunk of initialChunks) {
-    if (chunk.type === 'spoiler') {
-      finalChunks.push(chunk);
+  const intermediateChunks: Array<{
+    isMedia: boolean;
+    isSpoiler: boolean;
+    text?: string;
+    mediaUrl?: string;
+    mediaAlt?: string;
+    isGif?: boolean;
+  }> = [];
+
+  for (const item of rawChunks) {
+    const str = item.raw;
+    let mIdx = 0;
+    let mMatch: RegExpExecArray | null;
+
+    // First check markdown images ![]()
+    const temp: Array<{
+      isMedia: boolean;
+      isSpoiler: boolean;
+      text?: string;
+      mediaUrl?: string;
+      mediaAlt?: string;
+      isGif?: boolean;
+    }> = [];
+
+    while ((mMatch = mediaRegex.exec(str)) !== null) {
+      if (mMatch.index > mIdx) {
+        temp.push({ isMedia: false, isSpoiler: item.isSpoiler, text: str.slice(mIdx, mMatch.index) });
+      }
+      const alt = mMatch[1] || 'Mídia';
+      let url = mMatch[2];
+      let isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy') || url.toLowerCase().includes('tenor');
+
+      const giphyPage = url.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/i);
+      if (giphyPage) {
+        url = `https://media.giphy.com/media/${giphyPage[1]}/giphy.gif`;
+        isGif = true;
+      }
+
+      temp.push({ isMedia: true, isSpoiler: item.isSpoiler, mediaUrl: url, mediaAlt: alt, isGif });
+      mIdx = mediaRegex.lastIndex;
+    }
+    if (mIdx < str.length) {
+      temp.push({ isMedia: false, isSpoiler: item.isSpoiler, text: str.slice(mIdx) });
+    }
+
+    for (const t of temp) {
+      if (t.isMedia) {
+        intermediateChunks.push(t);
+      } else {
+        // Also check standalone image/gif URLs if not inside markdown
+        let sIdx = 0;
+        let sMatch: RegExpExecArray | null;
+        const subStr = t.text || '';
+        while ((sMatch = standaloneUrlRegex.exec(subStr)) !== null) {
+          const prefix = sMatch[1] || '';
+          let rawUrl = sMatch[2];
+          const start = sMatch.index + prefix.length;
+          const end = start + rawUrl.length;
+          if (start > sIdx) {
+            intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: subStr.slice(sIdx, start) });
+          }
+
+          let url = rawUrl.replace(/[.,!?:;)]+$/, '');
+          const trailing = rawUrl.slice(url.length);
+
+          let isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy') || url.toLowerCase().includes('tenor');
+
+          const giphyPage = url.match(/giphy\.com\/gifs\/(?:.*-)?([a-zA-Z0-9]+)$/i);
+          if (giphyPage) {
+            url = `https://media.giphy.com/media/${giphyPage[1]}/giphy.gif`;
+            isGif = true;
+          }
+
+          intermediateChunks.push({ isMedia: true, isSpoiler: t.isSpoiler, mediaUrl: url, mediaAlt: 'Imagem', isGif });
+          if (trailing) {
+            intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: trailing });
+          }
+          sIdx = end;
+          standaloneUrlRegex.lastIndex = end;
+        }
+        if (sIdx < subStr.length) {
+          intermediateChunks.push({ isMedia: false, isSpoiler: t.isSpoiler, text: subStr.slice(sIdx) });
+        }
+      }
+    }
+  }
+
+  // Now, for non-media chunks, extract mentions: @username
+  const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_À-ÿ-]+)/g;
+  const finalChunks: CommentTextChunk[] = [];
+
+  for (const chunk of intermediateChunks) {
+    if (chunk.isMedia && chunk.mediaUrl) {
+      finalChunks.push({
+        type: 'media',
+        content: chunk.mediaUrl,
+        mediaUrl: chunk.mediaUrl,
+        mediaAlt: chunk.mediaAlt,
+        isSpoiler: chunk.isSpoiler,
+        isGif: chunk.isGif
+      });
       continue;
     }
 
+    if (chunk.isSpoiler && chunk.text !== undefined) {
+      finalChunks.push({
+        type: 'spoiler',
+        content: chunk.text
+      });
+      continue;
+    }
+
+    // Split plain text by @mention
     let tLast = 0;
     let mMatch: RegExpExecArray | null;
-    const str = chunk.content;
+    const str = chunk.text || '';
     while ((mMatch = mentionRegex.exec(str)) !== null) {
       const prefix = mMatch[1] || '';
       const username = mMatch[2];
@@ -75,4 +267,3 @@ export function parseCommentBody(text: string): CommentTextChunk[] {
 
   return finalChunks;
 }
-

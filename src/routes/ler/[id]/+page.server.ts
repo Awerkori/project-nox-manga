@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } from '$lib/server/reader-editorial';
+import { sanitizeComments } from '$lib/comments';
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -38,26 +39,44 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
       }
       let userProgress = null;
-      if (locals.user) {
-        const pRes = await withTimeout(
+      const [commentsRes, pRes] = await Promise.all([
+        withTimeout(
           locals.db
-            .from('reading')
-            .select('page,completed_at')
-            .eq('user_id', locals.user.id)
+            .from('comments')
+            .select(
+              'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+            )
             .eq('chapter_id', params.id)
-            .maybeSingle(),
-          800,
-          { data: null } as any,
-          'reader_cached_progress'
-        );
-        userProgress = pRes?.data || null;
-      } else {
+            .order('created_at', { ascending: false })
+            .limit(500),
+          1500,
+          { data: [] } as any,
+          'reader_cached_comments'
+        ),
+        locals.user
+          ? withTimeout(
+              locals.db
+                .from('reading')
+                .select('page,completed_at')
+                .eq('user_id', locals.user.id)
+                .eq('chapter_id', params.id)
+                .maybeSingle(),
+              800,
+              { data: null } as any,
+              'reader_cached_progress'
+            )
+          : Promise.resolve({ data: null })
+      ]);
+      userProgress = pRes?.data || null;
+      const cachedComments = sanitizeComments(commentsRes?.data || []);
+
+      if (!locals.user) {
         const link = firstPagePreloadHeader(cached.pages);
         const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
           'cache-control': isAdultCached
             ? 'private, no-cache, no-store, must-revalidate'
-            : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+            : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
           ...(link ? { link } : {})
         });
       }
@@ -71,9 +90,11 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         next: all[index + 1] || null,
         siblings: all,
         progress: userProgress,
-        comments: [],
+        comments: cachedComments,
         scans: cached.scans,
-        preview: false
+        preview: false,
+        user: locals.user ? { id: locals.user.id } : null,
+        profile: locals.sessionCache?.profile || null
       };
     }
   }
@@ -138,6 +159,60 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
 
+  // Opportunistically bridge chapter stub into Supabase for comments & reading progression
+  if (chapter && !preview && locals.db) {
+    const bridgePromise = (async () => {
+      try {
+        const { data: cExists } = await (locals.db as any).from('chapters').select('id').eq('id', chapter.id).maybeSingle();
+        if (!cExists) {
+          const { privileged } = await import('$lib/server/db');
+          const adminDb = privileged();
+          const cw = (chapter.works as any) || {};
+          let cleanSlug = cw.slug || `obra-${chapter.work_id.slice(0, 8)}`;
+          let cleanTitle = cw.title || 'Obra';
+          let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          if (!sanitizedSlug) sanitizedSlug = `obra-${chapter.work_id.slice(0, 8)}`;
+
+          await adminDb.from('works').upsert(
+            {
+              id: chapter.work_id,
+              slug: sanitizedSlug,
+              title: cleanTitle.slice(0, 200),
+              published: true,
+              content_rating: cw.content_rating || 'GENERAL',
+              kind: cw.kind || 'MANHWA',
+              status: 'ONGOING'
+            },
+            { onConflict: 'id' }
+          );
+
+          await adminDb.from('chapters').upsert(
+            {
+              id: chapter.id,
+              work_id: chapter.work_id,
+              number: chapter.number ?? 1,
+              title: chapter.title || `Capítulo ${chapter.display_number || chapter.number || ''}`,
+              published_at: chapter.published_at || new Date().toISOString(),
+              canonical_chapter_key: chapter.canonical_chapter_key || null,
+              display_number: chapter.display_number || String(chapter.number || ''),
+              chapter_order_key: chapter.chapter_order_key || null,
+              chapter_kind: chapter.chapter_kind || 'chapter',
+              edition: chapter.edition || 'default',
+              language: chapter.language || 'und',
+              origin: 'MANUAL'
+            },
+            { onConflict: 'id' }
+          );
+        }
+      } catch (err) {
+        console.warn('[READER] Non-blocking chapter bridge error:', err);
+      }
+    })();
+    if (platform?.context?.waitUntil) {
+      platform.context.waitUntil(bridgePromise);
+    }
+  }
+
   if ((chapter.works as any)?.content_rating === 'ADULT_18') {
     const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
     let ageStatus = rawAgeCookie;
@@ -170,12 +245,11 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       locals.db
         .from('comments')
         .select(
-          'id,user_id,body,created_at,parent_id,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+          'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
         )
         .eq('chapter_id', chapter.id)
-        .eq('removed', false)
         .order('created_at', { ascending: false })
-        .limit(100),
+        .limit(500),
       locals.db
         .from('chapter_scans')
         .select('scans(id,name,slug)')
@@ -246,7 +320,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     setHeaders({
       'cache-control': isAdultChapter
         ? 'private, no-cache, no-store, must-revalidate'
-        : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+        : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
       ...(link ? { link } : {})
     });
   } else if (link) {
@@ -260,8 +334,10 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     next: all[index + 1] || null,
     siblings: all,
     progress: progress?.data || null,
-    comments: comments?.data || [],
+    comments: sanitizeComments(comments?.data || []),
     scans,
-    preview
+    preview,
+    user: locals.user ? { id: locals.user.id } : null,
+    profile: locals.sessionCache?.profile || null
   };
 };

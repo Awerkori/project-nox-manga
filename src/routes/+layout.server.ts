@@ -127,6 +127,10 @@ export const load = async ({ locals, url, cookies }) => {
   const isPlatformOwner = Boolean(locals.user?.id && (locals.user.id === (process.env.STAFF_OWNER_USER_ID || '732fbe87-5040-41fb-9983-0aedb2af44c8')));
   const effectiveRole = locals.role || (isPlatformOwner ? 'ADMIN' : null);
 
+  if (profile) {
+    (profile as any).role = effectiveRole || (profile as any).role || 'LEITOR';
+  }
+
   if (isPlatformOwner && (!userScans || userScans.length === 0)) {
     userScans = [{
       id: '04872e99-37ad-4d45-aed4-35759d0eae33',

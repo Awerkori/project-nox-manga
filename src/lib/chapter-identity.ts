@@ -93,8 +93,13 @@ export function compareChapterIdentity(a: ChapterIdentityFields, b: ChapterIdent
 
 export function chapterIdentityLabel(chapter: ChapterIdentityFields): string {
   const base = chapterDisplayNumber(chapter);
-  const qualifiers = [chapter.edition, chapter.language]
+  const normalizedLang = String(chapter.language ?? '').trim().toLowerCase();
+  const qualifiers = [chapter.edition]
     .map((value) => String(value ?? '').trim())
     .filter((value) => value && value !== 'default' && value !== 'und');
+
+  if (normalizedLang && !['default', 'und', 'pt', 'pt-br', 'pt_br'].includes(normalizedLang)) {
+    qualifiers.push(chapter.language!.trim());
+  }
   return qualifiers.length ? `${base} · ${qualifiers.join(' · ')}` : base;
 }
