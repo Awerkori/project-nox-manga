@@ -36,7 +36,7 @@
       (entries) => {
         for (const e of entries) {
           visibleNow = e.isIntersecting;
-          onSeen(page.position, visibleNow && loaded);
+          onSeen(page.position, visibleNow);
         }
       },
       { threshold: [0.05, 0.25, 0.5] }

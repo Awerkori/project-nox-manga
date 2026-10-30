@@ -511,20 +511,20 @@
   }
 
   async function completeChapter() {
-    if (completionClaimInFlight || completionAwardAttempted || data.preview || !isAuthenticated) return;
+    if (completionClaimInFlight || xpAwardConfirmed || data.preview) return;
     completionClaimInFlight = true;
-    completionAwardAttempted = true;
-    chapterCompleted = true;
 
     try {
-      // 1. Mark reading progress as completed via read_page
+      const totalPages = data.pages?.length || 1;
       let res = (await action('member', 'read_page', {
         work_id: data.chapter.work_id,
         chapter_id: data.chapter.id,
-        page: data.pages.length,
-        total_pages: data.pages.length,
+        page: totalPages,
+        total_pages: totalPages,
         completed: true
       })) as any;
+
+      chapterCompleted = true;
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
         xpAwardConfirmed = true;
@@ -595,9 +595,14 @@
     if (current < data.pages.length) {
       current++;
       handleSeen(current, true);
-    } else if (data.next) {
+      if (current === data.pages.length) {
+        void completeChapter();
+      }
+    } else {
       void completeChapter();
-      goto(`/ler/${data.next.id}`);
+      if (data.next) {
+        goto(`/ler/${data.next.id}`);
+      }
     }
   }
 
@@ -715,8 +720,27 @@
     };
     window.addEventListener('keydown', handleKeydown);
 
+    // Dedicated observer on conclusion section to guarantee completion detection
+    let endObserver: IntersectionObserver | null = null;
+    const endEl = document.getElementById('chapter-end');
+    if (endEl) {
+      endObserver = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              maxSeenPage = data.pages?.length || maxSeenPage;
+              void completeChapter();
+            }
+          }
+        },
+        { threshold: [0.01, 0.05, 0.1], rootMargin: '250px' }
+      );
+      endObserver.observe(endEl);
+    }
+
     return () => {
       window.removeEventListener('keydown', handleKeydown);
+      endObserver?.disconnect();
       if (unsubscribeOfflineSync) {
         unsubscribeOfflineSync();
         unsubscribeOfflineSync = null;
@@ -725,14 +749,24 @@
       if (hideTimer) clearTimeout(hideTimer);
     };
   });
-</script>
 
-<svelte:window
-  onscroll={() => {
+  function handleReaderScroll() {
     if (readerSettings.autoHideControls && uiVisible && !showSettingsModal && !showChaptersDrawer) {
       resetHideTimer();
     }
-  }}
+    if (readerSettings.mode === 'webtoon' && !chapterCompleted && !xpAwardConfirmed) {
+      const scrollPos = window.scrollY + window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      if (scrollPos >= docHeight - 800) {
+        maxSeenPage = data.pages?.length || maxSeenPage;
+        void completeChapter();
+      }
+    }
+  }
+</script>
+
+<svelte:window
+  onscroll={handleReaderScroll}
 />
 
 <svelte:head>
