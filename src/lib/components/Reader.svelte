@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { SvelteSet } from 'svelte/reactivity';
@@ -1026,7 +1027,7 @@
         class:has-gap={readerSettings.gap}
         style={readerSettings.fit === 'full' ? 'max-width: 100%;' : `max-width: ${readerSettings.width}px;`}
       >
-        {#each data.pages as page, index (page.position)}
+        {#each (browser ? (data.pages || []) : (data.pages || []).slice(0, 10)) as page, index (page.position)}
           <ReaderPage
             {page}
             onSeen={handleSeen}
