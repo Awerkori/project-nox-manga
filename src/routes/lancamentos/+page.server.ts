@@ -3,7 +3,7 @@ import { fetchPaginatedReleasesFromYugabyte } from "$lib/server/yugabyte";
 export const load = async ({ url, platform, setHeaders }: any) => {
   if (setHeaders) {
     setHeaders({
-      "cache-control": "public, max-age=0, s-maxage=2, must-revalidate"
+      "cache-control": "public, max-age=15, s-maxage=15, stale-while-revalidate=45"
     });
   }
 

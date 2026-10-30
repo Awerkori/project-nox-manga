@@ -35,13 +35,19 @@ export function getLkg<T>(key: string, maxAgeMs = 120_000): { data: T; ageSec: n
 export async function withYugabyteLkg<T>(
   op: string,
   fetcher: () => Promise<T>,
-  fallbackDefault: T
+  fallbackDefault: T,
+  cacheTtlMs = 0
 ): Promise<T> {
+  if (cacheTtlMs > 0) {
+    const cached = getLkg<T>(op, cacheTtlMs);
+    if (cached) {
+      return cached.data;
+    }
+  }
   const start = performance.now();
   try {
     const data = await fetcher();
     const dur = Math.round(performance.now() - start);
-    console.log(`[DATA_PLANE] DATA_SOURCE=YUGABYTE DATA_STATE=LIVE op=${op} dur=${dur}ms`);
     setLkg(op, data);
     return data;
   } catch (err: any) {
@@ -448,7 +454,8 @@ export async function fetchRecentReleasesFromYugabyte(
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
       return res.rows;
     },
-    []
+    [],
+    15_000
   );
 }
 
@@ -620,7 +627,8 @@ export async function fetchPaginatedReleasesFromYugabyte(
       totalPages: 1,
       currentPage: safePage,
       pageSize: safePageSize
-    }
+    },
+    15_000
   );
 }
 
@@ -681,7 +689,8 @@ export async function fetchRecentReleaseTimelineFromYugabyte(
       const res = await executeYugabyteSql<YugabyteReleaseRow>(sql, params, platformEnv);
       return res.rows;
     },
-    []
+    [],
+    15_000
   );
 }
 
