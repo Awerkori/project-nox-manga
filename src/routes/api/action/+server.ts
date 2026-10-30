@@ -425,6 +425,7 @@ export const POST = async ({ request, locals, platform }: any) => {
     }
 
     const page = Math.max(1, Number(body.data?.page) || 1);
+    const totalPages = Math.max(1, Number(body.data?.total_pages) || 1);
     const isCompleted = Boolean(body.data?.completed || body.action === 'complete_reading');
 
     const adminDb = privileged();
@@ -439,7 +440,8 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     const maxPage = Math.max(page, existingRead?.max_page || existingRead?.page || 0);
     const wasAlreadyCompleted = Boolean(existingRead?.completed_at);
-    const finalCompleted = wasAlreadyCompleted || isCompleted;
+    // Strict eligibility: completion requires reaching total pages or prior validated completion
+    const finalCompleted = wasAlreadyCompleted || (isCompleted && page >= totalPages);
 
     // 2. Upsert reading record
     await adminDb.from('reading').upsert(
@@ -455,7 +457,7 @@ export const POST = async ({ request, locals, platform }: any) => {
       { onConflict: 'user_id,chapter_id' }
     );
 
-    // 3. Award XP if completed
+    // 3. Award XP if completed (strictly transactional via award_xp RPC)
     let xpAward: any = null;
     if (finalCompleted) {
       // Check if already awarded in xp_ledger or xp_awards
@@ -485,6 +487,7 @@ export const POST = async ({ request, locals, platform }: any) => {
           total_xp: mem?.xp || 0
         };
       } else {
+        // Authoritative, transactional award execution via PostgreSQL RPC
         const { data: xpRes, error: xpErr } = await locals.db.rpc('award_xp', {
           p_kind: 'READ_CHAPTER',
           p_source_id: cid,
@@ -494,46 +497,9 @@ export const POST = async ({ request, locals, platform }: any) => {
           }
         });
 
-        if (!xpErr && xpRes && xpRes.awarded) {
+        if (!xpErr && xpRes) {
           xpAward = xpRes;
-          invalidateUserSession(locals.user.id);
-          invalidateRankingCache();
-        } else if (xpRes?.reason === 'already_awarded') {
-          xpAward = xpRes;
-        } else {
-          // Fallback: If RPC returned cooldown_active or had an issue but this chapter is legitimately NEVER awarded before
-          const { data: doubleCheck } = await adminDb
-            .from('xp_ledger')
-            .select('id')
-            .eq('user_id', locals.user.id)
-            .eq('kind', 'READ_CHAPTER')
-            .eq('source_id', cid)
-            .maybeSingle();
-
-          if (!doubleCheck) {
-            // Legitimate chapter read: apply authoritative award with adminDb
-            const { data: mem } = await adminDb.from('members').select('xp, lifetime_xp, season_xp').eq('id', locals.user.id).single();
-            const curXp = mem?.xp || 0;
-            const newXp = curXp + 150;
-            const newLifetime = (mem?.lifetime_xp || curXp) + 150;
-            const newSeason = (mem?.season_xp || curXp) + 150;
-
-            await adminDb.from('members').update({
-              xp: newXp,
-              lifetime_xp: newLifetime,
-              season_xp: newSeason
-            }).eq('id', locals.user.id);
-
-            await adminDb.from('xp_ledger').insert({
-              user_id: locals.user.id,
-              amount: 150,
-              balance_after: newXp,
-              kind: 'READ_CHAPTER',
-              source_id: cid,
-              description: 'Capítulo concluído',
-              created_at: new Date().toISOString()
-            });
-
+          if (xpRes.awarded) {
             try {
               await adminDb.from('xp_awards').insert({
                 user_id: locals.user.id,
@@ -544,27 +510,18 @@ export const POST = async ({ request, locals, platform }: any) => {
                 created_at: new Date().toISOString()
               });
             } catch {}
-
-            xpAward = {
-              ok: true,
-              awarded: true,
-              amount: 150,
-              total_xp: newXp,
-              season_xp: newSeason,
-              lifetime_xp: newLifetime
-            };
-
             invalidateUserSession(locals.user.id);
             invalidateRankingCache();
-          } else {
-            const { data: mem } = await adminDb.from('members').select('xp').eq('id', locals.user.id).single();
-            xpAward = {
-              ok: true,
-              awarded: false,
-              reason: 'already_awarded',
-              total_xp: mem?.xp || 0
-            };
           }
+        } else {
+          console.warn('[ACTION] award_xp RPC error:', xpErr);
+          const { data: mem } = await adminDb.from('members').select('xp').eq('id', locals.user.id).single();
+          xpAward = {
+            ok: false,
+            awarded: false,
+            reason: xpErr?.message || 'rpc_error',
+            total_xp: mem?.xp || 0
+          };
         }
       }
     }

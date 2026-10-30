@@ -524,7 +524,9 @@
         completed: true
       })) as any;
 
-      chapterCompleted = true;
+      if (res?.ok) {
+        chapterCompleted = true;
+      }
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
         xpAwardConfirmed = true;
@@ -579,7 +581,7 @@
       visible.delete(page);
     }
     const arr = Array.from(visible).sort((a, b) => a - b);
-    if (data.pages?.length && maxSeenPage >= data.pages.length && !chapterCompleted) {
+    if (data.pages?.length && maxSeenPage >= data.pages.length && !xpAwardConfirmed) {
       if (arr.length) current = arr[0];
       void completeChapter();
     } else if (arr.length) {
@@ -727,7 +729,7 @@
       endObserver = new IntersectionObserver(
         (entries) => {
           for (const e of entries) {
-            if (e.isIntersecting) {
+            if (e.isIntersecting && !xpAwardConfirmed && !completionClaimInFlight) {
               maxSeenPage = data.pages?.length || maxSeenPage;
               void completeChapter();
             }
@@ -754,7 +756,7 @@
     if (readerSettings.autoHideControls && uiVisible && !showSettingsModal && !showChaptersDrawer) {
       resetHideTimer();
     }
-    if (readerSettings.mode === 'webtoon' && !chapterCompleted && !xpAwardConfirmed) {
+    if (readerSettings.mode === 'webtoon' && !xpAwardConfirmed && !completionClaimInFlight) {
       const scrollPos = window.scrollY + window.innerHeight;
       const docHeight = document.documentElement.scrollHeight;
       if (scrollPos >= docHeight - 800) {
