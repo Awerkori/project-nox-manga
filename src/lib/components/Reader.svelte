@@ -80,7 +80,7 @@
   let chapterCompleted = $state(false);
 
   // =========================================================================
-  // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V4)
+  // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V5)
   // =========================================================================
   let preloadedCount = $state(0);
   let preloadProgressPct = $state(0);
@@ -96,6 +96,24 @@
   let turboTimeToFirstPage = 0;
   let turboTimeToFirst5Pages = 0;
   let turboTimeToComplete = 0;
+
+  function updateTurboTelemetry() {
+    if (typeof window === 'undefined') return;
+    (window as any).__nox_turbo_metrics = {
+      version: 'V5',
+      active: turboActive,
+      finished: turboFinished,
+      preloadedCount,
+      totalPages: data.pages?.length || 0,
+      preloadProgressPct,
+      activeWorkers: activePreloadWorkers,
+      concurrency: getAdaptiveConcurrency(),
+      timeToFirstPage: turboTimeToFirstPage,
+      timeToFirst5Pages: turboTimeToFirst5Pages,
+      timeToComplete: turboTimeToComplete,
+      elapsed: turboStartTime > 0 ? Math.round(performance.now() - turboStartTime) : 0
+    };
+  }
 
   function getAdaptiveConcurrency(): number {
     if (typeof window === 'undefined') return 2;
@@ -113,26 +131,31 @@
     if (isSaveData || isSlowConn) return 1;
     if (isMediumConn) return 2;
     if (isMobile) {
-      return cores <= 4 || ram <= 3 ? 2 : 3;
+      // Modern mobile devices: 4 parallel streams; slower mobile: 3
+      return cores <= 4 || ram <= 3 ? 3 : 4;
     }
-    // Desktop: High-throughput parallelism without socket starvation
-    if (cores >= 8 && ram >= 6) return 6;
-    if (cores >= 4) return 4;
-    return 3;
+    // High-performance Desktop: 6 to 8 parallel streams
+    if (cores >= 8) return 8;
+    if (cores >= 4) return 6;
+    return 4;
   }
 
   // Reactive Priority Queue
   let pendingQueue: Array<{ page: any; priority: number }> = [];
 
   function calculatePagePriority(pagePos: number, currentPos: number): number {
+    // 1. Current active page: highest priority (0)
     if (pagePos === currentPos) return 0;
-    if (pagePos > currentPos && pagePos <= currentPos + 3) {
+    // 2. Next 1 to 4 upcoming pages: priority 1..4
+    if (pagePos > currentPos && pagePos <= currentPos + 4) {
       return pagePos - currentPos;
     }
+    // 3. Subsequent forward pages in reading sequence: priority 5, 6, 7...
     if (pagePos > currentPos) {
-      return 10 + (pagePos - currentPos);
+      return 5 + (pagePos - currentPos);
     }
-    return 50 + (currentPos - pagePos);
+    // 4. Previous pages not yet downloaded: lowest priority
+    return 5000 + (currentPos - pagePos);
   }
 
   export function reorderTurboQueue(currentPos: number) {
@@ -169,16 +192,18 @@
 
         if (!isNearViewport) {
           // Download antecipado puro: carrega bytes no HTTP Cache do navegador sem decodificar bitmaps em RAM
-          const fetchTimeout = AbortSignal.timeout(8000);
+          const fetchTimeout = AbortSignal.timeout(15000);
           const fetchSignal = (AbortSignal as any).any ? (AbortSignal as any).any([signal, fetchTimeout]) : signal;
           const res = await fetch(mediaUrl, {
             signal: fetchSignal,
             cache: 'force-cache',
             priority: page.position <= current + 4 ? 'high' : ('low' as any)
           });
-          if (!res.ok && res.status >= 500) {
+          if (!res.ok && res.status >= 400) {
             throw new Error(`HTTP ${res.status}`);
           }
+          // Consumir o corpo para garantir transferência total de bytes e persistência no HTTP Cache
+          await res.blob();
         } else {
           // Decodificação assíncrona com timeout de segurança para nunca travar a aba
           await new Promise<void>((resolve, reject) => {
@@ -191,7 +216,7 @@
                 settled = true;
                 resolve();
               }
-            }, 8000);
+            }, 12000);
 
             const handleSuccess = () => {
               if (settled) return;
@@ -233,6 +258,7 @@
           turboTimeToComplete = Math.round(now - turboStartTime);
           turboFinished = true;
         }
+        updateTurboTelemetry();
       } catch (err: any) {
         if (signal.aborted) return;
         if (retryCount < 2) {
@@ -241,6 +267,7 @@
         }
       } finally {
         inFlightDownloads.delete(mediaId);
+        updateTurboTelemetry();
       }
     })();
 
@@ -278,6 +305,7 @@
       }));
 
     pendingQueue.sort((a, b) => a.priority - b.priority);
+    updateTurboTelemetry();
 
     async function workerLoop() {
       if (signal.aborted) return;
@@ -288,16 +316,19 @@
         if (!next || preloadedUrls.has(next.page.media_id)) continue;
 
         activePreloadWorkers++;
+        updateTurboTelemetry();
         try {
           await streamPreloadPage(next.page, signal);
         } finally {
           activePreloadWorkers--;
+          updateTurboTelemetry();
         }
       }
 
       if (pendingQueue.length === 0 && activePreloadWorkers === 0) {
         turboFinished = true;
         preloadProgressPct = 100;
+        updateTurboTelemetry();
       }
     }
 
@@ -750,6 +781,10 @@
       preloadAbortController?.abort();
       if (hideTimer) clearTimeout(hideTimer);
     };
+  });
+
+  onDestroy(() => {
+    preloadAbortController?.abort();
   });
 
   function handleReaderScroll() {
