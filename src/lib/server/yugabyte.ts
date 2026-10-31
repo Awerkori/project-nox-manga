@@ -13,7 +13,8 @@ interface LkgEntry<T> {
 }
 
 const lkgStore = new Map<string, LkgEntry<any>>();
-const activeLkgFlights = new Map<string, Promise<any>>();
+const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
+const MAX_FLIGHT_AGE_MS = 4_000;
 
 export function setLkg<T>(key: string, data: T): void {
   if (data !== null && data !== undefined) {
@@ -55,8 +56,8 @@ export async function withYugabyteLkg<T>(
       return cached.data;
     }
     const inFlight = activeLkgFlights.get(op);
-    if (inFlight) {
-      return inFlight as Promise<T>;
+    if (inFlight && Date.now() - inFlight.startedAt < MAX_FLIGHT_AGE_MS) {
+      return inFlight.promise as Promise<T>;
     }
   }
   const start = performance.now();
@@ -79,12 +80,14 @@ export async function withYugabyteLkg<T>(
       );
       return fallbackDefault;
     } finally {
-      activeLkgFlights.delete(op);
+      if (activeLkgFlights.get(op)?.promise === run) {
+        activeLkgFlights.delete(op);
+      }
     }
   })();
 
   if (cacheTtlMs > 0 && !isTestEnv) {
-    activeLkgFlights.set(op, run);
+    activeLkgFlights.set(op, { promise: run, startedAt: Date.now() });
   }
   return run;
 }
@@ -122,7 +125,8 @@ class YugabyteReadSession {
       const connectStart = performance.now();
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       try {
         await client.connect();
@@ -170,7 +174,8 @@ class YugabyteReadSession {
       this.activeOrCreating += 1;
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       client
         .connect()
@@ -235,29 +240,6 @@ class YugabyteReadSession {
   }
 }
 
-const MAX_DIRECT_CONCURRENT_QUERIES = 2;
-let activeDirectQueries = 0;
-const directQueryWaitQueue: Array<() => void> = [];
-
-async function acquireDirectQuerySlot(): Promise<void> {
-  if (activeDirectQueries < MAX_DIRECT_CONCURRENT_QUERIES) {
-    activeDirectQueries += 1;
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    directQueryWaitQueue.push(resolve);
-  });
-}
-
-function releaseDirectQuerySlot(): void {
-  const next = directQueryWaitQueue.shift();
-  if (next) {
-    next();
-    return;
-  }
-  activeDirectQueries = Math.max(0, activeDirectQueries - 1);
-}
-
 /**
  * Multiplexes many concurrent YugabyteDB read queries inside a single SSR/API request
  * over at most `maxConcurrency` reused Hyperdrive connections (default 1, max 2) instead of
@@ -307,15 +289,15 @@ export async function executeYugabyteSql<T = any>(
     }
   }
 
-  // Strategy 1: Hyperdrive native pooled connection if available (bounded to max 2 concurrent connections per isolate)
+  // Strategy 1: Hyperdrive native pooled connection if available
   const hyperdrive = !activeSession ? platformEnv?.HYPERDRIVE : undefined;
   if (hyperdrive?.connectionString) {
-    await acquireDirectQuerySlot();
     const connectStart = performance.now();
     try {
       const client = new Client({
         connectionString: hyperdrive.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       await client.connect();
       const connectDur = Math.round(performance.now() - connectStart);
@@ -335,8 +317,6 @@ export async function executeYugabyteSql<T = any>(
       }
     } catch (hdErr: any) {
       console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
-    } finally {
-      releaseDirectQuerySlot();
     }
   }
 

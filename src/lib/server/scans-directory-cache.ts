@@ -4,13 +4,14 @@ type ScansDirectoryCache = {
 };
 
 let cache: ScansDirectoryCache | null = null;
-let directoryFlight: Promise<any[]> | null = null;
+let directoryFlight: { promise: Promise<any[]>; startedAt: number } | null = null;
+const MAX_FLIGHT_AGE_MS = 4_000;
 
 export const SCANS_DIRECTORY_CACHE_TTL_MS = 300_000;
 export const SCAN_PROFILE_CACHE_TTL_MS = 120_000;
 
 const scanProfileCache = new Map<string, { timestamp: number; data: any }>();
-const scanProfileFlights = new Map<string, Promise<any>>();
+const scanProfileFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
 
 export function getScansDirectoryCache(): ScansDirectoryCache | null {
   return cache;
@@ -24,13 +25,13 @@ export async function getOrFetchScansDirectory(fetcher: () => Promise<any[]>): P
   if (cache && Date.now() - cache.timestamp < SCANS_DIRECTORY_CACHE_TTL_MS) {
     return cache.scans;
   }
-  if (directoryFlight) {
-    return directoryFlight;
+  if (directoryFlight && Date.now() - directoryFlight.startedAt < MAX_FLIGHT_AGE_MS) {
+    return directoryFlight.promise;
   }
   const run = fetcher().finally(() => {
-    if (directoryFlight === run) directoryFlight = null;
+    if (directoryFlight?.promise === run) directoryFlight = null;
   });
-  directoryFlight = run;
+  directoryFlight = { promise: run, startedAt: Date.now() };
   return run;
 }
 
@@ -41,8 +42,8 @@ export async function getOrFetchScanProfile<T>(slug: string, fetcher: () => Prom
     return cached.data as T;
   }
   const existingFlight = scanProfileFlights.get(key);
-  if (existingFlight) {
-    return existingFlight as Promise<T>;
+  if (existingFlight && Date.now() - existingFlight.startedAt < MAX_FLIGHT_AGE_MS) {
+    return existingFlight.promise as Promise<T>;
   }
   const run = fetcher()
     .then((res) => {
@@ -56,11 +57,11 @@ export async function getOrFetchScanProfile<T>(slug: string, fetcher: () => Prom
       return res;
     })
     .finally(() => {
-      if (scanProfileFlights.get(key) === run) {
+      if (scanProfileFlights.get(key)?.promise === run) {
         scanProfileFlights.delete(key);
       }
     });
-  scanProfileFlights.set(key, run);
+  scanProfileFlights.set(key, { promise: run, startedAt: Date.now() });
   return run;
 }
 

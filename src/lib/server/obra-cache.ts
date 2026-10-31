@@ -13,8 +13,9 @@ export type ObraAuxCacheEntry = {
 };
 
 const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
-const obraAuxFlights = new Map<string, Promise<ObraAuxCacheEntry>>();
+const obraAuxFlights = new Map<string, { promise: Promise<ObraAuxCacheEntry>; startedAt: number }>();
 const OBRA_AUX_CACHE_TTL_MS = 60_000; // 60s TTL; explicitly invalidated on like/comment/rating mutations
+const MAX_FLIGHT_AGE_MS = 4_000;
 
 export function getObraAuxCache(workId: string): ObraAuxCacheEntry | null {
   const entry = obraAuxCache.get(workId);
@@ -44,11 +45,11 @@ export async function getOrFetchObraAux(
   const cached = getObraAuxCache(workId);
   if (cached) return cached;
   const inFlight = obraAuxFlights.get(workId);
-  if (inFlight) return inFlight;
+  if (inFlight && Date.now() - inFlight.startedAt < MAX_FLIGHT_AGE_MS) return inFlight.promise;
   const run = fetcher().finally(() => {
-    if (obraAuxFlights.get(workId) === run) obraAuxFlights.delete(workId);
+    if (obraAuxFlights.get(workId)?.promise === run) obraAuxFlights.delete(workId);
   });
-  obraAuxFlights.set(workId, run);
+  obraAuxFlights.set(workId, { promise: run, startedAt: Date.now() });
   return run;
 }
 

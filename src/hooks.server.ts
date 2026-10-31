@@ -5,6 +5,7 @@ import type { Handle } from '@sveltejs/kit';
 import type { Database } from '$lib/database.types';
 import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
+import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
@@ -177,9 +178,18 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  const resolved = await resolve(event, {
-    filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
-  });
+  const resolved = await withYugabyteReadSession(
+    event.platform?.env,
+    async (sessionEnv) => {
+      if (event.platform && sessionEnv) {
+        (event.platform as any).env = sessionEnv;
+      }
+      return resolve(event, {
+        filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
+      });
+    },
+    1
+  );
 
   // Media and static assets handle their own caching and security headers; return immediately
   if (isMedia || isStaticAsset) {
