@@ -32,13 +32,17 @@
   import { invalidateAll } from '$app/navigation';
   import { evaluateStageClaim, normalizePositionName, CANONICAL_PIPELINE_STAGES } from '$lib/scan-roles';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
+  import RawProviderStageView from './RawProviderStageView.svelte';
 
   let {
     currentStageSlug = 'clean_redraw',
+    stages = [],
     chapterStages = [],
     chapters = [],
     works = [],
     productionFiles = [],
+    tasks = [],
+    qcIssues = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
@@ -616,6 +620,25 @@
 
 <svelte:window onkeydown={closeActiveModalOnEscape} />
 
+{#if activeCanonical.slug === 'raw'}
+  <RawProviderStageView
+    {stages}
+    {chapterStages}
+    {chapters}
+    {works}
+    {productionFiles}
+    {tasks}
+    {qcIssues}
+    {currentUserId}
+    {userRole}
+    {userPositions}
+    {seenStages}
+    {isOwnerOrAdmin}
+    {scanId}
+    {onSelectStage}
+    {onOpenChapter}
+  />
+{:else}
 <div class="pipeline-stage-view-root">
   <!-- Top Location & Stage Header -->
   <header class="stage-page-header">
@@ -1967,6 +1990,7 @@
       </form>
     </div>
   </div>
+{/if}
 {/if}
 
 <style>
