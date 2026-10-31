@@ -119,7 +119,11 @@ var worker_default = {
     let pragma = req.headers.get("cache-control") || "";
     const cacheBypassRequest = shouldBypassSharedCache(req);
     let res = !cacheBypassRequest && !pragma.includes("no-cache") && await r2(req);
-    if (res) return res;
+    if (res) {
+      res = new Response(res.body, res);
+      res.headers.set('X-Nox-Edge-Cache', 'HIT');
+      return res;
+    }
     let { pathname, search } = new URL(req.url);
     try {
       pathname = decodeURIComponent(pathname);

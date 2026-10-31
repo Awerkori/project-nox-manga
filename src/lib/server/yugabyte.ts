@@ -672,7 +672,7 @@ export async function fetchRecentReleasesFromYugabyte(
       return res.rows;
     },
     [],
-    15_000
+    30_000
   );
 }
 
@@ -845,7 +845,7 @@ export async function fetchPaginatedReleasesFromYugabyte(
       currentPage: safePage,
       pageSize: safePageSize
     },
-    15_000
+    30_000
   );
 }
 
@@ -907,7 +907,7 @@ export async function fetchRecentReleaseTimelineFromYugabyte(
       return res.rows;
     },
     [],
-    15_000
+    30_000
   );
 }
 
@@ -1211,8 +1211,9 @@ export async function fetchCatalogFromYugabyte(
   const tag = (options.tag || '').trim().toLowerCase();
 
   const isUnfiltered = !q && !kind && !status && !contentRating && !tag;
+  const normalizedQKey = q.toLowerCase();
 
-  const cacheKey = `catalog_${isUnfiltered ? 'unfiltered' : `${q}_${kind}_${status}_${contentRating}_${tag}`}_${sort}_${limit}_${offset}`;
+  const cacheKey = `catalog_${isUnfiltered ? 'unfiltered' : `${normalizedQKey}_${kind}_${status}_${contentRating}_${tag}`}_${sort}_${limit}_${offset}`;
 
   return withYugabyteLkg(
     cacheKey,
@@ -1237,7 +1238,11 @@ export async function fetchCatalogFromYugabyte(
         };
       }
 
-      // Filtered path
+      // Filtered path using bounded CTE so YugabyteDB pushes LIMIT down to
+      // idx_works_published_updated / idx_works_published_views / idx_works_search_text_trgm
+      // instead of scanning all 10,500+ works for an unbounded COUNT(*) OVER() window.
+      const boundLimit = Math.max(limit + offset + 20, 240);
+      const orderByClause = `${sortCol} ${sortAsc ? 'ASC, id ASC' : 'DESC'}`;
       const params: any[] = [];
       const where: string[] = ['published = true'];
 
@@ -1270,27 +1275,46 @@ export async function fetchCatalogFromYugabyte(
         params.push(offset);
         const offsetIdx = params.length;
 
-        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
-    FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
-    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+        const buildSql = (searchExpr: string) => `WITH matched AS (
+      SELECT ${WORK_SELECT_COLUMNS}
+      FROM works
+      WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
+      ORDER BY ${orderByClause}
+      LIMIT ${boundLimit}
+    )
+    SELECT *, (SELECT COUNT(*)::int FROM matched) AS total_count
+    FROM matched
     LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
-        // 1. Try search_text first (fast indexed path)
+        // 1. Primary trigram-indexed search on search_text (contains title + aliases + accent-folded tokens).
+        // Including btrim(search_text) ILIKE pushes a DocDB Storage Filter down on lossy ybgin rechecks,
+        // cutting Storage Read Requests from 4 to 1 and eliminating coordinator recheck serialization.
         let res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-          buildSql(`search_text ILIKE $${qParamIdx}`),
+          buildSql(`search_text ILIKE $${qParamIdx} AND btrim(search_text) ILIKE $${qParamIdx}`),
           params,
           platformEnv
         );
 
-        // 2. If 0 rows, fall back to alias and accent-insensitive scan
+        // 2. If 0 rows and the query had accents, try the accent-folded query on the trigram index
+        if (res.rows.length === 0) {
+          const foldedQ = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          if (foldedQ.length > 0 && foldedQ.toLowerCase() !== q.toLowerCase()) {
+            const foldedParams = [...params];
+            foldedParams[qParamIdx - 1] = `%${foldedQ}%`;
+            res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
+              buildSql(`search_text ILIKE $${qParamIdx} AND btrim(search_text) ILIKE $${qParamIdx}`),
+              foldedParams,
+              platformEnv
+            );
+          }
+        }
+
+        // 3. Stale-index fallback ONLY for rows where search_text is NULL (indexed via partial index idx_works_stale_search_text)
         if (res.rows.length === 0) {
           res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-            buildSql(`(
-              title ILIKE $${qParamIdx} OR EXISTS (
-                SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
-                WHERE work_alias.alias_text ILIKE $${qParamIdx}
-              ) OR translate(lower(COALESCE(works.search_text, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
-            )`),
+            buildSql(
+              `search_text IS NULL AND (title ILIKE $${qParamIdx} OR EXISTS (SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS alias WHERE alias ILIKE $${qParamIdx}))`
+            ),
             params,
             platformEnv
           );
@@ -1329,10 +1353,15 @@ export async function fetchCatalogFromYugabyte(
       const offsetIdx = params.length;
 
       const res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-        `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
-         FROM works
-         WHERE ${where.join(' AND ')}
-         ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+        `WITH matched AS (
+           SELECT ${WORK_SELECT_COLUMNS}
+           FROM works
+           WHERE ${where.join(' AND ')}
+           ORDER BY ${orderByClause}
+           LIMIT ${boundLimit}
+         )
+         SELECT *, (SELECT COUNT(*)::int FROM matched) AS total_count
+         FROM matched
          LIMIT $${limitIdx} OFFSET $${offsetIdx};`,
         params,
         platformEnv
@@ -1345,7 +1374,7 @@ export async function fetchCatalogFromYugabyte(
       };
     },
     { works: [], total: 0 },
-    isUnfiltered ? 60_000 : 45_000
+    60_000
   );
 }
 
