@@ -794,7 +794,7 @@
       {:else}
         <div class="cards-vertical-list">
           {#each myActiveItems as item (item.id)}
-            <article class="task-compact-card in-progress" class:is-rework={item.isRework}>
+            <article class="task-compact-card in-progress" class:is-rework={item.isRework} class:is-expanded={expandedItemIds[item.id]}>
               <!-- 2-Tiered Main Card Content -->
               <div class="card-main-content">
                 <!-- Top Region: Identification (Cover + Details) -->
@@ -1600,23 +1600,24 @@
     box-sizing: border-box;
   }
 
-  /* 1. Header Bar (V7.3 Refined Desktop & Mobile) */
+  /* 1. Header Bar (V7.4.1 Refined Desktop & Mobile) */
   .queue-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 80px;
-    padding: 16px 24px;
+    min-height: 76px;
+    padding: 13px 22px;
     background: rgba(18, 14, 28, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     backdrop-filter: blur(12px);
+    box-sizing: border-box;
   }
 
   .header-titles {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
   }
 
   .header-badge {
@@ -1628,7 +1629,7 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #a855f7;
-    margin-bottom: 2px;
+    margin-bottom: 0;
   }
 
   .title-row {
@@ -1659,9 +1660,9 @@
   }
 
   .active-tasks-pill.has-tasks {
-    background: rgba(168, 85, 247, 0.12);
+    background: rgba(168, 85, 247, 0.14);
     color: #c084fc;
-    border-color: rgba(168, 85, 247, 0.25);
+    border-color: rgba(168, 85, 247, 0.3);
   }
 
   .active-tasks-pill strong {
@@ -1710,14 +1711,14 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    height: 42px;
+    height: 44px;
     padding: 0 18px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: #cbd5e1;
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
@@ -1731,15 +1732,15 @@
   }
 
   .queue-tab-btn:hover {
-    color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .queue-tab-btn.active {
-    color: #f8fafc;
-    background: rgba(168, 85, 247, 0.16);
-    border-color: rgba(168, 85, 247, 0.4);
+    color: #ffffff;
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(168, 85, 247, 0.45);
     font-weight: 600;
   }
 
@@ -1988,7 +1989,7 @@
     padding: 4px;
   }
 
-  /* 4. Queue Cards List */
+  /* 4. Queue Cards Grid / List (V7.4.1 Editorial Responsive Architecture) */
   .queue-content-area {
     display: flex;
     flex-direction: column;
@@ -1997,26 +1998,36 @@
   }
 
   .cards-vertical-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
     width: 100%;
   }
 
-  /* Card Base (76–100px height on Desktop) */
+  /* Single task container restraint: prevent stretching across full screen */
+  .cards-vertical-list > :only-child {
+    max-width: 680px;
+  }
+
+  /* Expanded deliverable/files panel spans full width across both columns */
+  .task-compact-card.is-expanded {
+    grid-column: 1 / -1;
+  }
+
+  /* Card Base (V7.4.1 Editorial Proportions) */
   .task-compact-card {
     display: flex;
     flex-direction: column;
     background: rgba(20, 16, 32, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
   }
 
   .task-compact-card:hover {
-    border-color: rgba(168, 85, 247, 0.35);
-    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 6px 24px rgba(124, 58, 237, 0.1);
   }
 
   .task-compact-card.is-rework {
@@ -2026,31 +2037,33 @@
 
   .card-main-content {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     justify-content: space-between;
-    gap: 16px;
-    padding: 14px 20px;
-    min-height: 88px;
+    gap: 14px;
+    padding: 16px 18px;
+    min-height: 142px;
     box-sizing: border-box;
   }
 
   .card-identity-region {
     display: flex;
-    align-items: center;
-    gap: 16px;
-    flex: 1 1 0%;
+    align-items: flex-start;
+    gap: 14px;
+    width: 100%;
     min-width: 0;
   }
 
-  /* Left Cover (Desktop 52x70px) */
+  /* Left Cover (Desktop 54x72px) */
   .card-visual-col {
     flex-shrink: 0;
-    width: 52px;
-    height: 70px;
+    width: 54px;
+    height: 72px;
     border-radius: 6px;
     overflow: hidden;
     background: #140f22;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 
   .task-cover-thumb {
@@ -2083,7 +2096,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
 
   .card-title-row {
@@ -2093,20 +2106,22 @@
   }
 
   .task-work-name {
-    font-size: 1.0625rem;
-    font-weight: 650;
+    font-size: 1.125rem; /* 18px */
+    font-weight: 700;
     color: #f8fafc;
     margin: 0;
-    line-height: 1.35;
+    line-height: 1.3;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .card-meta-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
@@ -2114,10 +2129,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 2px 8px;
+    padding: 3px 8px;
     border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 500;
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 550;
     line-height: 1.4;
   }
 
@@ -2190,12 +2205,12 @@
   }
 
   .meta-pill.stale-inactivity {
-    background: rgba(245, 158, 11, 0.05);
-    color: #e2a03f;
-    border: 1px solid rgba(245, 158, 11, 0.15);
-    font-size: 0.6875rem;
-    font-weight: 450;
-    padding: 2px 7px;
+    background: rgba(245, 158, 11, 0.08);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    font-size: 0.75rem; /* 12px */
+    font-weight: 500;
+    padding: 2px 8px;
   }
 
   .meta-pill.waiting-status {
@@ -2210,24 +2225,36 @@
   }
 
   .meta-text-muted {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     color: #94a3b8;
   }
 
-  /* Right Actions */
+  /* Actions Region (Desktop V7.4.1 Integrated Footer Row) */
   .card-actions-col {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
+    gap: 10px;
+    width: 100%;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    box-sizing: border-box;
   }
 
-  .btn-action-continue {
+  .card-actions-col .action-form-full {
+    flex: 1.2 1 0%;
+    display: flex;
+  }
+
+  .btn-action-continue,
+  .btn-action-claim {
+    flex: 1.2 1 0%;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     height: 42px;
-    padding: 0 20px;
+    min-height: 42px;
+    padding: 0 18px;
     background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
@@ -2236,9 +2263,11 @@
     color: #ffffff;
     cursor: pointer;
     transition: transform 0.12s ease, filter 0.15s ease;
+    width: 100%;
   }
 
-  .btn-action-continue:hover {
+  .btn-action-continue:hover,
+  .btn-action-claim:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
   }
@@ -2250,37 +2279,20 @@
     transform: translateX(2px);
   }
 
-  .btn-action-claim {
+  .btn-toggle-expand,
+  .btn-timeline-ghost {
+    flex: 1 1 0%;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     height: 42px;
-    padding: 0 20px;
-    background: #a855f7;
-    border: none;
+    min-height: 42px;
+    padding: 0 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 8px;
     font-size: 0.875rem;
-    font-weight: 600;
-    color: #ffffff;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.12s ease;
-  }
-
-  .btn-action-claim:hover {
-    background: #9333ea;
-    transform: translateY(-1px);
-  }
-
-  .btn-toggle-expand {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 42px;
-    padding: 0 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    font-size: 0.84375rem;
     font-weight: 500;
     color: #cbd5e1;
     cursor: pointer;
@@ -2288,29 +2300,20 @@
   }
 
   .btn-toggle-expand:hover,
-  .btn-toggle-expand.is-expanded {
-    background: rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
-  }
-
-  .btn-timeline-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 36px;
-    padding: 0 12px;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    font-size: 0.75rem;
-    color: #94a3b8;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
   .btn-timeline-ghost:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .btn-toggle-expand.is-expanded {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+  }
+
+  .btn-timeline-ghost.full-mobile {
+    width: 100%;
   }
 
   /* Inline Expandable Panel */
@@ -2883,6 +2886,14 @@
   }
 
   /* 5. Responsive Breakpoints */
+  /* Intermediate Desktop / Tablet (769px to 1149px): Single balanced column */
+  @media (min-width: 769px) and (max-width: 1149px) {
+    .cards-vertical-list {
+      grid-template-columns: 1fr;
+      max-width: 780px;
+    }
+  }
+
   @media (max-width: 768px) {
     .tasks-tab-root {
       gap: 12px;
@@ -3049,7 +3060,10 @@
 
     /* 2-Tiered Mobile Card Composition (Rodada 21 V7.3 - Compact 12-15% Height Reduction) */
     .cards-vertical-list {
+      display: flex;
+      flex-direction: column;
       gap: 10px;
+      width: 100%;
     }
 
     .card-main-content {
