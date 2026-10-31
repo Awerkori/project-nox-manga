@@ -3,6 +3,9 @@ import { createServerClient } from '@supabase/ssr';
 import { existsSync } from 'node:fs';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
+if (!process.env.PUBLIC_SUPABASE_URL && existsSync('.dev.vars.preview_full')) {
+  process.loadEnvFile('.dev.vars.preview_full');
+}
 export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
   if (!process.env.PUBLIC_SUPABASE_URL || !process.env.PUBLIC_SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('OWNER_SESSION_UNAVAILABLE: configure a legitimate Supabase QA session; synthetic JWTs are prohibited.');
@@ -12,10 +15,24 @@ export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
       auth: { persistSession: false, autoRefreshToken: false }
     });
     let email = 'awerkori@gmail.com';
-    const linkPromise = admin.auth.admin.generateLink({ type: 'magiclink', email });
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth API timeout')), 2000));
-    const { data: link, error } = await Promise.race([linkPromise, timeoutPromise]);
-    if (error || !link) throw new Error(`OWNER_SESSION_UNAVAILABLE: magic-link generation failed (${error?.message || 'no link'}).`);
+    let link = null;
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const linkPromise = admin.auth.admin.generateLink({ type: 'magiclink', email });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth API timeout')), 8000));
+        const res = await Promise.race([linkPromise, timeoutPromise]);
+        if (res.error) throw res.error;
+        if (res.data) {
+          link = res.data;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+    if (!link) throw new Error(`OWNER_SESSION_UNAVAILABLE: magic-link generation failed (${lastError?.message || 'no link'}).`);
 
     const cookies = [];
     const client = createServerClient(process.env.PUBLIC_SUPABASE_URL, process.env.PUBLIC_SUPABASE_ANON_KEY, {

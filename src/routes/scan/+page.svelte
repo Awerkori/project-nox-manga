@@ -66,7 +66,7 @@
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { invalidate } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
@@ -107,25 +107,25 @@
 
   function triggerModuleLoadForTab(tab: string) {
     if (tab === 'recrutamento' || tab === 'candidaturas' || tab === 'positions') {
-      ensureModuleLoaded('recruitment');
+      if (!data.positions || data.positions.length === 0) ensureModuleLoaded('recruitment');
     } else if (tab === 'wiki' || tab === 'glossario' || tab === 'referencias') {
-      ensureModuleLoaded('knowledge');
+      if (!data.wikiPages || data.wikiPages.length === 0) ensureModuleLoaded('knowledge');
     } else if (tab === 'tutoriais') {
-      ensureModuleLoaded('academy');
+      if (!data.tutorials || data.tutorials.length === 0) ensureModuleLoaded('academy');
     } else if (tab === 'activity') {
-      ensureModuleLoaded('activity');
+      if (!data.scanAuditLogs || data.scanAuditLogs.length === 0) ensureModuleLoaded('activity');
     } else if (tab === 'staff_notes') {
-      ensureModuleLoaded('staff_notes');
+      if (!data.staffNotes || data.staffNotes.length === 0) ensureModuleLoaded('staff_notes');
     } else if (tab === 'settings') {
-      ensureModuleLoaded('settings');
+      if (!data.integrations || data.integrations.length === 0) ensureModuleLoaded('settings');
     } else if (tab === 'membros') {
-      ensureModuleLoaded('team_invites');
+      if (!data.invites) ensureModuleLoaded('team_invites');
     } else if (tab === 'obras' || tab === 'capitulos') {
-      ensureModuleLoaded('obras_metadata');
+      if (!data.projectRequests) ensureModuleLoaded('obras_metadata');
     } else if (tab === 'mural') {
-      ensureModuleLoaded('mural');
+      if (!data.muralPosts || data.muralPosts.length === 0) ensureModuleLoaded('mural');
     } else if (tab === 'minha_fila') {
-      ensureModuleLoaded('queue_metadata');
+      if (!data.workOverrides) ensureModuleLoaded('queue_metadata');
     }
   }
 
@@ -253,7 +253,13 @@
     };
   });
 
+  let lastNavigatedHref = '';
+
   $effect(() => {
+    const currentHref = page.url.href;
+    if (currentHref === lastNavigatedHref) return;
+    lastNavigatedHref = currentHref;
+
     const tabParam = normalizeTab(page.url.searchParams.get('tab'));
     const stageParam = page.url.searchParams.get('stage');
     untrack(() => {
@@ -275,6 +281,7 @@
       const stage = url.searchParams.get('stage') || 'clean_redraw';
       currentWorkspaceTab = tab;
       currentPipelineStage = stage;
+      lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
     };
     window.addEventListener('popstate', onPopState);
@@ -297,6 +304,7 @@
         url.searchParams.delete('stage');
       }
       window.history.pushState(window.history.state, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
     }
   }
