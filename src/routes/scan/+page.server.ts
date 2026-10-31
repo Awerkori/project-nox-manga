@@ -183,15 +183,32 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   const rawTab = url.searchParams.get('tab') || 'home';
   const requestedTab = rawTab === 'tarefas' || rawTab === 'tasks' ? 'minha_fila' : (rawTab === 'capitulos' || rawTab === 'works' ? 'obras' : rawTab);
 
+  const isHome = requestedTab === 'home';
+  const isPipeline = requestedTab === 'pipeline';
+  const isMyQueue = requestedTab === 'minha_fila';
+  const isWorks = requestedTab === 'obras';
+  const isTeam = requestedTab === 'membros';
+  const isCalendar = requestedTab === 'calendario';
+  const isMural = requestedTab === 'mural';
+  const isInbox = requestedTab === 'inbox';
+  const isQc = requestedTab === 'qc';
+  const isWorkload = requestedTab === 'workload';
+
   const needsRecruitment = ['recrutamento', 'candidaturas', 'positions'].includes(requestedTab);
   const needsKnowledge = ['wiki', 'glossario', 'referencias'].includes(requestedTab);
   const needsActivity = requestedTab === 'activity';
   const needsStaffNotes = requestedTab === 'staff_notes';
   const needsAcademy = ['tutoriais', 'academia', 'academy'].includes(requestedTab);
   const needsSettings = ['settings', 'canais_config'].includes(requestedTab);
-  const needsCatalogWorks = requestedTab === 'obras';
+  const needsCatalogWorks = isWorks;
   const needsPipelineConfig = requestedTab === 'pipeline_config';
-  const needsMuralDetails = requestedTab === 'mural';
+  const needsMuralDetails = isMural;
+  const needsInvites = isTeam;
+  const needsProjectRequests = isWorks;
+  const needsQcIssues = isQc || isPipeline || isHome;
+  const needsOverrides = isMyQueue || isPipeline;
+  const needsCreditSnapshots = isMyQueue;
+  const needsMural = isMural || isHome;
 
   // Start the authoritative editorial graph immediately. It deliberately runs
   // beside the rest of the workspace batch: a member should not wait for
@@ -226,8 +243,14 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         LEFT JOIN public.members assignee ON assignee.id = chapter_stage.assigned_to
         LEFT JOIN public.members completer ON completer.id = chapter_stage.completed_by
         WHERE chapter_stage.scan_id = $1
+          AND (
+            chapter_stage.assigned_to = $2
+            OR chapter_stage.status IN ('AVAILABLE', 'REWORK', 'IN_PROGRESS')
+            OR $3::boolean
+          )
         ORDER BY chapter_stage.created_at ASC
-      `, [currentScan.id], platform?.env),
+        LIMIT 500
+      `, [currentScan.id, locals.user.id, !isHome], platform?.env),
       executeYugabyteSql<any>(`
         SELECT production_chapter.*,
           CASE WHEN work.id IS NULL THEN NULL ELSE jsonb_build_object(
@@ -236,15 +259,20 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         FROM public.scan_production_chapters production_chapter
         LEFT JOIN public.works work ON work.id = production_chapter.work_id
         WHERE production_chapter.scan_id = $1
+          AND (
+            production_chapter.status != 'PUBLISHED'
+            OR $2::boolean
+          )
         ORDER BY production_chapter.chapter_sort_key ASC
-      `, [currentScan.id], platform?.env),
-      executeYugabyteSql<any>(`
+        LIMIT 300
+      `, [currentScan.id, !isHome], platform?.env),
+      (isPipeline || isMyQueue) ? executeYugabyteSql<any>(`
         SELECT timeline.*
         FROM public.scan_chapter_timeline timeline
         WHERE timeline.scan_id = $1
         ORDER BY timeline.created_at DESC
-        LIMIT 200
-      `, [currentScan.id], platform?.env)
+        LIMIT 100
+      `, [currentScan.id], platform?.env) : Promise.resolve({ rows: [], rowCount: 0 })
     ]),
     3_500,
     null,
@@ -421,33 +449,25 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     : Promise.resolve(null);
 
   // Task transitions already run through YSQL transactions. Keep the queue
-  // itself on that same data plane, including its historical comments, so a
-  // refresh cannot combine an authoritative claim with a stale task list.
+  // itself on that same data plane, without expensive correlated comments on initial load.
   const taskSnapshotPromise = withTimeout(
     executeYugabyteSql<any>(`
-      SELECT task.*,
-        COALESCE((
-          SELECT jsonb_agg(jsonb_build_object(
-            'id', comment.id,
-            'task_id', comment.task_id,
-            'content', comment.content,
-            'created_at', comment.created_at,
-            'members', CASE WHEN author.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', author.id,
-              'username', author.username,
-              'display_name', author.display_name,
-              'avatar_id', author.avatar_id
-            ) END
-          ) ORDER BY comment.created_at ASC)
-          FROM public.scan_task_comments comment
-          LEFT JOIN public.members author ON author.id = comment.user_id
-          WHERE comment.task_id = task.id
-        ), '[]'::jsonb) AS scan_task_comments
+      SELECT task.id, task.scan_id, task.work_id, task.chapter_id, task.chapter_number,
+        task.title, task.description, task.priority, task.status, task.stage_id,
+        task.stage_name, task.stage_slug, task.stage_color, task.assigned_to,
+        task.assignee_id, task.due_date, task.due_at, task.created_at, task.updated_at,
+        '[]'::jsonb AS scan_task_comments
       FROM public.scan_tasks task
       WHERE task.scan_id = $1
+        AND (
+          task.status != 'DONE'
+          OR task.updated_at > now() - interval '14 days'
+          OR $2::boolean
+        )
       ORDER BY task.created_at DESC
-    `, [currentScan.id], platform?.env),
-    3_500,
+      LIMIT 150
+    `, [currentScan.id, !isHome], platform?.env),
+    2_500,
     null,
     'scan_task_snapshot_ysql'
   );
@@ -461,7 +481,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         FROM public.scan_notifications notification
         WHERE notification.scan_id = $1 AND notification.user_id = $2
         ORDER BY notification.created_at DESC
-        LIMIT 50
+        LIMIT 25
       `, [currentScan.id, locals.user.id], platform?.env),
       executeYugabyteSql<any>(`
         SELECT preference.*
@@ -470,57 +490,35 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         LIMIT 1
       `, [currentScan.id, locals.user.id], platform?.env)
     ]),
-    3_500,
+    2_500,
     null,
     'scan_notification_snapshot_ysql'
   );
 
-  const pipelineFilesSnapshotPromise = withTimeout(
-    executeYugabyteSql<any>(`
-      SELECT file.*,
-        jsonb_build_object('id', member.id, 'username', member.username,
-          'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
-        jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
-      FROM public.scan_production_files file
-      LEFT JOIN public.members member ON member.id = file.uploaded_by
-      LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
-      WHERE file.scan_id = $1
-      ORDER BY file.version DESC, file.created_at DESC
-    `, [currentScan.id], platform?.env),
-    2_000,
-    { rows: [], rowCount: 0 },
-    'scan_pipeline_files_ysql'
-  ).catch((error: any) => {
-    console.warn('scan_pipeline_files_ysql_unavailable', { message: String(error?.message || 'unknown').slice(0, 240) });
-    return { rows: [], rowCount: 0 };
-  });
+  const pipelineFilesSnapshotPromise = (isPipeline || isMyQueue)
+    ? withTimeout(
+        executeYugabyteSql<any>(`
+          SELECT file.*,
+            jsonb_build_object('id', member.id, 'username', member.username,
+              'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
+            jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
+          FROM public.scan_production_files file
+          LEFT JOIN public.members member ON member.id = file.uploaded_by
+          LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
+          WHERE file.scan_id = $1
+          ORDER BY file.version DESC, file.created_at DESC
+          LIMIT 100
+        `, [currentScan.id], platform?.env),
+        2_000,
+        { rows: [], rowCount: 0 },
+        'scan_pipeline_files_ysql'
+      ).catch((error: any) => {
+        console.warn('scan_pipeline_files_ysql_unavailable', { message: String(error?.message || 'unknown').slice(0, 240) });
+        return { rows: [], rowCount: 0 };
+      })
+    : Promise.resolve({ rows: [], rowCount: 0 });
 
-  const chapterNotesSnapshotPromise = withTimeout(
-    executeYugabyteSql<any>(`
-      SELECT note.*,
-        jsonb_build_object(
-          'id', author.id, 'username', author.username,
-          'display_name', author.display_name, 'avatar_id', author.avatar_id
-        ) AS author,
-        CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
-          'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
-        ) END AS stage
-      FROM public.scan_chapter_notes note
-      JOIN public.members author ON author.id = note.author_id
-      LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
-      WHERE note.scan_id = $1 AND note.deleted_at IS NULL
-      ORDER BY note.is_pinned DESC, note.created_at ASC
-    `, [currentScan.id], platform?.env),
-    2_000,
-    { rows: [], rowCount: 0 },
-    'scan_chapter_notes_ysql'
-  ).catch((error: any) => {
-    console.warn('scan_chapter_notes_ysql_unavailable', {
-      scanId: currentScan.id,
-      message: String(error?.message || 'unknown').slice(0, 240)
-    });
-    return { rows: [], rowCount: 0 };
-  });
+  const chapterNotesSnapshotPromise = Promise.resolve({ rows: [], rowCount: 0 });
 
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
@@ -599,20 +597,20 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
        WHERE scan_member.scan_id = $1`,
       [currentScan.id], platform, 'scan_team_ysql'
     ),
-    ysqlCollection<any>(
+    needsInvites ? ysqlCollection<any>(
       `SELECT invite.* FROM public.scan_invites invite
        WHERE invite.scan_id = $1 AND invite.revoked = false
          AND invite.used_at IS NULL AND invite.expires_at > now()
        ORDER BY invite.created_at DESC`,
       [currentScan.id], platform, 'scan_invites_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsProjectRequests ? ysqlCollection<any>(
       `SELECT request.*, to_jsonb(work) AS works
        FROM public.scan_project_requests request
        JOIN public.works work ON work.id = request.work_id
        WHERE request.scan_id = $1 ORDER BY request.created_at DESC`,
       [currentScan.id], platform, 'scan_project_requests_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     needsCatalogWorks ? withYugabyteLkg(
       'scan_catalog_works_top100',
       () =>
@@ -720,7 +718,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
        WHERE tutorial.scan_id = $1 ORDER BY tutorial.display_order ASC`,
       [currentScan.id], platform, 'scan_tutorials_ysql'
     ) : Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsQcIssues ? ysqlCollection<any>(
       `SELECT issue.*,
          jsonb_build_object('id', assignee.id, 'username', assignee.username,
            'display_name', assignee.display_name, 'avatar_id', assignee.avatar_id) AS assignee,
@@ -729,22 +727,24 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
        FROM public.scan_chapter_qc_issues issue
        LEFT JOIN public.members assignee ON assignee.id = issue.assigned_to
        LEFT JOIN public.members creator ON creator.id = issue.created_by
-       WHERE issue.scan_id = $1 ORDER BY issue.created_at DESC`,
-      [currentScan.id], platform, 'scan_qc_issues_ysql'
-    ),
+       WHERE issue.scan_id = $1 AND (issue.status = 'OPEN' OR $2::boolean)
+       ORDER BY issue.created_at DESC LIMIT 50`,
+      [currentScan.id, isQc], platform, 'scan_qc_issues_ysql'
+    ) : Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     needsPipelineConfig ? ysqlCollection<any>(
       `SELECT template.* FROM public.scan_pipeline_templates template`,
       [], platform, 'scan_pipeline_templates_ysql'
     ) : Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsMural ? ysqlCollection<any>(
       `SELECT post.*, jsonb_build_object('id', author.id, 'username', author.username,
          'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
        FROM public.scan_mural_posts post
        LEFT JOIN public.members author ON author.id = post.author_id
-       WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC`,
+       WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC
+       LIMIT ${isHome ? 5 : 50}`,
       [currentScan.id], platform, 'scan_mural_posts_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     needsMuralDetails ? ysqlCollection<any>(
       `SELECT comment.*, jsonb_build_object('id', author.id, 'username', author.username,
          'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
@@ -767,16 +767,16 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     // below; keep this slot for the historical batch shape only.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsOverrides ? ysqlCollection<any>(
       `SELECT override.* FROM public.scan_work_workflow_overrides override
        WHERE override.scan_id = $1`,
       [currentScan.id], platform, 'scan_workflow_overrides_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsCreditSnapshots ? ysqlCollection<any>(
       `SELECT credit.* FROM public.chapter_credit_snapshots credit
        WHERE credit.scan_id = $1 ORDER BY credit.role_order ASC`,
       [currentScan.id], platform, 'scan_credit_snapshots_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     ysqlCollection<any>(

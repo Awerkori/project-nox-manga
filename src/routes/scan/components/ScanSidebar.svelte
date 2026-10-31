@@ -587,6 +587,7 @@
     width: 232px;
     min-width: 232px;
     height: 100vh;
+    max-height: 100vh;
     background: #08060f;
     border-right: 1px solid rgba(255, 255, 255, 0.07);
     display: flex;
@@ -595,9 +596,11 @@
     top: 0;
     z-index: 40;
     user-select: none;
+    overflow: hidden;
   }
 
   .sidebar-header {
+    flex-shrink: 0;
     padding: 16px 14px 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     position: relative;
@@ -768,6 +771,7 @@
 
   /* Command Palette Button */
   .sidebar-search-action {
+    flex-shrink: 0;
     padding: 10px 12px;
   }
 
@@ -804,8 +808,10 @@
 
   /* Nav Tree */
   .sidebar-nav-tree {
-    flex: 1;
+    flex: 1 1 0%;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 4px 8px 16px;
     display: flex;
     flex-direction: column;
@@ -1026,8 +1032,10 @@
 
   /* Footer */
   .sidebar-footer {
+    flex-shrink: 0;
     padding: 10px 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(8, 6, 15, 0.95);
   }
 
   .public-page-link {
@@ -1053,10 +1061,15 @@
       top: 0;
       bottom: 0;
       left: 0;
-      width: 270px;
+      width: 280px;
+      height: 100dvh;
+      max-height: 100dvh;
       transform: translateX(-100%);
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 60;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     .workspace-sidebar.mobile-open {

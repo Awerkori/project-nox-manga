@@ -520,7 +520,7 @@
   </footer>
 {/if}
 
-{#if !reader && !currentPath.startsWith('/admin')}
+{#if !reader && !currentPath.startsWith('/admin') && !currentPath.startsWith('/scan')}
   <nav class="mobile-bottom" aria-label="Navegação Principal" data-sveltekit-preload-data="tap">
     <a href="/" class:active={currentPath === '/'}>
       <BookOpen size={20} />

@@ -64,8 +64,9 @@
   import MuralTab from './components/MuralTab.svelte';
   import ChapterWorkspaceView from './components/ChapterWorkspaceView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
+  import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { invalidate } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
@@ -106,17 +107,25 @@
 
   function triggerModuleLoadForTab(tab: string) {
     if (tab === 'recrutamento' || tab === 'candidaturas' || tab === 'positions') {
-      ensureModuleLoaded('recruitment');
+      if (!data.positions || data.positions.length === 0) ensureModuleLoaded('recruitment');
     } else if (tab === 'wiki' || tab === 'glossario' || tab === 'referencias') {
-      ensureModuleLoaded('knowledge');
+      if (!data.wikiPages || data.wikiPages.length === 0) ensureModuleLoaded('knowledge');
     } else if (tab === 'tutoriais') {
-      ensureModuleLoaded('academy');
+      if (!data.tutorials || data.tutorials.length === 0) ensureModuleLoaded('academy');
     } else if (tab === 'activity') {
-      ensureModuleLoaded('activity');
+      if (!data.scanAuditLogs || data.scanAuditLogs.length === 0) ensureModuleLoaded('activity');
     } else if (tab === 'staff_notes') {
-      ensureModuleLoaded('staff_notes');
+      if (!data.staffNotes || data.staffNotes.length === 0) ensureModuleLoaded('staff_notes');
     } else if (tab === 'settings') {
-      ensureModuleLoaded('settings');
+      if (!data.integrations || data.integrations.length === 0) ensureModuleLoaded('settings');
+    } else if (tab === 'membros') {
+      if (!data.invites) ensureModuleLoaded('team_invites');
+    } else if (tab === 'obras' || tab === 'capitulos') {
+      if (!data.projectRequests) ensureModuleLoaded('obras_metadata');
+    } else if (tab === 'mural') {
+      if (!data.muralPosts || data.muralPosts.length === 0) ensureModuleLoaded('mural');
+    } else if (tab === 'minha_fila') {
+      if (!data.workOverrides) ensureModuleLoaded('queue_metadata');
     }
   }
 
@@ -134,7 +143,12 @@
   let staffNotes = $derived(dynamicModuleData.staff_notes?.staffNotes || data.staffNotes || []);
   let integrations = $derived(dynamicModuleData.settings?.integrations || data.integrations || []);
   let transferRequests = $derived(dynamicModuleData.settings?.transferRequests || data.transferRequests || []);
-  let catalogWorks = $derived(dynamicModuleData.catalog_works?.catalogWorks || data.catalogWorks || []);
+  let catalogWorks = $derived(dynamicModuleData.obras_metadata?.catalogWorks || dynamicModuleData.catalog_works?.catalogWorks || data.catalogWorks || []);
+  let projectRequests = $derived(dynamicModuleData.obras_metadata?.projectRequests || data.projectRequests || []);
+  let invites = $derived(dynamicModuleData.team_invites?.invites || data.invites || []);
+  let muralPosts = $derived(dynamicModuleData.mural?.posts || data.muralPosts || []);
+  let workOverrides = $derived(dynamicModuleData.queue_metadata?.workOverrides || data.workOverrides || []);
+  let creditSnapshots = $derived(dynamicModuleData.queue_metadata?.creditSnapshots || data.creditSnapshots || []);
 
   type DashTab =
     | 'works'
@@ -239,16 +253,39 @@
     };
   });
 
+  let lastNavigatedHref = '';
+
   $effect(() => {
+    const currentHref = page.url.href;
+    if (currentHref === lastNavigatedHref) return;
+    lastNavigatedHref = currentHref;
+
     const tabParam = normalizeTab(page.url.searchParams.get('tab'));
-    if (tabParam && tabParam !== currentWorkspaceTab) {
-      currentWorkspaceTab = tabParam;
-    }
     const stageParam = page.url.searchParams.get('stage');
-    if (stageParam && stageParam !== currentPipelineStage) {
-      currentPipelineStage = stageParam;
-    }
-    triggerModuleLoadForTab(currentWorkspaceTab);
+    untrack(() => {
+      if (tabParam && tabParam !== currentWorkspaceTab) {
+        currentWorkspaceTab = tabParam;
+        triggerModuleLoadForTab(tabParam);
+      }
+      if (stageParam && stageParam !== currentPipelineStage) {
+        currentPipelineStage = stageParam;
+      }
+    });
+  });
+
+  onMount(() => {
+    const onPopState = () => {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const tab = normalizeTab(url.searchParams.get('tab'));
+      const stage = url.searchParams.get('stage') || 'clean_redraw';
+      currentWorkspaceTab = tab;
+      currentPipelineStage = stage;
+      lastNavigatedHref = window.location.href;
+      triggerModuleLoadForTab(tab);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   });
 
   function handleSelectTab(tab: string, stage?: string) {
@@ -266,7 +303,8 @@
       } else {
         url.searchParams.delete('stage');
       }
-      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+      window.history.pushState(window.history.state, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
     }
   }
@@ -929,7 +967,7 @@
                 scanId={data.currentScan.id}
                 userProfile={{ id: data.userId }}
                 userRole={data.userRole}
-                muralPosts={data.muralPosts || []}
+                muralPosts={muralPosts}
                 positions={positions}
                 team={team}
               />
@@ -941,8 +979,8 @@
                 productionChapters={data.productionChapters || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
-                workOverrides={data.workOverrides || []}
-                creditSnapshots={data.creditSnapshots || []}
+                workOverrides={workOverrides}
+                creditSnapshots={creditSnapshots}
                 team={team}
                 positions={positions}
                 works={works}
@@ -1050,11 +1088,11 @@
                 <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
               {/if}
 
-              {#if data.projectRequests && data.projectRequests.length > 0}
+              {#if projectRequests && projectRequests.length > 0}
                 <div class="project-requests-block">
-                  <span class="sub-section-title">Solicitações de Obras ({data.projectRequests.length})</span>
+                  <span class="sub-section-title">Solicitações de Obras ({projectRequests.length})</span>
                   <div class="proj-requests-list">
-                    {#each data.projectRequests as req (req.id)}
+                    {#each projectRequests as req (req.id)}
                       <div class="proj-req-item status-{req.status.toLowerCase()}">
                         {#if req.works?.cover_id}
                           <img src="/media/{req.works.cover_id}" alt="" class="proj-cover-mini" />
@@ -1171,11 +1209,11 @@
             </div>
           {/if}
 
-          {#if data.invites && data.invites.length > 0}
+          {#if invites && invites.length > 0}
             <div class="active-invites-block">
-              <span class="sub-section-title">Convites Ativos ({data.invites.length})</span>
+              <span class="sub-section-title">Convites Ativos ({invites.length})</span>
               <div class="invites-list">
-                {#each data.invites as inv (inv.id)}
+                {#each invites as inv (inv.id)}
                   <div class="active-invite-item">
                     <div class="invite-info-left">
                       <span class="invite-role-tag">{ROLE_LABELS[inv.role] || inv.role}</span>

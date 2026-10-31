@@ -76,47 +76,8 @@
     return set;
   });
 
-  // Realtime Supabase Channel
+  // Realtime Supabase Channel coordinated at parent scan workspace level
   let realtimeChannel: RealtimeChannel | null = null;
-
-  onMount(() => {
-    const client = getSupabaseBrowserClient();
-    if (!client || !scanId) return;
-
-    realtimeChannel = client
-      .channel(`scan_pipeline_view:${scanId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_chapter_stages',
-          filter: `scan_id=eq.${scanId}`
-        },
-        async () => {
-          await invalidateAll();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_pipeline_stage_seen',
-          filter: `scan_id=eq.${scanId}`
-        },
-        async () => {
-          await invalidateAll();
-        }
-      )
-      .subscribe();
-  });
-
-  onDestroy(() => {
-    if (realtimeChannel) {
-      realtimeChannel.unsubscribe();
-    }
-  });
 
   // Check if current user holds the required editorial role for a stage
   function userHoldsRoleForStage(stageSlug: string): boolean {
