@@ -1594,7 +1594,7 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 1560px;
+    max-width: 100%;
     margin: 0;
     padding-bottom: 48px;
     box-sizing: border-box;
@@ -1713,12 +1713,12 @@
     gap: 12px;
     height: 46px;
     padding: 0 20px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     font-size: 0.9375rem; /* 15px */
     font-weight: 550;
-    color: #cbd5e1;
+    color: #e2e8f0;
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
@@ -1733,14 +1733,14 @@
 
   .queue-tab-btn:hover {
     color: #ffffff;
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
   }
 
   .queue-tab-btn.active {
     color: #ffffff;
-    background: rgba(168, 85, 247, 0.2);
-    border-color: rgba(168, 85, 247, 0.5);
+    background: rgba(168, 85, 247, 0.22);
+    border-color: rgba(168, 85, 247, 0.55);
     font-weight: 650;
   }
 
@@ -1765,8 +1765,8 @@
     border-radius: 9999px;
     font-size: 0.75rem; /* 12px */
     font-weight: 650;
-    background: rgba(255, 255, 255, 0.08);
-    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.09);
+    color: #cbd5e1;
     height: 22px;
     box-sizing: border-box;
   }
@@ -1774,6 +1774,7 @@
   .queue-tab-btn.active .queue-counter-badge {
     background: rgba(168, 85, 247, 0.45);
     color: #ffffff;
+    font-weight: 700;
   }
 
   /* 3. Search & Filter Bar */
@@ -1807,13 +1808,17 @@
     width: 100%;
     height: 44px;
     padding: 0 36px 0 42px;
-    background: rgba(20, 16, 32, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(20, 16, 32, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.11);
     border-radius: 8px;
     font-size: 0.90625rem; /* 14.5px */
-    color: #f1f5f9;
+    color: #ffffff;
     outline: none;
     transition: border-color 0.15s ease;
+  }
+
+  .filter-input::placeholder {
+    color: #94a3b8;
   }
 
   .filter-input:focus {
@@ -1848,14 +1853,19 @@
   .filter-select {
     height: 44px;
     padding: 0 34px 0 16px;
-    background: rgba(20, 16, 32, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(20, 16, 32, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.11);
     border-radius: 8px;
     font-size: 0.875rem; /* 14px */
-    color: #cbd5e1;
+    color: #f1f5f9;
     outline: none;
     cursor: pointer;
     transition: border-color 0.15s ease;
+  }
+
+  .filter-select option {
+    background: #141020;
+    color: #f8fafc;
   }
 
   .filter-select:focus {
@@ -2002,6 +2012,7 @@
   .cards-vertical-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 16px;
     width: 100%;
   }
@@ -2011,9 +2022,9 @@
     max-width: 680px;
   }
 
-  /* Expanded deliverable/files panel spans full width across both columns */
+  /* Expanded deliverable/files panel expands naturally in its column without jumping or layout shift */
   .task-compact-card.is-expanded {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   /* Card Base (V7.4.1 Editorial Proportions) */
@@ -2245,13 +2256,13 @@
   }
 
   .card-actions-col .action-form-full {
-    flex: 1.2 1 0%;
+    flex: 1.5 1 0%;
     display: flex;
   }
 
   .btn-action-continue,
   .btn-action-claim {
-    flex: 1.2 1 0%;
+    flex: 1.5 1 0%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2293,12 +2304,12 @@
     height: 46px;
     min-height: 46px;
     padding: 0 16px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     font-size: 0.90625rem; /* 14.5px */
     font-weight: 550;
-    color: #cbd5e1;
+    color: #e2e8f0;
     cursor: pointer;
     transition: all 0.15s ease;
   }
@@ -2307,7 +2318,7 @@
   .btn-timeline-ghost:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.18);
   }
 
   .btn-toggle-expand.is-expanded {
