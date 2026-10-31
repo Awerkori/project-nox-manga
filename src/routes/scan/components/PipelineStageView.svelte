@@ -36,10 +36,13 @@
 
   let {
     currentStageSlug = 'clean_redraw',
+    stages = [],
     chapterStages = [],
     chapters = [],
     works = [],
     productionFiles = [],
+    tasks = [],
+    qcIssues = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
