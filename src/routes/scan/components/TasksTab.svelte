@@ -23,7 +23,7 @@
     CheckCircle2,
     Briefcase
   } from '@lucide/svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
@@ -61,9 +61,16 @@
   let selectedStageFilter = $state<string>('ALL');
   let selectedPriorityFilter = $state<string>('ALL');
 
-  // Mobile Controls
+  // Mobile Controls (V7.2 Compact Collapsed-by-Default Architecture)
   let mobileSearchOpen = $state(false);
   let showMobileFilters = $state(false);
+  let mobileSearchInputEl = $state<HTMLInputElement | null>(null);
+
+  async function openMobileSearch() {
+    mobileSearchOpen = true;
+    await tick();
+    mobileSearchInputEl?.focus();
+  }
 
   // Pagination for Completed history
   let doneLimit = $state(12);
@@ -558,20 +565,20 @@
 </script>
 
 <div class="tasks-tab-root">
-  <!-- 1. COMPACT PREMIUM HEADER (72–90px) -->
+  <!-- 1. COMPACT PREMIUM HEADER (V7.2) -->
   <header class="queue-header-bar">
     <div class="header-titles">
       <div class="header-badge">
         <Briefcase size={12} />
-        <span>ÁREA DE TRABALHO PESSOAL</span>
+        <span>Área de Trabalho Pessoal</span>
       </div>
       <div class="title-row">
         <h1 class="tab-title">Minha Fila</h1>
         <span class="active-tasks-pill" class:has-tasks={rawActiveItems.length > 0}>
-          <strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'em andamento' : 'em andamento'}
+          <strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'ativo' : 'ativos'}
         </span>
       </div>
-      <p class="tab-desc">Gerencie seus trabalhos e acompanhe suas tarefas editoriais.</p>
+      <p class="tab-desc">Gerencie seus trabalhos.</p>
     </div>
   </header>
 
@@ -681,37 +688,70 @@
       </div>
     </div>
 
-    <!-- Mobile Search & Filter Actions -->
+    <!-- Mobile Search & Filter Actions (V7.2 Compact Collapsed-by-Default Architecture) -->
     <div class="mobile-filter-bar">
       {#if mobileSearchOpen}
         <div class="search-box mobile-expanded-search">
           <Search size={14} class="search-icon" />
           <input
+            bind:this={mobileSearchInputEl}
             type="text"
             placeholder="Buscar obra, cap ou etapa..."
             bind:value={searchQuery}
             class="filter-input"
-            autofocus
           />
+          {#if searchQuery}
+            <button
+              type="button"
+              class="btn-clear-search-inline"
+              onclick={() => (searchQuery = '')}
+              aria-label="Limpar termo de busca"
+            >
+              <X size={14} />
+            </button>
+          {/if}
           <button
             type="button"
             class="btn-close-mobile-search"
-            onclick={() => { searchQuery = ''; mobileSearchOpen = false; }}
+            onclick={() => (mobileSearchOpen = false)}
             aria-label="Fechar busca"
           >
-            <X size={15} />
+            <span>Fechar</span>
           </button>
         </div>
       {:else}
-        <button
-          type="button"
-          class="btn-mobile-search-toggle"
-          onclick={() => (mobileSearchOpen = true)}
-          aria-label="Abrir campo de busca"
-        >
-          <Search size={15} />
-          <span>{searchQuery ? `"${searchQuery}"` : 'Buscar...'}</span>
-        </button>
+        {#if searchQuery}
+          <div class="mobile-search-active-pill">
+            <button
+              type="button"
+              class="btn-mobile-search-toggle has-active-query"
+              onclick={openMobileSearch}
+              aria-label="Editar termo de busca"
+            >
+              <Search size={14} />
+              <span class="active-query-text">"{searchQuery}"</span>
+            </button>
+            <button
+              type="button"
+              class="btn-quick-clear-search"
+              onclick={() => (searchQuery = '')}
+              aria-label="Limpar busca"
+              title="Limpar busca"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        {:else}
+          <button
+            type="button"
+            class="btn-mobile-search-toggle"
+            onclick={openMobileSearch}
+            aria-label="Abrir campo de busca"
+          >
+            <Search size={14} />
+            <span>Buscar tarefas...</span>
+          </button>
+        {/if}
 
         <button
           type="button"
@@ -720,7 +760,7 @@
           onclick={() => (showMobileFilters = true)}
           aria-label="Abrir filtros"
         >
-          <Filter size={15} />
+          <Filter size={14} />
           <span>Filtros</span>
           {#if activeFiltersCount > (searchQuery ? 1 : 0)}
             <span class="active-badge">{activeFiltersCount - (searchQuery ? 1 : 0)}</span>
@@ -1544,19 +1584,19 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
     padding-bottom: 48px;
     box-sizing: border-box;
   }
 
-  /* 1. Header Bar (72–90px) */
+  /* 1. Header Bar (V7.2 Compact & Direct) */
   .queue-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     min-height: 72px;
-    padding: 16px 20px;
+    padding: 16px 22px;
     background: rgba(18, 14, 28, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
@@ -1587,7 +1627,7 @@
   }
 
   .tab-title {
-    font-size: 1.375rem;
+    font-size: 1.4375rem;
     font-weight: 700;
     color: #f8fafc;
     margin: 0;
@@ -1620,7 +1660,7 @@
   }
 
   .tab-desc {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: #94a3b8;
     margin: 0;
   }
@@ -1636,7 +1676,7 @@
   .queue-tabs-grid {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
     padding-bottom: 8px;
   }
@@ -1646,7 +1686,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 8px 16px;
+    height: 42px;
+    padding: 0 18px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
@@ -1718,8 +1759,8 @@
   }
 
   .desktop-search {
-    flex: 1 1 260px;
-    max-width: 400px;
+    flex: 1 1 280px;
+    max-width: 360px;
   }
 
   .search-box {
@@ -1737,12 +1778,12 @@
 
   .filter-input {
     width: 100%;
-    height: 38px;
+    height: 40px;
     padding: 0 32px 0 36px;
     background: rgba(20, 16, 32, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: #f1f5f9;
     outline: none;
     transition: border-color 0.15s ease;
@@ -1778,12 +1819,12 @@
   }
 
   .filter-select {
-    height: 38px;
-    padding: 0 14px;
+    height: 40px;
+    padding: 0 16px;
     background: rgba(20, 16, 32, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: #cbd5e1;
     outline: none;
     cursor: pointer;
@@ -1820,6 +1861,50 @@
     flex: 1 1 0%;
   }
 
+  .mobile-search-active-pill {
+    display: flex;
+    align-items: center;
+    flex: 1 1 0%;
+    height: 38px;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 8px;
+    padding: 0 4px 0 12px;
+    gap: 6px;
+  }
+
+  .mobile-search-active-pill .btn-mobile-search-toggle {
+    border: none;
+    background: transparent;
+    padding: 0;
+    height: auto;
+    color: #f1f5f9;
+    font-weight: 500;
+    flex: 1 1 0%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-quick-clear-search {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #cbd5e1;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .btn-quick-clear-search:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
+
   .btn-mobile-filter-toggle.has-active {
     border-color: rgba(168, 85, 247, 0.4);
     background: rgba(168, 85, 247, 0.1);
@@ -1842,15 +1927,40 @@
 
   .mobile-expanded-search {
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+
+  .mobile-expanded-search .filter-input {
+    height: 38px;
+    padding: 0 32px 0 34px;
+    font-size: 0.8125rem;
   }
 
   .btn-close-mobile-search {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    height: 38px;
+    padding: 0 12px;
+    color: #cbd5e1;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .btn-clear-search-inline {
     position: absolute;
-    right: 8px;
+    right: 76px;
     background: transparent;
     border: none;
     color: #94a3b8;
     cursor: pointer;
+    display: flex;
+    align-items: center;
     padding: 4px;
   }
 
@@ -1895,8 +2005,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 18px;
-    min-height: 84px;
+    padding: 14px 20px;
+    min-height: 88px;
     box-sizing: border-box;
   }
 
@@ -1908,11 +2018,11 @@
     min-width: 0;
   }
 
-  /* Left Cover (48x64px) */
+  /* Left Cover (Desktop 52x70px) */
   .card-visual-col {
     flex-shrink: 0;
-    width: 48px;
-    height: 64px;
+    width: 52px;
+    height: 70px;
     border-radius: 6px;
     overflow: hidden;
     background: #140f22;
@@ -1959,8 +2069,8 @@
   }
 
   .task-work-name {
-    font-size: 0.9375rem;
-    font-weight: 600;
+    font-size: 1.0625rem;
+    font-weight: 650;
     color: #f8fafc;
     margin: 0;
     line-height: 1.35;
@@ -2073,12 +2183,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 38px;
-    padding: 0 16px;
+    height: 40px;
+    padding: 0 18px;
     background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: #ffffff;
     cursor: pointer;
@@ -2101,12 +2211,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 38px;
-    padding: 0 16px;
+    height: 40px;
+    padding: 0 18px;
     background: #a855f7;
     border: none;
     border-radius: 8px;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: #ffffff;
     cursor: pointer;
@@ -2122,12 +2232,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 38px;
-    padding: 0 12px;
+    height: 40px;
+    padding: 0 14px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: #cbd5e1;
     cursor: pointer;
@@ -2732,16 +2842,32 @@
   /* 5. Responsive Breakpoints */
   @media (max-width: 768px) {
     .tasks-tab-root {
-      gap: 12px;
+      gap: 10px;
     }
 
     .queue-header-bar {
-      padding: 12px 14px;
+      padding: 8px 12px;
       min-height: auto;
+      margin-bottom: 0px;
+    }
+
+    .header-badge {
+      display: none;
     }
 
     .tab-title {
-      font-size: 1.1875rem;
+      font-size: 1.125rem;
+      line-height: 1.2;
+    }
+
+    .active-tasks-pill {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+    }
+
+    .tab-desc {
+      font-size: 0.75rem;
+      color: #94a3b8;
     }
 
     .desktop-search,
@@ -2757,24 +2883,24 @@
       display: none;
     }
 
-    /* 4 Categories Navigation in 2x2 Grid (Rodada 21 V7.1) */
+    /* 4 Categories Navigation in 2x2 Grid (Rodada 21 V7.2) */
     .queue-nav-strip {
       border-bottom: none;
-      margin-bottom: 2px;
+      margin-bottom: 0px;
     }
 
     .queue-tabs-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
       padding-bottom: 0;
     }
 
     .queue-tab-btn {
-      height: 48px;
-      min-height: 48px;
-      padding: 0 12px;
+      height: 46px;
+      min-height: 46px;
+      padding: 0 10px;
       box-sizing: border-box;
       font-size: 0.8125rem;
       border-radius: 8px;
@@ -2782,7 +2908,7 @@
     }
 
     .tab-label-group {
-      gap: 7px;
+      gap: 6px;
       min-width: 0;
     }
 
@@ -2792,25 +2918,34 @@
       white-space: nowrap;
     }
 
-    /* 2-Tiered Mobile Card Composition (Rodada 21 V7.1) */
+    /* 2-Tiered Mobile Card Composition (Rodada 21 V7.2 - Compact 12-15% Height Reduction) */
+    .cards-vertical-list {
+      gap: 8px;
+    }
+
     .card-main-content {
       flex-direction: column;
       align-items: stretch;
-      gap: 12px;
-      padding: 12px 14px;
+      gap: 8px;
+      padding: 10px 12px;
       min-height: auto;
     }
 
     .card-identity-region {
       align-items: flex-start;
-      gap: 12px;
+      gap: 10px;
       width: 100%;
     }
 
     .card-visual-col {
-      width: 48px;
-      height: 64px;
+      width: 44px;
+      height: 58px;
       flex-shrink: 0;
+      border-radius: 6px;
+    }
+
+    .card-details-col {
+      gap: 3px;
     }
 
     .task-work-name {
@@ -2819,7 +2954,18 @@
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
-      line-height: 1.35;
+      line-height: 1.3;
+    }
+
+    .card-meta-row {
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    .meta-pill {
+      padding: 2px 6px;
+      font-size: 0.6875rem;
+      border-radius: 4px;
     }
 
     .card-actions-col {
@@ -2827,19 +2973,20 @@
       flex-direction: row;
       gap: 8px;
       width: 100%;
-      padding-top: 8px;
+      padding-top: 6px;
+      margin-top: 2px;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
       align-items: stretch;
     }
 
     .card-actions-col .action-form-full {
-      flex: 1 1 0%;
+      flex: 1.2 1 0%;
       display: flex;
     }
 
     .btn-action-continue,
     .btn-action-claim {
-      flex: 1 1 0%;
+      flex: 1.2 1 0%;
       height: 44px;
       min-height: 44px;
       padding: 0 12px;
@@ -2853,7 +3000,7 @@
       flex: 1 1 0%;
       height: 44px;
       min-height: 44px;
-      padding: 0 12px;
+      padding: 0 10px;
       justify-content: center;
       font-size: 0.8125rem;
     }
@@ -2882,18 +3029,20 @@
 
   @media (max-width: 360px) {
     .queue-tab-btn {
-      padding: 0 8px;
+      height: 44px;
+      min-height: 44px;
+      padding: 0 6px;
       font-size: 0.75rem;
     }
 
     .queue-counter-badge {
-      padding: 2px 5px;
+      padding: 1px 4px;
       font-size: 0.625rem;
     }
 
     .card-visual-col {
-      width: 42px;
-      height: 56px;
+      width: 40px;
+      height: 52px;
     }
 
     .task-work-name {
@@ -2905,7 +3054,7 @@
     .btn-toggle-expand,
     .btn-timeline-ghost {
       font-size: 0.75rem;
-      padding: 0 8px;
+      padding: 0 6px;
     }
   }
 </style>

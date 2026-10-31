@@ -560,7 +560,7 @@
     if (event.key === 'Escape') dismiss();
   }
 
-  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7.1 - Enhanced Robust Engine)
+  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7.2 - Refined Single Engine)
   let touchStartX = 0;
   let touchStartY = 0;
   let touchDeltaX = 0;
@@ -577,10 +577,10 @@
 
     const target = e.target;
     const element = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null);
-    // Ignore touches starting on text inputs, selects, textareas, explicit no-swipe areas, or open modals
+    // Ignore touches starting inside topbar, text inputs, selects, textareas, explicit no-swipe areas, or open modals
     if (
       element?.closest(
-        'input, select, textarea, [data-no-swipe], .modal-dialog, .modal-sheet-drawer'
+        '.workspace-mobile-topbar, input, select, textarea, [data-no-swipe], .modal-dialog, .modal-sheet-drawer'
       )
     ) {
       isTrackingSwipe = null;
@@ -593,10 +593,10 @@
 
     if (!sidebarMobileOpen) {
       // SAFE ACTIVATION ZONE:
-      // Start after 20px so we do NOT intercept Android native back gesture (0-20px bezel).
+      // Start after 18px so we do NOT intercept Android native back gesture (0-18px bezel).
       // Allow gestures starting anywhere across the left and middle content (up to 75% of screen width, max 280px).
       const maxStartX = Math.min(window.innerWidth * 0.75, 280);
-      if (x >= 20 && x <= maxStartX) {
+      if (x >= 18 && x <= maxStartX) {
         touchStartX = x;
         touchStartY = y;
         touchDeltaX = 0;
@@ -660,16 +660,16 @@
 
     if (isTrackingSwipe === 'OPEN') {
       // Open criteria:
-      // 1. Dragged right >= 50px with dominant horizontal vector (absX > absY * 1.15)
-      // 2. OR flick with deltaX >= 30px and velocity > 0.35 px/ms
-      if ((touchDeltaX >= 50 && absX > absY * 1.15) || (touchDeltaX >= 30 && velocityX > 0.35 && absX > absY)) {
+      // 1. Dragged right >= 45px with dominant horizontal vector (absX > absY * 1.1)
+      // 2. OR flick with deltaX >= 25px and velocity > 0.3 px/ms
+      if ((touchDeltaX >= 45 && absX > absY * 1.1) || (touchDeltaX >= 25 && velocityX > 0.3 && absX > absY)) {
         sidebarMobileOpen = true;
       }
     } else if (isTrackingSwipe === 'CLOSE') {
       // Close criteria:
-      // 1. Dragged left <= -40px with dominant horizontal vector
-      // 2. OR flick with deltaX <= -25px and velocity > 0.35 px/ms
-      if ((touchDeltaX <= -40 && absX > absY * 1.15) || (touchDeltaX <= -25 && velocityX > 0.35 && absX > absY)) {
+      // 1. Dragged left <= -35px with dominant horizontal vector
+      // 2. OR flick with deltaX <= -20px and velocity > 0.3 px/ms
+      if ((touchDeltaX <= -35 && absX > absY * 1.1) || (touchDeltaX <= -20 && velocityX > 0.3 && absX > absY)) {
         sidebarMobileOpen = false;
       }
     }
@@ -679,19 +679,12 @@
 
   function handleWindowTouchCancel() {
     // If opening threshold was already comfortably reached before cancel, honor it
-    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 50) {
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 45) {
       sidebarMobileOpen = true;
     }
     isTrackingSwipe = null;
   }
 </script>
-
-<svelte:window
-  ontouchstart={handleWindowTouchStart}
-  ontouchmove={handleWindowTouchMove}
-  ontouchend={handleWindowTouchEnd}
-  ontouchcancel={handleWindowTouchCancel}
-/>
 
 <svelte:head>
   <title>{data.currentScan ? `Painel — ${data.currentScan.name} | Project Nox` : 'Painel de Scan Parceira | Project Nox'}</title>
