@@ -18,8 +18,9 @@ const SETTINGS_CACHE_TTL_MS = 120_000;
 type CustomFrame = { id: string; asset_url: string; style_data: Record<string, any> };
 let cachedCustomFrames: { timestamp: number; frames: CustomFrame[] } = { timestamp: 0, frames: [] };
 const CUSTOM_FRAMES_TTL_MS = 120_000;
-let customFramesFlight: Promise<void> | null = null;
-let settingsFlight: Promise<void> | null = null;
+const MAX_LAYOUT_FLIGHT_AGE_MS = 3_000;
+let customFramesFlight: { promise: Promise<void>; startedAt: number } | null = null;
+let settingsFlight: { promise: Promise<void>; startedAt: number } | null = null;
 
 export const load = async ({ locals, url, cookies }) => {
   const now = Date.now();
@@ -29,56 +30,68 @@ export const load = async ({ locals, url, cookies }) => {
 
   const framesTask = !needFrames
     ? Promise.resolve()
-    : (customFramesFlight ??= (async () => {
-        try {
-          const res = await withTimeout(
-            locals.db
-              .from('shop_items')
-              .select('id, asset_url, style_data')
-              .eq('kind', 'AVATAR_FRAME')
-              .neq('asset_url', ''),
-            1200,
-            { data: null } as any,
-            'custom_frames'
-          );
-          if (Array.isArray(res?.data)) {
-            cachedCustomFrames = {
-              timestamp: Date.now(),
-              frames: res.data
-                .filter((f: any) => f.asset_url)
-                .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
-            };
-          }
-        } catch {
-          // Keep stale frames; procedural frames don't depend on this.
-        } finally {
-          customFramesFlight = null;
-        }
-      })());
+    : customFramesFlight && now - customFramesFlight.startedAt < MAX_LAYOUT_FLIGHT_AGE_MS
+      ? customFramesFlight.promise
+      : (() => {
+          const run = (async () => {
+            try {
+              const res = await withTimeout(
+                locals.db
+                  .from('shop_items')
+                  .select('id, asset_url, style_data')
+                  .eq('kind', 'AVATAR_FRAME')
+                  .neq('asset_url', ''),
+                1200,
+                { data: null } as any,
+                'custom_frames'
+              );
+              if (Array.isArray(res?.data)) {
+                cachedCustomFrames = {
+                  timestamp: Date.now(),
+                  frames: res.data
+                    .filter((f: any) => f.asset_url)
+                    .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
+                };
+              }
+            } catch {
+              // Keep stale frames; procedural frames don't depend on this.
+            } finally {
+              if (customFramesFlight?.promise === run) customFramesFlight = null;
+            }
+          })();
+          customFramesFlight = { promise: run, startedAt: now };
+          return run;
+        })();
 
   const settingsTask = !needSettings
     ? Promise.resolve()
-    : (settingsFlight ??= (async () => {
-        try {
-          databaseConfig();
-          const settingsRes = await withTimeout(
-            locals.db.rpc('public_settings'),
-            1200,
-            { data: null } as any,
-            'public_settings'
-          );
-          if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
-            const nextConfig = Object.fromEntries(
-              settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
-            );
-            cachedSettings = { timestamp: Date.now(), config: nextConfig };
-          }
-        } catch {
-          // Keep stale config if available, otherwise default
-        } finally {
-          settingsFlight = null;
-        }
-      })());
+    : settingsFlight && now - settingsFlight.startedAt < MAX_LAYOUT_FLIGHT_AGE_MS
+      ? settingsFlight.promise
+      : (() => {
+          const run = (async () => {
+            try {
+              databaseConfig();
+              const settingsRes = await withTimeout(
+                locals.db.rpc('public_settings'),
+                1200,
+                { data: null } as any,
+                'public_settings'
+              );
+              if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
+                const nextConfig = Object.fromEntries(
+                  settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
+                );
+                cachedSettings = { timestamp: Date.now(), config: nextConfig };
+              }
+            } catch {
+              // Keep stale config if available, otherwise default
+            } finally {
+              if (settingsFlight?.promise === run) settingsFlight = null;
+            }
+          })();
+          settingsFlight = { promise: run, startedAt: now };
+          return run;
+        })();
 
   const userFallbackTask = !needUserFallback
     ? Promise.resolve(null)

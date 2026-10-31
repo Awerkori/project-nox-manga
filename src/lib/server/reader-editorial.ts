@@ -1,10 +1,11 @@
 import { executeYugabyteSql } from './yugabyte';
 
-const EDITORIAL_CACHE_TTL_MS = 30_000;
+const EDITORIAL_CACHE_TTL_MS = 60_000;
+const MAX_FLIGHT_AGE_MS = 4_000;
 const chapterMemCache = new Map<string, { at: number; value: any }>();
-const chapterFlights = new Map<string, Promise<any>>();
+const chapterFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
 const contentMemCache = new Map<string, { at: number; value: any }>();
-const contentFlights = new Map<string, Promise<any>>();
+const contentFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
 
 function isTestRuntime(): boolean {
   return typeof process !== 'undefined' && (process.env?.VITEST === 'true' || process.env?.NODE_ENV === 'test');
@@ -31,7 +32,7 @@ export async function readerChapter(id: string, preview: boolean, platformEnv: a
     return cached.value;
   }
   const existing = chapterFlights.get(id);
-  if (existing) return existing;
+  if (existing && Date.now() - existing.startedAt < MAX_FLIGHT_AGE_MS) return existing.promise;
   const flight = query()
     .then((res) => {
       if (res.data) {
@@ -44,9 +45,9 @@ export async function readerChapter(id: string, preview: boolean, platformEnv: a
       return res;
     })
     .finally(() => {
-      if (chapterFlights.get(id) === flight) chapterFlights.delete(id);
+      if (chapterFlights.get(id)?.promise === flight) chapterFlights.delete(id);
     });
-  chapterFlights.set(id, flight);
+  chapterFlights.set(id, { promise: flight, startedAt: Date.now() });
   return flight;
 }
 
@@ -70,7 +71,7 @@ export async function readerContent(chapterId: string, workId: string, platformE
     return cached.value;
   }
   const existing = contentFlights.get(chapterId);
-  if (existing) return existing;
+  if (existing && Date.now() - existing.startedAt < MAX_FLIGHT_AGE_MS) return existing.promise;
   const flight = query()
     .then((res) => {
       if (res.data?.pages?.length > 0) {
@@ -83,10 +84,14 @@ export async function readerContent(chapterId: string, workId: string, platformE
       return res;
     })
     .finally(() => {
-      if (contentFlights.get(chapterId) === flight) contentFlights.delete(chapterId);
+      if (contentFlights.get(idOrChap(chapterId))?.promise === flight) contentFlights.delete(chapterId);
     });
-  contentFlights.set(chapterId, flight);
+  contentFlights.set(chapterId, { promise: flight, startedAt: Date.now() });
   return flight;
+}
+
+function idOrChap(c: string): string {
+  return c;
 }
 
 export async function readerPreviewTarget(workId: string, displayNumber: string | number, platformEnv: any) {
