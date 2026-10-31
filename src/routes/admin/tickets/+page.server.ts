@@ -1,9 +1,17 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { parsePartnerRequestMeta } from '$lib/scans';
 import { createNotification } from '$lib/server/notifications';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
+import {
+  adminTicketsCache,
+  adminTicketsFlights,
+  invalidateAdminScansCache,
+  invalidateAdminTicketsCache,
+  withSingleFlightCache
+} from '$lib/server/admin-cache';
+import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 function getAdminDb(locals: any, platform?: any) {
@@ -14,7 +22,9 @@ function getAdminDb(locals: any, platform?: any) {
       return createClient(url, serviceKey, {
         auth: { persistSession: false, autoRefreshToken: false }
       });
-    } catch {}
+    } catch {
+      // Fallback to locals.db
+    }
   }
   return locals.db;
 }
@@ -44,112 +54,122 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   const typeFilter = url.searchParams.get('type') || 'ALL';
   const searchQuery = (url.searchParams.get('q') || '').trim().toLowerCase();
 
+  const cacheKey = `${locals.role}:${activeTab}:${statusFilter}:${typeFilter}:${searchQuery}`;
+  return withSingleFlightCache(
+    adminTicketsCache,
+    adminTicketsFlights,
+    cacheKey,
+    15_000,
+    async () => {
   const db = getAdminDb(locals, platform);
 
-  // 1. Content Reports Query (Work & Chapter issues)
-  let contentQuery = db
-    .from('reports')
-    .select(`
-      id,
-      target_type,
-      work_id,
-      chapter_id,
-      reason,
-      details,
-      status,
-      resolution_notes,
-      assigned_to,
-      assigned_at,
-      resolved_by,
-      resolved_at,
-      created_at,
-      updated_at,
-      reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-      assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-      resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
-      work:works(id, title, slug, cover_id),
-      chapter:chapters(id, number, display_number, title, work_id, works(id, title, slug, cover_id))
-    `)
-    .is('deleted_at', null)
-    .not('target_type', 'in', '("COMMENT","USER")')
-    .order('created_at', { ascending: false })
-    .limit(200);
-
+  // 1. Content Reports Query (Work & Chapter issues — only fetched when tab === 'relatorios')
+  let contentQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
   if (activeTab === 'relatorios') {
-    if (statusFilter !== 'ALL') contentQuery = contentQuery.eq('status', statusFilter);
-    if (typeFilter !== 'ALL') contentQuery = contentQuery.eq('target_type', typeFilter);
+    let q = db
+      .from('reports')
+      .select(`
+        id,
+        target_type,
+        work_id,
+        chapter_id,
+        reason,
+        details,
+        status,
+        resolution_notes,
+        assigned_to,
+        assigned_at,
+        resolved_by,
+        resolved_at,
+        created_at,
+        updated_at,
+        reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
+        assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+        resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
+        work:works(id, title, slug, cover_id),
+        chapter:chapters(id, number, display_number, title, work_id, works(id, title, slug, cover_id))
+      `)
+      .is('deleted_at', null)
+      .not('target_type', 'in', '("COMMENT","USER")')
+      .order('created_at', { ascending: false })
+      .limit(120);
+    if (statusFilter !== 'ALL') q = q.eq('status', statusFilter);
+    if (typeFilter !== 'ALL') q = q.eq('target_type', typeFilter);
+    contentQuery = q;
   }
 
-  // 2. Scan Partner Requests Query (ADMIN ONLY)
-  let partnerQuery = isAdmin
-    ? db
-        .from('scan_partner_requests')
-        .select(`
-          *,
-          applicant:members!user_id(id, username, display_name, avatar_id, avatar_crop),
-          assignee:members!scan_partner_requests_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-          reviewer:members!scan_partner_requests_reviewed_by_fkey(id, username, display_name, avatar_id, avatar_crop)
-        `)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(100)
-    : Promise.resolve({ data: [] });
-
-  if (isAdmin && activeTab === 'scans' && statusFilter !== 'ALL') {
-    if (statusFilter === 'PENDING') {
-      partnerQuery = (partnerQuery as any).eq('status', 'PENDING').is('assigned_to', null);
-    } else if (statusFilter === 'EM_ANALISE') {
-      partnerQuery = (partnerQuery as any).eq('status', 'PENDING').not('assigned_to', 'is', null);
-    } else {
-      partnerQuery = (partnerQuery as any).eq('status', statusFilter);
+  // 2. Scan Partner Requests Query (ADMIN ONLY — only fetched when tab === 'scans')
+  let partnerQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
+  if (isAdmin && activeTab === 'scans') {
+    let q: any = db
+      .from('scan_partner_requests')
+      .select(`
+        *,
+        applicant:members!user_id(id, username, display_name, avatar_id, avatar_crop),
+        assignee:members!scan_partner_requests_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+        reviewer:members!scan_partner_requests_reviewed_by_fkey(id, username, display_name, avatar_id, avatar_crop)
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (statusFilter !== 'ALL') {
+      if (statusFilter === 'PENDING') {
+        q = q.eq('status', 'PENDING').is('assigned_to', null);
+      } else if (statusFilter === 'EM_ANALISE') {
+        q = q.eq('status', 'PENDING').not('assigned_to', 'is', null);
+      } else {
+        q = q.eq('status', statusFilter);
+      }
     }
+    partnerQuery = q;
   }
 
-  // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY)
-  let moderationQuery = isAdmin
-    ? db
-        .from('reports')
-        .select(`
+  // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY — only fetched when tab === 'moderacao')
+  let moderationQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
+  if (isAdmin && activeTab === 'moderacao') {
+    let q: any = db
+      .from('reports')
+      .select(`
+        id,
+        target_type,
+        work_id,
+        chapter_id,
+        comment_id,
+        reason,
+        details,
+        status,
+        resolution_notes,
+        assigned_to,
+        assigned_at,
+        resolved_by,
+        resolved_at,
+        created_at,
+        updated_at,
+        reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
+        assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
+        resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
+        comment:comments(
           id,
-          target_type,
-          work_id,
-          chapter_id,
-          comment_id,
-          reason,
-          details,
-          status,
-          resolution_notes,
-          assigned_to,
-          assigned_at,
-          resolved_by,
-          resolved_at,
+          body,
+          user_id,
+          parent_id,
+          removed,
+          deleted,
           created_at,
-          updated_at,
-          reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-          assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-          resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
-          comment:comments(
-            id,
-            body,
-            user_id,
-            parent_id,
-            removed,
-            deleted,
-            created_at,
-            author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-            work:works(id, title, slug),
-            chapter:chapters(id, number, display_number, title, works(id, title, slug))
-          ),
-          target_user:members!reports_target_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
-        `)
-        .is('deleted_at', null)
-        .in('target_type', ['COMMENT', 'USER'])
-        .order('created_at', { ascending: false })
-        .limit(100)
-    : Promise.resolve({ data: [] });
-
-  if (isAdmin && activeTab === 'moderacao' && statusFilter !== 'ALL') {
-    moderationQuery = (moderationQuery as any).eq('status', statusFilter);
+          author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop),
+          work:works(id, title, slug),
+          chapter:chapters(id, number, display_number, title, works(id, title, slug))
+        ),
+        target_user:members!reports_target_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
+      `)
+      .is('deleted_at', null)
+      .in('target_type', ['COMMENT', 'USER'])
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (statusFilter !== 'ALL') {
+      q = q.eq('status', statusFilter);
+    }
+    moderationQuery = q;
   }
 
   // 4. Overall counts for badges and stats
@@ -244,8 +264,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   for (const rep of enrichedReports) {
     let key = `SINGLE:${rep.id}`;
     let clusterTitle = rep.workTitle;
-    let link = rep.problemLink;
-    let coverId = rep.coverId;
+    const link = rep.problemLink;
+    const coverId = rep.coverId;
 
     if (rep.target_type === 'CHAPTER' && rep.chapter) {
       key = `CHAPTER:${rep.chapter.id}`;
@@ -390,7 +410,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       siteLink = `/obra/${comm.work.slug}#comment-${comm.id}`;
     }
 
-    let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED' = 'VISIBLE';
+    let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED';
     if (!comm || comm.deleted) {
       visibilityStatus = 'DELETED';
     } else if (comm.removed) {
@@ -447,6 +467,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       pendingModerationCount
     }
   };
+    }
+  );
 };
 
 export const actions: Actions = {
@@ -519,9 +541,12 @@ export const actions: Actions = {
           href: '/notificacoes',
           dedupe_key: `report:${reportId}:${newStatus}`
         });
-      } catch {}
+      } catch {
+        // Non-fatal notification failure
+      }
     }
 
+    invalidateAdminTicketsCache();
     return { success: true };
   },
 
@@ -599,9 +624,12 @@ export const actions: Actions = {
           dedupe_key: `report:${r.id}:${newStatus}`
         }));
         await db.from('notifications').insert(notifs);
-      } catch {}
+      } catch {
+        // Non-fatal notification failure
+      }
     }
 
+    invalidateAdminTicketsCache();
     return { success: true, count: reportIds.length };
   },
 
@@ -704,6 +732,10 @@ export const actions: Actions = {
       }
 
       invalidateScansDirectoryCache();
+      invalidateAdminScansCache();
+      if (partnerReq.user_id) {
+        invalidateUserSession(partnerReq.user_id);
+      }
 
       // 4. Dispatch congratulatory in-app notification
       try {
@@ -733,6 +765,7 @@ export const actions: Actions = {
       }
     }
 
+    invalidateAdminTicketsCache();
     return { success: true, reviewedPartner: data };
   },
 
@@ -777,12 +810,14 @@ export const actions: Actions = {
           updated_at: new Date().toISOString()
         }).eq('id', reportId);
       }
+      invalidateAdminTicketsCache();
       return { success: true, action: 'hide' };
     }
 
     if (actionType === 'unhide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
       await privilegedDb.from('comments').update({ removed: false, deleted: false, deleted_at: null }).eq('id', commentId);
+      invalidateAdminTicketsCache();
       return { success: true, action: 'unhide' };
     }
 
@@ -829,6 +864,7 @@ export const actions: Actions = {
           .eq('id', reportId);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'delete' };
     }
 
@@ -836,6 +872,7 @@ export const actions: Actions = {
       const targetUserId = formData.get('target_user_id') as string;
       if (!targetUserId) return fail(400, { message: 'Usuário alvo inválido.' });
       await privilegedDb.from('access_roles').update({ suspended: true }).eq('user_id', targetUserId);
+      invalidateUserSession(targetUserId);
       if (reportId) {
         await privilegedDb.from('reports').update({
           status: 'RESOLVIDO',
@@ -844,6 +881,7 @@ export const actions: Actions = {
           updated_at: new Date().toISOString()
         }).eq('id', reportId);
       }
+      invalidateAdminTicketsCache();
       return { success: true, action: 'suspend_user' };
     }
 
@@ -855,6 +893,7 @@ export const actions: Actions = {
         assigned_to: locals.user!.id,
         updated_at: new Date().toISOString()
       }).eq('id', reportId);
+      invalidateAdminTicketsCache();
       return { success: true, action: 'dismiss_report' };
     }
 
@@ -866,6 +905,7 @@ export const actions: Actions = {
         assigned_to: locals.user!.id,
         updated_at: new Date().toISOString()
       }).eq('id', reportId);
+      invalidateAdminTicketsCache();
       return { success: true, action: 'resolve_report' };
     }
 
@@ -928,6 +968,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_claim scan:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'claim', ticketId };
     } else {
       // Content report or Moderation report (can be single ID or comma-separated cluster IDs)
@@ -974,6 +1015,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_claim report:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'claim', ticketId };
     }
   },
@@ -1026,6 +1068,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_release scan:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'release', ticketId };
     } else {
       const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
@@ -1076,6 +1119,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_release report:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'release', ticketId };
     }
   },
@@ -1126,6 +1170,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_delete scan:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'delete', ticketId };
     } else {
       const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
@@ -1153,6 +1198,7 @@ export const actions: Actions = {
         console.error('[audit_log] Error in ticket_delete report:', logErr);
       }
 
+      invalidateAdminTicketsCache();
       return { success: true, action: 'delete', ticketId };
     }
   }

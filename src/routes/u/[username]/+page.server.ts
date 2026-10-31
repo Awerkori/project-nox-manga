@@ -1,8 +1,9 @@
 import { error, fail } from '@sveltejs/kit';
 import { NOX_TITLES } from '$lib/levels';
 import { formatScanRoleTitle, formatScanBadgeText, getScanPreposition } from '$lib/scans';
+import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 
-export const load = async ({ locals, params }) => {
+export const load = async ({ locals, params, platform }: any) => {
   const { data: member } = await locals.db
     .from('members')
     .select(`
@@ -142,30 +143,8 @@ export const load = async ({ locals, params }) => {
     canViewReadingHistory
       ? locals.db
           .from('reading')
-          .select(`
-            chapter_id,
-            page,
-            max_page,
-            completed_at,
-            updated_at,
-            chapters!inner(
-              id,
-              number,
-              title,
-              work_id,
-              works!inner(
-                id,
-                slug,
-                title,
-                cover_id,
-                kind,
-                status,
-                content_rating
-              )
-            )
-          `)
+          .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
           .eq('user_id', member.id)
-          .eq('chapters.works.published', true)
           .order('updated_at', { ascending: false })
           .limit(80)
       : Promise.resolve({ data: [] }),
@@ -385,8 +364,13 @@ export const load = async ({ locals, params }) => {
 
   const favorites = (favoritesRes.data || []).map((r: any) => r.works).filter(Boolean);
 
+  const enrichedReadings =
+    Array.isArray(readingRes.data) && readingRes.data.length > 0
+      ? await enrichReadingRowsWithCatalog(readingRes.data, locals.db, platform?.env)
+      : [];
+
   const readingMap = new Map<string, any>();
-  for (const r of (readingRes.data || []) as any[]) {
+  for (const r of enrichedReadings as any[]) {
     const ch = r.chapters;
     if (!ch || !ch.works) continue;
     const wid = ch.work_id || ch.works.id;

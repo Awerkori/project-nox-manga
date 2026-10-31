@@ -11,20 +11,15 @@
     CheckCircle2,
     XCircle,
     AlertTriangle,
-    AlertCircle,
     Eye,
     EyeOff,
     Trash2,
     UserX,
     ExternalLink,
-    Filter,
-    Search,
     ChevronRight,
     ChevronDown,
-    Building2,
     Globe,
     MessageSquare,
-    Send,
     Check,
     X,
     Sparkles,
@@ -44,7 +39,6 @@
   let activeTab = $derived(data.activeTab || 'relatorios');
   let currentStatus = $derived(data.statusFilter || (activeTab === 'scans' ? 'PENDING' : 'NOVO'));
   let currentType = $derived(data.typeFilter || 'ALL');
-  let searchQuery = $state(data.searchQuery || '');
 
   // UI state
   let busy = $state(false);
@@ -191,20 +185,8 @@
     }
   }
 
-  // Selected reports for batch action
-  let selectedReportIds = $state<string[]>([]);
-
   // Expanded cluster tracking
   let expandedClusters = $state<Record<string, boolean>>({});
-
-  function setTab(tabName: string) {
-    const url = new URL(page.url);
-    url.searchParams.set('tab', tabName);
-    url.searchParams.delete('status');
-    url.searchParams.delete('type');
-    url.searchParams.delete('q');
-    goto(url.toString(), { keepFocus: true });
-  }
 
   function setStatusFilter(status: string) {
     const url = new URL(page.url);
@@ -668,10 +650,11 @@
                 <div class="ticket-target-info">
                   {#if cluster.coverId}
                     <img
-                      src="/media/{cluster.coverId}"
+                      src="/media/{cluster.coverId}?size=thumb&v=3"
                       alt="Capa de {cluster.workTitle}"
                       class="ticket-work-cover"
                       loading="lazy"
+                      decoding="async"
                     />
                   {:else}
                     <div class="ticket-work-cover-fallback">
@@ -718,7 +701,7 @@
                 <div class="problem-category-strip">
                   <span class="problem-label">Problema:</span>
                   <div class="reasons-pills-list">
-                    {#each cluster.reasons as reason}
+                    {#each cluster.reasons as reason (reason)}
                       <span class="reason-pill-amber">
                         <AlertTriangle size={12} />
                         {reason}
@@ -779,7 +762,7 @@
                 <div class="cluster-subreports-drawer">
                   <h4 class="subreports-title">Outros reportes agrupados nesta mesma obra/capítulo:</h4>
                   <div class="subreports-list">
-                    {#each cluster.reports.slice(1) as subRep}
+                    {#each cluster.reports.slice(1) as subRep (subRep.id)}
                       <div class="subreport-card">
                         <div class="subreport-header">
                           <div class="subreport-reporter">

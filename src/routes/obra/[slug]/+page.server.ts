@@ -18,14 +18,6 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     visitorId = cookies?.get?.('nox-vid');
     if (visitorId) {
       hadExistingVisitorId = true;
-    } else if (cookies?.set) {
-      visitorId = crypto.randomUUID();
-      cookies.set('nox-vid', visitorId, {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 31536000
-      });
     }
   }
 
@@ -148,7 +140,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
             .eq('work_id', work.id)
             .is('chapter_id', null)
             .order('created_at', { ascending: false })
-            .limit(500),
+            .limit(150),
           locals.db.from('likes').select('user_id').eq('work_id', work.id),
           locals.db.rpc('work_metrics', { p_work: work.id }),
           locals.db
@@ -197,7 +189,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       )
     : Promise.resolve([{ data: null }, { data: [] }]);
 
-  const chaptersPromise = (chaptersList && chaptersList.length > 0)
+  const hasYugabyteWorkBundle = Boolean(yugabyteBundle?.work);
+
+  const chaptersPromise = hasYugabyteWorkBundle
     ? Promise.resolve(chaptersList)
     : fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
         if (list && list.length > 0) return list;
@@ -218,7 +212,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
         return res?.data || [];
       });
 
-  const tagsPromise = (publicTags && publicTags.length > 0)
+  const tagsPromise = hasYugabyteWorkBundle
     ? Promise.resolve(publicTags)
     : fetchWorkTagsFromYugabyte(work.id, platform?.env);
 

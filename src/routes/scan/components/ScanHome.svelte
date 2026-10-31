@@ -7,22 +7,15 @@
     Clock,
     AlertCircle,
     ArrowRight,
-    ExternalLink,
     Pin,
-    Shield,
     Users,
     Layers,
     AlertTriangle,
-    Inbox,
     Calendar,
-    ChevronRight,
-    BookOpen,
-    Check
+    ChevronRight
   } from '@lucide/svelte';
-  import { relativeTime } from '$lib/types';
 
   let {
-    currentScan,
     userProfile,
     userRole = 'MEMBER',
     userPositions = [],
@@ -458,10 +451,11 @@
                 <div class="task-visual-col">
                   {#if task.coverId}
                     <img
-                      src="/media/{task.coverId}"
+                      src="/media/{task.coverId}?size=thumb&v=3"
                       alt={task.workTitle}
                       class="task-cover-thumb"
                       loading="lazy"
+                      decoding="async"
                       onerror={(e) => {
                         const target = e.currentTarget as HTMLElement;
                         target.style.display = 'none';
@@ -613,7 +607,7 @@
           {#if availableStagesData.activeStages.length > 0}
             <!-- Promoted rich stage cards: High visual appeal and instant action -->
             <div class="promoted-stages-grid">
-              {#each availableStagesData.activeStages as stage}
+              {#each availableStagesData.activeStages as stage (stage.slug)}
                 <div
                   class="promoted-stage-card"
                   onclick={() => onNavigateTab('pipeline', stage.slug)}
@@ -733,7 +727,7 @@
           {:else if availableStagesData.activeStages.length > 0}
             <!-- ONLY stages that actually have available chapters (> 0) -->
             <div class="available-stages-list">
-              {#each availableStagesData.activeStages as stage}
+              {#each availableStagesData.activeStages as stage (stage.slug)}
                 <div
                   class="available-stage-pill"
                   onclick={() => onNavigateTab('pipeline', stage.slug)}

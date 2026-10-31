@@ -23,7 +23,6 @@
   import { registerDynamicFrame } from '$lib/cosmetics-catalog';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import { page } from '$app/state';
-  import { invalidateAll } from '$app/navigation';
 
   let { data, children } = $props();
 
@@ -157,7 +156,6 @@
         profileOverride = { ...(profileOverride || data.profile), xp: newXp };
         data.profile = { ...data.profile, xp: newXp };
       }
-      void invalidateAll();
     };
     window.addEventListener('nox-xp-awarded', handleXpAwarded);
 

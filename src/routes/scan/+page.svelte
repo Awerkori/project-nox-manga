@@ -66,7 +66,7 @@
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { invalidate, goto } from '$app/navigation';
+  import { invalidate } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
@@ -113,21 +113,23 @@
     } else if (tab === 'tutoriais') {
       if (!data.tutorials || data.tutorials.length === 0) ensureModuleLoaded('academy');
     } else if (tab === 'activity') {
-      if (!data.scanAuditLogs || data.scanAuditLogs.length === 0) ensureModuleLoaded('activity');
+      if (!data.activity || data.activity.length === 0) ensureModuleLoaded('activity');
     } else if (tab === 'staff_notes') {
       if (!data.staffNotes || data.staffNotes.length === 0) ensureModuleLoaded('staff_notes');
     } else if (tab === 'settings') {
       if (!data.integrations || data.integrations.length === 0) ensureModuleLoaded('settings');
     } else if (tab === 'membros') {
-      if (!data.invites) ensureModuleLoaded('team_invites');
+      if (!data.invites || data.invites.length === 0) ensureModuleLoaded('team_invites');
     } else if (tab === 'obras' || tab === 'capitulos') {
-      if (!data.projectRequests) ensureModuleLoaded('obras_metadata');
+      if (!data.projectRequests || data.projectRequests.length === 0) ensureModuleLoaded('obras_metadata');
     } else if (tab === 'mural') {
       if (!data.muralPosts || data.muralPosts.length === 0) ensureModuleLoaded('mural');
     } else if (tab === 'minha_fila') {
-      if (!data.workOverrides) ensureModuleLoaded('queue_metadata');
+      if (!data.workOverrides || data.workOverrides.length === 0) ensureModuleLoaded('queue_metadata');
     }
   }
+
+  let visibleWorksLimit = $state(16);
 
   let positions = $derived(dynamicModuleData.recruitment?.positions || data.positions || []);
   let openings = $derived(dynamicModuleData.recruitment?.openings || data.openings || []);
@@ -1036,11 +1038,11 @@
 
               {#if works.length > 0}
                 <div class="works-list">
-                  {#each works as work (work.id)}
+                  {#each works.slice(0, visibleWorksLimit) as work (work.id)}
                     <div class="dash-work-row">
                       <a href="/obra/{work.slug}" class="dash-work-item">
                         {#if work.cover_id}
-                          <img src="/media/{work.cover_id}" alt={work.title} class="work-mini-cover" />
+                          <img src="/media/{work.cover_id}?size=thumb&v=3" alt={work.title} class="work-mini-cover" loading="lazy" decoding="async" />
                         {:else}
                           <div class="work-mini-placeholder">NOX</div>
                         {/if}
@@ -1084,6 +1086,17 @@
                     </div>
                   {/each}
                 </div>
+                {#if works.length > visibleWorksLimit}
+                  <div style="margin-top: 0.75rem; display: flex; justify-content: center;">
+                    <button
+                      type="button"
+                      class="btn-sm-action"
+                      onclick={() => (visibleWorksLimit = works.length)}
+                    >
+                      <span>Mostrar todas as {works.length} obras</span>
+                    </button>
+                  </div>
+                {/if}
               {:else}
                 <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
               {/if}
@@ -1095,7 +1108,7 @@
                     {#each projectRequests as req (req.id)}
                       <div class="proj-req-item status-{req.status.toLowerCase()}">
                         {#if req.works?.cover_id}
-                          <img src="/media/{req.works.cover_id}" alt="" class="proj-cover-mini" />
+                          <img src="/media/{req.works.cover_id}?size=thumb&v=3" alt="" class="proj-cover-mini" loading="lazy" decoding="async" />
                         {:else}
                           <div class="proj-cover-fallback">NOX</div>
                         {/if}

@@ -7,6 +7,7 @@ import { createNotification, processPendingEmailOutbox } from '$lib/server/notif
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
+import { invalidateAdminCatalogCaches, invalidateAdminStaffCache } from '$lib/server/admin-cache';
 import { fetchWorkFromYugabyte } from '$lib/server/yugabyte';
 import { readerChapter } from '$lib/server/reader-editorial';
 import type { Json } from '$lib/database.types';
@@ -25,6 +26,14 @@ export const POST = async ({ request, locals, platform }: any) => {
       .parse(JSON.parse(text));
   } catch {
     error(400, 'Solicitação inválida');
+  }
+
+  // Strict server-side RBAC guard using verified locals.role before touching any RPC
+  if (body.scope === 'owner' && locals.role !== 'ADMIN') {
+    error(403, 'Esta ação é exclusiva dos administradores.');
+  }
+  if (body.scope === 'editor' && !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+    error(403, 'Esta ação é exclusiva da equipe editorial.');
   }
 
   // Ensure work & chapter exist in Supabase for relational integrity and foreign keys
@@ -58,8 +67,8 @@ export const POST = async ({ request, locals, platform }: any) => {
                 const { data: wExists } = await adminDb.from('works').select('id').eq('id', resolvedWorkId).maybeSingle();
                 if (!wExists) {
                   const cw = (ybChap.works as any) || {};
-                  let cleanSlug = cw.slug || body.data?.work_slug || `obra-${resolvedWorkId.slice(0, 8)}`;
-                  let cleanTitle = cw.title || body.data?.work_title || 'Obra';
+                  const cleanSlug = cw.slug || body.data?.work_slug || `obra-${resolvedWorkId.slice(0, 8)}`;
+                  const cleanTitle = cw.title || body.data?.work_title || 'Obra';
                   let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
                   if (!sanitizedSlug) sanitizedSlug = `obra-${resolvedWorkId.slice(0, 8)}`;
 
@@ -330,17 +339,12 @@ export const POST = async ({ request, locals, platform }: any) => {
       error(404, 'Comentário indisponível');
     }
 
-    // Role check: Author or Staff/Admin
-    let isAuthorized = targetComment.user_id === locals.user.id;
-    if (!isAuthorized) {
-      const { data: roleRow } = await adminDb
-        .from('access_roles')
-        .select('role')
-        .eq('user_id', locals.user.id)
-        .maybeSingle();
-      const r = (roleRow?.role || '').toUpperCase();
-      isAuthorized = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(r) || locals.user.id === 'f730c4f8-132b-42eb-be14-16279f0ce6e6';
-    }
+    // Role check: Author or verified Staff/Admin in locals.role (zero extra DB query)
+    const r = (locals.role || '').toUpperCase();
+    const isAuthorized =
+      targetComment.user_id === locals.user.id ||
+      ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(r) ||
+      locals.user.id === 'f730c4f8-132b-42eb-be14-16279f0ce6e6';
 
     if (!isAuthorized) {
       error(403, 'Você não tem permissão para moderar esta mídia');
@@ -538,7 +542,9 @@ export const POST = async ({ request, locals, platform }: any) => {
                 source: 'web',
                 created_at: new Date().toISOString()
               });
-            } catch {}
+            } catch {
+              // Non-fatal xp_awards audit log failure
+            }
             invalidateUserSession(locals.user.id);
             invalidateRankingCache();
           }
@@ -637,15 +643,22 @@ export const POST = async ({ request, locals, platform }: any) => {
     const hash = commentId ? `#comment-${commentId}` : '';
     const deepLink = chapterId ? `/ler/${chapterId}${hash}` : `/obra/${workSlug}${hash}`;
 
-    // Buscar nome do autor
-    let authorName = 'Alguém';
-    const { data: authorMem } = await locals.db
-      .from('members')
-      .select('display_name, username')
-      .eq('id', locals.user.id)
-      .maybeSingle();
-    if (authorMem) {
-      authorName = authorMem.display_name || authorMem.username || 'Alguém';
+    // Buscar nome do autor (reaproveita sessionCache quando disponível)
+    let authorName =
+      locals.sessionCache?.profile?.display_name ||
+      locals.sessionCache?.profile?.username ||
+      '';
+    if (!authorName) {
+      const { data: authorMem } = await locals.db
+        .from('members')
+        .select('display_name, username')
+        .eq('id', locals.user.id)
+        .maybeSingle();
+      if (authorMem) {
+        authorName = authorMem.display_name || authorMem.username || 'Alguém';
+      } else {
+        authorName = 'Alguém';
+      }
     }
 
     let parentUserId: string | null = null;
@@ -716,8 +729,24 @@ export const POST = async ({ request, locals, platform }: any) => {
     }
   }
 
+  if (body.scope === 'owner' || body.scope === 'editor') {
+    invalidateAdminCatalogCaches();
+  }
+
+  if (body.scope === 'owner') {
+    invalidateAdminStaffCache();
+    const mutatedUserId = body.data?.id
+      ? String(body.data.id)
+      : body.data?.user_id
+        ? String(body.data.user_id)
+        : null;
+    if (mutatedUserId) {
+      invalidateUserSession(mutatedUserId);
+    }
+  }
+
   if (locals.user?.id) {
-    if ((data as any)?.xp_award?.awarded || ['read_page', 'claim_xp', 'reading', 'complete_reading', 'library', 'profile'].includes(body.action)) {
+    if ((data as any)?.xp_award?.awarded || ['read_page', 'claim_xp', 'reading', 'complete_reading', 'library', 'profile', 'equip_title', 'equip_badge', 'buy_cosmetic', 'equip_cosmetic'].includes(body.action)) {
       invalidateUserSession(locals.user.id);
       invalidateRankingCache();
     }

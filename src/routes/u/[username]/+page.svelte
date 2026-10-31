@@ -689,11 +689,12 @@
                       <a href="/obra/{r.workSlug}" class="reading-cover-wrap">
                         {#if r.coverId}
                           <img
-                            src="/media/{r.coverId}"
+                            src="/media/{r.coverId}?size=thumb&v=3"
                             alt={r.workTitle}
                             class="reading-cover-img"
                             class:blurred-cover={r.contentRating === 'ADULT_18' && (page.data?.blurNsfw ?? true)}
                             loading="lazy"
+                            decoding="async"
                           />
                         {:else}
                           <div class="reading-cover-placeholder">NOX</div>

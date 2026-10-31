@@ -1,7 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import { check, WORK_FIELDS } from '$lib/server/db';
 import { MEMBER_PAGE_SIZE, pageNumber, pageLink } from '$lib/pagination';
-export const load = async ({ locals, params, url }) => {
+import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
+export const load = async ({ locals, params, url, platform }: any) => {
   if (!locals.user) redirect(303, '/entrar');
   const area = params.area;
   const rawTab = url.searchParams.get('status') || '';
@@ -33,10 +34,8 @@ export const load = async ({ locals, params, url }) => {
     params.area === 'historico'
       ? locals.db
           .from('reading')
-          .select('*,chapters!inner(id,number,works!inner(slug,title,cover_id))', { count: 'exact' })
+          .select('*', { count: 'exact' })
           .eq('user_id', locals.user.id)
-          .not('chapters.published_at', 'is', null)
-          .eq('chapters.works.published', true)
           .order('updated_at', { ascending: false })
           .order('chapter_id')
           .range(start, start + MEMBER_PAGE_SIZE - 1)
@@ -74,10 +73,14 @@ export const load = async ({ locals, params, url }) => {
         ])
       : [empty, empty, empty];
   [completed, libraryTotal, completedWorks].forEach(check);
+  const enrichedHistory =
+    params.area === 'historico' && Array.isArray(history.data) && history.data.length > 0
+      ? await enrichReadingRowsWithCatalog(history.data, locals.db, platform?.env)
+      : history.data || [];
   return {
     area: params.area,
     library: library.data || [],
-    history: history.data || [],
+    history: enrichedHistory,
     notifications: notifications.data || [],
     tab,
     filter,

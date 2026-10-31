@@ -1,21 +1,16 @@
 <script lang="ts">
+  import { SvelteMap } from 'svelte/reactivity';
   import {
     Layers,
     Search,
     Filter,
     Clock,
-    User,
     CheckCircle2,
-    AlertCircle,
     ArrowRight,
-    FileText,
     BookOpen,
-    Eye,
-    MessageSquare,
     CheckSquare,
     Lock,
     RotateCcw,
-    Sparkles,
     AlertTriangle,
     ChevronRight
   } from '@lucide/svelte';
@@ -27,9 +22,7 @@
     works = [],
     tasks = [],
     qcIssues = [],
-    userRole = 'MEMBER',
-    isOwnerOrAdmin = false,
-    onOpenChapter = (ch: any) => {}
+    onOpenChapter = (_ch: any) => {}
   } = $props();
 
   let selectedWorkId = $state<string>('ALL');
@@ -43,14 +36,14 @@
 
   // Map of chapter_id -> array of chapter_stages ordered
   let chapterStagesMap = $derived(() => {
-    const map = new Map<string, any[]>();
+    const map = new SvelteMap<string, any[]>();
     for (const cs of chapterStages) {
       const chId = cs.production_chapter_id;
       if (!chId) continue;
       if (!map.has(chId)) map.set(chId, []);
       map.get(chId)!.push(cs);
     }
-    for (const [k, v] of map.entries()) {
+    for (const v of map.values()) {
       v.sort((a: any, b: any) => (a.stage?.display_order || 0) - (b.stage?.display_order || 0));
     }
     return map;
@@ -202,7 +195,7 @@
         <BookOpen size={14} class="select-icon" />
         <select bind:value={selectedWorkId} class="filter-select">
           <option value="ALL">Todas as Obras ({works.length})</option>
-          {#each works as w}
+          {#each works as w (w.id)}
             <option value={w.id}>{w.title}</option>
           {/each}
         </select>
@@ -239,7 +232,7 @@
               <div class="work-badge-cluster">
                 <div class="work-thumb-mini">
                   {#if work.cover_id}
-                    <img src="/media/{work.cover_id}" alt={work.title} class="work-thumb-img" />
+                    <img src="/media/{work.cover_id}?size=thumb&v=3" alt={work.title} class="work-thumb-img" loading="lazy" decoding="async" />
                   {:else}
                     <BookOpen size={14} class="text-purple-300" />
                   {/if}
@@ -278,7 +271,7 @@
             <!-- Compact 7-Stage Stepper Track -->
             <div class="stages-stepper-viewport">
               <div class="stages-stepper-track">
-                {#each orderedStages as st, idx}
+                {#each orderedStages as st, idx (st.id || st.slug || idx)}
                   {@const state = getStageState(chId, st.slug)}
                   {@const isDone = state.status === 'DONE'}
                   {@const isProgress = state.status === 'IN_PROGRESS'}

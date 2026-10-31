@@ -1,24 +1,11 @@
-import { loadSnapshot } from "$lib/server/importer-snapshot";
+import { invalidateImporterSnapshotCache, loadSnapshot } from "$lib/server/importer-snapshot";
 import { fail, error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-
-const snapshots = new Map<string, { at: number; data: any }>();
-const snapshotFlights = new Map<string, Promise<any>>();
 export const load: PageServerLoad = async (event) => {
   const key = event.locals.user?.id;
   if (!key || !['ADMIN','STAFF_SITE','EDITOR'].includes(event.locals.role || '')) error(403);
-  const cached = snapshots.get(key);
-  if (cached && Date.now() - cached.at < 4000) return cached.data;
-  const existing = snapshotFlights.get(key);
-  if (existing) return existing;
-  const flight = loadSnapshot(event).then(data => {
-    if (snapshots.size >= 50) snapshots.delete(snapshots.keys().next().value!);
-    snapshots.set(key, { at: Date.now(), data });
-    return data;
-  }).finally(() => snapshotFlights.delete(key));
-  snapshotFlights.set(key, flight);
-  return flight;
+  return loadSnapshot(event);
 };
 
 function slugify(value: string): string {
@@ -114,6 +101,7 @@ export const actions: Actions = {
       };
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: res?.message || 'Obra colocada em Prioridade Absoluta com sucesso!' };
   },
 
@@ -138,6 +126,7 @@ export const actions: Actions = {
       return fail(400, { error: res?.message || 'Não foi possível cancelar a prioridade.' });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: res?.message || 'Prioridade cancelada com sucesso.' };
   },
 
@@ -177,6 +166,7 @@ export const actions: Actions = {
       .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
       .eq('id', requestId);
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Prioridade reativada! Capítulos reenfileirados com prioridade 100.' };
   },
 
@@ -188,7 +178,7 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de obra inválido.' });
     }
 
-    const { data, error } = await locals.db.rpc('importer_request_reconciliation', {
+    const { error } = await locals.db.rpc('importer_request_reconciliation', {
       p_work_id: workId
     });
 
@@ -196,6 +186,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Reconciliação multi-fonte iniciada com sucesso!' };
   },
 
@@ -219,6 +210,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Job reenfileirado para execução imediata!' };
   },
 
@@ -248,6 +240,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Todos os jobs do grupo reenfileirados para retry!' };
   },
 
@@ -269,6 +262,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Job pausado pela Staff.' };
   },
 
@@ -288,6 +282,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: 'Job retomado e reenfileirado para execução!' };
   },
 
@@ -309,6 +304,7 @@ export const actions: Actions = {
       return fail(400, { error: error.message });
     }
 
+    invalidateImporterSnapshotCache();
     return { success: true, message: `Job adiado por ${hours} horas.` };
   },
 
@@ -331,6 +327,7 @@ export const actions: Actions = {
     }
 
     const res = data as any;
+    invalidateImporterSnapshotCache();
     return { success: true, message: res?.message || 'Job cancelado pela Staff.' };
   },
 
@@ -353,6 +350,7 @@ export const actions: Actions = {
     }
 
     const res = data as any;
+    invalidateImporterSnapshotCache();
     return { success: true, message: res?.message || 'Obra congelada com sucesso pela Staff.' };
   },
 
@@ -373,6 +371,7 @@ export const actions: Actions = {
     }
 
     const res = data as any;
+    invalidateImporterSnapshotCache();
     return { success: true, message: res?.message || 'Obra descongelada com sucesso. Reconciliação reativada.' };
   }
 };

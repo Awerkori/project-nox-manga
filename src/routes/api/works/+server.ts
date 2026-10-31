@@ -20,9 +20,16 @@ export const GET = async ({ url, platform }: any) => {
     platform?.env
   );
 
-  return json({
-    works: result.works,
-    total: result.total,
-    hasMore: offset + result.works.length < result.total
-  });
+  return json(
+    {
+      works: result.works,
+      total: result.total,
+      hasMore: offset + result.works.length < result.total
+    },
+    {
+      headers: {
+        'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
+      }
+    }
+  );
 };

@@ -7,6 +7,7 @@ import {
   fetchRecentReleasesFromYugabyte
 } from '$lib/server/yugabyte';
 import { chapterDisplayNumber, compareChapterIdentity } from '$lib/chapter-identity';
+import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 
 type HomeCachePayload = {
   timestamp: number;
@@ -52,21 +53,22 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     const readingRes = await safeDbQuery(
       locals.db
         .from('reading')
-        .select(
-          'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,display_number,canonical_chapter_key,chapter_order_key,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
-        )
-        .not('chapters.published_at', 'is', null)
-        .eq('chapters.works.published', true)
+        .select('chapter_id,work_id,page,max_page,completed_at,updated_at')
+        .eq('user_id', locals.user.id)
         .order('updated_at', { ascending: false })
         .limit(20),
       3000,
       'home_reading'
     );
+    const enrichedReadingRows =
+      readingRes.data && readingRes.data.length > 0
+        ? await enrichReadingRowsWithCatalog(readingRes.data as any[], locals.db, platform?.env)
+        : [];
 
     let continueReading: any[] = [];
-    if (readingRes.data && readingRes.data.length > 0) {
-      const grouped = new Map<string, typeof readingRes.data>();
-      for (const row of readingRes.data) {
+    if (enrichedReadingRows.length > 0) {
+      const grouped = new Map<string, typeof enrichedReadingRows>();
+      for (const row of enrichedReadingRows) {
         const wid = (row as any).chapters?.work_id;
         if (!wid) continue;
         if (!grouped.has(wid)) grouped.set(wid, []);
@@ -118,11 +120,8 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
       ? safeDbQuery(
           locals.db
             .from('reading')
-            .select(
-              'chapter_id,page,max_page,completed_at,updated_at,chapters!inner(id,number,display_number,canonical_chapter_key,chapter_order_key,work_id,published_at,works!inner(id,slug,title,cover_id,published,content_rating))'
-            )
-            .not('chapters.published_at', 'is', null)
-            .eq('chapters.works.published', true)
+            .select('chapter_id,work_id,page,max_page,completed_at,updated_at')
+            .eq('user_id', locals.user.id)
             .order('updated_at', { ascending: false })
             .limit(20),
           3000,
@@ -166,16 +165,21 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     updatedAt: string;
   }> = [];
 
-  if (readingRes.data && readingRes.data.length > 0) {
-    const grouped = new Map<string, typeof readingRes.data>();
-    for (const row of readingRes.data) {
+  const enrichedColdReadingRows =
+    readingRes.data && readingRes.data.length > 0
+      ? await enrichReadingRowsWithCatalog(readingRes.data as any[], locals.db, platform?.env)
+      : [];
+
+  if (enrichedColdReadingRows.length > 0) {
+    const grouped = new Map<string, typeof enrichedColdReadingRows>();
+    for (const row of enrichedColdReadingRows) {
       const wid = (row.chapters as any).work_id as string;
       const list = grouped.get(wid) || [];
       list.push(row);
       grouped.set(wid, list);
     }
 
-    const needsNextChapter: Array<{ wid: string; rows: typeof readingRes.data; currentCh: any }> = [];
+    const needsNextChapter: Array<{ wid: string; rows: typeof enrichedColdReadingRows; currentCh: any }> = [];
 
     for (const [wid, rows] of grouped.entries()) {
       const work = (rows[0].chapters as any).works;

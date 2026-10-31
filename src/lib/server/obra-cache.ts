@@ -13,7 +13,7 @@ export type ObraAuxCacheEntry = {
 };
 
 const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
-const OBRA_AUX_CACHE_TTL_MS = 2_000; // 2 seconds TTL to prevent stale reads on invalidation
+const OBRA_AUX_CACHE_TTL_MS = 60_000; // 60s TTL; explicitly invalidated on like/comment/rating mutations
 
 export function getObraAuxCache(workId: string): ObraAuxCacheEntry | null {
   const entry = obraAuxCache.get(workId);
