@@ -18,51 +18,92 @@ const SETTINGS_CACHE_TTL_MS = 120_000;
 type CustomFrame = { id: string; asset_url: string; style_data: Record<string, any> };
 let cachedCustomFrames: { timestamp: number; frames: CustomFrame[] } = { timestamp: 0, frames: [] };
 const CUSTOM_FRAMES_TTL_MS = 120_000;
+let customFramesFlight: Promise<void> | null = null;
+let settingsFlight: Promise<void> | null = null;
 
 export const load = async ({ locals, url, cookies }) => {
-  if (Date.now() - cachedCustomFrames.timestamp > CUSTOM_FRAMES_TTL_MS) {
-    try {
-      const res = await withTimeout(
-        locals.db
-          .from('shop_items')
-          .select('id, asset_url, style_data')
-          .eq('kind', 'AVATAR_FRAME')
-          .neq('asset_url', ''),
-        1200,
-        { data: null } as any,
-        'custom_frames'
+  const now = Date.now();
+  const needFrames = now - cachedCustomFrames.timestamp > CUSTOM_FRAMES_TTL_MS;
+  const needSettings = !cachedSettings || now - cachedSettings.timestamp > SETTINGS_CACHE_TTL_MS;
+  const needUserFallback = Boolean(locals.user && !locals.sessionCache);
+
+  const framesTask = !needFrames
+    ? Promise.resolve()
+    : (customFramesFlight ??= (async () => {
+        try {
+          const res = await withTimeout(
+            locals.db
+              .from('shop_items')
+              .select('id, asset_url, style_data')
+              .eq('kind', 'AVATAR_FRAME')
+              .neq('asset_url', ''),
+            1200,
+            { data: null } as any,
+            'custom_frames'
+          );
+          if (Array.isArray(res?.data)) {
+            cachedCustomFrames = {
+              timestamp: Date.now(),
+              frames: res.data
+                .filter((f: any) => f.asset_url)
+                .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
+            };
+          }
+        } catch {
+          // Keep stale frames; procedural frames don't depend on this.
+        } finally {
+          customFramesFlight = null;
+        }
+      })());
+
+  const settingsTask = !needSettings
+    ? Promise.resolve()
+    : (settingsFlight ??= (async () => {
+        try {
+          databaseConfig();
+          const settingsRes = await withTimeout(
+            locals.db.rpc('public_settings'),
+            1200,
+            { data: null } as any,
+            'public_settings'
+          );
+          if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
+            const nextConfig = Object.fromEntries(
+              settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
+            );
+            cachedSettings = { timestamp: Date.now(), config: nextConfig };
+          }
+        } catch {
+          // Keep stale config if available, otherwise default
+        } finally {
+          settingsFlight = null;
+        }
+      })());
+
+  const userFallbackTask = !needUserFallback
+    ? Promise.resolve(null)
+    : withTimeout(
+        Promise.all([
+          locals.db.from('members').select('*').eq('id', locals.user!.id).maybeSingle(),
+          locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user!.id).is('read_at', null),
+          locals.db
+            .from('scan_members')
+            .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
+            .eq('user_id', locals.user!.id)
+        ]),
+        1500,
+        [{ data: null }, { count: 0 }, { data: [] }] as any,
+        'layout_user_batch'
       );
-      if (Array.isArray(res?.data)) {
-        cachedCustomFrames = {
-          timestamp: Date.now(),
-          frames: res.data
-            .filter((f: any) => f.asset_url)
-            .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
-        };
-      }
-    } catch {
-      // Keep stale frames; procedural frames don't depend on this.
-    }
-  }
+
+  const [, , userBatch] = await Promise.all([framesTask, settingsTask, userFallbackTask]);
 
   let profile = locals.sessionCache?.profile || null;
   let unread = locals.sessionCache?.unread ?? 0;
   let userScans = locals.sessionCache?.userScans || [];
 
-  if (locals.user && !locals.sessionCache) {
-    const [profileRes, unreadRes, userScansRes] = await withTimeout(
-      Promise.all([
-        locals.db.from('members').select('*').eq('id', locals.user.id).maybeSingle(),
-        locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user.id).is('read_at', null),
-        locals.db
-          .from('scan_members')
-          .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-          .eq('user_id', locals.user.id)
-      ]),
-      1500,
-      [{ data: null }, { count: 0 }, { data: [] }] as any,
-      'layout_user_batch'
-    );
+  if (locals.user && !locals.sessionCache && userBatch) {
+    const [profileRes, unreadRes, userScansRes] = userBatch;
     profile =
       profileRes?.data ||
       (locals.authState !== 'ANONYMOUS'
@@ -85,29 +126,7 @@ export const load = async ({ locals, url, cookies }) => {
       })) || [];
   }
 
-  let config: Record<string, string> = cachedSettings?.config || {};
-  if (!cachedSettings || Date.now() - cachedSettings.timestamp > SETTINGS_CACHE_TTL_MS) {
-    try {
-      const { url: databaseUrl, key } = databaseConfig();
-       
-         
-       
-      const settingsRes = await withTimeout(
-        locals.db.rpc('public_settings'),
-        1200,
-        { data: null } as any,
-        'public_settings'
-      );
-      if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
-        config = Object.fromEntries(
-          settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
-        );
-        cachedSettings = { timestamp: Date.now(), config };
-      }
-    } catch {
-      // Keep stale config if available, otherwise empty
-    }
-  }
+  const config: Record<string, string> = cachedSettings?.config || {};
 
   const rawAgeCookie = cookies.get('nox-age-status');
   const ageStatus: 'UNKNOWN' | 'MINOR' | 'ADULT' =

@@ -365,7 +365,7 @@
               <a href="/admin/obras/{work.id}" class="mini-work-card">
                 <div class="mini-work-thumb">
                   {#if work.cover_id}
-                    <img src="/media/{work.cover_id}" alt="" width="36" height="50" class="mini-work-img" />
+                    <img src="/media/{work.cover_id}?size=thumb&v=3" alt="" width="36" height="50" loading="lazy" decoding="async" class="mini-work-img" />
                   {:else}
                     <div class="mini-work-placeholder">NOX</div>
                   {/if}

@@ -243,7 +243,7 @@
     <div class="hero-left">
       <div class="hero-thumb">
         {#if workData.cover_id}
-          <img src="/media/{workData.cover_id}" alt={workData.title} class="hero-thumb-img" />
+          <img src="/media/{workData.cover_id}?size=thumb&v=3" alt={workData.title} loading="lazy" decoding="async" class="hero-thumb-img" />
         {:else}
           <BookOpen size={28} class="text-purple-400" />
         {/if}

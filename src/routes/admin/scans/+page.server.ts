@@ -4,6 +4,14 @@ import { executeYugabyteSql, withYugabyteTransaction } from '$lib/server/yugabyt
 import { parsePartnerRequestMeta } from '$lib/scans';
 import { createNotification } from '$lib/server/notifications';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
+import {
+  adminScansCache,
+  adminScansFlights,
+  invalidateAdminScansCache,
+  invalidateAdminTicketsCache,
+  withSingleFlightCache
+} from '$lib/server/admin-cache';
+import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals, platform }) => {
@@ -12,45 +20,52 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
     throw error(403, 'Acesso restrito exclusivamente a Administradores Globais do Project Nox.');
   }
 
+  return withSingleFlightCache(
+    adminScansCache,
+    adminScansFlights,
+    'admin:scans:all',
+    20_000,
+    async () => {
   const db = locals.db || privileged();
 
   // The Scan entity and its operational impact counts must come from the
   // same authoritative YSQL plane used by hardDelete.  Keeping creation on
   // the old RPC while deletion reads YSQL creates a false "not found" state.
-  const scansYsql = await executeYugabyteSql<any>(
-    `SELECT scan.*,
-       (SELECT count(*)::int FROM public.work_scans ws WHERE ws.scan_id = scan.id) AS works_count,
-       (SELECT count(*)::int FROM public.chapter_scans cs WHERE cs.scan_id = scan.id) AS chapters_count,
-       (SELECT count(*)::int FROM public.scan_members sm WHERE sm.scan_id = scan.id) AS members_count,
-       (SELECT count(*)::int FROM public.scan_recruitment_openings so WHERE so.scan_id = scan.id AND so.status = 'OPEN') AS openings_count,
-       (SELECT count(*)::int FROM public.scan_production_chapters spc WHERE spc.scan_id = scan.id) AS pipeline_count,
-       (SELECT count(*)::int FROM public.scan_applications sa WHERE sa.scan_id = scan.id) AS applications_count,
-       (SELECT jsonb_build_object('id', member.id, 'username', member.username,
-                                  'display_name', member.display_name, 'avatar_id', member.avatar_id,
-                                  'avatar_crop', member.avatar_crop)
-          FROM public.scan_members owner_members
-          JOIN public.members member ON member.id = owner_members.user_id
-         WHERE owner_members.scan_id = scan.id AND owner_members.role = 'OWNER'
-         ORDER BY owner_members.created_at ASC LIMIT 1) AS owner
-      FROM public.scans scan
-      ORDER BY scan.is_official DESC, scan.name ASC`,
-    [],
-    platform?.env
-  );
-
   const [
+    scansYsql,
     partnerReqsRes,
     projectReqsRes,
     auditLogsRes,
     usersRes
   ] = await Promise.all([
+    executeYugabyteSql<any>(
+      `SELECT scan.*,
+         (SELECT count(*)::int FROM public.work_scans ws WHERE ws.scan_id = scan.id) AS works_count,
+         (SELECT count(*)::int FROM public.chapter_scans cs WHERE cs.scan_id = scan.id) AS chapters_count,
+         (SELECT count(*)::int FROM public.scan_members sm WHERE sm.scan_id = scan.id) AS members_count,
+         (SELECT count(*)::int FROM public.scan_recruitment_openings so WHERE so.scan_id = scan.id AND so.status = 'OPEN') AS openings_count,
+         (SELECT count(*)::int FROM public.scan_production_chapters spc WHERE spc.scan_id = scan.id) AS pipeline_count,
+         (SELECT count(*)::int FROM public.scan_applications sa WHERE sa.scan_id = scan.id) AS applications_count,
+         (SELECT jsonb_build_object('id', member.id, 'username', member.username,
+                                    'display_name', member.display_name, 'avatar_id', member.avatar_id,
+                                    'avatar_crop', member.avatar_crop)
+            FROM public.scan_members owner_members
+            JOIN public.members member ON member.id = owner_members.user_id
+           WHERE owner_members.scan_id = scan.id AND owner_members.role = 'OWNER'
+           ORDER BY owner_members.created_at ASC LIMIT 1) AS owner
+        FROM public.scans scan
+        ORDER BY scan.is_official DESC, scan.name ASC`,
+      [],
+      platform?.env
+    ),
     db
       .from('scan_partner_requests')
       .select(`
         *,
         members!user_id(id, username, display_name, avatar_id, avatar_crop)
       `)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(100),
     db
       .from('scan_project_requests')
       .select(`
@@ -59,7 +74,8 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
         works!inner(id, title, slug, cover_id),
         members!user_id(id, username, display_name)
       `)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(100),
     db
       .from('scan_global_audit_log')
       .select(`
@@ -96,6 +112,8 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
     auditLogs: auditLogsRes.data || [],
     users: usersRes.data || []
   };
+    }
+  );
 };
 
 export const actions: Actions = {
@@ -157,6 +175,14 @@ export const actions: Actions = {
 
         return scan.rows[0];
       });
+      invalidateAdminScansCache();
+      invalidateScansDirectoryCache();
+      invalidateAdminScansCache();
+      invalidateAdminTicketsCache();
+      if (partnerReq.user_id) {
+        invalidateUserSession(partnerReq.user_id);
+      }
+      invalidateUserSession(locals.user.id);
       return { success: true, scanCreated: created };
     } catch (err: any) {
       const message = String(err?.message || 'Falha ao criar a Scan.');
@@ -187,6 +213,8 @@ export const actions: Actions = {
     });
 
     if (rpcErr) return fail(400, { message: rpcErr.message });
+    invalidateAdminScansCache();
+    invalidateScansDirectoryCache();
     return { success: true, statusChanged: status };
   },
 
@@ -209,6 +237,8 @@ export const actions: Actions = {
     });
 
     if (rpcErr) return fail(400, { message: rpcErr.message });
+    invalidateAdminScansCache();
+    invalidateUserSession(newOwnerId);
     return { success: true, ownerRecovered: true };
   },
 
@@ -293,6 +323,13 @@ export const actions: Actions = {
         await client.query('DELETE FROM public.scans WHERE id = $1', [scanId]);
         return { deleted_scan_name: scanName, public_content_preserved: true };
       });
+      invalidateAdminScansCache();
+      invalidateScansDirectoryCache();
+      invalidateAdminScansCache();
+      invalidateAdminTicketsCache();
+      if (partnerReq.user_id) {
+        invalidateUserSession(partnerReq.user_id);
+      }
       return { success: true, hardDeleted: true, result };
     } catch (err: any) {
       const message = String(err?.message || 'Falha ao excluir a Scan.').slice(0, 240);
@@ -396,6 +433,11 @@ export const actions: Actions = {
       }
 
       invalidateScansDirectoryCache();
+      invalidateAdminScansCache();
+      invalidateAdminTicketsCache();
+      if (partnerReq.user_id) {
+        invalidateUserSession(partnerReq.user_id);
+      }
 
       // 4. Dispatch congratulatory in-app notification
       try {
@@ -425,6 +467,8 @@ export const actions: Actions = {
       }
     }
 
+    invalidateAdminScansCache();
+    invalidateAdminTicketsCache();
     return { success: true, reviewedPartner: data };
   },
 
@@ -447,6 +491,7 @@ export const actions: Actions = {
     });
 
     if (rpcErr) return fail(400, { message: rpcErr.message });
+    invalidateAdminScansCache();
     return { success: true, reviewedProject: data };
   }
 };

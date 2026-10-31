@@ -260,7 +260,13 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     case 'obras_metadata': {
       const [projRes, catRes] = await Promise.all([
         executeYugabyteSql(
-          `SELECT request.*, to_jsonb(work) AS works
+          `SELECT request.*,
+                  jsonb_build_object(
+                    'id', work.id,
+                    'title', work.title,
+                    'slug', work.slug,
+                    'cover_id', work.cover_id
+                  ) AS works
            FROM public.scan_project_requests request
            JOIN public.works work ON work.id = request.work_id
            WHERE request.scan_id = $1 ORDER BY request.created_at DESC`,
@@ -348,5 +354,5 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     default:
       return json({ error: 'Unknown module' }, { status: 400 });
   }
-  }, 2);
+  }, 4);
 };

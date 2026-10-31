@@ -23,9 +23,7 @@
     Check,
     Ban,
     Eye,
-    Image,
-    ShieldCheck,
-    Star
+    ShieldCheck
   } from '@lucide/svelte';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { enhance } from '$app/forms';
@@ -757,7 +755,7 @@
           <div class="request-body">
             <div class="obra-target-card">
               {#if req.works?.cover_id}
-                <img src="/media/{req.works.cover_id}" alt="" class="obra-mini-cover" />
+                <img src="/media/{req.works.cover_id}?size=thumb&v=3" alt="" loading="lazy" decoding="async" class="obra-mini-cover" />
               {:else}
                 <div class="obra-mini-placeholder">NOX</div>
               {/if}

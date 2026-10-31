@@ -24,7 +24,7 @@
     SlidersHorizontal,
     X
   } from '@lucide/svelte';
-  import { invalidateAll, goto } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { action } from '$lib/actions';
   import { kindLabels, statusLabels, date } from '$lib/types';
   import { resolveCoverUrl } from '$lib/covers';
@@ -366,7 +366,17 @@
           (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Obra adicionada aos favoritos');
         }
       }
-      await invalidateAll();
+      if (data.library) {
+        data.library = { ...data.library, ...update };
+      } else {
+        data.library = {
+          work_id: data.work.id,
+          status: 'READING',
+          favorite: Boolean(update.favorite),
+          following: true,
+          ...update
+        };
+      }
       optimisticFavorite = null;
       notice = 'Biblioteca atualizada com sucesso.';
     } catch (e) {
@@ -412,9 +422,9 @@
           (window as any).__noxTriggerXpReward(res.xp_award.amount, 'Obra curtida');
         }
       }
-      await invalidateAll();
-      optimisticLiked = null;
-      optimisticLikeDelta = 0;
+      const confirmedLiked = typeof res?.liked === 'boolean' ? res.liked : nextLiked;
+      optimisticLiked = confirmedLiked;
+      optimisticLikeDelta = (confirmedLiked ? 1 : 0) - (previousLiked ? 1 : 0);
     } catch (e) {
       optimisticLiked = previousLiked;
       optimisticLikeDelta += previousLiked ? 1 : -1;

@@ -639,8 +639,10 @@
                     <a href="/ler/{item.chapter_id}" class="history-item-row">
                       {#if item.chapters?.works?.cover_id}
                         <img
-                          src="/media/{item.chapters.works.cover_id}"
+                          src="/media/{item.chapters.works.cover_id}?size=thumb&v=3"
                           alt={item.chapters.works.title}
+                          loading="lazy"
+                          decoding="async"
                           class="h-mini-cover"
                         />
                       {/if}
@@ -739,8 +741,10 @@
                   <a href="/ler/{item.chapter_id}" class="history-item-row">
                     {#if item.chapters?.works?.cover_id}
                       <img
-                        src="/media/{item.chapters.works.cover_id}"
+                        src="/media/{item.chapters.works.cover_id}?size=thumb&v=3"
                         alt={item.chapters.works.title}
+                        loading="lazy"
+                        decoding="async"
                         class="h-mini-cover"
                       />
                     {/if}

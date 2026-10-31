@@ -1,10 +1,12 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { createScanNotification } from "$lib/server/scan-notifications";
-import { executeYugabyteSql } from "$lib/server/yugabyte";
+import { executeYugabyteSql, withYugabyteReadSession } from "$lib/server/yugabyte";
 import type { PageServerLoad, Actions } from "./$types";
 
 export const load: PageServerLoad = async ({ locals, params, platform }) => {
-  const scanResult = await executeYugabyteSql<any>(
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+    platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
+    const scanResult = await executeYugabyteSql<any>(
     `SELECT id, name, slug, description, display_preposition,
             logo_id, banner_id, website, discord, fluxer,
             is_official, status, created_at
@@ -395,6 +397,7 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
     totalViews,
     viewer
   };
+  }, 4);
 };
 
 export const actions: Actions = {

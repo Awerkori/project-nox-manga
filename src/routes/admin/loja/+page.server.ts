@@ -1,11 +1,22 @@
 import { error } from '@sveltejs/kit';
 import { privileged } from '$lib/server/db';
 import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
+import {
+  adminAuxPanelCache,
+  adminAuxPanelFlights,
+  withSingleFlightCache
+} from '$lib/server/admin-cache';
 
 export const load = async ({ locals }) => {
   const isEditor = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
   if (!isEditor) error(403, 'Acesso restrito à equipe editorial');
 
+  return withSingleFlightCache(
+    adminAuxPanelCache,
+    adminAuxPanelFlights,
+    'admin:loja',
+    30_000,
+    async () => {
   const db = locals.db || privileged();
 
   const [itemsRes, inventoryCountsRes] = await Promise.all([
@@ -116,4 +127,6 @@ export const load = async ({ locals }) => {
   return {
     items: combinedItems
   };
+    }
+  );
 };

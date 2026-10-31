@@ -5,9 +5,24 @@ import { normalizeAvatarCrop } from '$lib/avatar';
 import { storeImage, RateLimitError } from '$lib/server/media';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+let cachedGlobalAchievements: { at: number; data: any[] } | null = null;
+const GLOBAL_ACHIEVEMENTS_TTL_MS = 300_000;
+
+async function loadGlobalAchievements(db: any) {
+  if (cachedGlobalAchievements && Date.now() - cachedGlobalAchievements.at < GLOBAL_ACHIEVEMENTS_TTL_MS) {
+    return { data: cachedGlobalAchievements.data };
+  }
+  const res = await db.from('achievements').select('*').order('order_index', { ascending: true });
+  if (Array.isArray(res?.data) && res.data.length > 0) {
+    cachedGlobalAchievements = { at: Date.now(), data: res.data };
+  }
+  return res;
+}
+
+export const load: PageServerLoad = async ({ locals, platform }) => {
   if (!locals.user) {
     redirect(303, '/entrar');
   }
@@ -61,19 +76,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         .order('updated_at', { ascending: false }),
       locals.db
         .from('reading')
-        .select(`
-          chapter_id,
-          page,
-          max_page,
-          completed_at,
-          updated_at,
-          chapters!inner(
-            id,
-            number,
-            title,
-            works!inner(id, title, slug, cover_id, content_rating)
-          )
-        `)
+        .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
         .eq('user_id', locals.user.id)
         .order('updated_at', { ascending: false })
         .limit(60),
@@ -83,10 +86,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         .eq('user_id', locals.user.id)
         .order('created_at', { ascending: false })
         .limit(50),
-      locals.db
-        .from('achievements')
-        .select('*')
-        .order('order_index', { ascending: true }),
+      loadGlobalAchievements(locals.db),
       locals.db
         .from('member_achievements')
         .select('achievement_id, unlocked_at')
@@ -157,10 +157,15 @@ export const load: PageServerLoad = async ({ locals }) => {
     ...inv.shop_items
   }));
 
+  const enrichedHistory =
+    Array.isArray(historyRes.data) && historyRes.data.length > 0
+      ? await enrichReadingRowsWithCatalog(historyRes.data, locals.db, platform?.env)
+      : [];
+
   return {
     member,
     library: libraryRes.data || [],
-    history: historyRes.data || [],
+    history: enrichedHistory,
     notifications: notificationsRes.data || [],
     achievements,
     inventory

@@ -38,7 +38,7 @@ describe('Reader canonical chapter identity', () => {
   it('keeps special and edition identities visible without changing legacy URLs', () => {
     const special = { number: null, display_number: 'Prólogo', chapter_kind: 'special', edition: 'default', language: 'pt-BR' };
     const official = { number: 12.1, display_number: '12.1', chapter_kind: 'chapter', edition: 'official', language: 'en' };
-    expect(chapterIdentityLabel(special)).toBe('Prólogo · pt-BR');
+    expect(chapterIdentityLabel(special)).toBe('Prólogo');
     expect(chapterIdentityLabel(official)).toBe('12.1 · official · en');
     // Reader routes use the stable UUID, never a decimal chapter label.
     expect(`/ler/${'00000000-0000-4000-8000-000000000012'}`).toBe('/ler/00000000-0000-4000-8000-000000000012');

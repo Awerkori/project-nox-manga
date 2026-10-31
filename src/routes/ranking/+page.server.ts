@@ -13,11 +13,19 @@ const DEFAULT_SEASON = {
 };
 
 const PAGE_SIZE = 20;
+const RANKING_PUBLIC_CACHE_TTL_MS = 30_000;
+let cachedPublicRankingBase: {
+  at: number;
+  season: any;
+  totalMembers: number;
+  page1Rows: any[];
+  top3: any[];
+} | null = null;
 
 export const load = async ({ locals, url, setHeaders }: any) => {
   if (!locals.user) {
     setHeaders({
-      'cache-control': 'public, max-age=5, stale-while-revalidate=15'
+      'cache-control': 'public, max-age=15, s-maxage=30, stale-while-revalidate=60'
     });
   } else {
     setHeaders({
@@ -28,46 +36,61 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   const rawPage = parseInt(url.searchParams.get('page') || '1', 10);
   const requestedPage = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
   const searchQuery = (url.searchParams.get('q') || '').trim();
+  const isTestEnv =
+    typeof process !== 'undefined' && (process.env?.VITEST === 'true' || process.env?.NODE_ENV === 'test');
+  const canUsePublicCache = !isTestEnv && cachedPublicRankingBase && Date.now() - cachedPublicRankingBase.at < RANKING_PUBLIC_CACHE_TTL_MS;
 
-  // 1. Fetch active season
-  const { data: activeSeason } = await locals.db
-    .from('seasons')
-    .select('id,name,number,starts_at,ends_at,is_active,rules_text')
-    .eq('is_active', true)
-    .order('number', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let currentSeason: any;
+  let totalMembers: number;
 
-  const currentSeason = activeSeason || DEFAULT_SEASON;
+  if (canUsePublicCache) {
+    currentSeason = cachedPublicRankingBase!.season;
+    totalMembers = cachedPublicRankingBase!.totalMembers;
+  } else {
+    // 1 & 2. Fetch active season and total non-test members in parallel
+    const [{ data: activeSeason }, { count: totalMembersCount }] = await Promise.all([
+      locals.db
+        .from('seasons')
+        .select('id,name,number,starts_at,ends_at,is_active,rules_text')
+        .eq('is_active', true)
+        .order('number', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      locals.db
+        .from('members')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_test', false)
+    ]);
 
-  // 2. Count total non-test members for real backend pagination
-  const { count: totalMembersCount } = await locals.db
-    .from('members')
-    .select('id', { count: 'exact', head: true })
-    .eq('is_test', false);
+    currentSeason = activeSeason || DEFAULT_SEASON;
+    totalMembers = totalMembersCount || 0;
+  }
 
-  const totalMembers = totalMembersCount || 0;
   const totalPages = Math.max(1, Math.ceil(totalMembers / PAGE_SIZE));
   const currentPage = Math.min(requestedPage, totalPages);
   const offset = (currentPage - 1) * PAGE_SIZE;
 
   // 3. Fetch leaderboard members for current page with deterministic ordering
-  const { data: pageRows } = await safeDbQuery(
-    locals.db
-      .from('members')
-      .select(
-        'id,username,display_name,xp,lifetime_xp,season_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id'
-      )
-      .eq('is_test', false)
-      .order('season_xp', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1),
-    1500,
-    'ranking_page_members'
-  );
-
-  const rawMembers = pageRows || [];
+  let rawMembers: any[];
+  if (canUsePublicCache && currentPage === 1) {
+    rawMembers = cachedPublicRankingBase!.page1Rows;
+  } else {
+    const { data: pageRows } = await safeDbQuery(
+      locals.db
+        .from('members')
+        .select(
+          'id,username,display_name,xp,lifetime_xp,season_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id'
+        )
+        .eq('is_test', false)
+        .order('season_xp', { ascending: false })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1),
+      1500,
+      'ranking_page_members'
+    );
+    rawMembers = pageRows || [];
+  }
 
   // Decorate members with deterministic global rank and seasonal achievement title
   const members = rawMembers.map((m: any, idx: number) => {
@@ -88,6 +111,17 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   let top3: any[];
   if (currentPage === 1 && members.length > 0) {
     top3 = members.slice(0, 3);
+    if (!isTestEnv) {
+      cachedPublicRankingBase = {
+        at: Date.now(),
+        season: currentSeason,
+        totalMembers,
+        page1Rows: rawMembers,
+        top3
+      };
+    }
+  } else if (canUsePublicCache && cachedPublicRankingBase!.top3.length > 0) {
+    top3 = cachedPublicRankingBase!.top3;
   } else {
     const { data: top3Rows } = await locals.db
       .from('members')
