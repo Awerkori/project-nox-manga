@@ -592,11 +592,11 @@
     const y = touch.clientY;
 
     if (!sidebarMobileOpen) {
-      // SAFE ACTIVATION ZONE:
-      // Start after 18px so we do NOT intercept Android native back gesture (0-18px bezel).
-      // Allow gestures starting anywhere across the left and middle content (up to 75% of screen width, max 280px).
-      const maxStartX = Math.min(window.innerWidth * 0.75, 280);
-      if (x >= 18 && x <= maxStartX) {
+      // COMFORTABLE ACTIVATION ZONE:
+      // Start anywhere in the comfortable left/middle region (x between 10px and min(75% width, 300px)).
+      // Leaves 0-10px for extreme edge guards if desired, but allows natural thumb placement.
+      const maxStartX = Math.min(window.innerWidth * 0.75, 300);
+      if (x >= 10 && x <= maxStartX) {
         touchStartX = x;
         touchStartY = y;
         touchDeltaX = 0;
@@ -627,19 +627,34 @@
     const absX = Math.abs(touchDeltaX);
     const absY = Math.abs(touchDeltaY);
 
-    // VERTICAL SCROLL LOCK: If vertical motion dominates after an initial micro-movement (> 8px),
-    // cancel swipe tracking immediately so native vertical scrolling remains 100% fluid!
-    if (absY > absX && absY > 8) {
+    // VERTICAL SCROLL LOCK: Natural thumb arcs on mobile screens have initial vertical wobble.
+    // Only cancel tracking if vertical motion clearly dominates after initial movement (> 16px).
+    if (absY > absX * 1.4 && absY > 16) {
       isTrackingSwipe = null;
       return;
     }
 
-    // Direction validation
+    // Direction validation: if dragging in wrong direction, abort
     if (isTrackingSwipe === 'OPEN' && touchDeltaX < -15) {
       isTrackingSwipe = null;
       return;
     }
     if (isTrackingSwipe === 'CLOSE' && touchDeltaX > 15) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    // LIVE TRIGGER: As soon as swipe exceeds threshold during the drag, activate immediately!
+    // This provides instantaneous visual response without waiting for finger lift (touchend),
+    // and completely prevents Chrome Android from aborting via touchcancel.
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 40 && absX > absY * 1.05) {
+      sidebarMobileOpen = true;
+      isTrackingSwipe = null;
+      return;
+    }
+
+    if (isTrackingSwipe === 'CLOSE' && touchDeltaX <= -35 && absX > absY * 1.05) {
+      sidebarMobileOpen = false;
       isTrackingSwipe = null;
       return;
     }
@@ -659,17 +674,17 @@
     const velocityX = absX / duration;
 
     if (isTrackingSwipe === 'OPEN') {
-      // Open criteria:
-      // 1. Dragged right >= 45px with dominant horizontal vector (absX > absY * 1.1)
-      // 2. OR flick with deltaX >= 25px and velocity > 0.3 px/ms
-      if ((touchDeltaX >= 45 && absX > absY * 1.1) || (touchDeltaX >= 25 && velocityX > 0.3 && absX > absY)) {
+      // Open criteria on release:
+      // 1. Dragged right >= 35px with horizontal dominance
+      // 2. OR flick with deltaX >= 22px and velocity > 0.25 px/ms
+      if ((touchDeltaX >= 35 && absX > absY) || (touchDeltaX >= 22 && velocityX > 0.25 && absX > absY)) {
         sidebarMobileOpen = true;
       }
     } else if (isTrackingSwipe === 'CLOSE') {
-      // Close criteria:
-      // 1. Dragged left <= -35px with dominant horizontal vector
-      // 2. OR flick with deltaX <= -20px and velocity > 0.3 px/ms
-      if ((touchDeltaX <= -35 && absX > absY * 1.1) || (touchDeltaX <= -20 && velocityX > 0.3 && absX > absY)) {
+      // Close criteria on release:
+      // 1. Dragged left <= -30px with horizontal dominance
+      // 2. OR flick with deltaX <= -18px and velocity > 0.25 px/ms
+      if ((touchDeltaX <= -30 && absX > absY) || (touchDeltaX <= -18 && velocityX > 0.25 && absX > absY)) {
         sidebarMobileOpen = false;
       }
     }
@@ -678,8 +693,8 @@
   }
 
   function handleWindowTouchCancel() {
-    // If opening threshold was already comfortably reached before cancel, honor it
-    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 45) {
+    // If opening threshold was already reached or close before cancel, honor it
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 28) {
       sidebarMobileOpen = true;
     }
     isTrackingSwipe = null;
@@ -3354,7 +3369,7 @@
   @media (max-width: 1024px) {
     .workspace-app-shell,
     .workspace-main-area {
-      touch-action: pan-y;
+      touch-action: manipulation;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -3433,7 +3448,7 @@
   .workspace-view-content {
     flex: 1;
     min-width: 0;
-    padding: 24px;
+    padding: 24px 32px 32px 28px;
   }
 
   @media (max-width: 1024px) {

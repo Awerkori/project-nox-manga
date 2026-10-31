@@ -565,7 +565,7 @@
 </script>
 
 <div class="tasks-tab-root">
-  <!-- 1. COMPACT PREMIUM HEADER (V7.2) -->
+  <!-- 1. COMPACT PREMIUM HEADER (V7.3) -->
   <header class="queue-header-bar">
     <div class="header-titles">
       <div class="header-badge">
@@ -575,10 +575,14 @@
       <div class="title-row">
         <h1 class="tab-title">Minha Fila</h1>
         <span class="active-tasks-pill" class:has-tasks={rawActiveItems.length > 0}>
-          <strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'ativo' : 'ativos'}
+          <span class="desktop-pill-text"><strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'trabalho ativo' : 'trabalhos ativos'}</span>
+          <span class="mobile-pill-text"><strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'ativo' : 'ativos'}</span>
         </span>
       </div>
-      <p class="tab-desc">Gerencie seus trabalhos.</p>
+      <p class="tab-desc">
+        <span class="desktop-only-desc">Gerencie suas tarefas e acompanhe sua produção.</span>
+        <span class="mobile-only-desc">Seus trabalhos.</span>
+      </p>
     </div>
   </header>
 
@@ -749,7 +753,7 @@
             aria-label="Abrir campo de busca"
           >
             <Search size={14} />
-            <span>Buscar tarefas...</span>
+            <span>Buscar tarefas</span>
           </button>
         {/if}
 
@@ -872,6 +876,7 @@
 
                         {#if item.isStale && !item.isOverdue}
                           <span class="meta-pill stale-inactivity">
+                            <Clock size={11} />
                             Sem atividade há {item.staleDays} dias
                           </span>
                         {/if}
@@ -1584,20 +1589,20 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 1440px;
-    margin: 0 auto;
+    max-width: 1560px;
+    margin: 0;
     padding-bottom: 48px;
     box-sizing: border-box;
   }
 
-  /* 1. Header Bar (V7.2 Compact & Direct) */
+  /* 1. Header Bar (V7.3 Refined Desktop & Mobile) */
   .queue-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 72px;
-    padding: 16px 22px;
-    background: rgba(18, 14, 28, 0.7);
+    min-height: 80px;
+    padding: 16px 24px;
+    background: rgba(18, 14, 28, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     backdrop-filter: blur(12px);
@@ -1618,6 +1623,7 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #a855f7;
+    margin-bottom: 2px;
   }
 
   .title-row {
@@ -1638,9 +1644,9 @@
   .active-tasks-pill {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
+    padding: 3px 12px;
     border-radius: 9999px;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 500;
     background: rgba(255, 255, 255, 0.06);
     color: #94a3b8;
@@ -1663,6 +1669,19 @@
     font-size: 0.875rem;
     color: #94a3b8;
     margin: 0;
+  }
+
+  .mobile-only-desc {
+    display: none;
+  }
+  .desktop-only-desc {
+    display: inline;
+  }
+  .mobile-pill-text {
+    display: none;
+  }
+  .desktop-pill-text {
+    display: inline;
   }
 
   /* 2. Four Categories Navigation Bar */
@@ -1759,8 +1778,8 @@
   }
 
   .desktop-search {
-    flex: 1 1 280px;
-    max-width: 360px;
+    flex: 1 1 320px;
+    max-width: 440px;
   }
 
   .search-box {
@@ -1778,9 +1797,9 @@
 
   .filter-input {
     width: 100%;
-    height: 40px;
-    padding: 0 32px 0 36px;
-    background: rgba(20, 16, 32, 0.6);
+    height: 42px;
+    padding: 0 34px 0 38px;
+    background: rgba(20, 16, 32, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     font-size: 0.875rem;
@@ -1819,9 +1838,9 @@
   }
 
   .filter-select {
-    height: 40px;
+    height: 42px;
     padding: 0 16px;
-    background: rgba(20, 16, 32, 0.6);
+    background: rgba(20, 16, 32, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     font-size: 0.875rem;
@@ -2183,8 +2202,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 40px;
-    padding: 0 18px;
+    height: 42px;
+    padding: 0 20px;
     background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
@@ -2211,8 +2230,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 40px;
-    padding: 0 18px;
+    height: 42px;
+    padding: 0 20px;
     background: #a855f7;
     border: none;
     border-radius: 8px;
@@ -2232,12 +2251,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 40px;
-    padding: 0 14px;
+    height: 42px;
+    padding: 0 16px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    font-size: 0.8125rem;
+    font-size: 0.84375rem;
     font-weight: 500;
     color: #cbd5e1;
     cursor: pointer;
@@ -2842,12 +2861,12 @@
   /* 5. Responsive Breakpoints */
   @media (max-width: 768px) {
     .tasks-tab-root {
-      gap: 10px;
+      gap: 12px;
     }
 
     .queue-header-bar {
-      padding: 8px 12px;
-      min-height: auto;
+      padding: 12px 14px;
+      min-height: 68px;
       margin-bottom: 0px;
     }
 
@@ -2856,7 +2875,7 @@
     }
 
     .tab-title {
-      font-size: 1.125rem;
+      font-size: 1.25rem;
       line-height: 1.2;
     }
 
@@ -2865,8 +2884,21 @@
       padding: 2px 8px;
     }
 
+    .desktop-only-desc {
+      display: none;
+    }
+    .mobile-only-desc {
+      display: inline;
+    }
+    .desktop-pill-text {
+      display: none;
+    }
+    .mobile-pill-text {
+      display: inline;
+    }
+
     .tab-desc {
-      font-size: 0.75rem;
+      font-size: 0.8125rem;
       color: #94a3b8;
     }
 
@@ -2877,13 +2909,86 @@
 
     .mobile-filter-bar {
       display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .btn-mobile-search-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 38px;
+      padding: 0 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #cbd5e1;
+      cursor: pointer;
+      flex: 0 0 auto;
+      transition: all 0.15s ease;
+    }
+
+    .btn-mobile-search-toggle:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+
+    .btn-mobile-filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 38px;
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 20px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #94a3b8;
+      cursor: pointer;
+      flex: 0 0 auto;
+      transition: all 0.15s ease;
+    }
+
+    .btn-mobile-filter-toggle:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+    }
+
+    .btn-mobile-filter-toggle.has-active {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: rgba(168, 85, 247, 0.35);
+      color: #e9d5ff;
+    }
+
+    .mobile-search-active-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 38px;
+      background: rgba(168, 85, 247, 0.14);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 20px;
+      padding: 0 10px 0 14px;
+    }
+
+    .mobile-expanded-search {
+      width: 100%;
+      height: 40px;
     }
 
     .desktop-only-inline {
       display: none;
     }
 
-    /* 4 Categories Navigation in 2x2 Grid (Rodada 21 V7.2) */
+    /* 4 Categories Navigation in 2x2 Grid (Rodada 21 V7.3) */
     .queue-nav-strip {
       border-bottom: none;
       margin-bottom: 0px;
@@ -2892,15 +2997,15 @@
     .queue-tabs-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      gap: 8px;
       width: 100%;
       padding-bottom: 0;
     }
 
     .queue-tab-btn {
-      height: 46px;
+      height: 48px;
       min-height: 46px;
-      padding: 0 10px;
+      padding: 0 12px;
       box-sizing: border-box;
       font-size: 0.8125rem;
       border-radius: 8px;
@@ -2918,16 +3023,16 @@
       white-space: nowrap;
     }
 
-    /* 2-Tiered Mobile Card Composition (Rodada 21 V7.2 - Compact 12-15% Height Reduction) */
+    /* 2-Tiered Mobile Card Composition (Rodada 21 V7.3 - Compact 12-15% Height Reduction) */
     .cards-vertical-list {
-      gap: 8px;
+      gap: 10px;
     }
 
     .card-main-content {
       flex-direction: column;
       align-items: stretch;
       gap: 8px;
-      padding: 10px 12px;
+      padding: 10px 14px;
       min-height: auto;
     }
 
@@ -2963,9 +3068,9 @@
     }
 
     .meta-pill {
-      padding: 2px 6px;
+      padding: 2px 7px;
       font-size: 0.6875rem;
-      border-radius: 4px;
+      border-radius: 5px;
     }
 
     .card-actions-col {
