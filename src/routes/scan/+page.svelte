@@ -285,7 +285,24 @@
       triggerModuleLoadForTab(tab);
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+
+    // Passive touch listeners directly bound to window for 100% Android Chrome/Firefox compatibility
+    if (typeof window !== 'undefined') {
+      window.addEventListener('touchstart', handleWindowTouchStart, { passive: true });
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+      window.addEventListener('touchend', handleWindowTouchEnd, { passive: true });
+      window.addEventListener('touchcancel', handleWindowTouchCancel, { passive: true });
+    }
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('touchstart', handleWindowTouchStart);
+        window.removeEventListener('touchmove', handleWindowTouchMove);
+        window.removeEventListener('touchend', handleWindowTouchEnd);
+        window.removeEventListener('touchcancel', handleWindowTouchCancel);
+      }
+    };
   });
 
   function handleSelectTab(tab: string, stage?: string) {
@@ -543,11 +560,12 @@
     if (event.key === 'Escape') dismiss();
   }
 
-  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7)
+  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7.1 - Enhanced Robust Engine)
   let touchStartX = 0;
   let touchStartY = 0;
   let touchDeltaX = 0;
   let touchDeltaY = 0;
+  let swipeStartTime = 0;
   let isTrackingSwipe: 'OPEN' | 'CLOSE' | null = null;
 
   function handleWindowTouchStart(e: TouchEvent) {
@@ -559,10 +577,10 @@
 
     const target = e.target;
     const element = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null);
-    // Strictly ignore touches on interactive inputs, controls, or horizontally scrollable elements
+    // Ignore touches starting on text inputs, selects, textareas, explicit no-swipe areas, or open modals
     if (
       element?.closest(
-        'input, select, textarea, button, a, [data-no-swipe], .queue-tabs-scroll, .stage-filter-strip, .filter-controls-row, .files-table-wrapper'
+        'input, select, textarea, [data-no-swipe], .modal-dialog, .modal-sheet-drawer'
       )
     ) {
       isTrackingSwipe = null;
@@ -574,13 +592,16 @@
     const y = touch.clientY;
 
     if (!sidebarMobileOpen) {
-      // SAFE TOUCH ZONE: Android system back gesture operates in 0..20px edge.
-      // We ONLY capture touches starting at x >= 22px up to 120px to prevent conflicting with system navigation.
-      if (x >= 22 && x <= 120) {
+      // SAFE ACTIVATION ZONE:
+      // Start after 20px so we do NOT intercept Android native back gesture (0-20px bezel).
+      // Allow gestures starting anywhere across the left and middle content (up to 75% of screen width, max 280px).
+      const maxStartX = Math.min(window.innerWidth * 0.75, 280);
+      if (x >= 20 && x <= maxStartX) {
         touchStartX = x;
         touchStartY = y;
         touchDeltaX = 0;
         touchDeltaY = 0;
+        swipeStartTime = performance.now();
         isTrackingSwipe = 'OPEN';
       } else {
         isTrackingSwipe = null;
@@ -591,6 +612,7 @@
       touchStartY = y;
       touchDeltaX = 0;
       touchDeltaY = 0;
+      swipeStartTime = performance.now();
       isTrackingSwipe = 'CLOSE';
     }
   }
@@ -602,19 +624,22 @@
     touchDeltaX = touch.clientX - touchStartX;
     touchDeltaY = touch.clientY - touchStartY;
 
-    // VERTICAL SCROLL LOCK: If vertical motion is greater than horizontal motion,
-    // cancel swipe tracking immediately so native vertical scrolling remains 100% fluid and stutter-free!
-    if (Math.abs(touchDeltaY) > Math.abs(touchDeltaX)) {
+    const absX = Math.abs(touchDeltaX);
+    const absY = Math.abs(touchDeltaY);
+
+    // VERTICAL SCROLL LOCK: If vertical motion dominates after an initial micro-movement (> 8px),
+    // cancel swipe tracking immediately so native vertical scrolling remains 100% fluid!
+    if (absY > absX && absY > 8) {
       isTrackingSwipe = null;
       return;
     }
 
     // Direction validation
-    if (isTrackingSwipe === 'OPEN' && touchDeltaX < 0) {
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX < -15) {
       isTrackingSwipe = null;
       return;
     }
-    if (isTrackingSwipe === 'CLOSE' && touchDeltaX > 0) {
+    if (isTrackingSwipe === 'CLOSE' && touchDeltaX > 15) {
       isTrackingSwipe = null;
       return;
     }
@@ -630,15 +655,21 @@
 
     const absX = Math.abs(touchDeltaX);
     const absY = Math.abs(touchDeltaY);
+    const duration = Math.max(performance.now() - swipeStartTime, 1);
+    const velocityX = absX / duration;
 
     if (isTrackingSwipe === 'OPEN') {
-      // Swipe right threshold: deltaX > 45px and dominant horizontal angle
-      if (touchDeltaX > 45 && absX > absY * 1.5) {
+      // Open criteria:
+      // 1. Dragged right >= 50px with dominant horizontal vector (absX > absY * 1.15)
+      // 2. OR flick with deltaX >= 30px and velocity > 0.35 px/ms
+      if ((touchDeltaX >= 50 && absX > absY * 1.15) || (touchDeltaX >= 30 && velocityX > 0.35 && absX > absY)) {
         sidebarMobileOpen = true;
       }
     } else if (isTrackingSwipe === 'CLOSE') {
-      // Swipe left threshold: deltaX < -35px and dominant horizontal angle
-      if (touchDeltaX < -35 && absX > absY * 1.5) {
+      // Close criteria:
+      // 1. Dragged left <= -40px with dominant horizontal vector
+      // 2. OR flick with deltaX <= -25px and velocity > 0.35 px/ms
+      if ((touchDeltaX <= -40 && absX > absY * 1.15) || (touchDeltaX <= -25 && velocityX > 0.35 && absX > absY)) {
         sidebarMobileOpen = false;
       }
     }
@@ -647,6 +678,10 @@
   }
 
   function handleWindowTouchCancel() {
+    // If opening threshold was already comfortably reached before cancel, honor it
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 50) {
+      sidebarMobileOpen = true;
+    }
     isTrackingSwipe = null;
   }
 </script>
@@ -3324,6 +3359,12 @@
   }
 
   @media (max-width: 1024px) {
+    .workspace-app-shell,
+    .workspace-main-area {
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+
     .workspace-mobile-topbar {
       display: flex;
     }

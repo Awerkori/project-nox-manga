@@ -200,9 +200,16 @@
     const diffDays = Math.ceil((d.getTime() - Date.now()) / 86400000);
     if (diffDays === 0) return 'Hoje';
     if (diffDays === 1) return 'Amanhã';
-    if (diffDays < 0) return `Atrasado há ${Math.abs(diffDays)}d`;
-    if (diffDays <= 5) return `Em ${diffDays}d`;
+    if (diffDays < 0) return `Atrasado há ${Math.abs(diffDays)} dias`;
+    if (diffDays <= 5) return `Em ${diffDays} dias`;
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  }
+
+  function getDueDiffDays(dueDateStr: string | null | undefined): number {
+    if (!dueDateStr) return 0;
+    const d = new Date(dueDateStr);
+    if (isNaN(d.getTime())) return 0;
+    return Math.ceil((d.getTime() - Date.now()) / 86400000);
   }
 
   function formatBytes(bytes: number) {
@@ -231,6 +238,7 @@
     dueDate: string | null;
     formattedDue: string | null;
     isOverdue: boolean;
+    dueDiffDays: number;
     status: string;
     isRework: boolean;
     rejectionReason: string | null;
@@ -307,6 +315,7 @@
         dueDate: due,
         formattedDue,
         isOverdue,
+        dueDiffDays: getDueDiffDays(due),
         status: cs.status,
         isRework: cs.status === 'REWORK',
         rejectionReason: cs.rejection_reason || null,
@@ -358,6 +367,7 @@
         dueDate: due,
         formattedDue,
         isOverdue,
+        dueDiffDays: getDueDiffDays(due),
         status: t.status,
         isRework: false,
         rejectionReason: null,
@@ -435,13 +445,20 @@
     })
   );
 
-  // 3. AGUARDANDO: Blocked stages or stages currently worked on by peers
+  // 3. AGUARDANDO: Blocked stages waiting for predecessor deliverables
   let rawWaitingItems = $derived(
     allQueueItems.filter((item) => {
       if (item.type !== 'stage') return false;
-      if (item.status === 'BLOCKED') return true;
-      if ((item.status === 'IN_PROGRESS' || item.status === 'REWORK') && item.assignedTo !== currentUserId) return true;
-      if (item.status === 'AVAILABLE' && !item.eligible) return true;
+      // Exclude automated release / publication stages (not individual editorial tasks)
+      if (item.stageSlug === 'publicado' || item.stageSlug === 'published' || item.stageSlug === 'pre_aprovado') return false;
+
+      const isBlocked = item.status === 'BLOCKED' || item.status === 'WAITING';
+      if (!isBlocked) return false;
+
+      // Personal / role criteria: directly assigned to user, OR matching user editorial position in scan
+      if (item.assignedTo === currentUserId) return true;
+      if (item.eligible && !item.assignedTo) return true;
+
       return false;
     })
   );
@@ -560,15 +577,17 @@
 
   <!-- 2. FOUR CATEGORIES NAVIGATION STRIP -->
   <nav class="queue-nav-strip" aria-label="Abas da fila">
-    <div class="queue-tabs-scroll">
+    <div class="queue-tabs-grid">
       <button
         type="button"
         class="queue-tab-btn"
         class:active={activeView === 'MINE'}
         onclick={() => (activeView = 'MINE')}
       >
-        <Clock size={15} class="queue-icon blue" />
-        <span class="queue-tab-label">Em andamento</span>
+        <div class="tab-label-group">
+          <Clock size={15} class="queue-icon blue" />
+          <span class="queue-tab-label">Em andamento</span>
+        </div>
         <span class="queue-counter-badge count-mine">{rawActiveItems.length}</span>
       </button>
 
@@ -578,8 +597,10 @@
         class:active={activeView === 'AVAILABLE'}
         onclick={() => (activeView = 'AVAILABLE')}
       >
-        <Zap size={15} class="queue-icon yellow" />
-        <span class="queue-tab-label">Disponíveis para mim</span>
+        <div class="tab-label-group">
+          <Zap size={15} class="queue-icon yellow" />
+          <span class="queue-tab-label">Disponíveis<span class="desktop-only-inline">&nbsp;para mim</span></span>
+        </div>
         <span class="queue-counter-badge count-available">{rawAvailableItems.length}</span>
       </button>
 
@@ -589,8 +610,10 @@
         class:active={activeView === 'WAITING'}
         onclick={() => (activeView = 'WAITING')}
       >
-        <Lock size={15} class="queue-icon purple" />
-        <span class="queue-tab-label">Aguardando</span>
+        <div class="tab-label-group">
+          <Lock size={15} class="queue-icon purple" />
+          <span class="queue-tab-label">Aguardando</span>
+        </div>
         <span class="queue-counter-badge count-waiting">{rawWaitingItems.length}</span>
       </button>
 
@@ -600,8 +623,10 @@
         class:active={activeView === 'DONE'}
         onclick={() => (activeView = 'DONE')}
       >
-        <CheckCircle2 size={15} class="queue-icon green" />
-        <span class="queue-tab-label">Concluídas</span>
+        <div class="tab-label-group">
+          <CheckCircle2 size={15} class="queue-icon green" />
+          <span class="queue-tab-label">Concluídas</span>
+        </div>
         <span class="queue-counter-badge count-done">{rawDoneItems.length}</span>
       </button>
     </div>
@@ -725,89 +750,97 @@
         <div class="cards-vertical-list">
           {#each myActiveItems as item (item.id)}
             <article class="task-compact-card in-progress" class:is-rework={item.isRework}>
-              <!-- Main Horizontal Card Row -->
-              <div class="card-main-row">
-                <!-- Left: 48x64px Cover / Fallback -->
-                <div class="card-visual-col">
-                  {#if item.coverId}
-                    <img
-                      src="/media/{item.coverId}"
-                      alt={item.workTitle}
-                      class="task-cover-thumb"
-                      loading="lazy"
-                      onerror={(e) => {
-                        const target = e.currentTarget as HTMLElement;
-                        target.style.display = 'none';
-                        if (target.nextElementSibling) {
-                          (target.nextElementSibling as HTMLElement).style.display = 'flex';
-                        }
-                      }}
-                    />
-                    <div class="task-stage-icon-fallback" style="display: none;">
-                      <Briefcase size={18} class="task-fallback-icon" />
-                    </div>
-                  {:else}
-                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
-                      {#if item.stageIcon && item.stageIcon !== '💼'}
-                        <span class="fallback-emoji">{item.stageIcon}</span>
-                      {:else}
+              <!-- 2-Tiered Main Card Content -->
+              <div class="card-main-content">
+                <!-- Top Region: Identification (Cover + Details) -->
+                <div class="card-identity-region">
+                  <!-- Left: 48x64px Cover / Fallback -->
+                  <div class="card-visual-col">
+                    {#if item.coverId}
+                      <img
+                        src="/media/{item.coverId}"
+                        alt={item.workTitle}
+                        class="task-cover-thumb"
+                        loading="lazy"
+                        onerror={(e) => {
+                          const target = e.currentTarget as HTMLElement;
+                          target.style.display = 'none';
+                          if (target.nextElementSibling) {
+                            (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                          }
+                        }}
+                      />
+                      <div class="task-stage-icon-fallback" style="display: none;">
                         <Briefcase size={18} class="task-fallback-icon" />
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
-
-                <!-- Middle: Title, Chapter, Stage, Priority, Status -->
-                <div class="card-details-col">
-                  <div class="card-title-row">
-                    <h3 class="task-work-name" title={item.workTitle}>
-                      {item.workTitle}
-                    </h3>
-                  </div>
-
-                  <div class="card-meta-row primary-meta">
-                    {#if item.chapterNumber}
-                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
-                    {/if}
-
-                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
-                      <span class="dot"></span>
-                      {item.stageName}
-                    </span>
-
-                    {#if item.priority === 'URGENT'}
-                      <span class="meta-pill urgent">Urgente</span>
-                    {:else if item.priority === 'HIGH'}
-                      <span class="meta-pill high">Alta prioridade</span>
+                      </div>
+                    {:else}
+                      <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                        {#if item.stageIcon && item.stageIcon !== '💼'}
+                          <span class="fallback-emoji">{item.stageIcon}</span>
+                        {:else}
+                          <Briefcase size={18} class="task-fallback-icon" />
+                        {/if}
+                      </div>
                     {/if}
                   </div>
 
-                  {#if item.isRework || item.formattedDue || item.isStale}
-                    <div class="card-meta-row secondary-meta">
-                      {#if item.isRework}
-                        <span class="meta-pill rework">
-                          <AlertTriangle size={11} />
-                          Retrabalho
-                        </span>
+                  <!-- Middle Details: Title, Chapter, Stage, Priority, Status -->
+                  <div class="card-details-col">
+                    <div class="card-title-row">
+                      <h3 class="task-work-name" title={item.workTitle}>
+                        {item.workTitle}
+                      </h3>
+                    </div>
+
+                    <div class="card-meta-row primary-meta">
+                      {#if item.chapterNumber}
+                        <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
                       {/if}
 
-                      {#if item.formattedDue}
-                        <span class="meta-pill deadline" class:is-overdue={item.isOverdue}>
-                          <Clock size={11} />
-                          {item.formattedDue}
-                        </span>
-                      {/if}
+                      <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                        <span class="dot"></span>
+                        {item.stageName}
+                      </span>
 
-                      {#if item.isStale}
-                        <span class="meta-pill stale">
-                          Parado há {item.staleDays}d
-                        </span>
+                      {#if item.priority === 'URGENT'}
+                        <span class="meta-pill urgent">Urgente</span>
+                      {:else if item.priority === 'HIGH'}
+                        <span class="meta-pill high">Alta prioridade</span>
                       {/if}
                     </div>
-                  {/if}
+
+                    {#if item.isRework || item.isOverdue || item.formattedDue || item.isStale}
+                      <div class="card-meta-row secondary-meta">
+                        {#if item.isRework}
+                          <span class="meta-pill rework">
+                            <AlertTriangle size={11} />
+                            Retrabalho
+                          </span>
+                        {/if}
+
+                        {#if item.isOverdue}
+                          <span class="meta-pill deadline is-overdue">
+                            <Clock size={11} />
+                            Atrasado há {Math.abs(item.dueDiffDays || 0)} dias
+                          </span>
+                        {:else if item.formattedDue}
+                          <span class="meta-pill deadline">
+                            <Clock size={11} />
+                            {item.formattedDue}
+                          </span>
+                        {/if}
+
+                        {#if item.isStale && !item.isOverdue}
+                          <span class="meta-pill stale-inactivity">
+                            Sem atividade há {item.staleDays} dias
+                          </span>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
-                <!-- Right: Action Buttons -->
+                <!-- Bottom Region (Mobile) / Right Column (Desktop): Action Buttons -->
                 <div class="card-actions-col">
                   <button
                     type="button"
@@ -964,59 +997,70 @@
         <div class="cards-vertical-list">
           {#each availableItems as item (item.id)}
             <article class="task-compact-card available">
-              <div class="card-main-row">
-                <!-- Left: 48x64px Cover -->
-                <div class="card-visual-col">
-                  {#if item.coverId}
-                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
-                  {:else}
-                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
-                      <span class="fallback-emoji">{item.stageIcon}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                <!-- Middle: Details -->
-                <div class="card-details-col">
-                  <div class="card-title-row">
-                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
-                  </div>
-
-                  <div class="card-meta-row primary-meta">
-                    {#if item.chapterNumber}
-                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
-                    {/if}
-
-                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
-                      <span class="dot"></span>
-                      {item.stageName}
-                    </span>
-
-                    {#if item.isRework}
-                      <span class="meta-pill rework">
-                        <AlertTriangle size={11} />
-                        Retrabalho
-                      </span>
-                    {/if}
-
-                    {#if item.priority === 'URGENT'}
-                      <span class="meta-pill urgent">Urgente</span>
-                    {:else if item.priority === 'HIGH'}
-                      <span class="meta-pill high">Alta</span>
-                    {/if}
-                  </div>
-
-                  <div class="card-meta-row secondary-meta">
-                    {#if item.dependencies.length > 0}
-                      <span class="meta-text-muted">Pré-requisito pronto: {item.dependencies.join(', ').toUpperCase()}</span>
+              <div class="card-main-content">
+                <!-- Top Region: Identification (Cover + Details) -->
+                <div class="card-identity-region">
+                  <!-- Left: 48x64px Cover -->
+                  <div class="card-visual-col">
+                    {#if item.coverId}
+                      <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
                     {:else}
-                      <span class="meta-text-muted">Etapa de entrada sem pré-requisitos</span>
+                      <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                        <span class="fallback-emoji">{item.stageIcon}</span>
+                      </div>
                     {/if}
+                  </div>
+
+                  <!-- Middle: Details -->
+                  <div class="card-details-col">
+                    <div class="card-title-row">
+                      <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
+                    </div>
+
+                    <div class="card-meta-row primary-meta">
+                      {#if item.chapterNumber}
+                        <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                      {/if}
+
+                      <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                        <span class="dot"></span>
+                        {item.stageName}
+                      </span>
+
+                      {#if item.isRework}
+                        <span class="meta-pill rework">
+                          <AlertTriangle size={11} />
+                          Retrabalho
+                        </span>
+                      {/if}
+
+                      {#if item.priority === 'URGENT'}
+                        <span class="meta-pill urgent">Urgente</span>
+                      {:else if item.priority === 'HIGH'}
+                        <span class="meta-pill high">Alta</span>
+                      {/if}
+                    </div>
+
+                    <div class="card-meta-row secondary-meta">
+                      {#if item.dependencies.length > 0}
+                        <span class="meta-text-muted">Pré-requisito pronto: {item.dependencies.join(', ').toUpperCase()}</span>
+                      {:else}
+                        <span class="meta-text-muted">Etapa de entrada sem pré-requisitos</span>
+                      {/if}
+                    </div>
                   </div>
                 </div>
 
-                <!-- Right: Actions -->
+                <!-- Right / Bottom: Actions -->
                 <div class="card-actions-col">
+                  <form method="POST" action="?/claimStage" use:enhance class="action-form-full">
+                    <input type="hidden" name="chapter_stage_id" value={item.id} />
+                    <button type="submit" class="btn-action-claim" title="Assumir esta etapa para trabalhar">
+                      <Zap size={14} />
+                      <span>Pegar Tarefa</span>
+                    </button>
+                  </form>
+
                   <button
                     type="button"
                     class="btn-timeline-ghost"
@@ -1024,16 +1068,8 @@
                     title="Ver histórico do capítulo"
                   >
                     <History size={14} />
-                    <span class="desktop-only-inline">Histórico</span>
+                    <span>Histórico</span>
                   </button>
-
-                  <form method="POST" action="?/claimStage" use:enhance>
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
-                    <button type="submit" class="btn-action-claim" title="Assumir esta etapa para trabalhar">
-                      <Zap size={14} />
-                      <span>Pegar Tarefa</span>
-                    </button>
-                  </form>
                 </div>
               </div>
             </article>
@@ -1055,62 +1091,66 @@
         <div class="cards-vertical-list">
           {#each waitingItems as item (item.id)}
             <article class="task-compact-card waiting">
-              <div class="card-main-row">
-                <div class="card-visual-col">
-                  {#if item.coverId}
-                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
-                  {:else}
-                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
-                      <span class="fallback-emoji">{item.stageIcon}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                <div class="card-details-col">
-                  <div class="card-title-row">
-                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
-                  </div>
-
-                  <div class="card-meta-row primary-meta">
-                    {#if item.chapterNumber}
-                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
-                    {/if}
-
-                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
-                      <span class="dot"></span>
-                      {item.stageName}
-                    </span>
-
-                    <span class="meta-pill waiting-status">
-                      <Lock size={11} />
-                      {#if item.status === 'BLOCKED'}
-                        Aguardando etapa anterior
-                      {:else if item.assignedTo}
-                        Com outro membro
-                      {:else}
-                        Pendente
-                      {/if}
-                    </span>
-                  </div>
-
-                  <div class="card-meta-row secondary-meta">
-                    {#if item.dependencies.length > 0}
-                      <span class="meta-text-muted">Depende de: {item.dependencies.join(', ').toUpperCase()}</span>
+              <div class="card-main-content">
+                <!-- Top Region: Identification (Cover + Details) -->
+                <div class="card-identity-region">
+                  <div class="card-visual-col">
+                    {#if item.coverId}
+                      <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
                     {:else}
-                      <span class="meta-text-muted">Aguardando liberação operacional</span>
+                      <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                        <span class="fallback-emoji">{item.stageIcon}</span>
+                      </div>
                     {/if}
+                  </div>
+
+                  <div class="card-details-col">
+                    <div class="card-title-row">
+                      <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
+                    </div>
+
+                    <div class="card-meta-row primary-meta">
+                      {#if item.chapterNumber}
+                        <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                      {/if}
+
+                      <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                        <span class="dot"></span>
+                        {item.stageName}
+                      </span>
+
+                      <span class="meta-pill waiting-status">
+                        <Lock size={11} />
+                        {#if item.status === 'BLOCKED'}
+                          Aguardando etapa anterior
+                        {:else if item.assignedTo}
+                          Com outro membro
+                        {:else}
+                          Pendente
+                        {/if}
+                      </span>
+                    </div>
+
+                    <div class="card-meta-row secondary-meta">
+                      {#if item.dependencies.length > 0}
+                        <span class="meta-text-muted">Depende de: {item.dependencies.join(', ').toUpperCase()}</span>
+                      {:else}
+                        <span class="meta-text-muted">Aguardando liberação operacional</span>
+                      {/if}
+                    </div>
                   </div>
                 </div>
 
+                <!-- Right / Bottom: Actions -->
                 <div class="card-actions-col">
                   <button
                     type="button"
-                    class="btn-timeline-ghost"
+                    class="btn-timeline-ghost full-mobile"
                     onclick={() => openChapterTimeline(item.chapter)}
                     title="Ver linha do tempo"
                   >
                     <History size={14} />
-                    <span>Histórico</span>
+                    <span>Ver Linha do Tempo</span>
                   </button>
                 </div>
               </div>
@@ -1133,46 +1173,62 @@
         <div class="cards-vertical-list">
           {#each paginatedDoneItems as item (item.id)}
             <article class="task-compact-card done">
-              <div class="card-main-row">
-                <div class="card-visual-col">
-                  {#if item.coverId}
-                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
-                  {:else}
-                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
-                      <span class="fallback-emoji">{item.stageIcon}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                <div class="card-details-col">
-                  <div class="card-title-row">
-                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
-                  </div>
-
-                  <div class="card-meta-row primary-meta">
-                    {#if item.chapterNumber}
-                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+              <div class="card-main-content">
+                <!-- Top Region: Identification (Cover + Details) -->
+                <div class="card-identity-region">
+                  <div class="card-visual-col">
+                    {#if item.coverId}
+                      <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
+                    {:else}
+                      <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                        <span class="fallback-emoji">{item.stageIcon}</span>
+                      </div>
                     {/if}
-
-                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
-                      <span class="dot"></span>
-                      {item.stageName}
-                    </span>
-
-                    <span class="meta-pill completed-pill">
-                      <CheckCircle2 size={11} />
-                      Concluído
-                    </span>
                   </div>
 
-                  {#if item.completedAt}
-                    <div class="card-meta-row secondary-meta">
-                      <span class="meta-text-muted">Finalizado {relativeTime(item.completedAt)}</span>
+                  <div class="card-details-col">
+                    <div class="card-title-row">
+                      <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
                     </div>
-                  {/if}
+
+                    <div class="card-meta-row primary-meta">
+                      {#if item.chapterNumber}
+                        <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                      {/if}
+
+                      <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                        <span class="dot"></span>
+                        {item.stageName}
+                      </span>
+
+                      <span class="meta-pill completed-pill">
+                        <CheckCircle2 size={11} />
+                        Concluído
+                      </span>
+                    </div>
+
+                    {#if item.completedAt}
+                      <div class="card-meta-row secondary-meta">
+                        <span class="meta-text-muted">Finalizado {relativeTime(item.completedAt)}</span>
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
+                <!-- Right / Bottom: Actions -->
                 <div class="card-actions-col">
+                  {#if item.chapter}
+                    <button
+                      type="button"
+                      class="btn-action-continue"
+                      onclick={() => onOpenChapter && onOpenChapter(item.chapter)}
+                      title="Abrir capítulo"
+                    >
+                      <span>Abrir Capítulo</span>
+                      <ArrowRight size={13} class="btn-arrow-icon" />
+                    </button>
+                  {/if}
+
                   <button
                     type="button"
                     class="btn-timeline-ghost"
@@ -1575,31 +1631,24 @@
     align-items: center;
     width: 100%;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    overflow: hidden;
   }
 
-  .queue-tabs-scroll {
+  .queue-tabs-grid {
     display: flex;
     align-items: center;
     gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
     width: 100%;
     padding-bottom: 8px;
-  }
-
-  .queue-tabs-scroll::-webkit-scrollbar {
-    display: none;
   }
 
   .queue-tab-btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 10px;
     padding: 8px 16px;
-    background: transparent;
-    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
     font-size: 0.875rem;
     font-weight: 500;
@@ -1610,15 +1659,22 @@
     user-select: none;
   }
 
+  .tab-label-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .queue-tab-btn:hover {
     color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
   }
 
   .queue-tab-btn.active {
     color: #f8fafc;
-    background: rgba(168, 85, 247, 0.14);
-    border-color: rgba(168, 85, 247, 0.3);
+    background: rgba(168, 85, 247, 0.16);
+    border-color: rgba(168, 85, 247, 0.4);
     font-weight: 600;
   }
 
@@ -1648,7 +1704,7 @@
   }
 
   .queue-tab-btn.active .queue-counter-badge {
-    background: rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.4);
     color: #ffffff;
   }
 
@@ -1834,13 +1890,22 @@
     background: rgba(28, 20, 24, 0.75);
   }
 
-  .card-main-row {
+  .card-main-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 18px;
+    min-height: 84px;
+    box-sizing: border-box;
+  }
+
+  .card-identity-region {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px 16px;
-    min-height: 80px;
-    box-sizing: border-box;
+    flex: 1 1 0%;
+    min-width: 0;
   }
 
   /* Left Cover (48x64px) */
@@ -1898,7 +1963,7 @@
     font-weight: 600;
     color: #f8fafc;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.35;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1966,14 +2031,18 @@
   }
 
   .meta-pill.deadline.is-overdue {
-    background: rgba(244, 63, 94, 0.15);
-    color: #fb7185;
+    background: rgba(239, 68, 68, 0.14);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
     font-weight: 600;
   }
 
-  .meta-pill.stale {
-    background: rgba(244, 63, 94, 0.1);
-    color: #f87171;
+  .meta-pill.stale-inactivity {
+    background: rgba(251, 191, 36, 0.08);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    font-size: 0.6875rem;
+    font-weight: 500;
   }
 
   .meta-pill.waiting-status {
@@ -2688,45 +2757,109 @@
       display: none;
     }
 
-    /* Card Mobile Specs (90–120px height, touch targets >= 44x44px) */
-    .card-main-row {
-      padding: 10px 12px;
+    /* 4 Categories Navigation in 2x2 Grid (Rodada 21 V7.1) */
+    .queue-nav-strip {
+      border-bottom: none;
+      margin-bottom: 2px;
+    }
+
+    .queue-tabs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+      padding-bottom: 0;
+    }
+
+    .queue-tab-btn {
+      height: 48px;
+      min-height: 48px;
+      padding: 0 12px;
+      box-sizing: border-box;
+      font-size: 0.8125rem;
+      border-radius: 8px;
+      width: 100%;
+    }
+
+    .tab-label-group {
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .queue-tab-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 2-Tiered Mobile Card Composition (Rodada 21 V7.1) */
+    .card-main-content {
+      flex-direction: column;
+      align-items: stretch;
       gap: 12px;
-      min-height: 90px;
+      padding: 12px 14px;
+      min-height: auto;
+    }
+
+    .card-identity-region {
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
     }
 
     .card-visual-col {
-      width: 44px;
-      height: 60px;
+      width: 48px;
+      height: 64px;
+      flex-shrink: 0;
     }
 
     .task-work-name {
-      font-size: 0.875rem;
+      font-size: 0.9375rem;
       white-space: normal;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
+      line-height: 1.35;
     }
 
     .card-actions-col {
-      flex-direction: column;
-      gap: 6px;
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      width: 100%;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
       align-items: stretch;
+    }
+
+    .card-actions-col .action-form-full {
+      flex: 1 1 0%;
+      display: flex;
     }
 
     .btn-action-continue,
     .btn-action-claim {
+      flex: 1 1 0%;
       height: 44px;
-      min-width: 44px;
+      min-height: 44px;
       padding: 0 12px;
       justify-content: center;
+      font-size: 0.8125rem;
+      width: 100%;
     }
 
     .btn-toggle-expand,
     .btn-timeline-ghost {
-      height: 38px;
-      min-width: 44px;
+      flex: 1 1 0%;
+      height: 44px;
+      min-height: 44px;
+      padding: 0 12px;
       justify-content: center;
+      font-size: 0.8125rem;
+    }
+
+    .btn-timeline-ghost.full-mobile {
+      width: 100%;
     }
 
     .panel-footer-actions {
@@ -2744,6 +2877,35 @@
       width: 100%;
       height: 44px;
       justify-content: center;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .queue-tab-btn {
+      padding: 0 8px;
+      font-size: 0.75rem;
+    }
+
+    .queue-counter-badge {
+      padding: 2px 5px;
+      font-size: 0.625rem;
+    }
+
+    .card-visual-col {
+      width: 42px;
+      height: 56px;
+    }
+
+    .task-work-name {
+      font-size: 0.875rem;
+    }
+
+    .btn-action-continue,
+    .btn-action-claim,
+    .btn-toggle-expand,
+    .btn-timeline-ghost {
+      font-size: 0.75rem;
+      padding: 0 8px;
     }
   }
 </style>
