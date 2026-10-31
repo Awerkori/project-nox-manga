@@ -2109,7 +2109,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
   }
 
   .card-title-row {
@@ -2119,23 +2119,23 @@
   }
 
   .task-work-name {
-    font-size: 1.25rem; /* ~20px */
-    font-weight: 700;
+    font-size: 1.3125rem; /* ~21px */
+    font-weight: 750;
     color: #ffffff;
     margin: 0;
-    line-height: 1.28;
+    line-height: 1.25;
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
   }
 
   .card-meta-row {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
@@ -2151,15 +2151,17 @@
   }
 
   .meta-pill.chapter {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f8fafc;
-    font-weight: 650;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #e2e8f0;
+    font-weight: 600;
   }
 
   .meta-pill.stage {
-    background: color-mix(in srgb, var(--stage-c, #8b5cf6) 16%, transparent);
+    background: color-mix(in srgb, var(--stage-c, #8b5cf6) 18%, transparent);
     color: color-mix(in srgb, var(--stage-c, #8b5cf6) 95%, #ffffff);
-    border: 1px solid color-mix(in srgb, var(--stage-c, #8b5cf6) 35%, transparent);
+    border: 1px solid color-mix(in srgb, var(--stage-c, #8b5cf6) 38%, transparent);
+    font-weight: 650;
   }
 
   .meta-pill.stage .dot {
@@ -2167,6 +2169,7 @@
     height: 7px;
     border-radius: 50%;
     background: var(--stage-c, #8b5cf6);
+    box-shadow: 0 0 5px color-mix(in srgb, var(--stage-c, #8b5cf6) 60%, transparent);
   }
 
   .meta-pill.urgent {
@@ -2221,8 +2224,8 @@
   .meta-pill.stale-inactivity {
     background: rgba(245, 158, 11, 0.08);
     color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.2);
-    font-size: 0.78125rem; /* 12.5px */
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    font-size: 0.8125rem; /* ~13px */
     font-weight: 500;
     padding: 3px 9px;
   }
