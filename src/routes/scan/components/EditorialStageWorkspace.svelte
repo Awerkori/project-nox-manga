@@ -130,9 +130,9 @@
   const STAGE_PRESETS: Record<string, StagePreset> = {
     traducao: {
       title: 'Tradução',
-      pillLabel: 'Etapa 2 · Tradução',
+      pillLabel: 'ETAPA 2',
       pillBg: 'rgba(59, 130, 246, 0.12)',
-      pillBorder: 'rgba(59, 130, 246, 0.28)',
+      pillBorder: 'rgba(59, 130, 246, 0.3)',
       accentColor: '#3b82f6',
       accentLight: '#60a5fa',
       accentGlow: 'rgba(59, 130, 246, 0.25)',
@@ -152,9 +152,9 @@
     },
     clean_redraw: {
       title: 'Clean/Redraw',
-      pillLabel: 'Etapa 3 · Clean',
+      pillLabel: 'ETAPA 3',
       pillBg: 'rgba(236, 72, 153, 0.12)',
-      pillBorder: 'rgba(236, 72, 153, 0.28)',
+      pillBorder: 'rgba(236, 72, 153, 0.3)',
       accentColor: '#ec4899',
       accentLight: '#f472b6',
       accentGlow: 'rgba(236, 72, 153, 0.25)',
@@ -174,9 +174,9 @@
     },
     typeset: {
       title: 'Typeset',
-      pillLabel: 'Etapa 4 · Typeset',
+      pillLabel: 'ETAPA 4',
       pillBg: 'rgba(245, 158, 11, 0.12)',
-      pillBorder: 'rgba(245, 158, 11, 0.28)',
+      pillBorder: 'rgba(245, 158, 11, 0.3)',
       accentColor: '#f59e0b',
       accentLight: '#fbbf24',
       accentGlow: 'rgba(245, 158, 11, 0.25)',
@@ -224,6 +224,15 @@
   let isReleasingStageId = $state<string | null>(null);
   let claimFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
   let completeFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
+
+  // Helper to reliably retrieve work cover url
+  function getWorkCoverUrl(work: any): string | null {
+    if (!work) return null;
+    const coverId = work.cover_id || work.cover_image_id || work.coverId;
+    if (coverId) return `/media/${coverId}?size=thumb&v=3`;
+    if (work.cover_url) return work.cover_url;
+    return null;
+  }
 
   // Format bytes helper
   function formatBytes(bytes: number): string {
@@ -351,14 +360,11 @@
   let availableItems = $derived.by(() => {
     return activeStageItems
       .filter((item: any) => {
-        // Must be unassigned and in AVAILABLE or REWORK status
         const isFree = (item.cs.status === 'AVAILABLE' || item.cs.status === 'REWORK') && !item.cs.assigned_to;
         return isFree;
       })
       .filter((item: any) => {
-        // Work filter
         const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
-        // Text search query
         const query = searchQuery.trim().toLowerCase();
         if (!query) return matchesWork;
         const title = (item.work?.title || '').toLowerCase();
@@ -388,7 +394,7 @@
       });
   });
 
-  // Automatically select 'mine' if available is 0 and user has active work
+  // Automatically select 'mine' initially if available is 0 and user has active work
   $effect(() => {
     if (!userSelectedCategory && myItems.length > 0 && availableItems.length === 0 && activeCategory === 'available') {
       activeCategory = 'mine';
@@ -437,6 +443,7 @@
     <div class="editorial-cards-grid">
       {#each availableItems as item (item.cs.id)}
         {@const priorityMeta = formatPriority(item.ch.priority)}
+        {@const coverUrl = getWorkCoverUrl(item.work)}
         {@const isTypeset = canonicalSlug === 'typeset'}
         {@const typesetPrereqs = isTypeset ? checkTypesetPrerequisites(item.ch.id) : null}
         {@const rawPrereqs = !isTypeset ? checkRawPrerequisites(item.ch.id) : null}
@@ -446,13 +453,19 @@
 
         <article class="editorial-card available-card" class:prereqs-blocked={isTypeset && !typesetPrereqs?.isEligible}>
           <div class="card-top-cluster">
-            <!-- Cover image thumbnail -->
+            <!-- Real work cover image or elegant stage-colored fallback -->
             <div class="card-cover-container">
-              {#if item.work?.cover_url}
-                <img src={item.work.cover_url} alt={item.work.title} class="card-cover-image" loading="lazy" />
+              {#if coverUrl}
+                <img
+                  src={coverUrl}
+                  alt={item.work?.title || 'Obra'}
+                  class="card-cover-image"
+                  loading="lazy"
+                  decoding="async"
+                />
               {:else}
-                <div class="card-cover-fallback">
-                  <FileArchive size={22} class="text-slate-500" />
+                <div class="card-cover-fallback" style="--accent-color: {stageConfig.accentColor}">
+                  <span class="fallback-nox-text">NOX</span>
                 </div>
               {/if}
             </div>
@@ -561,6 +574,16 @@
                 {/if}
               </button>
             </form>
+
+            <button
+              type="button"
+              class="btn-action-view-details available-details"
+              onclick={() => onOpenChapter(item.ch)}
+              title="Ver ficha técnica, equipe e comentários deste capítulo"
+            >
+              <span>Ver detalhes</span>
+              <ArrowRight size={13} />
+            </button>
           </div>
         </article>
       {/each}
@@ -587,6 +610,7 @@
       {#each myItems as item (item.cs.id)}
         {@const deliverables = getDeliverableFiles(item.cs, item.ch.id)}
         {@const hasDeliverables = deliverables.length > 0}
+        {@const coverUrl = getWorkCoverUrl(item.work)}
         {@const upstream = getUpstreamInputs(item.ch.id)}
         {@const isExpanded = !!expandedChapterIds[item.cs.id]}
         {@const isRework = item.cs.status === 'REWORK'}
@@ -599,7 +623,7 @@
             <div class="card-rework-banner">
               <div class="rework-banner-head">
                 <AlertTriangle size={14} class="text-amber-400" />
-                <span class="rework-banner-title">Retrabalho solicitado pelo QC</span>
+                <span class="rework-banner-title">Correção solicitada pelo QC</span>
               </div>
               {#if item.cs.notes}
                 <p class="rework-banner-text">{item.cs.notes}</p>
@@ -609,12 +633,19 @@
 
           <!-- Card Header Cluster -->
           <div class="card-top-cluster">
+            <!-- Real work cover image or fallback -->
             <div class="card-cover-container">
-              {#if item.work?.cover_url}
-                <img src={item.work.cover_url} alt={item.work.title} class="card-cover-image" loading="lazy" />
+              {#if coverUrl}
+                <img
+                  src={coverUrl}
+                  alt={item.work?.title || 'Obra'}
+                  class="card-cover-image"
+                  loading="lazy"
+                  decoding="async"
+                />
               {:else}
-                <div class="card-cover-fallback">
-                  <FileArchive size={22} class="text-slate-500" />
+                <div class="card-cover-fallback" style="--accent-color: {stageConfig.accentColor}">
+                  <span class="fallback-nox-text">NOX</span>
                 </div>
               {/if}
             </div>
@@ -628,12 +659,12 @@
                 {#if isRework}
                   <span class="card-status-badge rework">
                     <AlertTriangle size={11} />
-                    <span>Retrabalho</span>
+                    <span>Correção solicitada</span>
                   </span>
                 {:else if hasDeliverables}
                   <span class="card-status-badge ready">
                     <CheckCircle2 size={11} />
-                    <span>Pronto para concluir ({deliverables.length})</span>
+                    <span>Pronto para concluir &bull; {deliverables.length} {deliverables.length === 1 ? 'arq.' : 'arqs.'}</span>
                   </span>
                 {:else}
                   <span class="card-status-badge in-progress" style="--accent-color: {stageConfig.accentColor}">
@@ -650,41 +681,10 @@
                 {/if}
               </div>
 
-              <!-- Action Buttons Row -->
+              <!-- REFINED ACTION HIERARCHY (NO BUTTON COMPETITION) -->
               <div class="my-card-actions-row">
-                <button
-                  type="button"
-                  class="btn-toggle-workspace"
-                  class:active={isExpanded}
-                  class:highlight={!hasDeliverables}
-                  onclick={() => toggleChapterWorkspace(item.cs.id)}
-                  title={isExpanded ? 'Recolher área de trabalho' : 'Continuar trabalhando neste capítulo'}
-                >
-                  <Eye size={13} />
-                  <span>{isExpanded ? 'Recolher' : 'Continuar'}</span>
-                  {#if isExpanded}
-                    <ChevronUp size={13} />
-                  {:else}
-                    <ChevronDown size={13} />
-                  {/if}
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-secondary-files"
-                  onclick={() => {
-                    if (!isExpanded) expandedChapterIds[item.cs.id] = true;
-                    if (!mobileAccordionState[item.cs.id]) {
-                      mobileAccordionState[item.cs.id] = { inputs: true, delivery: true };
-                    }
-                  }}
-                  title="Acessar arquivos e entregas"
-                >
-                  <FileText size={13} />
-                  <span>Arquivos ({deliverables.length})</span>
-                </button>
-
                 {#if hasDeliverables}
+                  <!-- STATE A: READY TO COMPLETE (PRIMARY HIGHLIGHTED GREEN ACTION) -->
                   <form
                     method="POST"
                     action="?/completeStageAction"
@@ -709,12 +709,12 @@
                         }
                       };
                     }}
-                    class="complete-form-inline"
+                    class="complete-form-primary"
                   >
                     <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
                     <button
                       type="submit"
-                      class="btn-editorial-complete"
+                      class="btn-action-complete-prominent"
                       disabled={isCompletingStageId === item.cs.id}
                       title="Concluir etapa e avançar no pipeline"
                     >
@@ -722,12 +722,73 @@
                         <span class="spinner-editorial-xs"></span>
                         <span>Concluindo...</span>
                       {:else}
-                        <CheckCircle2 size={13} />
+                        <CheckCircle2 size={14} />
                         <span>{stageConfig.completeActionLabel}</span>
                       {/if}
                     </button>
                   </form>
+
+                  <!-- Secondary Action: Abrir trabalho / Recolher -->
+                  <button
+                    type="button"
+                    class="btn-action-open-work"
+                    class:active={isExpanded}
+                    onclick={() => toggleChapterWorkspace(item.cs.id)}
+                    title={isExpanded ? 'Recolher área de trabalho' : 'Abrir materiais e arquivos'}
+                  >
+                    <FolderKanban size={13} />
+                    <span>{isExpanded ? 'Recolher' : 'Abrir trabalho'}</span>
+                    {#if isExpanded}
+                      <ChevronUp size={13} />
+                    {:else}
+                      <ChevronDown size={13} />
+                    {/if}
+                  </button>
+                {:else}
+                  <!-- STATE B: WORK IN PROGRESS (PRIMARY NOX PURPLE ACTION) -->
+                  <button
+                    type="button"
+                    class="btn-action-open-work"
+                    class:active={isExpanded}
+                    onclick={() => toggleChapterWorkspace(item.cs.id)}
+                    title={isExpanded ? 'Recolher área de trabalho' : 'Abrir materiais e arquivos'}
+                  >
+                    <FolderKanban size={13} />
+                    <span>{isExpanded ? 'Recolher' : 'Abrir trabalho'}</span>
+                    {#if isExpanded}
+                      <ChevronUp size={13} />
+                    {:else}
+                      <ChevronDown size={13} />
+                    {/if}
+                  </button>
+
+                  <!-- Secondary Action: Arquivos -->
+                  <button
+                    type="button"
+                    class="btn-action-secondary"
+                    onclick={() => {
+                      if (!isExpanded) expandedChapterIds[item.cs.id] = true;
+                      if (!mobileAccordionState[item.cs.id]) {
+                        mobileAccordionState[item.cs.id] = { inputs: true, delivery: true };
+                      }
+                    }}
+                    title="Acessar arquivos e entregas"
+                  >
+                    <Upload size={13} />
+                    <span>Arquivos</span>
+                  </button>
                 {/if}
+
+                <!-- Dedicated Secondary Action: Ver detalhes da página do capítulo -->
+                <button
+                  type="button"
+                  class="btn-action-view-details"
+                  onclick={() => onOpenChapter(item.ch)}
+                  title="Abrir página de detalhes, equipe e comentários deste capítulo"
+                >
+                  <span>Ver detalhes</span>
+                  <ArrowRight size={13} />
+                </button>
               </div>
             </div>
           </div>
@@ -1051,7 +1112,7 @@
 
 <!-- MAIN COMPONENT ROOT -->
 <div class="editorial-workspace-root">
-  <!-- COMPACT EDITORIAL HEADER (70–90px, Sleek lockup, 0 redundant breadcrumbs or 7 stage buttons) -->
+  <!-- COMPACT EDITORIAL HEADER (70–85px, Sleek lockup, 0 redundant breadcrumbs or 7 stage buttons) -->
   <header class="editorial-header">
     <div class="editorial-header-info">
       <div class="editorial-title-row">
@@ -1211,20 +1272,21 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 1400px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     color: #e2e8f0;
     box-sizing: border-box;
   }
 
   /* --------------------------------------------------------------------------
-     1. COMPACT EDITORIAL HEADER (70–90px Desktop, 70–100px Android)
+     1. COMPACT EDITORIAL HEADER (70–85px Desktop, 60–80px Android)
      -------------------------------------------------------------------------- */
   .editorial-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
+    min-height: 76px;
+    padding: 16px 22px;
     background: rgba(14, 17, 29, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
@@ -1248,7 +1310,7 @@
   }
 
   .editorial-title {
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 700;
     color: #ffffff;
     letter-spacing: -0.02em;
@@ -1260,13 +1322,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     padding: 3px 9px;
-    border-radius: 9999px;
+    border-radius: 6px;
     border-width: 1px;
     border-style: solid;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
@@ -1277,7 +1339,7 @@
   }
 
   .editorial-subtitle {
-    font-size: 13px;
+    font-size: 13.5px;
     color: #94a3b8;
     margin: 0;
     line-height: 1.4;
@@ -1299,9 +1361,9 @@
     gap: 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 6px 12px;
+    padding: 6px 13px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 500;
     color: #cbd5e1;
   }
@@ -1336,10 +1398,10 @@
     justify-content: space-between;
     gap: 14px;
     flex-wrap: wrap;
-    background: rgba(14, 17, 29, 0.6);
+    background: rgba(14, 17, 29, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 10px;
-    padding: 8px 12px;
+    padding: 8px 14px;
     box-sizing: border-box;
   }
 
@@ -1356,10 +1418,10 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 7px 13px;
+    padding: 8px 14px;
     border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 13.5px;
+    font-weight: 600;
     color: #94a3b8;
     background: transparent;
     border: none;
@@ -1370,12 +1432,12 @@
 
   .segment-btn:hover {
     color: #e2e8f0;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .segment-btn.active {
     color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
@@ -1395,7 +1457,7 @@
   }
 
   .segment-btn.active .segment-badge {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
   }
 
@@ -1406,7 +1468,7 @@
   }
 
   .segment-badge.mine {
-    background: rgba(168, 85, 247, 0.18);
+    background: rgba(168, 85, 247, 0.2);
     color: #d8b4fe;
   }
 
@@ -1440,7 +1502,7 @@
 
   .mini-search-icon {
     position: absolute;
-    left: 10px;
+    left: 11px;
     color: #64748b;
     pointer-events: none;
   }
@@ -1448,20 +1510,22 @@
   .mini-search-input {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 7px;
-    padding: 7px 28px 7px 30px;
-    font-size: 12.5px;
+    border-radius: 8px;
+    padding: 0 32px 0 34px;
+    height: 42px;
+    font-size: 13px;
     color: #f1f5f9;
-    width: 190px;
+    width: 220px;
     outline: none;
     transition: all 0.15s ease;
+    box-sizing: border-box;
   }
 
   .mini-search-input:focus {
     background: rgba(255, 255, 255, 0.07);
     border-color: rgba(168, 85, 247, 0.4);
     box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
-    width: 220px;
+    width: 260px;
   }
 
   .mini-search-input::placeholder {
@@ -1470,12 +1534,12 @@
 
   .btn-clear-search-mini {
     position: absolute;
-    right: 7px;
+    right: 8px;
     background: transparent;
     border: none;
     color: #94a3b8;
     cursor: pointer;
-    padding: 3px;
+    padding: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1484,13 +1548,15 @@
   .mini-work-select {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 7px;
-    padding: 7px 10px;
-    font-size: 12.5px;
+    border-radius: 8px;
+    padding: 0 12px;
+    height: 42px;
+    font-size: 13px;
     color: #f1f5f9;
     outline: none;
     cursor: pointer;
-    max-width: 200px;
+    max-width: 220px;
+    box-sizing: border-box;
   }
 
   .mini-work-select:focus {
@@ -1513,7 +1579,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
-    gap: 14px;
+    gap: 16px;
     width: 100%;
     box-sizing: border-box;
   }
@@ -1529,7 +1595,7 @@
     background: rgba(14, 17, 29, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    padding: 14px;
+    padding: 15px;
     gap: 12px;
     box-sizing: border-box;
     transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
@@ -1601,6 +1667,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
 
   .card-cover-fallback {
@@ -1609,6 +1676,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .fallback-nox-text {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent-color, #a855f7);
+    opacity: 0.7;
   }
 
   .card-details-block {
@@ -1628,7 +1704,7 @@
   }
 
   .card-work-title {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     color: #ffffff;
     letter-spacing: -0.01em;
@@ -1680,7 +1756,7 @@
   }
 
   .chapter-number-badge {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #f1f5f9;
   }
@@ -1728,9 +1804,9 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 600;
-    padding: 2px 7px;
+    padding: 2px 8px;
     border-radius: 6px;
     flex-shrink: 0;
   }
@@ -1756,12 +1832,15 @@
   /* Card Action Row & Buttons */
   .card-action-footer {
     display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     margin-top: 2px;
   }
 
   .claim-form-full {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 
   .btn-editorial-claim {
@@ -1810,89 +1889,124 @@
     margin-top: 6px;
   }
 
-  .btn-toggle-workspace {
+  /* State A: Complete form takes primary focus */
+  .complete-form-primary {
+    display: inline-flex;
+  }
+
+  .btn-action-complete-prominent {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 12px;
+    height: 38px;
+    padding: 0 16px;
     border-radius: 7px;
-    font-size: 12.5px;
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #f1f5f9;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-toggle-workspace:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .btn-toggle-workspace.active {
-    background: rgba(124, 58, 237, 0.2);
-    border-color: rgba(124, 58, 237, 0.4);
-    color: #c084fc;
-  }
-
-  .btn-toggle-workspace.highlight {
-    background: rgba(124, 58, 237, 0.15);
-    border-color: rgba(124, 58, 237, 0.3);
-  }
-
-  .btn-secondary-files {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 11px;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 500;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #94a3b8;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-secondary-files:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #f1f5f9;
-  }
-
-  .complete-form-inline {
-    display: inline-flex;
-    margin-left: auto;
-  }
-
-  .btn-editorial-complete {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 13px;
-    border-radius: 7px;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     background: linear-gradient(135deg, #059669 0%, #10b981 100%);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: #ffffff;
     cursor: pointer;
     transition: all 0.15s ease;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
   }
 
-  .btn-editorial-complete:hover:not(:disabled) {
+  .btn-action-complete-prominent:hover:not(:disabled) {
     background: linear-gradient(135deg, #047857 0%, #059669 100%);
-    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
   }
 
-  .btn-editorial-complete:disabled {
+  .btn-action-complete-prominent:disabled {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.08);
     color: #64748b;
     cursor: not-allowed;
     box-shadow: none;
+  }
+
+  /* State B: Open work takes primary purple focus */
+  .btn-action-open-work {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+  }
+
+  .btn-action-open-work:hover {
+    background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  }
+
+  .btn-action-open-work.active {
+    background: rgba(124, 58, 237, 0.25);
+    border-color: rgba(124, 58, 237, 0.5);
+    color: #d8b4fe;
+    box-shadow: none;
+  }
+
+  .btn-action-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-action-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .btn-action-secondary.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+  }
+
+  .btn-action-view-details {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    color: #c4b5fd;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .btn-action-view-details:hover {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.45);
+    color: #ffffff;
+  }
+
+  .btn-action-view-details.available-details {
+    height: 42px;
   }
 
   /* --------------------------------------------------------------------------
@@ -2206,7 +2320,7 @@
   }
 
   /* --------------------------------------------------------------------------
-     5. CONTEXTUAL COMPACT EMPTY STATES (140–180px)
+     5. CONTEXTUAL COMPACT EMPTY STATES (140–159px)
      -------------------------------------------------------------------------- */
   .editorial-empty-card {
     display: flex;
@@ -2219,10 +2333,11 @@
     border: 1px dashed rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     min-height: 140px;
-    max-height: 190px;
+    max-height: 160px;
     gap: 8px;
     box-sizing: border-box;
     width: 100%;
+    max-width: 680px;
   }
 
   .empty-icon-halo {
@@ -2399,6 +2514,7 @@
     .editorial-header {
       padding: 11px 14px;
       gap: 8px;
+      min-height: auto;
     }
 
     .editorial-title {
@@ -2415,12 +2531,12 @@
     }
 
     .stage-pill-badge {
-      font-size: 10.5px;
+      font-size: 10px;
       padding: 2px 7px;
     }
 
     .editorial-header-meta {
-      display: none; /* Hide quick stats on mobile to keep header ultra-compact (70-85px) */
+      display: none; /* Hide quick stats on mobile to keep header ultra-compact */
     }
 
     .editorial-nav-bar {
@@ -2462,7 +2578,7 @@
     .mini-search-input {
       width: 100%;
       box-sizing: border-box;
-      min-height: 40px;
+      min-height: 44px;
     }
 
     .mini-search-input:focus {
@@ -2473,7 +2589,7 @@
       width: 100%;
       max-width: 100%;
       box-sizing: border-box;
-      min-height: 40px;
+      min-height: 44px;
     }
 
     .editorial-cards-grid {
@@ -2482,18 +2598,18 @@
     }
 
     .editorial-card {
-      padding: 12px;
+      padding: 13px;
       gap: 10px;
       width: 100%;
     }
 
     .card-cover-container {
       width: 52px;
-      height: 74px;
+      height: 70px;
     }
 
     .card-work-title {
-      font-size: 14.5px;
+      font-size: 15px;
       white-space: normal;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -2509,23 +2625,23 @@
     .my-card-actions-row {
       width: 100%;
       justify-content: flex-start;
+      gap: 8px;
     }
 
-    .btn-toggle-workspace,
-    .btn-secondary-files,
-    .btn-editorial-complete {
-      min-height: 44px; /* Touch friendly on mobile */
-    }
-
-    .complete-form-inline {
+    .complete-form-primary {
       width: 100%;
-      margin-left: 0;
-      margin-top: 4px;
     }
 
-    .btn-editorial-complete {
+    .btn-action-complete-prominent {
       width: 100%;
       justify-content: center;
+      min-height: 44px;
+    }
+
+    .btn-action-open-work,
+    .btn-action-secondary,
+    .btn-editorial-claim {
+      min-height: 44px; /* Touch friendly on mobile */
     }
 
     .workspace-actions-footer {
@@ -2561,7 +2677,7 @@
     }
 
     .card-cover-container {
-      width: 48px;
+      width: 50px;
       height: 68px;
     }
   }

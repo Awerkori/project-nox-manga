@@ -185,6 +185,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
 
   const isHome = requestedTab === 'home';
   const isPipeline = requestedTab === 'pipeline';
+  const isCapitulo = requestedTab === 'capitulo' || requestedTab === 'detalhes_capitulo' || url.searchParams.has('chapter_id') || (requestedTab === 'pipeline' && url.searchParams.has('id'));
   const isMyQueue = requestedTab === 'minha_fila';
   const isWorks = requestedTab === 'obras';
   const isTeam = requestedTab === 'membros';
@@ -263,7 +264,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         ORDER BY production_chapter.chapter_sort_key ASC
         LIMIT 300
       `, [currentScan.id, !isHome], platform?.env),
-      (isPipeline || isMyQueue) ? executeYugabyteSql<any>(`
+      (isPipeline || isMyQueue || isCapitulo) ? executeYugabyteSql<any>(`
         SELECT timeline.*
         FROM public.scan_chapter_timeline timeline
         WHERE timeline.scan_id = $1
@@ -532,7 +533,35 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
       })
     : Promise.resolve({ rows: [], rowCount: 0 });
 
-  const chapterNotesSnapshotPromise = Promise.resolve({ rows: [], rowCount: 0 });
+  const needsChapterNotes = isPipeline || isCapitulo || isMyQueue;
+  const chapterNotesSnapshotPromise = needsChapterNotes
+    ? withTimeout(
+        executeYugabyteSql<any>(`
+          SELECT note.*,
+            jsonb_build_object(
+              'id', author.id, 'username', author.username,
+              'display_name', author.display_name, 'avatar_id', author.avatar_id
+            ) AS author,
+            CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
+            ) END AS stage
+          FROM public.scan_chapter_notes note
+          JOIN public.members author ON author.id = note.author_id
+          LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
+          WHERE note.scan_id = $1 AND note.deleted_at IS NULL
+          ORDER BY note.is_pinned DESC, note.created_at ASC
+        `, [currentScan.id], platform?.env),
+        2_000,
+        { rows: [], rowCount: 0 },
+        'scan_chapter_notes_ysql'
+      ).catch((error: any) => {
+        console.warn('scan_chapter_notes_ysql_unavailable', {
+          scanId: currentScan.id,
+          message: String(error?.message || 'unknown').slice(0, 240)
+        });
+        return { rows: [], rowCount: 0 };
+      })
+    : Promise.resolve({ rows: [], rowCount: 0 });
 
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [

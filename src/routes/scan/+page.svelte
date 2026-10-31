@@ -63,6 +63,7 @@
   import ScanHome from './components/ScanHome.svelte';
   import MuralTab from './components/MuralTab.svelte';
   import ChapterWorkspaceView from './components/ChapterWorkspaceView.svelte';
+  import ChapterDetailsView from './components/ChapterDetailsView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
@@ -182,6 +183,7 @@
     if (clean === 'capitulos' || clean === 'works') return 'obras';
     if (clean === 'dashboard') return 'home';
     if (clean === 'notificacoes' || clean === 'notifications') return 'inbox';
+    if (clean === 'capitulo' || clean === 'detalhes_capitulo' || clean === 'chapter') return 'capitulo';
     return clean;
   }
 
@@ -264,6 +266,7 @@
 
     const tabParam = normalizeTab(page.url.searchParams.get('tab'));
     const stageParam = page.url.searchParams.get('stage');
+    const chParam = page.url.searchParams.get('id') || page.url.searchParams.get('chapter_id');
     untrack(() => {
       if (tabParam && tabParam !== currentWorkspaceTab) {
         currentWorkspaceTab = tabParam;
@@ -271,6 +274,13 @@
       }
       if (stageParam && stageParam !== currentPipelineStage) {
         currentPipelineStage = stageParam;
+      }
+      if (tabParam === 'capitulo' && chParam) {
+        const all = [...(data.productionChapters || []), ...(chapters || [])];
+        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
+        activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
+      } else if (tabParam !== 'capitulo' && !chParam && activeWorkspaceChapter) {
+        activeWorkspaceChapter = null;
       }
     });
   });
@@ -281,8 +291,16 @@
       const url = new URL(window.location.href);
       const tab = normalizeTab(url.searchParams.get('tab'));
       const stage = url.searchParams.get('stage') || 'clean_redraw';
+      const chParam = url.searchParams.get('id') || url.searchParams.get('chapter_id');
       currentWorkspaceTab = tab;
       currentPipelineStage = stage;
+      if (tab === 'capitulo' && chParam) {
+        const all = [...(data.productionChapters || []), ...(chapters || [])];
+        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
+        activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
+      } else {
+        activeWorkspaceChapter = null;
+      }
       lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
     };
@@ -340,6 +358,34 @@
       activeWorkspaceChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo' };
     } else {
       activeWorkspaceChapter = ch.chapters || ch;
+    }
+    const targetId = activeWorkspaceChapter?.id || activeWorkspaceChapter?.target_chapter_id || (typeof ch === 'string' ? ch : ch?.id);
+    if (typeof window !== 'undefined' && targetId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'capitulo');
+      url.searchParams.set('id', String(targetId));
+      if (currentPipelineStage) {
+        url.searchParams.set('from_stage', currentPipelineStage);
+      }
+      window.history.pushState({ tab: 'capitulo', id: targetId }, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
+    }
+  }
+
+  function handleBackFromChapter() {
+    activeWorkspaceChapter = null;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const fromStage = url.searchParams.get('from_stage') || currentPipelineStage || 'traducao';
+      url.searchParams.set('tab', 'pipeline');
+      url.searchParams.set('stage', fromStage);
+      url.searchParams.delete('id');
+      url.searchParams.delete('from_stage');
+      url.searchParams.delete('chapter_id');
+      window.history.pushState({ tab: 'pipeline', stage: fromStage }, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
+      currentWorkspaceTab = 'pipeline';
+      currentPipelineStage = fromStage;
     }
   }
 
@@ -1080,24 +1126,27 @@
           {/if}
 
           <div class="workspace-view-content">
-            {#if activeWorkspaceChapter}
-              {@const activeChId = activeWorkspaceChapter.id || activeWorkspaceChapter.target_chapter_id || activeWorkspaceChapter.chapters?.id}
-              <ChapterWorkspaceView
+            {#if activeWorkspaceChapter || currentWorkspaceTab === 'capitulo'}
+              {@const activeCh = activeWorkspaceChapter || (data.productionChapters || []).find((c: any) => c.id === page.url.searchParams.get('id') || c.target_chapter_id === page.url.searchParams.get('id')) || (chapters || []).find((c: any) => c.id === page.url.searchParams.get('id')) || null}
+              {@const activeChId = activeCh?.id || activeCh?.target_chapter_id || activeCh?.chapters?.id || page.url.searchParams.get('id') || ''}
+              <ChapterDetailsView
                 chapterId={activeChId}
-                chapters={[activeWorkspaceChapter, ...(data.productionChapters || []), ...(chapters || [])]}
+                chapter={activeCh}
+                scan={data.currentScan}
+                chapters={[activeCh, ...(data.productionChapters || []), ...(chapters || [])]}
                 stages={data.stages || []}
                 chapterStages={data.chapterStages || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
                 chapterNotes={data.chapterNotes || []}
-                tasks={(data.tasks || []).filter((t: any) => t.chapter_id === activeChId || t.chapter_id === activeWorkspaceChapter.id || t.chapter_id === activeWorkspaceChapter.target_chapter_id || t.chapter_number === (activeWorkspaceChapter.number || activeWorkspaceChapter.chapter_number))}
                 team={team}
-                userProfile={{ id: data.userId }}
                 currentUserId={data.userId}
                 userRole={data.userRole}
+                userPositions={data.userPositions || []}
                 scanId={data.currentScan.id}
-                qcIssues={(data.qcIssues || []).filter((q: any) => q.chapter_id === activeChId || q.chapter_id === activeWorkspaceChapter.id || q.chapter_id === activeWorkspaceChapter.target_chapter_id)}
-                onBackToPipeline={() => (activeWorkspaceChapter = null)}
+                qcIssues={(data.qcIssues || []).filter((q: any) => q.chapter_id === activeChId || (activeCh && (q.chapter_id === activeCh.id || q.chapter_id === activeCh.target_chapter_id)))}
+                fromStage={page.url.searchParams.get('from_stage') || currentPipelineStage}
+                onBackToPipeline={handleBackFromChapter}
               />
             {:else if currentWorkspaceTab === 'home'}
               <ScanHome
