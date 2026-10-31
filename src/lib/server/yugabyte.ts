@@ -65,6 +65,177 @@ export async function withYugabyteLkg<T>(
   }
 }
 
+const YUGABYTE_READ_SESSION_KEY = Symbol.for('nox.yugabyte.readSession');
+
+class YugabyteReadSession {
+  private readonly maxConcurrency: number;
+  private readonly connectionString: string;
+  private readonly allClients = new Set<Client>();
+  private readonly idleClients: Client[] = [];
+  private readonly waitQueue: Array<{
+    resolve: (client: Client) => void;
+    reject: (err: unknown) => void;
+  }> = [];
+  private activeOrCreating = 0;
+  private closed = false;
+
+  constructor(connectionString: string, maxConcurrency = 2) {
+    this.connectionString = connectionString;
+    this.maxConcurrency = Math.max(1, maxConcurrency);
+  }
+
+  private async acquire(): Promise<{ client: Client; connectDur: number }> {
+    if (this.closed) {
+      throw new Error('YUGABYTE_READ_SESSION_CLOSED');
+    }
+    const idle = this.idleClients.pop();
+    if (idle) {
+      this.activeOrCreating += 1;
+      return { client: idle, connectDur: 0 };
+    }
+    if (this.activeOrCreating < this.maxConcurrency) {
+      this.activeOrCreating += 1;
+      const connectStart = performance.now();
+      const client = new Client({
+        connectionString: this.connectionString,
+        connectionTimeoutMillis: 1500
+      });
+      try {
+        await client.connect();
+        if (this.closed) {
+          await client.end().catch(() => {});
+          this.activeOrCreating -= 1;
+          throw new Error('YUGABYTE_READ_SESSION_CLOSED');
+        }
+        this.allClients.add(client);
+        return { client, connectDur: Math.round(performance.now() - connectStart) };
+      } catch (err) {
+        this.activeOrCreating -= 1;
+        await client.end().catch(() => {});
+        this.pumpWaitQueue();
+        throw err;
+      }
+    }
+    const client = await new Promise<Client>((resolve, reject) => {
+      this.waitQueue.push({ resolve, reject });
+    });
+    return { client, connectDur: 0 };
+  }
+
+  private release(client: Client, broken = false): void {
+    if (broken || this.closed) {
+      this.activeOrCreating = Math.max(0, this.activeOrCreating - 1);
+      this.allClients.delete(client);
+      void client.end().catch(() => {});
+      this.pumpWaitQueue();
+      return;
+    }
+    const next = this.waitQueue.shift();
+    if (next) {
+      next.resolve(client);
+      return;
+    }
+    this.activeOrCreating = Math.max(0, this.activeOrCreating - 1);
+    this.idleClients.push(client);
+  }
+
+  private pumpWaitQueue(): void {
+    while (!this.closed && this.waitQueue.length > 0 && this.activeOrCreating < this.maxConcurrency) {
+      const waiter = this.waitQueue.shift();
+      if (!waiter) break;
+      this.activeOrCreating += 1;
+      const client = new Client({
+        connectionString: this.connectionString,
+        connectionTimeoutMillis: 1500
+      });
+      client
+        .connect()
+        .then(() => {
+          if (this.closed) {
+            this.activeOrCreating = Math.max(0, this.activeOrCreating - 1);
+            void client.end().catch(() => {});
+            waiter.reject(new Error('YUGABYTE_READ_SESSION_CLOSED'));
+            return;
+          }
+          this.allClients.add(client);
+          waiter.resolve(client);
+        })
+        .catch((err) => {
+          this.activeOrCreating = Math.max(0, this.activeOrCreating - 1);
+          void client.end().catch(() => {});
+          waiter.reject(err);
+          this.pumpWaitQueue();
+        });
+    }
+  }
+
+  async query<T = any>(sql: string, params: any[]): Promise<SqlResponse<T>> {
+    const { client, connectDur } = await this.acquire();
+    let broken = false;
+    try {
+      const queryStart = performance.now();
+      const res = await client.query(sql, params);
+      const queryDur = Math.round(performance.now() - queryStart);
+      if (queryDur > 500) {
+        console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
+      }
+      return {
+        rows: res.rows || [],
+        rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
+      };
+    } catch (err: any) {
+      // Discard connection on transport/protocol error; keep healthy client on SQL-level error if desired,
+      // though discarding on unexpected read errors is safe and bounded.
+      broken = true;
+      throw err;
+    } finally {
+      this.release(client, broken);
+    }
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    while (this.waitQueue.length > 0) {
+      const waiter = this.waitQueue.shift();
+      waiter?.reject(new Error('YUGABYTE_READ_SESSION_CLOSED'));
+    }
+    this.idleClients.length = 0;
+    const clients = Array.from(this.allClients);
+    this.allClients.clear();
+    await Promise.allSettled(clients.map((c) => c.end()));
+  }
+}
+
+/**
+ * Multiplexes many concurrent YugabyteDB read queries inside a single SSR/API request
+ * over at most `maxConcurrency` reused Hyperdrive connections (default 2) instead of
+ * opening dozens of simultaneous `pg.Client` connections against `max_connections = 13`.
+ */
+export async function withYugabyteReadSession<T>(
+  platformEnv: any,
+  operation: (scopedEnv: any) => Promise<T>,
+  maxConcurrency = 2
+): Promise<T> {
+  const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
+  if (!connectionString || platformEnv?.[YUGABYTE_READ_SESSION_KEY]) {
+    return operation(platformEnv);
+  }
+  const session = new YugabyteReadSession(connectionString, maxConcurrency);
+  const scopedEnv = Object.create(platformEnv, {
+    [YUGABYTE_READ_SESSION_KEY]: {
+      value: session,
+      enumerable: false,
+      configurable: false,
+      writable: false
+    }
+  });
+  try {
+    return await operation(scopedEnv);
+  } finally {
+    await session.close();
+  }
+}
+
 /**
  * Execute raw SQL query against authoritative YugabyteDB.
  * Strategy 1: Hyperdrive native connection via platform.env.HYPERDRIVE (sub-millisecond connection in worker)
@@ -75,8 +246,17 @@ export async function executeYugabyteSql<T = any>(
   params: any[] = [],
   platformEnv?: any
 ): Promise<SqlResponse<T>> {
+  const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
+  if (activeSession) {
+    try {
+      return await activeSession.query<T>(query, params);
+    } catch (hdErr: any) {
+      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+    }
+  }
+
   // Strategy 1: Hyperdrive native pooled connection if available
-  const hyperdrive = platformEnv?.HYPERDRIVE;
+  const hyperdrive = !activeSession ? platformEnv?.HYPERDRIVE : undefined;
   if (hyperdrive?.connectionString) {
     const connectStart = performance.now();
     try {

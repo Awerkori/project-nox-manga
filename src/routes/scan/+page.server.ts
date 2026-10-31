@@ -3,7 +3,7 @@ import { dispatchScanMentions } from '$lib/server/scan-mentions';
 import { createScanNotification } from '$lib/server/scan-notifications';
 import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteLkg, withYugabyteReadSession } from '$lib/server/yugabyte';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -74,6 +74,9 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
       chapterNotes: []
     };
   }
+
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+  platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
 
   // Resolve workspace membership exclusively from the authoritative YSQL
   // plane.  Authentication still uses the existing identity provider, but
@@ -472,6 +475,53 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     'scan_notification_snapshot_ysql'
   );
 
+  const pipelineFilesSnapshotPromise = withTimeout(
+    executeYugabyteSql<any>(`
+      SELECT file.*,
+        jsonb_build_object('id', member.id, 'username', member.username,
+          'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
+        jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
+      FROM public.scan_production_files file
+      LEFT JOIN public.members member ON member.id = file.uploaded_by
+      LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
+      WHERE file.scan_id = $1
+      ORDER BY file.version DESC, file.created_at DESC
+    `, [currentScan.id], platform?.env),
+    2_000,
+    { rows: [], rowCount: 0 },
+    'scan_pipeline_files_ysql'
+  ).catch((error: any) => {
+    console.warn('scan_pipeline_files_ysql_unavailable', { message: String(error?.message || 'unknown').slice(0, 240) });
+    return { rows: [], rowCount: 0 };
+  });
+
+  const chapterNotesSnapshotPromise = withTimeout(
+    executeYugabyteSql<any>(`
+      SELECT note.*,
+        jsonb_build_object(
+          'id', author.id, 'username', author.username,
+          'display_name', author.display_name, 'avatar_id', author.avatar_id
+        ) AS author,
+        CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
+        ) END AS stage
+      FROM public.scan_chapter_notes note
+      JOIN public.members author ON author.id = note.author_id
+      LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
+      WHERE note.scan_id = $1 AND note.deleted_at IS NULL
+      ORDER BY note.is_pinned DESC, note.created_at ASC
+    `, [currentScan.id], platform?.env),
+    2_000,
+    { rows: [], rowCount: 0 },
+    'scan_chapter_notes_ysql'
+  ).catch((error: any) => {
+    console.warn('scan_chapter_notes_ysql_unavailable', {
+      scanId: currentScan.id,
+      message: String(error?.message || 'unknown').slice(0, 240)
+    });
+    return { rows: [], rowCount: 0 };
+  });
+
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
     worksRes,
@@ -563,10 +613,16 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
        WHERE request.scan_id = $1 ORDER BY request.created_at DESC`,
       [currentScan.id], platform, 'scan_project_requests_ysql'
     ),
-    needsCatalogWorks ? ysqlCollection<any>(
-      `SELECT id, title, slug, cover_id FROM public.works
-       WHERE published = true ORDER BY title LIMIT 100`,
-      [], platform, 'scan_catalog_works_ysql'
+    needsCatalogWorks ? withYugabyteLkg(
+      'scan_catalog_works_top100',
+      () =>
+        ysqlCollection<any>(
+          `SELECT id, title, slug, cover_id FROM public.works
+           WHERE published = true ORDER BY title LIMIT 100`,
+          [], platform, 'scan_catalog_works_ysql'
+        ),
+      { data: [], error: null },
+      300_000
     ) : Promise.resolve({ data: [] }),
     needsSettings ? ysqlCollection<any>(
       `SELECT transfer_request.*,
@@ -905,26 +961,9 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   // of this incremental Scan workspace migration intact while ensuring a new
   // multi-file upload is visible immediately after invalidation.
   let productionFiles = productionFilesRes.data || [];
-  try {
-    const ysqlFiles = await withTimeout(
-      executeYugabyteSql<any>(`
-        SELECT file.*,
-          jsonb_build_object('id', member.id, 'username', member.username,
-            'display_name', member.display_name, 'avatar_id', member.avatar_id) AS uploader,
-          jsonb_build_object('id', stage.id, 'name', stage.name, 'slug', stage.slug) AS stage
-        FROM public.scan_production_files file
-        LEFT JOIN public.members member ON member.id = file.uploaded_by
-        LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
-        WHERE file.scan_id = $1
-        ORDER BY file.version DESC, file.created_at DESC
-      `, [currentScan.id], platform?.env),
-      2_000,
-      { rows: [], rowCount: 0 },
-      'scan_pipeline_files_ysql'
-    );
+  const ysqlFiles = await pipelineFilesSnapshotPromise;
+  if (ysqlFiles && Array.isArray(ysqlFiles.rows)) {
     productionFiles = ysqlFiles.rows;
-  } catch (error: any) {
-    console.warn('scan_pipeline_files_ysql_unavailable', { message: String(error?.message || 'unknown').slice(0, 240) });
   }
 
   // The workflow graph is the other half of a production delivery. YSQL is
@@ -954,38 +993,14 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   // Notes are a separate, editable collaboration stream read from the
   // authoritative YSQL data plane.
   let chapterNotes: any[] = [];
-  try {
-    const ysqlNotes = await withTimeout(
-      executeYugabyteSql<any>(`
-        SELECT note.*,
-          jsonb_build_object(
-            'id', author.id, 'username', author.username,
-            'display_name', author.display_name, 'avatar_id', author.avatar_id
-          ) AS author,
-          CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
-          ) END AS stage
-        FROM public.scan_chapter_notes note
-        JOIN public.members author ON author.id = note.author_id
-        LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
-        WHERE note.scan_id = $1 AND note.deleted_at IS NULL
-        ORDER BY note.is_pinned DESC, note.created_at ASC
-      `, [currentScan.id], platform?.env),
-      2_000,
-      { rows: [], rowCount: 0 },
-      'scan_chapter_notes_ysql'
-    );
+  const ysqlNotes = await chapterNotesSnapshotPromise;
+  if (ysqlNotes && Array.isArray(ysqlNotes.rows)) {
     chapterNotes = ysqlNotes.rows.map((note: any) => ({
       ...note,
       canEdit: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
       canDelete: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
       canPin: isScanLeader || isGlobalEditor
     }));
-  } catch (error: any) {
-    console.warn('scan_chapter_notes_ysql_unavailable', {
-      scanId: currentScan.id,
-      message: String(error?.message || 'unknown').slice(0, 240)
-    });
   }
 
   // Keep channels, messages and read markers from one authoritative data plane.
@@ -999,10 +1014,6 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     chatMessages = messagesResult.rows;
     channelReadStates = readStatesResult.rows;
   } else {
-    console.warn('scan_chat_snapshot_ysql_unavailable', {
-      scanId: currentScan.id,
-      message: 'ysql snapshot unavailable'
-    });
     chatChannels = [];
     chatMessages = [];
     channelReadStates = [];
@@ -1061,6 +1072,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     pendingAppsCount,
     activeTab: requestedTab
   };
+  }, 2);
 };
 
 export const actions: Actions = {

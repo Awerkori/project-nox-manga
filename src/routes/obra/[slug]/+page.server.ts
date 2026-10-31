@@ -13,9 +13,12 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const isTargetUuid = isUuid(params.slug);
 
   let visitorId = locals.user?.id;
+  let hadExistingVisitorId = Boolean(visitorId);
   if (!visitorId) {
     visitorId = cookies?.get?.('nox-vid');
-    if (!visitorId && cookies?.set) {
+    if (visitorId) {
+      hadExistingVisitorId = true;
+    } else if (cookies?.set) {
       visitorId = crypto.randomUUID();
       cookies.set('nox-vid', visitorId, {
         path: '/',
@@ -37,7 +40,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
 
   const yugabyteBundle = await fetchFullWorkPageFromYugabyte(
     params.slug,
-    visitorId,
+    hadExistingVisitorId ? visitorId : undefined,
     locals.user?.id,
     preview,
     platform?.env

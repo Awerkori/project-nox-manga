@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteLkg, withYugabyteReadSession } from '$lib/server/yugabyte';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals, url, platform }) => {
@@ -14,11 +14,12 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     return json({ error: 'Missing scan_id or module' }, { status: 400 });
   }
 
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
   // 1. Verify membership and role in this scan
   const memberRes = await executeYugabyteSql<{ role: string }>(
     `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
     [scanId, locals.user.id],
-    platform?.env
+    sessionEnv
   );
 
   if (!memberRes.rows.length) {
@@ -39,7 +40,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            WHERE position.scan_id = $1 AND (position.is_active = true OR $2::boolean)
            ORDER BY position.display_order ASC`,
           [scanId, canManageRecruitment],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT opening.*,
@@ -52,7 +53,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            WHERE opening.scan_id = $1 AND (opening.status = 'OPEN' OR $2::boolean)
            ORDER BY opening.created_at DESC`,
           [scanId, canManageRecruitment],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT application.*,
@@ -73,13 +74,13 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            LEFT JOIN public.members applicant ON applicant.id = application.user_id
            WHERE application.scan_id = $1 ORDER BY application.created_at DESC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT question.* FROM public.scan_recruitment_questions question
            WHERE question.scan_id = $1 ORDER BY question.display_order ASC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT answer.*,
@@ -93,7 +94,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            WHERE application.scan_id = $1 AND ($2::boolean OR application.user_id = $3)
            ORDER BY answer.created_at ASC`,
           [scanId, canReadAllApplicationAnswers, locals.user.id],
-          platform?.env
+          sessionEnv
         )
       ]);
 
@@ -122,19 +123,19 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
           `SELECT wiki_page.* FROM public.scan_wiki_pages wiki_page
            WHERE wiki_page.scan_id = $1 ORDER BY wiki_page.is_pinned DESC, wiki_page.title ASC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT glossary_entry.* FROM public.work_glossary_entries glossary_entry
            WHERE glossary_entry.scan_id = $1 ORDER BY glossary_entry.source_term ASC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT work_reference.* FROM public.work_references work_reference
            WHERE work_reference.scan_id = $1 ORDER BY work_reference.created_at DESC`,
           [scanId],
-          platform?.env
+          sessionEnv
         )
       ]);
       return json({
@@ -149,7 +150,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
         `SELECT tutorial.* FROM public.scan_academy_tutorials tutorial
          WHERE tutorial.scan_id = $1 ORDER BY tutorial.display_order ASC`,
         [scanId],
-        platform?.env
+        sessionEnv
       );
       return json({ tutorials: res.rows });
     }
@@ -162,7 +163,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
          LEFT JOIN public.members member ON member.id = activity.user_id
          WHERE activity.scan_id = $1 ORDER BY activity.created_at DESC LIMIT 50`,
         [scanId],
-        platform?.env
+        sessionEnv
       );
       return json({ activity: res.rows });
     }
@@ -179,7 +180,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
          WHERE note.scan_id = $1
          ORDER BY note.is_pinned DESC, note.created_at DESC`,
         [scanId],
-        platform?.env
+        sessionEnv
       );
       const staffNotes = res.rows.map((n: any) => ({
         ...n,
@@ -195,7 +196,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
           `SELECT integration.* FROM public.scan_integrations integration
            WHERE integration.scan_id = $1 ORDER BY integration.created_at DESC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT transfer_request.*,
@@ -206,7 +207,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            LEFT JOIN public.members receiver ON receiver.id = transfer_request.to_user_id
            WHERE transfer_request.scan_id = $1 ORDER BY transfer_request.created_at DESC`,
           [scanId],
-          platform?.env
+          sessionEnv
         ),
         executeYugabyteSql(
           `SELECT transfer_request.*,
@@ -218,7 +219,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            WHERE transfer_request.to_user_id = $1 AND transfer_request.status = 'PENDING'
            ORDER BY transfer_request.created_at DESC LIMIT 1`,
           [locals.user.id],
-          platform?.env
+          sessionEnv
         )
       ]);
       return json({
@@ -229,11 +230,17 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     }
 
     case 'catalog_works': {
-      const res = await executeYugabyteSql(
-        `SELECT id, title, slug, cover_id FROM public.works
-         WHERE published = true ORDER BY title LIMIT 100`,
-        [],
-        platform?.env
+      const res = await withYugabyteLkg(
+        'scan_catalog_works_top100',
+        () =>
+          executeYugabyteSql(
+            `SELECT id, title, slug, cover_id FROM public.works
+             WHERE published = true ORDER BY title LIMIT 100`,
+            [],
+            sessionEnv
+          ),
+        { rows: [], rowCount: 0 },
+        300_000
       );
       return json({ catalogWorks: res.rows });
     }
@@ -241,4 +248,5 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     default:
       return json({ error: 'Unknown module' }, { status: 400 });
   }
+  }, 2);
 };
