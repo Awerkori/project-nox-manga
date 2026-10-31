@@ -245,6 +245,106 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
       return json({ catalogWorks: res.rows });
     }
 
+    case 'team_invites': {
+      const res = await executeYugabyteSql(
+        `SELECT invite.* FROM public.scan_invites invite
+         WHERE invite.scan_id = $1 AND invite.revoked = false
+           AND invite.used_at IS NULL AND invite.expires_at > now()
+         ORDER BY invite.created_at DESC`,
+        [scanId],
+        sessionEnv
+      );
+      return json({ invites: res.rows });
+    }
+
+    case 'obras_metadata': {
+      const [projRes, catRes] = await Promise.all([
+        executeYugabyteSql(
+          `SELECT request.*, to_jsonb(work) AS works
+           FROM public.scan_project_requests request
+           JOIN public.works work ON work.id = request.work_id
+           WHERE request.scan_id = $1 ORDER BY request.created_at DESC`,
+          [scanId],
+          sessionEnv
+        ),
+        withYugabyteLkg(
+          'scan_catalog_works_top100',
+          () =>
+            executeYugabyteSql(
+              `SELECT id, title, slug, cover_id FROM public.works
+               WHERE published = true ORDER BY title LIMIT 100`,
+              [],
+              sessionEnv
+            ),
+          { rows: [], rowCount: 0 },
+          300_000
+        )
+      ]);
+      return json({ projectRequests: projRes.rows, catalogWorks: catRes.rows });
+    }
+
+    case 'mural': {
+      const [postsRes, commentsRes, reactionsRes, attachmentsRes] = await Promise.all([
+        executeYugabyteSql(
+          `SELECT post.*, jsonb_build_object('id', author.id, 'username', author.username,
+             'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+           FROM public.scan_mural_posts post
+           LEFT JOIN public.members author ON author.id = post.author_id
+           WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC LIMIT 50`,
+          [scanId],
+          sessionEnv
+        ),
+        executeYugabyteSql(
+          `SELECT comment.*, jsonb_build_object('id', author.id, 'username', author.username,
+             'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+           FROM public.scan_mural_comments comment
+           LEFT JOIN public.members author ON author.id = comment.author_id
+           WHERE comment.scan_id = $1 ORDER BY comment.created_at ASC`,
+          [scanId],
+          sessionEnv
+        ),
+        executeYugabyteSql(
+          `SELECT reaction.* FROM public.scan_mural_reactions reaction
+           WHERE reaction.scan_id = $1`,
+          [scanId],
+          sessionEnv
+        ),
+        executeYugabyteSql(
+          `SELECT attachment.* FROM public.scan_attachments attachment
+           WHERE attachment.scan_id = $1 ORDER BY attachment.created_at ASC`,
+          [scanId],
+          sessionEnv
+        )
+      ]);
+      return json({
+        posts: postsRes.rows,
+        comments: commentsRes.rows,
+        reactions: reactionsRes.rows,
+        attachments: attachmentsRes.rows
+      });
+    }
+
+    case 'queue_metadata': {
+      const [overridesRes, creditsRes] = await Promise.all([
+        executeYugabyteSql(
+          `SELECT override.* FROM public.scan_work_workflow_overrides override
+           WHERE override.scan_id = $1`,
+          [scanId],
+          sessionEnv
+        ),
+        executeYugabyteSql(
+          `SELECT credit.* FROM public.chapter_credit_snapshots credit
+           WHERE credit.scan_id = $1 ORDER BY credit.role_order ASC`,
+          [scanId],
+          sessionEnv
+        )
+      ]);
+      return json({
+        workOverrides: overridesRes.rows,
+        creditSnapshots: creditsRes.rows
+      });
+    }
+
     default:
       return json({ error: 'Unknown module' }, { status: 400 });
   }

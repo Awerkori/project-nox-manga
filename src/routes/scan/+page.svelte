@@ -118,6 +118,14 @@
       ensureModuleLoaded('staff_notes');
     } else if (tab === 'settings') {
       ensureModuleLoaded('settings');
+    } else if (tab === 'membros') {
+      ensureModuleLoaded('team_invites');
+    } else if (tab === 'obras' || tab === 'capitulos') {
+      ensureModuleLoaded('obras_metadata');
+    } else if (tab === 'mural') {
+      ensureModuleLoaded('mural');
+    } else if (tab === 'minha_fila') {
+      ensureModuleLoaded('queue_metadata');
     }
   }
 
@@ -135,7 +143,12 @@
   let staffNotes = $derived(dynamicModuleData.staff_notes?.staffNotes || data.staffNotes || []);
   let integrations = $derived(dynamicModuleData.settings?.integrations || data.integrations || []);
   let transferRequests = $derived(dynamicModuleData.settings?.transferRequests || data.transferRequests || []);
-  let catalogWorks = $derived(dynamicModuleData.catalog_works?.catalogWorks || data.catalogWorks || []);
+  let catalogWorks = $derived(dynamicModuleData.obras_metadata?.catalogWorks || dynamicModuleData.catalog_works?.catalogWorks || data.catalogWorks || []);
+  let projectRequests = $derived(dynamicModuleData.obras_metadata?.projectRequests || data.projectRequests || []);
+  let invites = $derived(dynamicModuleData.team_invites?.invites || data.invites || []);
+  let muralPosts = $derived(dynamicModuleData.mural?.posts || data.muralPosts || []);
+  let workOverrides = $derived(dynamicModuleData.queue_metadata?.workOverrides || data.workOverrides || []);
+  let creditSnapshots = $derived(dynamicModuleData.queue_metadata?.creditSnapshots || data.creditSnapshots || []);
 
   type DashTab =
     | 'works'
@@ -946,7 +959,7 @@
                 scanId={data.currentScan.id}
                 userProfile={{ id: data.userId }}
                 userRole={data.userRole}
-                muralPosts={data.muralPosts || []}
+                muralPosts={muralPosts}
                 positions={positions}
                 team={team}
               />
@@ -958,8 +971,8 @@
                 productionChapters={data.productionChapters || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
-                workOverrides={data.workOverrides || []}
-                creditSnapshots={data.creditSnapshots || []}
+                workOverrides={workOverrides}
+                creditSnapshots={creditSnapshots}
                 team={team}
                 positions={positions}
                 works={works}
@@ -1067,11 +1080,11 @@
                 <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
               {/if}
 
-              {#if data.projectRequests && data.projectRequests.length > 0}
+              {#if projectRequests && projectRequests.length > 0}
                 <div class="project-requests-block">
-                  <span class="sub-section-title">Solicitações de Obras ({data.projectRequests.length})</span>
+                  <span class="sub-section-title">Solicitações de Obras ({projectRequests.length})</span>
                   <div class="proj-requests-list">
-                    {#each data.projectRequests as req (req.id)}
+                    {#each projectRequests as req (req.id)}
                       <div class="proj-req-item status-{req.status.toLowerCase()}">
                         {#if req.works?.cover_id}
                           <img src="/media/{req.works.cover_id}" alt="" class="proj-cover-mini" />
@@ -1188,11 +1201,11 @@
             </div>
           {/if}
 
-          {#if data.invites && data.invites.length > 0}
+          {#if invites && invites.length > 0}
             <div class="active-invites-block">
-              <span class="sub-section-title">Convites Ativos ({data.invites.length})</span>
+              <span class="sub-section-title">Convites Ativos ({invites.length})</span>
               <div class="invites-list">
-                {#each data.invites as inv (inv.id)}
+                {#each invites as inv (inv.id)}
                   <div class="active-invite-item">
                     <div class="invite-info-left">
                       <span class="invite-role-tag">{ROLE_LABELS[inv.role] || inv.role}</span>
