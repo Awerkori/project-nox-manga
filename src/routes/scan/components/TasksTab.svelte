@@ -21,7 +21,8 @@
     ChevronUp,
     Filter,
     CheckCircle2,
-    Briefcase
+    Briefcase,
+    Info
   } from '@lucide/svelte';
   import { onMount, onDestroy, tick } from 'svelte';
   import { enhance } from '$app/forms';
@@ -1133,6 +1134,10 @@
           <p>Não há capítulos bloqueados aguardando entregas anteriores no momento.</p>
         </div>
       {:else}
+        <div class="category-context-notice">
+          <Info size={14} class="notice-icon" />
+          <span>Etapas aguardando outras fases da produção.</span>
+        </div>
         <div class="cards-vertical-list">
           {#each waitingItems as item (item.id)}
             <article class="task-compact-card waiting">
@@ -1778,8 +1783,8 @@
   }
 
   .desktop-search {
-    flex: 1 1 320px;
-    max-width: 440px;
+    flex: 1 1 340px;
+    max-width: 520px;
   }
 
   .search-box {
@@ -2166,12 +2171,31 @@
     font-weight: 600;
   }
 
+  .category-context-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    margin-bottom: 4px;
+  }
+
+  .category-context-notice :global(.notice-icon) {
+    color: #c084fc;
+    flex-shrink: 0;
+  }
+
   .meta-pill.stale-inactivity {
-    background: rgba(251, 191, 36, 0.08);
-    color: #fbbf24;
-    border: 1px solid rgba(251, 191, 36, 0.2);
+    background: rgba(245, 158, 11, 0.05);
+    color: #e2a03f;
+    border: 1px solid rgba(245, 158, 11, 0.15);
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-weight: 450;
+    padding: 2px 7px;
   }
 
   .meta-pill.waiting-status {
