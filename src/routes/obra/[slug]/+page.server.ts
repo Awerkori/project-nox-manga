@@ -4,7 +4,7 @@ import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
-import { getObraAuxCache, setObraAuxCache } from '$lib/server/obra-cache';
+import { getObraAuxCache, setObraAuxCache, getOrFetchObraAux } from '$lib/server/obra-cache';
 import { sanitizeComments } from '$lib/comments';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -120,7 +120,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     }
   }
 
-  // Check in-memory aux cache for public comments, likes, metrics and scans
+  // Check in-memory aux cache for public comments, likes, metrics and scans with single-flight deduplication
   const cachedAuxEntry = getObraAuxCache(work.id);
 
   const publicAuxPromise = cachedAuxEntry
@@ -130,41 +130,44 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
         metrics: cachedAuxEntry.metrics,
         workScans: cachedAuxEntry.workScans
       })
-    : withTimeout(
-        Promise.all([
-          locals.db
-            .from('comments')
-            .select(
-              'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
-            )
-            .eq('work_id', work.id)
-            .is('chapter_id', null)
-            .order('created_at', { ascending: false })
-            .limit(150),
-          locals.db.from('likes').select('user_id').eq('work_id', work.id),
-          locals.db.rpc('work_metrics', { p_work: work.id }),
-          locals.db
-            .from('work_scans')
-            .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
-            .eq('work_id', work.id)
-        ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
-          const entry = {
-            comments: sanitizeComments(commentsRes?.data || []),
-            likes: likesRes?.data || [],
-            metrics: metricsRes?.data?.[0] || null,
-            workScans: scansRes?.data || []
-          };
-          setObraAuxCache(work.id, entry);
-          return { ...entry, timestamp: Date.now() };
-        }),
-        3500,
-        {
-          comments: cachedAuxEntry?.comments || [],
-          likes: cachedAuxEntry?.likes || [],
-          metrics: cachedAuxEntry?.metrics || null,
-          workScans: cachedAuxEntry?.workScans || []
-        },
-        'obra_public_aux'
+    : getOrFetchObraAux(work.id, () =>
+        withTimeout(
+          Promise.all([
+            locals.db
+              .from('comments')
+              .select(
+                'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+              )
+              .eq('work_id', work.id)
+              .is('chapter_id', null)
+              .order('created_at', { ascending: false })
+              .limit(150),
+            locals.db.from('likes').select('user_id').eq('work_id', work.id),
+            locals.db.rpc('work_metrics', { p_work: work.id }),
+            locals.db
+              .from('work_scans')
+              .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
+              .eq('work_id', work.id)
+          ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
+            const entry = {
+              comments: sanitizeComments(commentsRes?.data || []),
+              likes: likesRes?.data || [],
+              metrics: metricsRes?.data?.[0] || null,
+              workScans: scansRes?.data || []
+            };
+            setObraAuxCache(work.id, entry);
+            return { ...entry, timestamp: Date.now() };
+          }),
+          3500,
+          {
+            timestamp: Date.now(),
+            comments: cachedAuxEntry?.comments || [],
+            likes: cachedAuxEntry?.likes || [],
+            metrics: cachedAuxEntry?.metrics || null,
+            workScans: cachedAuxEntry?.workScans || []
+          },
+          'obra_public_aux'
+        )
       );
 
   const personalPromise = locals.user

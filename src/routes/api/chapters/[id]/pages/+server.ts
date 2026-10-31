@@ -64,5 +64,5 @@ export const GET = async ({ params, locals, cookies, platform }) => {
         }
       }
     );
-  }, 2);
+  }, 1);
 };

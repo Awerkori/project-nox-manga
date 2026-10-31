@@ -218,7 +218,8 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.url.pathname.startsWith('/admin') ||
       event.url.pathname.startsWith('/auth') ||
       event.url.pathname.startsWith('/me') ||
-      event.url.pathname.startsWith('/scan') ||
+      event.url.pathname === '/scan' ||
+      event.url.pathname.startsWith('/scan/') ||
       event.url.pathname.startsWith('/perfil') ||
       event.url.pathname.startsWith('/biblioteca') ||
       event.url.pathname.startsWith('/favoritos') ||
