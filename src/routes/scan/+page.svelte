@@ -542,7 +542,121 @@
   function dismissOnEscape(event: KeyboardEvent, dismiss: () => void) {
     if (event.key === 'Escape') dismiss();
   }
+
+  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchDeltaX = 0;
+  let touchDeltaY = 0;
+  let isTrackingSwipe: 'OPEN' | 'CLOSE' | null = null;
+
+  function handleWindowTouchStart(e: TouchEvent) {
+    if (typeof window === 'undefined' || window.innerWidth > 1024) return;
+    if (e.touches.length !== 1) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    const target = e.target;
+    const element = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null);
+    // Strictly ignore touches on interactive inputs, controls, or horizontally scrollable elements
+    if (
+      element?.closest(
+        'input, select, textarea, button, a, [data-no-swipe], .queue-tabs-scroll, .stage-filter-strip, .filter-controls-row, .files-table-wrapper'
+      )
+    ) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    const touch = e.touches[0];
+    const x = touch.clientX;
+    const y = touch.clientY;
+
+    if (!sidebarMobileOpen) {
+      // SAFE TOUCH ZONE: Android system back gesture operates in 0..20px edge.
+      // We ONLY capture touches starting at x >= 22px up to 120px to prevent conflicting with system navigation.
+      if (x >= 22 && x <= 120) {
+        touchStartX = x;
+        touchStartY = y;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
+        isTrackingSwipe = 'OPEN';
+      } else {
+        isTrackingSwipe = null;
+      }
+    } else {
+      // Sidebar is already open: allow swipe-left anywhere on the open sidebar or its backdrop to close
+      touchStartX = x;
+      touchStartY = y;
+      touchDeltaX = 0;
+      touchDeltaY = 0;
+      isTrackingSwipe = 'CLOSE';
+    }
+  }
+
+  function handleWindowTouchMove(e: TouchEvent) {
+    if (!isTrackingSwipe || e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    touchDeltaX = touch.clientX - touchStartX;
+    touchDeltaY = touch.clientY - touchStartY;
+
+    // VERTICAL SCROLL LOCK: If vertical motion is greater than horizontal motion,
+    // cancel swipe tracking immediately so native vertical scrolling remains 100% fluid and stutter-free!
+    if (Math.abs(touchDeltaY) > Math.abs(touchDeltaX)) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    // Direction validation
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX < 0) {
+      isTrackingSwipe = null;
+      return;
+    }
+    if (isTrackingSwipe === 'CLOSE' && touchDeltaX > 0) {
+      isTrackingSwipe = null;
+      return;
+    }
+  }
+
+  function handleWindowTouchEnd(e: TouchEvent) {
+    if (!isTrackingSwipe) return;
+
+    if (touchDeltaX === 0 && e.changedTouches && e.changedTouches.length > 0) {
+      touchDeltaX = e.changedTouches[0].clientX - touchStartX;
+      touchDeltaY = e.changedTouches[0].clientY - touchStartY;
+    }
+
+    const absX = Math.abs(touchDeltaX);
+    const absY = Math.abs(touchDeltaY);
+
+    if (isTrackingSwipe === 'OPEN') {
+      // Swipe right threshold: deltaX > 45px and dominant horizontal angle
+      if (touchDeltaX > 45 && absX > absY * 1.5) {
+        sidebarMobileOpen = true;
+      }
+    } else if (isTrackingSwipe === 'CLOSE') {
+      // Swipe left threshold: deltaX < -35px and dominant horizontal angle
+      if (touchDeltaX < -35 && absX > absY * 1.5) {
+        sidebarMobileOpen = false;
+      }
+    }
+
+    isTrackingSwipe = null;
+  }
+
+  function handleWindowTouchCancel() {
+    isTrackingSwipe = null;
+  }
 </script>
+
+<svelte:window
+  ontouchstart={handleWindowTouchStart}
+  ontouchmove={handleWindowTouchMove}
+  ontouchend={handleWindowTouchEnd}
+  ontouchcancel={handleWindowTouchCancel}
+/>
 
 <svelte:head>
   <title>{data.currentScan ? `Painel — ${data.currentScan.name} | Project Nox` : 'Painel de Scan Parceira | Project Nox'}</title>
@@ -976,13 +1090,14 @@
                 tasks={data.tasks || []}
                 stages={data.stages || []}
                 chapterStages={data.chapterStages || []}
-                productionChapters={data.productionChapters || []}
+                productionChapters={data.productionChapters || chapters || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
                 workOverrides={workOverrides}
                 creditSnapshots={creditSnapshots}
                 team={team}
                 positions={positions}
+                userPositions={data.userPositions || []}
                 works={works}
                 currentUserId={data.userId}
                 currentScanId={data.currentScan?.id || ''}
@@ -2130,13 +2245,14 @@
           tasks={data.tasks || []}
           stages={data.stages || []}
           chapterStages={data.chapterStages || []}
-          productionChapters={data.productionChapters || []}
+          productionChapters={data.productionChapters || chapters || []}
           productionFiles={data.productionFiles || []}
           chapterTimeline={data.chapterTimeline || []}
           workOverrides={data.workOverrides || []}
           creditSnapshots={data.creditSnapshots || []}
           team={team}
           positions={positions}
+          userPositions={data.userPositions || []}
           works={works}
           currentUserId={data.userId}
           currentScanId={data.currentScan?.id || ''}

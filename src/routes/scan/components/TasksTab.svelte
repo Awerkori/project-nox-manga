@@ -1,7 +1,5 @@
 <script lang="ts">
   import {
-    Plus,
-    CheckCircle2,
     Clock,
     AlertCircle,
     AlertTriangle,
@@ -18,6 +16,12 @@
     Sparkles,
     ShieldCheck,
     History,
+    ArrowRight,
+    ChevronDown,
+    ChevronUp,
+    Filter,
+    CheckCircle2,
+    Briefcase
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
   import { enhance } from '$app/forms';
@@ -28,59 +32,68 @@
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
 
   let {
+    tasks = [],
     stages = [],
     chapterStages = [],
     productionChapters = [],
     productionFiles = [],
     chapterTimeline = [],
     team = [],
+    positions = [],
+    userPositions = [],
     works = [],
     currentUserId = '',
     currentScanId = '',
     userRole = 'MEMBER',
     isOwnerOrAdmin = false,
-    initialView = 'AVAILABLE',
+    onOpenChapter = null,
+    initialView = 'MINE',
   } = $props();
 
-  // Queue View Mode
-  type ViewMode = 'AVAILABLE' | 'MINE' | 'WAITING' | 'DONE';
+  // 4 Core Queue View Modes
+  type ViewMode = 'MINE' | 'AVAILABLE' | 'WAITING' | 'DONE';
   let activeView = $state<ViewMode>(initialView === 'MINE' ? 'MINE' : 'AVAILABLE');
+  let hasInitializedView = $state(false);
 
-  // Stage Filter (e.g. ALL, raw, clean_redraw, traducao, typeset, revisao, qc, ready)
-  let selectedStageFilter = $state<string>('ALL');
-
-  // Work and Search Filter
-  let selectedWorkFilter = $state<string>('ALL');
+  // Filters
   let searchQuery = $state('');
+  let selectedWorkFilter = $state<string>('ALL');
+  let selectedStageFilter = $state<string>('ALL');
+  let selectedPriorityFilter = $state<string>('ALL');
+
+  // Mobile Controls
+  let mobileSearchOpen = $state(false);
+  let showMobileFilters = $state(false);
+
+  // Pagination for Completed history
+  let doneLimit = $state(12);
+
+  // Inline expanded item deliverable view
+  let expandedItemIds = $state<Record<string, boolean>>({});
+  let stagesWithOpenUploads = $state<Record<string, boolean>>({});
+
+  function toggleExpand(id: string) {
+    expandedItemIds = { ...expandedItemIds, [id]: !expandedItemIds[id] };
+  }
+
+  function setStageUploadState(chapterStageId: string, hasOpenUploads: boolean) {
+    stagesWithOpenUploads = { ...stagesWithOpenUploads, [chapterStageId]: hasOpenUploads };
+  }
 
   // Modals state
-  let showCreateChapterModal = $state(false);
-  let showBulkCreateModal = $state(false);
   let showTimelineModal = $state(false);
   let selectedTimelineChapter = $state<any>(null);
 
-  // Return / Rework Modal
   let showReturnModal = $state(false);
   let returnSourceStage = $state<any>(null);
   let returnTargetSlug = $state<string>('typeset');
   let returnReason = $state<string>('');
 
-  // Admin Override Modal
   let showOverrideModal = $state(false);
   let overrideTargetStage = $state<any>(null);
   let overrideAction = $state<string>('FORCE_COMPLETE');
   let overrideReason = $state<string>('');
   let overrideTargetUserId = $state<string>('');
-
-  // RAW Quick Picker State
-  let rawWorkId = $state<string>('');
-  let rawChapterId = $state<string>('');
-
-  let stagesWithOpenUploads = $state<Record<string, boolean>>({});
-
-  function setStageUploadState(chapterStageId: string, hasOpenUploads: boolean) {
-    stagesWithOpenUploads = { ...stagesWithOpenUploads, [chapterStageId]: hasOpenUploads };
-  }
 
   // Realtime Supabase Channel
   let realtimeChannel: RealtimeChannel | null = null;
@@ -90,7 +103,7 @@
     if (!client || !currentScanId) return;
 
     realtimeChannel = client
-      .channel(`scan_editorial:${currentScanId}`)
+      .channel(`scan_queue_sync:${currentScanId}`)
       .on(
         'postgres_changes',
         {
@@ -116,10 +129,6 @@
         }
       )
       .subscribe();
-
-    if (works.length > 0) {
-      rawWorkId = works[0].id;
-    }
   });
 
   onDestroy(() => {
@@ -128,19 +137,18 @@
     }
   });
 
-  // Current user's positions in the scan
-  let userPositions = $derived(
-    team.find((m: any) => m.id === currentUserId)?.positions || []
+  // Effective positions for logged-in user
+  let effectivePositions = $derived(
+    userPositions && userPositions.length > 0
+      ? userPositions
+      : (team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId)?.positions || [])
   );
+
   let userPositionIds = $derived(
-    userPositions.map((p: any) => p.position_id || p.id).filter(Boolean)
+    effectivePositions.map((p: any) => p.position_id || p.id).filter(Boolean)
   );
 
-  let canCreateChapters = $derived(
-    isOwnerOrAdmin || userPositions.some((p: any) => (p.name || '').toLowerCase().includes('raw'))
-  );
-
-  // Helper to check if a stage is claimable by the current user
+  // Helper to check if a stage is claimable by current user
   function isUserEligibleForStage(wfStage: any): boolean {
     if (isOwnerOrAdmin) return true;
     if (!wfStage) return true;
@@ -150,7 +158,7 @@
     }
 
     const sName = (wfStage.name || wfStage.slug || '').toLowerCase();
-    return userPositions.some((p: any) => {
+    return effectivePositions.some((p: any) => {
       const pName = (p.name || '').toLowerCase();
       if (sName.includes('trad') && pName.includes('trad')) return true;
       if (sName.includes('clean') && (pName.includes('clean') || pName.includes('redraw'))) return true;
@@ -163,210 +171,38 @@
     });
   }
 
-  // Combine stages with their parent production chapter
-  interface UnifiedStageItem {
-    id: string;
-    production_chapter_id: string;
-    stage_id: string;
-    status: 'BLOCKED' | 'AVAILABLE' | 'IN_PROGRESS' | 'DONE' | 'SKIPPED' | 'REWORK' | 'PAUSED' | 'CANCELLED';
-    assigned_to: string | null;
-    claimed_at: string | null;
-    last_activity_at: string | null;
-    previous_assigned_to: string | null;
-    rejection_reason: string | null;
-    return_to_stage_id: string | null;
-    is_override: boolean;
-    override_action: string | null;
-    override_reason: string | null;
-    chapter: any;
-    stage: any;
-    assignee: any;
-    completer: any;
-    currentFile: any;
-    currentFiles: any[];
-    allFiles: any[];
-    dependencyFiles: any[];
-    isStale: boolean;
-    staleDays: number;
-    eligible: boolean;
+  function getStageIcon(slug: string | undefined): string {
+    if (!slug) return '💼';
+    const s = slug.toLowerCase();
+    if (s.includes('clean') || s.includes('redraw')) return '🎨';
+    if (s.includes('trad') || s.includes('trans')) return '🌐';
+    if (s.includes('type') || s.includes('letr')) return '✒️';
+    if (s.includes('qc') || s.includes('revis')) return '🔎';
+    if (s.includes('raw')) return '📦';
+    return '💼';
   }
 
-  let unifiedItems = $derived.by(() => {
-    const items: UnifiedStageItem[] = [];
-
-    for (const cs of chapterStages) {
-      const ch = productionChapters.find((c: any) => c.id === cs.production_chapter_id);
-      if (!ch) continue;
-
-      const wfStage = cs.stage || stages.find((s: any) => s.id === cs.stage_id);
-      if (!wfStage) continue;
-
-      // Find files for this chapter and stage
-      const chapterFiles = productionFiles.filter((f: any) => f.production_chapter_id === ch.id);
-      const stageFiles = chapterFiles.filter((f: any) => f.stage_id === cs.stage_id);
-      const currentFiles = stageFiles.filter((f: any) => f.is_current);
-      const currentFile = currentFiles[0] || stageFiles[0] || null;
-
-      // Find files for dependency stages
-      const depSlugs = wfStage.dependencies || [];
-      const dependencyFiles = chapterFiles.filter((file: any) =>
-        file.is_current && depSlugs.includes(file.stage_slug || file.stage?.slug)
-      );
-
-      // Check stale status
-      let isStale = false;
-      let staleDays = 0;
-      if (cs.status === 'IN_PROGRESS' && (cs.last_activity_at || cs.claimed_at)) {
-        const diffMs = Date.now() - new Date(cs.last_activity_at || cs.claimed_at).getTime();
-        staleDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        if (staleDays >= 3) {
-          isStale = true;
-        }
-      }
-
-      items.push({
-        id: cs.id,
-        production_chapter_id: cs.production_chapter_id,
-        stage_id: cs.stage_id,
-        status: cs.status,
-        assigned_to: cs.assigned_to,
-        claimed_at: cs.claimed_at,
-        last_activity_at: cs.last_activity_at,
-        previous_assigned_to: cs.previous_assigned_to,
-        rejection_reason: cs.rejection_reason,
-        return_to_stage_id: cs.return_to_stage_id,
-        is_override: cs.is_override,
-        override_action: cs.override_action,
-        override_reason: cs.override_reason,
-        chapter: ch,
-        stage: wfStage,
-        assignee: cs.assignee,
-        completer: cs.completer,
-        currentFile,
-        currentFiles,
-        allFiles: stageFiles,
-        dependencyFiles,
-        isStale,
-        staleDays,
-        eligible: isUserEligibleForStage(wfStage)
-      });
-    }
-
-    return items;
-  });
-
-  // Filter items by Stage, Work, and Search Query
-  function applyFilters(list: UnifiedStageItem[]) {
-    return list.filter((item) => {
-      if (selectedStageFilter !== 'ALL' && item.stage?.slug !== selectedStageFilter) {
-        return false;
-      }
-      if (selectedWorkFilter !== 'ALL' && item.chapter?.work_id !== selectedWorkFilter) {
-        return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const workTitle = (item.chapter?.work?.title || '').toLowerCase();
-        const chNum = String(item.chapter?.chapter_number || '');
-        const chLabel = (item.chapter?.chapter_label || '').toLowerCase();
-        const stageName = (item.stage?.name || '').toLowerCase();
-        return workTitle.includes(q) || chNum.includes(q) || chLabel.includes(q) || stageName.includes(q);
-      }
-      return true;
-    });
+  function getStageColor(slug: string | undefined): string {
+    if (!slug) return '#8b5cf6';
+    const s = slug.toLowerCase();
+    if (s.includes('clean') || s.includes('redraw')) return '#ec4899';
+    if (s.includes('trad') || s.includes('trans')) return '#3b82f6';
+    if (s.includes('type') || s.includes('letr')) return '#eab308';
+    if (s.includes('qc') || s.includes('revis')) return '#a855f7';
+    if (s.includes('raw')) return '#94a3b8';
+    return '#8b5cf6';
   }
 
-  // Queue 1: Disponíveis para Você (AVAILABLE or REWORK without assignee)
-  let availableItems = $derived(
-    applyFilters(
-      unifiedItems.filter((item) => {
-        if (item.status === 'AVAILABLE') {
-          return item.eligible;
-        }
-        if (item.status === 'REWORK' && !item.assigned_to) {
-          return item.eligible;
-        }
-        return false;
-      })
-    )
-  );
-
-  // Queue 2: Meus Trabalhos (IN_PROGRESS or REWORK assigned to current user)
-  let myItems = $derived(
-    applyFilters(
-      unifiedItems.filter((item) => {
-        return (item.status === 'IN_PROGRESS' || item.status === 'REWORK') && item.assigned_to === currentUserId;
-      })
-    )
-  );
-
-  // Queue 3: Aguardando Outra Etapa (BLOCKED or in progress by others)
-  let waitingItems = $derived(
-    applyFilters(
-      unifiedItems.filter((item) => {
-        if (item.status === 'BLOCKED') return true;
-        if ((item.status === 'IN_PROGRESS' || item.status === 'REWORK') && item.assigned_to !== currentUserId) return true;
-        if (item.status === 'AVAILABLE' && !item.eligible) return true;
-        return false;
-      })
-    )
-  );
-
-  // Queue 4: Concluídos (DONE or SKIPPED)
-  let doneItems = $derived(
-    applyFilters(
-      unifiedItems.filter((item) => item.status === 'DONE' || item.status === 'SKIPPED')
-    )
-  );
-
-  // Available RAW chapters for Quick Picker
-  let rawAvailableChapters = $derived.by(() => {
-    if (!rawWorkId) return [];
-    return unifiedItems
-      .filter((item) => item.stage?.slug === 'raw' && item.status === 'AVAILABLE' && item.chapter?.work_id === rawWorkId)
-      .map((item) => item.chapter);
-  });
-
-  let targetRawStageItem = $derived(
-    rawChapterId ? unifiedItems.find(i => i.production_chapter_id === rawChapterId && i.stage?.slug === 'raw' && i.status === 'AVAILABLE') : null
-  );
-
-  // Open Chapter Timeline
-  function openChapterTimeline(chapter: any) {
-    selectedTimelineChapter = chapter;
-    showTimelineModal = true;
-  }
-
-  // Timeline events for selected chapter
-  let chapterTimelineEvents = $derived(
-    selectedTimelineChapter
-      ? chapterTimeline.filter((t: any) => t.production_chapter_id === selectedTimelineChapter.id)
-      : []
-  );
-
-  // Files for selected chapter
-  let chapterTimelineFiles = $derived(
-    selectedTimelineChapter
-      ? productionFiles.filter((f: any) => f.production_chapter_id === selectedTimelineChapter.id)
-      : []
-  );
-
-  // Open Return / Rework Modal
-  function openReturnModal(item: UnifiedStageItem) {
-    returnSourceStage = item;
-    // Default target stage is previous upstream stage (e.g. typeset or clean)
-    returnTargetSlug = 'typeset';
-    returnReason = '';
-    showReturnModal = true;
-  }
-
-  // Open Admin Override Modal
-  function openOverrideModal(item: UnifiedStageItem) {
-    overrideTargetStage = item;
-    overrideAction = 'FORCE_COMPLETE';
-    overrideReason = '';
-    overrideTargetUserId = '';
-    showOverrideModal = true;
+  function formatDueDate(dueDateStr: string | null | undefined): string | null {
+    if (!dueDateStr) return null;
+    const d = new Date(dueDateStr);
+    if (isNaN(d.getTime())) return null;
+    const diffDays = Math.ceil((d.getTime() - Date.now()) / 86400000);
+    if (diffDays === 0) return 'Hoje';
+    if (diffDays === 1) return 'Amanhã';
+    if (diffDays < 0) return `Atrasado há ${Math.abs(diffDays)}d`;
+    if (diffDays <= 5) return `Em ${diffDays}d`;
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   }
 
   function formatBytes(bytes: number) {
@@ -376,597 +212,1053 @@
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
+
+  // Unified Item Interface
+  interface QueueItem {
+    id: string;
+    type: 'stage' | 'legacy';
+    title: string;
+    chapterNumber: number | string | null;
+    chapterLabel: string | null;
+    workId: string | null;
+    workTitle: string;
+    coverId: string | null;
+    stageName: string;
+    stageSlug: string;
+    stageIcon: string;
+    stageColor: string;
+    priority: 'NORMAL' | 'HIGH' | 'URGENT' | 'LOW';
+    dueDate: string | null;
+    formattedDue: string | null;
+    isOverdue: boolean;
+    status: string;
+    isRework: boolean;
+    rejectionReason: string | null;
+    assignedTo: string | null;
+    claimedAt: string | null;
+    lastActivityAt: string | null;
+    isStale: boolean;
+    staleDays: number;
+    eligible: boolean;
+    chapter: any | null;
+    stage: any | null;
+    chapterStage: any | null;
+    task: any | null;
+    currentFiles: any[];
+    allFiles: any[];
+    dependencyFiles: any[];
+    dependencies: string[];
+    completer: any | null;
+    completedAt: string | null;
+  }
+
+  // Combine stages and legacy tasks
+  let allQueueItems = $derived.by(() => {
+    const items: QueueItem[] = [];
+
+    // 1. Process scan_chapter_stages
+    for (const cs of chapterStages) {
+      const ch = productionChapters.find((c: any) => c.id === cs.production_chapter_id) || null;
+      const work = ch?.work || (ch?.work_id ? works.find((w: any) => w.id === ch.work_id) : null);
+      const wfStage = cs.stage || (cs.stage_id ? stages.find((s: any) => s.id === cs.stage_id) : null);
+
+      const sSlug = wfStage?.slug || 'traducao';
+      const sName = wfStage?.name || 'Etapa Editorial';
+      const chNum = ch?.chapter_number || ch?.number || null;
+      const prio = ch?.priority || 'NORMAL';
+      const due = ch?.target_publish_at || null;
+      const formattedDue = formatDueDate(due);
+      const isOverdue = formattedDue ? formattedDue.includes('Atrasado') : false;
+
+      // Files for this chapter and stage
+      const chapterFiles = ch ? productionFiles.filter((f: any) => f.production_chapter_id === ch.id) : [];
+      const stageFiles = cs.stage_id ? chapterFiles.filter((f: any) => f.stage_id === cs.stage_id) : [];
+      const currentFiles = stageFiles.filter((f: any) => f.is_current);
+
+      // Dependency files
+      const depSlugs = wfStage?.dependencies || [];
+      const dependencyFiles = chapterFiles.filter((file: any) =>
+        file.is_current && depSlugs.includes(file.stage_slug || file.stage?.slug)
+      );
+
+      // Stale check
+      let isStale = false;
+      let staleDays = 0;
+      if (cs.status === 'IN_PROGRESS' && (cs.last_activity_at || cs.claimed_at)) {
+        const diffMs = Date.now() - new Date(cs.last_activity_at || cs.claimed_at).getTime();
+        staleDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (staleDays >= 3) isStale = true;
+      }
+
+      items.push({
+        id: cs.id,
+        type: 'stage',
+        title: work?.title || 'Obra em Produção',
+        chapterNumber: chNum,
+        chapterLabel: ch?.chapter_label || '',
+        workId: ch?.work_id || work?.id || null,
+        workTitle: work?.title || 'Obra em Produção',
+        coverId: work?.cover_id || null,
+        stageName: sName,
+        stageSlug: sSlug,
+        stageIcon: getStageIcon(sSlug),
+        stageColor: wfStage?.color || getStageColor(sSlug),
+        priority: prio,
+        dueDate: due,
+        formattedDue,
+        isOverdue,
+        status: cs.status,
+        isRework: cs.status === 'REWORK',
+        rejectionReason: cs.rejection_reason || null,
+        assignedTo: cs.assigned_to,
+        claimedAt: cs.claimed_at,
+        lastActivityAt: cs.last_activity_at,
+        isStale,
+        staleDays,
+        eligible: isUserEligibleForStage(wfStage),
+        chapter: ch,
+        stage: wfStage,
+        chapterStage: cs,
+        task: null,
+        currentFiles,
+        allFiles: stageFiles,
+        dependencyFiles,
+        dependencies: depSlugs,
+        completer: cs.completer || null,
+        completedAt: cs.completed_at || cs.updated_at || null
+      });
+    }
+
+    // 2. Process legacy tasks assigned to user
+    for (const t of tasks) {
+      const ch = t.chapter_id ? (productionChapters.find((c: any) => c.id === t.chapter_id) || null) : null;
+      const work = ch ? (ch.work || works.find((w: any) => w.id === ch.work_id)) : (t.work_id ? works.find((w: any) => w.id === t.work_id) : null);
+      const chNum = ch?.chapter_number || ch?.number || t.chapter_number || null;
+      const sSlug = t.stage_slug || 'minha_fila';
+      const isGeneral = !chNum;
+      const displayTitle = isGeneral ? (t.title || work?.title || 'Tarefa Geral') : (work?.title || t.title || 'Obra em Produção');
+      const due = t.due_date || t.due_at || null;
+      const formattedDue = formatDueDate(due);
+      const isOverdue = formattedDue ? formattedDue.includes('Atrasado') : false;
+
+      items.push({
+        id: t.id,
+        type: 'legacy',
+        title: displayTitle,
+        chapterNumber: chNum,
+        chapterLabel: ch?.chapter_label || (isGeneral ? '' : t.title),
+        workId: work?.id || t.work_id || null,
+        workTitle: displayTitle,
+        coverId: isGeneral ? null : (work?.cover_id || null),
+        stageName: t.stage_name || (isGeneral ? 'Tarefa Geral' : 'Limpeza & Redraw'),
+        stageSlug: sSlug,
+        stageIcon: getStageIcon(sSlug),
+        stageColor: t.stage_color || getStageColor(sSlug),
+        priority: t.priority || 'NORMAL',
+        dueDate: due,
+        formattedDue,
+        isOverdue,
+        status: t.status,
+        isRework: false,
+        rejectionReason: null,
+        assignedTo: t.assigned_to || t.assignee_id || null,
+        claimedAt: t.created_at || null,
+        lastActivityAt: t.updated_at || null,
+        isStale: false,
+        staleDays: 0,
+        eligible: true,
+        chapter: ch,
+        stage: null,
+        chapterStage: null,
+        task: t,
+        currentFiles: [],
+        allFiles: [],
+        dependencyFiles: [],
+        dependencies: [],
+        completer: null,
+        completedAt: t.updated_at || null
+      });
+    }
+
+    return items;
+  });
+
+  // Filter items by Work, Stage, Priority, and Search Query
+  function applyFilters(list: QueueItem[]) {
+    return list.filter((item) => {
+      if (selectedWorkFilter !== 'ALL' && item.workId !== selectedWorkFilter) {
+        return false;
+      }
+      if (selectedStageFilter !== 'ALL' && item.stageSlug !== selectedStageFilter) {
+        return false;
+      }
+      if (selectedPriorityFilter !== 'ALL' && item.priority !== selectedPriorityFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const titleMatch = item.workTitle.toLowerCase().includes(q);
+        const chMatch = String(item.chapterNumber || '').toLowerCase().includes(q);
+        const labelMatch = (item.chapterLabel || '').toLowerCase().includes(q);
+        const stageMatch = item.stageName.toLowerCase().includes(q);
+        return titleMatch || chMatch || labelMatch || stageMatch;
+      }
+      return true;
+    });
+  }
+
+  // 1. EM ANDAMENTO: Chapter stages & tasks actively assigned to logged-in user
+  let rawActiveItems = $derived(
+    allQueueItems
+      .filter((item) => {
+        if (item.type === 'stage') {
+          return item.assignedTo === currentUserId && (item.status === 'IN_PROGRESS' || item.status === 'REWORK');
+        } else {
+          return item.assignedTo === currentUserId && item.status !== 'DONE';
+        }
+      })
+      .sort((a, b) => {
+        if (a.isRework && !b.isRework) return -1;
+        if (!a.isRework && b.isRework) return 1;
+        const prioOrder: Record<string, number> = { URGENT: 3, HIGH: 2, NORMAL: 1, LOW: 0 };
+        return (prioOrder[b.priority] || 1) - (prioOrder[a.priority] || 1);
+      })
+  );
+
+  // 2. DISPONÍVEIS PARA MIM: Stages matching user positions that can be claimed
+  let rawAvailableItems = $derived(
+    allQueueItems.filter((item) => {
+      if (item.type !== 'stage') return false;
+      if (item.status === 'AVAILABLE' && item.eligible) return true;
+      if (item.status === 'REWORK' && !item.assignedTo && item.eligible) return true;
+      return false;
+    })
+  );
+
+  // 3. AGUARDANDO: Blocked stages or stages currently worked on by peers
+  let rawWaitingItems = $derived(
+    allQueueItems.filter((item) => {
+      if (item.type !== 'stage') return false;
+      if (item.status === 'BLOCKED') return true;
+      if ((item.status === 'IN_PROGRESS' || item.status === 'REWORK') && item.assignedTo !== currentUserId) return true;
+      if (item.status === 'AVAILABLE' && !item.eligible) return true;
+      return false;
+    })
+  );
+
+  // 4. CONCLUÍDAS: Tasks and stages completed by logged-in user
+  let rawDoneItems = $derived(
+    allQueueItems
+      .filter((item) => {
+        if (item.type === 'stage') {
+          const isMine = item.assignedTo === currentUserId || item.completer?.id === currentUserId;
+          return (item.status === 'DONE' || item.status === 'SKIPPED') && isMine;
+        } else {
+          return item.status === 'DONE' && item.assignedTo === currentUserId;
+        }
+      })
+      .sort((a, b) => {
+        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return timeB - timeA;
+      })
+  );
+
+  // Filtered Lists
+  let myActiveItems = $derived(applyFilters(rawActiveItems));
+  let availableItems = $derived(applyFilters(rawAvailableItems));
+  let waitingItems = $derived(applyFilters(rawWaitingItems));
+  let doneItems = $derived(applyFilters(rawDoneItems));
+
+  // Pagination for Done
+  let paginatedDoneItems = $derived(doneItems.slice(0, doneLimit));
+  let hasMoreDone = $derived(doneItems.length > doneLimit);
+
+  // Auto-select initial view based on active tasks count
+  $effect(() => {
+    if (!hasInitializedView) {
+      if (rawActiveItems.length > 0) {
+        activeView = 'MINE';
+      } else {
+        activeView = 'AVAILABLE';
+      }
+      hasInitializedView = true;
+    }
+  });
+
+  // Active filters count for mobile indicator
+  let activeFiltersCount = $derived(
+    (selectedWorkFilter !== 'ALL' ? 1 : 0) +
+    (selectedStageFilter !== 'ALL' ? 1 : 0) +
+    (selectedPriorityFilter !== 'ALL' ? 1 : 0) +
+    (searchQuery.trim() ? 1 : 0)
+  );
+
+  function resetFilters() {
+    searchQuery = '';
+    selectedWorkFilter = 'ALL';
+    selectedStageFilter = 'ALL';
+    selectedPriorityFilter = 'ALL';
+    showMobileFilters = false;
+  }
+
+  // Open Chapter Timeline Modal
+  function openChapterTimeline(chapter: any) {
+    if (!chapter) return;
+    selectedTimelineChapter = chapter;
+    showTimelineModal = true;
+  }
+
+  // Timeline events & files
+  let chapterTimelineEvents = $derived(
+    selectedTimelineChapter
+      ? chapterTimeline.filter((t: any) => t.production_chapter_id === selectedTimelineChapter.id)
+      : []
+  );
+
+  let chapterTimelineFiles = $derived(
+    selectedTimelineChapter
+      ? productionFiles.filter((f: any) => f.production_chapter_id === selectedTimelineChapter.id)
+      : []
+  );
+
+  // Open Return / Rework Modal
+  function openReturnModal(item: QueueItem) {
+    returnSourceStage = item;
+    returnTargetSlug = 'typeset';
+    returnReason = '';
+    showReturnModal = true;
+  }
+
+  // Open Admin Override Modal
+  function openOverrideModal(item: QueueItem) {
+    overrideTargetStage = item;
+    overrideAction = 'FORCE_COMPLETE';
+    overrideReason = '';
+    overrideTargetUserId = '';
+    showOverrideModal = true;
+  }
 </script>
 
 <div class="tasks-tab-root">
-  <!-- Header Bar -->
-  <header class="tasks-header-bar">
+  <!-- 1. COMPACT PREMIUM HEADER (72–90px) -->
+  <header class="queue-header-bar">
     <div class="header-titles">
       <div class="header-badge">
-        <Zap size={14} />
-        <span>CENTRAL DE PRODUÇÃO & FLUXO EDITORIAL</span>
+        <Briefcase size={12} />
+        <span>ÁREA DE TRABALHO PESSOAL</span>
       </div>
-      <h2 class="tab-title">Produção Operacional</h2>
-      <p class="tab-desc">Fluxo descomplicado para a equipe: pegue um capítulo, baixe o material pré-requisito, envie seu trabalho e avance a etapa.</p>
-    </div>
-
-    <div class="header-actions">
-      {#if isOwnerOrAdmin}
-        <button type="button" class="btn-secondary-sm" onclick={() => (showBulkCreateModal = true)}>
-          <Layers size={14} />
-          <span>Criação em Lote</span>
-        </button>
-      {/if}
-      {#if canCreateChapters}
-        <button type="button" class="btn-primary-sm" onclick={() => (showCreateChapterModal = true)}>
-          <Plus size={14} />
-          <span>Novo Capítulo</span>
-        </button>
-      {/if}
+      <div class="title-row">
+        <h1 class="tab-title">Minha Fila</h1>
+        <span class="active-tasks-pill" class:has-tasks={rawActiveItems.length > 0}>
+          <strong>{rawActiveItems.length}</strong> {rawActiveItems.length === 1 ? 'em andamento' : 'em andamento'}
+        </span>
+      </div>
+      <p class="tab-desc">Gerencie seus trabalhos e acompanhe suas tarefas editoriais.</p>
     </div>
   </header>
 
-  <!-- Stage Quick Selector Bar -->
-  <section class="stage-filter-strip" aria-label="Filtrar por etapa editorial">
-    <button
-      type="button"
-      class="stage-filter-pill"
-      class:active={selectedStageFilter === 'ALL'}
-      onclick={() => (selectedStageFilter = 'ALL')}
-    >
-      Todas as Etapas
-    </button>
-    {#each stages as st (st.id)}
+  <!-- 2. FOUR CATEGORIES NAVIGATION STRIP -->
+  <nav class="queue-nav-strip" aria-label="Abas da fila">
+    <div class="queue-tabs-scroll">
       <button
         type="button"
-        class="stage-filter-pill"
-        class:active={selectedStageFilter === st.slug}
-        style="--pill-accent: {st.color || '#6366f1'}"
-        onclick={() => (selectedStageFilter = st.slug)}
+        class="queue-tab-btn"
+        class:active={activeView === 'MINE'}
+        onclick={() => (activeView = 'MINE')}
       >
-        <span class="stage-color-dot" style="background: {st.color || '#6366f1'}"></span>
-        <span>{st.name}</span>
+        <Clock size={15} class="queue-icon blue" />
+        <span class="queue-tab-label">Em andamento</span>
+        <span class="queue-counter-badge count-mine">{rawActiveItems.length}</span>
       </button>
-    {/each}
-  </section>
 
-  <!-- Queue Selector Navigation Strip -->
-  <nav class="queue-nav-strip">
-    <button
-      type="button"
-      class="queue-tab-btn"
-      class:active={activeView === 'AVAILABLE'}
-      onclick={() => (activeView = 'AVAILABLE')}
-    >
-      <Zap size={15} class="queue-icon yellow" />
-      <span class="queue-tab-label">Disponíveis para Você</span>
-      <span class="queue-counter-badge count-available">{availableItems.length}</span>
-    </button>
+      <button
+        type="button"
+        class="queue-tab-btn"
+        class:active={activeView === 'AVAILABLE'}
+        onclick={() => (activeView = 'AVAILABLE')}
+      >
+        <Zap size={15} class="queue-icon yellow" />
+        <span class="queue-tab-label">Disponíveis para mim</span>
+        <span class="queue-counter-badge count-available">{rawAvailableItems.length}</span>
+      </button>
 
-    <button
-      type="button"
-      class="queue-tab-btn"
-      class:active={activeView === 'MINE'}
-      onclick={() => (activeView = 'MINE')}
-    >
-      <Clock size={15} class="queue-icon blue" />
-      <span class="queue-tab-label">Meus Trabalhos</span>
-      <span class="queue-counter-badge count-mine">{myItems.length}</span>
-    </button>
+      <button
+        type="button"
+        class="queue-tab-btn"
+        class:active={activeView === 'WAITING'}
+        onclick={() => (activeView = 'WAITING')}
+      >
+        <Lock size={15} class="queue-icon purple" />
+        <span class="queue-tab-label">Aguardando</span>
+        <span class="queue-counter-badge count-waiting">{rawWaitingItems.length}</span>
+      </button>
 
-    <button
-      type="button"
-      class="queue-tab-btn"
-      class:active={activeView === 'WAITING'}
-      onclick={() => (activeView = 'WAITING')}
-    >
-      <Lock size={15} class="queue-icon purple" />
-      <span class="queue-tab-label">Aguardando Outra Etapa</span>
-      <span class="queue-counter-badge count-waiting">{waitingItems.length}</span>
-    </button>
-
-    <button
-      type="button"
-      class="queue-tab-btn"
-      class:active={activeView === 'DONE'}
-      onclick={() => (activeView = 'DONE')}
-    >
-      <CheckCircle2 size={15} class="queue-icon green" />
-      <span class="queue-tab-label">Concluídos</span>
-      <span class="queue-counter-badge count-done">{doneItems.length}</span>
-    </button>
+      <button
+        type="button"
+        class="queue-tab-btn"
+        class:active={activeView === 'DONE'}
+        onclick={() => (activeView = 'DONE')}
+      >
+        <CheckCircle2 size={15} class="queue-icon green" />
+        <span class="queue-tab-label">Concluídas</span>
+        <span class="queue-counter-badge count-done">{rawDoneItems.length}</span>
+      </button>
+    </div>
   </nav>
 
-  <!-- Global Filters (Work & Search) -->
+  <!-- 3. SEARCH & FILTERS ROW -->
   <div class="filter-controls-row">
-    <div class="search-box">
+    <!-- Desktop Search -->
+    <div class="search-box desktop-search">
       <Search size={14} class="search-icon" />
       <input
         type="text"
-        placeholder="Buscar por obra ou número de capítulo..."
+        placeholder="Buscar por obra, capítulo ou etapa..."
         bind:value={searchQuery}
         class="filter-input"
       />
+      {#if searchQuery}
+        <button type="button" class="btn-clear-search" onclick={() => (searchQuery = '')} aria-label="Limpar busca">
+          <X size={13} />
+        </button>
+      {/if}
     </div>
 
-    <div class="work-filter-select-wrapper">
-      <select bind:value={selectedWorkFilter} class="filter-select">
-        <option value="ALL">Todas as Obras ({works.length})</option>
-        {#each works as w (w.id)}
-          <option value={w.id}>{w.title}</option>
-        {/each}
-      </select>
+    <!-- Desktop Select Filters -->
+    <div class="desktop-filters">
+      <div class="select-wrapper">
+        <select bind:value={selectedWorkFilter} class="filter-select">
+          <option value="ALL">Todas as Obras ({works.length})</option>
+          {#each works as w (w.id)}
+            <option value={w.id}>{w.title}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="select-wrapper">
+        <select bind:value={selectedStageFilter} class="filter-select">
+          <option value="ALL">Todas as Etapas</option>
+          {#each stages as st (st.id)}
+            <option value={st.slug}>{st.name}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="select-wrapper">
+        <select bind:value={selectedPriorityFilter} class="filter-select">
+          <option value="ALL">Todas as Prioridades</option>
+          <option value="URGENT">Urgente</option>
+          <option value="HIGH">Alta</option>
+          <option value="NORMAL">Normal</option>
+          <option value="LOW">Baixa</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Mobile Search & Filter Actions -->
+    <div class="mobile-filter-bar">
+      {#if mobileSearchOpen}
+        <div class="search-box mobile-expanded-search">
+          <Search size={14} class="search-icon" />
+          <input
+            type="text"
+            placeholder="Buscar obra, cap ou etapa..."
+            bind:value={searchQuery}
+            class="filter-input"
+            autofocus
+          />
+          <button
+            type="button"
+            class="btn-close-mobile-search"
+            onclick={() => { searchQuery = ''; mobileSearchOpen = false; }}
+            aria-label="Fechar busca"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      {:else}
+        <button
+          type="button"
+          class="btn-mobile-search-toggle"
+          onclick={() => (mobileSearchOpen = true)}
+          aria-label="Abrir campo de busca"
+        >
+          <Search size={15} />
+          <span>{searchQuery ? `"${searchQuery}"` : 'Buscar...'}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-mobile-filter-toggle"
+          class:has-active={activeFiltersCount > (searchQuery ? 1 : 0)}
+          onclick={() => (showMobileFilters = true)}
+          aria-label="Abrir filtros"
+        >
+          <Filter size={15} />
+          <span>Filtros</span>
+          {#if activeFiltersCount > (searchQuery ? 1 : 0)}
+            <span class="active-badge">{activeFiltersCount - (searchQuery ? 1 : 0)}</span>
+          {/if}
+        </button>
+      {/if}
     </div>
   </div>
 
-  <!-- RAW QUICK PICKER (Reference: Old Scan Staff RawQueue) -->
-  {#if selectedStageFilter === 'raw' || selectedStageFilter === 'ALL'}
-    <section class="raw-quick-picker-card">
-      <div class="picker-header">
-        <div class="picker-title-lockup">
-          <Download size={18} class="text-amber-400" />
-          <h3>Entrada Rápida de RAW</h3>
-        </div>
-        <p class="picker-hint">Escolha a obra e o capítulo para iniciar a produção imediata.</p>
-      </div>
-
-      <div class="picker-controls">
-        <div class="picker-field">
-          <label for="raw-work-select">Obra</label>
-          <select id="raw-work-select" bind:value={rawWorkId} class="picker-select">
-            {#each works as w (w.id)}
-              <option value={w.id}>{w.title}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="picker-field">
-          <label for="raw-chapter-select">Capítulo Disponível</label>
-          <select
-            id="raw-chapter-select"
-            bind:value={rawChapterId}
-            class="picker-select"
-            disabled={rawAvailableChapters.length === 0}
-          >
-            {#if rawAvailableChapters.length === 0}
-              <option value="">Nenhum capítulo aguardando RAW</option>
-            {:else}
-              <option value="">Selecione o capítulo...</option>
-              {#each rawAvailableChapters as ch (ch.id)}
-                <option value={ch.id}>
-                  Capítulo #{ch.chapter_number} {ch.chapter_label ? `(${ch.chapter_label})` : ''}
-                </option>
-              {/each}
-            {/if}
-          </select>
-        </div>
-
-        <div class="picker-action">
-          {#if targetRawStageItem}
-            {@const canClaimRaw = isOwnerOrAdmin || isUserEligibleForStage(targetRawStageItem.stage)}
-            {#if canClaimRaw}
-              <form method="POST" action="?/claimStage" use:enhance>
-                <input type="hidden" name="chapter_stage_id" value={targetRawStageItem.id} />
-                <button type="submit" class="btn-claim-highlight">
-                  <Zap size={14} />
-                  <span>Pegar este capítulo</span>
-                </button>
-              </form>
-            {:else}
-              <button type="button" class="btn-claim-highlight" disabled title="Você precisa do cargo Raw Provider para assumir esta etapa.">
-                <Lock size={14} />
-                <span>Disponível para Raw Provider</span>
-              </button>
-            {/if}
-          {:else}
-            <button type="button" class="btn-claim-highlight" disabled>
-              <span>Pegar este capítulo</span>
-            </button>
-          {/if}
-        </div>
-      </div>
-    </section>
-  {/if}
-
-  <!-- MAIN QUEUE VIEWS -->
+  <!-- 4. MAIN QUEUE CONTENT AREA -->
   <main class="queue-content-area">
-    <!-- 1. DISPONÍVEIS PARA VOCÊ -->
-    {#if activeView === 'AVAILABLE'}
-      {#if availableItems.length === 0}
+    <!-- TAB 1: EM ANDAMENTO -->
+    {#if activeView === 'MINE'}
+      {#if myActiveItems.length === 0}
         <div class="empty-state-box">
-          <CheckCircle2 size={44} class="text-emerald-400" />
-          <h4>Nenhuma etapa disponível para o seu cargo no momento!</h4>
-          <p>Você está em dia. Novas etapas aparecerão assim que os pré-requisitos anteriores forem entregues.</p>
+          <div class="empty-icon-wrap emerald">
+            <CheckCircle2 size={32} />
+          </div>
+          <h4>Você está em dia com seus trabalhos!</h4>
+          <p>Não há nenhuma tarefa em andamento atribuída a você no momento.</p>
+          <button type="button" class="btn-empty-action" onclick={() => (activeView = 'AVAILABLE')}>
+            <Zap size={14} />
+            <span>Ver etapas disponíveis para mim</span>
+          </button>
         </div>
       {:else}
-        <div class="cards-grid">
-          {#each availableItems as item (item.id)}
-            <article class="editorial-card available">
-              <header class="card-header">
-                <div class="badge-row">
-                  <span class="stage-tag" style="background: {item.stage?.color || '#3b82f6'}20; color: {item.stage?.color || '#60a5fa'}; border-color: {item.stage?.color || '#3b82f6'}50;">
-                    {item.stage?.name}
-                  </span>
-                  {#if item.status === 'REWORK'}
-                    <span class="rework-tag">RETRABALHO</span>
+        <div class="cards-vertical-list">
+          {#each myActiveItems as item (item.id)}
+            <article class="task-compact-card in-progress" class:is-rework={item.isRework}>
+              <!-- Main Horizontal Card Row -->
+              <div class="card-main-row">
+                <!-- Left: 48x64px Cover / Fallback -->
+                <div class="card-visual-col">
+                  {#if item.coverId}
+                    <img
+                      src="/media/{item.coverId}"
+                      alt={item.workTitle}
+                      class="task-cover-thumb"
+                      loading="lazy"
+                      onerror={(e) => {
+                        const target = e.currentTarget as HTMLElement;
+                        target.style.display = 'none';
+                        if (target.nextElementSibling) {
+                          (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                        }
+                      }}
+                    />
+                    <div class="task-stage-icon-fallback" style="display: none;">
+                      <Briefcase size={18} class="task-fallback-icon" />
+                    </div>
+                  {:else}
+                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                      {#if item.stageIcon && item.stageIcon !== '💼'}
+                        <span class="fallback-emoji">{item.stageIcon}</span>
+                      {:else}
+                        <Briefcase size={18} class="task-fallback-icon" />
+                      {/if}
+                    </div>
                   {/if}
-                  <span class="prio-tag prio-{(item.chapter.priority || 'NORMAL').toLowerCase()}">
-                    {item.chapter.priority}
-                  </span>
                 </div>
 
-                <div class="work-meta">
-                  <span class="work-name">{item.chapter.work?.title}</span>
-                  <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapter_number}
-                    {#if item.chapter.chapter_label}
-                      <small class="chapter-label-pill">{item.chapter.chapter_label}</small>
-                    {/if}
-                  </h3>
-                </div>
-              </header>
-
-              {#if item.rejection_reason}
-                <div class="card-alert-banner rework">
-                  <AlertTriangle size={14} />
-                  <span>Motivo do retorno: {item.rejection_reason}</span>
-                </div>
-              {/if}
-
-              <div class="card-dependencies-info">
-                {#if item.stage?.dependencies?.length > 0}
-                  <span class="deps-label">Pré-requisitos concluídos:</span>
-                  <div class="deps-tags">
-                    {#each item.stage.dependencies as dep (dep)}
-                      <span class="dep-done-tag">✓ {dep.toUpperCase()}</span>
-                    {/each}
+                <!-- Middle: Title, Chapter, Stage, Priority, Status -->
+                <div class="card-details-col">
+                  <div class="card-title-row">
+                    <h3 class="task-work-name" title={item.workTitle}>
+                      {item.workTitle}
+                    </h3>
                   </div>
-                {:else}
-                  <span class="deps-label">Etapa de entrada: sem pré-requisitos</span>
-                {/if}
+
+                  <div class="card-meta-row primary-meta">
+                    {#if item.chapterNumber}
+                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                    {/if}
+
+                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                      <span class="dot"></span>
+                      {item.stageName}
+                    </span>
+
+                    {#if item.priority === 'URGENT'}
+                      <span class="meta-pill urgent">Urgente</span>
+                    {:else if item.priority === 'HIGH'}
+                      <span class="meta-pill high">Alta prioridade</span>
+                    {/if}
+                  </div>
+
+                  {#if item.isRework || item.formattedDue || item.isStale}
+                    <div class="card-meta-row secondary-meta">
+                      {#if item.isRework}
+                        <span class="meta-pill rework">
+                          <AlertTriangle size={11} />
+                          Retrabalho
+                        </span>
+                      {/if}
+
+                      {#if item.formattedDue}
+                        <span class="meta-pill deadline" class:is-overdue={item.isOverdue}>
+                          <Clock size={11} />
+                          {item.formattedDue}
+                        </span>
+                      {/if}
+
+                      {#if item.isStale}
+                        <span class="meta-pill stale">
+                          Parado há {item.staleDays}d
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+
+                <!-- Right: Action Buttons -->
+                <div class="card-actions-col">
+                  <button
+                    type="button"
+                    class="btn-action-continue"
+                    onclick={() => {
+                      if (onOpenChapter && item.chapter) {
+                        onOpenChapter(item.chapter);
+                      } else {
+                        toggleExpand(item.id);
+                      }
+                    }}
+                    title="Continuar este trabalho"
+                  >
+                    <span>Continuar</span>
+                    <ArrowRight size={13} class="btn-arrow-icon" />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn-toggle-expand"
+                    class:is-expanded={expandedItemIds[item.id]}
+                    onclick={() => toggleExpand(item.id)}
+                    title={expandedItemIds[item.id] ? "Ocultar arquivos e entrega" : "Gerenciar arquivos e entrega"}
+                    aria-label="Gerenciar arquivos e entrega"
+                  >
+                    <span>Arquivos</span>
+                    {#if expandedItemIds[item.id]}
+                      <ChevronUp size={13} />
+                    {:else}
+                      <ChevronDown size={13} />
+                    {/if}
+                  </button>
+                </div>
               </div>
 
-              <footer class="card-footer">
-                <button
-                  type="button"
-                  class="btn-timeline-ghost"
-                  onclick={() => openChapterTimeline(item.chapter)}
-                  title="Ver linha do tempo do capítulo"
-                >
-                  <History size={14} />
-                  <span>Histórico</span>
-                </button>
+              <!-- Inline Expandable Deliverable / Actions Section -->
+              {#if expandedItemIds[item.id]}
+                <div class="card-inline-panel">
+                  {#if item.rejectionReason}
+                    <div class="rework-alert-banner">
+                      <AlertCircle size={15} />
+                      <div>
+                        <strong>Motivo do Retrabalho:</strong>
+                        <p>{item.rejectionReason}</p>
+                      </div>
+                    </div>
+                  {/if}
 
-                <form method="POST" action="?/claimStage" use:enhance>
-                  <input type="hidden" name="chapter_stage_id" value={item.id} />
-                  <button type="submit" class="btn-claim-primary">
-                    <Zap size={14} />
-                    <span>Pegar Tarefa</span>
-                  </button>
-                </form>
-              </footer>
+                  <!-- Dependency Downloads -->
+                  {#if item.dependencyFiles.length > 0}
+                    <div class="panel-section">
+                      <span class="section-title"><Download size={13} /> Materiais Pré-requisito (Entrada)</span>
+                      <div class="deps-download-list">
+                        {#each item.dependencyFiles as depFile (depFile.id)}
+                          <a
+                            href="/api/scan/production/files/{depFile.id}?download=1"
+                            download={depFile.file_name}
+                            class="dep-download-chip"
+                          >
+                            <Download size={12} />
+                            <span>{depFile.stage_slug?.toUpperCase()} ({formatBytes(depFile.byte_size)})</span>
+                          </a>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+
+                  <!-- Deliverable Upload Component -->
+                  {#if item.type === 'stage'}
+                    <div class="panel-section upload-subpanel">
+                      <span class="section-title"><Upload size={13} /> Enviar Arquivo de Entrega</span>
+                      <PipelineDeliverableUpload
+                        scanId={currentScanId}
+                        productionChapterId={item.chapter?.id || item.chapterStage?.production_chapter_id}
+                        stageId={item.stage?.id || item.chapterStage?.stage_id}
+                        currentFiles={item.currentFiles}
+                        onFilesChanged={async () => { await invalidateAll(); }}
+                        onUploadStateChange={(open: boolean) => setStageUploadState(item.id, open)}
+                      />
+                    </div>
+                  {/if}
+
+                  <!-- Actions Footer -->
+                  <div class="panel-footer-actions">
+                    <div class="left-actions">
+                      <form method="POST" action="?/releaseStage" use:enhance>
+                        <input type="hidden" name="chapter_stage_id" value={item.id} />
+                        <button type="submit" class="btn-ghost-sm" title="Liberar tarefa de volta à equipe">
+                          <RotateCcw size={12} />
+                          <span>Liberar Tarefa</span>
+                        </button>
+                      </form>
+
+                      {#if ['revisor_qc', 'qc', 'revisao'].includes(item.stageSlug)}
+                        <button
+                          type="button"
+                          class="btn-ghost-sm text-amber-400"
+                          onclick={() => openReturnModal(item)}
+                          title="Solicitar correção para etapa anterior"
+                        >
+                          <RotateCcw size={12} />
+                          <span>Solicitar Correção</span>
+                        </button>
+                      {/if}
+
+                      {#if isOwnerOrAdmin}
+                        <button
+                          type="button"
+                          class="btn-ghost-sm text-purple-400"
+                          onclick={() => openOverrideModal(item)}
+                          title="Ações de Liderança"
+                        >
+                          <ShieldCheck size={12} />
+                          <span>Override</span>
+                        </button>
+                      {/if}
+                    </div>
+
+                    <div class="right-actions">
+                      {#if item.type === 'stage'}
+                        <form method="POST" action="?/completeStageAction" use:enhance>
+                          <input type="hidden" name="chapter_stage_id" value={item.id} />
+                          <button
+                            type="submit"
+                            class="btn-complete-task"
+                            disabled={item.stage?.requires_output && item.currentFiles.length === 0}
+                            title={item.stage?.requires_output && item.currentFiles.length === 0 ? "Envie um arquivo para concluir" : "Concluir e avançar etapa"}
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Concluir Etapa</span>
+                          </button>
+                        </form>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+              {/if}
             </article>
           {/each}
         </div>
       {/if}
 
-    <!-- 2. MEUS TRABALHOS -->
-    {:else if activeView === 'MINE'}
-      {#if myItems.length === 0}
+    <!-- TAB 2: DISPONÍVEIS PARA MIM -->
+    {:else if activeView === 'AVAILABLE'}
+      {#if availableItems.length === 0}
         <div class="empty-state-box">
-          <BookOpen size={44} class="text-blue-400" />
-          <h4>Você não possui tarefas em andamento</h4>
-          <p>Acesse a aba <strong>Disponíveis para Você</strong> para assumir um novo capítulo da equipe.</p>
+          <div class="empty-icon-wrap purple">
+            <Layers size={32} />
+          </div>
+          <h4>Nenhuma etapa disponível para seus cargos</h4>
+          <p>Novos capítulos aparecerão aqui assim que as etapas anteriores forem concluídas pela equipe.</p>
         </div>
       {:else}
-        <div class="cards-grid">
-          {#each myItems as item (item.id)}
-            <article class="editorial-card in-progress" class:is-rework={item.status === 'REWORK'}>
-              <header class="card-header">
-                <div class="badge-row">
-                  <span class="stage-tag" style="background: {item.stage?.color || '#3b82f6'}25; color: {item.stage?.color || '#60a5fa'}; border-color: {item.stage?.color || '#3b82f6'}60;">
-                    {item.stage?.name} · COM VOCÊ
-                  </span>
-                  {#if item.status === 'REWORK'}
-                    <span class="rework-tag pulse">CORREÇÃO SOLICITADA</span>
-                  {/if}
-                  {#if item.isStale}
-                    <span class="stale-tag">⚠️ Parado há {item.staleDays} dias</span>
+        <div class="cards-vertical-list">
+          {#each availableItems as item (item.id)}
+            <article class="task-compact-card available">
+              <div class="card-main-row">
+                <!-- Left: 48x64px Cover -->
+                <div class="card-visual-col">
+                  {#if item.coverId}
+                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
+                  {:else}
+                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                      <span class="fallback-emoji">{item.stageIcon}</span>
+                    </div>
                   {/if}
                 </div>
 
-                <div class="work-meta">
-                  <span class="work-name">{item.chapter.work?.title}</span>
-                  <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapter_number}
-                    {#if item.chapter.chapter_label}
-                      <small class="chapter-label-pill">{item.chapter.chapter_label}</small>
+                <!-- Middle: Details -->
+                <div class="card-details-col">
+                  <div class="card-title-row">
+                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
+                  </div>
+
+                  <div class="card-meta-row primary-meta">
+                    {#if item.chapterNumber}
+                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
                     {/if}
-                  </h3>
-                </div>
-              </header>
 
-              {#if item.rejection_reason}
-                <div class="card-alert-banner rework-prominent">
-                  <AlertCircle size={16} />
-                  <div>
-                    <strong>Atenção: Correção Solicitada pelo QC/Revisão</strong>
-                    <p>{item.rejection_reason}</p>
+                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                      <span class="dot"></span>
+                      {item.stageName}
+                    </span>
+
+                    {#if item.isRework}
+                      <span class="meta-pill rework">
+                        <AlertTriangle size={11} />
+                        Retrabalho
+                      </span>
+                    {/if}
+
+                    {#if item.priority === 'URGENT'}
+                      <span class="meta-pill urgent">Urgente</span>
+                    {:else if item.priority === 'HIGH'}
+                      <span class="meta-pill high">Alta</span>
+                    {/if}
                   </div>
-                </div>
-              {/if}
 
-              <!-- STEP 1: DOWNLOAD DEPENDENCY DELIVERABLES -->
-              {#if item.dependencyFiles.length > 0}
-                <section class="card-section-box">
-                  <div class="section-title-sm">
-                    <Download size={13} />
-                    <span>Materiais de Entrada (Pré-requisitos)</span>
-                  </div>
-                  <div class="download-artifacts-row">
-                    {#each item.dependencyFiles as depFile (depFile.id)}
-                      <a
-                        href="/api/scan/production/files/{depFile.id}?download=1"
-                        download={depFile.file_name}
-                        class="btn-download-artifact"
-                      >
-                        <Download size={13} />
-                        <div class="artifact-info">
-                          <strong>Baixar {depFile.stage_slug?.toUpperCase()} (v{depFile.version})</strong>
-                          <small>{depFile.file_name} · {formatBytes(depFile.byte_size)}</small>
-                        </div>
-                      </a>
-                    {/each}
-                  </div>
-                </section>
-              {/if}
-
-              <!-- STEP 2: DELIVERABLE UPLOAD SECTION -->
-              <section class="card-section-box upload-box">
-                <div class="section-title-sm">
-                  <Upload size={13} />
-                  <span>Arquivos da Entrega ({item.stage?.name})</span>
-                </div>
-                <PipelineDeliverableUpload
-                  scanId={currentScanId}
-                  productionChapterId={item.production_chapter_id}
-                  stageId={item.stage_id}
-                  currentFiles={item.currentFiles}
-                  onFilesChanged={async () => { await invalidateAll(); }}
-                  onUploadStateChange={(open: boolean) => setStageUploadState(item.id, open)}
-                />
-              </section>
-
-              <!-- STEP 3: ACTIONS & COMPLETION -->
-              <footer class="card-footer actions-grid">
-                <div class="footer-left">
-                  <form method="POST" action="?/releaseStage" use:enhance>
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
-                    <button type="submit" class="btn-release-task" title="Liberar tarefa de volta à fila">
-                      <RotateCcw size={13} />
-                      <span>Liberar</span>
-                    </button>
-                  </form>
-
-                  {#if ['revisor_qc', 'qc', 'revisao'].includes(item.stage?.slug)}
-                    <button
-                      type="button"
-                      class="btn-return-rework"
-                      onclick={() => openReturnModal(item)}
-                      title="Solicitar correção para uma etapa anterior"
-                    >
-                      <RotateCcw size={13} />
-                      <span>Solicitar Correção</span>
-                    </button>
-                  {/if}
-
-                  {#if isOwnerOrAdmin}
-                    <button
-                      type="button"
-                      class="btn-override-sm"
-                      onclick={() => openOverrideModal(item)}
-                      title="Ações Administrativas de Líder"
-                    >
-                      <span>Override</span>
-                    </button>
-                  {/if}
-                </div>
-
-                <div class="footer-right">
-                  <form method="POST" action="?/completeStageAction" use:enhance>
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
-                    {#if item.stage?.requires_output && !item.currentFile}
-                      <button type="button" class="btn-complete-disabled" disabled title="Envie o arquivo antes de concluir">
-                        <Lock size={14} />
-                        <span>Concluir (Envie Arquivo)</span>
-                      </button>
+                  <div class="card-meta-row secondary-meta">
+                    {#if item.dependencies.length > 0}
+                      <span class="meta-text-muted">Pré-requisito pronto: {item.dependencies.join(', ').toUpperCase()}</span>
                     {:else}
-                      <button type="submit" class="btn-complete-primary" disabled={Boolean(stagesWithOpenUploads[item.id])} title={stagesWithOpenUploads[item.id] ? 'Finalize ou descarte os uploads pendentes antes de concluir' : undefined}>
-                        <CheckCircle2 size={15} />
-                        <span>Concluir {item.stage?.name}</span>
-                      </button>
+                      <span class="meta-text-muted">Etapa de entrada sem pré-requisitos</span>
                     {/if}
+                  </div>
+                </div>
+
+                <!-- Right: Actions -->
+                <div class="card-actions-col">
+                  <button
+                    type="button"
+                    class="btn-timeline-ghost"
+                    onclick={() => openChapterTimeline(item.chapter)}
+                    title="Ver histórico do capítulo"
+                  >
+                    <History size={14} />
+                    <span class="desktop-only-inline">Histórico</span>
+                  </button>
+
+                  <form method="POST" action="?/claimStage" use:enhance>
+                    <input type="hidden" name="chapter_stage_id" value={item.id} />
+                    <button type="submit" class="btn-action-claim" title="Assumir esta etapa para trabalhar">
+                      <Zap size={14} />
+                      <span>Pegar Tarefa</span>
+                    </button>
                   </form>
                 </div>
-              </footer>
+              </div>
             </article>
           {/each}
         </div>
       {/if}
 
-    <!-- 3. AGUARDANDO OUTRA ETAPA -->
+    <!-- TAB 3: AGUARDANDO -->
     {:else if activeView === 'WAITING'}
       {#if waitingItems.length === 0}
         <div class="empty-state-box">
-          <CheckCircle2 size={44} class="text-purple-400" />
-          <h4>Nenhum capítulo aguardando outras etapas no momento</h4>
+          <div class="empty-icon-wrap blue">
+            <Clock size={32} />
+          </div>
+          <h4>Nenhuma etapa aguardando liberação</h4>
+          <p>Não há capítulos bloqueados aguardando entregas anteriores no momento.</p>
         </div>
       {:else}
-        <div class="cards-grid">
+        <div class="cards-vertical-list">
           {#each waitingItems as item (item.id)}
-            <article class="editorial-card waiting">
-              <header class="card-header">
-                <div class="badge-row">
-                  <span class="stage-tag waiting-tag">
-                    <Lock size={11} />
-                    <span>{item.stage?.name}</span>
-                  </span>
-                  <span class="waiting-reason-pill">
-                    {#if item.status === 'BLOCKED'}
-                      BLOQUEADO POR PRÉ-REQUISITOS
-                    {:else if item.assigned_to}
-                      EM ANDAMENTO COM {item.assignee?.display_name || item.assignee?.username || 'MEMBRO'}
-                    {:else}
-                      AGUARDANDO CARGO CORRESPONDENTE
-                    {/if}
-                  </span>
+            <article class="task-compact-card waiting">
+              <div class="card-main-row">
+                <div class="card-visual-col">
+                  {#if item.coverId}
+                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
+                  {:else}
+                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                      <span class="fallback-emoji">{item.stageIcon}</span>
+                    </div>
+                  {/if}
                 </div>
 
-                <div class="work-meta">
-                  <span class="work-name">{item.chapter.work?.title}</span>
-                  <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapter_number}
-                    {#if item.chapter.chapter_label}
-                      <small class="chapter-label-pill">{item.chapter.chapter_label}</small>
-                    {/if}
-                  </h3>
-                </div>
-              </header>
-
-              <div class="waiting-details-box">
-                {#if item.stage?.slug === 'typeset'}
-                  <p class="waiting-hint">
-                    O Typeset requer que tanto <strong>Clean/Redraw</strong> quanto <strong>Tradução</strong> estejam concluídos com seus arquivos anexados.
-                  </p>
-                {:else if item.stage?.dependencies?.length > 0}
-                  <p class="waiting-hint">
-                    Aguardando conclusão de: <strong>{item.stage.dependencies.join(', ').toUpperCase()}</strong>.
-                  </p>
-                {/if}
-
-                {#if item.isStale && isOwnerOrAdmin}
-                  <div class="card-alert-banner warning">
-                    <AlertTriangle size={14} />
-                    <span>Membro inativo há {item.staleDays} dias. Você pode reassumir a tarefa.</span>
+                <div class="card-details-col">
+                  <div class="card-title-row">
+                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
                   </div>
-                {/if}
-              </div>
 
-              <footer class="card-footer">
-                <button
-                  type="button"
-                  class="btn-timeline-ghost"
-                  onclick={() => openChapterTimeline(item.chapter)}
-                >
-                  <History size={14} />
-                  <span>Histórico</span>
-                </button>
+                  <div class="card-meta-row primary-meta">
+                    {#if item.chapterNumber}
+                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                    {/if}
 
-                {#if isOwnerOrAdmin}
+                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                      <span class="dot"></span>
+                      {item.stageName}
+                    </span>
+
+                    <span class="meta-pill waiting-status">
+                      <Lock size={11} />
+                      {#if item.status === 'BLOCKED'}
+                        Aguardando etapa anterior
+                      {:else if item.assignedTo}
+                        Com outro membro
+                      {:else}
+                        Pendente
+                      {/if}
+                    </span>
+                  </div>
+
+                  <div class="card-meta-row secondary-meta">
+                    {#if item.dependencies.length > 0}
+                      <span class="meta-text-muted">Depende de: {item.dependencies.join(', ').toUpperCase()}</span>
+                    {:else}
+                      <span class="meta-text-muted">Aguardando liberação operacional</span>
+                    {/if}
+                  </div>
+                </div>
+
+                <div class="card-actions-col">
                   <button
                     type="button"
-                    class="btn-override-sm"
-                    onclick={() => openOverrideModal(item)}
+                    class="btn-timeline-ghost"
+                    onclick={() => openChapterTimeline(item.chapter)}
+                    title="Ver linha do tempo"
                   >
-                    <span>Override Líder</span>
+                    <History size={14} />
+                    <span>Histórico</span>
                   </button>
-                {/if}
-              </footer>
+                </div>
+              </div>
             </article>
           {/each}
         </div>
       {/if}
 
-    <!-- 4. CONCLUÍDOS & PRONTO PRA UPAR -->
+    <!-- TAB 4: CONCLUÍDAS -->
     {:else if activeView === 'DONE'}
       {#if doneItems.length === 0}
         <div class="empty-state-box">
-          <Layers size={44} class="text-slate-400" />
-          <h4>Nenhuma etapa concluída ainda</h4>
+          <div class="empty-icon-wrap emerald">
+            <CheckCircle2 size={32} />
+          </div>
+          <h4>Nenhuma etapa concluída recente</h4>
+          <p>O histórico de tarefas que você finalizou nesta scan será exibido aqui.</p>
         </div>
       {:else}
-        <div class="cards-grid">
-          {#each doneItems as item (item.id)}
-            <article class="editorial-card done">
-              <header class="card-header">
-                <div class="badge-row">
-                  <span class="stage-tag done-tag">
-                    <CheckCircle2 size={12} />
-                    <span>{item.stage?.name}</span>
-                  </span>
-                  {#if item.status === 'SKIPPED'}
-                    <span class="skipped-tag">PULADO (OVERRIDE)</span>
-                  {/if}
-                  {#if item.chapter.status === 'READY'}
-                    <span class="ready-tag">PRONTO PRA UPAR</span>
-                  {:else if item.chapter.status === 'PUBLISHED'}
-                    <span class="published-tag">PUBLICADO</span>
-                  {/if}
-                </div>
-
-                <div class="work-meta">
-                  <span class="work-name">{item.chapter.work?.title}</span>
-                  <h3 class="chapter-number-heading">
-                    Capítulo #{item.chapter.chapter_number}
-                    {#if item.chapter.chapter_label}
-                      <small class="chapter-label-pill">{item.chapter.chapter_label}</small>
-                    {/if}
-                  </h3>
-                </div>
-              </header>
-
-              {#if item.currentFiles.length > 0}
-                <div class="done-files-list">
-                  {#each item.currentFiles as file (file.id)}
-                    <div class="current-file-badge done-file">
-                      <FileText size={14} class="text-emerald-400 flex-shrink-0" />
-                      <div class="file-meta">
-                        <strong>{file.file_name} (v{file.version})</strong>
-                        <small>{formatBytes(file.byte_size)} · Concluído por {item.completer?.display_name || item.completer?.username || 'Membro'}</small>
-                      </div>
-                      <a href="/api/scan/production/files/{file.id}?download=1" download={file.file_name} class="btn-icon-download">
-                        <Download size={13} />
-                      </a>
+        <div class="cards-vertical-list">
+          {#each paginatedDoneItems as item (item.id)}
+            <article class="task-compact-card done">
+              <div class="card-main-row">
+                <div class="card-visual-col">
+                  {#if item.coverId}
+                    <img src="/media/{item.coverId}" alt={item.workTitle} class="task-cover-thumb" loading="lazy" />
+                  {:else}
+                    <div class="task-stage-icon-fallback" style="--stage-color: {item.stageColor}">
+                      <span class="fallback-emoji">{item.stageIcon}</span>
                     </div>
-                  {/each}
+                  {/if}
                 </div>
-              {/if}
 
-              <footer class="card-footer space-between">
-                <button
-                  type="button"
-                  class="btn-timeline-ghost"
-                  onclick={() => openChapterTimeline(item.chapter)}
-                >
-                  <History size={14} />
-                  <span>Histórico</span>
-                </button>
+                <div class="card-details-col">
+                  <div class="card-title-row">
+                    <h3 class="task-work-name" title={item.workTitle}>{item.workTitle}</h3>
+                  </div>
 
-                {#if item.chapter.status === 'READY' && ['OWNER', 'ADMIN', 'UPLOADER'].includes(userRole)}
-                  <form method="POST" action="?/publishProductionChapter" use:enhance>
-                    <input type="hidden" name="production_chapter_id" value={item.chapter.id} />
-                    <button type="submit" class="btn-publish-highlight">
-                      <Sparkles size={14} />
-                      <span>Publicar Capítulo</span>
-                    </button>
-                  </form>
-                {:else if item.chapter.status === 'PUBLISHED' && isOwnerOrAdmin}
-                  <form method="POST" action="?/unpublishProductionChapter" use:enhance>
-                    <input type="hidden" name="production_chapter_id" value={item.chapter.id} />
-                    <button type="submit" class="btn-unpublish-ghost">
-                      <span>Despublicar</span>
-                    </button>
-                  </form>
-                {/if}
-              </footer>
+                  <div class="card-meta-row primary-meta">
+                    {#if item.chapterNumber}
+                      <span class="meta-pill chapter">Capítulo {item.chapterNumber}</span>
+                    {/if}
+
+                    <span class="meta-pill stage" style="--stage-c: {item.stageColor}">
+                      <span class="dot"></span>
+                      {item.stageName}
+                    </span>
+
+                    <span class="meta-pill completed-pill">
+                      <CheckCircle2 size={11} />
+                      Concluído
+                    </span>
+                  </div>
+
+                  {#if item.completedAt}
+                    <div class="card-meta-row secondary-meta">
+                      <span class="meta-text-muted">Finalizado {relativeTime(item.completedAt)}</span>
+                    </div>
+                  {/if}
+                </div>
+
+                <div class="card-actions-col">
+                  <button
+                    type="button"
+                    class="btn-timeline-ghost"
+                    onclick={() => openChapterTimeline(item.chapter)}
+                    title="Ver linha do tempo"
+                  >
+                    <History size={14} />
+                    <span>Histórico</span>
+                  </button>
+                </div>
+              </div>
             </article>
           {/each}
         </div>
+
+        {#if hasMoreDone}
+          <div class="load-more-row">
+            <button type="button" class="btn-load-more" onclick={() => (doneLimit += 12)}>
+              <span>Carregar mais concluídas ({doneItems.length - doneLimit} restantes)</span>
+            </button>
+          </div>
+        {/if}
       {/if}
     {/if}
   </main>
 
-  <!-- MODAL: RETRABALHO / SOLICITAR CORREÇÃO -->
+  <!-- 5. MOBILE FILTER SHEET MODAL -->
+  {#if showMobileFilters}
+    <div class="modal-backdrop" role="dialog" aria-modal="true">
+      <div class="modal-sheet-drawer">
+        <header class="sheet-header">
+          <div class="sheet-title-lockup">
+            <Filter size={16} class="text-purple-400" />
+            <h3>Filtrar Minha Fila</h3>
+          </div>
+          <button type="button" class="btn-close-modal" onclick={() => (showMobileFilters = false)} aria-label="Fechar filtros">
+            <X size={16} />
+          </button>
+        </header>
+
+        <div class="sheet-body">
+          <div class="sheet-field">
+            <label for="mob-filter-work">Obra</label>
+            <select id="mob-filter-work" bind:value={selectedWorkFilter} class="modal-select">
+              <option value="ALL">Todas as Obras ({works.length})</option>
+              {#each works as w (w.id)}
+                <option value={w.id}>{w.title}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="sheet-field">
+            <label for="mob-filter-stage">Etapa Editorial</label>
+            <select id="mob-filter-stage" bind:value={selectedStageFilter} class="modal-select">
+              <option value="ALL">Todas as Etapas</option>
+              {#each stages as st (st.id)}
+                <option value={st.slug}>{st.name}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="sheet-field">
+            <label for="mob-filter-prio">Prioridade</label>
+            <select id="mob-filter-prio" bind:value={selectedPriorityFilter} class="modal-select">
+              <option value="ALL">Todas as Prioridades</option>
+              <option value="URGENT">Urgente</option>
+              <option value="HIGH">Alta</option>
+              <option value="NORMAL">Normal</option>
+              <option value="LOW">Baixa</option>
+            </select>
+          </div>
+        </div>
+
+        <footer class="sheet-footer">
+          <button type="button" class="btn-cancel" onclick={resetFilters}>
+            Limpar Filtros
+          </button>
+          <button type="button" class="btn-primary-action" onclick={() => (showMobileFilters = false)}>
+            Aplicar
+          </button>
+        </footer>
+      </div>
+    </div>
+  {/if}
+
+  <!-- 6. MODAL: RETRABALHO / SOLICITAR CORREÇÃO -->
   {#if showReturnModal && returnSourceStage}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card">
@@ -992,15 +1284,15 @@
 
           <div class="modal-body">
             <p class="modal-instruction">
-              O capítulo <strong>#{returnSourceStage.chapter?.chapter_number}</strong> voltará com status <strong>REWORK</strong> para a etapa selecionada. Após corrigido, retornará diretamente para a sua validação.
+              O capítulo <strong>#{returnSourceStage.chapterNumber}</strong> voltará com status <strong>REWORK</strong> para a etapa selecionada. Após corrigido, retornará para validação.
             </p>
 
             <div class="modal-field">
               <label for="target-stage-slug">Etapa de Destino para Correção</label>
               <select id="target-stage-slug" name="target_stage_slug" bind:value={returnTargetSlug} class="modal-select">
-                <option value="raw">Raw Provider (Qualidade de Imagem Original)</option>
-                <option value="traducao">Tradução (Sentido ou Ortografia)</option>
-                <option value="clean_redraw">Clean/Redraw (Limpeza ou Reconstrução)</option>
+                <option value="raw">Raw Provider (Qualidade Original)</option>
+                <option value="traducao">Tradução (Sentido / Ortografia)</option>
+                <option value="clean_redraw">Clean/Redraw (Limpeza / Reconstrução)</option>
                 <option value="typeset">Typeset (Diagramação / Balões / Fontes)</option>
               </select>
             </div>
@@ -1013,7 +1305,7 @@
                 bind:value={returnReason}
                 rows="4"
                 class="modal-textarea"
-                placeholder="Explique exatamente o que precisa ser corrigido (ex: Balão da pág. 4 cortado, fonte incorreta no grito pág. 12)..."
+                placeholder="Explique o que precisa ser ajustado (ex: balão da pág. 4 cortado, fonte incorreta no grito pág. 12)..."
                 required
               ></textarea>
             </div>
@@ -1031,7 +1323,7 @@
     </div>
   {/if}
 
-  <!-- MODAL: ADMIN OVERRIDE -->
+  <!-- 7. MODAL: ADMIN OVERRIDE -->
   {#if showOverrideModal && overrideTargetStage}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card">
@@ -1095,7 +1387,7 @@
 
           <footer class="modal-footer">
             <button type="button" class="btn-cancel" onclick={() => (showOverrideModal = false)}>Cancelar</button>
-            <button type="submit" class="btn-primary-sm" disabled={overrideReason.trim().length < 3}>
+            <button type="submit" class="btn-primary-action" disabled={overrideReason.trim().length < 3}>
               <span>Confirmar Override</span>
             </button>
           </footer>
@@ -1104,140 +1396,7 @@
     </div>
   {/if}
 
-  <!-- MODAL: NOVO CAPÍTULO -->
-  {#if showCreateChapterModal}
-    <div class="modal-backdrop" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <header class="modal-header">
-          <div class="modal-title-wrap">
-            <Plus size={18} class="text-emerald-400" />
-            <h3>Novo Capítulo em Produção</h3>
-          </div>
-          <button type="button" class="btn-close-modal" onclick={() => (showCreateChapterModal = false)}>
-            <X size={16} />
-          </button>
-        </header>
-
-        <form method="POST" action="?/createProductionChapter" use:enhance={() => {
-          return async ({ result }) => {
-            if (result.type === 'success') {
-              showCreateChapterModal = false;
-              await invalidateAll();
-            }
-          };
-        }}>
-          <input type="hidden" name="scan_id" value={currentScanId} />
-
-          <div class="modal-body">
-            <div class="modal-field">
-              <label for="new-ch-work">Obra *</label>
-              <select id="new-ch-work" name="work_id" class="modal-select" required>
-                {#each works as w (w.id)}
-                  <option value={w.id}>{w.title}</option>
-                {/each}
-              </select>
-            </div>
-
-            <div class="modal-grid-2">
-              <div class="modal-field">
-                <label for="new-ch-num">Número do Capítulo *</label>
-                <input id="new-ch-num" type="number" step="0.1" name="chapter_number" placeholder="Ex: 85" class="modal-input" required />
-              </div>
-              <div class="modal-field">
-                <label for="new-ch-label">Rótulo / Especial (Opcional)</label>
-                <input id="new-ch-label" type="text" name="chapter_label" placeholder="Ex: 12.5, Prólogo, Extra 1" class="modal-input" />
-              </div>
-            </div>
-
-            <div class="modal-grid-2">
-              <div class="modal-field">
-                <label for="new-ch-template">Template Editorial</label>
-                <select id="new-ch-template" name="template" class="modal-select">
-                  <option value="MANHWA">Manhwa Completo (9 etapas)</option>
-                  <option value="MANGA">Mangá Japonês</option>
-                  <option value="WEBTOON">Webtoon Rápido</option>
-                  <option value="NOVEL">Novel / Literatura</option>
-                </select>
-              </div>
-              <div class="modal-field">
-                <label for="new-ch-priority">Prioridade</label>
-                <select id="new-ch-priority" name="priority" class="modal-select">
-                  <option value="NORMAL">Normal</option>
-                  <option value="HIGH">Alta</option>
-                  <option value="URGENT">Urgente</option>
-                  <option value="LOW">Baixa</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <footer class="modal-footer">
-            <button type="button" class="btn-cancel" onclick={() => (showCreateChapterModal = false)}>Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Criar e Liberar RAW</button>
-          </footer>
-        </form>
-      </div>
-    </div>
-  {/if}
-
-  <!-- MODAL: CRIAÇÃO EM LOTE -->
-  {#if showBulkCreateModal}
-    <div class="modal-backdrop" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <header class="modal-header">
-          <div class="modal-title-wrap">
-            <Layers size={18} class="text-purple-400" />
-            <h3>Criação de Capítulos em Lote</h3>
-          </div>
-          <button type="button" class="btn-close-modal" onclick={() => (showBulkCreateModal = false)}>
-            <X size={16} />
-          </button>
-        </header>
-
-        <form method="POST" action="?/bulkCreateProductionChapters" use:enhance={() => {
-          return async ({ result }) => {
-            if (result.type === 'success') {
-              showBulkCreateModal = false;
-              await invalidateAll();
-            }
-          };
-        }}>
-          <input type="hidden" name="scan_id" value={currentScanId} />
-
-          <div class="modal-body">
-            <div class="modal-field">
-              <label for="bulk-work-select">Obra *</label>
-              <select id="bulk-work-select" name="work_id" class="modal-select" required>
-                {#each works as w (w.id)}
-                  <option value={w.id}>{w.title}</option>
-                {/each}
-              </select>
-            </div>
-
-            <div class="modal-grid-2">
-              <div class="modal-field">
-                <label for="bulk-from">Do Capítulo Número *</label>
-                <input id="bulk-from" type="number" name="from_number" placeholder="Ex: 85" class="modal-input" required />
-              </div>
-              <div class="modal-field">
-                <label for="bulk-to">Até o Capítulo Número *</label>
-                <input id="bulk-to" type="number" name="to_number" placeholder="Ex: 100" class="modal-input" required />
-              </div>
-            </div>
-
-            <p class="modal-hint-text">Capítulos que já existirem serão ignorados automaticamente sem gerar duplicatas.</p>
-          </div>
-
-          <footer class="modal-footer">
-            <button type="button" class="btn-cancel" onclick={() => (showBulkCreateModal = false)}>Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Gerar Lote</button>
-          </footer>
-        </form>
-      </div>
-    </div>
-  {/if}
-
-  <!-- MODAL: LINHA DO TEMPO & HISTÓRICO DE VERSÕES -->
+  <!-- 8. MODAL: TIMELINE & VERSIONS HISTORY -->
   {#if showTimelineModal && selectedTimelineChapter}
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <div class="modal-card wide">
@@ -1253,7 +1412,7 @@
 
         <div class="modal-body">
           <section class="modal-sub-block">
-            <h4>Arquivos Staged & Versões</h4>
+            <h4>Arquivos Enviados & Versões</h4>
             {#if chapterTimelineFiles.length === 0}
               <p class="text-muted-sm">Nenhum arquivo enviado para este capítulo ainda.</p>
             {:else}
@@ -1307,9 +1466,6 @@
                         <span class="timeline-date">{relativeTime(evt.created_at)}</span>
                       </div>
                       <p class="timeline-actor">Por {evt.user_name || 'Sistema'}</p>
-                      {#if evt.details && Object.keys(evt.details).length > 0}
-                        <pre class="timeline-details">{JSON.stringify(evt.details, null, 2)}</pre>
-                      {/if}
                     </div>
                   </div>
                 {/each}
@@ -1330,811 +1486,833 @@
   .tasks-tab-root {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 16px;
     width: 100%;
-    max-width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-bottom: 48px;
     box-sizing: border-box;
-    overflow-x: hidden;
   }
 
-  /* Header */
-  .tasks-header-bar {
+  /* 1. Header Bar (72–90px) */
+  .queue-header-bar {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    background: linear-gradient(180deg, rgba(30, 27, 75, 0.4) 0%, rgba(15, 23, 42, 0.4) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 72px;
+    padding: 16px 20px;
+    background: rgba(18, 14, 28, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
-    padding: 1.25rem;
+    backdrop-filter: blur(12px);
+  }
+
+  .header-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .header-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    color: #f59e0b;
-    margin-bottom: 0.35rem;
+    gap: 6px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #a855f7;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .tab-title {
-    font-size: 1.4rem;
-    font-weight: 800;
+    font-size: 1.375rem;
+    font-weight: 700;
     color: #f8fafc;
     margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .active-tasks-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .active-tasks-pill.has-tasks {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.25);
+  }
+
+  .active-tasks-pill strong {
+    font-weight: 700;
+    margin-right: 4px;
+    color: #f8fafc;
   }
 
   .tab-desc {
-    font-size: 0.85rem;
+    font-size: 0.8125rem;
     color: #94a3b8;
-    margin: 0.25rem 0 0;
-    max-width: 700px;
+    margin: 0;
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  /* Stage Filter Strip */
-  .stage-filter-strip {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding: 0.25rem 0;
-    scrollbar-width: thin;
-    max-width: 100%;
-  }
-
-  .stage-filter-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.85rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 9999px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #cbd5e1;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s ease;
-  }
-
-  .stage-filter-pill:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
-  }
-
-  .stage-filter-pill.active {
-    background: var(--pill-accent, rgba(223, 194, 141, 0.15));
-    border-color: var(--pill-accent, #dfc28d);
-    color: #fff;
-    font-weight: 700;
-  }
-
-  .stage-color-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-
-  /* Queue Navigation Strip */
+  /* 2. Four Categories Navigation Bar */
   .queue-nav-strip {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    width: 100%;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 0.5rem;
+    overflow: hidden;
+  }
+
+  .queue-tabs-scroll {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     overflow-x: auto;
-    scrollbar-width: thin;
-    max-width: 100%;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 8px;
+  }
+
+  .queue-tabs-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .queue-tab-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 0.95rem;
+    gap: 8px;
+    padding: 8px 16px;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 0.875rem;
+    font-weight: 500;
     color: #94a3b8;
     cursor: pointer;
-    white-space: nowrap;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    user-select: none;
   }
 
   .queue-tab-btn:hover {
+    color: #f1f5f9;
     background: rgba(255, 255, 255, 0.04);
-    color: #e2e8f0;
   }
 
   .queue-tab-btn.active {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.12);
     color: #f8fafc;
+    background: rgba(168, 85, 247, 0.14);
+    border-color: rgba(168, 85, 247, 0.3);
+    font-weight: 600;
+  }
+
+  :global(.queue-icon.blue) {
+    color: #60a5fa;
+  }
+  :global(.queue-icon.yellow) {
+    color: #facc15;
+  }
+  :global(.queue-icon.purple) {
+    color: #c084fc;
+  }
+  :global(.queue-icon.green) {
+    color: #4ade80;
   }
 
   .queue-counter-badge {
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.15rem 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
     border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
   }
 
-  .count-available { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-  .count-mine { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-  .count-waiting { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
-  .count-done { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+  .queue-tab-btn.active .queue-counter-badge {
+    background: rgba(168, 85, 247, 0.35);
+    color: #ffffff;
+  }
 
-  /* Filters */
+  /* 3. Search & Filter Bar */
   .filter-controls-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    justify-content: space-between;
+    gap: 12px;
     flex-wrap: wrap;
+  }
+
+  .desktop-search {
+    flex: 1 1 260px;
+    max-width: 400px;
   }
 
   .search-box {
     position: relative;
-    flex: 1;
-    min-width: 220px;
+    display: flex;
+    align-items: center;
   }
 
   :global(.search-icon) {
     position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
+    left: 12px;
     color: #64748b;
+    pointer-events: none;
   }
 
   .filter-input {
     width: 100%;
-    box-sizing: border-box;
-    background: #0f172a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem 0.5rem 2.2rem;
-    font-size: 0.85rem;
-    color: #f8fafc;
-    outline: none;
-  }
-
-  .filter-select, .picker-select, .modal-select, .modal-input, .modal-textarea {
-    background: #0f172a;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
-    color: #f8fafc;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  /* RAW Quick Picker Card */
-  .raw-quick-picker-card {
-    background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%);
-    border: 1px solid rgba(245, 158, 11, 0.25);
-    border-radius: 10px;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .picker-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .picker-title-lockup {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .picker-title-lockup h3 {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #fcd34d;
-    margin: 0;
-  }
-
-  .picker-hint {
-    font-size: 0.8rem;
-    color: #94a3b8;
-    margin: 0;
-  }
-
-  .picker-controls {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .picker-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    flex: 1;
-    min-width: 200px;
-  }
-
-  .picker-field label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #cbd5e1;
-  }
-
-  .btn-claim-highlight {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    color: #0f172a;
-    border: none;
-    padding: 0.55rem 1.25rem;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 800;
-    cursor: pointer;
-    transition: transform 0.15s ease, filter 0.15s ease;
-  }
-
-  .btn-claim-highlight:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.1);
-  }
-
-  .btn-claim-highlight:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Cards Grid */
-  .cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
-  }
-
-  @media (max-width: 640px) {
-    .cards-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .editorial-card {
-    background: #111827;
+    height: 38px;
+    padding: 0 32px 0 36px;
+    background: rgba(20, 16, 32, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 1.1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    overflow: hidden;
-  }
-
-  .editorial-card:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  }
-
-  .editorial-card.in-progress {
-    border-color: rgba(59, 130, 246, 0.35);
-    background: linear-gradient(180deg, #131d38 0%, #0f172a 100%);
-  }
-
-  .editorial-card.is-rework {
-    border-color: rgba(244, 63, 94, 0.5);
-    background: linear-gradient(180deg, #24111e 0%, #0f172a 100%);
-  }
-
-  .card-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .badge-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-  }
-
-  .stage-tag {
-    font-size: 0.72rem;
-    font-weight: 800;
-    padding: 0.2rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid;
-    letter-spacing: 0.03em;
-  }
-
-  .rework-tag {
-    font-size: 0.68rem;
-    font-weight: 800;
-    background: #e11d48;
-    color: #fff;
-    padding: 0.2rem 0.45rem;
-    border-radius: 4px;
-  }
-
-  .pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-  }
-
-  .stale-tag {
-    font-size: 0.68rem;
-    font-weight: 700;
-    background: rgba(245, 158, 11, 0.2);
-    color: #fcd34d;
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    padding: 0.2rem 0.45rem;
-    border-radius: 4px;
-  }
-
-  .prio-tag {
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    margin-left: auto;
-  }
-  .prio-urgent { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-  .prio-high { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
-  .prio-normal { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
-  .prio-low { background: rgba(100, 116, 139, 0.15); color: #64748b; }
-
-  .work-name {
-    font-size: 0.78rem;
-    color: #94a3b8;
-    font-weight: 600;
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .chapter-number-heading {
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #f8fafc;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .chapter-label-pill {
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.08);
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    color: #cbd5e1;
-  }
-
-  /* Alerts */
-  .card-alert-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
-  }
-
-  .card-alert-banner.rework {
-    background: rgba(225, 29, 72, 0.15);
-    border: 1px solid rgba(225, 29, 72, 0.3);
-    color: #fda4af;
-  }
-
-  .card-alert-banner.rework-prominent {
-    background: rgba(225, 29, 72, 0.2);
-    border: 1px solid rgba(225, 29, 72, 0.4);
-    color: #ffe4e6;
-    align-items: flex-start;
-  }
-
-  .card-alert-banner.warning {
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fde68a;
-  }
-
-  /* Dependencies */
-  .card-dependencies-info {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .deps-tags {
-    display: flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-  }
-
-  .dep-done-tag {
-    font-size: 0.7rem;
-    font-weight: 700;
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-  }
-
-  /* Section Boxes inside cards */
-  .card-section-box {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    padding: 0.65rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .section-title-sm {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #cbd5e1;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .download-artifacts-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .btn-download-artifact {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    padding: 0.45rem 0.65rem;
-    border-radius: 6px;
-    color: #93c5fd;
-    text-decoration: none;
-    font-size: 0.75rem;
-    transition: background 0.15s ease;
-  }
-
-  .btn-download-artifact:hover {
-    background: rgba(59, 130, 246, 0.22);
-  }
-
-  .artifact-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .current-file-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    padding: 0.4rem 0.65rem;
-    border-radius: 6px;
-  }
-
-  .file-meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .file-meta strong {
-    font-size: 0.78rem;
-    color: #f8fafc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .file-meta small {
-    font-size: 0.68rem;
-    color: #94a3b8;
-  }
-
-  .file-upload-dropzone {
-    border: 1px dashed rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    padding: 0.75rem;
-    text-align: center;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.02);
+    font-size: 0.8125rem;
+    color: #f1f5f9;
+    outline: none;
     transition: border-color 0.15s ease;
   }
 
-  .file-upload-dropzone:hover {
-    border-color: #a855f7;
-    background: rgba(168, 85, 247, 0.05);
+  .filter-input:focus {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.2);
   }
 
-  .dropzone-content {
+  .btn-clear-search {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.75rem;
-    color: #cbd5e1;
-  }
-
-  .uploading-text {
-    color: #d8b4fe;
-    font-weight: 700;
-  }
-
-  .upload-feedback {
-    font-size: 0.72rem;
-    padding: 0.35rem 0.5rem;
+    padding: 4px;
     border-radius: 4px;
   }
-  .upload-feedback.success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-  .upload-feedback.error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
-  /* Card Footers */
-  .card-footer {
+  .desktop-filters {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-top: auto;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 10px;
     flex-wrap: wrap;
   }
 
-  .actions-grid {
-    display: flex;
+  .select-wrapper {
+    position: relative;
+  }
+
+  .filter-select {
+    height: 38px;
+    padding: 0 14px;
+    background: rgba(20, 16, 32, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .filter-select:focus {
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+
+  .mobile-filter-bar {
+    display: none;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 8px;
     width: 100%;
   }
 
-  .footer-left {
+  .btn-mobile-search-toggle,
+  .btn-mobile-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 14px;
+    background: rgba(20, 16, 32, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+
+  .btn-mobile-search-toggle {
+    flex: 1 1 0%;
+  }
+
+  .btn-mobile-filter-toggle.has-active {
+    border-color: rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.1);
+    color: #e2e8f0;
+  }
+
+  .active-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9999px;
+    background: #a855f7;
+    color: #ffffff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+  }
+
+  .mobile-expanded-search {
+    width: 100%;
+  }
+
+  .btn-close-mobile-search {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  /* 4. Queue Cards List */
+  .queue-content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .cards-vertical-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  /* Card Base (76–100px height on Desktop) */
+  .task-compact-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 16, 32, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .task-compact-card:hover {
+    border-color: rgba(168, 85, 247, 0.35);
+    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+  }
+
+  .task-compact-card.is-rework {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(28, 20, 24, 0.75);
+  }
+
+  .card-main-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 16px;
+    padding: 12px 16px;
+    min-height: 80px;
+    box-sizing: border-box;
+  }
+
+  /* Left Cover (48x64px) */
+  .card-visual-col {
+    flex-shrink: 0;
+    width: 48px;
+    height: 64px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #140f22;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .task-cover-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .task-stage-icon-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(20, 16, 32, 0.8) 100%);
+  }
+
+  .fallback-emoji {
+    font-size: 1.25rem;
+  }
+
+  :global(.task-fallback-icon) {
+    color: #a855f7;
+  }
+
+  /* Middle Details */
+  .card-details-col {
+    flex: 1 1 0%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-work-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #f8fafc;
+    margin: 0;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
-  .footer-right {
+  .meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .meta-pill.chapter {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+    font-weight: 600;
+  }
+
+  .meta-pill.stage {
+    background: color-mix(in srgb, var(--stage-c, #8b5cf6) 15%, transparent);
+    color: color-mix(in srgb, var(--stage-c, #8b5cf6) 90%, #ffffff);
+    border: 1px solid color-mix(in srgb, var(--stage-c, #8b5cf6) 30%, transparent);
+  }
+
+  .meta-pill.stage .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--stage-c, #8b5cf6);
+  }
+
+  .meta-pill.urgent {
+    background: rgba(244, 63, 94, 0.15);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+  }
+
+  .meta-pill.high {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .meta-pill.rework {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    font-weight: 600;
+  }
+
+  .meta-pill.deadline {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+  }
+
+  .meta-pill.deadline.is-overdue {
+    background: rgba(244, 63, 94, 0.15);
+    color: #fb7185;
+    font-weight: 600;
+  }
+
+  .meta-pill.stale {
+    background: rgba(244, 63, 94, 0.1);
+    color: #f87171;
+  }
+
+  .meta-pill.waiting-status {
+    background: rgba(148, 163, 184, 0.1);
+    color: #cbd5e1;
+  }
+
+  .meta-pill.completed-pill {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .meta-text-muted {
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  /* Right Actions */
+  .card-actions-col {
     display: flex;
     align-items: center;
-    margin-left: auto;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .btn-action-continue {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+    transition: transform 0.12s ease, filter 0.15s ease;
+  }
+
+  .btn-action-continue:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  :global(.btn-arrow-icon) {
+    transition: transform 0.12s ease;
+  }
+  .btn-action-continue:hover :global(.btn-arrow-icon) {
+    transform: translateX(2px);
+  }
+
+  .btn-action-claim {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    background: #a855f7;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+
+  .btn-action-claim:hover {
+    background: #9333ea;
+    transform: translateY(-1px);
+  }
+
+  .btn-toggle-expand {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 38px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-toggle-expand:hover,
+  .btn-toggle-expand.is-expanded {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
   }
 
   .btn-timeline-ghost {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 5px;
+    height: 36px;
+    padding: 0 12px;
     background: transparent;
-    border: none;
-    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
     font-size: 0.75rem;
+    color: #94a3b8;
     cursor: pointer;
-    padding: 0.35rem 0.5rem;
-    border-radius: 4px;
-    transition: color 0.15s ease;
+    transition: all 0.15s ease;
   }
 
   .btn-timeline-ghost:hover {
-    color: #f8fafc;
     background: rgba(255, 255, 255, 0.05);
+    color: #f1f5f9;
   }
 
-  .btn-claim-primary {
+  /* Inline Expandable Panel */
+  .card-inline-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(14, 11, 22, 0.65);
+  }
+
+  .rework-alert-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fde68a;
+    font-size: 0.8125rem;
+  }
+
+  .rework-alert-banner strong {
+    color: #fbbf24;
+  }
+
+  .rework-alert-banner p {
+    margin: 2px 0 0;
+    color: #fef3c7;
+  }
+
+  .panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .section-title {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    background: #2563eb;
-    color: #fff;
-    border: none;
-    padding: 0.45rem 0.85rem;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .deps-download-list {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dep-download-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
     border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .btn-claim-primary:hover {
-    background: #1d4ed8;
-  }
-
-  .btn-complete-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #10b981;
-    color: #064e3b;
-    border: none;
-    padding: 0.45rem 0.95rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 800;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .btn-complete-primary:hover {
-    background: #059669;
-    color: #fff;
-  }
-
-  .btn-complete-disabled {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
     background: rgba(255, 255, 255, 0.06);
-    color: #64748b;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 0.45rem 0.85rem;
+    font-size: 0.75rem;
+    color: #93c5fd;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+
+  .dep-download-chip:hover {
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .panel-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .left-actions,
+  .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-ghost-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 10px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     font-size: 0.75rem;
+    color: #94a3b8;
+    cursor: pointer;
+  }
+
+  .btn-ghost-sm:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f1f5f9;
+  }
+
+  .btn-complete-task {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    background: #10b981;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .btn-complete-task:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
-  .btn-release-task {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #cbd5e1;
-    font-size: 0.72rem;
-    padding: 0.35rem 0.55rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .btn-release-task:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .btn-return-rework {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: rgba(225, 29, 72, 0.15);
-    border: 1px solid rgba(225, 29, 72, 0.3);
-    color: #fda4af;
-    font-size: 0.72rem;
-    padding: 0.35rem 0.55rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-  }
-
-  .btn-return-rework:hover {
-    background: rgba(225, 29, 72, 0.25);
-  }
-
-  .btn-override-sm {
-    font-size: 0.7rem;
-    font-weight: 700;
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fcd34d;
-    padding: 0.35rem 0.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .btn-override-sm:hover {
-    background: rgba(245, 158, 11, 0.25);
-  }
-
-  .btn-publish-highlight {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #fff;
-    border: none;
-    padding: 0.45rem 0.85rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .btn-publish-highlight:hover {
-    filter: brightness(1.1);
-  }
-
-  .btn-unpublish-ghost {
-    background: transparent;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #f87171;
-    font-size: 0.72rem;
-    padding: 0.35rem 0.55rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .btn-unpublish-ghost:hover {
-    background: rgba(239, 68, 68, 0.1);
-  }
-
-  .btn-icon-download, .btn-icon-link {
-    color: #94a3b8;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0.25rem;
-    display: inline-flex;
-  }
-
-  .btn-icon-download:hover, .btn-icon-link:hover {
-    color: #fff;
-  }
-
-  /* Empty state */
+  /* Empty State */
   .empty-state-box {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 3.5rem 1rem;
-    background: rgba(255, 255, 255, 0.02);
+    padding: 48px 24px;
+    background: rgba(18, 14, 28, 0.5);
     border: 1px dashed rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    gap: 0.75rem;
+    margin: 12px 0;
+  }
+
+  .empty-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    margin-bottom: 16px;
+  }
+
+  .empty-icon-wrap.emerald {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+  }
+
+  .empty-icon-wrap.purple {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+  }
+
+  .empty-icon-wrap.blue {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
   }
 
   .empty-state-box h4 {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 6px;
   }
 
   .empty-state-box p {
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     color: #94a3b8;
-    margin: 0;
-    max-width: 480px;
+    margin: 0 0 18px;
+    max-width: 440px;
+  }
+
+  .btn-empty-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #c084fc;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-empty-action:hover {
+    background: rgba(168, 85, 247, 0.25);
+    color: #ffffff;
+  }
+
+  .load-more-row {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+  }
+
+  .btn-load-more {
+    height: 38px;
+    padding: 0 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+
+  .btn-load-more:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
   }
 
   /* Modals */
@@ -2142,49 +2320,48 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
-    padding: 1rem;
-    box-sizing: border-box;
+    padding: 16px;
+    z-index: 100;
   }
 
   .modal-card {
-    background: #111827;
+    background: #141022;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     width: 100%;
-    max-width: 500px;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   }
 
   .modal-card.wide {
-    max-width: 720px;
-    max-height: 85vh;
+    max-width: 780px;
   }
 
   .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.25rem;
+    padding: 16px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .modal-title-wrap {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 8px;
   }
 
   .modal-title-wrap h3 {
-    font-size: 1.05rem;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 600;
     color: #f8fafc;
     margin: 0;
   }
@@ -2194,222 +2371,379 @@
     border: none;
     color: #94a3b8;
     cursor: pointer;
-    padding: 0.25rem;
+    padding: 4px;
+    border-radius: 4px;
   }
 
-  .btn-close-modal:hover { color: #fff; }
-
   .modal-body {
-    padding: 1.25rem;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    overflow-y: auto;
+    gap: 16px;
+  }
+
+  .modal-instruction {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.5;
   }
 
   .modal-field {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 6px;
   }
 
   .modal-field label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #cbd5e1;
+    text-transform: uppercase;
   }
 
-  .modal-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+  .modal-select,
+  .modal-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(20, 16, 32, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #f1f5f9;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .modal-select:focus,
+  .modal-textarea:focus {
+    border-color: rgba(168, 85, 247, 0.5);
   }
 
   .modal-footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
+    gap: 10px;
+    padding: 14px 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(0, 0, 0, 0.2);
-  }
-
-  .btn-primary-sm {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #7c3aed;
-    color: #fff;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .btn-primary-sm:hover:not(:disabled) {
-    background: #6d28d9;
-  }
-
-  .btn-primary-sm:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary-sm {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #cbd5e1;
-    padding: 0.5rem 0.9rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn-secondary-sm:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(10, 7, 18, 0.5);
   }
 
   .btn-cancel {
+    height: 36px;
+    padding: 0 16px;
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 0.8125rem;
     color: #94a3b8;
-    font-size: 0.8rem;
-    font-weight: 600;
     cursor: pointer;
-    padding: 0.5rem 0.75rem;
   }
 
   .btn-danger-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    background: #e11d48;
-    color: #fff;
+    gap: 6px;
+    height: 36px;
+    padding: 0 16px;
+    background: #ef4444;
     border: none;
-    padding: 0.5rem 1rem;
     border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ffffff;
     cursor: pointer;
   }
 
-  .btn-danger-action:hover:not(:disabled) {
-    background: #be123c;
+  .btn-primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 16px;
+    background: #a855f7;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
   }
 
-  .btn-danger-action:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  /* Mobile Sheet Drawer */
+  .modal-sheet-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #141022;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px 16px 0 0;
+    max-height: 85vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .modal-instruction {
-    font-size: 0.82rem;
-    color: #cbd5e1;
+  @keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sheet-title-lockup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sheet-title-lockup h3 {
     margin: 0;
-    line-height: 1.4;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f8fafc;
   }
 
-  .modal-hint-text {
+  .sheet-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sheet-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sheet-field label {
     font-size: 0.75rem;
-    color: #94a3b8;
-    margin: 0;
+    font-weight: 600;
+    color: #cbd5e1;
+    text-transform: uppercase;
   }
 
-  /* Timeline modal table */
+  .sheet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sheet-footer .btn-cancel,
+  .sheet-footer .btn-primary-action {
+    flex: 1 1 0%;
+  }
+
+  /* Table for Timeline */
+  .modal-sub-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modal-sub-block h4 {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #e2e8f0;
+  }
+
   .files-table-wrapper {
     overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
   }
 
   .files-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78rem;
-  }
-
-  .files-table th, .files-table td {
-    padding: 0.5rem 0.65rem;
+    font-size: 0.75rem;
     text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .files-table th {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
     color: #94a3b8;
     font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .files-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
   }
 
   .version-tag {
-    font-size: 0.7rem;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.08);
-    padding: 0.15rem 0.35rem;
+    display: inline-block;
+    padding: 2px 6px;
     border-radius: 4px;
-    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.06);
+    font-weight: 600;
   }
 
   .version-tag.current {
     background: rgba(16, 185, 129, 0.2);
-    color: #6ee7b7;
+    color: #34d399;
+  }
+
+  .btn-icon-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    color: #93c5fd;
+    text-decoration: none;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.1);
   }
 
   .timeline-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    position: relative;
-    padding-left: 1rem;
-    border-left: 2px solid rgba(255, 255, 255, 0.08);
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
   }
 
   .timeline-entry {
-    position: relative;
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.8125rem;
   }
 
   .timeline-dot {
-    position: absolute;
-    left: -1.35rem;
-    top: 0.25rem;
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: #a855f7;
-    border: 2px solid #111827;
+    margin-top: 5px;
+  }
+
+  .timeline-info {
+    flex: 1 1 0%;
   }
 
   .timeline-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .timeline-date {
-    font-size: 0.7rem;
     color: #64748b;
+    font-size: 0.6875rem;
   }
 
   .timeline-actor {
-    font-size: 0.75rem;
+    margin: 2px 0 0;
     color: #94a3b8;
-    margin: 0;
+    font-size: 0.75rem;
   }
 
-  .timeline-details {
-    background: rgba(0, 0, 0, 0.3);
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    color: #cbd5e1;
-    overflow-x: auto;
-    margin: 0.25rem 0 0;
+  .desktop-only-inline {
+    display: inline;
+  }
+
+  /* 5. Responsive Breakpoints */
+  @media (max-width: 768px) {
+    .tasks-tab-root {
+      gap: 12px;
+    }
+
+    .queue-header-bar {
+      padding: 12px 14px;
+      min-height: auto;
+    }
+
+    .tab-title {
+      font-size: 1.1875rem;
+    }
+
+    .desktop-search,
+    .desktop-filters {
+      display: none;
+    }
+
+    .mobile-filter-bar {
+      display: flex;
+    }
+
+    .desktop-only-inline {
+      display: none;
+    }
+
+    /* Card Mobile Specs (90–120px height, touch targets >= 44x44px) */
+    .card-main-row {
+      padding: 10px 12px;
+      gap: 12px;
+      min-height: 90px;
+    }
+
+    .card-visual-col {
+      width: 44px;
+      height: 60px;
+    }
+
+    .task-work-name {
+      font-size: 0.875rem;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .card-actions-col {
+      flex-direction: column;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .btn-action-continue,
+    .btn-action-claim {
+      height: 44px;
+      min-width: 44px;
+      padding: 0 12px;
+      justify-content: center;
+    }
+
+    .btn-toggle-expand,
+    .btn-timeline-ghost {
+      height: 38px;
+      min-width: 44px;
+      justify-content: center;
+    }
+
+    .panel-footer-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .left-actions,
+    .right-actions {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .btn-complete-task {
+      width: 100%;
+      height: 44px;
+      justify-content: center;
+    }
   }
 </style>
