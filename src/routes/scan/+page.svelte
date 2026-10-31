@@ -69,7 +69,10 @@
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
-    Search
+    Search,
+    Home,
+    CheckSquare,
+    MoreHorizontal
   } from '@lucide/svelte';
 
   let { data, form } = $props();
@@ -77,6 +80,10 @@
   let works = $derived(data.works || []);
   let chapters = $derived(data.chapters || []);
   let team = $derived(data.team || []);
+
+  let currentMember = $derived(
+    (data.team || []).find((m: any) => m.id === data.userId || m.user_id === data.userId) || null
+  );
 
   let dynamicModuleData = $state<Record<string, any>>({});
   const loadingModules: Record<string, boolean> = {};
@@ -154,9 +161,12 @@
 
   function normalizeTab(t: string | null): string {
     if (!t) return 'home';
-    if (t === 'tarefas' || t === 'tasks') return 'minha_fila';
-    if (t === 'capitulos' || t === 'works') return 'obras';
-    return t;
+    const clean = t.toLowerCase().trim();
+    if (clean === 'tarefas' || clean === 'tasks' || clean === 'queue') return 'minha_fila';
+    if (clean === 'capitulos' || clean === 'works') return 'obras';
+    if (clean === 'dashboard') return 'home';
+    if (clean === 'notificacoes' || clean === 'notifications') return 'inbox';
+    return clean;
   }
 
   let currentWorkspaceTab = $state<string>(normalizeTab(page.url.searchParams.get('tab')));
@@ -840,11 +850,12 @@
               aria-label="Abrir menu de navegação"
               onclick={() => (sidebarMobileOpen = true)}
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
             <div class="mobile-scan-brand">
+              <span class="mobile-context-prefix">Área da Scan</span>
+              <span class="mobile-context-sep">·</span>
               <span class="mobile-scan-title">{data.currentScan?.name}</span>
-              <span class="mobile-scan-role">{ROLE_LABELS[data.userRole] || data.userRole}</span>
             </div>
             <button
               type="button"
@@ -852,7 +863,7 @@
               aria-label="Busca rápida"
               onclick={() => (showCommandPalette = true)}
             >
-              <Search size={18} />
+              <Search size={16} />
             </button>
           </header>
 
@@ -894,11 +905,17 @@
             {:else if currentWorkspaceTab === 'home'}
               <ScanHome
                 currentScan={data.currentScan}
-                userProfile={{ id: data.userId }}
+                userProfile={{
+                  id: data.userId,
+                  display_name: currentMember?.display_name || currentMember?.username || 'Membro',
+                  avatar_id: currentMember?.avatar_id,
+                  role: data.userRole
+                }}
                 userRole={data.userRole}
+                userPositions={data.userPositions || []}
                 tasks={data.tasks || []}
                 stages={data.stages || []}
-                chapters={data.productionChapters || []}
+                chapters={data.productionChapters || chapters || []}
                 chapterStages={data.chapterStages || []}
                 works={works}
                 muralPosts={data.muralPosts || []}
@@ -2235,6 +2252,85 @@
         onClose={() => (showCommandPalette = false)}
       />
     </div>
+
+    <!-- Dedicated Contextual Mobile Bottom Nav -->
+    <nav class="scan-mobile-bottom-bar" aria-label="Navegação rápida móvel">
+      <button
+        type="button"
+        class="scan-nav-item"
+        class:active={currentWorkspaceTab === 'home'}
+        onclick={() => handleSelectTab('home')}
+      >
+        <div class="nav-item-icon-wrap">
+          <Home size={18} />
+          {#if currentWorkspaceTab === 'home'}
+            <span class="active-nav-dot"></span>
+          {/if}
+        </div>
+        <span>Início</span>
+      </button>
+
+      <button
+        type="button"
+        class="scan-nav-item"
+        class:active={currentWorkspaceTab === 'minha_fila'}
+        onclick={() => handleSelectTab('minha_fila')}
+      >
+        <div class="nav-item-icon-wrap">
+          <CheckSquare size={18} />
+          {#if (data.tasks || []).filter((t: any) => t.status !== 'DONE' && (t.assigned_to === data.userId || t.assignee_id === data.userId)).length > 0}
+            <span class="nav-item-badge amber">
+              {(data.tasks || []).filter((t: any) => t.status !== 'DONE' && (t.assigned_to === data.userId || t.assignee_id === data.userId)).length}
+            </span>
+          {/if}
+          {#if currentWorkspaceTab === 'minha_fila'}
+            <span class="active-nav-dot"></span>
+          {/if}
+        </div>
+        <span>Minha Fila</span>
+      </button>
+
+      <button
+        type="button"
+        class="scan-nav-item"
+        class:active={currentWorkspaceTab === 'pipeline'}
+        onclick={() => handleSelectTab('pipeline')}
+      >
+        <div class="nav-item-icon-wrap">
+          <Layers size={18} />
+          {#if currentWorkspaceTab === 'pipeline'}
+            <span class="active-nav-dot"></span>
+          {/if}
+        </div>
+        <span>Produção</span>
+      </button>
+
+      <button
+        type="button"
+        class="scan-nav-item"
+        class:active={currentWorkspaceTab === 'chat'}
+        onclick={() => handleSelectTab('chat')}
+      >
+        <div class="nav-item-icon-wrap">
+          <MessageSquare size={18} />
+          {#if currentWorkspaceTab === 'chat'}
+            <span class="active-nav-dot"></span>
+          {/if}
+        </div>
+        <span>Chat</span>
+      </button>
+
+      <button
+        type="button"
+        class="scan-nav-item"
+        onclick={() => (sidebarMobileOpen = true)}
+      >
+        <div class="nav-item-icon-wrap">
+          <MoreHorizontal size={18} />
+        </div>
+        <span>Mais</span>
+      </button>
+    </nav>
   </div>
 </div>
 {/if}
@@ -3060,12 +3156,17 @@
     display: none;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    background: #08060f;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    height: 44px;
+    padding: 0 10px;
+    background: rgba(10, 11, 18, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     position: sticky;
     top: 0;
     z-index: 30;
+    gap: 8px;
+    box-sizing: border-box;
   }
 
   @media (max-width: 1024px) {
@@ -3076,14 +3177,15 @@
 
   .btn-hamburger,
   .btn-search-mobile {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
     color: #cbd5e1;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -3097,23 +3199,47 @@
 
   .mobile-scan-brand {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    text-align: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .mobile-context-prefix {
+    color: #94a3b8;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .mobile-context-sep {
+    color: rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
   }
 
   .mobile-scan-title {
-    font-size: 0.95rem;
-    font-weight: 700;
     color: #f8fafc;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  @media (max-width: 340px) {
+    .mobile-context-prefix,
+    .mobile-context-sep {
+      display: none;
+    }
   }
 
   .mobile-scan-role {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: #a855f7;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    display: none;
   }
 
   .workspace-view-content {
@@ -3122,10 +3248,99 @@
     padding: 24px;
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .workspace-view-content {
-      padding: 14px 10px;
+      padding: 8px 10px calc(84px + env(safe-area-inset-bottom, 24px)) 10px;
     }
+  }
+
+  /* Dedicated Contextual Mobile Bottom Nav */
+  .scan-mobile-bottom-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(8, 9, 15, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 45;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  @media (max-width: 1024px) {
+    .scan-mobile-bottom-bar {
+      display: flex;
+    }
+  }
+
+  .scan-nav-item {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: color 0.15s ease, transform 0.1s ease;
+    min-width: 52px;
+    position: relative;
+  }
+
+  .scan-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  .scan-nav-item.active {
+    color: #c084fc;
+    font-weight: 700;
+  }
+
+  .nav-item-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .active-nav-dot {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 9999px;
+    background: #c084fc;
+    box-shadow: 0 0 6px rgba(192, 132, 252, 0.8);
+  }
+
+  .nav-item-badge {
+    position: absolute;
+    top: -4px;
+    right: -8px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    background: #f59e0b;
+    color: #000000;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
   /* Unauthenticated */
