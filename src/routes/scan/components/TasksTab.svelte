@@ -3077,8 +3077,19 @@
     .cards-vertical-list {
       display: flex;
       flex-direction: column;
+      align-items: stretch;
       gap: 10px;
       width: 100%;
+    }
+
+    .cards-vertical-list > :only-child {
+      max-width: 100%;
+    }
+
+    .task-compact-card {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .card-main-content {
