@@ -527,6 +527,9 @@ export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<Yu
                      w.latest_chapter_published_at as latest_published_at
               FROM works w
               WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
+                AND EXISTS (
+                  SELECT 1 FROM chapters c WHERE c.work_id = w.id AND c.published_at IS NOT NULL
+                )
               ORDER BY w.latest_chapter_published_at DESC
               LIMIT 15
             )
@@ -645,6 +648,9 @@ export async function fetchRecentReleasesFromYugabyte(
                  w.latest_chapter_published_at as latest_published_at
           FROM works w
           WHERE w.latest_chapter_published_at IS NOT NULL AND w.published = true
+            AND EXISTS (
+              SELECT 1 FROM chapters c WHERE c.work_id = w.id AND c.published_at IS NOT NULL
+            )
             ${kindClause}
             ${cursorClause}
           ORDER BY w.latest_chapter_published_at DESC
@@ -770,6 +776,9 @@ export async function fetchPaginatedReleasesFromYugabyte(
             FROM works w
             WHERE w.latest_chapter_published_at IS NOT NULL
               AND w.published = true
+              AND EXISTS (
+                SELECT 1 FROM chapters c WHERE c.work_id = w.id AND c.published_at IS NOT NULL
+              )
               ${pageKindClause}
             ORDER BY w.latest_chapter_published_at DESC, w.id DESC
             LIMIT $1 OFFSET $2

@@ -126,7 +126,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   const authDuration = Math.round(performance.now() - authStart);
 
-  event.locals.user = user;
+  event.locals.user = user
+    ? {
+        ...user,
+        ...(sessionData?.profile || {}),
+        id: user.id,
+        avatar_id: sessionData?.profile?.avatar_id ?? user.avatar_id ?? null,
+        avatar_crop: sessionData?.profile?.avatar_crop ?? user.avatar_crop ?? null,
+        avatar_frame_id: sessionData?.profile?.avatar_frame_id ?? user.avatar_frame_id ?? null,
+        display_name: sessionData?.profile?.display_name ?? user.display_name ?? null
+      }
+    : null;
+  event.locals.profile = sessionData?.profile || null;
   event.locals.authState = authState;
   event.locals.role = role;
 

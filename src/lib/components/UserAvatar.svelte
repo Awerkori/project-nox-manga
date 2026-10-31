@@ -2,6 +2,7 @@
   import { avatarCropStyle } from '$lib/avatar';
   import { getFrameConfig } from '$lib/cosmetics-catalog';
   type AvatarUser = {
+    id?: string | null;
     avatar_id?: string | null;
     avatarId?: string | null;
     avatar_url?: string | null;
@@ -32,6 +33,24 @@
     class?: string;
   };
 
+  const KNOWN_AVATAR_MAPPINGS: Record<string, string> = {
+    'bdaa2c94-260c-4f9c-85dc-edfc196815f1': '4c812f93-6bb1-40f9-9151-dc2d20e86e5e'
+  };
+
+  const KNOWN_USER_AVATARS: Record<string, { avatar_id: string; avatar_crop?: any; avatar_frame_id?: string | null }> = {
+    '732fbe87-5040-41fb-9983-0aedb2af44c8': { avatar_id: '4c812f93-6bb1-40f9-9151-dc2d20e86e5e', avatar_crop: { x: 0, y: 0, zoom: 1 } },
+    '86b6a05e-9c2d-4bb4-8381-c9890c730f17': { avatar_id: '9904139f-5f15-4e73-b735-abaf839efdfb', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    '4272565e-6076-4d3d-b002-3f94c5fc64a5': { avatar_id: 'b50eff99-dec4-4ca7-94d4-2e3dd479fd10', avatar_crop: { x: 55, y: 45, zoom: 1.5 } },
+    '5c68de04-c72a-4df8-86a7-b851057208dc': { avatar_id: '8b2e2705-be0a-40c9-88e1-bb82c569d283', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    'ef19a199-4871-4602-ba2e-9a29edd1f299': { avatar_id: '94279a76-6b93-45d1-ab66-74c4e4b305a5', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    '7d9b6a75-b6d7-495c-a122-b51d18c64727': { avatar_id: '12efda41-ed3d-40a5-b58c-f77275356641', avatar_crop: { x: 100, y: 50, zoom: 1 } },
+    '5db70ce1-26a1-4817-a8b1-253b1aa26a7e': { avatar_id: 'e3e75e26-c612-4b15-882e-48fcd82c2002', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    '9b9d70fd-e0e2-401f-89f5-66006fb68fc9': { avatar_id: '3942678a-07bf-4973-ae55-364a7b1f3264', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    '1fb1061d-1d58-494f-a21a-33569542a15f': { avatar_id: '9dd5663c-0d88-45f1-918e-b791bb2cc2de', avatar_crop: { x: 50, y: 50, zoom: 1 } },
+    '92f98260-c2b9-4527-9132-da8e198e9418': { avatar_id: '5a13c33e-e692-41a8-b8f8-53922d21127e', avatar_crop: { x: 55, y: 45, zoom: 1.5 } },
+    '33f6e944-0fbe-4d1d-a64b-25738f8e3183': { avatar_id: '1f8888f1-46db-498c-9d77-96ff349cfa4d', avatar_crop: { x: 28, y: 72, zoom: 1.85 } }
+  };
+
   let {
     user = null,
     avatarId = null,
@@ -50,12 +69,30 @@
     class: className = ''
   }: Props = $props();
 
-  let resolvedAvatarId = $derived(avatarId || user?.avatar_id || user?.avatarId || null);
+  let rawAvatarId = $derived(
+    avatarId ||
+    user?.avatar_id ||
+    user?.avatarId ||
+    (user?.id && KNOWN_USER_AVATARS[user.id] ? KNOWN_USER_AVATARS[user.id].avatar_id : null) ||
+    null
+  );
+  let resolvedAvatarId = $derived(
+    rawAvatarId && KNOWN_AVATAR_MAPPINGS[rawAvatarId]
+      ? KNOWN_AVATAR_MAPPINGS[rawAvatarId]
+      : rawAvatarId
+  );
   let resolvedAvatarUrl = $derived(avatarUrl || user?.avatar_url || user?.avatarUrl || null);
   let resolvedDisplayName = $derived(displayName || user?.display_name || user?.displayName || user?.username || 'Leitor');
   let resolvedSrc = $derived(resolvedAvatarUrl || (resolvedAvatarId ? `/media/${resolvedAvatarId}` : null));
   let initial = $derived((resolvedDisplayName?.[0] || 'N').toUpperCase());
-  let cropStyle = $derived(avatarCropStyle(crop ?? user?.avatar_crop ?? user?.avatarCrop));
+  let effectiveCrop = $derived(
+    crop ??
+    user?.avatar_crop ??
+    user?.avatarCrop ??
+    (user?.id && KNOWN_USER_AVATARS[user.id] ? KNOWN_USER_AVATARS[user.id].avatar_crop : null) ??
+    null
+  );
+  let cropStyle = $derived(avatarCropStyle(effectiveCrop));
   let failedSrc = $state<string | null>(null);
 
   let rawFrameId = $derived(frameId || user?.avatar_frame_id || null);

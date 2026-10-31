@@ -3515,7 +3515,7 @@
 
   @media (max-width: 1024px) {
     .workspace-view-content {
-      padding: 8px 10px calc(84px + env(safe-area-inset-bottom, 24px)) 10px;
+      padding: 8px 10px calc(100px + env(safe-area-inset-bottom, 24px)) 10px;
     }
   }
 

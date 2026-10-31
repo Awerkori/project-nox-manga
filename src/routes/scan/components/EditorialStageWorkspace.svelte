@@ -148,7 +148,7 @@
       emptyMineDesc: 'Quando você assumir uma tradução, ela aparecerá aqui.',
       uploadTitle: 'Minha tradução',
       uploadFormatHint: 'Formatos aceitos: .docx, .doc, .txt ou arquivo de script',
-      uploadStepHint: '1º Envie sua tradução abaixo • 2º Clique em "Concluir Tradução" acima'
+      uploadStepHint: '1º Envie sua tradução abaixo • 2º Clique em "Concluir Tradução" ao final'
     },
     clean_redraw: {
       title: 'Clean/Redraw',
@@ -170,7 +170,7 @@
       emptyMineDesc: 'Quando você assumir um Clean/Redraw, ele aparecerá aqui.',
       uploadTitle: 'Minhas páginas limpas',
       uploadFormatHint: 'Formatos aceitos: .zip, .cbz ou páginas limpas sequenciais',
-      uploadStepHint: '1º Envie as páginas limpas abaixo • 2º Clique em "Concluir Clean/Redraw" acima'
+      uploadStepHint: '1º Envie as páginas limpas abaixo • 2º Clique em "Concluir Clean/Redraw" ao final'
     },
     typeset: {
       title: 'Typeset',
@@ -683,8 +683,32 @@
 
               <!-- REFINED ACTION HIERARCHY (NO BUTTON COMPETITION) -->
               <div class="my-card-actions-row">
-                {#if hasDeliverables}
-                  <!-- STATE A: READY TO COMPLETE (PRIMARY HIGHLIGHTED GREEN ACTION) -->
+                {#if isExpanded}
+                  <!-- STATE EXPANDED: Workspace is open below; top controls toggle collapse or view details -->
+                  <button
+                    type="button"
+                    class="btn-action-open-work primary-row-btn active"
+                    onclick={() => toggleChapterWorkspace(item.cs.id)}
+                    title="Recolher área de trabalho"
+                  >
+                    <FolderKanban size={13} />
+                    <span>Recolher trabalho</span>
+                    <ChevronUp size={13} />
+                  </button>
+
+                  <div class="secondary-actions-row is-single">
+                    <button
+                      type="button"
+                      class="btn-action-view-details"
+                      onclick={() => onOpenChapter(item.ch)}
+                      title="Abrir página de detalhes, equipe e comentários deste capítulo"
+                    >
+                      <span>Ver detalhes</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
+                {:else if hasDeliverables}
+                  <!-- STATE COLLAPSED & READY: Primary highlight is Concluir, secondary is Abrir and Detalhes -->
                   <form
                     method="POST"
                     action="?/completeStageAction"
@@ -714,7 +738,7 @@
                     <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
                     <button
                       type="submit"
-                      class="btn-action-complete-prominent"
+                      class="btn-action-complete-prominent primary-row-btn"
                       disabled={isCompletingStageId === item.cs.id}
                       title="Concluir etapa e avançar no pipeline"
                     >
@@ -728,67 +752,72 @@
                     </button>
                   </form>
 
-                  <!-- Secondary Action: Abrir trabalho / Recolher -->
-                  <button
-                    type="button"
-                    class="btn-action-open-work"
-                    class:active={isExpanded}
-                    onclick={() => toggleChapterWorkspace(item.cs.id)}
-                    title={isExpanded ? 'Recolher área de trabalho' : 'Abrir materiais e arquivos'}
-                  >
-                    <FolderKanban size={13} />
-                    <span>{isExpanded ? 'Recolher' : 'Abrir trabalho'}</span>
-                    {#if isExpanded}
-                      <ChevronUp size={13} />
-                    {:else}
+                  <div class="secondary-actions-row">
+                    <!-- Secondary Action: Abrir trabalho -->
+                    <button
+                      type="button"
+                      class="btn-action-open-work"
+                      onclick={() => toggleChapterWorkspace(item.cs.id)}
+                      title="Abrir materiais e arquivos"
+                    >
+                      <FolderKanban size={13} />
+                      <span>Abrir trabalho</span>
                       <ChevronDown size={13} />
-                    {/if}
-                  </button>
+                    </button>
+
+                    <!-- Dedicated Secondary Action: Ver detalhes da página do capítulo -->
+                    <button
+                      type="button"
+                      class="btn-action-view-details"
+                      onclick={() => onOpenChapter(item.ch)}
+                      title="Abrir página de detalhes, equipe e comentários deste capítulo"
+                    >
+                      <span>Ver detalhes</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
                 {:else}
-                  <!-- STATE B: WORK IN PROGRESS (PRIMARY NOX PURPLE ACTION) -->
+                  <!-- STATE COLLAPSED & IN PROGRESS (PRIMARY NOX PURPLE ACTION) -->
                   <button
                     type="button"
-                    class="btn-action-open-work"
-                    class:active={isExpanded}
+                    class="btn-action-open-work primary-row-btn"
                     onclick={() => toggleChapterWorkspace(item.cs.id)}
-                    title={isExpanded ? 'Recolher área de trabalho' : 'Abrir materiais e arquivos'}
+                    title="Abrir materiais e arquivos"
                   >
                     <FolderKanban size={13} />
-                    <span>{isExpanded ? 'Recolher' : 'Abrir trabalho'}</span>
-                    {#if isExpanded}
-                      <ChevronUp size={13} />
-                    {:else}
-                      <ChevronDown size={13} />
-                    {/if}
+                    <span>Abrir trabalho</span>
+                    <ChevronDown size={13} />
                   </button>
 
-                  <!-- Secondary Action: Arquivos -->
-                  <button
-                    type="button"
-                    class="btn-action-secondary"
-                    onclick={() => {
-                      if (!isExpanded) expandedChapterIds[item.cs.id] = true;
-                      if (!mobileAccordionState[item.cs.id]) {
-                        mobileAccordionState[item.cs.id] = { inputs: true, delivery: true };
-                      }
-                    }}
-                    title="Acessar arquivos e entregas"
-                  >
-                    <Upload size={13} />
-                    <span>Arquivos</span>
-                  </button>
+                  <div class="secondary-actions-row">
+                    <!-- Secondary Action: Arquivos -->
+                    <button
+                      type="button"
+                      class="btn-action-secondary"
+                      onclick={() => {
+                        expandedChapterIds[item.cs.id] = true;
+                        if (!mobileAccordionState[item.cs.id]) {
+                          mobileAccordionState[item.cs.id] = { inputs: true, delivery: true };
+                        }
+                      }}
+                      title="Acessar arquivos e entregas"
+                    >
+                      <Upload size={13} />
+                      <span>Arquivos</span>
+                    </button>
+
+                    <!-- Dedicated Secondary Action: Ver detalhes da página do capítulo -->
+                    <button
+                      type="button"
+                      class="btn-action-view-details"
+                      onclick={() => onOpenChapter(item.ch)}
+                      title="Abrir página de detalhes, equipe e comentários deste capítulo"
+                    >
+                      <span>Ver detalhes</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
                 {/if}
-
-                <!-- Dedicated Secondary Action: Ver detalhes da página do capítulo -->
-                <button
-                  type="button"
-                  class="btn-action-view-details"
-                  onclick={() => onOpenChapter(item.ch)}
-                  title="Abrir página de detalhes, equipe e comentários deste capítulo"
-                >
-                  <span>Ver detalhes</span>
-                  <ArrowRight size={13} />
-                </button>
               </div>
             </div>
           </div>
@@ -1585,8 +1614,13 @@
   }
 
   /* Restrain single card from stretching across entire width */
-  .editorial-cards-grid > :only-child {
-    max-width: 680px;
+  .editorial-cards-grid > :only-child:not(.is-expanded) {
+    max-width: 760px;
+  }
+
+  .editorial-card.is-expanded {
+    grid-column: 1 / -1;
+    max-width: 100% !important;
   }
 
   .editorial-card {
@@ -1887,6 +1921,12 @@
     gap: 8px;
     flex-wrap: wrap;
     margin-top: 6px;
+  }
+
+  .secondary-actions-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   /* State A: Complete form takes primary focus */
@@ -2508,7 +2548,7 @@
   @media (max-width: 768px) {
     .editorial-workspace-root {
       gap: 12px;
-      padding-bottom: 76px; /* Clearance for fixed mobile bottom navigation */
+      padding-bottom: calc(110px + env(safe-area-inset-bottom, 24px)); /* Clearance for fixed mobile bottom navigation */
     }
 
     .editorial-header {
@@ -2624,8 +2664,15 @@
 
     .my-card-actions-row {
       width: 100%;
-      justify-content: flex-start;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
+    }
+
+    .primary-row-btn {
+      width: 100%;
+      justify-content: center;
+      min-height: 44px;
     }
 
     .complete-form-primary {
@@ -2638,8 +2685,25 @@
       min-height: 44px;
     }
 
-    .btn-action-open-work,
-    .btn-action-secondary,
+    .secondary-actions-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .secondary-actions-row.is-single {
+      grid-template-columns: 1fr;
+    }
+
+    .secondary-actions-row .btn-action-open-work,
+    .secondary-actions-row .btn-action-secondary,
+    .secondary-actions-row .btn-action-view-details {
+      width: 100%;
+      justify-content: center;
+      min-height: 44px;
+    }
+
     .btn-editorial-claim {
       min-height: 44px; /* Touch friendly on mobile */
     }

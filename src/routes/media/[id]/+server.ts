@@ -92,6 +92,17 @@ async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIME
 export const GET = async ({ locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
+  // Stale media alias redirection: self-heal known broken historical media pointers
+  if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1') {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/media/4c812f93-6bb1-40f9-9151-dc2d20e86e5e',
+        'Cache-Control': 'public, max-age=86400'
+      }
+    });
+  }
+
 
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);

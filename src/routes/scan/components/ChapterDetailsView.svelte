@@ -22,7 +22,8 @@
     Lock,
     Sparkles,
     ShieldAlert,
-    RotateCcw
+    RotateCcw,
+    Globe
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { relativeTime } from '$lib/types';
@@ -134,6 +135,25 @@
     chapterData.status === 'READY' ||
     (currentChapterStages.length > 0 &&
       currentChapterStages.every((s: any) => s.status === 'DONE' || s.stage?.slug === 'publicado'))
+  );
+
+  // Catalog publication status vs Internal Scan Production status
+  let isCatalogPublished = $derived(
+    chapterData.status === 'PUBLISHED' || Boolean(chapterData.target_chapter_id)
+  );
+
+  let chapterWorkflowStatusText = $derived(() => {
+    if (chapterData.status === 'PUBLISHED' && currentChapterStages.every((s: any) => s.status === 'DONE')) {
+      return 'Concluída';
+    }
+    return currentActiveStage();
+  });
+
+  // Pre-approved evaluation: QC done and no open issues, or chapter already marked ready/published
+  let isPreApproved = $derived(
+    chapterData.status === 'PUBLISHED' ||
+    chapterData.status === 'READY' ||
+    (qcStage?.status === 'DONE' && openQcCount === 0)
   );
 
   // Work cover resolution
@@ -262,7 +282,8 @@
         title="Retornar à lista anterior"
       >
         <ArrowLeft size={16} />
-        <span>Voltar para {fromStageLabel()}</span>
+        <span class="btn-back-text-full">Voltar para {fromStageLabel()}</span>
+        <span class="btn-back-text-short">Voltar</span>
       </button>
 
       <div class="header-breadcrumbs">
@@ -283,25 +304,10 @@
         title="Visualizar no Leitor de Preview interno"
       >
         <Eye size={14} />
-        <span>Leitor de Preview</span>
-        <ExternalLink size={12} class="icon-subtle" />
+        <span class="btn-preview-text-full">Leitor de Preview</span>
+        <span class="btn-preview-text-short">Preview</span>
+        <ExternalLink size={12} class="icon-subtle icon-preview-external" />
       </a>
-
-      {#if ['OWNER', 'ADMIN', 'UPLOADER'].includes(userRole)}
-        <form method="POST" action="?/publishProductionChapter" use:enhance class="publish-form-inline">
-          <input type="hidden" name="production_chapter_id" value={actualChapterId} />
-          <input type="hidden" name="scan_id" value={scanId} />
-          <button
-            type="submit"
-            class="btn-action-publish"
-            class:is-published={chapterData.status === 'PUBLISHED'}
-            disabled={!isReadyToPublish || chapterData.status === 'PUBLISHED'}
-          >
-            <CheckCircle2 size={14} />
-            <span>{chapterData.status === 'PUBLISHED' ? 'Publicado' : 'Publicar Capítulo'}</span>
-          </button>
-        </form>
-      {/if}
     </div>
   </header>
 
@@ -336,33 +342,55 @@
 
       <!-- Summary Metadata Badges -->
       <div class="hero-badges-row">
+        <!-- 1. Catálogo status (No site) -->
+        <div class="badge-item catalog-status-badge" class:is-published={isCatalogPublished}>
+          <span class="badge-dot" class:dot-green={isCatalogPublished} class:dot-amber={!isCatalogPublished}></span>
+          <span class="badge-label">Catálogo:</span>
+          <strong>{isCatalogPublished ? 'Publicado no site' : 'Não publicado'}</strong>
+        </div>
+
+        <!-- 2. Workflow status (Na scan) -->
         <div class="badge-item current-stage-badge">
           <span class="badge-dot pulse-purple"></span>
-          <span class="badge-label">Etapa:</span>
-          <strong>{currentActiveStage()}</strong>
+          <span class="badge-label">Produção:</span>
+          <strong>{chapterWorkflowStatusText()}</strong>
         </div>
 
-        <div class="badge-item state-badge">
-          <span class="badge-label">Estado:</span>
-          <strong>{chapterData.status === 'PUBLISHED' ? 'Publicado' : chapterData.status === 'READY' ? 'Pronto' : 'Em Produção'}</strong>
-        </div>
-
+        <!-- 3. Prioridade -->
         <div class="badge-item priority-badge">
           <Clock size={12} class="badge-icon-subtle" />
           <span class="badge-label">Prioridade:</span>
           <strong>{chapterData.priority || 'Normal'}</strong>
         </div>
 
+        <!-- 4. Scan -->
         <div class="badge-item scan-badge">
           <span class="badge-label">Scan:</span>
           <strong>{scan?.name || 'Project Nox'}</strong>
         </div>
 
+        <!-- 5. QC Alert if open -->
         {#if openQcCount > 0}
           <div class="badge-item qc-alert-badge">
             <AlertTriangle size={12} />
             <strong>QC: {openQcCount} pendência{openQcCount > 1 ? 's' : ''}</strong>
           </div>
+        {/if}
+
+        <!-- 6. Action button: Publicar capítulo (Dedicated position inside info row) -->
+        {#if ['OWNER', 'ADMIN', 'UPLOADER'].includes(userRole) && !isCatalogPublished && isReadyToPublish}
+          <form method="POST" action="?/publishProductionChapter" use:enhance class="publish-form-inline">
+            <input type="hidden" name="production_chapter_id" value={actualChapterId} />
+            <input type="hidden" name="scan_id" value={scanId} />
+            <button
+              type="submit"
+              class="btn-badge-publish"
+              title="Aprovar e publicar este capítulo no catálogo público"
+            >
+              <CheckCircle2 size={13} />
+              <span>Publicar Capítulo</span>
+            </button>
+          </form>
         {/if}
       </div>
     </div>
@@ -387,7 +415,8 @@
       onclick={() => (activeTab = 'team')}
     >
       <Users size={15} />
-      <span>Créditos e Equipe</span>
+      <span class="tab-label-full">Créditos e Equipe</span>
+      <span class="tab-label-short">Equipe</span>
     </button>
 
     <button
@@ -510,16 +539,34 @@
           <div class="arrow-line"></div>
         </div>
 
-        <!-- 5. PRÉ-APROVADO & PUBLICADO -->
-        <div class="flow-stage-node status-{publicadoStage?.status === 'DONE' || chapterData.status === 'PUBLISHED' ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
+        <!-- 5. PRÉ-APROVADO -->
+        <div class="flow-stage-node status-{isPreApproved ? 'done' : qcStage?.status === 'IN_PROGRESS' ? 'in_progress' : isReadyToPublish ? 'available' : 'waiting'}">
           <div class="node-header">
-            <span class="node-step-tag">Final</span>
-            <span class="node-status-pill">{chapterData.status === 'PUBLISHED' ? 'Publicado' : isReadyToPublish ? 'Pronto' : 'Aguardando'}</span>
+            <span class="node-step-tag">Etapa 6</span>
+            <span class="node-status-pill">{isPreApproved ? 'Aprovado' : qcStage?.status === 'IN_PROGRESS' ? 'Em validação' : isReadyToPublish ? 'Pronto' : 'Aguardando'}</span>
           </div>
-          <div class="node-title">{chapterData.status === 'PUBLISHED' ? 'Publicado' : 'Pré-aprovado'}</div>
+          <div class="node-title">Pré-aprovado</div>
           <div class="node-assignee">
             <CheckCircle2 size={12} />
-            <span>{chapterData.status === 'PUBLISHED' ? 'No ar' : 'Site'}</span>
+            <span>Validação final e build</span>
+          </div>
+        </div>
+
+        <!-- Arrow Connector -->
+        <div class="flow-connector straight-arrow">
+          <div class="arrow-line"></div>
+        </div>
+
+        <!-- 6. PUBLICADO -->
+        <div class="flow-stage-node status-{isCatalogPublished ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
+          <div class="node-header">
+            <span class="node-step-tag">Etapa 7</span>
+            <span class="node-status-pill">{isCatalogPublished ? 'No Ar' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
+          </div>
+          <div class="node-title">Publicado</div>
+          <div class="node-assignee">
+            <Globe size={12} />
+            <span>Catálogo Project Nox</span>
           </div>
         </div>
       </div>
@@ -623,19 +670,37 @@
           </div>
         </div>
 
-        <!-- 5. PRÉ-APROVADO & PUBLICADO -->
-        <div class="mobile-timeline-card status-{chapterData.status === 'PUBLISHED' ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
+        <!-- 6. PRÉ-APROVADO -->
+        <div class="mobile-timeline-card status-{isPreApproved ? 'done' : qcStage?.status === 'IN_PROGRESS' ? 'in_progress' : isReadyToPublish ? 'available' : 'waiting'}">
+          <div class="card-timeline-left">
+            <span class="timeline-step-bubble">6</span>
+            <div class="timeline-vertical-spine"></div>
+          </div>
+          <div class="card-timeline-content">
+            <div class="timeline-card-top">
+              <span class="timeline-stage-title">Pré-aprovado</span>
+              <span class="timeline-status-tag">{isPreApproved ? 'Aprovado' : qcStage?.status === 'IN_PROGRESS' ? 'Em validação' : isReadyToPublish ? 'Pronto' : 'Aguardando'}</span>
+            </div>
+            <div class="timeline-card-assignee">
+              <CheckCircle2 size={12} />
+              <span>Validação final e build aprovados</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. PUBLICADO -->
+        <div class="mobile-timeline-card status-{isCatalogPublished ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
           <div class="card-timeline-left">
             <span class="timeline-step-bubble final">✓</span>
           </div>
           <div class="card-timeline-content">
             <div class="timeline-card-top">
-              <span class="timeline-stage-title">{chapterData.status === 'PUBLISHED' ? 'Publicado no Site' : 'Pré-aprovado'}</span>
-              <span class="timeline-status-tag">{chapterData.status === 'PUBLISHED' ? 'No Ar' : isReadyToPublish ? 'Pronto' : 'Aguardando'}</span>
+              <span class="timeline-stage-title">Publicado no Site</span>
+              <span class="timeline-status-tag">{isCatalogPublished ? 'No Ar' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
             </div>
             <div class="timeline-card-assignee">
-              <CheckCircle2 size={12} />
-              <span>Status oficial da obra</span>
+              <Globe size={12} />
+              <span>Catálogo oficial do Project Nox</span>
             </div>
           </div>
         </div>
@@ -929,7 +994,7 @@
                 {/if}
 
                 {#if note.canEdit || note.canDelete || note.canPin}
-                  <footer class="comment-actions-bar">
+                  <div class="comment-actions-bar">
                     {#if note.canEdit}
                       <button type="button" class="btn-note-action" onclick={() => beginNoteEdit(note)}>
                         <Pencil size={12} />
@@ -957,7 +1022,7 @@
                         </button>
                       </form>
                     {/if}
-                  </footer>
+                  </div>
                 {/if}
               </div>
             </article>
@@ -1074,7 +1139,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
@@ -1082,22 +1147,24 @@
   .header-left-cluster {
     display: flex;
     align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
+    gap: 14px;
+    min-width: 0;
   }
 
   .btn-back-stage {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    gap: 7px;
+    padding: 7px 14px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     color: #e2e8f0;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     font-weight: 500;
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: all 0.2s ease;
   }
 
@@ -1107,12 +1174,23 @@
     color: #fff;
   }
 
+  .btn-back-text-full {
+    display: inline;
+  }
+
+  .btn-back-text-short {
+    display: none;
+  }
+
   .header-breadcrumbs {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
     color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .crumb-sep {
@@ -1138,20 +1216,22 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
 
   .btn-action-preview {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
+    padding: 7px 13px;
     background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 8px;
     color: #c4b5fd;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     font-weight: 500;
     text-decoration: none;
+    white-space: nowrap;
     transition: all 0.2s ease;
   }
 
@@ -1159,6 +1239,14 @@
     background: rgba(139, 92, 246, 0.22);
     border-color: rgba(139, 92, 246, 0.45);
     color: #fff;
+  }
+
+  .btn-preview-text-full {
+    display: inline;
+  }
+
+  .btn-preview-text-short {
+    display: none;
   }
 
   .publish-form-inline {
@@ -1200,17 +1288,17 @@
   .chapter-hero-card {
     display: flex;
     align-items: center;
-    gap: 20px;
-    padding: 20px 24px;
+    gap: 18px;
+    padding: 16px 20px;
     background: linear-gradient(135deg, rgba(26, 20, 48, 0.7) 0%, rgba(15, 15, 22, 0.9) 100%);
     border: 1px solid rgba(139, 92, 246, 0.2);
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
   }
 
   .hero-cover-wrap {
-    width: 68px;
-    height: 96px;
+    width: 62px;
+    height: 88px;
     border-radius: 8px;
     overflow: hidden;
     flex-shrink: 0;
@@ -1236,7 +1324,7 @@
   .hero-info-stack {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     flex: 1;
   }
@@ -1248,7 +1336,7 @@
   }
 
   .hero-series-title {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 500;
     color: #a78bfa;
     letter-spacing: 0.02em;
@@ -1257,7 +1345,7 @@
 
   .hero-chapter-title {
     margin: 0;
-    font-size: 1.45rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: #fff;
     line-height: 1.25;
@@ -1273,7 +1361,7 @@
   }
 
   .hero-chapter-sub {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 500;
     color: #cbd5e1;
   }
@@ -1281,25 +1369,45 @@
   .hero-badges-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
   .badge-item {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+    gap: 5px;
+    padding: 3px 9px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: #94a3b8;
   }
 
   .badge-item strong {
     color: #f1f5f9;
     font-weight: 600;
+  }
+
+  .catalog-status-badge {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .catalog-status-badge.is-published {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.28);
+    color: #a7f3d0;
+  }
+
+  .dot-green {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  }
+
+  .dot-amber {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
   }
 
   .badge-dot {
@@ -1329,6 +1437,25 @@
     color: #fbbf24;
   }
 
+  .btn-badge-publish {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    background: #10b981;
+    border: 1px solid #059669;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-badge-publish:hover {
+    background: #059669;
+  }
+
   /* --------------------------------------------------------------------------
      SEGMENTED TABS
      -------------------------------------------------------------------------- */
@@ -1347,12 +1474,12 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 18px;
+    padding: 8px 16px;
     border-radius: 7px;
     background: transparent;
     border: 1px solid transparent;
     color: #94a3b8;
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1364,11 +1491,19 @@
   }
 
   .details-tab-btn.is-active {
-    background: #8b5cf6;
-    border-color: #7c3aed;
-    color: #fff;
+    background: rgba(147, 51, 234, 0.18);
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #f3e8ff;
     font-weight: 600;
-    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.35);
+    box-shadow: none;
+  }
+
+  .tab-label-full {
+    display: inline;
+  }
+
+  .tab-label-short {
+    display: none;
   }
 
   .tab-count-pill {
@@ -1411,18 +1546,18 @@
   .desktop-pipeline-flow {
     display: flex;
     align-items: center;
-    gap: 0;
-    padding: 24px;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    padding: 22px 20px;
     background: rgba(18, 18, 28, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    overflow-x: auto;
   }
 
   .flow-stage-node {
-    flex: 1;
-    min-width: 140px;
-    max-width: 180px;
+    flex: 1 1 0;
+    min-width: 0;
     padding: 12px 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1433,8 +1568,17 @@
     transition: all 0.2s ease;
   }
 
+  .flow-parallel-column {
+    flex: 1.25 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+
   .flow-stage-node.parallel-node {
-    min-width: 150px;
+    width: 100%;
   }
 
   .flow-stage-node.status-done {
@@ -2058,10 +2202,13 @@
      TAB 3: COMENTÁRIOS INTERNOS
      -------------------------------------------------------------------------- */
   .tab-pane-comments {
+    max-width: 780px;
+    margin: 0 auto;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding-bottom: 20px;
+    gap: 16px;
+    padding-bottom: 24px;
   }
 
   .comments-section-header {
@@ -2115,12 +2262,15 @@
   .comment-card {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: 10px;
+    padding: 10px 14px;
     background: rgba(18, 18, 28, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    border-radius: 10px;
     transition: all 0.2s ease;
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
   }
 
   .comment-card.is-pinned {
@@ -2138,7 +2288,7 @@
 
   .comment-author-avatar {
     flex-shrink: 0;
-    padding-top: 2px;
+    padding-top: 1px;
   }
 
   .comment-body-wrapper {
@@ -2146,34 +2296,37 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    height: auto;
+    min-height: 0;
   }
 
   .comment-card-topline {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
   .comment-meta-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
   .comment-author-name {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-weight: 600;
     color: #fff;
+    line-height: 1.2;
   }
 
   .comment-stage-tag {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 500;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
     background: rgba(139, 92, 246, 0.18);
     color: #c4b5fd;
@@ -2183,75 +2336,88 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
     background: rgba(139, 92, 246, 0.25);
     color: #e9d5ff;
   }
 
   .comment-badge-important {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
     background: rgba(245, 158, 11, 0.2);
     color: #fcd34d;
   }
 
   .comment-badge-pending {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
     background: rgba(239, 68, 68, 0.2);
     color: #fca5a5;
   }
 
   .comment-timestamp {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: #64748b;
   }
 
   .comment-text-content {
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     color: #e2e8f0;
-    line-height: 1.5;
+    line-height: 1.42;
     white-space: pre-wrap;
     word-break: break-word;
+    margin: 2px 0 0 0;
+    padding: 0;
   }
 
   .comment-actions-bar {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding-top: 4px;
+    padding: 0 !important;
+    margin: 4px 0 0 0;
+    background: transparent !important;
+    border: none !important;
+    min-height: 0 !important;
   }
 
   .inline-action-form {
     margin: 0;
+    padding: 0;
+    display: inline-flex;
   }
 
   .btn-note-action {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 0;
+    padding: 3px 5px;
+    margin: -2px -3px;
     background: transparent;
     border: none;
     color: #94a3b8;
-    font-size: 0.75rem;
+    font-size: 0.74rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: color 0.15s ease;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
   }
 
   .btn-note-action:hover {
     color: #fff;
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .btn-note-action.delete-action:hover {
     color: #f87171;
+    background: rgba(248, 113, 113, 0.1);
   }
 
   .comment-edit-form {
@@ -2460,8 +2626,8 @@
      -------------------------------------------------------------------------- */
   @media (max-width: 900px) {
     .chapter-details-root {
-      padding: 16px 16px 80px 16px;
-      gap: 16px;
+      padding: 10px 12px calc(110px + env(safe-area-inset-bottom, 24px)) 12px;
+      gap: 10px;
     }
 
     .desktop-pipeline-flow {
@@ -2472,55 +2638,113 @@
       display: flex;
     }
 
+    .hero-series-title {
+      font-size: 0.72rem;
+      margin-bottom: 1px;
+    }
+
     .hero-chapter-title {
-      font-size: 1.25rem;
+      font-size: 1.05rem;
+      line-height: 1.25;
     }
 
     .chapter-hero-card {
-      padding: 14px 16px;
-      gap: 14px;
+      padding: 10px 12px;
+      gap: 10px;
+      border-radius: 10px;
     }
 
     .hero-cover-wrap {
-      width: 54px;
-      height: 76px;
+      width: 44px;
+      height: 62px;
+      border-radius: 6px;
+    }
+
+    .hero-badges-row {
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .badge-item {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
     }
 
     .chapter-details-tabs {
       width: 100%;
       justify-content: space-between;
+      padding: 3px;
+      gap: 4px;
+      border-radius: 8px;
+      margin-top: 2px;
     }
 
     .details-tab-btn {
       flex: 1;
       justify-content: center;
-      padding: 9px 8px;
-      font-size: 0.82rem;
+      padding: 7px 6px;
+      font-size: 0.78rem;
+      min-height: 38px;
+    }
+
+    .tab-label-full {
+      display: none;
+    }
+
+    .tab-label-short {
+      display: inline;
+    }
+
+    .tab-pane-comments {
+      padding-bottom: calc(110px + env(safe-area-inset-bottom, 24px)); /* Virtual keyboard clearance & safe area */
     }
 
     .comment-composer-dock {
       /* Android keyboard safety clearance */
-      padding-bottom: max(env(safe-area-inset-bottom), 16px);
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     }
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     .header-breadcrumbs {
       display: none;
     }
 
-    .header-right-actions {
-      width: 100%;
-      justify-content: flex-end;
+    .btn-back-text-full {
+      display: none;
+    }
+
+    .btn-back-text-short {
+      display: inline;
+    }
+
+    .btn-preview-text-full {
+      display: none;
+    }
+
+    .btn-preview-text-short {
+      display: inline;
+    }
+
+    .icon-preview-external {
+      display: none;
+    }
+
+    .btn-back-stage,
+    .btn-action-preview {
+      min-height: 38px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
     }
 
     .hero-badges-row {
-      gap: 6px;
+      gap: 4px;
     }
 
     .badge-item {
-      font-size: 0.72rem;
-      padding: 3px 8px;
+      font-size: 0.7rem;
+      padding: 2px 6px;
     }
 
     .deliverables-list-grid {

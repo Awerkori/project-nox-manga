@@ -524,7 +524,7 @@ main {
   font-size: 8px;
   letter-spacing: 0.22em;
 }
-footer {
+footer:not(.comment-actions-bar) {
   border-top: 1px solid var(--line);
   padding: 42px 48px 0;
   max-width: 1320px;
@@ -1127,7 +1127,7 @@ td {
     width: 260px;
     height: 260px;
   }
-  footer {
+  footer:not(.comment-actions-bar) {
     padding: 32px 20px 75px;
   }
   .footer-inner {
