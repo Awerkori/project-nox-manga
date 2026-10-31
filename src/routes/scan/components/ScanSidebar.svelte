@@ -1066,6 +1066,8 @@
       max-height: 100dvh;
       transform: translateX(-100%);
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform;
+      touch-action: pan-y;
       z-index: 60;
       overflow: hidden;
       display: flex;
@@ -1089,6 +1091,21 @@
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(4px);
       z-index: 55;
+      animation: fadeInSidebarBackdrop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeInSidebarBackdrop {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .workspace-sidebar {
+        transition: none !important;
+      }
+      .sidebar-backdrop {
+        animation: none !important;
+      }
     }
   }
 </style>

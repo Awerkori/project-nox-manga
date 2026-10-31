@@ -287,7 +287,24 @@
       triggerModuleLoadForTab(tab);
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+
+    // Passive touch listeners directly bound to window for 100% Android Chrome/Firefox compatibility
+    if (typeof window !== 'undefined') {
+      window.addEventListener('touchstart', handleWindowTouchStart, { passive: true });
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+      window.addEventListener('touchend', handleWindowTouchEnd, { passive: true });
+      window.addEventListener('touchcancel', handleWindowTouchCancel, { passive: true });
+    }
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('touchstart', handleWindowTouchStart);
+        window.removeEventListener('touchmove', handleWindowTouchMove);
+        window.removeEventListener('touchend', handleWindowTouchEnd);
+        window.removeEventListener('touchcancel', handleWindowTouchCancel);
+      }
+    };
   });
 
   function handleSelectTab(tab: string, stage?: string) {
@@ -543,6 +560,146 @@
 
   function dismissOnEscape(event: KeyboardEvent, dismiss: () => void) {
     if (event.key === 'Escape') dismiss();
+  }
+
+  // Mobile Sidebar Swipe Gesture Implementation (Rodada 21 V7.2 - Refined Single Engine)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchDeltaX = 0;
+  let touchDeltaY = 0;
+  let swipeStartTime = 0;
+  let isTrackingSwipe: 'OPEN' | 'CLOSE' | null = null;
+
+  function handleWindowTouchStart(e: TouchEvent) {
+    if (typeof window === 'undefined' || window.innerWidth > 1024) return;
+    if (e.touches.length !== 1) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    const target = e.target;
+    const element = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null);
+    // Ignore touches starting inside topbar, text inputs, selects, textareas, explicit no-swipe areas, or open modals
+    if (
+      element?.closest(
+        '.workspace-mobile-topbar, input, select, textarea, [data-no-swipe], .modal-dialog, .modal-sheet-drawer'
+      )
+    ) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    const touch = e.touches[0];
+    const x = touch.clientX;
+    const y = touch.clientY;
+
+    if (!sidebarMobileOpen) {
+      // COMFORTABLE ACTIVATION ZONE:
+      // Start anywhere in the comfortable left/middle region (x between 10px and min(75% width, 300px)).
+      // Leaves 0-10px for extreme edge guards if desired, but allows natural thumb placement.
+      const maxStartX = Math.min(window.innerWidth * 0.75, 300);
+      if (x >= 10 && x <= maxStartX) {
+        touchStartX = x;
+        touchStartY = y;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
+        swipeStartTime = performance.now();
+        isTrackingSwipe = 'OPEN';
+      } else {
+        isTrackingSwipe = null;
+      }
+    } else {
+      // Sidebar is already open: allow swipe-left anywhere on the open sidebar or its backdrop to close
+      touchStartX = x;
+      touchStartY = y;
+      touchDeltaX = 0;
+      touchDeltaY = 0;
+      swipeStartTime = performance.now();
+      isTrackingSwipe = 'CLOSE';
+    }
+  }
+
+  function handleWindowTouchMove(e: TouchEvent) {
+    if (!isTrackingSwipe || e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    touchDeltaX = touch.clientX - touchStartX;
+    touchDeltaY = touch.clientY - touchStartY;
+
+    const absX = Math.abs(touchDeltaX);
+    const absY = Math.abs(touchDeltaY);
+
+    // VERTICAL SCROLL LOCK: Natural thumb arcs on mobile screens have initial vertical wobble.
+    // Only cancel tracking if vertical motion clearly dominates after initial movement (> 16px).
+    if (absY > absX * 1.4 && absY > 16) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    // Direction validation: if dragging in wrong direction, abort
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX < -15) {
+      isTrackingSwipe = null;
+      return;
+    }
+    if (isTrackingSwipe === 'CLOSE' && touchDeltaX > 15) {
+      isTrackingSwipe = null;
+      return;
+    }
+
+    // LIVE TRIGGER: As soon as swipe exceeds threshold during the drag, activate immediately!
+    // This provides instantaneous visual response without waiting for finger lift (touchend),
+    // and completely prevents Chrome Android from aborting via touchcancel.
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 40 && absX > absY * 1.05) {
+      sidebarMobileOpen = true;
+      isTrackingSwipe = null;
+      return;
+    }
+
+    if (isTrackingSwipe === 'CLOSE' && touchDeltaX <= -35 && absX > absY * 1.05) {
+      sidebarMobileOpen = false;
+      isTrackingSwipe = null;
+      return;
+    }
+  }
+
+  function handleWindowTouchEnd(e: TouchEvent) {
+    if (!isTrackingSwipe) return;
+
+    if (touchDeltaX === 0 && e.changedTouches && e.changedTouches.length > 0) {
+      touchDeltaX = e.changedTouches[0].clientX - touchStartX;
+      touchDeltaY = e.changedTouches[0].clientY - touchStartY;
+    }
+
+    const absX = Math.abs(touchDeltaX);
+    const absY = Math.abs(touchDeltaY);
+    const duration = Math.max(performance.now() - swipeStartTime, 1);
+    const velocityX = absX / duration;
+
+    if (isTrackingSwipe === 'OPEN') {
+      // Open criteria on release:
+      // 1. Dragged right >= 35px with horizontal dominance
+      // 2. OR flick with deltaX >= 22px and velocity > 0.25 px/ms
+      if ((touchDeltaX >= 35 && absX > absY) || (touchDeltaX >= 22 && velocityX > 0.25 && absX > absY)) {
+        sidebarMobileOpen = true;
+      }
+    } else if (isTrackingSwipe === 'CLOSE') {
+      // Close criteria on release:
+      // 1. Dragged left <= -30px with horizontal dominance
+      // 2. OR flick with deltaX <= -18px and velocity > 0.25 px/ms
+      if ((touchDeltaX <= -30 && absX > absY) || (touchDeltaX <= -18 && velocityX > 0.25 && absX > absY)) {
+        sidebarMobileOpen = false;
+      }
+    }
+
+    isTrackingSwipe = null;
+  }
+
+  function handleWindowTouchCancel() {
+    // If opening threshold was already reached or close before cancel, honor it
+    if (isTrackingSwipe === 'OPEN' && touchDeltaX >= 28) {
+      sidebarMobileOpen = true;
+    }
+    isTrackingSwipe = null;
   }
 </script>
 
@@ -978,13 +1135,14 @@
                 tasks={data.tasks || []}
                 stages={data.stages || []}
                 chapterStages={data.chapterStages || []}
-                productionChapters={data.productionChapters || []}
+                productionChapters={data.productionChapters || chapters || []}
                 productionFiles={data.productionFiles || []}
                 chapterTimeline={data.chapterTimeline || []}
                 workOverrides={workOverrides}
                 creditSnapshots={creditSnapshots}
                 team={team}
                 positions={positions}
+                userPositions={data.userPositions || []}
                 works={works}
                 currentUserId={data.userId}
                 currentScanId={data.currentScan?.id || ''}
@@ -2143,13 +2301,14 @@
           tasks={data.tasks || []}
           stages={data.stages || []}
           chapterStages={data.chapterStages || []}
-          productionChapters={data.productionChapters || []}
+          productionChapters={data.productionChapters || chapters || []}
           productionFiles={data.productionFiles || []}
           chapterTimeline={data.chapterTimeline || []}
           workOverrides={data.workOverrides || []}
           creditSnapshots={data.creditSnapshots || []}
           team={team}
           positions={positions}
+          userPositions={data.userPositions || []}
           works={works}
           currentUserId={data.userId}
           currentScanId={data.currentScan?.id || ''}
@@ -3221,6 +3380,12 @@
   }
 
   @media (max-width: 1024px) {
+    .workspace-app-shell,
+    .workspace-main-area {
+      touch-action: manipulation;
+      -webkit-overflow-scrolling: touch;
+    }
+
     .workspace-mobile-topbar {
       display: flex;
     }
@@ -3296,7 +3461,7 @@
   .workspace-view-content {
     flex: 1;
     min-width: 0;
-    padding: 24px;
+    padding: 24px 32px 32px 28px;
   }
 
   @media (max-width: 1024px) {
