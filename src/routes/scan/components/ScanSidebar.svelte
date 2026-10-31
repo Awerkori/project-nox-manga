@@ -299,8 +299,10 @@
 
   <!-- Primary Workspace Navigation -->
   <nav class="sidebar-nav-tree" aria-label="Navegação do workspace">
-    <!-- Home Shortcut -->
+    <!-- Group: PRINCIPAL -->
     <div class="nav-section">
+      <div class="section-title">PRINCIPAL</div>
+
       <button
         type="button"
         class="nav-link-btn"
@@ -310,11 +312,6 @@
         <Home size={16} class="nav-icon" />
         <span>Início</span>
       </button>
-    </div>
-
-    <!-- Group: PRODUÇÃO -->
-    <div class="nav-section">
-      <div class="section-title">PRODUÇÃO</div>
 
       <button
         type="button"
@@ -328,8 +325,13 @@
           <span class="nav-badge amber">{openTasksCount}</span>
         {/if}
       </button>
+    </div>
 
-      <!-- Pipeline Expandable Group -->
+    <!-- Group: PRODUÇÃO -->
+    <div class="nav-section">
+      <div class="section-title">PRODUÇÃO</div>
+
+      <!-- Área de Produção Expandable Group -->
       <div class="nav-expandable-group" class:is-expanded={pipelineExpanded}>
         <div class="nav-parent-row" class:parent-active={activeTab === 'pipeline'}>
           <button
@@ -339,7 +341,7 @@
             onclick={handlePipelineClick}
           >
             <Layers size={16} class="nav-icon text-purple" />
-            <span>Pipeline</span>
+            <span>Área de Produção</span>
             {#if totalAvailablePipeline > 0}
               <span class="nav-badge purple total-pipeline-badge">{totalAvailablePipeline}</span>
             {/if}
@@ -348,7 +350,7 @@
             type="button"
             class="nav-chevron-toggle-btn"
             onclick={togglePipeline}
-            aria-label={pipelineExpanded ? "Recolher etapas do Pipeline" : "Expandir etapas do Pipeline"}
+            aria-label={pipelineExpanded ? "Recolher etapas da Área de Produção" : "Expandir etapas da Área de Produção"}
             title={pipelineExpanded ? "Recolher etapas" : "Expandir etapas"}
           >
             <span class="chevron-rotator" class:is-collapsed={!pipelineExpanded}>
@@ -382,6 +384,11 @@
           </div>
         {/if}
       </div>
+    </div>
+
+    <!-- Group: SCANS -->
+    <div class="nav-section">
+      <div class="section-title">SCANS</div>
 
       <button
         type="button"
@@ -490,9 +497,9 @@
       </button>
     </div>
 
-    <!-- Group: EQUIPE -->
+    <!-- Group: EQUIPE E GESTÃO -->
     <div class="nav-section">
-      <div class="section-title">EQUIPE</div>
+      <div class="section-title">EQUIPE E GESTÃO</div>
 
       <button
         type="button"
@@ -537,13 +544,6 @@
             <span class="nav-badge alert">{pendingAppsCount}</span>
           {/if}
         </button>
-      {/if}
-    </div>
-
-    <!-- Group: GESTÃO (Owner & Admin only) -->
-    {#if ['OWNER', 'ADMIN'].includes(userRole)}
-      <div class="nav-section">
-        <div class="section-title">GESTÃO DA SCAN</div>
 
         <button
           type="button"
@@ -562,10 +562,10 @@
           onclick={() => selectTab('settings')}
         >
           <Settings size={16} class="nav-icon" />
-          <span>Configurações & Modos</span>
+          <span>Configurações</span>
         </button>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </nav>
 
   <!-- Sidebar Footer External Link -->
@@ -584,8 +584,8 @@
 
 <style>
   .workspace-sidebar {
-    width: 248px;
-    min-width: 248px;
+    width: 232px;
+    min-width: 232px;
     height: 100vh;
     background: #08060f;
     border-right: 1px solid rgba(255, 255, 255, 0.07);
@@ -828,11 +828,12 @@
   }
 
   .section-title {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
-    color: #475569;
-    letter-spacing: 0.07em;
-    padding: 4px 8px 2px;
+    color: #64748b;
+    letter-spacing: 0.08em;
+    padding: 6px 9px 3px;
+    text-transform: uppercase;
   }
 
   .nav-link-btn {
@@ -840,9 +841,9 @@
     display: flex;
     align-items: center;
     gap: 9px;
-    padding: 6px 9px;
+    padding: 6.5px 9px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 13.5px;
     color: #94a3b8;
     cursor: pointer;
     transition: all 0.12s ease-in-out;
@@ -854,9 +855,10 @@
   }
 
   .nav-link-btn.active {
-    background: rgba(139, 92, 246, 0.15);
-    color: #f1f5f9;
+    background: rgba(139, 92, 246, 0.16);
+    color: #ffffff;
     font-weight: 600;
+    box-shadow: inset 3px 0 0 #a855f7;
   }
 
   /* Expandable Pipeline Nav Item */
