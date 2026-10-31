@@ -40,6 +40,17 @@ var worker_default = {`;
     );
   }
 
+  if (!content.includes('X-Nox-Edge-Cache')) {
+    content = content.replace(
+      'if (res) return res;',
+      `if (res) {
+      res = new Response(res.body, res);
+      res.headers.set('X-Nox-Edge-Cache', 'HIT');
+      return res;
+    }`
+    );
+  }
+
   if (!content.includes('pathname.startsWith(\'/_app/immutable/\')')) {
     const fetchStartMarker = 'async fetch(req, env2, ctx) {\n    if (!origin) {';
     const immutableFastPath = `async fetch(req, env2, ctx) {

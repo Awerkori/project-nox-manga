@@ -13,6 +13,7 @@ export type ObraAuxCacheEntry = {
 };
 
 const obraAuxCache = new Map<string, ObraAuxCacheEntry>();
+const obraAuxFlights = new Map<string, Promise<ObraAuxCacheEntry>>();
 const OBRA_AUX_CACHE_TTL_MS = 60_000; // 60s TTL; explicitly invalidated on like/comment/rating mutations
 
 export function getObraAuxCache(workId: string): ObraAuxCacheEntry | null {
@@ -36,10 +37,27 @@ export function setObraAuxCache(workId: string, entry: Omit<ObraAuxCacheEntry, '
   });
 }
 
+export async function getOrFetchObraAux(
+  workId: string,
+  fetcher: () => Promise<ObraAuxCacheEntry>
+): Promise<ObraAuxCacheEntry> {
+  const cached = getObraAuxCache(workId);
+  if (cached) return cached;
+  const inFlight = obraAuxFlights.get(workId);
+  if (inFlight) return inFlight;
+  const run = fetcher().finally(() => {
+    if (obraAuxFlights.get(workId) === run) obraAuxFlights.delete(workId);
+  });
+  obraAuxFlights.set(workId, run);
+  return run;
+}
+
 export function invalidateObraAuxCache(workId?: string): void {
   if (workId) {
     obraAuxCache.delete(workId);
+    obraAuxFlights.delete(workId);
   } else {
     obraAuxCache.clear();
+    obraAuxFlights.clear();
   }
 }

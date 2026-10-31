@@ -13,7 +13,7 @@ const DEFAULT_SEASON = {
 };
 
 const PAGE_SIZE = 20;
-const RANKING_PUBLIC_CACHE_TTL_MS = 30_000;
+const RANKING_PUBLIC_CACHE_TTL_MS = 60_000;
 let cachedPublicRankingBase: {
   at: number;
   season: any;
@@ -25,7 +25,7 @@ let cachedPublicRankingBase: {
 export const load = async ({ locals, url, setHeaders }: any) => {
   if (!locals.user) {
     setHeaders({
-      'cache-control': 'public, max-age=15, s-maxage=30, stale-while-revalidate=60'
+      'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
     });
   } else {
     setHeaders({

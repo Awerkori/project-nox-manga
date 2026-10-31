@@ -103,9 +103,9 @@ class YugabyteReadSession {
   private activeOrCreating = 0;
   private closed = false;
 
-  constructor(connectionString: string, maxConcurrency = 4) {
+  constructor(connectionString: string, maxConcurrency = 1) {
     this.connectionString = connectionString;
-    this.maxConcurrency = Math.max(1, maxConcurrency);
+    this.maxConcurrency = Math.max(1, Math.min(2, maxConcurrency));
   }
 
   private async acquire(): Promise<{ client: Client; connectDur: number }> {
@@ -235,15 +235,38 @@ class YugabyteReadSession {
   }
 }
 
+const MAX_DIRECT_CONCURRENT_QUERIES = 2;
+let activeDirectQueries = 0;
+const directQueryWaitQueue: Array<() => void> = [];
+
+async function acquireDirectQuerySlot(): Promise<void> {
+  if (activeDirectQueries < MAX_DIRECT_CONCURRENT_QUERIES) {
+    activeDirectQueries += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    directQueryWaitQueue.push(resolve);
+  });
+}
+
+function releaseDirectQuerySlot(): void {
+  const next = directQueryWaitQueue.shift();
+  if (next) {
+    next();
+    return;
+  }
+  activeDirectQueries = Math.max(0, activeDirectQueries - 1);
+}
+
 /**
  * Multiplexes many concurrent YugabyteDB read queries inside a single SSR/API request
- * over at most `maxConcurrency` reused Hyperdrive connections (default 4) instead of
+ * over at most `maxConcurrency` reused Hyperdrive connections (default 1, max 2) instead of
  * opening dozens of simultaneous `pg.Client` connections against `max_connections = 13`.
  */
 export async function withYugabyteReadSession<T>(
   platformEnv: any,
   operation: (scopedEnv: any) => Promise<T>,
-  maxConcurrency = 4
+  maxConcurrency = 1
 ): Promise<T> {
   const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
   if (!connectionString || platformEnv?.[YUGABYTE_READ_SESSION_KEY]) {
@@ -284,9 +307,10 @@ export async function executeYugabyteSql<T = any>(
     }
   }
 
-  // Strategy 1: Hyperdrive native pooled connection if available
+  // Strategy 1: Hyperdrive native pooled connection if available (bounded to max 2 concurrent connections per isolate)
   const hyperdrive = !activeSession ? platformEnv?.HYPERDRIVE : undefined;
   if (hyperdrive?.connectionString) {
+    await acquireDirectQuerySlot();
     const connectStart = performance.now();
     try {
       const client = new Client({
@@ -311,6 +335,8 @@ export async function executeYugabyteSql<T = any>(
       }
     } catch (hdErr: any) {
       console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+    } finally {
+      releaseDirectQuerySlot();
     }
   }
 
@@ -1339,7 +1365,7 @@ export async function fetchCatalogFromYugabyte(
       };
     },
     { works: [], total: 0 },
-    isUnfiltered ? 30_000 : 15_000
+    isUnfiltered ? 60_000 : 45_000
   );
 }
 

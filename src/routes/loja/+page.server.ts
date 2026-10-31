@@ -131,7 +131,7 @@ export const load = async ({ locals, setHeaders }) => {
     }
   } else {
     setHeaders({
-      'cache-control': 'public, max-age=5, stale-while-revalidate=30'
+      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
     });
   }
 
