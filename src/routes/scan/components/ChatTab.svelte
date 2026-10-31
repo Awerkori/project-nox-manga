@@ -426,10 +426,14 @@
     return unread ? unread.id : null;
   });
 
+  let lastMarkedMessageByChannel: Record<string, string> = {};
+
   async function markCurrentChannelRead() {
     if (!activeChannelId || displayedMessages.length === 0) return;
     const latest = displayedMessages[displayedMessages.length - 1];
-    if (!latest) return;
+    if (!latest?.id) return;
+    if (lastMarkedMessageByChannel[activeChannelId] === latest.id) return;
+    lastMarkedMessageByChannel[activeChannelId] = latest.id;
     try {
       const fd = new FormData();
       fd.set('scanId', currentScanId);
@@ -442,7 +446,7 @@
   }
 
   $effect(() => {
-    if (activeChannelId && displayedMessages.length > 0) {
+    if (activeChannelId && displayedMessages.length > 0 && (!activeChannelReadState?.last_read_at || firstUnreadMsgId)) {
       markCurrentChannelRead();
     }
   });

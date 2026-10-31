@@ -2,10 +2,10 @@ import { withTimeout } from '$lib/server/resilience';
 import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
-const SHOP_CACHE_TTL_MS = 5_000;
+const SHOP_CACHE_TTL_MS = 120_000;
 
 export const load = async ({ locals, setHeaders }) => {
-  let items: any[] = [];
+  let items: any[];
   if (cachedShopItems && Date.now() - cachedShopItems.timestamp < SHOP_CACHE_TTL_MS) {
     items = cachedShopItems.data;
   } else {
@@ -131,7 +131,7 @@ export const load = async ({ locals, setHeaders }) => {
     }
   } else {
     setHeaders({
-      'cache-control': 'public, max-age=5, stale-while-revalidate=30'
+      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
     });
   }
 

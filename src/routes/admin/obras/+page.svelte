@@ -9,7 +9,6 @@
     ExternalLink,
     ArrowRight,
     BookOpen,
-    Clock,
     AlertCircle,
     CheckCircle2,
     ChevronLeft,
@@ -326,12 +325,13 @@
                 <a href="/admin/obras/{work.id}" class="cover-mini-frame" tabindex="-1">
                   {#if work.cover_id}
                     <img
-                      src="/media/{work.cover_id}"
+                      src="/media/{work.cover_id}?size=thumb&v=3"
                       alt=""
                       width="44"
                       height="62"
                       class="table-cover-img"
                       loading="lazy"
+                      decoding="async"
                     />
                   {:else}
                     <div class="table-cover-placeholder">NOX</div>
@@ -416,12 +416,13 @@
           <a href="/admin/obras/{work.id}" class="mobile-cover-wrap" tabindex="-1">
             {#if work.cover_id}
               <img
-                src="/media/{work.cover_id}"
+                src="/media/{work.cover_id}?size=thumb&v=3"
                 alt=""
                 width="56"
                 height="78"
                 class="mobile-cover-img"
                 loading="lazy"
+                decoding="async"
               />
             {:else}
               <div class="mobile-cover-placeholder">NOX</div>
@@ -506,7 +507,7 @@
             <ChevronLeft size={16} />
           </button>
 
-          {#each visiblePageNumbers as p}
+          {#each visiblePageNumbers as p, idx (`${p}-${idx}`)}
             {#if p === '...'}
               <span class="page-ellipsis">…</span>
             {:else}

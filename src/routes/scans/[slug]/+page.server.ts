@@ -1,169 +1,199 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { createScanNotification } from "$lib/server/scan-notifications";
-import { executeYugabyteSql } from "$lib/server/yugabyte";
+import { executeYugabyteSql, withYugabyteReadSession } from "$lib/server/yugabyte";
+import { getOrFetchScanProfile, invalidateScansDirectoryCache } from "$lib/server/scans-directory-cache";
 import type { PageServerLoad, Actions } from "./$types";
 
-export const load: PageServerLoad = async ({ locals, params, platform }) => {
-  const scanResult = await executeYugabyteSql<any>(
-    `SELECT id, name, slug, description, display_preposition,
-            logo_id, banner_id, website, discord, fluxer,
-            is_official, status, created_at
-     FROM public.scans
-     WHERE slug = $1
-     LIMIT 1`,
-    [params.slug],
-    platform?.env
-  );
-  const scan = scanResult.rows[0] || null;
-
-  if (!scan) {
-    // Check slug history for 301 redirection
-    const historyResult = await executeYugabyteSql<{ slug: string }>(`
-      SELECT current_scan.slug
-      FROM public.scan_slug_history history
-      JOIN public.scans current_scan ON current_scan.id = history.scan_id
-      WHERE history.old_slug = $1
-      LIMIT 1
-    `, [params.slug], platform?.env);
-    const redirectSlug = historyResult.rows[0]?.slug;
-
-    if (redirectSlug) {
-      throw redirect(301, `/scans/${redirectSlug}`);
-    }
-
-    error(404, "Scan não encontrada");
+export const load: PageServerLoad = async ({ locals, params, platform, setHeaders }) => {
+  if (!locals.user && setHeaders) {
+    setHeaders({
+      "cache-control": "public, max-age=60, s-maxage=120, stale-while-revalidate=300"
+    });
   }
 
-  const [worksRes, chaptersRes, membersRes, positionsRes, openingsRes, activitiesRes, userAppsRes, commentsRes, questionsRes] = await Promise.all([
-    executeYugabyteSql<any>(`
-      SELECT work_scan.is_primary, work_scan.status,
-             jsonb_build_object(
-               'id', work.id, 'slug', work.slug, 'title', work.title, 'aliases', work.aliases,
-               'synopsis', work.synopsis, 'description', work.description, 'author', work.author,
-               'artist', work.artist, 'kind', work.kind, 'status', work.status, 'year', work.year,
-               'age_rating', work.age_rating, 'published', work.published, 'featured', work.featured,
-               'cover_id', work.cover_id, 'updated_at', work.updated_at, 'created_at', work.created_at,
-               'content_rating', work.content_rating, 'views_total', work.views_total
-             ) AS work
-      FROM public.work_scans work_scan
-      JOIN public.works work ON work.id = work_scan.work_id AND work.published = true
-      WHERE work_scan.scan_id = $1
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT jsonb_build_object(
-        'id', chapter.id, 'number', chapter.number, 'title', chapter.title,
-        'published_at', chapter.published_at, 'work_id', chapter.work_id, 'views_total', chapter.views_total,
-        'works', jsonb_build_object('id', work.id, 'slug', work.slug, 'title', work.title,
-          'cover_id', work.cover_id, 'content_rating', work.content_rating)
-      ) AS chapter
-      FROM public.chapter_scans chapter_scan
-      JOIN public.chapters chapter ON chapter.id = chapter_scan.chapter_id AND chapter.published_at IS NOT NULL
-      JOIN public.works work ON work.id = chapter.work_id
-      WHERE chapter_scan.scan_id = $1
-      ORDER BY chapter.published_at DESC
-      LIMIT 30
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT scan_member.role, scan_member.created_at,
-             jsonb_build_object('id', member.id, 'username', member.username,
-               'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'xp', member.xp,
-               'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS member
-      FROM public.scan_members scan_member
-      JOIN public.members member ON member.id = scan_member.user_id
-      WHERE scan_member.scan_id = $1
-      ORDER BY scan_member.role ASC, scan_member.created_at ASC
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT member_position.scan_id, member_position.user_id, member_position.is_primary,
-             jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
-      FROM public.scan_member_positions member_position
-      JOIN public.scan_positions position ON position.id = member_position.position_id
-      WHERE member_position.scan_id = $1
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT opening.*, jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
-      FROM public.scan_recruitment_openings opening
-      JOIN public.scan_positions position ON position.id = opening.position_id
-      WHERE opening.scan_id = $1 AND opening.status = 'OPEN'
-      ORDER BY opening.created_at DESC
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
-        'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop) AS activity_user
-      FROM public.scan_activity activity
-      LEFT JOIN public.members member ON member.id = activity.user_id
-      WHERE activity.scan_id = $1
-      ORDER BY activity.created_at DESC
-      LIMIT 20
-    `, [scan.id], platform?.env),
-    locals.user
-      ? executeYugabyteSql<any>(`
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+    platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
+
+    const publicBundle = await getOrFetchScanProfile(params.slug, async () => {
+      const scanResult = await executeYugabyteSql<any>(
+        `SELECT id, name, slug, description, display_preposition,
+                logo_id, banner_id, website, discord, fluxer,
+                is_official, status, created_at
+         FROM public.scans
+         WHERE slug = $1
+         LIMIT 1`,
+        [params.slug],
+        platform?.env
+      );
+      const scan = scanResult.rows[0] || null;
+
+      if (!scan) {
+        const historyResult = await executeYugabyteSql<{ slug: string }>(`
+          SELECT current_scan.slug
+          FROM public.scan_slug_history history
+          JOIN public.scans current_scan ON current_scan.id = history.scan_id
+          WHERE history.old_slug = $1
+          LIMIT 1
+        `, [params.slug], platform?.env);
+        return {
+          scan: null,
+          redirectSlug: historyResult.rows[0]?.slug || null
+        };
+      }
+
+      const [worksRes, chaptersRes, membersRes, positionsRes, openingsRes, activitiesRes, commentsRes, questionsRes, catalogChaptersRes] = await Promise.all([
+        executeYugabyteSql<any>(`
+          SELECT work_scan.is_primary, work_scan.status,
+                 jsonb_build_object(
+                   'id', work.id, 'slug', work.slug, 'title', work.title, 'aliases', work.aliases,
+                   'synopsis', work.synopsis, 'description', work.description, 'author', work.author,
+                   'artist', work.artist, 'kind', work.kind, 'status', work.status, 'year', work.year,
+                   'age_rating', work.age_rating, 'published', work.published, 'featured', work.featured,
+                   'cover_id', work.cover_id, 'updated_at', work.updated_at, 'created_at', work.created_at,
+                   'content_rating', work.content_rating, 'views_total', work.views_total
+                 ) AS work
+          FROM public.work_scans work_scan
+          JOIN public.works work ON work.id = work_scan.work_id AND work.published = true
+          WHERE work_scan.scan_id = $1
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT jsonb_build_object(
+            'id', chapter.id, 'number', chapter.number, 'title', chapter.title,
+            'published_at', chapter.published_at, 'work_id', chapter.work_id, 'views_total', chapter.views_total,
+            'works', jsonb_build_object('id', work.id, 'slug', work.slug, 'title', work.title,
+              'cover_id', work.cover_id, 'content_rating', work.content_rating)
+          ) AS chapter
+          FROM public.chapter_scans chapter_scan
+          JOIN public.chapters chapter ON chapter.id = chapter_scan.chapter_id AND chapter.published_at IS NOT NULL
+          JOIN public.works work ON work.id = chapter.work_id
+          WHERE chapter_scan.scan_id = $1
+          ORDER BY chapter.published_at DESC
+          LIMIT 30
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT scan_member.role, scan_member.created_at,
+                 jsonb_build_object('id', member.id, 'username', member.username,
+                   'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'xp', member.xp,
+                   'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS member
+          FROM public.scan_members scan_member
+          JOIN public.members member ON member.id = scan_member.user_id
+          WHERE scan_member.scan_id = $1
+          ORDER BY scan_member.role ASC, scan_member.created_at ASC
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT member_position.scan_id, member_position.user_id, member_position.is_primary,
+                 jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
+          FROM public.scan_member_positions member_position
+          JOIN public.scan_positions position ON position.id = member_position.position_id
+          WHERE member_position.scan_id = $1
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT opening.*, jsonb_build_object('id', position.id, 'name', position.name, 'display_order', position.display_order) AS position
+          FROM public.scan_recruitment_openings opening
+          JOIN public.scan_positions position ON position.id = opening.position_id
+          WHERE opening.scan_id = $1 AND opening.status = 'OPEN'
+          ORDER BY opening.created_at DESC
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
+            'display_name', member.display_name, 'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop) AS activity_user
+          FROM public.scan_activity activity
+          LEFT JOIN public.members member ON member.id = activity.user_id
+          WHERE activity.scan_id = $1
+          ORDER BY activity.created_at DESC
+          LIMIT 20
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT comment.id, comment.scan_id, comment.user_id, comment.parent_id, comment.body,
+            comment.removed, comment.pinned, comment.created_at, comment.updated_at,
+            jsonb_build_object('id', member.id, 'username', member.username, 'display_name', member.display_name,
+              'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members,
+            COALESCE(jsonb_agg(jsonb_build_object('user_id', comment_like.user_id))
+              FILTER (WHERE comment_like.user_id IS NOT NULL), '[]'::jsonb) AS scan_comment_likes
+          FROM public.scan_comments comment
+          LEFT JOIN public.members member ON member.id = comment.user_id
+          LEFT JOIN public.scan_comment_likes comment_like ON comment_like.comment_id = comment.id
+          WHERE comment.scan_id = $1 AND comment.removed = false
+          GROUP BY comment.id, member.id
+          ORDER BY comment.pinned DESC, comment.created_at DESC
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<any>(`
+          SELECT * FROM public.scan_recruitment_questions
+          WHERE scan_id = $1
+          ORDER BY display_order ASC
+        `, [scan.id], platform?.env),
+        executeYugabyteSql<{
+          id: string;
+          number: number | string;
+          title: string | null;
+          published_at: string;
+          work_id: string;
+          views_total: number | string | null;
+          work_slug: string;
+          work_title: string;
+          work_cover_id: string | null;
+          work_content_rating: string | null;
+        }>(`
+          SELECT chapter.id, chapter.number, chapter.title, chapter.published_at,
+                 chapter.work_id, chapter.views_total,
+                 work.slug AS work_slug, work.title AS work_title,
+                 work.cover_id AS work_cover_id, work.content_rating AS work_content_rating
+          FROM public.work_scans work_scan
+          JOIN public.works work
+            ON work.id = work_scan.work_id AND work.published = true
+          JOIN public.chapters chapter
+            ON chapter.work_id = work_scan.work_id AND chapter.published_at IS NOT NULL
+          WHERE work_scan.scan_id = $1
+          ORDER BY chapter.published_at DESC
+          LIMIT 30
+        `, [scan.id], platform?.env).catch((err: any) => {
+          console.warn('public_scan_chapters_ysql_fallback', {
+            scanId: scan.id,
+            message: String(err?.message || 'unknown').slice(0, 240)
+          });
+          return { rows: [] as any[] };
+        })
+      ]);
+
+      return {
+        scan,
+        redirectSlug: null,
+        worksRows: worksRes.rows || [],
+        chaptersRows: chaptersRes.rows || [],
+        catalogChaptersRows: catalogChaptersRes.rows || [],
+        membersRows: membersRes.rows || [],
+        positionsRows: positionsRes.rows || [],
+        openingsRows: openingsRes.rows || [],
+        activitiesRows: activitiesRes.rows || [],
+        commentsRows: commentsRes.rows || [],
+        questionsRows: questionsRes.rows || []
+      };
+    });
+
+    if (!publicBundle.scan) {
+      if (publicBundle.redirectSlug) {
+        throw redirect(301, `/scans/${publicBundle.redirectSlug}`);
+      }
+      error(404, "Scan não encontrada");
+    }
+
+    const scan = publicBundle.scan;
+    const userAppsRes = locals.user
+      ? await executeYugabyteSql<any>(`
           SELECT id, opening_id, status, created_at
           FROM public.scan_applications
           WHERE scan_id = $1 AND user_id = $2
         `, [scan.id, locals.user.id], platform?.env)
-      : Promise.resolve({ rows: [] as any[] }),
-    executeYugabyteSql<any>(`
-      SELECT comment.id, comment.scan_id, comment.user_id, comment.parent_id, comment.body,
-        comment.removed, comment.pinned, comment.created_at, comment.updated_at,
-        jsonb_build_object('id', member.id, 'username', member.username, 'display_name', member.display_name,
-          'avatar_id', member.avatar_id, 'avatar_crop', member.avatar_crop, 'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members,
-        COALESCE(jsonb_agg(jsonb_build_object('user_id', comment_like.user_id))
-          FILTER (WHERE comment_like.user_id IS NOT NULL), '[]'::jsonb) AS scan_comment_likes
-      FROM public.scan_comments comment
-      LEFT JOIN public.members member ON member.id = comment.user_id
-      LEFT JOIN public.scan_comment_likes comment_like ON comment_like.comment_id = comment.id
-      WHERE comment.scan_id = $1 AND comment.removed = false
-      GROUP BY comment.id, member.id
-      ORDER BY comment.pinned DESC, comment.created_at DESC
-    `, [scan.id], platform?.env),
-    executeYugabyteSql<any>(`
-      SELECT * FROM public.scan_recruitment_questions
-      WHERE scan_id = $1
-      ORDER BY display_order ASC
-    `, [scan.id], platform?.env)
-  ]);
+      : { rows: [] as any[] };
 
-  const works = (worksRes.rows || []).map((row: any) => ({
-    ...row.work,
-    scan_status: row.status || "ACTIVE",
-    is_primary: row.is_primary
-  })).filter(Boolean);
+    const works = (publicBundle.worksRows || []).map((row: any) => ({
+      ...row.work,
+      scan_status: row.status || "ACTIVE",
+      is_primary: row.is_primary
+    })).filter(Boolean);
 
-  const attributedChapters = (chaptersRes.rows || []).map((row: any) => row.chapter).filter(Boolean);
-
-  // `chapter_scans` is optional attribution metadata. Public releases owned by
-  // a scan's work must still appear when that compatibility table has not yet
-  // received a row. Read the public catalog directly from Yugabyte and merge
-  // it with attributed releases so old records remain visible too.
-  let catalogChapters: any[] = [];
-  try {
-    const result = await executeYugabyteSql<{
-      id: string;
-      number: number | string;
-      title: string | null;
-      published_at: string;
-      work_id: string;
-      views_total: number | string | null;
-      work_slug: string;
-      work_title: string;
-      work_cover_id: string | null;
-      work_content_rating: string | null;
-    }>(`
-      SELECT chapter.id, chapter.number, chapter.title, chapter.published_at,
-             chapter.work_id, chapter.views_total,
-             work.slug AS work_slug, work.title AS work_title,
-             work.cover_id AS work_cover_id, work.content_rating AS work_content_rating
-      FROM public.work_scans work_scan
-      JOIN public.works work
-        ON work.id = work_scan.work_id AND work.published = true
-      JOIN public.chapters chapter
-        ON chapter.work_id = work_scan.work_id AND chapter.published_at IS NOT NULL
-      WHERE work_scan.scan_id = $1
-      ORDER BY chapter.published_at DESC
-      LIMIT 30
-    `, [scan.id], platform?.env);
-    catalogChapters = result.rows.map((chapter) => ({
+    const attributedChapters = (publicBundle.chaptersRows || []).map((row: any) => row.chapter).filter(Boolean);
+    const catalogChapters = (publicBundle.catalogChaptersRows || []).map((chapter: any) => ({
       id: chapter.id,
       number: chapter.number,
       title: chapter.title,
@@ -178,223 +208,210 @@ export const load: PageServerLoad = async ({ locals, params, platform }) => {
         content_rating: chapter.work_content_rating
       }
     }));
-  } catch (error: any) {
-    console.warn('public_scan_chapters_ysql_fallback', {
-      scanId: scan.id,
-      message: String(error?.message || 'unknown').slice(0, 240)
-    });
-  }
 
-  const chaptersById = new Map<string, any>();
-  for (const chapter of [...catalogChapters, ...attributedChapters]) {
-    if (chapter?.id && !chaptersById.has(chapter.id)) chaptersById.set(chapter.id, chapter);
-  }
-  const chapters = Array.from(chaptersById.values())
-    .sort((a: any, b: any) => Date.parse(b.published_at || '') - Date.parse(a.published_at || ''))
-    .slice(0, 30);
+    const chaptersById = new Map<string, any>();
+    for (const chapter of [...catalogChapters, ...attributedChapters]) {
+      if (chapter?.id && !chaptersById.has(chapter.id)) chaptersById.set(chapter.id, chapter);
+    }
+    const chapters = Array.from(chaptersById.values())
+      .sort((a: any, b: any) => Date.parse(b.published_at || '') - Date.parse(a.published_at || ''))
+      .slice(0, 30);
 
-  // Map member positions
-  const positionsByUser = new Map<string, any[]>();
-  for (const p of (positionsRes.rows || []) as any[]) {
-    if (!positionsByUser.has(p.user_id)) positionsByUser.set(p.user_id, []);
-    if (p.position) {
-      positionsByUser.get(p.user_id)!.push({
-        id: p.position.id,
-        name: p.position.name,
-        display_order: p.position.display_order,
-        is_primary: p.is_primary
+    // Map member positions
+    const positionsByUser = new Map<string, any[]>();
+    for (const p of (publicBundle.positionsRows || []) as any[]) {
+      if (!positionsByUser.has(p.user_id)) positionsByUser.set(p.user_id, []);
+      if (p.position) {
+        positionsByUser.get(p.user_id)!.push({
+          id: p.position.id,
+          name: p.position.name,
+          display_order: p.position.display_order,
+          is_primary: p.is_primary
+        });
+      }
+    }
+
+    const rawComments = (publicBundle.commentsRows || []) as any[];
+    const viewerId = locals.user?.id;
+    const enrichedMembersMap = new Map<string, any>();
+
+    // Populate enrichedMembersMap directly from the joined YSQL member rows (zero extra DB round-trip)
+    for (const r of publicBundle.membersRows || []) {
+      if (r?.member?.id) enrichedMembersMap.set(r.member.id, r.member);
+    }
+    for (const a of publicBundle.activitiesRows || []) {
+      if (a?.activity_user?.id && !enrichedMembersMap.has(a.activity_user.id)) {
+        enrichedMembersMap.set(a.activity_user.id, a.activity_user);
+      }
+    }
+    for (const c of rawComments) {
+      if (c?.members?.id && !enrichedMembersMap.has(c.members.id)) {
+        enrichedMembersMap.set(c.members.id, c.members);
+      }
+    }
+
+    // Always blend active session profile for the current authenticated viewer
+    if (viewerId && locals.sessionCache?.profile) {
+      const cachedProfile = locals.sessionCache.profile;
+      const existing = enrichedMembersMap.get(viewerId) || {};
+      enrichedMembersMap.set(viewerId, {
+        ...existing,
+        id: viewerId,
+        username: cachedProfile.username || existing.username,
+        display_name: cachedProfile.display_name || existing.display_name,
+        avatar_id: cachedProfile.avatar_id ?? existing.avatar_id,
+        avatar_crop: cachedProfile.avatar_crop ?? existing.avatar_crop,
+        avatar_frame_id: cachedProfile.avatar_frame_id ?? existing.avatar_frame_id,
+        name_color: cachedProfile.name_color ?? existing.name_color
       });
     }
-  }
 
-  // Collect all distinct user IDs from comments, team members, activities, and the viewer
-  const rawComments = (commentsRes.rows || []) as any[];
-  const commentUserIds = rawComments.map((c: any) => c.user_id).filter(Boolean);
-  const teamUserIds = (membersRes.rows || []).map((r: any) => r.member?.id).filter(Boolean);
-  const activityUserIds = (activitiesRes.rows || []).map((a: any) => a.activity_user?.id || a.user_id).filter(Boolean);
-  const viewerId = locals.user?.id;
-  const allUserIds = Array.from(new Set([...commentUserIds, ...teamUserIds, ...activityUserIds, ...(viewerId ? [viewerId] : [])]));
+    const members = (publicBundle.membersRows || []).map((row: any) => {
+      const userPositions = positionsByUser.get(row.member?.id) || [];
+      const primary = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
+      const dbm = enrichedMembersMap.get(row.member?.id);
+      const resolvedAvatarId = dbm?.avatar_id ?? row.member?.avatar_id ?? null;
+      const resolvedAvatarCrop = dbm?.avatar_crop ?? row.member?.avatar_crop ?? null;
+      const resolvedFrameId = dbm?.avatar_frame_id ?? row.member?.avatar_frame_id ?? null;
+      const resolvedDisplayName = dbm?.display_name || row.member?.display_name || row.member?.username || 'Membro';
+      const resolvedUsername = dbm?.username || row.member?.username || 'membro';
+      const resolvedNameColor = dbm?.name_color ?? row.member?.name_color ?? null;
 
-  // Batch-enrich member identities with authoritative YSQL members table
-  const enrichedMembersMap = new Map<string, any>();
-  if (allUserIds.length > 0) {
-    try {
-      const memberRows = await executeYugabyteSql<any>(
-        `SELECT id, username, display_name, avatar_id, avatar_crop, avatar_frame_id, name_color
-         FROM public.members
-         WHERE id = ANY($1::uuid[])`,
-        [allUserIds],
-        platform?.env
-      );
-      for (const m of memberRows.rows || []) {
-        if (m?.id) enrichedMembersMap.set(m.id, m);
-      }
-    } catch (err: any) {
-      console.warn('scan_enrich_members_ysql_failed', { message: String(err?.message || err).slice(0, 200) });
-    }
-  }
-
-  // Always blend active session profile for the current authenticated viewer
-  if (viewerId && locals.sessionCache?.profile) {
-    const cachedProfile = locals.sessionCache.profile;
-    const existing = enrichedMembersMap.get(viewerId) || {};
-    enrichedMembersMap.set(viewerId, {
-      ...existing,
-      id: viewerId,
-      username: cachedProfile.username || existing.username,
-      display_name: cachedProfile.display_name || existing.display_name,
-      avatar_id: cachedProfile.avatar_id ?? existing.avatar_id,
-      avatar_crop: cachedProfile.avatar_crop ?? existing.avatar_crop,
-      avatar_frame_id: cachedProfile.avatar_frame_id ?? existing.avatar_frame_id,
-      name_color: cachedProfile.name_color ?? existing.name_color
+      return {
+        role: row.role,
+        joined_at: row.created_at,
+        ...row.member,
+        id: row.member?.id,
+        username: resolvedUsername,
+        display_name: resolvedDisplayName,
+        displayName: resolvedDisplayName,
+        avatar_id: resolvedAvatarId,
+        avatarId: resolvedAvatarId,
+        avatar_crop: resolvedAvatarCrop,
+        avatarCrop: resolvedAvatarCrop,
+        avatar_frame_id: resolvedFrameId,
+        frame_id: resolvedFrameId,
+        frameId: resolvedFrameId,
+        name_color: resolvedNameColor,
+        positions: userPositions,
+        primaryPosition: primary
+      };
     });
-  }
 
-  const members = (membersRes.rows || []).map((row: any) => {
-    const userPositions = positionsByUser.get(row.member?.id) || [];
-    const primary = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
-    const dbm = enrichedMembersMap.get(row.member?.id);
-    const resolvedAvatarId = dbm?.avatar_id ?? row.member?.avatar_id ?? null;
-    const resolvedAvatarCrop = dbm?.avatar_crop ?? row.member?.avatar_crop ?? null;
-    const resolvedFrameId = dbm?.avatar_frame_id ?? row.member?.avatar_frame_id ?? null;
-    const resolvedDisplayName = dbm?.display_name || row.member?.display_name || row.member?.username || 'Membro';
-    const resolvedUsername = dbm?.username || row.member?.username || 'membro';
-    const resolvedNameColor = dbm?.name_color ?? row.member?.name_color ?? null;
+    const openings = (publicBundle.openingsRows || []).map((o: any) => ({
+      ...o,
+      positionName: o.position?.name || "Geral"
+    }));
+
+    const activities = (publicBundle.activitiesRows || []).map((a: any) => {
+      const actorId = a.user_id || a.activity_user?.id;
+      const dbm = actorId ? enrichedMembersMap.get(actorId) : null;
+      return {
+        ...a,
+        userName: dbm?.display_name || dbm?.username || a.activity_user?.display_name || a.activity_user?.username || null,
+        userAvatarId: dbm?.avatar_id ?? a.activity_user?.avatar_id ?? null,
+        userAvatarCrop: dbm?.avatar_crop ?? a.activity_user?.avatar_crop ?? null
+      };
+    });
+
+    const userApplications = userAppsRes.rows || [];
+    const userAppOpenings = new Set(userApplications.map((a: any) => a.opening_id));
+
+    // Calculate total views for this scan works
+    const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
+
+    const memberUserIds = new Set(members.map((m: any) => m.id));
+    const isViewerScanMember = Boolean(viewerId && memberUserIds.has(viewerId));
+    const isViewerScanAdmin = members.some((m: any) => m.id === viewerId && ['OWNER', 'ADMIN'].includes(m.role));
+    const isViewerGlobalAdmin = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
+    const isPlatformOwner =
+      ['ADMIN', 'STAFF_SITE'].includes(locals.role || '') ||
+      (viewerId && viewerId === '732fbe87-5040-41fb-9983-0aedb2af44c8');
+    const canModerateComments = isViewerScanAdmin || isViewerGlobalAdmin;
+    const canAccessScanPanel = Boolean(locals.user && (isPlatformOwner || isViewerScanMember));
+    const scanPanelUrl = `/scans/${scan.slug}/painel`;
+
+    const comments = rawComments.map((c: any) => {
+      const likes = c.scan_comment_likes || [];
+      const dbm = enrichedMembersMap.get(c.user_id);
+      const resolvedAvatarId = dbm?.avatar_id ?? c.members?.avatar_id ?? null;
+      const resolvedAvatarCrop = dbm?.avatar_crop ?? c.members?.avatar_crop ?? null;
+      const resolvedFrameId = dbm?.avatar_frame_id ?? c.members?.avatar_frame_id ?? null;
+      const resolvedDisplayName = dbm?.display_name || c.members?.display_name || c.members?.username || 'Usuário';
+      const resolvedUsername = dbm?.username || c.members?.username || 'usuario';
+      const resolvedNameColor = dbm?.name_color ?? c.members?.name_color ?? null;
+
+      const author = {
+        id: c.user_id,
+        username: resolvedUsername,
+        display_name: resolvedDisplayName,
+        displayName: resolvedDisplayName,
+        avatar_id: resolvedAvatarId,
+        avatarId: resolvedAvatarId,
+        avatar_crop: resolvedAvatarCrop,
+        avatarCrop: resolvedAvatarCrop,
+        avatar_frame_id: resolvedFrameId,
+        frameId: resolvedFrameId,
+        name_color: resolvedNameColor
+      };
+
+      return {
+        id: c.id,
+        scan_id: c.scan_id,
+        user_id: c.user_id,
+        parent_id: c.parent_id,
+        body: c.body,
+        pinned: !!c.pinned,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+        author,
+        likesCount: likes.length,
+        isLiked: viewerId ? likes.some((l: any) => l.user_id === viewerId) : false,
+        isStaff: memberUserIds.has(c.user_id),
+        canDelete: canModerateComments || c.user_id === viewerId,
+        canModerate: canModerateComments
+      };
+    });
+
+    // Build complete viewer profile matching UserAvatar interface
+    const viewerProfile = viewerId ? (enrichedMembersMap.get(viewerId) || locals.sessionCache?.profile || null) : null;
+    const viewer = locals.user
+      ? {
+          id: locals.user.id,
+          username: viewerProfile?.username || locals.user.email?.split('@')[0] || "leitor",
+          displayName: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
+          display_name: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
+          avatarId: viewerProfile?.avatar_id || null,
+          avatar_id: viewerProfile?.avatar_id || null,
+          avatarCrop: viewerProfile?.avatar_crop || null,
+          avatar_crop: viewerProfile?.avatar_crop || null,
+          avatar_frame_id: viewerProfile?.avatar_frame_id || null,
+          frameId: viewerProfile?.avatar_frame_id || null,
+          name_color: viewerProfile?.name_color || null,
+          role: locals.role || null
+        }
+      : null;
 
     return {
-      role: row.role,
-      joined_at: row.created_at,
-      ...row.member,
-      id: row.member?.id,
-      username: resolvedUsername,
-      display_name: resolvedDisplayName,
-      displayName: resolvedDisplayName,
-      avatar_id: resolvedAvatarId,
-      avatarId: resolvedAvatarId,
-      avatar_crop: resolvedAvatarCrop,
-      avatarCrop: resolvedAvatarCrop,
-      avatar_frame_id: resolvedFrameId,
-      frame_id: resolvedFrameId,
-      frameId: resolvedFrameId,
-      name_color: resolvedNameColor,
-      positions: userPositions,
-      primaryPosition: primary
+      scan,
+      works,
+      chapters,
+      members,
+      openings,
+      activities,
+      comments,
+      canModerateComments,
+      canAccessScanPanel,
+      scanPanelUrl,
+      isViewerScanAdmin,
+      isViewerScanMember,
+      userApplications,
+      userAppOpenings: Array.from(userAppOpenings),
+      recruitmentQuestions: publicBundle.questionsRows || [],
+      totalViews,
+      viewer
     };
-  });
-
-  const openings = (openingsRes.rows || []).map((o: any) => ({
-    ...o,
-    positionName: o.position?.name || "Geral"
-  }));
-
-  const activities = (activitiesRes.rows || []).map((a: any) => {
-    const actorId = a.user_id || a.activity_user?.id;
-    const dbm = actorId ? enrichedMembersMap.get(actorId) : null;
-    return {
-      ...a,
-      userName: dbm?.display_name || dbm?.username || a.activity_user?.display_name || a.activity_user?.username || null,
-      userAvatarId: dbm?.avatar_id ?? a.activity_user?.avatar_id ?? null,
-      userAvatarCrop: dbm?.avatar_crop ?? a.activity_user?.avatar_crop ?? null
-    };
-  });
-
-  const userApplications = userAppsRes.rows || [];
-  const userAppOpenings = new Set(userApplications.map((a: any) => a.opening_id));
-
-  // Calculate total views for this scan works
-  const totalViews = works.reduce((sum: number, w: any) => sum + Number(w.views_total || 0), 0);
-
-  const memberUserIds = new Set(members.map((m: any) => m.id));
-  const isViewerScanMember = Boolean(viewerId && memberUserIds.has(viewerId));
-  const isViewerScanAdmin = members.some((m: any) => m.id === viewerId && ['OWNER', 'ADMIN'].includes(m.role));
-  const isViewerGlobalAdmin = ['ADMIN', 'EDITOR', 'STAFF_SITE'].includes(locals.role || '');
-  const isPlatformOwner =
-    ['ADMIN', 'STAFF_SITE'].includes(locals.role || '') ||
-    (viewerId && viewerId === '732fbe87-5040-41fb-9983-0aedb2af44c8');
-  const canModerateComments = isViewerScanAdmin || isViewerGlobalAdmin;
-  const canAccessScanPanel = Boolean(locals.user && (isPlatformOwner || isViewerScanMember));
-  const scanPanelUrl = `/scans/${scan.slug}/painel`;
-
-  const comments = rawComments.map((c: any) => {
-    const likes = c.scan_comment_likes || [];
-    const dbm = enrichedMembersMap.get(c.user_id);
-    const resolvedAvatarId = dbm?.avatar_id ?? c.members?.avatar_id ?? null;
-    const resolvedAvatarCrop = dbm?.avatar_crop ?? c.members?.avatar_crop ?? null;
-    const resolvedFrameId = dbm?.avatar_frame_id ?? c.members?.avatar_frame_id ?? null;
-    const resolvedDisplayName = dbm?.display_name || c.members?.display_name || c.members?.username || 'Usuário';
-    const resolvedUsername = dbm?.username || c.members?.username || 'usuario';
-    const resolvedNameColor = dbm?.name_color ?? c.members?.name_color ?? null;
-
-    const author = {
-      id: c.user_id,
-      username: resolvedUsername,
-      display_name: resolvedDisplayName,
-      displayName: resolvedDisplayName,
-      avatar_id: resolvedAvatarId,
-      avatarId: resolvedAvatarId,
-      avatar_crop: resolvedAvatarCrop,
-      avatarCrop: resolvedAvatarCrop,
-      avatar_frame_id: resolvedFrameId,
-      frameId: resolvedFrameId,
-      name_color: resolvedNameColor
-    };
-
-    return {
-      id: c.id,
-      scan_id: c.scan_id,
-      user_id: c.user_id,
-      parent_id: c.parent_id,
-      body: c.body,
-      pinned: !!c.pinned,
-      created_at: c.created_at,
-      updated_at: c.updated_at,
-      author,
-      likesCount: likes.length,
-      isLiked: viewerId ? likes.some((l: any) => l.user_id === viewerId) : false,
-      isStaff: memberUserIds.has(c.user_id),
-      canDelete: canModerateComments || c.user_id === viewerId,
-      canModerate: canModerateComments
-    };
-  });
-
-  // Build complete viewer profile matching UserAvatar interface
-  const viewerProfile = viewerId ? (enrichedMembersMap.get(viewerId) || locals.sessionCache?.profile || null) : null;
-  const viewer = locals.user
-    ? {
-        id: locals.user.id,
-        username: viewerProfile?.username || locals.user.email?.split('@')[0] || "leitor",
-        displayName: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
-        display_name: viewerProfile?.display_name || viewerProfile?.username || locals.user.email?.split('@')[0] || "Leitor",
-        avatarId: viewerProfile?.avatar_id || null,
-        avatar_id: viewerProfile?.avatar_id || null,
-        avatarCrop: viewerProfile?.avatar_crop || null,
-        avatar_crop: viewerProfile?.avatar_crop || null,
-        avatar_frame_id: viewerProfile?.avatar_frame_id || null,
-        frameId: viewerProfile?.avatar_frame_id || null,
-        name_color: viewerProfile?.name_color || null,
-        role: locals.role || null
-      }
-    : null;
-
-  return {
-    scan,
-    works,
-    chapters,
-    members,
-    openings,
-    activities,
-    comments,
-    canModerateComments,
-    canAccessScanPanel,
-    scanPanelUrl,
-    isViewerScanAdmin,
-    isViewerScanMember,
-    userApplications,
-    userAppOpenings: Array.from(userAppOpenings),
-    recruitmentQuestions: questionsRes.rows || [],
-    totalViews,
-    viewer
-  };
+  }, 1);
 };
 
 export const actions: Actions = {
@@ -540,10 +557,11 @@ export const actions: Actions = {
       }
     }
 
+    invalidateScansDirectoryCache(params.slug);
     return { success: true, commentPosted: true, data };
   },
 
-  likeComment: async ({ request, locals, platform }) => {
+  likeComment: async ({ request, locals, params, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Você precisa estar conectado para curtir." });
     }
@@ -573,10 +591,11 @@ export const actions: Actions = {
       });
     }
 
+    invalidateScansDirectoryCache(params.slug);
     return { success: true, likeResult: data };
   },
 
-  moderateComment: async ({ request, locals, platform }) => {
+  moderateComment: async ({ request, locals, params, platform }) => {
     if (!locals.user) {
       return fail(401, { message: "Acesso negado." });
     }
@@ -608,6 +627,7 @@ export const actions: Actions = {
       });
     }
 
+    invalidateScansDirectoryCache(params.slug);
     return { success: true, moderateResult: data };
   },
 

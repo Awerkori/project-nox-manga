@@ -9,10 +9,12 @@ type ReaderCacheEntry = {
   pages: any[];
   siblings: any[];
   scans: any[];
+  comments: any[];
 };
 
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
+const bridgedChaptersSet = new Set<string>();
 
 function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
   const links = pages
@@ -39,36 +41,21 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
       }
       let userProgress = null;
-      const [commentsRes, pRes] = await Promise.all([
-        withTimeout(
+      if (locals.user) {
+        const pRes = await withTimeout(
           locals.db
-            .from('comments')
-            .select(
-              'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
-            )
+            .from('reading')
+            .select('page,completed_at')
+            .eq('user_id', locals.user.id)
             .eq('chapter_id', params.id)
-            .order('created_at', { ascending: false })
-            .limit(500),
-          1500,
-          { data: [] } as any,
-          'reader_cached_comments'
-        ),
-        locals.user
-          ? withTimeout(
-              locals.db
-                .from('reading')
-                .select('page,completed_at')
-                .eq('user_id', locals.user.id)
-                .eq('chapter_id', params.id)
-                .maybeSingle(),
-              800,
-              { data: null } as any,
-              'reader_cached_progress'
-            )
-          : Promise.resolve({ data: null })
-      ]);
-      userProgress = pRes?.data || null;
-      const cachedComments = sanitizeComments(commentsRes?.data || []);
+            .maybeSingle(),
+          800,
+          { data: null } as any,
+          'reader_cached_progress'
+        );
+        userProgress = pRes?.data || null;
+      }
+      const cachedComments = cached.comments || [];
 
       if (!locals.user) {
         const link = firstPagePreloadHeader(cached.pages);
@@ -76,7 +63,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         setHeaders({
           'cache-control': isAdultCached
             ? 'private, no-cache, no-store, must-revalidate'
-            : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
+            : 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
           ...(link ? { link } : {})
         });
       }
@@ -159,8 +146,13 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
 
-  // Opportunistically bridge chapter stub into Supabase for comments & reading progression
-  if (chapter && !preview && locals.db) {
+  // Opportunistically bridge chapter stub into Supabase for comments & reading progression (once per chapter per isolate)
+  if (chapter && !preview && locals.db && !bridgedChaptersSet.has(chapter.id)) {
+    bridgedChaptersSet.add(chapter.id);
+    if (bridgedChaptersSet.size > 500) {
+      const first = bridgedChaptersSet.values().next().value;
+      if (first) bridgedChaptersSet.delete(first);
+    }
     const bridgePromise = (async () => {
       try {
         const { data: cExists } = await (locals.db as any).from('chapters').select('id').eq('id', chapter.id).maybeSingle();
@@ -168,8 +160,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
           const { privileged } = await import('$lib/server/db');
           const adminDb = privileged();
           const cw = (chapter.works as any) || {};
-          let cleanSlug = cw.slug || `obra-${chapter.work_id.slice(0, 8)}`;
-          let cleanTitle = cw.title || 'Obra';
+          const cleanSlug = cw.slug || `obra-${chapter.work_id.slice(0, 8)}`;
+          const cleanTitle = cw.title || 'Obra';
           let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
           if (!sanitizedSlug) sanitizedSlug = `obra-${chapter.work_id.slice(0, 8)}`;
 
@@ -299,9 +291,10 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
 
   const all = (siblingsRes.data || []) as any[];
   const index = all.findIndex((c) => c.id === chapter.id);
+  const sanitizedComments = sanitizeComments(comments?.data || []);
 
   if (!preview && chapter && pagesData.length > 0) {
-    if (readerCache.size >= 100) {
+    if (readerCache.size >= 150) {
       const oldestKey = readerCache.keys().next().value;
       if (oldestKey) readerCache.delete(oldestKey);
     }
@@ -310,7 +303,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       chapter,
       pages: pagesData,
       siblings: all,
-      scans
+      scans,
+      comments: sanitizedComments
     });
   }
 
@@ -320,7 +314,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     setHeaders({
       'cache-control': isAdultChapter
         ? 'private, no-cache, no-store, must-revalidate'
-        : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
+        : 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
       ...(link ? { link } : {})
     });
   } else if (link) {
@@ -334,7 +328,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     next: all[index + 1] || null,
     siblings: all,
     progress: progress?.data || null,
-    comments: sanitizeComments(comments?.data || []),
+    comments: sanitizedComments,
     scans,
     preview,
     user: locals.user ? { id: locals.user.id } : null,

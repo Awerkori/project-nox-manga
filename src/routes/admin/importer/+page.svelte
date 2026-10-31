@@ -70,11 +70,14 @@
     window.dispatchEvent(new CustomEvent('nox:importer-tab', { detail: nextTab }));
   }
 
-  async function refreshSnapshot() {
+  async function refreshSnapshot(force = false) {
     if (snapshotRefreshing) return;
     snapshotRefreshing = true;
     try {
-      const res = await fetch('/api/internal/importer/snapshot');
+      const endpoint = force
+        ? '/api/internal/importer/snapshot?refresh=1'
+        : '/api/internal/importer/snapshot';
+      const res = await fetch(endpoint);
       if (!res.ok) return;
       const body = await res.json();
       if (body.success && body.data) {
@@ -176,6 +179,13 @@
 
       return true;
     })
+  );
+
+  let showAllHealthRows = $state(false);
+  const visibleWorkHealth = $derived(
+    showAllHealthRows
+      ? filteredWorkHealth
+      : filteredWorkHealth.slice(0, currentTab === 'capitulos-faltando' ? 20 : 8)
   );
 
   let showPrioritizeModal = $state(false);
@@ -507,7 +517,7 @@
       <button
         type="button"
         class="btn-refresh"
-        onclick={refreshSnapshot}
+        onclick={() => refreshSnapshot(true)}
         disabled={snapshotRefreshing}
         aria-label="Atualizar dados do Importer"
         title={`Última atualização local: ${new Date(snapshotUpdatedAt).toLocaleTimeString('pt-BR')}`}
@@ -933,7 +943,7 @@
         <div class="hero-work-row">
           <div class="hero-cover-wrap">
             {#if data.activeFocus.works?.cover_id}
-              <img src="/media/{data.activeFocus.works.cover_id}" alt="" class="hero-cover-img" />
+              <img src="/media/{data.activeFocus.works.cover_id}?size=thumb&v=3" alt="" loading="lazy" decoding="async" class="hero-cover-img" />
             {:else}
               <div class="hero-cover-placeholder">NOX</div>
             {/if}
@@ -1178,7 +1188,7 @@
             <div class="candidate-card" class:is-direct-url={isUrlQuery}>
               <div class="candidate-cover-box">
                 {#if candidate.coverId}
-                  <img src="/media/{candidate.coverId}" alt="" class="candidate-cover-img" />
+                  <img src="/media/{candidate.coverId}?size=thumb&v=3" alt="" loading="lazy" decoding="async" class="candidate-cover-img" />
                 {:else}
                   <div class="candidate-cover-placeholder">NOX</div>
                 {/if}
@@ -1450,14 +1460,14 @@
             </tr>
           </thead>
           <tbody>
-            {#each filteredWorkHealth as item (item.work_id)}
+            {#each visibleWorkHealth as item (item.work_id)}
               <tr class="health-row">
                 <!-- Obra -->
                 <td class="td-work">
                   <div class="health-work-info">
                     <div class="health-cover-box">
                       {#if item.work?.cover_id}
-                        <img src="/media/{item.work.cover_id}" alt="" width="34" height="48" class="health-cover-img" />
+                        <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt="" width="34" height="48" loading="lazy" decoding="async" class="health-cover-img" />
                       {:else}
                         <div class="health-cover-fallback">NOX</div>
                       {/if}
@@ -1621,6 +1631,19 @@
           </tbody>
         </table>
       </div>
+      {#if filteredWorkHealth.length > visibleWorkHealth.length || showAllHealthRows}
+        <div style="display: flex; justify-content: center; padding: 12px 0 4px;">
+          <button
+            type="button"
+            class="filter-chip"
+            onclick={() => (showAllHealthRows = !showAllHealthRows)}
+          >
+            {showAllHealthRows
+              ? 'Mostrar resumo enxuto'
+              : `Mostrar todas (${filteredWorkHealth.length})`}
+          </button>
+        </div>
+      {/if}
     {:else}
       <div class="health-empty-state">
         <GitCompare size={36} class="text-zinc-500" />
@@ -1648,7 +1671,7 @@
           <div class="work-pipeline-card">
             <div class="work-pipeline-thumb">
               {#if work.cover_id}
-                <img src="/media/{work.cover_id}" alt={work.title} class="work-pipe-img" />
+                <img src="/media/{work.cover_id}?size=thumb&v=3" alt={work.title} loading="lazy" decoding="async" class="work-pipe-img" />
               {:else}
                 <div class="thumb-placeholder">NOX</div>
               {/if}
@@ -1696,7 +1719,7 @@
                 <!-- Work Thumb -->
                 <div class="job-thumb">
                   {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                    <img src="/media/{job.work.cover_id}?size=thumb&v=3" alt="" width="38" height="52" loading="lazy" decoding="async" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -1957,7 +1980,7 @@
                 <!-- Work Thumb -->
                 <div class="job-thumb">
                   {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                    <img src="/media/{job.work.cover_id}?size=thumb&v=3" alt="" width="38" height="52" loading="lazy" decoding="async" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -2131,7 +2154,7 @@
               <div class="active-job-card" style="border-left: 3px solid #fbbf24;">
                 <div class="job-thumb">
                   {#if job.work?.cover_id}
-                    <img src="/media/{job.work.cover_id}" alt="" width="38" height="52" class="thumb-img" />
+                    <img src="/media/{job.work.cover_id}?size=thumb&v=3" alt="" width="38" height="52" loading="lazy" decoding="async" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}
@@ -2237,7 +2260,7 @@
               <div class="staff-request-row">
                 <div class="req-work-thumb">
                   {#if req.works?.cover_id}
-                    <img src="/media/{req.works.cover_id}" alt="" width="34" height="46" class="thumb-img" />
+                    <img src="/media/{req.works.cover_id}?size=thumb&v=3" alt="" width="34" height="46" loading="lazy" decoding="async" class="thumb-img" />
                   {:else}
                     <div class="thumb-placeholder">NOX</div>
                   {/if}

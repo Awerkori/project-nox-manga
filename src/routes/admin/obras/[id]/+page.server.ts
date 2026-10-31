@@ -65,9 +65,15 @@ export const load = async ({ locals, params, request }) => {
           .select('id,name,base_url,enabled,status'),
     params.id === 'nova'
       ? Promise.resolve({ data: null, error: null })
-      : provenanceDb!.from('works').select('metadata_provenance').eq('id', params.id).maybeSingle()
+      : provenanceDb!.from('works').select('metadata_provenance').eq('id', params.id).maybeSingle(),
+    params.id === 'nova'
+      ? Promise.resolve({ data: [], error: null })
+      : provenanceDb!
+          .from('importer_chapter_mappings')
+          .select('id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at')
+          .eq('work_id', params.id)
   ]);
-  const [work, tags, selected, chapters, allScans, workScans, workMappings, sources, provenanceMetadata] = queries;
+  const [work, tags, selected, chapters, allScans, workScans, workMappings, sources, provenanceMetadata, chapterMappingsRaw] = queries;
 
   let metadataProvenanceAvailable = true;
   if (params.id !== 'nova' && provenanceMetadata.error) {
@@ -97,10 +103,7 @@ export const load = async ({ locals, params, request }) => {
   const chapterMappings =
     params.id === 'nova' || chapterIds.length === 0
       ? { data: [] }
-      : await provenanceDb!
-          .from('importer_chapter_mappings')
-          .select('id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at')
-          .eq('work_id', params.id);
+      : chapterMappingsRaw;
 
   throwOnAdminLoadError(chapterMappings, { ...queryContext, operation: 'importer_chapter_mappings' });
 

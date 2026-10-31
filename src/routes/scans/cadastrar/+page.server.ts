@@ -1,10 +1,11 @@
-import { error, fail } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import { parsePartnerRequestMeta, type ScanPartnerRequestMeta } from '$lib/scans';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 import { notifyAdminsForScanApplication } from '$lib/server/notifications';
+import { invalidateAdminScansCache, invalidateAdminTicketsCache } from '$lib/server/admin-cache';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, platform }) => {
   if (!locals.user) {
     return {
       isAuthenticated: false,
@@ -15,42 +16,57 @@ export const load: PageServerLoad = async ({ locals }) => {
     };
   }
 
-  // 1. Fetch user's existing scan partner applications
-  const { data: rawRequests, error: reqErr } = await locals.db
-    .from('scan_partner_requests')
-    .select('*')
-    .eq('user_id', locals.user.id)
-    .order('created_at', { ascending: false });
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+    let rawRequests: any[] = [];
+    try {
+      const reqRes = await executeYugabyteSql<any>(
+        `SELECT *
+         FROM public.scan_partner_requests
+         WHERE user_id = $1 AND deleted_at IS NULL
+         ORDER BY created_at DESC`,
+        [locals.user!.id],
+        sessionEnv
+      );
+      rawRequests = reqRes.rows || [];
+    } catch (reqErr: any) {
+      console.warn('Failed to load user scan partner requests:', reqErr?.message);
+    }
 
-  if (reqErr) {
-    console.warn('Failed to load user scan partner requests:', reqErr.message);
-  }
+    const requests = rawRequests.map((r: any) => ({
+      ...r,
+      meta: parsePartnerRequestMeta(r.sample_links)
+    }));
 
-  const requests = (rawRequests || []).map((r: any) => ({
-    ...r,
-    meta: parsePartnerRequestMeta(r.sample_links)
-  }));
+    const activeRequest = requests.find((r: any) => r.status === 'PENDING') || null;
 
-  const activeRequest = requests.find((r: any) => r.status === 'PENDING') || null;
+    // 2. Reuse verified sessionCache.userScans when present to avoid a duplicate DB round-trip
+    let userScans: any[] = [];
+    if (Array.isArray(locals.sessionCache?.userScans)) {
+      userScans = locals.sessionCache.userScans;
+    } else {
+      try {
+        const memberRes = await executeYugabyteSql<any>(
+          `SELECT sm.role, s.id, s.name, s.slug, s.logo_id, s.status
+           FROM public.scan_members sm
+           JOIN public.scans s ON s.id = sm.scan_id
+           WHERE sm.user_id = $1`,
+          [locals.user!.id],
+          sessionEnv
+        );
+        userScans = memberRes.rows || [];
+      } catch (memberErr: any) {
+        console.warn('Failed to load user scans on /scans/cadastrar:', memberErr?.message);
+      }
+    }
 
-  // 2. Fetch scans where user is already an OWNER or ADMIN
-  const { data: memberRows } = await locals.db
-    .from('scan_members')
-    .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-    .eq('user_id', locals.user.id);
-
-  const userScans = (memberRows || []).map((m: any) => ({
-    role: m.role,
-    ...m.scans
-  }));
-
-  return {
-    isAuthenticated: true,
-    user: locals.user,
-    activeRequest,
-    pastRequests: requests,
-    userScans
-  };
+    return {
+      isAuthenticated: true,
+      user: locals.user,
+      activeRequest,
+      pastRequests: requests,
+      userScans
+    };
+  });
 };
 
 export const actions: Actions = {
@@ -62,7 +78,6 @@ export const actions: Actions = {
     const formData = await request.formData();
     const name = (formData.get('name') as string)?.trim() || '';
     const slug = (formData.get('slug') as string)?.trim().toLowerCase() || '';
-    const displayPreposition = (formData.get('display_preposition') as string)?.trim() || 'de';
     const description = (formData.get('description') as string)?.trim() || '';
     const discord = (formData.get('discord') as string)?.trim() || '';
     const fluxer = (formData.get('fluxer') as string)?.trim() || '';
@@ -96,27 +111,25 @@ export const actions: Actions = {
       return fail(400, { message: 'Os links de redes sociais não podem ultrapassar 255 caracteres.' });
     }
 
-    // Check if slug is already taken by an existing scan
-    const { data: existingScan } = await locals.db
-      .from('scans')
-      .select('id')
-      .eq('slug', slug)
-      .maybeSingle();
+    try {
+      const checkRes = await executeYugabyteSql<{ slug_taken: boolean; has_pending: boolean }>(
+        `SELECT
+           EXISTS (SELECT 1 FROM public.scans WHERE slug = $1) AS slug_taken,
+           EXISTS (SELECT 1 FROM public.scan_partner_requests WHERE user_id = $2 AND status = 'PENDING' AND deleted_at IS NULL) AS has_pending`,
+        [slug, locals.user.id],
+        platform?.env
+      );
 
-    if (existingScan) {
-      return fail(400, { message: 'Este identificador (slug) já está em uso por outra scan no Project Nox.' });
-    }
+      if (checkRes.rows[0]?.slug_taken) {
+        return fail(400, { message: 'Este identificador (slug) já está em uso por outra scan no Project Nox.' });
+      }
 
-    // Check if user already has a pending application
-    const { data: existingPending } = await locals.db
-      .from('scan_partner_requests')
-      .select('id')
-      .eq('user_id', locals.user.id)
-      .eq('status', 'PENDING')
-      .maybeSingle();
-
-    if (existingPending) {
-      return fail(400, { message: 'Você já possui uma solicitação em análise pela equipe.' });
+      if (checkRes.rows[0]?.has_pending) {
+        return fail(400, { message: 'Você já possui uma solicitação em análise pela equipe.' });
+      }
+    } catch (checkErr: any) {
+      console.error('Failed to validate scan_partner_request prerequisites:', checkErr?.message);
+      return fail(500, { message: 'Não foi possível validar sua solicitação no momento. Tente novamente.' });
     }
 
     const meta: ScanPartnerRequestMeta = {
@@ -133,40 +146,17 @@ export const actions: Actions = {
 
     const serializedMeta = JSON.stringify(meta);
 
-    // Persist in Supabase
-    const { data: inserted, error: insertErr } = await locals.db
-      .from('scan_partner_requests')
-      .insert({
-        user_id: locals.user.id,
-        scan_name: name,
-        scan_slug: slug,
-        description: description,
-        discord: discord,
-        fluxer: fluxer,
-        website: website,
-        sample_links: serializedMeta,
-        status: 'PENDING'
-      })
-      .select()
-      .single();
-
-    if (insertErr) {
-      console.error('Failed to insert scan_partner_request:', insertErr);
-      return fail(500, { message: 'Não foi possível registrar sua solicitação no momento. Tente novamente.' });
-    }
-
-    // Sync to YSQL plane for resilience
     try {
       await executeYugabyteSql(
         `INSERT INTO public.scan_partner_requests
-           (id, user_id, scan_name, scan_slug, description, discord, fluxer, website, sample_links, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING')
-         ON CONFLICT (id) DO NOTHING`,
-        [inserted.id, locals.user.id, name, slug, description, discord, fluxer, website, serializedMeta],
+           (user_id, scan_name, scan_slug, description, discord, fluxer, website, sample_links, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')`,
+        [locals.user.id, name, slug, description, discord, fluxer, website, serializedMeta],
         platform?.env
       );
-    } catch (ysqlErr: any) {
-      console.warn('YSQL partner request sync error (non-fatal):', ysqlErr?.message);
+    } catch (insertErr: any) {
+      console.error('Failed to insert scan_partner_request:', insertErr?.message);
+      return fail(500, { message: 'Não foi possível registrar sua solicitação no momento. Tente novamente.' });
     }
 
     // Dispatch real-time in-app & transactional email notification to Admins
@@ -182,6 +172,8 @@ export const actions: Actions = {
       console.warn('[NOTIF] Erro ao disparar notificação de inscrição de scan:', notifErr?.message);
     }
 
+    invalidateAdminTicketsCache();
+    invalidateAdminScansCache();
     return { success: true, submitted: true };
   },
 
@@ -197,29 +189,22 @@ export const actions: Actions = {
       return fail(400, { message: 'Identificador da solicitação inválido.' });
     }
 
-    // Remove from Supabase
-    const { error: delErr } = await locals.db
-      .from('scan_partner_requests')
-      .delete()
-      .eq('id', requestId)
-      .eq('user_id', locals.user.id)
-      .eq('status', 'PENDING');
-
-    if (delErr) {
-      return fail(500, { message: 'Erro ao cancelar a solicitação.' });
-    }
-
-    // Remove from YSQL
     try {
-      await executeYugabyteSql(
+      const delRes = await executeYugabyteSql(
         `DELETE FROM public.scan_partner_requests WHERE id = $1 AND user_id = $2 AND status = 'PENDING'`,
         [requestId, locals.user.id],
         platform?.env
       );
+      if (delRes.rowCount === 0) {
+        return fail(404, { message: 'Solicitação não encontrada ou já processada.' });
+      }
     } catch (e: any) {
       console.warn('YSQL cancel error:', e?.message);
+      return fail(500, { message: 'Erro ao cancelar a solicitação.' });
     }
 
+    invalidateAdminTicketsCache();
+    invalidateAdminScansCache();
     return { success: true, cancelled: true };
   }
 };

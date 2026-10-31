@@ -27,14 +27,11 @@
     Shield,
     Zap
   } from '@lucide/svelte';
-  import { onMount, onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { evaluateStageClaim, normalizePositionName, CANONICAL_PIPELINE_STAGES } from '$lib/scan-roles';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
-  import type { RealtimeChannel } from '@supabase/supabase-js';
 
   let {
     currentStageSlug = 'clean_redraw',
@@ -75,9 +72,6 @@
     }
     return set;
   });
-
-  // Realtime Supabase Channel coordinated at parent scan workspace level
-  let realtimeChannel: RealtimeChannel | null = null;
 
   // Check if current user holds the required editorial role for a stage
   function userHoldsRoleForStage(stageSlug: string): boolean {
@@ -979,7 +973,7 @@
                   <div class="accordion-header-left">
                     <div class="work-thumbnail sm">
                       {#if item.work?.cover_id}
-                        <img src="/media/{item.work.cover_id}" alt={item.work.title} class="thumbnail-img" />
+                        <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumbnail-img" loading="lazy" decoding="async" />
                       {:else}
                         <div class="thumbnail-fallback">NOX</div>
                       {/if}
@@ -1355,7 +1349,7 @@
                 <div class="accordion-header-left">
                   <div class="work-thumbnail sm">
                     {#if item.work?.cover_id}
-                      <img src="/media/{item.work.cover_id}" alt={item.work.title} class="thumbnail-img" />
+                      <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumbnail-img" loading="lazy" decoding="async" />
                     {:else}
                       <div class="thumbnail-fallback">NOX</div>
                     {/if}

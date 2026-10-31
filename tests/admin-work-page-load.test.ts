@@ -31,7 +31,7 @@ function database(overrides: Record<string, ReturnType<typeof result> | ReturnTy
       const requested = overrides[table] || defaults[table];
       const call = Array.isArray(requested) ? requested.shift() || defaults[table] : requested;
       const query: any = {};
-      for (const method of ['select', 'eq', 'order', 'in']) query[method] = vi.fn(() => query);
+      for (const method of ['select', 'eq', 'order', 'in', 'is', 'not']) query[method] = vi.fn(() => query);
       query.maybeSingle = vi.fn(() => Promise.resolve(call));
       query.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
         Promise.resolve(call).then(resolve, reject);

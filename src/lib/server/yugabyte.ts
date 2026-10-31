@@ -13,10 +13,20 @@ interface LkgEntry<T> {
 }
 
 const lkgStore = new Map<string, LkgEntry<any>>();
+const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
+const MAX_FLIGHT_AGE_MS = 4_000;
 
 export function setLkg<T>(key: string, data: T): void {
   if (data !== null && data !== undefined) {
     lkgStore.set(key, { data, timestamp: Date.now() });
+  }
+}
+
+export function invalidateYugabyteLkgPrefix(prefix: string): void {
+  for (const key of lkgStore.keys()) {
+    if (key.startsWith(prefix)) {
+      lkgStore.delete(key);
+    }
   }
 }
 
@@ -29,7 +39,8 @@ export function getLkg<T>(key: string, maxAgeMs = 120_000): { data: T; ageSec: n
 }
 
 /**
- * Executes a resilient query against YugabyteDB with automatic Last-Known-Good (LKG) fallback.
+ * Executes a resilient query against YugabyteDB with automatic Last-Known-Good (LKG) fallback
+ * and single-flight deduplication to prevent cache stampedes under high concurrency.
  * Guarantees that transient database pauses or connection hiccups NEVER crash public SSR pages.
  */
 export async function withYugabyteLkg<T>(
@@ -38,31 +49,47 @@ export async function withYugabyteLkg<T>(
   fallbackDefault: T,
   cacheTtlMs = 0
 ): Promise<T> {
-  if (cacheTtlMs > 0) {
+  const isTestEnv = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');
+  if (cacheTtlMs > 0 && !isTestEnv) {
     const cached = getLkg<T>(op, cacheTtlMs);
     if (cached) {
       return cached.data;
     }
+    const inFlight = activeLkgFlights.get(op);
+    if (inFlight && Date.now() - inFlight.startedAt < MAX_FLIGHT_AGE_MS) {
+      return inFlight.promise as Promise<T>;
+    }
   }
   const start = performance.now();
-  try {
-    const data = await fetcher();
-    setLkg(op, data);
-    return data;
-  } catch (err: any) {
-    const dur = Math.round(performance.now() - start);
-    const lkg = getLkg<T>(op);
-    if (lkg) {
-      console.warn(
-        `[DATA_PLANE] DATA_SOURCE=YUGABYTE DATA_STATE=LKG op=${op} LKG_AGE_SEC=${lkg.ageSec} dur=${dur}ms error=${err?.message || err}`
+  const run = (async (): Promise<T> => {
+    try {
+      const data = await fetcher();
+      setLkg(op, data);
+      return data;
+    } catch (err: any) {
+      const dur = Math.round(performance.now() - start);
+      const lkg = getLkg<T>(op);
+      if (lkg) {
+        console.warn(
+          `[DATA_PLANE] DATA_SOURCE=YUGABYTE DATA_STATE=LKG op=${op} LKG_AGE_SEC=${lkg.ageSec} dur=${dur}ms error=${err?.message || err}`
+        );
+        return lkg.data;
+      }
+      console.error(
+        `[DATA_PLANE] DATA_SOURCE=YUGABYTE DATA_STATE=DEGRADED op=${op} dur=${dur}ms error=${err?.message || err}`
       );
-      return lkg.data;
+      return fallbackDefault;
+    } finally {
+      if (activeLkgFlights.get(op)?.promise === run) {
+        activeLkgFlights.delete(op);
+      }
     }
-    console.error(
-      `[DATA_PLANE] DATA_SOURCE=YUGABYTE DATA_STATE=DEGRADED op=${op} dur=${dur}ms error=${err?.message || err}`
-    );
-    return fallbackDefault;
+  })();
+
+  if (cacheTtlMs > 0 && !isTestEnv) {
+    activeLkgFlights.set(op, { promise: run, startedAt: Date.now() });
   }
+  return run;
 }
 
 const YUGABYTE_READ_SESSION_KEY = Symbol.for('nox.yugabyte.readSession');
@@ -79,9 +106,9 @@ class YugabyteReadSession {
   private activeOrCreating = 0;
   private closed = false;
 
-  constructor(connectionString: string, maxConcurrency = 2) {
+  constructor(connectionString: string, maxConcurrency = 1) {
     this.connectionString = connectionString;
-    this.maxConcurrency = Math.max(1, maxConcurrency);
+    this.maxConcurrency = Math.max(1, Math.min(2, maxConcurrency));
   }
 
   private async acquire(): Promise<{ client: Client; connectDur: number }> {
@@ -98,7 +125,8 @@ class YugabyteReadSession {
       const connectStart = performance.now();
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       try {
         await client.connect();
@@ -146,7 +174,8 @@ class YugabyteReadSession {
       this.activeOrCreating += 1;
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       client
         .connect()
@@ -184,9 +213,14 @@ class YugabyteReadSession {
         rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
       };
     } catch (err: any) {
-      // Discard connection on transport/protocol error; keep healthy client on SQL-level error if desired,
-      // though discarding on unexpected read errors is safe and bounded.
-      broken = true;
+      // Only discard the underlying socket on connection/transport/fatal errors;
+      // ordinary SQL errors keep the Hyperdrive session socket warm for sibling queries.
+      const code = String(err?.code || '');
+      const msg = String(err?.message || '');
+      broken =
+        !code ||
+        /^(?:08|57P|53300)/i.test(code) ||
+        /connection|terminated|closed|timeout|ECONN|EPIPE|socket/i.test(msg);
       throw err;
     } finally {
       this.release(client, broken);
@@ -208,13 +242,13 @@ class YugabyteReadSession {
 
 /**
  * Multiplexes many concurrent YugabyteDB read queries inside a single SSR/API request
- * over at most `maxConcurrency` reused Hyperdrive connections (default 2) instead of
+ * over at most `maxConcurrency` reused Hyperdrive connections (default 1, max 2) instead of
  * opening dozens of simultaneous `pg.Client` connections against `max_connections = 13`.
  */
 export async function withYugabyteReadSession<T>(
   platformEnv: any,
   operation: (scopedEnv: any) => Promise<T>,
-  maxConcurrency = 2
+  maxConcurrency = 1
 ): Promise<T> {
   const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
   if (!connectionString || platformEnv?.[YUGABYTE_READ_SESSION_KEY]) {
@@ -262,7 +296,8 @@ export async function executeYugabyteSql<T = any>(
     try {
       const client = new Client({
         connectionString: hyperdrive.connectionString,
-        connectionTimeoutMillis: 1500
+        connectionTimeoutMillis: 1500,
+        query_timeout: 3500
       });
       await client.connect();
       const connectDur = Math.round(performance.now() - connectStart);
@@ -525,7 +560,8 @@ export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<Yu
         recentReleases: (row?.recent_releases || []) as YugabyteReleaseRow[]
       };
     },
-    { homeWorks: [], mostRead: [], recentReleases: [] }
+    { homeWorks: [], mostRead: [], recentReleases: [] },
+    20_000
   );
 }
 
@@ -546,7 +582,8 @@ export async function fetchHomeWorksFromYugabyte(platformEnv?: any): Promise<Yug
       const res = await executeYugabyteSql<YugabyteWork>(sql, [], platformEnv);
       return res.rows;
     },
-    []
+    [],
+    30_000
   );
 }
 
@@ -567,7 +604,8 @@ export async function fetchMostReadFromYugabyte(platformEnv?: any): Promise<Yuga
       const res = await executeYugabyteSql<YugabyteWork>(sql, [], platformEnv);
       return res.rows;
     },
-    []
+    [],
+    30_000
   );
 }
 
@@ -891,7 +929,8 @@ export async function fetchWorkFromYugabyte(
       const res = await executeYugabyteSql<YugabyteWork>(sql, [slugOrId], platformEnv);
       return res.rows[0] || null;
     },
-    null
+    null,
+    30_000
   );
 }
 
@@ -1014,14 +1053,20 @@ export async function fetchFullWorkPageFromYugabyte(
 
   if (!base || !base.work) return null;
 
-  // 2. Targeted micro-query for personal user rating if session or visitor identifier present
+  // 2. Targeted micro-query for personal user rating if session or visitor identifier present and work has ratings
   let personalUserRating: number | null = null;
-  if (visitorId || userId) {
+  if ((visitorId || userId) && (base.rating?.count ?? 0) > 0) {
     try {
-      const uRes = await executeYugabyteSql<{ rating: number }>(
-        `SELECT rating FROM public.work_ratings WHERE work_id = $1::uuid AND (visitor_id = $2 OR (user_id = $3::uuid AND $3 IS NOT NULL)) LIMIT 1`,
-        [base.work.id, visitorId || '', userId || null],
-        platformEnv
+      const uRes = await withYugabyteLkg(
+        `work_user_rating_${base.work.id}_${userId || visitorId}`,
+        () =>
+          executeYugabyteSql<{ rating: number }>(
+            `SELECT rating FROM public.work_ratings WHERE work_id = $1::uuid AND (visitor_id = $2 OR (user_id = $3::uuid AND $3 IS NOT NULL)) LIMIT 1`,
+            [base.work.id, visitorId || '', userId || null],
+            platformEnv
+          ),
+        { rows: [], rowCount: 0 },
+        15_000
       );
       if (uRes.rows.length > 0 && uRes.rows[0].rating) {
         personalUserRating = Number(uRes.rows[0].rating);
@@ -1078,7 +1123,8 @@ export async function fetchPublishedWorksCountFromYugabyte(platformEnv?: any): P
       }
       return count || 9430;
     },
-    cachedPublishedCount?.count || 9430
+    cachedPublishedCount?.count || 9430,
+    300_000
   );
 }
 
@@ -1136,7 +1182,7 @@ export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<Yugabyte
   if (cachedAllTags && Date.now() - cachedAllTags.timestamp < ALL_TAGS_TTL_MS && cachedAllTags.tags.length > 0) {
     return cachedAllTags.tags;
   }
-  return withYugabyteLkg('all_tags', () => computeCatalogFilterTags(platformEnv), cachedAllTags?.tags || []);
+  return withYugabyteLkg('all_tags', () => computeCatalogFilterTags(platformEnv), cachedAllTags?.tags || [], 300_000);
 }
 
 /**
@@ -1298,7 +1344,8 @@ export async function fetchCatalogFromYugabyte(
         total
       };
     },
-    { works: [], total: 0 }
+    { works: [], total: 0 },
+    isUnfiltered ? 60_000 : 45_000
   );
 }
 
@@ -1335,7 +1382,8 @@ export async function fetchWorkChaptersFromYugabyte(
       const res = await executeYugabyteSql<YugabyteChapter>(sql, [workId], platformEnv);
       return res.rows;
     },
-    []
+    [],
+    preview ? 0 : 20_000
   );
 }
 
@@ -1361,7 +1409,8 @@ export async function fetchWorkTagsFromYugabyte(
       const res = await executeYugabyteSql<YugabyteTag>(sql, [workId], platformEnv);
       return res.rows;
     },
-    []
+    [],
+    60_000
   );
 }
 
@@ -1386,6 +1435,7 @@ export async function fetchMediaMetadataFromYugabyte(
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
       return res.rows[0] || null;
     },
-    null
+    null,
+    300_000
   );
 }

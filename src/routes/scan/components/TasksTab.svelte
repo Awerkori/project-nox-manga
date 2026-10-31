@@ -27,8 +27,6 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
-  import type { RealtimeChannel } from '@supabase/supabase-js';
   import { relativeTime } from '$lib/types';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
 
@@ -102,48 +100,6 @@
   let overrideAction = $state<string>('FORCE_COMPLETE');
   let overrideReason = $state<string>('');
   let overrideTargetUserId = $state<string>('');
-
-  // Realtime Supabase Channel
-  let realtimeChannel: RealtimeChannel | null = null;
-
-  onMount(() => {
-    const client = getSupabaseBrowserClient();
-    if (!client || !currentScanId) return;
-
-    realtimeChannel = client
-      .channel(`scan_queue_sync:${currentScanId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_chapter_stages',
-          filter: `scan_id=eq.${currentScanId}`
-        },
-        async () => {
-          await invalidateAll();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_production_chapters',
-          filter: `scan_id=eq.${currentScanId}`
-        },
-        async () => {
-          await invalidateAll();
-        }
-      )
-      .subscribe();
-  });
-
-  onDestroy(() => {
-    if (realtimeChannel) {
-      realtimeChannel.unsubscribe();
-    }
-  });
 
   // Effective positions for logged-in user
   let effectivePositions = $derived(

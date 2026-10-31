@@ -188,11 +188,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   const isMyQueue = requestedTab === 'minha_fila';
   const isWorks = requestedTab === 'obras';
   const isTeam = requestedTab === 'membros';
-  const isCalendar = requestedTab === 'calendario';
   const isMural = requestedTab === 'mural';
-  const isInbox = requestedTab === 'inbox';
   const isQc = requestedTab === 'qc';
-  const isWorkload = requestedTab === 'workload';
 
   const needsRecruitment = ['recrutamento', 'candidaturas', 'positions'].includes(requestedTab);
   const needsKnowledge = ['wiki', 'glossario', 'referencias'].includes(requestedTab);
@@ -449,14 +446,31 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     : Promise.resolve(null);
 
   // Task transitions already run through YSQL transactions. Keep the queue
-  // itself on that same data plane, without expensive correlated comments on initial load.
+  // itself on that same data plane, skipping correlated comments on initial home overview.
   const taskSnapshotPromise = withTimeout(
     executeYugabyteSql<any>(`
       SELECT task.id, task.scan_id, task.work_id, task.chapter_id, task.chapter_number,
         task.title, task.description, task.priority, task.status, task.stage_id,
         task.stage_name, task.stage_slug, task.stage_color, task.assigned_to,
         task.assignee_id, task.due_date, task.due_at, task.created_at, task.updated_at,
-        '[]'::jsonb AS scan_task_comments
+        CASE
+          WHEN $2::boolean THEN COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'id', comment.id,
+              'task_id', comment.task_id,
+              'content', comment.content,
+              'created_at', comment.created_at,
+              'members', CASE WHEN author.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', author.id, 'username', author.username,
+                'display_name', author.display_name, 'avatar_id', author.avatar_id
+              ) END
+            ) ORDER BY comment.created_at ASC)
+            FROM public.scan_task_comments comment
+            LEFT JOIN public.members author ON author.id = comment.user_id
+            WHERE comment.task_id = task.id
+          ), '[]'::jsonb)
+          ELSE '[]'::jsonb
+        END AS scan_task_comments
       FROM public.scan_tasks task
       WHERE task.scan_id = $1
         AND (
@@ -568,7 +582,17 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     Promise.all([
     ysqlCollection<any>(
       `SELECT work_scan.is_primary, work_scan.status, work_scan.created_at,
-         to_jsonb(work) AS works
+         jsonb_build_object(
+           'id', work.id,
+           'slug', work.slug,
+           'title', work.title,
+           'cover_id', work.cover_id,
+           'status', work.status,
+           'kind', work.kind,
+           'views_total', work.views_total,
+           'updated_at', work.updated_at,
+           'published', work.published
+         ) AS works
        FROM public.work_scans work_scan
        JOIN public.works work ON work.id = work_scan.work_id
        WHERE work_scan.scan_id = $1`,
@@ -1072,7 +1096,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     pendingAppsCount,
     activeTab: requestedTab
   };
-  }, 2);
+  }, 4);
 };
 
 export const actions: Actions = {

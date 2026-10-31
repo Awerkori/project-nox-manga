@@ -1,4 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { invalidateUserSession } from '$lib/server/session-cache';
+import { adminStaffCache, adminStaffFlights, invalidateAdminStaffCache, withSingleFlightCache } from '$lib/server/admin-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -6,61 +8,31 @@ export const load: PageServerLoad = async ({ locals }) => {
     throw redirect(303, '/entrar?redirect=/admin/staff');
   }
 
-  let staffList: any[] = [];
-
-  try {
-    // 1. First attempt: relational select on access_roles with members
-    const { data: staffRoles, error: joinErr } = await locals.db
-      .from('access_roles')
-      .select(`
-        user_id,
-        role,
-        suspended,
-        members (
-          id,
-          username,
-          display_name,
-          avatar_id,
-          xp,
-          created_at
-        )
-      `)
-      .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
-      .order('role', { ascending: true });
-
-    if (!joinErr && staffRoles && staffRoles.length > 0) {
-      staffList = staffRoles.map((sr: any) => {
-        const m = Array.isArray(sr.members) ? sr.members[0] : (sr.members || sr.member);
-        return {
-          userId: sr.user_id,
-          role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
-          suspended: Boolean(sr.suspended),
-          updatedAt: m?.created_at || null,
-          username: m?.username || 'desconhecido',
-          displayName: m?.display_name || m?.username || 'Membro',
-          avatarId: m?.avatar_id || null,
-          xp: m?.xp || 0,
-          createdAt: m?.created_at || null
-        };
-      });
-    } else {
-      // 2. Fallback attempt: query access_roles and members separately to avoid join ambiguity
-      const { data: rawRoles } = await locals.db
+  const staffList = await withSingleFlightCache(adminStaffCache, adminStaffFlights, 'staff_list', 30_000, async () => {
+    let resolved: any[] = [];
+    try {
+      // 1. First attempt: relational select on access_roles with members
+      const { data: staffRoles, error: joinErr } = await locals.db
         .from('access_roles')
-        .select('user_id, role, suspended')
-        .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR']);
+        .select(`
+          user_id,
+          role,
+          suspended,
+          members (
+            id,
+            username,
+            display_name,
+            avatar_id,
+            xp,
+            created_at
+          )
+        `)
+        .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
+        .order('role', { ascending: true });
 
-      if (rawRoles && rawRoles.length > 0) {
-        const userIds = rawRoles.map((r: any) => r.user_id);
-        const { data: memberRows } = await locals.db
-          .from('members')
-          .select('id, username, display_name, avatar_id, xp, created_at')
-          .in('id', userIds);
-
-        const memberMap = new Map((memberRows || []).map((m: any) => [m.id, m]));
-
-        staffList = rawRoles.map((sr: any) => {
-          const m = memberMap.get(sr.user_id);
+      if (!joinErr && staffRoles && staffRoles.length > 0) {
+        resolved = staffRoles.map((sr: any) => {
+          const m = Array.isArray(sr.members) ? sr.members[0] : (sr.members || sr.member);
           return {
             userId: sr.user_id,
             role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
@@ -73,11 +45,43 @@ export const load: PageServerLoad = async ({ locals }) => {
             createdAt: m?.created_at || null
           };
         });
+      } else {
+        // 2. Fallback attempt: query access_roles and members separately to avoid join ambiguity
+        const { data: rawRoles } = await locals.db
+          .from('access_roles')
+          .select('user_id, role, suspended')
+          .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR']);
+
+        if (rawRoles && rawRoles.length > 0) {
+          const userIds = rawRoles.map((r: any) => r.user_id);
+          const { data: memberRows } = await locals.db
+            .from('members')
+            .select('id, username, display_name, avatar_id, xp, created_at')
+            .in('id', userIds);
+
+          const memberMap = new Map((memberRows || []).map((m: any) => [m.id, m]));
+
+          resolved = rawRoles.map((sr: any) => {
+            const m = memberMap.get(sr.user_id);
+            return {
+              userId: sr.user_id,
+              role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
+              suspended: Boolean(sr.suspended),
+              updatedAt: m?.created_at || null,
+              username: m?.username || 'desconhecido',
+              displayName: m?.display_name || m?.username || 'Membro',
+              avatarId: m?.avatar_id || null,
+              xp: m?.xp || 0,
+              createdAt: m?.created_at || null
+            };
+          });
+        }
       }
+    } catch (err: any) {
+      console.error('Falha inesperada ao carregar equipe:', err);
     }
-  } catch (err: any) {
-    console.error('Falha inesperada ao carregar equipe:', err);
-  }
+    return resolved;
+  });
 
   const counts = {
     total: staffList.length,
@@ -117,6 +121,9 @@ export const actions: Actions = {
       return fail(400, { error: error.message || 'Falha ao atualizar cargo do usuário.' });
     }
 
+    invalidateUserSession(userId);
+    invalidateAdminStaffCache();
+
     return {
       success: true,
       action: role === 'USER' ? 'removed' : 'updated',
@@ -146,6 +153,9 @@ export const actions: Actions = {
     if (error) {
       return fail(400, { error: error.message || 'Falha ao promover usuário.' });
     }
+
+    invalidateUserSession(userId);
+    invalidateAdminStaffCache();
 
     return { success: true, action: 'promoted', userId, role };
   }

@@ -26,9 +26,11 @@ export interface CachedSession {
   tokenExp?: number;
 }
 
-const SESSION_CACHE_TTL_MS = 3_000; // 3 seconds window to ensure freshness across actions while deduplicating in-flight subrequests
+const SESSION_CACHE_TTL_MS = 60_000; // 60s window (invalidated immediately on mutations via invalidateUserSession)
+const VERIFIED_TOKEN_TTL_MS = 300_000; // 5m verified JWT signature cache
 const sessionCache = new Map<string, CachedSession>();
 const activeFlights = new Map<string, Promise<CachedSession>>();
+const verifiedTokens = new Map<string, { userId: string; expiresAt: number }>();
 
 /**
  * Reconstruct full auth cookie string even when chunked into .0, .1, etc.
@@ -57,7 +59,9 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
     if (raw.includes('%')) {
       try {
         raw = decodeURIComponent(raw);
-      } catch {}
+      } catch {
+        // Keep raw cookie value when percent-decoding fails
+      }
     }
     if (raw.startsWith('base64-')) {
       raw = atob(raw.slice(7));
@@ -116,16 +120,33 @@ export async function resolveSessionData(
   const flightPromise = (async () => {
     let identityVerified = false;
     try {
-      const verified = await withTimeout(
-        db.auth.getUser(accessToken),
-        2000,
-        null,
-        'session_verify_user'
-      );
-      if (!verified?.data?.user || verified.error || verified.data.user.id !== decoded.sub) {
+      const tokenExpMs = decoded.exp ? decoded.exp * 1000 : now + VERIFIED_TOKEN_TTL_MS;
+      if (tokenExpMs <= now) {
         throw new Error('SESSION_NOT_VERIFIED');
       }
-      identityVerified = true;
+      const cachedVerification = verifiedTokens.get(accessToken);
+      if (cachedVerification && cachedVerification.userId === decoded.sub && cachedVerification.expiresAt > now) {
+        identityVerified = true;
+      } else {
+        const verified = await withTimeout(
+          db.auth.getUser(accessToken),
+          2000,
+          null,
+          'session_verify_user'
+        );
+        if (!verified?.data?.user || verified.error || verified.data.user.id !== decoded.sub) {
+          throw new Error('SESSION_NOT_VERIFIED');
+        }
+        identityVerified = true;
+        if (verifiedTokens.size > 1000) {
+          const oldest = verifiedTokens.keys().next().value;
+          if (oldest) verifiedTokens.delete(oldest);
+        }
+        verifiedTokens.set(accessToken, {
+          userId: decoded.sub,
+          expiresAt: Math.min(tokenExpMs, now + VERIFIED_TOKEN_TTL_MS)
+        });
+      }
       const userId = decoded.sub;
 
       // Run profile, role, scans and unread queries concurrently
@@ -288,6 +309,11 @@ export function invalidateUserSession(userId: string) {
   for (const [k, session] of sessionCache.entries()) {
     if (session.user.id === userId) {
       sessionCache.delete(k);
+    }
+  }
+  for (const [k, v] of verifiedTokens.entries()) {
+    if (v.userId === userId) {
+      verifiedTokens.delete(k);
     }
   }
 }
