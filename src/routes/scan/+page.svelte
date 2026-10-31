@@ -64,6 +64,7 @@
   import MuralTab from './components/MuralTab.svelte';
   import ChapterWorkspaceView from './components/ChapterWorkspaceView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
+  import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { invalidate } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
@@ -241,14 +242,30 @@
 
   $effect(() => {
     const tabParam = normalizeTab(page.url.searchParams.get('tab'));
-    if (tabParam && tabParam !== currentWorkspaceTab) {
-      currentWorkspaceTab = tabParam;
-    }
     const stageParam = page.url.searchParams.get('stage');
-    if (stageParam && stageParam !== currentPipelineStage) {
-      currentPipelineStage = stageParam;
-    }
-    triggerModuleLoadForTab(currentWorkspaceTab);
+    untrack(() => {
+      if (tabParam && tabParam !== currentWorkspaceTab) {
+        currentWorkspaceTab = tabParam;
+        triggerModuleLoadForTab(tabParam);
+      }
+      if (stageParam && stageParam !== currentPipelineStage) {
+        currentPipelineStage = stageParam;
+      }
+    });
+  });
+
+  onMount(() => {
+    const onPopState = () => {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const tab = normalizeTab(url.searchParams.get('tab'));
+      const stage = url.searchParams.get('stage') || 'clean_redraw';
+      currentWorkspaceTab = tab;
+      currentPipelineStage = stage;
+      triggerModuleLoadForTab(tab);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   });
 
   function handleSelectTab(tab: string, stage?: string) {
@@ -266,7 +283,7 @@
       } else {
         url.searchParams.delete('stage');
       }
-      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+      window.history.pushState(window.history.state, '', url.pathname + url.search);
       triggerModuleLoadForTab(tab);
     }
   }
