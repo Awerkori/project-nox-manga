@@ -65,7 +65,7 @@
   import ChapterWorkspaceView from './components/ChapterWorkspaceView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
   import { page } from '$app/state';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { invalidate } from '$app/navigation';
   import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
@@ -77,10 +77,57 @@
   let works = $derived(data.works || []);
   let chapters = $derived(data.chapters || []);
   let team = $derived(data.team || []);
-  let positions = $derived(data.positions || []);
-  let openings = $derived(data.openings || []);
-  let applications = $derived(data.applications || []);
-  let activity = $derived(data.activity || []);
+
+  let dynamicModuleData = $state<Record<string, any>>({});
+  const loadingModules: Record<string, boolean> = {};
+
+  async function ensureModuleLoaded(mod: string) {
+    if (dynamicModuleData[mod] || loadingModules[mod] || !data.currentScan?.id || typeof window === 'undefined') return;
+    loadingModules[mod] = true;
+    try {
+      const res = await fetch(`/api/scan/module?scan_id=${data.currentScan.id}&module=${mod}`);
+      if (res.ok) {
+        const json = await res.json();
+        dynamicModuleData[mod] = json;
+      }
+    } catch (err) {
+      console.error('Failed to load scan module:', mod, err);
+    } finally {
+      delete loadingModules[mod];
+    }
+  }
+
+  function triggerModuleLoadForTab(tab: string) {
+    if (tab === 'recrutamento' || tab === 'candidaturas' || tab === 'positions') {
+      ensureModuleLoaded('recruitment');
+    } else if (tab === 'wiki' || tab === 'glossario' || tab === 'referencias') {
+      ensureModuleLoaded('knowledge');
+    } else if (tab === 'tutoriais') {
+      ensureModuleLoaded('academy');
+    } else if (tab === 'activity') {
+      ensureModuleLoaded('activity');
+    } else if (tab === 'staff_notes') {
+      ensureModuleLoaded('staff_notes');
+    } else if (tab === 'settings') {
+      ensureModuleLoaded('settings');
+    }
+  }
+
+  let positions = $derived(dynamicModuleData.recruitment?.positions || data.positions || []);
+  let openings = $derived(dynamicModuleData.recruitment?.openings || data.openings || []);
+  let applications = $derived(dynamicModuleData.recruitment?.applications || data.applications || []);
+  let applicationAnswers = $derived(dynamicModuleData.recruitment?.applicationAnswers || data.applicationAnswers || []);
+
+  let wikiPages = $derived(dynamicModuleData.knowledge?.wikiPages || data.wikiPages || []);
+  let glossary = $derived(dynamicModuleData.knowledge?.glossary || data.glossary || []);
+  let references = $derived(dynamicModuleData.knowledge?.references || data.references || []);
+
+  let tutorials = $derived(dynamicModuleData.academy?.tutorials || data.tutorials || []);
+  let activity = $derived(dynamicModuleData.activity?.activity || data.activity || []);
+  let staffNotes = $derived(dynamicModuleData.staff_notes?.staffNotes || data.staffNotes || []);
+  let integrations = $derived(dynamicModuleData.settings?.integrations || data.integrations || []);
+  let transferRequests = $derived(dynamicModuleData.settings?.transferRequests || data.transferRequests || []);
+  let catalogWorks = $derived(dynamicModuleData.catalog_works?.catalogWorks || data.catalogWorks || []);
 
   type DashTab =
     | 'works'
@@ -123,8 +170,8 @@
   function debouncedInvalidate() {
     if (invalidateTimer) clearTimeout(invalidateTimer);
     invalidateTimer = setTimeout(async () => {
-      await invalidateAll();
-    }, 300);
+      await invalidate('scan:workspace');
+    }, 1500);
   }
 
   $effect(() => {
@@ -191,6 +238,7 @@
     if (stageParam && stageParam !== currentPipelineStage) {
       currentPipelineStage = stageParam;
     }
+    triggerModuleLoadForTab(currentWorkspaceTab);
   });
 
   function handleSelectTab(tab: string, stage?: string) {
@@ -201,14 +249,15 @@
       currentPipelineStage = stage;
     }
     if (typeof window !== 'undefined') {
-      const url = new URL(page.url);
+      const url = new URL(window.location.href);
       url.searchParams.set('tab', tab);
       if (tab === 'pipeline') {
         url.searchParams.set('stage', currentPipelineStage);
       } else {
         url.searchParams.delete('stage');
       }
-      goto(url.toString(), { replaceState: true, keepFocus: true, noScroll: true });
+      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+      triggerModuleLoadForTab(tab);
     }
   }
 
@@ -227,7 +276,6 @@
     }
   }
 
-  let staffNotes = $derived(data.staffNotes || []);
   let newStaffNoteBody = $state('');
   let newStaffNotePinned = $state(false);
   let isPostingStaffNote = $state(false);
@@ -273,6 +321,11 @@
   );
 
   let showProjectModal = $state(false);
+  $effect(() => {
+    if (showProjectModal) {
+      ensureModuleLoaded('catalog_works');
+    }
+  });
   let selectedWorkId = $state('');
   let projectMessage = $state('');
   let projectSubmitting = $state(false);
@@ -1141,10 +1194,10 @@
             </div>
           {/if}
 
-          {#if data.transferRequests && data.transferRequests.some((t: any) => t.status === 'PENDING')}
+          {#if transferRequests && transferRequests.some((t: any) => t.status === 'PENDING')}
             <div class="pending-transfers-block">
               <span class="sub-section-title"><Crown size={14} class="inline mr-1" /> Transferência Pendente</span>
-              {#each data.transferRequests.filter((t: any) => t.status === 'PENDING') as tr (tr.id)}
+              {#each transferRequests.filter((t: any) => t.status === 'PENDING') as tr (tr.id)}
                 <div class="pending-transfer-item">
                   <div class="transfer-to-info">
                     <span class="transfer-to-name">Proposta para <strong>{tr.to_user?.display_name || tr.to_user?.username}</strong></span>
@@ -1512,7 +1565,7 @@
           {#if filteredApplications.length > 0}
             <div class="applications-grid">
               {#each filteredApplications as app (app.id)}
-                {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.application_id === app.id)}
+                {@const appAnswers = (applicationAnswers || []).filter((a: any) => a.application_id === app.id)}
                 <div class="app-card status-{app.status.toLowerCase()}">
                   <div class="app-card-header">
                     <div class="applicant-profile-row">
@@ -1991,7 +2044,7 @@
           <div class="settings-divider"></div>
           <SettingsTab
             currentScan={data.currentScan}
-            integrations={data.integrations}
+            integrations={integrations}
             team={data.team}
             works={data.works}
             chapters={data.chapters}
@@ -2057,7 +2110,7 @@
       <!-- TAB PANE: GLOSSÁRIO -->
       {:else if currentWorkspaceTab === 'glossario' || activeDashTab === 'glossary'}
         <GlossaryTab
-          glossary={data.glossary}
+          glossary={glossary}
           works={data.works}
           scanId={data.currentScan?.id}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -2067,7 +2120,7 @@
       <!-- TAB PANE: REFERÊNCIAS -->
       {:else if currentWorkspaceTab === 'referencias' || activeDashTab === 'references'}
         <ReferencesTab
-          references={data.references}
+          references={references}
           works={data.works}
           scanId={data.currentScan?.id}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -2077,7 +2130,7 @@
       <!-- TAB PANE: WIKI -->
       {:else if currentWorkspaceTab === 'wiki' || activeDashTab === 'wiki'}
         <WikiTab
-          wikiPages={data.wikiPages}
+          wikiPages={wikiPages}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
           scanId={data.currentScan?.id}
         />
@@ -2132,7 +2185,7 @@
       <!-- TAB PANE: ACADEMIA -->
       {:else if currentWorkspaceTab === 'tutoriais' || activeDashTab === 'academia'}
         <AcademiaTab
-          tutorials={data.tutorials || []}
+          tutorials={tutorials}
           attachments={data.attachments || []}
           positions={positions}
           isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
@@ -2156,8 +2209,8 @@
         works={works}
         chapters={chapters}
         tasks={data.tasks || []}
-        tutorials={data.tutorials || []}
-        wikiPages={data.wikiPages || []}
+        tutorials={tutorials}
+        wikiPages={wikiPages}
         channels={data.channels || []}
         team={team}
         onSelect={(type, id) => {
@@ -2262,7 +2315,7 @@
             <label for="proj-work">Selecione a Obra Desejada:</label>
             <select id="proj-work" name="work_id" bind:value={selectedWorkId} required class="form-select">
               <option value="" disabled>Escolha uma obra...</option>
-              {#each data.catalogWorks as w (w.id)}
+              {#each (catalogWorks.length ? catalogWorks : (data.catalogWorks || [])) as w (w.id)}
                 <option value={w.id}>{w.title}</option>
               {/each}
             </select>
@@ -2511,7 +2564,7 @@
   {/if}
 
   {#if reviewingApp}
-    {@const appAnswers = (data.applicationAnswers || []).filter((a: any) => a.application_id === reviewingApp.id)}
+    {@const appAnswers = (applicationAnswers || []).filter((a: any) => a.application_id === reviewingApp.id)}
     <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (reviewingApp = null))} onkeydown={(event) => dismissOnEscape(event, () => (reviewingApp = null))}>
       <div class="modal-card">
         <div class="modal-header">

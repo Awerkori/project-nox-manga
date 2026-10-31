@@ -40,6 +40,17 @@ var worker_default = {`;
     );
   }
 
+  if (!content.includes('pathname.startsWith(\'/_app/immutable/\')')) {
+    const fetchStartMarker = 'async fetch(req, env2, ctx) {\n    if (!origin) {';
+    const immutableFastPath = `async fetch(req, env2, ctx) {
+    const url = new URL(req.url);
+    if (url.pathname.startsWith('/_app/immutable/')) {
+      return env2.ASSETS.fetch(req);
+    }
+    if (!origin) {`;
+    content = content.replace(fetchStartMarker, immutableFastPath);
+  }
+
   // Dynamic SvelteKit routes must not fall through to the static asset
   // binding: its 404 is a plain "Not found" and bypasses application routing.
   // Keep asset requests on the fast path while explicitly routing extensionless

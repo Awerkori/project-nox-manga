@@ -12,16 +12,7 @@
   "assets": {
     "directory": ".svelte-kit/cloudflare",
     "binding": "ASSETS",
-    "run_worker_first": [
-      "!/_app/*",
-      "!/brand/*",
-      "!/badges/*",
-      "!/cosmetics/*",
-      "!/apple-touch-icon.png",
-      "!/favicon.*",
-      "!/site.webmanifest",
-      "/*"
-    ]
+    "run_worker_first": true
   },
   "observability": {
     "enabled": true

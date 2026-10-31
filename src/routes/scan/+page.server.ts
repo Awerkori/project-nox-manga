@@ -31,7 +31,8 @@ const ysqlCollection = async <T = any>(
   return { data: result.rows, error: null };
 };
 
-export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
+export const load: PageServerLoad = async ({ locals, url, platform, depends }: any) => {
+  if (depends) depends('scan:workspace');
   if (!locals.user) {
     return {
       authenticated: false,
@@ -174,6 +175,21 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
   // exposes free-form candidate answers to scan leaders and global ADMIN only.
   const canReadAllApplicationAnswers = isScanLeader || locals.role === 'ADMIN';
 
+  // Modular tab detection: only execute heavy secondary queries if the requested
+  // tab belongs to that module or is accessed directly.
+  const rawTab = url.searchParams.get('tab') || 'home';
+  const requestedTab = rawTab === 'tarefas' || rawTab === 'tasks' ? 'minha_fila' : (rawTab === 'capitulos' || rawTab === 'works' ? 'obras' : rawTab);
+
+  const needsRecruitment = ['recrutamento', 'candidaturas', 'positions'].includes(requestedTab);
+  const needsKnowledge = ['wiki', 'glossario', 'referencias'].includes(requestedTab);
+  const needsActivity = requestedTab === 'activity';
+  const needsStaffNotes = requestedTab === 'staff_notes';
+  const needsAcademy = ['tutoriais', 'academia', 'academy'].includes(requestedTab);
+  const needsSettings = ['settings', 'canais_config'].includes(requestedTab);
+  const needsCatalogWorks = requestedTab === 'obras';
+  const needsPipelineConfig = requestedTab === 'pipeline_config';
+  const needsMuralDetails = requestedTab === 'mural';
+
   // Start the authoritative editorial graph immediately. It deliberately runs
   // beside the rest of the workspace batch: a member should not wait for
   // unrelated backoffice widgets before the pipeline can render.
@@ -289,103 +305,117 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
   ) : Promise.resolve(null); */
 
   // The recruitment board contains both public vacancy data and private
-  // candidate answers. Fetch it directly from YSQL, but carry the legacy RLS
-  // visibility rules into the query: ordinary members can inspect scan
-  // applications, while only the applicant, a scan leader, or global ADMIN
-  // receives the answer text.
-  const recruitmentSnapshotPromise = withTimeout(
-    Promise.all([
-      executeYugabyteSql<any>(`
-        SELECT position.*
-        FROM public.scan_positions position
-        WHERE position.scan_id = $1
-          AND (position.is_active = true OR $2::boolean)
-        ORDER BY position.display_order ASC
-      `, [currentScan.id, canManageRecruitment], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT opening.*,
-          CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', position.id, 'name', position.name, 'description', position.description,
-            'icon', position.icon, 'display_order', position.display_order
-          ) END AS scan_positions
-        FROM public.scan_recruitment_openings opening
-        LEFT JOIN public.scan_positions position ON position.id = opening.position_id
-        WHERE opening.scan_id = $1
-          AND (opening.status = 'OPEN' OR $2::boolean)
-        ORDER BY opening.created_at DESC
-      `, [currentScan.id, canManageRecruitment], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT application.*,
-          CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', position.id, 'name', position.name, 'description', position.description,
-            'icon', position.icon, 'display_order', position.display_order
-          ) END AS scan_positions,
-          CASE WHEN opening.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', opening.id, 'title', opening.title
-          ) END AS scan_recruitment_openings,
-          CASE WHEN applicant.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', applicant.id, 'username', applicant.username,
-            'display_name', applicant.display_name, 'avatar_id', applicant.avatar_id
-          ) END AS members
-        FROM public.scan_applications application
-        LEFT JOIN public.scan_positions position ON position.id = application.position_id
-        LEFT JOIN public.scan_recruitment_openings opening ON opening.id = application.opening_id
-        LEFT JOIN public.members applicant ON applicant.id = application.user_id
-        WHERE application.scan_id = $1
-        ORDER BY application.created_at DESC
-      `, [currentScan.id], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT question.*
-        FROM public.scan_recruitment_questions question
-        WHERE question.scan_id = $1
-        ORDER BY question.display_order ASC
-      `, [currentScan.id], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT answer.*,
-          CASE WHEN question.id IS NULL THEN NULL ELSE jsonb_build_object(
-            'id', question.id, 'question', question.question,
-            'question_type', question.question_type, 'display_order', question.display_order
-          ) END AS question
-        FROM public.scan_application_answers answer
-        JOIN public.scan_applications application ON application.id = answer.application_id
-        LEFT JOIN public.scan_recruitment_questions question ON question.id = answer.question_id
-        WHERE application.scan_id = $1
-          AND ($2::boolean OR application.user_id = $3)
-        ORDER BY answer.created_at ASC
-      `, [currentScan.id, canReadAllApplicationAnswers, locals.user.id], platform?.env)
-    ]),
-    3_500,
-    null,
-    'scan_recruitment_snapshot_ysql'
-  );
+  // candidate answers. When not on the recruitment tab, a single count query is executed
+  // for the sidebar badge, completely skipping 5 heavy queries.
+  const recruitmentSnapshotPromise = needsRecruitment
+    ? withTimeout(
+        Promise.all([
+          executeYugabyteSql<any>(`
+            SELECT position.*
+            FROM public.scan_positions position
+            WHERE position.scan_id = $1
+              AND (position.is_active = true OR $2::boolean)
+            ORDER BY position.display_order ASC
+          `, [currentScan.id, canManageRecruitment], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT opening.*,
+              CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', position.id, 'name', position.name, 'description', position.description,
+                'icon', position.icon, 'display_order', position.display_order
+              ) END AS scan_positions
+            FROM public.scan_recruitment_openings opening
+            LEFT JOIN public.scan_positions position ON position.id = opening.position_id
+            WHERE opening.scan_id = $1
+              AND (opening.status = 'OPEN' OR $2::boolean)
+            ORDER BY opening.created_at DESC
+          `, [currentScan.id, canManageRecruitment], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT application.*,
+              CASE WHEN position.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', position.id, 'name', position.name, 'description', position.description,
+                'icon', position.icon, 'display_order', position.display_order
+              ) END AS scan_positions,
+              CASE WHEN opening.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', opening.id, 'title', opening.title
+              ) END AS scan_recruitment_openings,
+              CASE WHEN applicant.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', applicant.id, 'username', applicant.username,
+                'display_name', applicant.display_name, 'avatar_id', applicant.avatar_id
+              ) END AS members
+            FROM public.scan_applications application
+            LEFT JOIN public.scan_positions position ON position.id = application.position_id
+            LEFT JOIN public.scan_recruitment_openings opening ON opening.id = application.opening_id
+            LEFT JOIN public.members applicant ON applicant.id = application.user_id
+            WHERE application.scan_id = $1
+            ORDER BY application.created_at DESC
+          `, [currentScan.id], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT question.*
+            FROM public.scan_recruitment_questions question
+            WHERE question.scan_id = $1
+            ORDER BY question.display_order ASC
+          `, [currentScan.id], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT answer.*,
+              CASE WHEN question.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', question.id, 'question', question.question,
+                'question_type', question.question_type, 'display_order', question.display_order
+              ) END AS question
+            FROM public.scan_application_answers answer
+            JOIN public.scan_applications application ON application.id = answer.application_id
+            LEFT JOIN public.scan_recruitment_questions question ON question.id = answer.question_id
+            WHERE application.scan_id = $1
+              AND ($2::boolean OR application.user_id = $3)
+            ORDER BY answer.created_at ASC
+          `, [currentScan.id, canReadAllApplicationAnswers, locals.user.id], platform?.env)
+        ]),
+        3_500,
+        null,
+        'scan_recruitment_snapshot_ysql'
+      )
+    : Promise.resolve(null);
 
-  // Knowledge is a read-heavy workspace surface. Keep all three collections
-  // on the YSQL data plane and fail closed to empty state on a transient error.
-  const knowledgeSnapshotPromise = withTimeout(
-    Promise.all([
-      executeYugabyteSql<any>(`
-        SELECT wiki_page.*
-        FROM public.scan_wiki_pages wiki_page
-        WHERE wiki_page.scan_id = $1
-        ORDER BY wiki_page.is_pinned DESC, wiki_page.title ASC
-      `, [currentScan.id], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT glossary_entry.*
-        FROM public.work_glossary_entries glossary_entry
-        WHERE glossary_entry.scan_id = $1
-        ORDER BY glossary_entry.source_term ASC
-      `, [currentScan.id], platform?.env),
-      executeYugabyteSql<any>(`
-        SELECT work_reference.*
-        FROM public.work_references work_reference
-        WHERE work_reference.scan_id = $1
-        ORDER BY work_reference.created_at DESC
-      `, [currentScan.id], platform?.env)
-    ]),
-    3_500,
-    null,
-    'scan_knowledge_snapshot_ysql'
-  );
+  const pendingAppsCountPromise = (!needsRecruitment && canManageRecruitment)
+    ? withTimeout(
+        executeYugabyteSql<{ count: number }>(`
+          SELECT count(*)::int as count
+          FROM public.scan_applications
+          WHERE scan_id = $1 AND status IN ('PENDING', 'UNDER_REVIEW')
+        `, [currentScan.id], platform?.env),
+        2_000,
+        { rows: [{ count: 0 }], rowCount: 1 },
+        'scan_pending_apps_count_ysql'
+      )
+    : Promise.resolve(null);
+
+  // Knowledge is a read-heavy workspace surface loaded on demand.
+  const knowledgeSnapshotPromise = needsKnowledge
+    ? withTimeout(
+        Promise.all([
+          executeYugabyteSql<any>(`
+            SELECT wiki_page.*
+            FROM public.scan_wiki_pages wiki_page
+            WHERE wiki_page.scan_id = $1
+            ORDER BY wiki_page.is_pinned DESC, wiki_page.title ASC
+          `, [currentScan.id], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT glossary_entry.*
+            FROM public.work_glossary_entries glossary_entry
+            WHERE glossary_entry.scan_id = $1
+            ORDER BY glossary_entry.source_term ASC
+          `, [currentScan.id], platform?.env),
+          executeYugabyteSql<any>(`
+            SELECT work_reference.*
+            FROM public.work_references work_reference
+            WHERE work_reference.scan_id = $1
+            ORDER BY work_reference.created_at DESC
+          `, [currentScan.id], platform?.env)
+        ]),
+        3_500,
+        null,
+        'scan_knowledge_snapshot_ysql'
+      )
+    : Promise.resolve(null);
 
   // Task transitions already run through YSQL transactions. Keep the queue
   // itself on that same data plane, including its historical comments, so a
@@ -533,12 +563,12 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        WHERE request.scan_id = $1 ORDER BY request.created_at DESC`,
       [currentScan.id], platform, 'scan_project_requests_ysql'
     ),
-    ysqlCollection<any>(
+    needsCatalogWorks ? ysqlCollection<any>(
       `SELECT id, title, slug, cover_id FROM public.works
        WHERE published = true ORDER BY title LIMIT 100`,
       [], platform, 'scan_catalog_works_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsSettings ? ysqlCollection<any>(
       `SELECT transfer_request.*,
          jsonb_build_object('id', sender.id, 'username', sender.username, 'display_name', sender.display_name) AS from_user,
          jsonb_build_object('id', receiver.id, 'username', receiver.username, 'display_name', receiver.display_name) AS to_user
@@ -547,8 +577,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        LEFT JOIN public.members receiver ON receiver.id = transfer_request.to_user_id
        WHERE transfer_request.scan_id = $1 ORDER BY transfer_request.created_at DESC`,
       [currentScan.id], platform, 'scan_transfer_requests_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsSettings ? ysqlCollection<any>(
       `SELECT transfer_request.*,
          jsonb_build_object('id', scan.id, 'name', scan.name, 'slug', scan.slug) AS scans,
          jsonb_build_object('id', sender.id, 'username', sender.username, 'display_name', sender.display_name) AS from_user
@@ -558,20 +588,20 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        WHERE transfer_request.to_user_id = $1 AND transfer_request.status = 'PENDING'
        ORDER BY transfer_request.created_at DESC LIMIT 1`,
       [locals.user.id], platform, 'scan_incoming_transfer_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     // Recruitment is loaded from the YSQL snapshot below. Keep its legacy
     // reads out of the healthy request path.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsActivity ? ysqlCollection<any>(
       `SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
          'display_name', member.display_name, 'avatar_id', member.avatar_id) AS members
        FROM public.scan_activity activity
        LEFT JOIN public.members member ON member.id = activity.user_id
        WHERE activity.scan_id = $1 ORDER BY activity.created_at DESC LIMIT 50`,
       [currentScan.id], platform, 'scan_activity_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     ysqlCollection<any>(
       `SELECT member_position.user_id, member_position.position_id,
          member_position.is_primary, member_position.is_public, member_position.hidden_by_admin,
@@ -583,7 +613,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        WHERE member_position.scan_id = $1`,
       [currentScan.id], platform, 'scan_member_positions_ysql'
     ),
-    ysqlCollection<any>(
+    needsStaffNotes ? ysqlCollection<any>(
       `SELECT note.id, note.scan_id, note.user_id, note.parent_id, note.body,
          note.is_pinned, note.created_at, note.updated_at,
          jsonb_build_object('id', member.id, 'username', member.username,
@@ -594,7 +624,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        WHERE note.scan_id = $1
        ORDER BY note.is_pinned DESC, note.created_at DESC`,
       [currentScan.id], platform, 'scan_staff_notes_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     // Task reads are served by the YSQL snapshot above. This placeholder
@@ -605,12 +635,12 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsSettings ? ysqlCollection<any>(
       `SELECT integration.* FROM public.scan_integrations integration
        WHERE integration.scan_id = $1 ORDER BY integration.created_at DESC`,
       [currentScan.id], platform, 'scan_integrations_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsCatalogWorks ? ysqlCollection<any>(
       `SELECT uploader.*,
          jsonb_build_object('id', member.id, 'username', member.username, 'display_name', member.display_name) AS members,
          jsonb_build_object('id', work.id, 'title', work.title) AS works
@@ -619,7 +649,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        LEFT JOIN public.works work ON work.id = uploader.work_id
        WHERE uploader.scan_id = $1`,
       [currentScan.id], platform, 'scan_work_uploaders_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     Promise.resolve({ data: [] }),
     // YSQL chat snapshot is started above. These placeholders preserve the
     // batch shape while that snapshot resolves.
@@ -629,11 +659,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     // placeholders preserve the existing batch index during the migration.
     Promise.resolve({ data: [] }),
     Promise.resolve({ data: null }),
-    ysqlCollection<any>(
+    needsAcademy ? ysqlCollection<any>(
       `SELECT tutorial.* FROM public.scan_academy_tutorials tutorial
        WHERE tutorial.scan_id = $1 ORDER BY tutorial.display_order ASC`,
       [currentScan.id], platform, 'scan_tutorials_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     ysqlCollection<any>(
       `SELECT issue.*,
          jsonb_build_object('id', assignee.id, 'username', assignee.username,
@@ -647,10 +677,10 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
       [currentScan.id], platform, 'scan_qc_issues_ysql'
     ),
     Promise.resolve({ data: [] }),
-    ysqlCollection<any>(
+    needsPipelineConfig ? ysqlCollection<any>(
       `SELECT template.* FROM public.scan_pipeline_templates template`,
       [], platform, 'scan_pipeline_templates_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     ysqlCollection<any>(
       `SELECT post.*, jsonb_build_object('id', author.id, 'username', author.username,
          'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
@@ -659,24 +689,24 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
        WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC`,
       [currentScan.id], platform, 'scan_mural_posts_ysql'
     ),
-    ysqlCollection<any>(
+    needsMuralDetails ? ysqlCollection<any>(
       `SELECT comment.*, jsonb_build_object('id', author.id, 'username', author.username,
          'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
        FROM public.scan_mural_comments comment
        LEFT JOIN public.members author ON author.id = comment.author_id
        WHERE comment.scan_id = $1 ORDER BY comment.created_at ASC`,
       [currentScan.id], platform, 'scan_mural_comments_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsMuralDetails ? ysqlCollection<any>(
       `SELECT reaction.* FROM public.scan_mural_reactions reaction
        WHERE reaction.scan_id = $1`,
       [currentScan.id], platform, 'scan_mural_reactions_ysql'
-    ),
-    ysqlCollection<any>(
+    ) : Promise.resolve({ data: [] }),
+    needsMuralDetails ? ysqlCollection<any>(
       `SELECT attachment.* FROM public.scan_attachments attachment
        WHERE attachment.scan_id = $1 ORDER BY attachment.created_at ASC`,
       [currentScan.id], platform, 'scan_attachments_ysql'
-    ),
+    ) : Promise.resolve({ data: [] }),
     // Production files are loaded by the dedicated YSQL query immediately
     // below; keep this slot for the historical batch shape only.
     Promise.resolve({ data: [] }),
@@ -755,16 +785,15 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     recruitmentQuestions = questionsResult.rows;
     applicationAnswers = answersResult.rows;
   } else {
-    console.warn('scan_recruitment_snapshot_ysql_unavailable', {
-      scanId: currentScan.id,
-      message: 'ysql snapshot unavailable'
-    });
     positions = [];
     recruitmentOpenings = [];
     applications = [];
     recruitmentQuestions = [];
     applicationAnswers = [];
   }
+
+  const pendingAppsCountSnap = await pendingAppsCountPromise;
+  const pendingAppsCount = pendingAppsCountSnap?.rows?.[0]?.count ?? applications.filter((a: any) => ['PENDING', 'UNDER_REVIEW'].includes(a.status)).length;
 
   const openings = recruitmentOpenings.map((op: any) => {
     const apps = applications.filter((a: any) => a.opening_id === op.id);
@@ -815,10 +844,6 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     glossary = glossaryResult.rows;
     references = referencesResult.rows;
   } else {
-    console.warn('scan_knowledge_snapshot_ysql_unavailable', {
-      scanId: currentScan.id,
-      message: 'ysql snapshot unavailable'
-    });
     wikiPages = [];
     glossary = [];
     references = [];
@@ -1032,7 +1057,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     chapterTimeline,
     workOverrides: workOverridesRes.data || [],
     creditSnapshots: creditSnapshotsRes.data || [],
-    seenStages: seenStagesRes.data || []
+    seenStages: seenStagesRes.data || [],
+    pendingAppsCount,
+    activeTab: requestedTab
   };
 };
 

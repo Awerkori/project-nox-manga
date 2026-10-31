@@ -108,6 +108,10 @@ var worker_default = {
    * @returns {Promise<Response>}
    */
   async fetch(req, env2, ctx) {
+    const url = new URL(req.url);
+    if (url.pathname.startsWith('/_app/immutable/')) {
+      return env2.ASSETS.fetch(req);
+    }
     if (!origin) {
       origin = new URL(req.url).origin;
     }

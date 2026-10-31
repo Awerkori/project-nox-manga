@@ -94,10 +94,16 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const isAdultWork = (work as any).content_rating === 'ADULT_18';
   if (!locals.user && setHeaders) {
     if (isAdultWork) {
-      // Adult content is strictly kept private from edge cache to enforce the minor age gate on every request
-      setHeaders({
-        'cache-control': 'private, no-cache, no-store, must-revalidate'
-      });
+      const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
+      if (rawAgeCookie === 'MINOR') {
+        setHeaders({
+          'cache-control': 'private, no-cache, no-store, must-revalidate'
+        });
+      } else {
+        setHeaders({
+          'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
+        });
+      }
     } else {
       setHeaders({
         'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'

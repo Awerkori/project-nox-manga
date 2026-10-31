@@ -47,7 +47,6 @@ export async function withYugabyteLkg<T>(
   const start = performance.now();
   try {
     const data = await fetcher();
-    const dur = Math.round(performance.now() - start);
     setLkg(op, data);
     return data;
   } catch (err: any) {
@@ -740,10 +739,11 @@ export async function fetchFullWorkPageFromYugabyte(
   platformEnv?: any
 ): Promise<FullWorkPageBundle | null> {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
-  const opKey = `work_full_${slugOrId}_${preview}_${visitorId || 'anon'}_${userId || 'anon'}`;
+  const baseOpKey = `work_full_base_${slugOrId}_${preview}`;
 
-  return withYugabyteLkg(
-    opKey,
+  // 1. Fetch base bundle (cached for 30 seconds across all readers)
+  const base = await withYugabyteLkg<FullWorkPageBundle | null>(
+    baseOpKey,
     async () => {
       const targetCondition = isUuid ? 'w.id = $1::uuid' : 'w.slug = $1';
       const chapterPubFilter = preview ? '' : 'AND c.published_at IS NOT NULL';
@@ -779,7 +779,6 @@ export async function fetchFullWorkPageFromYugabyte(
           SELECT
             ROUND(AVG(rating) FILTER (WHERE rating >= 1 AND rating <= 5)::numeric, 1) as avg_rating,
             COUNT(*) FILTER (WHERE rating >= 1 AND rating <= 5)::int as total_count,
-            MAX(rating) FILTER (WHERE visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL)) as user_rating,
             COUNT(*) FILTER (WHERE rating = 1)::int as cnt_1,
             COUNT(*) FILTER (WHERE rating = 2)::int as cnt_2,
             COUNT(*) FILTER (WHERE rating = 3)::int as cnt_3,
@@ -800,7 +799,7 @@ export async function fetchFullWorkPageFromYugabyte(
         chapters: YugabyteChapter[] | null;
         tags: YugabyteTag[] | null;
         rating: any | null;
-      }>(sql, [slugOrId, visitorId || '', userId || null], platformEnv);
+      }>(sql, [slugOrId], platformEnv);
 
       const row = res.rows[0];
       if (!row || !row.work) return null;
@@ -809,7 +808,6 @@ export async function fetchFullWorkPageFromYugabyte(
       const rawAvg = rawRating?.avg_rating;
       const count = rawRating?.total_count ? Number(rawRating.total_count) : 0;
       const average = rawAvg !== null && rawAvg !== undefined ? parseFloat(rawAvg) : null;
-      const userRating = rawRating?.user_rating !== null && rawRating?.user_rating !== undefined ? Number(rawRating.user_rating) : null;
       const distribution: Record<number, number> = {
         1: rawRating?.cnt_1 ? Number(rawRating.cnt_1) : 0,
         2: rawRating?.cnt_2 ? Number(rawRating.cnt_2) : 0,
@@ -825,13 +823,41 @@ export async function fetchFullWorkPageFromYugabyte(
         rating: {
           average,
           count,
-          userRating,
+          userRating: null,
           distribution
         }
       };
     },
-    null
+    null,
+    30_000
   );
+
+  if (!base || !base.work) return null;
+
+  // 2. Targeted micro-query for personal user rating if session or visitor identifier present
+  let personalUserRating: number | null = null;
+  if (visitorId || userId) {
+    try {
+      const uRes = await executeYugabyteSql<{ rating: number }>(
+        `SELECT rating FROM public.work_ratings WHERE work_id = $1::uuid AND (visitor_id = $2 OR (user_id = $3::uuid AND $3 IS NOT NULL)) LIMIT 1`,
+        [base.work.id, visitorId || '', userId || null],
+        platformEnv
+      );
+      if (uRes.rows.length > 0 && uRes.rows[0].rating) {
+        personalUserRating = Number(uRes.rows[0].rating);
+      }
+    } catch {
+      // Non-critical, fall back to null
+    }
+  }
+
+  return {
+    ...base,
+    rating: {
+      ...base.rating,
+      userRating: personalUserRating
+    }
+  };
 }
 
 export interface YugabyteCatalogOptions {
