@@ -187,9 +187,24 @@
     }
   }
 
-  function handleKeydownModal(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
+  function attemptCloseModal() {
+    const isDirty = newChapterNumber !== '' || newChapterLabel.trim() !== '';
+    if (isDirty) {
+      if (typeof window !== 'undefined' && window.confirm('Deseja descartar as alterações do novo capítulo?')) {
+        showNewChapterModal = false;
+        newChapterNumber = '';
+        newChapterLabel = '';
+        createFeedback = null;
+      }
+    } else {
       showNewChapterModal = false;
+      createFeedback = null;
+    }
+  }
+
+  function handleKeydownModal(e: KeyboardEvent) {
+    if (e.key === 'Escape' && showNewChapterModal) {
+      attemptCloseModal();
     }
   }
 </script>
@@ -260,7 +275,7 @@
   {/if}
 
   <!-- MAIN SECTIONS COMPOSITION (Side-by-side on wide screens, stacked on mobile) -->
-  <main class="raw-main-grid">
+  <div class="raw-main-grid">
     <!-- SECTION 1: CAPÍTULOS DISPONÍVEIS (Central Pool of Chapters awaiting RAW) -->
     <section class="raw-section raw-available-section">
       <div class="section-headline">
@@ -452,6 +467,7 @@
                       type="button"
                       class="btn-toggle-upload"
                       class:active={isExpanded}
+                      class:cta-needed={!hasFiles}
                       onclick={() => toggleUploadAccordion(item.cs.id)}
                       title={isExpanded ? 'Recolher área de arquivos' : 'Gerenciar arquivos do RAW'}
                     >
@@ -515,8 +531,13 @@
               {#if isExpanded}
                 <div class="raw-upload-accordion">
                   <div class="upload-accordion-header">
-                    <span class="upload-accordion-title">Arquivos originais do Capítulo #{item.ch.chapter_number}</span>
-                    <span class="upload-format-note">Formatos: .zip, .cbz ou imagens sequenciais</span>
+                    <div class="upload-title-wrap">
+                      <span class="upload-accordion-title">Arquivos originais do Capítulo #{item.ch.chapter_number}</span>
+                      <span class="upload-format-note">Formatos aceitos: .zip, .cbz ou imagens sequenciais</span>
+                    </div>
+                    {#if !hasFiles}
+                      <span class="upload-step-hint">1º Envie o RAW abaixo &bull; 2º Clique em "Concluir RAW" acima</span>
+                    {/if}
                   </div>
 
                   <PipelineDeliverableUpload
@@ -532,14 +553,14 @@
         </div>
       {/if}
     </section>
-  </main>
+  </div>
 
   <!-- MODAL: CADASTRAR NOVO CAPÍTULO (COLLAPSED BY DEFAULT) -->
   {#if showNewChapterModal}
     <div
       class="modal-backdrop"
       onclick={(e) => {
-        if (e.target === e.currentTarget) showNewChapterModal = false;
+        if (e.target === e.currentTarget) attemptCloseModal();
       }}
       role="presentation"
     >
@@ -557,7 +578,7 @@
           <button
             type="button"
             class="btn-modal-close"
-            onclick={() => (showNewChapterModal = false)}
+            onclick={attemptCloseModal}
             aria-label="Fechar formulário de cadastro"
             title="Fechar"
           >
@@ -711,7 +732,7 @@
             <button
               type="button"
               class="btn-modal-cancel"
-              onclick={() => (showNewChapterModal = false)}
+              onclick={attemptCloseModal}
             >
               Cancelar
             </button>
@@ -947,15 +968,21 @@
   .raw-main-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 20px;
+    grid-auto-rows: max-content;
+    align-content: start;
     align-items: start;
+    gap: 20px;
     width: 100%;
+    min-height: 0;
   }
 
   @media (max-width: 1024px) {
     .raw-main-grid {
       grid-template-columns: minmax(0, 1fr);
-      gap: 20px;
+      grid-auto-rows: max-content;
+      align-content: start;
+      gap: 16px;
+      min-height: 0;
     }
   }
 
@@ -1286,6 +1313,19 @@
     color: #c4b5fd;
   }
 
+  .btn-toggle-upload.cta-needed {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.45);
+    color: #e9d5ff;
+    font-weight: 650;
+  }
+
+  .btn-toggle-upload.cta-needed:hover {
+    background: rgba(139, 92, 246, 0.28);
+    border-color: rgba(139, 92, 246, 0.65);
+    color: #ffffff;
+  }
+
   .btn-concluir-raw {
     display: inline-flex;
     align-items: center;
@@ -1323,8 +1363,25 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .upload-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .upload-step-hint {
+    font-size: 11px;
+    font-weight: 600;
+    color: #a78bfa;
+    background: rgba(139, 92, 246, 0.12);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(139, 92, 246, 0.25);
   }
 
   .upload-accordion-title {
@@ -1396,7 +1453,7 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 14px;
     width: 100%;
-    max-width: 520px;
+    max-width: 540px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     overflow: hidden;
     display: flex;
@@ -1485,10 +1542,10 @@
   }
 
   .modal-form {
-    padding: 18px 20px 20px 20px;
+    padding: 20px 24px 24px 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
   }
 
   .form-group {
@@ -1498,7 +1555,7 @@
   }
 
   .form-label {
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 650;
     color: #cbd5e1;
   }
@@ -1506,7 +1563,7 @@
   .form-select,
   .form-input {
     width: 100%;
-    padding: 9px 12px;
+    padding: 10px 14px;
     background: #131726;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
@@ -1525,8 +1582,8 @@
 
   .form-grid-two {
     display: grid;
-    grid-template-columns: 1fr 1.4fr;
-    gap: 12px;
+    grid-template-columns: 1fr 1.35fr;
+    gap: 14px;
   }
 
   /* Priority Radio Pills */
@@ -1540,11 +1597,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px;
+    padding: 9px 12px;
     background: #131726;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 7px;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     color: #94a3b8;
     cursor: pointer;
@@ -1614,13 +1671,13 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
-    padding-top: 10px;
+    gap: 12px;
+    padding-top: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .btn-modal-cancel {
-    padding: 9px 16px;
+    padding: 10px 18px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #cbd5e1;
@@ -1629,6 +1686,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
+    min-height: 40px;
   }
 
   .btn-modal-cancel:hover {
@@ -1640,7 +1698,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 9px 18px;
+    padding: 10px 20px;
     background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
     border: 1px solid rgba(139, 92, 246, 0.5);
     color: #ffffff;
@@ -1649,6 +1707,7 @@
     font-weight: 650;
     cursor: pointer;
     transition: all 0.15s ease;
+    min-height: 40px;
   }
 
   .btn-modal-submit:hover:not(:disabled) {
@@ -1752,8 +1811,22 @@
     .modal-card {
       border-bottom-left-radius: 0;
       border-bottom-right-radius: 0;
-      max-height: 90vh;
+      max-height: 85dvh;
       overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    }
+
+    .modal-form {
+      padding: 16px 16px 20px 16px;
+      gap: 16px;
+    }
+
+    .btn-modal-cancel,
+    .btn-modal-submit {
+      min-height: 44px;
+      padding: 11px 18px;
+      font-size: 14px;
     }
   }
 
