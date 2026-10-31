@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 
 const targetUrl = process.env.BENCHMARK_TARGET_URL || 'https://home-preview-manga.project-nox-awerkori.workers.dev';
 const artifactDir = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
-const workerVersion = 'd28ad64b-b381-4875-97bc-713d79d9dfa0';
+const workerVersion = '41d3eaaa-0c63-4f1e-ac1e-2da15eaa974a';
 
 async function runVerification() {
   console.log('=== PROJECT NOX — HOMOLOGAÇÃO COMPLETA RODADA 21 V7.4 ===');
