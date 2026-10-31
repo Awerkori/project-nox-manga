@@ -232,6 +232,19 @@
       attemptCloseModal();
     }
   }
+
+  // Prevent background scrolling while modal is open
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      if (showNewChapterModal) {
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+          document.body.style.overflow = originalOverflow;
+        };
+      }
+    }
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydownModal} />
@@ -487,11 +500,11 @@
   {/if}
 {/snippet}
 
-<!-- SNIPPET 3: ELEGANT EMPTY STATE FOR AVAILABLE POOL -->
+<!-- SNIPPET 3: ELEGANT COMPACT EMPTY STATE FOR AVAILABLE POOL -->
 {#snippet emptyAvailable()}
   <div class="workspace-empty-card">
     <div class="empty-halo-icon">
-      <CheckCircle2 size={24} class="text-emerald-400" />
+      <CheckCircle2 size={18} class="text-emerald-400" />
     </div>
     <div class="empty-body">
       <strong class="empty-heading">Tudo em dia por aqui</strong>
@@ -500,24 +513,25 @@
     {#if canCreateChapter}
       <button
         type="button"
-        class="btn-empty-action"
+        class="btn-empty-action-secondary"
         onclick={() => {
           showNewChapterModal = true;
           createFeedback = null;
         }}
+        title="Cadastrar um novo capítulo"
       >
-        <Plus size={14} />
+        <Plus size={13} />
         <span>Cadastrar novo capítulo</span>
       </button>
     {/if}
   </div>
 {/snippet}
 
-<!-- SNIPPET 4: ELEGANT EMPTY STATE FOR MY WORK -->
+<!-- SNIPPET 4: ELEGANT COMPACT EMPTY STATE FOR MY WORK -->
 {#snippet emptyMine()}
   <div class="workspace-empty-card">
     <div class="empty-halo-icon neutral">
-      <Clock size={24} class="text-slate-400" />
+      <Clock size={18} class="text-slate-400" />
     </div>
     <div class="empty-body">
       <strong class="empty-heading">Sua fila de RAW está livre</strong>
@@ -526,10 +540,10 @@
     {#if availableItems.length > 0}
       <button
         type="button"
-        class="btn-empty-action amber"
+        class="btn-empty-action-secondary amber"
         onclick={() => (activeCategory = 'available')}
       >
-        <Zap size={14} />
+        <Zap size={13} />
         <span>Ver {availableItems.length} capítulo{availableItems.length > 1 ? 's' : ''} disponível{availableItems.length > 1 ? 'is' : ''}</span>
       </button>
     {/if}
@@ -539,15 +553,15 @@
 
 <!-- MAIN COMPONENT ROOT -->
 <div class="raw-provider-root">
-  <!-- COMPACT HEADER (Clean, Elegant, Low Height) -->
+  <!-- COMPACT HEADER (Clean, Elegant, Low Height, Refined Hierarchy) -->
   <header class="raw-header">
     <div class="raw-header-main">
       <div class="raw-title-row">
+        <h1 class="raw-title">Raw Provider</h1>
         <span class="raw-stage-pill">
           <span class="stage-dot"></span>
           <span>Etapa 1 &bull; RAW</span>
         </span>
-        <h1 class="raw-title">Raw Provider</h1>
       </div>
       <p class="raw-subtitle">Prepare os arquivos originais para a produção.</p>
     </div>
@@ -1268,11 +1282,11 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 32px 20px;
+    padding: 22px 16px;
     background: #0a0d18;
     border: 1px dashed rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
     box-sizing: border-box;
   }
@@ -1281,12 +1295,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     background: rgba(16, 185, 129, 0.1);
     border: 1px solid rgba(16, 185, 129, 0.25);
-    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
   }
 
   .empty-halo-icon.neutral {
@@ -1298,21 +1312,55 @@
   .empty-body {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
   }
 
   .empty-heading {
-    font-size: 14.5px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #f1f5f9;
   }
 
   .empty-subtext {
     margin: 0;
-    font-size: 12.5px;
+    font-size: 12px;
     color: #94a3b8;
-    max-width: 380px;
-    line-height: 1.4;
+    max-width: 340px;
+    line-height: 1.35;
+  }
+
+  .btn-empty-action-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    margin-top: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 7px;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-empty-action-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
+
+  .btn-empty-action-secondary.amber {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.22);
+    color: #fbbf24;
+  }
+
+  .btn-empty-action-secondary.amber:hover {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fef08a;
   }
 
   .btn-empty-action {
@@ -1880,13 +1928,15 @@
   .modal-card {
     background: #0f1322;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 14px;
+    border-radius: 16px;
     width: 100%;
-    max-width: 540px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    max-width: 520px;
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    max-height: calc(100dvh - 32px);
+    margin: auto;
     animation: scaleInModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -1901,6 +1951,7 @@
     justify-content: space-between;
     padding: 18px 22px 14px 22px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
   }
 
   .modal-header-lockup {
@@ -1962,6 +2013,7 @@
     padding: 10px 12px;
     border-radius: 8px;
     font-size: 13px;
+    flex-shrink: 0;
   }
 
   .modal-feedback-alert.error {
@@ -1975,6 +2027,9 @@
     display: flex;
     flex-direction: column;
     gap: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
   }
 
   .form-group {
@@ -2258,32 +2313,141 @@
 
     .form-grid-two {
       grid-template-columns: 1fr;
+      gap: 12px;
     }
 
+    /* TRUE FLOATING MODAL ON MOBILE (NOT A BOTTOM SHEET) */
     .modal-backdrop {
-      align-items: flex-end;
-      padding: 0;
+      align-items: center;
+      justify-content: center;
+      padding: max(16px, env(safe-area-inset-top, 16px)) 16px max(16px, env(safe-area-inset-bottom, 16px)) 16px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .modal-card {
-      border-bottom-left-radius: 0;
-      border-bottom-right-radius: 0;
-      max-height: 85dvh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      max-height: calc(100dvh - 32px);
+      margin: auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-header {
+      padding: 14px 16px;
+      flex-shrink: 0;
+    }
+
+    .modal-icon-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+    }
+
+    .modal-title {
+      font-size: 15.5px;
+    }
+
+    .modal-subtitle {
+      font-size: 11.5px;
     }
 
     .modal-form {
-      padding: 16px 16px 20px 16px;
-      gap: 16px;
+      padding: 14px 16px 16px 16px;
+      gap: 13px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      min-height: 0;
+    }
+
+    .form-group {
+      gap: 5px;
+    }
+
+    .form-label {
+      font-size: 12px;
+    }
+
+    .form-select,
+    .form-input {
+      padding: 8px 12px;
+      font-size: 13px;
+      border-radius: 7px;
+    }
+
+    .priority-radio-option {
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+
+    .checkbox-container {
+      gap: 8px;
+    }
+
+    .checkbox-label-text strong {
+      font-size: 12px;
+    }
+
+    .checkbox-label-text small {
+      font-size: 11px;
+    }
+
+    .modal-footer {
+      padding-top: 12px;
+      gap: 10px;
+      flex-shrink: 0;
     }
 
     .btn-modal-cancel,
     .btn-modal-submit {
-      min-height: 44px;
-      padding: 11px 18px;
-      font-size: 14px;
+      min-height: 42px;
+      padding: 10px 16px;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .raw-header {
+      padding: 10px 12px;
+      gap: 8px;
+    }
+
+    .raw-title-row {
+      gap: 6px;
+    }
+
+    .raw-title {
+      font-size: 16px;
+    }
+
+    .raw-stage-pill {
+      font-size: 10px;
+      padding: 2px 6px;
+    }
+
+    .raw-subtitle {
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .btn-novo-capitulo {
+      padding: 6px 10px;
+      font-size: 12px;
+      gap: 4px;
+    }
+
+    .modal-backdrop {
+      padding: max(12px, env(safe-area-inset-top, 12px)) 12px max(12px, env(safe-area-inset-bottom, 12px)) 12px;
+    }
+
+    .modal-card {
+      max-height: calc(100dvh - 24px);
+      border-radius: 14px;
     }
   }
 
