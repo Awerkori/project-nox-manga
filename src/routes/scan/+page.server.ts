@@ -225,7 +225,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   const needsMuralDetails = isMural;
   const needsInvites = isTeam;
   const needsProjectRequests = isWorks;
-  const needsQcIssues = isQc || isPipeline || isHome;
+  const needsQcIssues = isQc || isPipeline || isHome || isCapitulo;
   const needsOverrides = isMyQueue || isPipeline;
   const needsCreditSnapshots = isMyQueue;
   const needsMural = isMural || isHome;
@@ -534,7 +534,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     'scan_notification_snapshot_ysql'
   );
 
-  const pipelineFilesSnapshotPromise = (isPipeline || isMyQueue)
+  const pipelineFilesSnapshotPromise = (isPipeline || isMyQueue || isCapitulo)
     ? withTimeout(
         executeYugabyteSql<any>(`
           SELECT file.*,
@@ -546,7 +546,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
           LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
           WHERE file.scan_id = $1
           ORDER BY file.version DESC, file.created_at DESC
-          LIMIT 100
+          LIMIT 500
         `, [currentScan.id], platform?.env),
         2_000,
         { rows: [], rowCount: 0 },

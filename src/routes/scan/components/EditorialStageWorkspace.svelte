@@ -1224,7 +1224,9 @@
       {#if works.length > 0}
         <div class="editorial-filters-toolbar">
           <div class="mini-search-box">
-            <Search size={13} class="mini-search-icon" />
+            <span class="mini-search-icon-wrap" aria-hidden="true">
+              <Search size={14} />
+            </span>
             <input
               type="text"
               placeholder="Buscar obra ou capítulo..."
@@ -1527,24 +1529,42 @@
     position: relative;
     display: flex;
     align-items: center;
+    width: 220px;
+    transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .mini-search-icon {
+  .mini-search-box:focus-within {
+    width: 260px;
+  }
+
+  .mini-search-icon-wrap {
     position: absolute;
-    left: 11px;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: #64748b;
     pointer-events: none;
+    z-index: 2;
+    line-height: 0;
+    transition: color 0.15s ease;
+  }
+
+  .mini-search-box:focus-within .mini-search-icon-wrap {
+    color: #a855f7;
   }
 
   .mini-search-input {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    padding: 0 32px 0 34px;
-    height: 42px;
+    padding: 0 32px 0 36px;
+    height: 40px;
     font-size: 13px;
     color: #f1f5f9;
-    width: 220px;
+    width: 100%;
     outline: none;
     transition: all 0.15s ease;
     box-sizing: border-box;
@@ -1554,7 +1574,6 @@
     background: rgba(255, 255, 255, 0.07);
     border-color: rgba(168, 85, 247, 0.4);
     box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
-    width: 260px;
   }
 
   .mini-search-input::placeholder {
@@ -1564,6 +1583,8 @@
   .btn-clear-search-mini {
     position: absolute;
     right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     background: transparent;
     border: none;
     color: #94a3b8;
@@ -1572,6 +1593,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+    z-index: 2;
+  }
+
+  .btn-clear-search-mini:hover {
+    color: #f1f5f9;
   }
 
   .mini-work-select {
@@ -2612,13 +2640,18 @@
     }
 
     .mini-search-box {
-      width: 100%;
+      width: 100% !important;
+    }
+
+    .mini-search-box:focus-within {
+      width: 100% !important;
     }
 
     .mini-search-input {
       width: 100%;
       box-sizing: border-box;
       min-height: 44px;
+      font-size: 14px;
     }
 
     .mini-search-input:focus {

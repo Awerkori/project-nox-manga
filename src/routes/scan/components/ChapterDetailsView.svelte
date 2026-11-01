@@ -62,13 +62,25 @@
   let actualChapterId = $derived(chapterData.id || chapterId);
   let previewId = $derived(chapterData.target_chapter_id || actualChapterId);
 
+  // Robust ID matcher across production and catalog IDs
+  function isForThisChapter(recordChapterId: string | null | undefined): boolean {
+    if (!recordChapterId) return false;
+    return (
+      recordChapterId === actualChapterId ||
+      recordChapterId === chapterId ||
+      recordChapterId === previewId ||
+      (chapterData.id && recordChapterId === chapterData.id) ||
+      (chapterData.target_chapter_id && recordChapterId === chapterData.target_chapter_id)
+    );
+  }
+
   // Active navigation tab
   let activeTab = $state<'overview' | 'team' | 'comments'>('overview');
 
   // Stages for this chapter sorted by display_order
   let currentChapterStages = $derived(
     chapterStages
-      .filter((cs: any) => cs.production_chapter_id === actualChapterId)
+      .filter((cs: any) => isForThisChapter(cs.production_chapter_id) || isForThisChapter(cs.chapter_id))
       .sort((a: any, b: any) => (a.stage?.display_order || 0) - (b.stage?.display_order || 0))
   );
 
@@ -106,27 +118,27 @@
   // Files for this chapter
   let currentChapterFiles = $derived(
     productionFiles
-      .filter((f: any) => f.production_chapter_id === actualChapterId)
+      .filter((f: any) => isForThisChapter(f.production_chapter_id) || isForThisChapter(f.chapter_id))
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   );
 
   // Timeline for this chapter
   let currentChapterTimeline = $derived(
     chapterTimeline
-      .filter((t: any) => t.production_chapter_id === actualChapterId)
+      .filter((t: any) => isForThisChapter(t.production_chapter_id) || isForThisChapter(t.chapter_id))
       .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   );
 
   // Notes for this chapter
   let currentChapterNotes = $derived(
     chapterNotes
-      .filter((note: any) => note.production_chapter_id === actualChapterId)
+      .filter((note: any) => isForThisChapter(note.production_chapter_id) || isForThisChapter(note.chapter_id))
       .sort((a: any, b: any) => Number(b.is_pinned) - Number(a.is_pinned) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   );
 
   // Open QC count
   let currentQcIssues = $derived(
-    qcIssues.filter((q: any) => q.chapter_id === actualChapterId || q.chapter_id === chapterId)
+    qcIssues.filter((q: any) => isForThisChapter(q.chapter_id))
   );
   let openQcCount = $derived(currentQcIssues.filter((q: any) => q.status === 'OPEN').length);
 
