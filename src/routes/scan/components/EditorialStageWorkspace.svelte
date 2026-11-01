@@ -1620,7 +1620,7 @@
 
   .editorial-card.is-expanded {
     grid-column: 1 / -1;
-    max-width: 100% !important;
+    max-width: 860px !important;
   }
 
   .editorial-card {

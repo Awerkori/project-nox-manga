@@ -142,19 +142,56 @@
     chapterData.status === 'PUBLISHED' || Boolean(chapterData.target_chapter_id)
   );
 
+  let isProductionCompleted = $derived(
+    currentChapterStages.length > 0 && currentChapterStages.every((s: any) => s.status === 'DONE')
+  );
+
   let chapterWorkflowStatusText = $derived(() => {
-    if (chapterData.status === 'PUBLISHED' && currentChapterStages.every((s: any) => s.status === 'DONE')) {
+    if (chapterData.status === 'PUBLISHED' && isProductionCompleted) {
       return 'Concluída';
     }
     return currentActiveStage();
   });
 
-  // Pre-approved evaluation: QC done and no open issues, or chapter already marked ready/published
-  let isPreApproved = $derived(
-    chapterData.status === 'PUBLISHED' ||
-    chapterData.status === 'READY' ||
-    (qcStage?.status === 'DONE' && openQcCount === 0)
-  );
+  // Pre-approved evaluation:
+  // In the active production pipeline, Pre-approved depends on QC stage completion.
+  // Never shortcut to "Aprovado" if prior editorial stages (typeset, qc, etc.) are still pending or in progress!
+  let isPreApproved = $derived.by(() => {
+    if (preAprovadoStage) {
+      return preAprovadoStage.status === 'DONE';
+    }
+    // If QC, Typeset, Tradução, or Clean are pending / in progress / rework, it cannot be pre-approved
+    if (qcStage && qcStage.status !== 'DONE') {
+      return false;
+    }
+    if (typesetStage && typesetStage.status !== 'DONE') {
+      return false;
+    }
+    if (traducaoStage && traducaoStage.status !== 'DONE') {
+      return false;
+    }
+    if (cleanStage && cleanStage.status !== 'DONE') {
+      return false;
+    }
+    // If QC is finished with zero open issues
+    if (qcStage?.status === 'DONE' && openQcCount === 0) {
+      return true;
+    }
+    // If all production stages are done and status is published or ready
+    if (isProductionCompleted) {
+      return true;
+    }
+    if (chapterData.status === 'READY') {
+      return true;
+    }
+    return false;
+  });
+
+  // Production Published: Has this active production cycle itself been completed and published?
+  let isProductionPublished = $derived.by(() => {
+    if (publicadoStage) return publicadoStage.status === 'DONE';
+    return isProductionCompleted && chapterData.status === 'PUBLISHED';
+  });
 
   // Work cover resolution
   let coverUrl = $derived(
@@ -558,10 +595,10 @@
         </div>
 
         <!-- 6. PUBLICADO -->
-        <div class="flow-stage-node status-{isCatalogPublished ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
+        <div class="flow-stage-node status-{isProductionPublished ? 'done' : isCatalogPublished ? 'catalog_done' : isReadyToPublish ? 'available' : 'waiting'}">
           <div class="node-header">
             <span class="node-step-tag">Etapa 7</span>
-            <span class="node-status-pill">{isCatalogPublished ? 'No Ar' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
+            <span class="node-status-pill">{isProductionPublished ? 'No Ar' : isCatalogPublished ? 'No Ar (Catálogo)' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
           </div>
           <div class="node-title">Publicado</div>
           <div class="node-assignee">
@@ -689,14 +726,14 @@
         </div>
 
         <!-- 7. PUBLICADO -->
-        <div class="mobile-timeline-card status-{isCatalogPublished ? 'done' : isReadyToPublish ? 'available' : 'waiting'}">
+        <div class="mobile-timeline-card status-{isProductionPublished ? 'done' : isCatalogPublished ? 'catalog_done' : isReadyToPublish ? 'available' : 'waiting'}">
           <div class="card-timeline-left">
             <span class="timeline-step-bubble final">✓</span>
           </div>
           <div class="card-timeline-content">
             <div class="timeline-card-top">
               <span class="timeline-stage-title">Publicado no Site</span>
-              <span class="timeline-status-tag">{isCatalogPublished ? 'No Ar' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
+              <span class="timeline-status-tag">{isProductionPublished ? 'No Ar' : isCatalogPublished ? 'No Ar (Catálogo)' : isReadyToPublish ? 'Pronto' : 'Pendente'}</span>
             </div>
             <div class="timeline-card-assignee">
               <Globe size={12} />
@@ -1584,6 +1621,18 @@
   .flow-stage-node.status-done {
     border-color: rgba(16, 185, 129, 0.35);
     background: rgba(16, 185, 129, 0.06);
+  }
+
+  .flow-stage-node.status-catalog_done,
+  .mobile-timeline-card.status-catalog_done {
+    border-color: rgba(6, 182, 212, 0.35);
+    background: rgba(6, 182, 212, 0.06);
+  }
+
+  .status-catalog_done .node-status-pill,
+  .status-catalog_done .timeline-status-tag {
+    background: rgba(6, 182, 212, 0.2);
+    color: #67e8f9;
   }
 
   .flow-stage-node.status-in_progress {
