@@ -2263,7 +2263,7 @@
      TAB 3: COMENTÁRIOS INTERNOS
      -------------------------------------------------------------------------- */
   .tab-pane-comments {
-    max-width: 780px;
+    max-width: 860px;
     margin: 0 auto;
     width: 100%;
     display: flex;

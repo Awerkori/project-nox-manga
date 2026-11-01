@@ -11,8 +11,20 @@ type RuntimeEnv = Record<string, unknown> | undefined;
  * failures, so continuing with a guessed value is worse than failing closed.
  */
 export function getScanArtifactStorage(platformEnv?: RuntimeEnv): SupabaseClient {
-  const url = String(platformEnv?.STAFF_SUPABASE_URL ?? env.STAFF_SUPABASE_URL ?? '').trim();
-  const key = String(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? env.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  let url = String(platformEnv?.STAFF_SUPABASE_URL ?? env.STAFF_SUPABASE_URL ?? '').trim();
+  let key = String(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? env.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+
+  // Resilient fallback: if STAFF_SUPABASE_URL points to the decommissioned project or is missing,
+  // resolve from canonical Supabase instance.
+  if (!url || url.includes('pgumtergvtbeepzpgvkv') || !key) {
+    const canonicalUrl = String(platformEnv?.PUBLIC_SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? '').trim();
+    const canonicalKey = String(platformEnv?.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+    if (canonicalUrl && canonicalKey) {
+      url = canonicalUrl;
+      key = canonicalKey;
+    }
+  }
+
   if (!url || !key) throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISSING');
 
   let parsed: URL;
