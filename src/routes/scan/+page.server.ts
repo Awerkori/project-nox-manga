@@ -78,6 +78,28 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
   platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
 
+  // 1. Authoritative member avatar/profile synchronizer from Supabase to Yugabyte
+  const currentUserProfile = locals.sessionCache?.profile || locals.profile || locals.user;
+  const currentUserId = locals.user?.id;
+  const userAvatarId = currentUserProfile?.avatar_id || locals.user?.avatar_id || null;
+  const userCrop = currentUserProfile?.avatar_crop ?? locals.user?.avatar_crop ?? null;
+  const userCropJson = userCrop ? JSON.stringify(userCrop) : null;
+  const userFrameId = currentUserProfile?.avatar_frame_id || locals.user?.avatar_frame_id || null;
+  const userDisplayName = currentUserProfile?.display_name || locals.user?.display_name || null;
+
+  if (currentUserId && userAvatarId) {
+    executeYugabyteSql(
+      `UPDATE public.members 
+       SET avatar_id = $1,
+           avatar_crop = COALESCE($2::jsonb, avatar_crop),
+           avatar_frame_id = COALESCE($3, avatar_frame_id),
+           display_name = COALESCE($4, display_name)
+       WHERE id = $5 AND (avatar_id IS DISTINCT FROM $1 OR avatar_frame_id IS DISTINCT FROM $3 OR display_name IS DISTINCT FROM $4)`,
+      [userAvatarId, userCropJson, userFrameId, userDisplayName, currentUserId],
+      platform?.env
+    ).catch((err: any) => console.warn('member_avatar_auto_sync_err', err?.message || err));
+  }
+
   // Resolve workspace membership exclusively from the authoritative YSQL
   // plane.  Authentication still uses the existing identity provider, but
   // Scan data never falls back to a second database on a degraded request.
@@ -185,6 +207,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
 
   const isHome = requestedTab === 'home';
   const isPipeline = requestedTab === 'pipeline';
+  const isCapitulo = requestedTab === 'capitulo' || requestedTab === 'detalhes_capitulo' || url.searchParams.has('chapter_id') || (requestedTab === 'pipeline' && url.searchParams.has('id'));
   const isMyQueue = requestedTab === 'minha_fila';
   const isWorks = requestedTab === 'obras';
   const isTeam = requestedTab === 'membros';
@@ -202,7 +225,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   const needsMuralDetails = isMural;
   const needsInvites = isTeam;
   const needsProjectRequests = isWorks;
-  const needsQcIssues = isQc || isPipeline || isHome;
+  const needsQcIssues = isQc || isPipeline || isHome || isCapitulo;
   const needsOverrides = isMyQueue || isPipeline;
   const needsCreditSnapshots = isMyQueue;
   const needsMural = isMural || isHome;
@@ -229,11 +252,13 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
           ) END AS stage,
           CASE WHEN assignee.id IS NULL THEN NULL ELSE jsonb_build_object(
             'id', assignee.id, 'username', assignee.username,
-            'display_name', assignee.display_name, 'avatar_id', assignee.avatar_id
+            'display_name', assignee.display_name, 'avatar_id', assignee.avatar_id,
+            'avatar_crop', assignee.avatar_crop, 'avatar_frame_id', assignee.avatar_frame_id
           ) END AS assignee,
           CASE WHEN completer.id IS NULL THEN NULL ELSE jsonb_build_object(
             'id', completer.id, 'username', completer.username,
-            'display_name', completer.display_name, 'avatar_id', completer.avatar_id
+            'display_name', completer.display_name, 'avatar_id', completer.avatar_id,
+            'avatar_crop', completer.avatar_crop, 'avatar_frame_id', completer.avatar_frame_id
           ) END AS completer
         FROM public.scan_chapter_stages chapter_stage
         LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = chapter_stage.stage_id
@@ -263,7 +288,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         ORDER BY production_chapter.chapter_sort_key ASC
         LIMIT 300
       `, [currentScan.id, !isHome], platform?.env),
-      (isPipeline || isMyQueue) ? executeYugabyteSql<any>(`
+      (isPipeline || isMyQueue || isCapitulo) ? executeYugabyteSql<any>(`
         SELECT timeline.*
         FROM public.scan_chapter_timeline timeline
         WHERE timeline.scan_id = $1
@@ -509,7 +534,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     'scan_notification_snapshot_ysql'
   );
 
-  const pipelineFilesSnapshotPromise = (isPipeline || isMyQueue)
+  const pipelineFilesSnapshotPromise = (isPipeline || isMyQueue || isCapitulo)
     ? withTimeout(
         executeYugabyteSql<any>(`
           SELECT file.*,
@@ -521,7 +546,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
           LEFT JOIN public.scan_workflow_stages stage ON stage.id = file.stage_id
           WHERE file.scan_id = $1
           ORDER BY file.version DESC, file.created_at DESC
-          LIMIT 100
+          LIMIT 500
         `, [currentScan.id], platform?.env),
         2_000,
         { rows: [], rowCount: 0 },
@@ -532,7 +557,36 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
       })
     : Promise.resolve({ rows: [], rowCount: 0 });
 
-  const chapterNotesSnapshotPromise = Promise.resolve({ rows: [], rowCount: 0 });
+  const needsChapterNotes = isPipeline || isCapitulo || isMyQueue;
+  const chapterNotesSnapshotPromise = needsChapterNotes
+    ? withTimeout(
+        executeYugabyteSql<any>(`
+          SELECT note.*,
+            jsonb_build_object(
+              'id', author.id, 'username', author.username,
+              'display_name', author.display_name, 'avatar_id', author.avatar_id,
+              'avatar_crop', author.avatar_crop, 'avatar_frame_id', author.avatar_frame_id
+            ) AS author,
+            CASE WHEN workflow_stage.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', workflow_stage.id, 'name', workflow_stage.name, 'slug', workflow_stage.slug
+            ) END AS stage
+          FROM public.scan_chapter_notes note
+          JOIN public.members author ON author.id = note.author_id
+          LEFT JOIN public.scan_workflow_stages workflow_stage ON workflow_stage.id = note.stage_id
+          WHERE note.scan_id = $1 AND note.deleted_at IS NULL
+          ORDER BY note.is_pinned DESC, note.created_at ASC
+        `, [currentScan.id], platform?.env),
+        2_000,
+        { rows: [], rowCount: 0 },
+        'scan_chapter_notes_ysql'
+      ).catch((error: any) => {
+        console.warn('scan_chapter_notes_ysql_unavailable', {
+          scanId: currentScan.id,
+          message: String(error?.message || 'unknown').slice(0, 240)
+        });
+        return { rows: [], rowCount: 0 };
+      })
+    : Promise.resolve({ rows: [], rowCount: 0 });
 
   const emptyScanBatchFallback = Array.from({ length: 42 }, () => ({ data: [] }));
   const [
@@ -674,7 +728,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     Promise.resolve({ data: [] }),
     needsActivity ? ysqlCollection<any>(
       `SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
-         'display_name', member.display_name, 'avatar_id', member.avatar_id) AS members
+         'display_name', member.display_name, 'avatar_id', member.avatar_id,
+         'avatar_crop', member.avatar_crop, 'avatar_frame_id', member.avatar_frame_id) AS members
        FROM public.scan_activity activity
        LEFT JOIN public.members member ON member.id = activity.user_id
        WHERE activity.scan_id = $1 ORDER BY activity.created_at DESC LIMIT 50`,
@@ -696,6 +751,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
          note.is_pinned, note.created_at, note.updated_at,
          jsonb_build_object('id', member.id, 'username', member.username,
            'display_name', member.display_name, 'avatar_id', member.avatar_id,
+           'avatar_crop', member.avatar_crop,
            'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members
        FROM public.scan_staff_notes note
        LEFT JOIN public.members member ON member.id = note.user_id
@@ -762,7 +818,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     ) : Promise.resolve({ data: [] }),
     needsMural ? ysqlCollection<any>(
       `SELECT post.*, jsonb_build_object('id', author.id, 'username', author.username,
-         'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+         'display_name', author.display_name, 'avatar_id', author.avatar_id,
+         'avatar_crop', author.avatar_crop, 'avatar_frame_id', author.avatar_frame_id) AS author
        FROM public.scan_mural_posts post
        LEFT JOIN public.members author ON author.id = post.author_id
        WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC
@@ -771,7 +828,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     ) : Promise.resolve({ data: [] }),
     needsMuralDetails ? ysqlCollection<any>(
       `SELECT comment.*, jsonb_build_object('id', author.id, 'username', author.username,
-         'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+         'display_name', author.display_name, 'avatar_id', author.avatar_id,
+         'avatar_crop', author.avatar_crop, 'avatar_frame_id', author.avatar_frame_id) AS author
        FROM public.scan_mural_comments comment
        LEFT JOIN public.members author ON author.id = comment.author_id
        WHERE comment.scan_id = $1 ORDER BY comment.created_at ASC`,
@@ -835,17 +893,23 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     is_primary: r.is_primary
   })).filter(Boolean);
   const chapters = (chaptersRes.data || []).map((r: any) => r.chapters).filter(Boolean);
-  const team = (teamRes.data || []).map((r: any) => ({
-    role: r.role,
-    is_public: r.is_public ?? true,
-    hidden_by_admin: r.hidden_by_admin ?? false,
-    availability_status: r.availability_status || 'ACTIVE',
-    availability_message: r.availability_message || '',
-    availability_updated_at: r.availability_updated_at || null,
-    created_at: r.created_at,
-    ...r.members,
-    positions: memberPosMap.get(r.members.id) || []
-  }));
+  const team = (teamRes.data || []).map((r: any) => {
+    const isCurrentUser = r.members?.id === locals.user!.id;
+    return {
+      role: r.role,
+      is_public: r.is_public ?? true,
+      hidden_by_admin: r.hidden_by_admin ?? false,
+      availability_status: r.availability_status || 'ACTIVE',
+      availability_message: r.availability_message || '',
+      availability_updated_at: r.availability_updated_at || null,
+      created_at: r.created_at,
+      ...r.members,
+      avatar_id: isCurrentUser ? (locals.user!.avatar_id || r.members?.avatar_id) : r.members?.avatar_id,
+      avatar_crop: isCurrentUser ? (locals.user!.avatar_crop ?? r.members?.avatar_crop) : r.members?.avatar_crop,
+      avatar_frame_id: isCurrentUser ? (locals.user!.avatar_frame_id || r.members?.avatar_frame_id) : r.members?.avatar_frame_id,
+      positions: memberPosMap.get(r.members?.id) || []
+    };
+  });
   const invites = invitesRes.data || [];
   const projectRequests = projectRequestsRes.data || [];
   const catalogWorks = catalogWorksRes.data || [];
@@ -1000,7 +1064,25 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   if (pipelineSnapshot) {
     const [workflowResult, chapterStageResult, productionChapterResult, timelineResult] = pipelineSnapshot;
     workflowStages = workflowResult.rows;
-    chapterStages = chapterStageResult.rows;
+    chapterStages = (chapterStageResult.rows || []).map((cs: any) => {
+      if (cs.assignee?.id === locals.user!.id) {
+        cs.assignee = {
+          ...cs.assignee,
+          avatar_id: locals.user!.avatar_id || cs.assignee.avatar_id,
+          avatar_crop: locals.user!.avatar_crop ?? cs.assignee.avatar_crop,
+          avatar_frame_id: locals.user!.avatar_frame_id || cs.assignee.avatar_frame_id
+        };
+      }
+      if (cs.completer?.id === locals.user!.id) {
+        cs.completer = {
+          ...cs.completer,
+          avatar_id: locals.user!.avatar_id || cs.completer.avatar_id,
+          avatar_crop: locals.user!.avatar_crop ?? cs.completer.avatar_crop,
+          avatar_frame_id: locals.user!.avatar_frame_id || cs.completer.avatar_frame_id
+        };
+      }
+      return cs;
+    });
     productionChapters = productionChapterResult.rows;
     chapterTimeline = timelineResult.rows;
   } else {
@@ -1019,12 +1101,21 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   let chapterNotes: any[] = [];
   const ysqlNotes = await chapterNotesSnapshotPromise;
   if (ysqlNotes && Array.isArray(ysqlNotes.rows)) {
-    chapterNotes = ysqlNotes.rows.map((note: any) => ({
-      ...note,
-      canEdit: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
-      canDelete: note.author_id === locals.user!.id || isScanLeader || isGlobalEditor,
-      canPin: isScanLeader || isGlobalEditor
-    }));
+    chapterNotes = ysqlNotes.rows.map((note: any) => {
+      const isCurrentUser = note.author_id === locals.user!.id;
+      return {
+        ...note,
+        author: {
+          ...note.author,
+          avatar_id: isCurrentUser ? (locals.user!.avatar_id || note.author?.avatar_id) : note.author?.avatar_id,
+          avatar_crop: isCurrentUser ? (locals.user!.avatar_crop ?? note.author?.avatar_crop) : note.author?.avatar_crop,
+          avatar_frame_id: isCurrentUser ? (locals.user!.avatar_frame_id || note.author?.avatar_frame_id) : note.author?.avatar_frame_id
+        },
+        canEdit: isCurrentUser || isScanLeader || isGlobalEditor,
+        canDelete: isCurrentUser || isScanLeader || isGlobalEditor,
+        canPin: isScanLeader || isGlobalEditor
+      };
+    });
   }
 
   // Keep channels, messages and read markers from one authoritative data plane.

@@ -310,7 +310,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
         });
       }
       const group = releasesMap.get(workId)!;
-      if (group.chapters.length < 4) {
+      if ((row as any).chapter_id && group.chapters.length < 4) {
         group.chapters.push({
           id: (row as any).chapter_id,
           number: (row as any).chapter_number,
@@ -327,7 +327,9 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     }
   }
 
-  let recentReleases = Array.from(releasesMap.values());
+  let recentReleases = Array.from(releasesMap.values())
+    .filter((g) => g.chapters.length > 0)
+    .slice(0, 15);
 
   // Derive works from RPC data if works query timed out but chapters succeeded
   if (works.length === 0 && chaptersRes.data && chaptersRes.data.length > 0) {

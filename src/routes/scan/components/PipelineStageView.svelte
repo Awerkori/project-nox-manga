@@ -33,6 +33,7 @@
   import { evaluateStageClaim, normalizePositionName, CANONICAL_PIPELINE_STAGES } from '$lib/scan-roles';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
   import RawProviderStageView from './RawProviderStageView.svelte';
+  import EditorialStageWorkspace from './EditorialStageWorkspace.svelte';
 
   let {
     currentStageSlug = 'clean_redraw',
@@ -622,6 +623,26 @@
 
 {#if activeCanonical.slug === 'raw'}
   <RawProviderStageView
+    {stages}
+    {chapterStages}
+    {chapters}
+    {works}
+    {productionFiles}
+    {tasks}
+    {qcIssues}
+    {currentUserId}
+    {userRole}
+    {userPositions}
+    {seenStages}
+    {isOwnerOrAdmin}
+    {scanId}
+    {onSelectStage}
+    {onOpenChapter}
+  />
+{:else if ['traducao', 'clean_redraw', 'typeset'].some(s => matchesStageSlug(activeCanonical.slug, s))}
+  <EditorialStageWorkspace
+    stageSlug={activeCanonical.slug}
+    {activeCanonical}
     {stages}
     {chapterStages}
     {chapters}

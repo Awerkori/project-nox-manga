@@ -64,10 +64,11 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
              CASE WHEN opening.id IS NULL THEN NULL ELSE jsonb_build_object(
                'id', opening.id, 'title', opening.title
              ) END AS scan_recruitment_openings,
-             CASE WHEN applicant.id IS NULL THEN NULL ELSE jsonb_build_object(
-               'id', applicant.id, 'username', applicant.username,
-               'display_name', applicant.display_name, 'avatar_id', applicant.avatar_id
-             ) END AS members
+              CASE WHEN applicant.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', applicant.id, 'username', applicant.username,
+                'display_name', applicant.display_name, 'avatar_id', applicant.avatar_id,
+                'avatar_crop', applicant.avatar_crop, 'avatar_frame_id', applicant.avatar_frame_id
+              ) END AS members
            FROM public.scan_applications application
            LEFT JOIN public.scan_positions position ON position.id = application.position_id
            LEFT JOIN public.scan_recruitment_openings opening ON opening.id = application.opening_id
@@ -158,7 +159,8 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     case 'activity': {
       const res = await executeYugabyteSql(
         `SELECT activity.*, jsonb_build_object('id', member.id, 'username', member.username,
-           'display_name', member.display_name, 'avatar_id', member.avatar_id) AS members
+           'display_name', member.display_name, 'avatar_id', member.avatar_id,
+           'avatar_crop', member.avatar_crop, 'avatar_frame_id', member.avatar_frame_id) AS members
          FROM public.scan_activity activity
          LEFT JOIN public.members member ON member.id = activity.user_id
          WHERE activity.scan_id = $1 ORDER BY activity.created_at DESC LIMIT 50`,
@@ -174,6 +176,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
            note.is_pinned, note.created_at, note.updated_at,
            jsonb_build_object('id', member.id, 'username', member.username,
              'display_name', member.display_name, 'avatar_id', member.avatar_id,
+             'avatar_crop', member.avatar_crop,
              'avatar_frame_id', member.avatar_frame_id, 'name_color', member.name_color) AS members
          FROM public.scan_staff_notes note
          LEFT JOIN public.members member ON member.id = note.user_id
@@ -293,7 +296,8 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
       const [postsRes, commentsRes, reactionsRes, attachmentsRes] = await Promise.all([
         executeYugabyteSql(
           `SELECT post.*, jsonb_build_object('id', author.id, 'username', author.username,
-             'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+             'display_name', author.display_name, 'avatar_id', author.avatar_id,
+             'avatar_crop', author.avatar_crop, 'avatar_frame_id', author.avatar_frame_id) AS author
            FROM public.scan_mural_posts post
            LEFT JOIN public.members author ON author.id = post.author_id
            WHERE post.scan_id = $1 ORDER BY post.is_pinned DESC, post.created_at DESC LIMIT 50`,
@@ -302,7 +306,8 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
         ),
         executeYugabyteSql(
           `SELECT comment.*, jsonb_build_object('id', author.id, 'username', author.username,
-             'display_name', author.display_name, 'avatar_id', author.avatar_id) AS author
+             'display_name', author.display_name, 'avatar_id', author.avatar_id,
+             'avatar_crop', author.avatar_crop, 'avatar_frame_id', author.avatar_frame_id) AS author
            FROM public.scan_mural_comments comment
            LEFT JOIN public.members author ON author.id = comment.author_id
            WHERE comment.scan_id = $1 ORDER BY comment.created_at ASC`,
