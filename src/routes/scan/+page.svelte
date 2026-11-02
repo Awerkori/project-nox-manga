@@ -33,7 +33,8 @@
     Trash2,
     Shield,
     User,
-    Sliders
+    Sliders,
+    RefreshCw
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { relativeTime, slugify } from '$lib/types';
@@ -64,6 +65,7 @@
   import MuralTab from './components/MuralTab.svelte';
   import ChapterWorkspaceView from './components/ChapterWorkspaceView.svelte';
   import ChapterDetailsView from './components/ChapterDetailsView.svelte';
+  import QcReaderView from './components/QcReaderView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
@@ -184,11 +186,13 @@
     if (clean === 'dashboard') return 'home';
     if (clean === 'notificacoes' || clean === 'notifications') return 'inbox';
     if (clean === 'capitulo' || clean === 'detalhes_capitulo' || clean === 'chapter') return 'capitulo';
+    if (clean === 'qc_leitor' || clean === 'revisor_leitor' || clean === 'qc_reader') return 'qc_leitor';
+    if (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(clean)) return 'pipeline';
     return clean;
   }
 
   let currentWorkspaceTab = $state<string>(normalizeTab(page.url.searchParams.get('tab')));
-  let currentPipelineStage = $state<string>(page.url.searchParams.get('stage') || 'clean_redraw');
+  let currentPipelineStage = $state<string>(page.url.searchParams.get('stage') || (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(page.url.searchParams.get('tab') || '') ? (page.url.searchParams.get('tab') as string) : 'clean_redraw'));
   let sidebarMobileOpen = $state(false);
 
   // Global Realtime synchronization across sessions
@@ -264,8 +268,9 @@
     if (currentHref === lastNavigatedHref) return;
     lastNavigatedHref = currentHref;
 
-    const tabParam = normalizeTab(page.url.searchParams.get('tab'));
-    const stageParam = page.url.searchParams.get('stage');
+    const rawTab = page.url.searchParams.get('tab');
+    const tabParam = normalizeTab(rawTab);
+    const stageParam = page.url.searchParams.get('stage') || (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(rawTab || '') ? rawTab : null);
     const chParam = page.url.searchParams.get('id') || page.url.searchParams.get('chapter_id');
     untrack(() => {
       if (tabParam && tabParam !== currentWorkspaceTab) {
@@ -281,6 +286,13 @@
         activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
       } else if (tabParam !== 'capitulo' && !chParam && activeWorkspaceChapter) {
         activeWorkspaceChapter = null;
+      }
+      if (tabParam === 'qc_leitor' && chParam) {
+        const all = [...(data.productionChapters || []), ...(chapters || [])];
+        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
+        activeQcReaderChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
+      } else if (tabParam !== 'qc_leitor' && !chParam && activeQcReaderChapter) {
+        activeQcReaderChapter = null;
       }
     });
   });
@@ -300,6 +312,13 @@
         activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
       } else {
         activeWorkspaceChapter = null;
+      }
+      if (tab === 'qc_leitor' && chParam) {
+        const all = [...(data.productionChapters || []), ...(chapters || [])];
+        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
+        activeQcReaderChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
+      } else {
+        activeQcReaderChapter = null;
       }
       lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
@@ -329,6 +348,7 @@
     tab = normalizeTab(tab);
     currentWorkspaceTab = tab;
     activeWorkspaceChapter = null;
+    activeQcReaderChapter = null;
     if (stage) {
       currentPipelineStage = stage;
     }
@@ -349,6 +369,7 @@
   let activeDashTab = $state<DashTab>('works');
   let showCommandPalette = $state(false);
   let activeWorkspaceChapter = $state<any>(null);
+  let activeQcReaderChapter = $state<any>(null);
 
   function handleOpenChapter(ch: any) {
     if (!ch) return;
@@ -386,6 +407,43 @@
       lastNavigatedHref = window.location.href;
       currentWorkspaceTab = 'pipeline';
       currentPipelineStage = fromStage;
+    }
+  }
+
+  function handleOpenQcReader(ch: any) {
+    if (!ch) return;
+    if (typeof ch === 'string') {
+      const all = [...(data.productionChapters || []), ...(chapters || [])];
+      const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.target_chapter_id === ch);
+      activeQcReaderChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo' };
+    } else {
+      activeQcReaderChapter = ch.chapters || ch;
+    }
+    const targetId = activeQcReaderChapter?.id || activeQcReaderChapter?.target_chapter_id || (typeof ch === 'string' ? ch : ch?.id);
+    if (typeof window !== 'undefined' && targetId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'qc_leitor');
+      url.searchParams.set('id', String(targetId));
+      url.searchParams.set('from_stage', 'revisor_qc');
+      window.history.pushState({ tab: 'qc_leitor', id: targetId }, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
+      currentWorkspaceTab = 'qc_leitor';
+    }
+  }
+
+  function handleBackFromQcReader() {
+    activeQcReaderChapter = null;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'pipeline');
+      url.searchParams.set('stage', 'revisor_qc');
+      url.searchParams.delete('id');
+      url.searchParams.delete('from_stage');
+      url.searchParams.delete('chapter_id');
+      window.history.pushState({ tab: 'pipeline', stage: 'revisor_qc' }, '', url.pathname + url.search);
+      lastNavigatedHref = window.location.href;
+      currentWorkspaceTab = 'pipeline';
+      currentPipelineStage = 'revisor_qc';
     }
   }
 
@@ -806,8 +864,25 @@
             <a href="/registro" class="btn-secondary">Criar Conta</a>
           </div>
         </section>
+      {:else if data.infraError}
+        <!-- State 3: Infrastructure / Database temporary error (NEVER false diagnosis of no scan) -->
+        <section class="infra-error-state">
+          <div class="infra-error-icon-ring">
+            <AlertTriangle size={42} class="text-amber-400" />
+          </div>
+          <h1 class="infra-error-title">Instabilidade Temporária de Conexão</h1>
+          <p class="infra-error-sub">
+            {data.errorMessage || 'Não foi possível carregar os dados da sua scan devido a uma instabilidade momentânea no banco de dados. Sua participação na scan e permissões continuam ativas e seguras.'}
+          </p>
+          <div class="infra-error-actions">
+            <button type="button" class="btn-primary btn-retry-infra" onclick={() => window.location.reload()}>
+              <RefreshCw size={16} />
+              <span>Tentar novamente</span>
+            </button>
+          </div>
+        </section>
       {:else}
-        <!-- Not a Scan Member State -->
+        <!-- State 1: Genuine Not a Scan Member State -->
         <section class="partnership-portal">
         <header class="portal-header">
           <div class="badge-partnership">
@@ -1126,7 +1201,20 @@
           {/if}
 
           <div class="workspace-view-content">
-            {#if activeWorkspaceChapter || currentWorkspaceTab === 'capitulo'}
+            {#if currentWorkspaceTab === 'qc_leitor' || activeQcReaderChapter}
+              {@const activeCh = activeQcReaderChapter || (data.productionChapters || []).find((c: any) => c.id === page.url.searchParams.get('id') || c.target_chapter_id === page.url.searchParams.get('id')) || (chapters || []).find((c: any) => c.id === page.url.searchParams.get('id')) || null}
+              {@const activeChId = activeCh?.id || activeCh?.target_chapter_id || activeCh?.chapters?.id || page.url.searchParams.get('id') || ''}
+              <QcReaderView
+                chapterId={activeChId}
+                chapter={activeCh}
+                scan={data.currentScan}
+                qcIssues={data.qcIssues || []}
+                chapterStages={data.chapterStages || []}
+                currentUserId={data.userId}
+                userRole={data.userRole}
+                onBack={handleBackFromQcReader}
+              />
+            {:else if activeWorkspaceChapter || currentWorkspaceTab === 'capitulo'}
               {@const activeCh = activeWorkspaceChapter || (data.productionChapters || []).find((c: any) => c.id === page.url.searchParams.get('id') || c.target_chapter_id === page.url.searchParams.get('id')) || (chapters || []).find((c: any) => c.id === page.url.searchParams.get('id')) || null}
               {@const activeChId = activeCh?.id || activeCh?.target_chapter_id || activeCh?.chapters?.id || page.url.searchParams.get('id') || ''}
               <ChapterDetailsView
@@ -1218,6 +1306,7 @@
                 scanId={data.currentScan?.id || ''}
                 onSelectStage={(slug: string) => handleSelectTab('pipeline', slug)}
                 onOpenChapter={handleOpenChapter}
+                onOpenQcReader={handleOpenQcReader}
               />
             {:else if currentWorkspaceTab === 'pipeline_config'}
               <PipelineConfigTab
@@ -3652,6 +3741,71 @@
   .onboarding-actions {
     display: flex;
     gap: 1rem;
+  }
+
+  /* Infrastructure temporary error (State 3) */
+  .infra-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 5rem 2rem;
+    background: radial-gradient(circle at top, rgba(245, 158, 11, 0.12), transparent 70%), #0e111d;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 20px;
+    margin: 2rem 0;
+  }
+
+  .infra-error-icon-ring {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .infra-error-title {
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #f1f5f9;
+    margin: 0 0 0.75rem;
+  }
+
+  .infra-error-sub {
+    font-size: 1.05rem;
+    color: #94a3b8;
+    max-width: 540px;
+    line-height: 1.6;
+    margin: 0 0 2rem;
+  }
+
+  .infra-error-actions {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .btn-retry-infra {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+    transition: all 0.15s ease;
+  }
+
+  .btn-retry-infra:hover {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+    transform: translateY(-1px);
   }
 
   .btn-primary {

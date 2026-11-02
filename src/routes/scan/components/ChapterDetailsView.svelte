@@ -61,6 +61,7 @@
   let workData = $derived(chapterData?.works || chapterData?.work || {});
   let actualChapterId = $derived(chapterData.id || chapterId);
   let previewId = $derived(chapterData.target_chapter_id || actualChapterId);
+  let isPublished = $derived(chapterData.status === 'PUBLISHED');
 
   // Robust ID matcher across production and catalog IDs
   function isForThisChapter(recordChapterId: string | null | undefined): boolean {
@@ -345,18 +346,30 @@
     </div>
 
     <div class="header-right-actions">
-      <a
-        href="/ler/{previewId}?preview=1"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn-action-preview"
-        title="Visualizar no Leitor de Preview interno"
-      >
-        <Eye size={14} />
-        <span class="btn-preview-text-full">Leitor de Preview</span>
-        <span class="btn-preview-text-short">Preview</span>
-        <ExternalLink size={12} class="icon-subtle icon-preview-external" />
-      </a>
+      {#if fromStage === 'revisor_qc' || !isPublished}
+        <a
+          href="/scan?tab=qc_leitor&id={actualChapterId}"
+          class="btn-action-preview btn-action-qc-reader"
+          title="Abrir Leitor de Revisão Privado (QC)"
+        >
+          <Eye size={14} />
+          <span class="btn-preview-text-full">Abrir leitor QC</span>
+          <span class="btn-preview-text-short">Leitor QC</span>
+        </a>
+      {:else}
+        <a
+          href="/ler/{chapterData.target_chapter_id || previewId}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn-action-preview"
+          title="Visualizar capítulo publicado no leitor do catálogo"
+        >
+          <Eye size={14} />
+          <span class="btn-preview-text-full">Ver no Site</span>
+          <span class="btn-preview-text-short">Ver</span>
+          <ExternalLink size={12} class="icon-subtle icon-preview-external" />
+        </a>
+      {/if}
     </div>
   </header>
 
