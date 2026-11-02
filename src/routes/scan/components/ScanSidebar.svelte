@@ -55,7 +55,7 @@
     { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', color: '#ec4899', aliases: ['clean', 'clean_redraw', 'clean/redraw', 'redraw'] },
     { slug: 'typeset', name: 'Typeset', icon: '✒️', color: '#eab308', aliases: ['typeset', 'typer'] },
     { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', color: '#a855f7', aliases: ['revisor_qc', 'revisao', 'qc', 'revisor (qc)'] },
-    { slug: 'pre_aprovado', name: 'Pré Aprovado', icon: '✅', color: '#06b6d4', aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado'] },
+    { slug: 'pre_aprovado', name: 'Pré-aprovado', icon: '✅', color: '#06b6d4', aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado', 'pré-aprovado'] },
     { slug: 'publicado', name: 'Publicado', icon: '📚', color: '#22c55e', aliases: ['publicado', 'published'] }
   ];
 
@@ -66,8 +66,8 @@
     if (t === 'clean' || t === 'clean_redraw' || t === 'clean/redraw') {
       return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
     }
-    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') {
-      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado';
+    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview' || t === 'pré aprovado' || t === 'pré-aprovado') {
+      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado' || s === 'pré-aprovado';
     }
     if (t === 'traducao' || t === 'translation') {
       return s === 'traducao' || s === 'translation';

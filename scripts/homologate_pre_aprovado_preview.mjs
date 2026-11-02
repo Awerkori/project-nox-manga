@@ -117,6 +117,10 @@ async function main() {
     await mobPage.goto(`${targetUrl}/scan?tab=pipeline&stage=pre_aprovado`, { waitUntil: 'networkidle', timeout: 45000 });
     await mobPage.waitForTimeout(2500);
 
+    // Scroll card into view on mobile so all actions are verified
+    await mobPage.locator('.pre-card').first().scrollIntoViewIfNeeded();
+    await mobPage.waitForTimeout(800);
+
     const mobPopulatedPath = join(artifactDir, 'pre_aprovado_populated_mobile.png');
     await mobPage.screenshot({ path: mobPopulatedPath, fullPage: false });
     console.log(`✓ Saved ${mobPopulatedPath}`);
@@ -163,14 +167,9 @@ async function main() {
     console.log('Clicking "Publicar no catálogo" submit button...');
     const btnSubmit = deskPage.locator('.btn-modal-submit');
     await btnSubmit.click();
-    await deskPage.waitForTimeout(3000);
-
-    // Verify toast or banner
-    const toastCount = await deskPage.locator('.publish-toast-banner').count();
-    console.log(`Toast banner visible count: ${toastCount}`);
-    if (toastCount > 0) {
-      console.log('Toast message:', await deskPage.locator('.publish-toast-banner').innerText());
-    }
+    await deskPage.waitForSelector('.publish-toast-banner', { state: 'visible', timeout: 10000 });
+    const toastMessage = await deskPage.locator('.publish-toast-banner').innerText();
+    console.log(`✓ SUCCESS TOAST VERIFIED: "${toastMessage.trim()}"`);
 
     // Verify queue returned to 0
     const postAvailableCount = await deskPage.locator('.available-badge').innerText();

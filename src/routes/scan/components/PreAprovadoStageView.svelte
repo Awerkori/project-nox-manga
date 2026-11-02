@@ -59,11 +59,13 @@
     userRole = 'MEMBER',
     userPositions = [],
     seenStages = [],
-    isOwnerOrAdmin = false,
+    isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
     onSelectStage = () => {},
     onOpenChapter = () => {}
   }: Props = $props();
+
+  let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
 
   // 7 Canonical stages in strict editorial order
   const CANONICAL_STAGES = [
@@ -72,7 +74,7 @@
     { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', color: '#ec4899', badgeBg: 'rgba(236, 72, 153, 0.12)', badgeBorder: 'rgba(236, 72, 153, 0.28)', aliases: ['clean', 'clean_redraw', 'clean/redraw'] },
     { slug: 'typeset', name: 'Typeset', icon: '✒️', color: '#eab308', badgeBg: 'rgba(234, 179, 8, 0.12)', badgeBorder: 'rgba(234, 179, 8, 0.28)', aliases: ['typeset'] },
     { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', color: '#a855f7', badgeBg: 'rgba(168, 85, 247, 0.12)', badgeBorder: 'rgba(168, 85, 247, 0.28)', aliases: ['revisor_qc', 'qc', 'revisao'] },
-    { slug: 'pre_aprovado', name: 'Pré-aprovado', icon: '✅', color: '#06b6d4', badgeBg: 'rgba(6, 182, 212, 0.14)', badgeBorder: 'rgba(6, 182, 212, 0.35)', aliases: ['pre_aprovado', 'ready', 'preview'] },
+    { slug: 'pre_aprovado', name: 'Pré-aprovado', icon: '✅', color: '#06b6d4', badgeBg: 'rgba(6, 182, 212, 0.14)', badgeBorder: 'rgba(6, 182, 212, 0.35)', aliases: ['pre_aprovado', 'ready', 'preview', 'pronto_pra_upar', 'pré aprovado', 'pré-aprovado'] },
     { slug: 'publicado', name: 'Publicado', icon: '📚', color: '#22c55e', badgeBg: 'rgba(34, 197, 94, 0.12)', badgeBorder: 'rgba(34, 197, 94, 0.28)', aliases: ['publicado', 'published'] }
   ];
 
@@ -81,7 +83,9 @@
     const t = target.toLowerCase().trim();
     if (s === t) return true;
     if (t === 'clean_redraw' || t === 'clean') return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
-    if (t === 'pre_aprovado' || t === 'ready' || t === 'preview') return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado' || s === 'pré-aprovado';
+    if (t === 'pre_aprovado' || t === 'ready' || t === 'preview' || t === 'pronto_pra_upar' || t === 'pré aprovado' || t === 'pré-aprovado') {
+      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado' || s === 'pré-aprovado';
+    }
     if (t === 'traducao' || t === 'translation') return s === 'traducao' || s === 'translation';
     if (t === 'revisor_qc' || t === 'qc') return s === 'revisor_qc' || s === 'revisao' || s === 'qc' || s === 'revisor (qc)';
     if (t === 'publicado' || t === 'published') return s === 'publicado' || s === 'published';
@@ -92,7 +96,7 @@
   // Filter and search state
   let searchQuery = $state('');
   let filterWorkId = $state<string>('ALL');
-  let filterQueueTab = $state<'ALL' | 'AVAILABLE' | 'MINE'>('ALL');
+  let filterQueueTab = $state<'ALL' | 'AVAILABLE' | 'MINE' | 'TEAM'>('ALL');
 
   // Expanded card tracking
   let expandedCards = $state<Record<string, boolean>>({});
@@ -124,6 +128,9 @@
       const slug = cs.stage?.slug || '';
       if (!matchesStageSlug(slug, 'pre_aprovado')) continue;
 
+      // Filter out non-active stage statuses
+      if (cs.status === 'BLOCKED' || cs.status === 'CANCELLED' || cs.status === 'DONE') continue;
+
       const chId = cs.production_chapter_id || cs.chapter_id;
       const ch = chapters.find((c: any) => c.id === chId);
       if (!ch) continue;
@@ -152,10 +159,17 @@
     })
   );
 
+  // Capítulos atribuídos à equipe (assigned to other team members, IN_PROGRESS or REWORK)
+  let teamItems = $derived(
+    preAprovadoItems.filter((item: any) => {
+      return item.cs.assigned_to && item.cs.assigned_to !== currentUserId && (item.cs.status === 'IN_PROGRESS' || item.cs.status === 'REWORK');
+    })
+  );
+
   // Filtered available items (matching work and search)
   let filteredAvailableItems = $derived(
     availableItems.filter((item: any) => {
-      if (filterQueueTab === 'MINE') return false;
+      if (filterQueueTab === 'MINE' || filterQueueTab === 'TEAM') return false;
       const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
       const q = searchQuery.trim().toLowerCase();
       if (!q) return matchesWork;
@@ -169,7 +183,21 @@
   // Filtered my items (matching work and search)
   let filteredMyItems = $derived(
     myItems.filter((item: any) => {
-      if (filterQueueTab === 'AVAILABLE') return false;
+      if (filterQueueTab === 'AVAILABLE' || filterQueueTab === 'TEAM') return false;
+      const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return matchesWork;
+      const title = (item.work?.title || '').toLowerCase();
+      const num = String(item.ch.chapter_number || '');
+      const label = (item.ch.chapter_label || '').toLowerCase();
+      return matchesWork && (title.includes(q) || num.includes(q) || label.includes(q));
+    })
+  );
+
+  // Filtered team items (matching work and search)
+  let filteredTeamItems = $derived(
+    teamItems.filter((item: any) => {
+      if (filterQueueTab === 'AVAILABLE' || filterQueueTab === 'MINE') return false;
       const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
       const q = searchQuery.trim().toLowerCase();
       if (!q) return matchesWork;
@@ -269,8 +297,18 @@
   function closePublishModal() {
     publishModalOpen = false;
     publishingItem = null;
-    publishFeedback = null;
+    // Keep publishFeedback intact so the page toast banner displays the result
   }
+
+  // Auto-dismiss success feedback after 7 seconds
+  $effect(() => {
+    if (publishFeedback && publishFeedback.type === 'success') {
+      const timer = setTimeout(() => {
+        publishFeedback = null;
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  });
 
   // Check if target chapter number is already published for the selected work
   let duplicateCatalogChapter = $derived.by(() => {
@@ -423,7 +461,7 @@
           onclick={() => (filterQueueTab = 'ALL')}
         >
           <span>Todos</span>
-          <span class="segment-pill">{availableItems.length + myItems.length}</span>
+          <span class="segment-pill">{filteredAvailableItems.length + filteredMyItems.length + filteredTeamItems.length}</span>
         </button>
         <button
           type="button"
@@ -432,7 +470,7 @@
           onclick={() => (filterQueueTab = 'AVAILABLE')}
         >
           <span>Disponíveis</span>
-          <span class="segment-pill cyan">{availableItems.length}</span>
+          <span class="segment-pill cyan">{filteredAvailableItems.length}</span>
         </button>
         <button
           type="button"
@@ -441,8 +479,19 @@
           onclick={() => (filterQueueTab = 'MINE')}
         >
           <span>Meus</span>
-          <span class="segment-pill purple">{myItems.length}</span>
+          <span class="segment-pill purple">{filteredMyItems.length}</span>
         </button>
+        {#if teamItems.length > 0}
+          <button
+            type="button"
+            class="segment-btn"
+            class:is-active={filterQueueTab === 'TEAM'}
+            onclick={() => (filterQueueTab = 'TEAM')}
+          >
+            <span>Equipe</span>
+            <span class="segment-pill amber">{filteredTeamItems.length}</span>
+          </button>
+        {/if}
       </div>
     </div>
   </section>
@@ -861,6 +910,197 @@
     </section>
   {/if}
 
+  <!-- 4.1. SEÇÃO: CAPÍTULOS DA EQUIPE -->
+  {#if teamItems.length > 0 && filterQueueTab !== 'AVAILABLE' && filterQueueTab !== 'MINE'}
+    <section class="queue-section" aria-labelledby="heading-team">
+      <div class="section-header">
+        <div class="section-title-lockup">
+          <div class="section-icon-box text-amber">
+            <User size={18} />
+          </div>
+          <div>
+            <div class="section-title-row">
+              <h2 id="heading-team" class="section-heading">Capítulos em andamento pela equipe</h2>
+              <span class="section-counter-badge mine-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">{filteredTeamItems.length}</span>
+            </div>
+            <p class="section-subtext">
+              Capítulos sob responsabilidade de outros membros da equipe para publicação.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {#if filteredTeamItems.length === 0}
+        <div class="empty-state-box">
+          <div class="empty-icon-wrap" style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2);">
+            <CheckCircle2 size={28} class="empty-icon" style="color: #f59e0b;" />
+          </div>
+          <h3 class="empty-title">Nenhum capítulo atribuído a outros membros</h3>
+          <p class="empty-desc">
+            Todos os capítulos em Pré-aprovado estão na fila geral ou em suas mãos.
+          </p>
+        </div>
+      {:else}
+        <div class="cards-grid">
+          {#each filteredTeamItems as item (item.cs.id)}
+            {@const isOpen = Boolean(expandedCards[item.cs.id])}
+            {@const primaryPkg = getPrimaryPackage(item.ch.id)}
+            {@const deliverables = getChapterDeliverables(item.ch.id)}
+            {@const assigneeName = item.cs.assignee?.display_name || item.cs.assignee?.username || 'Outro membro'}
+
+            <article class="pre-card" class:is-expanded={isOpen}>
+              <!-- CARD TOP BAR -->
+              <div class="card-top-bar">
+                <div class="card-left-identity">
+                  <div class="work-thumbnail">
+                    {#if item.work?.cover_id}
+                      <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumb-img" loading="lazy" />
+                    {:else}
+                      <div class="thumb-fallback">NOX</div>
+                    {/if}
+                  </div>
+
+                  <div class="titles-cluster">
+                    <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
+                    <h3 class="chapter-title">
+                      Capítulo #{item.ch.chapter_number}
+                      {#if item.ch.chapter_label}
+                        <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
+                      {/if}
+                    </h3>
+                    <p class="context-subtitle">Capítulo {item.ch.chapter_number} — Atribuído a {assigneeName}</p>
+                  </div>
+                </div>
+
+                <div class="card-right-status">
+                  <span class="badge-status-mine" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.28);">
+                    <User size={13} />
+                    <span>Com {assigneeName}</span>
+                  </span>
+                  <span class="badge-status-test">
+                    <Zap size={11} />
+                    <span>Teste interno</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- CARD ACTIONS BAR -->
+              <div class="card-actions-bar">
+                <div class="actions-group-left">
+                  <button
+                    type="button"
+                    class="btn-toggle-work"
+                    onclick={() => toggleCard(item.cs.id)}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{isOpen ? 'Recolher trabalho' : 'Abrir trabalho'}</span>
+                    <span class="chevron-rotator" class:is-flipped={isOpen}>
+                      <ChevronDown size={15} />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn-details-secondary"
+                    onclick={() => onOpenChapter(item.ch)}
+                  >
+                    <BookOpen size={14} />
+                    <span>Ver detalhes</span>
+                  </button>
+                </div>
+
+                <div class="actions-group-right">
+                  <button
+                    type="button"
+                    class="btn-publish-highlight"
+                    onclick={() => openPublishModal(item)}
+                  >
+                    <Globe size={15} />
+                    <span>Publicar no catálogo</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- CARD EXPANDED CONTENT -->
+              {#if isOpen}
+                <div class="card-expanded-content">
+                  <div class="expanded-grid">
+                    <div class="expanded-panel">
+                      <div class="panel-header">
+                        <ShieldCheck size={16} class="text-purple-400" />
+                        <h4 class="panel-title">Resumo Editorial</h4>
+                      </div>
+                      <dl class="meta-definition-list">
+                        <div class="meta-row">
+                          <dt>Obra:</dt>
+                          <dd class="text-white">{item.work?.title || '—'}</dd>
+                        </div>
+                        <div class="meta-row">
+                          <dt>Capítulo:</dt>
+                          <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
+                        </div>
+                        <div class="meta-row">
+                          <dt>Etapa Atual:</dt>
+                          <dd><span class="inline-badge cyan">Pré-aprovado</span></dd>
+                        </div>
+                        <div class="meta-row">
+                          <dt>Responsável:</dt>
+                          <dd class="text-amber font-semibold">{assigneeName}</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <div class="expanded-panel">
+                      <div class="panel-header">
+                        <Package size={16} class="text-emerald" />
+                        <h4 class="panel-title">Materiais Prontos</h4>
+                      </div>
+                      {#if primaryPkg}
+                        <div class="primary-deliverable-card">
+                          <div class="pkg-icon-wrap">
+                            <FileArchive size={20} class="text-emerald" />
+                          </div>
+                          <div class="pkg-details">
+                            <div class="pkg-filename">{primaryPkg.file_name}</div>
+                            <div class="pkg-meta">
+                              <span>Pacote validado</span>
+                              <span>·</span>
+                              <span>{formatBytes(primaryPkg.file_size)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      {/if}
+                    </div>
+
+                    <div class="expanded-panel full-width">
+                      <div class="panel-header">
+                        <Globe size={16} class="text-cyan" />
+                        <h4 class="panel-title">Ação de Publicação</h4>
+                      </div>
+                      <div class="destiny-callout">
+                        <p class="destiny-text">
+                          Pronto para publicação no catálogo oficial. Como líder/administrador, você pode liberar este capítulo diretamente.
+                        </p>
+                        <button
+                          type="button"
+                          class="btn-publish-highlight in-expanded"
+                          onclick={() => openPublishModal(item)}
+                        >
+                          <Globe size={16} />
+                          <span>Publicar no Catálogo</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {/if}
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
+
   <!-- 5. MODAL / BOTTOM SHEET DE PUBLICAÇÃO -->
   {#if publishModalOpen && publishingItem}
     <div class="modal-backdrop" onclick={closePublishModal} role="presentation">
@@ -900,9 +1140,11 @@
               if (result.type === 'success') {
                 const pubChId = publishingItem?.ch?.id;
                 if (pubChId) locallyPublishedChapterIds[pubChId] = true;
+                const targetWork = works.find((w: any) => w.id === publishTargetWorkId) || publishingItem?.work;
+                const workTitle = targetWork?.title || 'Obra';
                 publishFeedback = {
                   type: 'success',
-                  message: `Distante Sky — Capítulo #${publishChapterNumber} publicado com sucesso no catálogo oficial!`
+                  message: `${workTitle} — Capítulo #${publishChapterNumber} publicado com sucesso no catálogo oficial!`
                 };
                 closePublishModal();
                 await update({ reset: false });
@@ -2033,13 +2275,14 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(3, 7, 18, 0.75);
+    background: rgba(3, 7, 18, 0.82);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
-    padding: 1rem;
+    padding: calc(78px + 1.25rem) 1rem 1.5rem 1rem;
+    overflow-y: auto;
   }
 
   .publish-modal-card {
@@ -2048,12 +2291,13 @@
     border-radius: 16px;
     width: 100%;
     max-width: 680px;
-    max-height: 90vh;
+    max-height: calc(100vh - 110px);
     display: flex;
     flex-direction: column;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(6, 182, 212, 0.15);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(6, 182, 212, 0.15);
     overflow: hidden;
     animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    margin: auto;
   }
 
   @keyframes modalPop {
@@ -2074,6 +2318,7 @@
     align-items: center;
     justify-content: space-between;
     background: #141828;
+    flex-shrink: 0;
   }
   .modal-header-left {
     display: flex;
@@ -2120,6 +2365,8 @@
   .modal-form {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
   }
 
@@ -2129,7 +2376,8 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    max-height: calc(90vh - 180px);
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .modal-form-block {
@@ -2359,7 +2607,7 @@
   @media (max-width: 768px) {
     .pre-aprovado-root {
       gap: 1.25rem;
-      padding-bottom: 5rem;
+      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
     }
 
     .pre-hero-card {
@@ -2411,7 +2659,7 @@
       justify-content: center;
     }
 
-    /* Mobile Cards */
+    /* Mobile Cards: Primary expander button on top, Details & Publish on row below */
     .card-top-bar {
       padding: 1rem;
       flex-direction: column;
@@ -2427,35 +2675,46 @@
 
     .card-actions-bar {
       padding: 0.85rem 1rem;
-      flex-direction: column;
-      align-items: stretch;
+      display: grid;
+      grid-template-columns: 1fr 1.3fr;
       gap: 0.65rem;
     }
     .actions-group-left {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      width: 100%;
-    }
-    .btn-toggle-work, .btn-details-secondary {
-      justify-content: center;
-      width: 100%;
+      display: contents;
     }
     .actions-group-right {
-      width: 100%;
+      display: contents;
     }
-    .btn-publish-highlight {
+    .btn-toggle-work {
+      grid-column: 1 / -1;
       width: 100%;
       justify-content: center;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+    .btn-details-secondary {
+      grid-column: 1;
+      width: 100%;
+      justify-content: center;
+      padding: 0.75rem 0.5rem;
+    }
+    .btn-publish-highlight {
+      grid-column: 2;
+      width: 100%;
+      justify-content: center;
+      padding: 0.75rem 0.5rem;
     }
 
     /* Bottom Sheet on Mobile */
     .modal-backdrop {
       align-items: flex-end;
       padding: 0;
+      overflow-y: hidden;
     }
     .publish-modal-card {
       border-radius: 20px 20px 0 0;
-      max-height: 85vh;
+      max-height: 88vh;
+      margin: 0;
       animation: sheetSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes sheetSlideUp {
@@ -2471,6 +2730,9 @@
     }
     .form-group.half-col {
       grid-column: 1 / -1;
+    }
+    .modal-footer {
+      padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
     }
     .modal-footer-buttons {
       flex-direction: column;

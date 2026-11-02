@@ -233,13 +233,13 @@
     },
     {
       slug: 'pre_aprovado',
-      name: 'Pré Aprovado',
+      name: 'Pré-aprovado',
       icon: '✅',
       color: '#06b6d4',
       badgeBg: 'rgba(6, 182, 212, 0.14)',
       badgeBorder: 'rgba(6, 182, 212, 0.3)',
       subtitle: 'Capítulo validado e pré-aprovado. Pronto para liberação oficial no catálogo.',
-      aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado'],
+      aliases: ['pre_aprovado', 'ready', 'pronto_pra_upar', 'preview', 'pré aprovado', 'pré-aprovado'],
       requiresOutput: false
     },
     {
@@ -262,8 +262,8 @@
     if (t === 'clean' || t === 'clean_redraw' || t === 'clean/redraw') {
       return s === 'clean' || s === 'clean_redraw' || s === 'clean/redraw';
     }
-    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview') {
-      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado';
+    if (t === 'pre_aprovado' || t === 'ready' || t === 'pronto_pra_upar' || t === 'preview' || t === 'pré aprovado' || t === 'pré-aprovado') {
+      return s === 'pre_aprovado' || s === 'ready' || s === 'pronto_pra_upar' || s === 'preview' || s === 'pré aprovado' || s === 'pré-aprovado';
     }
     if (t === 'traducao' || t === 'translation') {
       return s === 'traducao' || s === 'translation';
