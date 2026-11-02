@@ -291,7 +291,7 @@
         </span>
         <h1 class="qc-header-title">
           {manifest?.workTitle || chapter?.work?.title || 'Céu Distante'}
-          <span class="qc-header-ch">Cap. #{manifest?.chapterNumber || chapter?.chapter_number || 84}</span>
+          <span class="qc-header-ch">Cap. {manifest?.chapterNumber || chapter?.chapter_number || 85}</span>
         </h1>
       </div>
     </div>
@@ -335,7 +335,7 @@
         class="qc-icon-btn qc-badge-btn"
         class:active={sidebarOpen}
         onclick={() => sidebarOpen = !sidebarOpen}
-        title="Apontamentos e Observações"
+        title={isConferenceMode ? 'Observações da conferência' : 'Apontamentos e Observações'}
       >
         <List size={16} />
         {#if openIssuesCount > 0}
@@ -350,7 +350,7 @@
         onclick={() => openNewIssueModal(currentPage)}
       >
         <Flag size={14} />
-        <span>Apontar erro</span>
+        <span>{isConferenceMode ? 'Adicionar observação' : 'Apontar erro'}</span>
       </button>
 
       <!-- Solicit Rework Button -->
@@ -439,7 +439,7 @@
     <div class="qc-reader-incomplete-banner" role="alert">
       <AlertTriangle size={15} class="flex-shrink-0" />
       <span>
-        <strong>Material Incompleto:</strong> O pacote contém páginas limpas do Clean/Redraw com balões vazios. As falas da tradução não foram diagramadas. A aprovação está bloqueada.
+        <strong>Material Incompleto:</strong> O pacote contém páginas limpas do Clean/Redraw com balões vazios. As falas da tradução não foram diagramadas. {isConferenceMode ? 'A publicação está bloqueada.' : 'A aprovação está bloqueada.'}
       </span>
     </div>
   {/if}
@@ -449,7 +449,7 @@
     <div class="qc-mob-menu-backdrop" onclick={() => mobileMenuOpen = false}>
       <div class="qc-mob-menu-sheet" onclick={(e) => e.stopPropagation()}>
         <div class="qc-mob-menu-header">
-          <span class="qc-mob-menu-title">Opções do Leitor QC</span>
+          <span class="qc-mob-menu-title">{isConferenceMode ? 'Conferência Editorial' : 'Opções do Leitor QC'}</span>
           <button type="button" class="qc-mob-menu-close" onclick={() => mobileMenuOpen = false}>
             <X size={18} />
           </button>
@@ -461,7 +461,7 @@
             onclick={() => { mobileMenuOpen = false; openNewIssueModal(currentPage); }}
           >
             <Flag size={16} class="text-amber-400" />
-            <span>Apontar erro na página {currentPage}</span>
+            <span>{isConferenceMode ? `Registrar observação na pág. ${currentPage}` : `Apontar erro na página ${currentPage}`}</span>
           </button>
           <button
             type="button"
@@ -469,7 +469,7 @@
             onclick={() => { mobileMenuOpen = false; sidebarOpen = true; }}
           >
             <List size={16} class="text-purple-400" />
-            <span>Ver apontamentos ({openIssuesCount})</span>
+            <span>{isConferenceMode ? `Ver observações (${openIssuesCount})` : `Ver apontamentos (${openIssuesCount})`}</span>
           </button>
           <button
             type="button"
@@ -660,7 +660,7 @@
         <div class="qc-sidebar-header">
           <div class="qc-sidebar-title-row">
             <h2 class="qc-sidebar-title">
-              Apontamentos do QC
+              {isConferenceMode ? 'Observações da conferência' : 'Apontamentos do QC'}
               <span class="qc-sidebar-count">({chapterQcIssues.length})</span>
             </h2>
             <button
@@ -672,7 +672,9 @@
               <X size={16} />
             </button>
           </div>
-          <p class="qc-sidebar-subtitle">Erros mapeados para devolução e conferência.</p>
+          <p class="qc-sidebar-subtitle">
+            {isConferenceMode ? 'Observações editoriais registradas antes da publicação.' : 'Erros mapeados para devolução e conferência.'}
+          </p>
         </div>
 
         <!-- Add Issue Quick Action -->
@@ -794,7 +796,7 @@
         onclick={() => openNewIssueModal(currentPage)}
       >
         <Flag size={15} />
-        <span>Apontar erro</span>
+        <span>{isConferenceMode ? 'Observação' : 'Apontar erro'}</span>
       </button>
 
       <div class="qc-mob-page-chip">
@@ -807,7 +809,7 @@
         onclick={() => sidebarOpen = !sidebarOpen}
       >
         <List size={15} />
-        <span>Erros ({openIssuesCount})</span>
+        <span>{isConferenceMode ? 'Observações' : 'Erros'} ({openIssuesCount})</span>
       </button>
     </div>
   {/if}
@@ -822,8 +824,8 @@
               <Flag size={18} />
             </div>
             <div>
-              <h3 class="qc-modal-title">Apontar Erro no Capítulo</h3>
-              <p class="qc-modal-subtitle">Indique o local exato e descreva a correção solicitada.</p>
+              <h3 class="qc-modal-title">{isConferenceMode ? 'Observação da Conferência' : 'Apontar Erro no Capítulo'}</h3>
+              <p class="qc-modal-subtitle">{isConferenceMode ? 'Indique o detalhe ou inconsistência a ser corrigida antes da publicação.' : 'Indique o local exato e descreva a correção solicitada.'}</p>
             </div>
           </div>
           <button type="button" class="btn-close-modal" onclick={() => showIssueModal = false}>
@@ -961,7 +963,7 @@
               disabled={submittingAction || !issueDescription.trim()}
             >
               <Flag size={14} />
-              <span>{submittingAction ? 'Salvando...' : 'Registrar Apontamento'}</span>
+              <span>{submittingAction ? 'Salvando...' : (isConferenceMode ? 'Salvar Observação' : 'Registrar Apontamento')}</span>
             </button>
           </div>
         </form>

@@ -724,9 +724,13 @@
           >
             <span class="pill-icon" aria-hidden="true">{st.icon}</span>
             <span class="pill-name">{st.name}</span>
-            {#if personalNew > 0}
+            {#if matchesStageSlug(st.slug, 'pre_aprovado') || matchesStageSlug(st.slug, 'publicado')}
+              {#if totalAvail > 0}
+                <span class="pill-total-badge">{totalAvail}</span>
+              {/if}
+            {:else if personalNew > 0}
               <span class="pill-personal-badge" title="{personalNew} novos capítulos para seu cargo editorial">
-                ✨ {personalNew} novo{personalNew > 1 ? 's' : ''}
+                {personalNew} novo{personalNew > 1 ? 's' : ''}
               </span>
             {:else if totalAvail > 0}
               <span class="pill-total-badge">{totalAvail}</span>

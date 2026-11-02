@@ -113,10 +113,7 @@
   });
 
   function userHoldsRoleForStage(stageSlug: string): boolean {
-    if (stageSlug === 'publicado') return false;
-    if (matchesStageSlug(stageSlug, 'pre_aprovado')) {
-      return userRole === 'OWNER' || userRole === 'ADMIN';
-    }
+    if (stageSlug === 'publicado' || matchesStageSlug(stageSlug, 'pre_aprovado')) return false;
     const stageConfig = CANONICAL_PIPELINE_STAGES.find(s => matchesStageSlug(s.slug, stageSlug));
     if (!stageConfig || !stageConfig.requiredRoleSlug) return false;
 
@@ -381,8 +378,12 @@
               >
                 <span class="sub-stage-icon" aria-hidden="true">{st.icon}</span>
                 <span class="sub-stage-title">{st.name}</span>
-                {#if personalNew > 0}
-                  <span class="nav-sub-personal-badge" title="{personalNew} capítulos novos para você">✨ {personalNew}</span>
+                {#if matchesStageSlug(st.slug, 'pre_aprovado') || matchesStageSlug(st.slug, 'publicado')}
+                  {#if availCount > 0}
+                    <span class="nav-sub-badge">{availCount}</span>
+                  {/if}
+                {:else if personalNew > 0}
+                  <span class="nav-sub-personal-badge" title="{personalNew} capítulos novos para você">{personalNew}</span>
                 {:else if availCount > 0}
                   <span class="nav-sub-badge">{availCount}</span>
                 {/if}

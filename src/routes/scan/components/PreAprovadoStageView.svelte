@@ -244,6 +244,31 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
+  // Format chapter display without duplicate prefixes (e.g. "Cap. 85 — Homologação Editorial")
+  function formatChapterDisplay(chNumber: any, rawLabel?: string, rawTitle?: string): string {
+    const numStr = String(chNumber ?? '').trim();
+    const label = (rawLabel || rawTitle || '').trim();
+    if (!label) {
+      return numStr ? `Cap. ${numStr}` : 'Capítulo';
+    }
+
+    const prefixRegex = new RegExp(`^(?:cap[íi]tulo|cap\\.?)\\s*#?\\s*${numStr}\\s*[-–—:·.]*\\s*`, 'i');
+    let cleanTitle = label.replace(prefixRegex, '').trim();
+
+    if (!cleanTitle || cleanTitle.toLowerCase() === `capítulo ${numStr}`.toLowerCase() || cleanTitle.toLowerCase() === `cap. ${numStr}`.toLowerCase()) {
+      return numStr ? `Cap. ${numStr}` : 'Capítulo';
+    }
+
+    return numStr ? `Cap. ${numStr} — ${cleanTitle}` : cleanTitle;
+  }
+
+  function cleanChapterTitle(rawTitle?: string, chNum?: any): string {
+    if (!rawTitle) return '';
+    const numStr = String(chNum ?? '').trim();
+    const prefixRegex = new RegExp(`^(?:cap[íi]tulo|cap\\.?)\\s*#?\\s*${numStr}\\s*[-–—:·.]*\\s*`, 'i');
+    return rawTitle.replace(prefixRegex, '').trim();
+  }
+
   // Detect incomplete material (e.g. Chapter 85 unlettered speech bubbles)
   function isItemIncomplete(item: any): boolean {
     const chId = item?.ch?.id;
@@ -311,7 +336,8 @@
     const targetWId = item.work?.id || item.ch?.work_id || (works.length > 0 ? works[0].id : '');
     publishTargetWorkId = targetWId;
     publishChapterNumber = item.ch.chapter_number ?? '';
-    publishChapterTitle = item.ch.chapter_label || item.ch.chapter_title || '';
+    const rawLabel = item.ch.chapter_label || item.ch.chapter_title || '';
+    publishChapterTitle = cleanChapterTitle(rawLabel, item.ch.chapter_number);
     publishVolume = item.ch.volume ?? '';
     publishConfirmedDuplicate = false;
     publishConferenceConfirmed = Boolean(confirmedConferences[item.ch.id]);
@@ -376,13 +402,12 @@
     <div class="pre-title-group">
       <div class="pre-title-row">
         <h1 class="stage-main-title">Pré-aprovado</h1>
-        <span class="discrete-count-badge">
-          {waitingPublishItems.length} {waitingPublishItems.length === 1 ? 'aguardando' : 'aguardando'}
-        </span>
+        {#if waitingPublishItems.length > 0}
+          <span class="discrete-count-badge">
+            {waitingPublishItems.length}
+          </span>
+        {/if}
       </div>
-      <p class="stage-sub-desc">
-        Capítulos revisados aguardando liberação para o catálogo oficial.
-      </p>
     </div>
 
     <!-- Controls Cluster: Search & Work Filter -->
@@ -432,7 +457,9 @@
         >
           <span class="stage-tab-icon">{st.icon}</span>
           <span class="stage-tab-label">{st.name}</span>
-          <span class="stage-tab-count">{count}</span>
+          {#if count > 0}
+            <span class="stage-tab-count">{count}</span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -446,7 +473,9 @@
           <Globe size={16} />
         </div>
         <h2 id="section-heading-queue" class="queue-heading-text">Aguardando publicação</h2>
-        <span class="queue-heading-count">{filteredItems.length}</span>
+        {#if filteredItems.length > 0}
+          <span class="queue-heading-count">{filteredItems.length}</span>
+        {/if}
       </div>
     </div>
 
@@ -472,10 +501,12 @@
           {@const isIncomplete = isItemIncomplete(item)}
           {@const isConferred = Boolean(confirmedConferences[item.ch.id])}
           {@const deliverables = getChapterDeliverables(item.ch.id)}
+          {@const formattedChTitle = formatChapterDisplay(item.ch.chapter_number, item.ch.chapter_label, item.ch.chapter_title)}
 
           <article class="pub-card" class:is-expanded={isOpen} class:is-incomplete={isIncomplete}>
-            <!-- CARD MAIN INFO ROW -->
-            <div class="card-main-row">
+            <!-- CARD TOP / MAIN ROW: Identity on left, Actions on right (desktop), stacked in order (mobile) -->
+            <div class="pub-card-header-bar">
+              <!-- 1. Capa e identificação da obra + 2. Título sem duplicações + 3. Status principal -->
               <div class="card-left-identity">
                 <div class="work-cover-box">
                   {#if item.work?.cover_id}
@@ -487,20 +518,21 @@
 
                 <div class="chapter-info-cluster">
                   <span class="work-title" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
-                  <span class="chapter-identity">
-                    Capítulo #{item.ch.chapter_number}{item.ch.chapter_label ? ` · ${item.ch.chapter_label}` : ''}
+                  <span class="chapter-identity" title={formattedChTitle}>
+                    {formattedChTitle}
                   </span>
 
+                  <!-- Status Principal do Material & Conferência -->
                   <div class="card-meta-pills">
                     {#if isIncomplete}
                       <span class="meta-pill is-warning" title="Pacote Typeset possui balões sem texto diagramado">
                         <AlertTriangle size={11} />
-                        <span>Typeset incompleto (balões vazios)</span>
+                        <span>Aguardando correções</span>
                       </span>
                     {:else}
                       <span class="meta-pill is-valid">
                         <CheckCircle2 size={11} />
-                        <span>Validado pelo QC</span>
+                        <span>Pronto para publicação</span>
                       </span>
                     {/if}
 
@@ -510,79 +542,72 @@
                         <span>Conferido</span>
                       </span>
                     {/if}
-
-                    {#if primaryPkg}
-                      <span class="meta-pill is-pkg">
-                        <Package size={11} />
-                        <span>{primaryPkg.stage_slug || 'Typeset'} · {formatBytes(primaryPkg.byte_size || primaryPkg.file_size)}</span>
-                      </span>
-                    {/if}
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- CARD ACTIONS ROW -->
-            <div class="card-actions-bar">
-              <!-- 1. Conferir Capítulo (Primary Action) -->
-              <button
-                type="button"
-                class="btn-action-conferir"
-                onclick={() => onOpenQcReader(item.ch)}
-                title="Abrir leitor privado para conferência das páginas antes da publicação"
-              >
-                <BookOpen size={15} />
-                <span>Conferir capítulo</span>
-              </button>
+              <!-- Actions in requested order: 4. Conferir, 5. Ver detalhes, 6. Publicar -->
+              <div class="card-actions-bar">
+                <!-- 4. Conferir Capítulo (Primary Action) -->
+                <button
+                  type="button"
+                  class="btn-action-conferir"
+                  onclick={() => onOpenQcReader(item.ch)}
+                  title="Abrir leitor privado para conferência das páginas antes da publicação"
+                >
+                  <BookOpen size={15} />
+                  <span>Conferir capítulo</span>
+                </button>
 
-              <!-- 2. Ver Detalhes Toggle -->
-              <button
-                type="button"
-                class="btn-action-details"
-                onclick={() => toggleCard(item.cs.id)}
-                aria-expanded={isOpen}
-              >
-                <span>{isOpen ? 'Menos detalhes' : 'Ver detalhes'}</span>
-                <span class="chevron-rotator" class:is-flipped={isOpen}>
-                  <ChevronDown size={14} />
-                </span>
-              </button>
+                <!-- 5. Ver Detalhes Toggle -->
+                <button
+                  type="button"
+                  class="btn-action-details"
+                  onclick={() => toggleCard(item.cs.id)}
+                  aria-expanded={isOpen}
+                >
+                  <span>{isOpen ? 'Menos detalhes' : 'Ver detalhes'}</span>
+                  <span class="chevron-rotator" class:is-flipped={isOpen}>
+                    <ChevronDown size={14} />
+                  </span>
+                </button>
 
-              <!-- 3. Publicar no Catálogo (or Blocked Indicator) -->
-              {#if canPublish}
-                {#if isIncomplete}
-                  <button
-                    type="button"
-                    class="btn-action-publish is-blocked"
-                    disabled
-                    title="Publicação bloqueada: o pacote Typeset contém balões vazios sem as falas diagramadas."
-                  >
-                    <Lock size={14} />
-                    <span>Publicação Bloqueada</span>
-                  </button>
+                <!-- 6. Publicar no Catálogo (or Blocked Indicator) -->
+                {#if canPublish}
+                  {#if isIncomplete}
+                    <button
+                      type="button"
+                      class="btn-action-publish is-blocked"
+                      disabled
+                      title="Publicação bloqueada: o pacote Typeset contém balões vazios sem as falas diagramadas."
+                    >
+                      <Lock size={14} />
+                      <span>Publicação Bloqueada</span>
+                    </button>
+                  {:else}
+                    <button
+                      type="button"
+                      class="btn-action-publish is-ready"
+                      onclick={() => openPublishModal(item)}
+                    >
+                      <Globe size={14} />
+                      <span>Publicar no catálogo</span>
+                    </button>
+                  {/if}
                 {:else}
-                  <button
-                    type="button"
-                    class="btn-action-publish is-ready"
-                    onclick={() => openPublishModal(item)}
-                  >
-                    <Globe size={14} />
-                    <span>Publicar no catálogo</span>
-                  </button>
+                  <span class="badge-waiting-admin" title="Apenas Dono ou Gerente da scan podem publicar no catálogo">
+                    <Lock size={12} />
+                    <span>Aguardando Dono/Gerente</span>
+                  </span>
                 {/if}
-              {:else}
-                <span class="badge-waiting-admin" title="Apenas Dono ou Gerente da scan podem publicar no catálogo">
-                  <Lock size={12} />
-                  <span>Aguardando Dono/Gerente</span>
-                </span>
-              {/if}
+              </div>
             </div>
 
             <!-- CARD EXPANDED CONTENT (Only shown on "Ver detalhes") -->
             {#if isOpen}
               <div class="card-details-panel">
                 <div class="details-grid">
-                  <!-- Resumo Editorial -->
+                  <!-- 1. Resumo Editorial -->
                   <div class="details-panel-card">
                     <h4 class="panel-card-title">
                       <ShieldCheck size={14} class="text-cyan" />
@@ -595,37 +620,56 @@
                       </div>
                       <div class="kv-row">
                         <dt>Capítulo:</dt>
-                        <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
+                        <dd class="text-cyan font-bold">{formattedChTitle}</dd>
                       </div>
                       <div class="kv-row">
-                        <dt>Etapa Atual:</dt>
-                        <dd><span class="inline-stage-tag cyan">Pré-aprovado</span></dd>
+                        <dt>Estado da Fila:</dt>
+                        <dd><span class="inline-stage-tag cyan">Aguardando liberação</span></dd>
                       </div>
                       <div class="kv-row">
-                        <dt>Validação QC:</dt>
-                        <dd class={isIncomplete ? 'text-amber' : 'text-emerald'}>
-                          {isIncomplete ? 'Incompleto (Balões em branco)' : 'Aprovado sem pendências'}
+                        <dt>Estado do Material:</dt>
+                        <dd class={isIncomplete ? 'text-amber font-semibold' : 'text-emerald font-semibold'}>
+                          {#if isIncomplete}
+                            <span class="status-indicator-inline amber">
+                              <AlertTriangle size={12} />
+                              Aguardando correções (Typeset com balões vazios)
+                            </span>
+                          {:else}
+                            <span class="status-indicator-inline emerald">
+                              <CheckCircle2 size={12} />
+                              Pronto para publicação
+                            </span>
+                          {/if}
                         </dd>
                       </div>
                       <div class="kv-row">
-                        <dt>Conferência:</dt>
-                        <dd class={isConferred ? 'text-emerald font-semibold' : 'text-slate-400'}>
-                          {isConferred ? 'Realizada no leitor privado' : 'Pendente de conferência no leitor'}
+                        <dt>Estado da Conferência:</dt>
+                        <dd class={isConferred ? 'text-cyan font-semibold' : 'text-slate-400'}>
+                          {#if isConferred}
+                            <span class="status-indicator-inline cyan">
+                              <Check size={12} />
+                              Conferência concluída no leitor
+                            </span>
+                          {:else}
+                            <span class="status-indicator-inline slate">
+                              Não conferido
+                            </span>
+                          {/if}
                         </dd>
                       </div>
                     </dl>
                   </div>
 
-                  <!-- Materiais Prontos -->
+                  <!-- 2. Materiais de Produção -->
                   <div class="details-panel-card">
                     <h4 class="panel-card-title">
-                      <Package size={14} class="text-emerald" />
-                      <span>Materiais Prontos</span>
+                      <Package size={14} class={isIncomplete ? 'text-amber' : 'text-emerald'} />
+                      <span>{isIncomplete ? 'Materiais (Aguardando Correções)' : 'Materiais de Produção'}</span>
                     </h4>
                     {#if primaryPkg}
-                      <div class="primary-pkg-box">
+                      <div class="primary-pkg-box" class:is-incomplete={isIncomplete}>
                         <div class="pkg-icon-wrap">
-                          <FileArchive size={18} class="text-emerald" />
+                          <FileArchive size={18} class={isIncomplete ? 'text-amber' : 'text-emerald'} />
                         </div>
                         <div class="pkg-txt">
                           <div class="pkg-name" title={primaryPkg.file_name}>{primaryPkg.file_name}</div>
@@ -649,7 +693,7 @@
                     </div>
                   </div>
 
-                  <!-- Destino no Catálogo Oficial -->
+                  <!-- 3. Destino no Catálogo Oficial -->
                   <div class="details-panel-card full-span">
                     <h4 class="panel-card-title">
                       <Globe size={14} class="text-cyan" />
@@ -663,7 +707,7 @@
                           </p>
                         {:else}
                           <p>
-                            Este capítulo será liberado para leitura pública com os créditos de <strong>Project Nox</strong> como <strong>{item.work?.title} — Capítulo #{item.ch.chapter_number}</strong>.
+                            Este capítulo será liberado para leitura pública com os créditos de <strong>Project Nox</strong> como <strong>{item.work?.title} — {formattedChTitle}</strong>.
                           </p>
                         {/if}
                       </div>
@@ -873,7 +917,7 @@
                 </div>
                 <div class="summary-line">
                   <span class="summary-key">Capítulo Selecionado:</span>
-                  <span class="summary-val text-cyan font-bold">Capítulo #{publishChapterNumber}</span>
+                  <span class="summary-val text-cyan font-bold">Cap. {publishChapterNumber}{publishChapterTitle ? ` — ${publishChapterTitle}` : ''}</span>
                 </div>
                 <div class="summary-line">
                   <span class="summary-key">Scan de Origem:</span>
@@ -889,7 +933,7 @@
                   <span class="summary-key">Status de Validação:</span>
                   {#if publishingMaterialIncomplete}
                     <span class="summary-val text-amber font-semibold">
-                      ⚠ Reprovado no QC (Balões sem falas diagramadas)
+                      ⚠ Typeset incompleto (balões vazios sem falas diagramadas)
                     </span>
                   {:else}
                     <span class="summary-val text-emerald font-semibold">
@@ -951,7 +995,7 @@
                       bind:checked={publishConfirmedDuplicate}
                       class="confirm-checkbox"
                     />
-                    <span>Estou ciente e confirmo a atualização/substituição do Capítulo #{publishChapterNumber}.</span>
+                    <span>Estou ciente e confirmo a atualização/substituição do Cap. #{publishChapterNumber}.</span>
                   </label>
                 </div>
               {:else}
@@ -1141,13 +1185,17 @@
   .discrete-count-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.2rem 0.6rem;
-    border-radius: 6px;
-    background: rgba(168, 85, 247, 0.14);
-    border: 1px solid rgba(168, 85, 247, 0.28);
-    color: #c084fc;
+    justify-content: center;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: rgba(139, 92, 246, 0.22);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
+    line-height: 1.2;
+    min-width: 18px;
+    text-align: center;
   }
   .stage-sub-desc {
     font-size: 0.8125rem;
@@ -1271,17 +1319,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.25rem;
-    padding: 0 0.35rem;
+    min-width: 1.15rem;
+    padding: 1px 6px;
     height: 1.15rem;
-    border-radius: 999px;
-    background: rgba(168, 85, 247, 0.14);
-    color: #c084fc;
-    font-size: 0.72rem;
-    font-weight: 600;
+    border-radius: 9999px;
+    background: rgba(139, 92, 246, 0.22);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1;
   }
   .stage-tab-btn.is-active .stage-tab-count {
     background: rgba(6, 182, 212, 0.25);
+    border-color: rgba(6, 182, 212, 0.45);
     color: #67e8f9;
   }
 
@@ -1321,12 +1372,15 @@
   .queue-heading-count {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.55rem;
-    border-radius: 999px;
-    background: rgba(6, 182, 212, 0.15);
-    color: #22d3ee;
+    justify-content: center;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: rgba(139, 92, 246, 0.22);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
     font-size: 0.75rem;
     font-weight: 700;
+    line-height: 1.2;
   }
 
   /* CLEAN EMPTY BOX */
@@ -1391,12 +1445,13 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   }
 
-  /* Card Main Info Row */
-  .card-main-row {
+  /* Card Top Row */
+  .pub-card-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 1.25rem;
+    min-width: 0;
   }
   .card-left-identity {
     display: flex;
@@ -1495,9 +1550,7 @@
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    padding-top: 0.85rem;
-    border-top: 1px solid #1a2032;
-    flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   /* 1. Conferir Capítulo (Primary Action) */
@@ -1666,6 +1719,10 @@
     border-radius: 8px;
     padding: 0.55rem 0.75rem;
   }
+  .primary-pkg-box.is-incomplete {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.05);
+  }
   .pkg-icon-wrap {
     display: flex;
     align-items: center;
@@ -1681,9 +1738,28 @@
     font-size: 0.8125rem;
     font-weight: 600;
     color: #f1f5f9;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+  .status-indicator-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .status-indicator-inline.amber {
+    color: #fbbf24;
+  }
+  .status-indicator-inline.emerald {
+    color: #34d399;
+  }
+  .status-indicator-inline.cyan {
+    color: #22d3ee;
+  }
+  .status-indicator-inline.slate {
+    color: #94a3b8;
   }
   .pkg-meta-line {
     font-size: 0.72rem;
@@ -2173,6 +2249,12 @@
       padding: 0.95rem 1rem;
       gap: 0.85rem;
     }
+    .pub-card-header-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.85rem;
+    }
     .work-cover-box {
       width: 46px;
       height: 60px;
@@ -2189,6 +2271,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 0.5rem;
       padding-top: 0.75rem;
+      border-top: 1px solid #1a2032;
     }
     .btn-action-conferir {
       grid-column: 1 / -1;
