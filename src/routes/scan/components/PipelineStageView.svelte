@@ -34,6 +34,7 @@
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
   import RawProviderStageView from './RawProviderStageView.svelte';
   import EditorialStageWorkspace from './EditorialStageWorkspace.svelte';
+  import PreAprovadoStageView from './PreAprovadoStageView.svelte';
 
   let {
     currentStageSlug = 'clean_redraw',
@@ -128,6 +129,10 @@
     }
 
     for (const cs of chapterStages) {
+      const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
+      if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+        continue;
+      }
       const slug = cs.stage?.slug || '';
       for (const cSt of CANONICAL_STAGES) {
         if (matchesStageSlug(slug, cSt.slug)) {
@@ -454,6 +459,10 @@
 
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
+        const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+          continue;
+        }
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
@@ -474,17 +483,6 @@
     if (counts['publicado']) {
       counts['publicado'].total = pubCount;
       counts['publicado'].available = pubCount;
-    }
-
-    // Special count for preview / pre_aprovado
-    const prevCount = chapters.filter((c: any) => ['READY', 'PREVIEW'].includes(c.status)).length;
-    if (counts['pre_aprovado']) {
-      counts['pre_aprovado'].available = prevCount;
-      counts['pre_aprovado'].total = prevCount;
-    }
-    if (counts['preview']) {
-      counts['preview'].available = prevCount;
-      counts['preview'].total = prevCount;
     }
 
     return counts;
@@ -521,8 +519,8 @@
     for (const cs of chapterStages) {
       const stageSlug = cs.stage?.slug || '';
       if (matchesStageSlug(stageSlug, target)) {
-        const ch = chapters.find((c: any) => c.id === cs.production_chapter_id);
-        if (ch) {
+        const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
+        if (ch && ch.status !== 'PUBLISHED' && ch.status !== 'ARCHIVED' && ch.status !== 'INACTIVE') {
           const work = ch.work || works.find((w: any) => w.id === ch.work_id);
           result.push({ ch, cs, work });
         }
@@ -660,6 +658,24 @@
     {onSelectStage}
     {onOpenChapter}
     {onOpenQcReader}
+  />
+{:else if matchesStageSlug(activeCanonical.slug, 'pre_aprovado')}
+  <PreAprovadoStageView
+    {stages}
+    {chapterStages}
+    {chapters}
+    {works}
+    {productionFiles}
+    {tasks}
+    {qcIssues}
+    {currentUserId}
+    {userRole}
+    {userPositions}
+    {seenStages}
+    {isOwnerOrAdmin}
+    {scanId}
+    {onSelectStage}
+    {onOpenChapter}
   />
 {:else}
 <div class="pipeline-stage-view-root">

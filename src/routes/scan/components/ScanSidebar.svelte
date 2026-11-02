@@ -88,6 +88,10 @@
 
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
+        const ch = chapters?.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+          continue;
+        }
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {
@@ -99,9 +103,8 @@
       }
     }
 
+    // Publicado is purely historic published chapters
     if (chapters && chapters.length > 0) {
-      const prevCount = chapters.filter((c: any) => ['READY', 'PREVIEW'].includes(c.status)).length;
-      counts['pre_aprovado'] = prevCount;
       const pubCount = chapters.filter((c: any) => c.status === 'PUBLISHED').length;
       counts['publicado'] = pubCount;
     }
@@ -142,6 +145,10 @@
 
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
+        const ch = chapters?.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+          continue;
+        }
         const slug = cs.stage?.slug || '';
         for (const cSt of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, cSt.slug)) {

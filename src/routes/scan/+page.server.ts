@@ -3858,6 +3858,22 @@ export const actions: Actions = {
     const productionChapterId = String(formData.get('production_chapter_id') || '');
     if (!productionChapterId) return fail(400, { message: 'ID do capítulo ausente.' });
 
+    const targetWorkId = String(formData.get('work_id') || '').trim();
+    const targetChapterNumber = formData.get('chapter_number') ? Number(formData.get('chapter_number')) : null;
+    const targetTitle = String(formData.get('chapter_title') || '').trim();
+
+    if (targetWorkId) {
+      await executeYugabyteSql(
+        `UPDATE public.scan_production_chapters
+         SET work_id = $2,
+             chapter_number = COALESCE($3, chapter_number),
+             chapter_label = COALESCE(NULLIF($4, ''), chapter_label),
+             updated_at = now()
+         WHERE id = $1`,
+        [productionChapterId, targetWorkId, targetChapterNumber, targetTitle], platform?.env
+      ).catch(() => {});
+    }
+
     let data: any;
     try {
       const result = await executeYugabyteSql<{ result: any }>(
@@ -3865,6 +3881,13 @@ export const actions: Actions = {
         [productionChapterId, locals.user.id, locals.role === 'ADMIN'], platform?.env
       );
       data = result.rows[0]?.result;
+
+      // Ensure stages for this published chapter are marked BLOCKED in Yugabyte
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'BLOCKED', assigned_to = NULL, updated_at = now()
+        WHERE production_chapter_id = $1
+      `, [productionChapterId], platform?.env).catch(() => {});
     } catch {
       return fail(503, { message: 'Não foi possível publicar o capítulo com segurança agora.' });
     }
@@ -3872,6 +3895,55 @@ export const actions: Actions = {
       platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
+  },
+
+  setPreAprovadoFixture: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const mode = String(formData.get('mode') || 'status');
+    const chId = 'b5a9fbf0-206d-475a-8e05-70aaa672f71e';
+    if (mode === 'set-ready') {
+      await executeYugabyteSql(`
+        UPDATE public.scan_production_chapters
+        SET status = 'IN_PRODUCTION', current_stage_slug = 'pre_aprovado', updated_at = now()
+        WHERE id = $1
+      `, [chId], platform?.env);
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'DONE', completed_at = now(), updated_at = now()
+        WHERE production_chapter_id = $1
+          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'revisor_qc')
+      `, [chId], platform?.env);
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'AVAILABLE', assigned_to = NULL, claimed_at = NULL, availability_version = 1, availability_reason = 'qc_completed', updated_at = now()
+        WHERE production_chapter_id = $1
+          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
+      `, [chId], platform?.env);
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'BLOCKED', updated_at = now()
+        WHERE production_chapter_id = $1
+          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'publicado')
+      `, [chId], platform?.env);
+      return { success: true, mode: 'set-ready' };
+    } else if (mode === 'set-empty') {
+      await executeYugabyteSql(`
+        UPDATE public.scan_production_chapters
+        SET status = 'PUBLISHED', updated_at = now()
+        WHERE id = $1
+      `, [chId], platform?.env);
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'BLOCKED', assigned_to = NULL, updated_at = now()
+        WHERE production_chapter_id = $1
+          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
+      `, [chId], platform?.env);
+      return { success: true, mode: 'set-empty' };
+    }
+    const ch = await executeYugabyteSql(`SELECT id, chapter_number, status, current_stage_slug FROM public.scan_production_chapters WHERE id = $1`, [chId], platform?.env);
+    const stages = await executeYugabyteSql(`SELECT s.id, s.stage_id, s.status, s.assigned_to, ws.slug FROM public.scan_chapter_stages s JOIN public.scan_workflow_stages ws ON ws.id = s.stage_id WHERE s.production_chapter_id = $1`, [chId], platform?.env);
+    return { success: true, chapter: ch.rows[0], stages: stages.rows };
   },
 
   unpublishProductionChapter: async ({ request, locals, platform }) => {
