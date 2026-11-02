@@ -125,8 +125,8 @@ class YugabyteReadSession {
       const connectStart = performance.now();
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500,
-        query_timeout: 3500
+        connectionTimeoutMillis: 5000,
+        query_timeout: 8000
       });
       try {
         await client.connect();
@@ -174,8 +174,8 @@ class YugabyteReadSession {
       this.activeOrCreating += 1;
       const client = new Client({
         connectionString: this.connectionString,
-        connectionTimeoutMillis: 1500,
-        query_timeout: 3500
+        connectionTimeoutMillis: 5000,
+        query_timeout: 8000
       });
       client
         .connect()
@@ -290,14 +290,14 @@ export async function executeYugabyteSql<T = any>(
   }
 
   // Strategy 1: Hyperdrive native pooled connection if available
-  const hyperdrive = !activeSession ? platformEnv?.HYPERDRIVE : undefined;
+  const hyperdrive = platformEnv?.HYPERDRIVE;
   if (hyperdrive?.connectionString) {
     const connectStart = performance.now();
     try {
       const client = new Client({
         connectionString: hyperdrive.connectionString,
-        connectionTimeoutMillis: 1500,
-        query_timeout: 3500
+        connectionTimeoutMillis: 5000,
+        query_timeout: 8000
       });
       await client.connect();
       const connectDur = Math.round(performance.now() - connectStart);

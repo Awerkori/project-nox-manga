@@ -109,21 +109,34 @@
   // Conference tracking persisted across page views
   let confirmedConferences = $state<Record<string, { confirmedAt: string; confirmedBy: string; fileKey: string }>>({});
 
-  onMount(() => {
+  function reloadConferences() {
     if (typeof window !== 'undefined') {
       try {
+        const next: Record<string, { confirmedAt: string; confirmedBy: string; fileKey: string }> = {};
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
           if (k && k.startsWith('pre_aprovado_conf_')) {
             const chId = k.replace('pre_aprovado_conf_', '');
             const val = JSON.parse(localStorage.getItem(k) || '{}');
             if (val && val.confirmedAt) {
-              confirmedConferences[chId] = val;
+              next[chId] = val;
             }
           }
         }
+        confirmedConferences = next;
       } catch {}
     }
+  }
+
+  onMount(() => {
+    reloadConferences();
+    const handleStorage = () => reloadConferences();
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('nox-conference-updated', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('nox-conference-updated', handleStorage);
+    };
   });
 
   // Publication Modal State
@@ -340,7 +353,7 @@
     publishChapterTitle = cleanChapterTitle(rawLabel, item.ch.chapter_number);
     publishVolume = item.ch.volume ?? '';
     publishConfirmedDuplicate = false;
-    publishConferenceConfirmed = Boolean(confirmedConferences[item.ch.id]);
+    publishConferenceConfirmed = Boolean(confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id]));
     isSimulationMode = true; // default safe simulation
     serverErrorMessage = null;
     publishFeedback = null;
@@ -499,7 +512,7 @@
           {@const isOpen = Boolean(expandedCards[item.cs.id])}
           {@const primaryPkg = getPrimaryPackage(item.ch.id)}
           {@const isIncomplete = isItemIncomplete(item)}
-          {@const isConferred = Boolean(confirmedConferences[item.ch.id])}
+          {@const isConferred = Boolean(confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id]))}
           {@const deliverables = getChapterDeliverables(item.ch.id)}
           {@const formattedChTitle = formatChapterDisplay(item.ch.chapter_number, item.ch.chapter_label, item.ch.chapter_title)}
 
@@ -647,9 +660,13 @@
                         <dt>Estado da Conferência:</dt>
                         <dd class={isConferred ? 'text-cyan font-semibold' : 'text-slate-400'}>
                           {#if isConferred}
+                            {@const confData = confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id])}
                             <span class="status-indicator-inline cyan">
                               <Check size={12} />
                               Conferência concluída no leitor
+                              {#if confData?.confirmedBy}
+                                ({confData.confirmedBy})
+                              {/if}
                             </span>
                           {:else}
                             <span class="status-indicator-inline slate">

@@ -57,21 +57,49 @@
 
   let isConferenceMode = $derived(fromStage === 'pre_aprovado');
 
-  function handleConfirmConference() {
-    if (typeof window !== 'undefined') {
+  let isAlreadyConferred = $state(false);
+  let conferredData = $state<{ confirmedAt: string; confirmedBy: string } | null>(null);
+
+  $effect(() => {
+    if (typeof window !== 'undefined' && isConferenceMode) {
       const targetId = chapter?.id || chapterId;
-      const record = {
-        chapterId: targetId,
-        confirmedAt: new Date().toISOString(),
-        confirmedBy: userRole === 'OWNER' ? 'Dono' : 'Gerente',
-        fileKey: manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || 'v2',
-        version: manifest?.typesetPackage?.version || 2
-      };
+      if (targetId) {
+        try {
+          const raw = localStorage.getItem(`pre_aprovado_conf_${targetId}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.confirmedAt) {
+              isAlreadyConferred = true;
+              conferredData = parsed;
+              return;
+            }
+          }
+        } catch {}
+      }
+      isAlreadyConferred = false;
+      conferredData = null;
+    }
+  });
+
+  function handleConfirmConference() {
+    const targetId = chapter?.id || chapterId;
+    const record = {
+      chapterId: targetId,
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: userRole === 'OWNER' ? 'Dono' : 'Gerente',
+      fileKey: manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || 'v2',
+      version: manifest?.typesetPackage?.version || 2
+    };
+    if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`pre_aprovado_conf_${targetId}`, JSON.stringify(record));
+        window.dispatchEvent(new CustomEvent('nox-conference-updated', { detail: { chapterId: targetId, record } }));
       } catch {}
     }
-    showToast('Conferência do capítulo registrada com sucesso!');
+    const wasAlready = isAlreadyConferred;
+    isAlreadyConferred = true;
+    conferredData = record;
+    showToast(wasAlready ? 'Conferência atualizada com sucesso!' : 'Conferência do capítulo registrada com sucesso!');
     setTimeout(() => {
       onBack();
     }, 350);
@@ -296,8 +324,8 @@
       </button>
 
       <div class="qc-header-info">
-        <span class="qc-header-badge" class:is-conference={isConferenceMode}>
-          {isConferenceMode ? 'CONFERÊNCIA EDITORIAL' : 'QC LEITOR'}
+        <span class="qc-header-badge" class:is-conference={isConferenceMode} class:is-conferred={isConferenceMode && isAlreadyConferred}>
+          {isConferenceMode ? (isAlreadyConferred ? 'CONFERÊNCIA CONCLUÍDA' : 'CONFERÊNCIA EDITORIAL') : 'QC LEITOR'}
         </span>
         <h1 class="qc-header-title">
           {manifest?.workTitle || chapter?.work?.title || 'Céu Distante'}
@@ -378,11 +406,12 @@
         <button
           type="button"
           class="qc-btn-approve is-conference"
+          class:is-already-conferred={isAlreadyConferred}
           onclick={handleConfirmConference}
-          title="Concluir conferência e retornar para liberação"
+          title={isAlreadyConferred ? "Conferência já realizada no leitor. Clique para atualizar registro e retornar." : "Concluir conferência e retornar para liberação"}
         >
           <CheckCircle2 size={15} />
-          <span class="btn-text-desktop">Concluir Conferência</span>
+          <span class="btn-text-desktop">{isAlreadyConferred ? 'Conferência Concluída' : 'Concluir Conferência'}</span>
         </button>
       {:else}
         <!-- Approve Button -->
@@ -409,11 +438,12 @@
         <button
           type="button"
           class="qc-mob-quick-approve is-conference"
+          class:is-already-conferred={isAlreadyConferred}
           onclick={handleConfirmConference}
-          title="Concluir conferência"
+          title={isAlreadyConferred ? "Conferência já realizada. Toque para atualizar." : "Concluir conferência"}
         >
           <CheckCircle2 size={15} />
-          <span>Conferido</span>
+          <span>{isAlreadyConferred ? 'Conferido' : 'Concluir'}</span>
         </button>
       {:else}
         <button
@@ -693,6 +723,12 @@
           <p class="qc-sidebar-subtitle">
             {isConferenceMode ? 'Observações editoriais registradas antes da publicação.' : 'Erros mapeados para devolução e conferência.'}
           </p>
+          {#if isConferenceMode && isAlreadyConferred && conferredData}
+            <div class="qc-sidebar-conferred-badge">
+              <CheckCircle2 size={13} class="text-cyan-400 flex-shrink-0" />
+              <span>Conferência realizada por <strong>{conferredData.confirmedBy}</strong> em {new Date(conferredData.confirmedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às {new Date(conferredData.confirmedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          {/if}
         </div>
 
         <!-- Add Issue Quick Action -->
@@ -1312,6 +1348,12 @@
     border-color: rgba(6, 182, 212, 0.4);
   }
 
+  .qc-header-badge.is-conference.is-conferred {
+    background: rgba(16, 185, 129, 0.18);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.4);
+  }
+
   .qc-header-title {
     font-size: 0.875rem;
     font-weight: 600;
@@ -1478,6 +1520,36 @@
     background: #06b6d4 !important;
     border-color: #0891b2 !important;
     color: #ffffff !important;
+  }
+
+  .qc-btn-approve.is-conference.is-already-conferred {
+    background: linear-gradient(135deg, #059669 0%, #0d9488 100%) !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3) !important;
+  }
+
+  .qc-btn-approve.is-conference.is-already-conferred:hover {
+    background: linear-gradient(135deg, #047857 0%, #0f766e 100%) !important;
+  }
+
+  .qc-mob-quick-approve.is-conference.is-already-conferred {
+    background: #059669 !important;
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+  }
+
+  .qc-sidebar-conferred-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    color: #67e8f9;
+    line-height: 1.3;
   }
 
   .qc-btn-approve:disabled,

@@ -71,6 +71,37 @@ async function main() {
     }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', PRE_APROVADO_STAGE_ID);
 
     console.log('✓ Supabase: Chapter 85 is now PUBLISHED. Pré-aprovado queue is empty.');
+  } else if (mode === 'restore-qc') {
+    console.log('Restoring Chapter 85 to legitimate Revisor (QC) stage...');
+    await client.from('scan_production_chapters').update({
+      status: 'IN_PRODUCTION',
+      current_stage_slug: 'revisor_qc',
+      target_chapter_id: null,
+      updated_at: new Date().toISOString()
+    }).eq('id', CHAPTER_85_ID);
+
+    await client.from('scan_chapter_stages').update({
+      status: 'IN_PROGRESS',
+      assigned_to: '732fbe87-5040-41fb-9983-0aedb2af44c8',
+      completed_at: null,
+      updated_at: new Date().toISOString()
+    }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', QC_STAGE_ID);
+
+    await client.from('scan_chapter_stages').update({
+      status: 'BLOCKED',
+      assigned_to: null,
+      completed_at: null,
+      updated_at: new Date().toISOString()
+    }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', PRE_APROVADO_STAGE_ID);
+
+    await client.from('scan_chapter_stages').update({
+      status: 'BLOCKED',
+      assigned_to: null,
+      completed_at: null,
+      updated_at: new Date().toISOString()
+    }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', PUBLICADO_STAGE_ID);
+
+    console.log('✓ Supabase: Chapter 85 restored to Revisor (QC) stage.');
   }
 
   // Also invoke preview worker to update Yugabyte via Hyperdrive

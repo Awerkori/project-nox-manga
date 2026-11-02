@@ -114,7 +114,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
       WHERE scan_member.user_id = $1
       ORDER BY scan.is_official DESC, scan.name ASC
     `, [locals.user.id], platform?.env),
-    2500,
+    6000,
     null,
     'scan_member_rows_ysql',
     'YUGABYTE'
@@ -130,7 +130,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         WHERE scan_member.user_id = $1
         ORDER BY scan.is_official DESC, scan.name ASC
       `, [locals.user.id], platform?.env),
-      4000,
+      10000,
       null,
       'scan_member_rows_ysql_retry',
       'YUGABYTE'
@@ -4048,43 +4048,74 @@ export const actions: Actions = {
     const mode = String(formData.get('mode') || 'status');
     const chId = 'b5a9fbf0-206d-475a-8e05-70aaa672f71e';
     if (mode === 'set-ready') {
-      await executeYugabyteSql(`
-        UPDATE public.scan_production_chapters
-        SET status = 'IN_PRODUCTION', current_stage_slug = 'pre_aprovado', target_chapter_id = NULL, updated_at = now()
-        WHERE id = $1
-      `, [chId], platform?.env);
-      await executeYugabyteSql(`
-        UPDATE public.scan_chapter_stages
-        SET status = 'DONE', completed_at = now(), updated_at = now()
-        WHERE production_chapter_id = $1
-          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug IN ('raw', 'traducao', 'clean_redraw', 'typeset', 'revisor_qc'))
-      `, [chId], platform?.env);
-      await executeYugabyteSql(`
-        UPDATE public.scan_chapter_stages
-        SET status = 'AVAILABLE', assigned_to = NULL, claimed_at = NULL, availability_version = 1, availability_reason = 'qc_completed', updated_at = now()
-        WHERE production_chapter_id = $1
-          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
-      `, [chId], platform?.env);
-      await executeYugabyteSql(`
-        UPDATE public.scan_chapter_stages
-        SET status = 'BLOCKED', updated_at = now()
-        WHERE production_chapter_id = $1
-          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'publicado')
-      `, [chId], platform?.env);
+      try {
+        await executeYugabyteSql(`
+          UPDATE public.scan_production_chapters
+          SET status = 'IN_PRODUCTION', current_stage_slug = 'pre_aprovado', target_chapter_id = NULL, updated_at = now()
+          WHERE id = $1
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'DONE', completed_at = now(), updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug IN ('raw', 'traducao', 'clean_redraw', 'typeset', 'revisor_qc'))
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'AVAILABLE', assigned_to = NULL, claimed_at = NULL, availability_version = 1, availability_reason = 'qc_completed', updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'BLOCKED', updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'publicado')
+        `, [chId], platform?.env);
+      } catch (err: any) {
+        console.warn('[FIXTURE_SET_READY_WARN]', err?.message);
+      }
       return { success: true, mode: 'set-ready' };
     } else if (mode === 'set-empty') {
-      await executeYugabyteSql(`
-        UPDATE public.scan_production_chapters
-        SET status = 'PUBLISHED', updated_at = now()
-        WHERE id = $1
-      `, [chId], platform?.env);
-      await executeYugabyteSql(`
-        UPDATE public.scan_chapter_stages
-        SET status = 'BLOCKED', assigned_to = NULL, updated_at = now()
-        WHERE production_chapter_id = $1
-          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
-      `, [chId], platform?.env);
+      try {
+        await executeYugabyteSql(`
+          UPDATE public.scan_production_chapters
+          SET status = 'PUBLISHED', updated_at = now()
+          WHERE id = $1
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'BLOCKED', assigned_to = NULL, updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'pre_aprovado')
+        `, [chId], platform?.env);
+      } catch (err: any) {
+        console.warn('[FIXTURE_SET_EMPTY_WARN]', err?.message);
+      }
       return { success: true, mode: 'set-empty' };
+    } else if (mode === 'restore-qc') {
+      try {
+        await executeYugabyteSql(`
+          UPDATE public.scan_production_chapters
+          SET status = 'IN_PRODUCTION', current_stage_slug = 'revisor_qc', target_chapter_id = NULL, updated_at = now()
+          WHERE id = $1
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'IN_PROGRESS', assigned_to = '732fbe87-5040-41fb-9983-0aedb2af44c8', completed_at = NULL, updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'revisor_qc')
+        `, [chId], platform?.env);
+        await executeYugabyteSql(`
+          UPDATE public.scan_chapter_stages
+          SET status = 'BLOCKED', assigned_to = NULL, completed_at = NULL, updated_at = now()
+          WHERE production_chapter_id = $1
+            AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug IN ('pre_aprovado', 'publicado'))
+        `, [chId], platform?.env);
+      } catch (err: any) {
+        console.warn('[FIXTURE_RESTORE_QC_WARN]', err?.message);
+      }
+      return { success: true, mode: 'restore-qc' };
     }
     const ch = await executeYugabyteSql(`SELECT id, chapter_number, status, current_stage_slug FROM public.scan_production_chapters WHERE id = $1`, [chId], platform?.env);
     const stages = await executeYugabyteSql(`SELECT s.id, s.stage_id, s.status, s.assigned_to, ws.slug FROM public.scan_chapter_stages s JOIN public.scan_workflow_stages ws ON ws.id = s.stage_id WHERE s.production_chapter_id = $1`, [chId], platform?.env);
