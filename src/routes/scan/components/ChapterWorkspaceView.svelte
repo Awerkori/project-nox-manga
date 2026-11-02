@@ -58,6 +58,7 @@
   let workData = $derived(chapterData?.works || chapterData?.work || {});
   let actualChapterId = $derived(chapterData.id || chapterId);
   let previewId = $derived(chapterData.target_chapter_id || actualChapterId);
+  let isPublished = $derived(chapterData.status === 'PUBLISHED');
 
   // Stages for this chapter
   let currentChapterStages = $derived(
@@ -209,17 +210,28 @@
     </div>
 
     <div class="nav-right-actions">
-      <a
-        href="/ler/{previewId}?preview=1"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn-preview"
-        title="Abrir Leitor de Preview interno"
-      >
-        <Eye size={14} />
-        <span>Leitor de Preview</span>
-        <ExternalLink size={12} />
-      </a>
+      {#if isPublished}
+        <a
+          href="/ler/{chapterData.target_chapter_id || previewId}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn-preview"
+          title="Visualizar capítulo publicado no catálogo"
+        >
+          <Eye size={14} />
+          <span>Ver no Site</span>
+          <ExternalLink size={12} />
+        </a>
+      {:else}
+        <a
+          href="/scan?tab=qc_leitor&id={actualChapterId}"
+          class="btn-preview btn-qc-reader"
+          title="Abrir Leitor de Revisão Privado (QC)"
+        >
+          <Eye size={14} />
+          <span>Abrir leitor QC</span>
+        </a>
+      {/if}
 
       {#if ['OWNER', 'ADMIN', 'UPLOADER'].includes(userRole)}
         <form method="POST" action="?/publishProductionChapter" use:enhance>

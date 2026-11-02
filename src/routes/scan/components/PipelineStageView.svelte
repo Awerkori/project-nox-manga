@@ -51,7 +51,8 @@
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
     onSelectStage = (_slug: string) => {},
-    onOpenChapter = (_ch: any) => {}
+    onOpenChapter = (_ch: any) => {},
+    onOpenQcReader = (_ch: any) => {}
   } = $props();
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
@@ -639,7 +640,7 @@
     {onSelectStage}
     {onOpenChapter}
   />
-{:else if ['traducao', 'clean_redraw', 'typeset'].some(s => matchesStageSlug(activeCanonical.slug, s))}
+{:else if ['traducao', 'clean_redraw', 'typeset', 'revisor_qc'].some(s => matchesStageSlug(activeCanonical.slug, s))}
   <EditorialStageWorkspace
     stageSlug={activeCanonical.slug}
     {activeCanonical}
@@ -658,6 +659,7 @@
     {scanId}
     {onSelectStage}
     {onOpenChapter}
+    {onOpenQcReader}
   />
 {:else}
 <div class="pipeline-stage-view-root">

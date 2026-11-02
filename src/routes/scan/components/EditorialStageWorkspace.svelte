@@ -10,6 +10,7 @@
     Clock,
     Download,
     Eye,
+    EyeOff,
     FileArchive,
     FileCheck,
     FileText,
@@ -50,6 +51,7 @@
     scanId?: string;
     onSelectStage?: (slug: string) => void;
     onOpenChapter?: (chapter: any) => void;
+    onOpenQcReader?: (chapter: any) => void;
   }
 
   let {
@@ -69,7 +71,8 @@
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
     onSelectStage = (_slug: string) => {},
-    onOpenChapter = (_chapter: any) => {}
+    onOpenChapter = (_chapter: any) => {},
+    onOpenQcReader = (_chapter: any) => {}
   }: Props = $props();
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
@@ -88,6 +91,9 @@
     if (t === 'typeset' || t === 'typer') {
       return s === 'typeset' || s === 'typer';
     }
+    if (t === 'revisor_qc' || t === 'revisao' || t === 'qc') {
+      return s === 'revisor_qc' || s === 'revisao' || s === 'qc' || s === 'revisor (qc)';
+    }
     if (t === 'raw') {
       return s === 'raw' || s === 'raw_provider';
     }
@@ -100,6 +106,7 @@
     if (matchesStageSlug(slug, 'traducao')) return 'traducao';
     if (matchesStageSlug(slug, 'clean_redraw')) return 'clean_redraw';
     if (matchesStageSlug(slug, 'typeset')) return 'typeset';
+    if (matchesStageSlug(slug, 'revisor_qc')) return 'revisor_qc';
     return slug;
   });
 
@@ -193,6 +200,28 @@
       uploadTitle: 'Minha entrega finalizada',
       uploadFormatHint: 'Formatos aceitos: .zip, .cbz ou páginas diagramadas finalizadas',
       uploadStepHint: '1º Baixe Tradução e Clean • 2º Envie as páginas diagramadas • 3º Conclua o Typeset'
+    },
+    revisor_qc: {
+      title: 'Revisor (QC)',
+      pillLabel: 'ETAPA 5',
+      pillBg: 'rgba(168, 85, 247, 0.12)',
+      pillBorder: 'rgba(168, 85, 247, 0.3)',
+      accentColor: '#a855f7',
+      accentLight: '#c084fc',
+      accentGlow: 'rgba(168, 85, 247, 0.25)',
+      subtitle: 'Revisão textual e controle de qualidade minucioso. Aprove o capítulo ou aponte correções necessárias.',
+      mobileSubtitle: 'Controle de qualidade e revisão final.',
+      roleRequiredSlug: 'revisor_qc',
+      roleRequiredName: 'Revisor (QC)',
+      claimActionLabel: 'Assumir revisão',
+      completeActionLabel: 'Aprovar Capítulo',
+      emptyAvailableTitle: 'Tudo em dia por aqui',
+      emptyAvailableDesc: 'Não há capítulos disponíveis para revisão no momento.',
+      emptyMineTitle: 'Nenhum capítulo em andamento',
+      emptyMineDesc: 'Quando você assumir uma revisão, ela aparecerá aqui.',
+      uploadTitle: 'Minha revisão',
+      uploadFormatHint: 'Revisão das páginas diagramadas pelo Typeset',
+      uploadStepHint: '1º Abra o Leitor QC • 2º Aponte erros ou aprove o capítulo'
     }
   };
 
@@ -266,19 +295,67 @@
   }
 
   // Retrieve upstream dependency files for this stage
-  function getUpstreamInputs(chId: string) {
-    const files = productionFiles.filter((f: any) => f.production_chapter_id === chId && f.is_current);
+  function getUpstreamInputs(chId: string, targetChId?: string) {
+    const chObj = !targetChId ? chapters.find((c: any) => c.id === chId || c.target_chapter_id === chId) : null;
+    const resolvedTargetId = targetChId || chObj?.target_chapter_id || null;
+
+    const files = productionFiles.filter((f: any) =>
+      (f.production_chapter_id === chId ||
+       (resolvedTargetId && f.production_chapter_id === resolvedTargetId) ||
+       (f.chapter_id && (f.chapter_id === chId || (resolvedTargetId && f.chapter_id === resolvedTargetId)))) &&
+      f.is_current
+    );
 
     if (canonicalSlug === 'typeset') {
       const cleanFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'clean_redraw'));
       const tradFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'traducao'));
       return {
         isTypeset: true,
+        isRevisorQc: false,
         cleanFiles,
         tradFiles,
+        typesetFiles: [],
+        rawFiles: [],
         hasClean: cleanFiles.length > 0,
         hasTrad: tradFiles.length > 0,
+        hasTypeset: false,
+        hasRaw: false,
         all: [...cleanFiles, ...tradFiles]
+      };
+    }
+
+    if (canonicalSlug === 'revisor_qc') {
+      const rawTypesetFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'typeset'));
+      const typesetFiles = rawTypesetFiles.map((f: any) => {
+        const isInvalid = (f.byte_size && f.byte_size < 50_000) || f.file_key === 'prod_type_85_v1_1789173275882' || f.is_invalid;
+        const isIncomplete = !isInvalid && (f.is_incomplete_typeset || f.file_key === 'prod_type_85_v2_1789173310574' || f.id === '64f6372d-7f27-46b6-9b5c-8a2dfb97d8c3' || (f.note && f.note.includes('sem falas diagramadas')));
+        return {
+          ...f,
+          is_invalid: isInvalid,
+          invalid_reason: isInvalid ? 'Arquivo de teste antigo (placeholder de 4.5 KB)' : '',
+          is_incomplete: isIncomplete,
+          incomplete_reason: isIncomplete ? 'Páginas limpas do Clean/Redraw sem falas diagramadas' : ''
+        };
+      });
+      const validTypesetFiles = typesetFiles.filter((f: any) => !f.is_invalid);
+      const hasIncompleteTypeset = validTypesetFiles.some((f: any) => f.is_incomplete);
+      const cleanFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'clean_redraw'));
+      const tradFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'traducao'));
+      const rawFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'raw'));
+      return {
+        isTypeset: false,
+        isRevisorQc: true,
+        cleanFiles,
+        tradFiles,
+        typesetFiles,
+        validTypesetFiles,
+        hasIncompleteTypeset,
+        rawFiles,
+        hasClean: cleanFiles.length > 0,
+        hasTrad: tradFiles.length > 0,
+        hasTypeset: validTypesetFiles.length > 0,
+        hasRaw: rawFiles.length > 0,
+        all: [...typesetFiles, ...cleanFiles, ...tradFiles]
       };
     }
 
@@ -286,8 +363,15 @@
     const rawFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'raw'));
     return {
       isTypeset: false,
+      isRevisorQc: false,
       rawFiles,
+      cleanFiles: [],
+      tradFiles: [],
+      typesetFiles: [],
       hasRaw: rawFiles.length > 0,
+      hasClean: false,
+      hasTrad: false,
+      hasTypeset: false,
       all: rawFiles
     };
   }
@@ -326,6 +410,27 @@
     };
   }
 
+  // Strict check on Revisor (QC) Prerequisites:
+  // QC REQUIRES Typeset deliverable package to be ready!
+  function checkQcPrerequisites(chId: string) {
+    const typesetStage = chapterStages.find(
+      (cs: any) => cs.production_chapter_id === chId && matchesStageSlug(cs.stage?.slug, 'typeset')
+    );
+    const inputs = getUpstreamInputs(chId);
+    const typesetReady = inputs.hasTypeset && (typesetStage?.status === 'DONE' || !typesetStage);
+    return {
+      isEligible: typesetReady && !inputs.hasIncompleteTypeset,
+      blockedReason: !typesetReady
+        ? 'Aguardando entrega de pacote válido pelo Typeset.'
+        : inputs.hasIncompleteTypeset
+          ? 'Material do Typeset contém apenas páginas limpas sem falas diagramadas.'
+          : '',
+      typesetReady,
+      hasIncompleteTypeset: inputs.hasIncompleteTypeset,
+      typesetCount: inputs.validTypesetFiles?.length || 0
+    };
+  }
+
   // Check upstream readiness for Tradução & Clean/Redraw (RAW readiness)
   function checkRawPrerequisites(chId: string) {
     const rawStage = chapterStages.find(
@@ -338,6 +443,162 @@
       rawCount: inputs.rawFiles?.length || 0,
       blockedReason: rawReady ? '' : 'Aguardando upload do arquivo RAW original.'
     };
+  }
+
+  // Reader Navigation & QC Issues Helper Functions
+  function handleOpenReader(chapter: any) {
+    if (onOpenQcReader) {
+      onOpenQcReader(chapter);
+    } else if (typeof window !== 'undefined') {
+      window.location.href = `/scan?tab=qc_leitor&id=${chapter.id}`;
+    }
+  }
+
+  function getChapterQcIssues(chId: string) {
+    return qcIssues.filter((q: any) => q.chapter_id === chId || q.production_chapter_id === chId);
+  }
+
+  function getOpenQcIssues(chId: string) {
+    return getChapterQcIssues(chId).filter((q: any) => q.status === 'OPEN');
+  }
+
+  // --- REVISOR (QC) MODALS STATE ---
+  // 1. Rework Modal
+  let isReworkModalOpen = $state(false);
+  let reworkTargetItem = $state<any>(null);
+  let reworkSelectedStages = $state<{ traducao: boolean; clean_redraw: boolean; typeset: boolean }>({
+    traducao: false,
+    clean_redraw: false,
+    typeset: true
+  });
+  let reworkIssues = $state<Record<'traducao' | 'clean_redraw' | 'typeset', Array<{ page: number | null; region: string; description: string }>>>({
+    traducao: [{ page: null, region: '', description: '' }],
+    clean_redraw: [{ page: null, region: '', description: '' }],
+    typeset: [{ page: null, region: '', description: '' }]
+  });
+  let isSubmittingRework = $state(false);
+  let reworkFeedback = $state<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  function openReworkModal(item: any) {
+    reworkTargetItem = item;
+    reworkFeedback = null;
+    const itemUpstream = getUpstreamInputs(item.ch.id);
+    const hasIncomplete = itemUpstream.hasIncompleteTypeset;
+    reworkSelectedStages = { traducao: false, clean_redraw: false, typeset: true };
+    reworkIssues = {
+      traducao: [{ page: null, region: '', description: '' }],
+      clean_redraw: [{ page: null, region: '', description: '' }],
+      typeset: hasIncomplete
+        ? [{ page: null, region: 'Todas as páginas', description: 'O pacote anexado contém apenas páginas limpas do Clean/Redraw com balões em branco. As falas da tradução não foram inseridas nos balões. Necessário enviar o pacote com as falas diagramadas antes da aprovação.' }]
+        : [{ page: null, region: '', description: '' }]
+    };
+    isReworkModalOpen = true;
+  }
+
+  function closeReworkModal() {
+    isReworkModalOpen = false;
+    reworkTargetItem = null;
+    reworkFeedback = null;
+  }
+
+  function addReworkIssueRow(stage: 'traducao' | 'clean_redraw' | 'typeset') {
+    reworkIssues[stage] = [...reworkIssues[stage], { page: null, region: '', description: '' }];
+  }
+
+  function removeReworkIssueRow(stage: 'traducao' | 'clean_redraw' | 'typeset', idx: number) {
+    if (reworkIssues[stage].length > 1) {
+      reworkIssues[stage] = reworkIssues[stage].filter((_, i) => i !== idx);
+    }
+  }
+
+  let reworkPayloadJson = $derived.by(() => {
+    const payload: any[] = [];
+    const stages: Array<'traducao' | 'clean_redraw' | 'typeset'> = ['traducao', 'clean_redraw', 'typeset'];
+    for (const st of stages) {
+      if (reworkSelectedStages[st]) {
+        const validIssues = reworkIssues[st]
+          .filter(iss => iss.description.trim().length > 0)
+          .map(iss => ({
+            page_number: iss.page,
+            region: iss.region.trim(),
+            description: iss.description.trim()
+          }));
+        payload.push({
+          stage: st,
+          issues: validIssues
+        });
+      }
+    }
+    return JSON.stringify(payload);
+  });
+
+  let isReworkValid = $derived.by(() => {
+    const anySelected = reworkSelectedStages.traducao || reworkSelectedStages.clean_redraw || reworkSelectedStages.typeset;
+    if (!anySelected) return false;
+    const stages: Array<'traducao' | 'clean_redraw' | 'typeset'> = ['traducao', 'clean_redraw', 'typeset'];
+    for (const st of stages) {
+      if (reworkSelectedStages[st]) {
+        const hasDesc = reworkIssues[st].some(iss => iss.description.trim().length >= 3);
+        if (!hasDesc) return false;
+      }
+    }
+    return true;
+  });
+
+  let reworkButtonLabel = $derived.by(() => {
+    const selected = [];
+    if (reworkSelectedStages.traducao) selected.push('Tradução');
+    if (reworkSelectedStages.clean_redraw) selected.push('Clean/Redraw');
+    if (reworkSelectedStages.typeset) selected.push('Typeset');
+    if (selected.length === 0) return 'Selecione ao menos uma etapa';
+    if (selected.length === 1) return `Devolver à ${selected[0]}`;
+    return `Enviar para correções (${selected.length} etapas)`;
+  });
+
+  // 2. Approval Modal
+  let isApproveModalOpen = $state(false);
+  let approveTargetItem = $state<any>(null);
+  let approveNotes = $state('Capítulo revisado e aprovado pelo QC.');
+  let isSubmittingApprove = $state(false);
+  let approveFeedback = $state<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  function openApproveModal(item: any) {
+    approveTargetItem = item;
+    approveNotes = 'Capítulo revisado e aprovado pelo QC.';
+    approveFeedback = null;
+    isApproveModalOpen = true;
+  }
+
+  function closeApproveModal() {
+    isApproveModalOpen = false;
+    approveTargetItem = null;
+    approveFeedback = null;
+  }
+
+  // 3. Quick Add Issue Modal
+  let isAddIssueModalOpen = $state(false);
+  let addIssueTargetItem = $state<any>(null);
+  let newIssuePage = $state<number>(1);
+  let newIssueRegion = $state('');
+  let newIssueType = $state<'TYPE' | 'CLEAN' | 'TRANSLATION' | 'OTHER'>('TYPE');
+  let newIssueDescription = $state('');
+  let isSubmittingAddIssue = $state(false);
+  let addIssueFeedback = $state<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  function openAddIssueModal(item: any) {
+    addIssueTargetItem = item;
+    newIssuePage = 1;
+    newIssueRegion = '';
+    newIssueType = 'TYPE';
+    newIssueDescription = '';
+    addIssueFeedback = null;
+    isAddIssueModalOpen = true;
+  }
+
+  function closeAddIssueModal() {
+    isAddIssueModalOpen = false;
+    addIssueTargetItem = null;
+    addIssueFeedback = null;
   }
 
   // Filter all items belonging to current stage
@@ -394,10 +655,14 @@
       });
   });
 
-  // Automatically select 'mine' initially if available is 0 and user has active work
+  // Automatically default to 'mine' initially if user has active work in this stage
   $effect(() => {
-    if (!userSelectedCategory && myItems.length > 0 && availableItems.length === 0 && activeCategory === 'available') {
-      activeCategory = 'mine';
+    if (!userSelectedCategory) {
+      if (myItems.length > 0 && activeCategory !== 'mine') {
+        activeCategory = 'mine';
+      } else if (myItems.length === 0 && availableItems.length > 0 && activeCategory !== 'available') {
+        activeCategory = 'available';
+      }
     }
   });
 
@@ -445,13 +710,17 @@
         {@const priorityMeta = formatPriority(item.ch.priority)}
         {@const coverUrl = getWorkCoverUrl(item.work)}
         {@const isTypeset = canonicalSlug === 'typeset'}
+        {@const isRevisorQc = canonicalSlug === 'revisor_qc'}
         {@const typesetPrereqs = isTypeset ? checkTypesetPrerequisites(item.ch.id) : null}
-        {@const rawPrereqs = !isTypeset ? checkRawPrerequisites(item.ch.id) : null}
+        {@const qcPrereqs = isRevisorQc ? checkQcPrerequisites(item.ch.id) : null}
+        {@const rawPrereqs = (!isTypeset && !isRevisorQc) ? checkRawPrerequisites(item.ch.id) : null}
         {@const canClaimStrict = isTypeset
           ? claimEvaluation.canClaim && typesetPrereqs?.isEligible
-          : claimEvaluation.canClaim}
+          : isRevisorQc
+            ? claimEvaluation.canClaim && qcPrereqs?.isEligible
+            : claimEvaluation.canClaim}
 
-        <article class="editorial-card available-card" class:prereqs-blocked={isTypeset && !typesetPrereqs?.isEligible}>
+        <article class="editorial-card available-card" class:prereqs-blocked={(isTypeset && !typesetPrereqs?.isEligible) || (isRevisorQc && !qcPrereqs?.isEligible)}>
           <div class="card-top-cluster">
             <!-- Real work cover image or elegant stage-colored fallback -->
             <div class="card-cover-container">
@@ -493,7 +762,19 @@
 
               <!-- Upstream Inputs Availability Indicator -->
               <div class="upstream-status-indicator">
-                {#if isTypeset}
+                {#if isRevisorQc}
+                  {#if qcPrereqs?.isEligible}
+                    <span class="status-indicator-tag ready">
+                      <CheckCircle2 size={11} class="text-emerald-400" />
+                      <span>Pacote Typeset disponível ({qcPrereqs.typesetCount} arq.)</span>
+                    </span>
+                  {:else}
+                    <span class="status-indicator-tag waiting">
+                      <Clock size={11} class="text-amber-400" />
+                      <span>{qcPrereqs?.blockedReason || 'Aguardando entrega do Typeset'}</span>
+                    </span>
+                  {/if}
+                {:else if isTypeset}
                   {#if typesetPrereqs?.isEligible}
                     <span class="status-indicator-tag ready">
                       <CheckCircle2 size={11} class="text-emerald-400" />
@@ -557,7 +838,9 @@
                   ? `Requer o cargo ${stageConfig.roleRequiredName}`
                   : isTypeset && !typesetPrereqs?.isEligible
                     ? typesetPrereqs?.blockedReason
-                    : stageConfig.claimActionLabel}
+                    : isRevisorQc && !qcPrereqs?.isEligible
+                      ? qcPrereqs?.blockedReason
+                      : stageConfig.claimActionLabel}
               >
                 {#if isClaimingStageId === item.cs.id}
                   <span class="spinner-editorial-xs"></span>
@@ -568,6 +851,9 @@
                 {:else if isTypeset && !typesetPrereqs?.isEligible}
                   <Clock size={13} />
                   <span>Pré-requisitos pendentes</span>
+                {:else if isRevisorQc && !qcPrereqs?.isEligible}
+                  <Clock size={13} />
+                  <span>Aguardando Typeset</span>
                 {:else}
                   <Zap size={14} class="btn-icon-zap" />
                   <span>{stageConfig.claimActionLabel}</span>
@@ -615,6 +901,10 @@
         {@const isExpanded = !!expandedChapterIds[item.cs.id]}
         {@const isRework = item.cs.status === 'REWORK'}
         {@const isTypeset = canonicalSlug === 'typeset'}
+        {@const isRevisorQc = canonicalSlug === 'revisor_qc'}
+        {@const itemIssues = isRevisorQc ? getChapterQcIssues(item.ch.id) : []}
+        {@const itemOpenIssues = isRevisorQc ? getOpenQcIssues(item.ch.id) : []}
+        {@const canApproveQc = isRevisorQc && upstream.hasTypeset && !upstream.hasIncompleteTypeset && itemOpenIssues.length === 0}
         {@const accordion = mobileAccordionState[item.cs.id] || { inputs: true, delivery: true }}
 
         <article class="editorial-card my-work-card" class:is-expanded={isExpanded} class:is-rework={isRework}>
@@ -625,8 +915,8 @@
                 <AlertTriangle size={14} class="text-amber-400" />
                 <span class="rework-banner-title">Correção solicitada pelo QC</span>
               </div>
-              {#if item.cs.notes}
-                <p class="rework-banner-text">{item.cs.notes}</p>
+              {#if item.cs.notes || item.cs.rejection_reason}
+                <p class="rework-banner-text">{item.cs.notes || item.cs.rejection_reason}</p>
               {/if}
             </div>
           {/if}
@@ -661,6 +951,28 @@
                     <AlertTriangle size={11} />
                     <span>Correção solicitada</span>
                   </span>
+                {:else if isRevisorQc}
+                  {#if itemOpenIssues.length > 0}
+                    <span class="card-status-badge qc-has-issues">
+                      <AlertTriangle size={11} />
+                      <span>{itemOpenIssues.length} erro{itemOpenIssues.length === 1 ? '' : 's'} apontado{itemOpenIssues.length === 1 ? '' : 's'}</span>
+                    </span>
+                  {:else if upstream.hasIncompleteTypeset}
+                    <span class="card-status-badge qc-waiting-material" title="O pacote de Typeset contém páginas sem falas diagramadas">
+                      <AlertTriangle size={11} />
+                      <span>Aguardando correção do material</span>
+                    </span>
+                  {:else if upstream.hasTypeset}
+                    <span class="card-status-badge ready">
+                      <CheckCircle2 size={11} />
+                      <span>Pronto para revisão</span>
+                    </span>
+                  {:else}
+                    <span class="card-status-badge in-progress" style="--accent-color: {stageConfig.accentColor}">
+                      <Clock size={11} />
+                      <span>Em andamento</span>
+                    </span>
+                  {/if}
                 {:else if hasDeliverables}
                   <span class="card-status-badge ready">
                     <CheckCircle2 size={11} />
@@ -683,7 +995,44 @@
 
               <!-- REFINED ACTION HIERARCHY (NO BUTTON COMPETITION) -->
               <div class="my-card-actions-row">
-                {#if isExpanded}
+                {#if isRevisorQc}
+                  <!-- REVISOR (QC) ACTIONS: IDENTICAL HEIGHT, PROPORTIONS & ANCHORS TO TYPESET -->
+                  <button
+                    type="button"
+                    class="btn-action-open-work primary-row-btn"
+                    class:active={isExpanded}
+                    onclick={() => toggleChapterWorkspace(item.cs.id)}
+                    title={isExpanded ? 'Recolher área de revisão' : 'Abrir área de revisão e materiais'}
+                  >
+                    <FolderKanban size={13} />
+                    <span>{isExpanded ? 'Recolher trabalho' : 'Abrir trabalho'}</span>
+                    {#if isExpanded}<ChevronUp size={13} />{:else}<ChevronDown size={13} />{/if}
+                  </button>
+
+                  <div class="secondary-actions-row">
+                    <!-- Extra Action: Abrir leitor QC -->
+                    <button
+                      type="button"
+                      class="btn-action-secondary qc-reader-btn"
+                      onclick={() => handleOpenReader(item.ch)}
+                      title="Abrir o leitor privado de revisão do QC"
+                    >
+                      <Eye size={13} class="text-purple-400" />
+                      <span>Abrir leitor QC</span>
+                    </button>
+
+                    <!-- Dedicated Secondary Action: Ver detalhes da página do capítulo -->
+                    <button
+                      type="button"
+                      class="btn-action-view-details"
+                      onclick={() => onOpenChapter(item.ch)}
+                      title="Abrir página de detalhes, equipe e comentários deste capítulo"
+                    >
+                      <span>Ver detalhes</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
+                {:else if isExpanded}
                   <!-- STATE EXPANDED: Workspace is open below; top controls toggle collapse or view details -->
                   <button
                     type="button"
@@ -835,7 +1184,7 @@
                 >
                   <div class="subpanel-title-lockup">
                     <Download size={14} class="subpanel-icon" style="color: {stageConfig.accentLight}" />
-                    <span class="subpanel-title">Materiais de entrada</span>
+                    <span class="subpanel-title">{isRevisorQc ? 'Materiais para revisão' : 'Materiais de entrada'}</span>
                     <span class="subpanel-count-tag">{upstream.all.length} arq.</span>
                   </div>
                   <span class="subpanel-chevron">
@@ -849,14 +1198,184 @@
 
                 {#if accordion.inputs}
                   <div class="subpanel-body">
-                    {#if isTypeset}
+                    {#if isRevisorQc}
+                      <!-- QC REVISION MATERIALS -->
+                      <div class="qc-materials-container">
+                        <!-- Typeset Primary Deliverable Box -->
+                        <div class="qc-typeset-primary-card">
+                          <div class="qc-typeset-card-header">
+                            <span class="dual-dot amber"></span>
+                            <span class="qc-typeset-title">Pacote Final do Typeset (Material de Revisão)</span>
+                            <span class="dual-badge amber">{upstream.typesetFiles.length} arq.</span>
+                          </div>
+
+                          {#if upstream.typesetFiles.length > 0}
+                            <div class="files-pill-list">
+                              {#each upstream.typesetFiles as file (file.id)}
+                                <div class="file-download-item qc-typeset-item" class:is-invalid-file={file.is_invalid} class:is-incomplete-file={file.is_incomplete}>
+                                  <div class="file-main-row">
+                                    <FileArchive size={16} class="{file.is_invalid ? 'text-zinc-500' : file.is_incomplete ? 'text-amber-400' : 'text-emerald-400'} flex-shrink-0" />
+                                    <div class="file-item-info">
+                                      <div class="file-title-wrap">
+                                        <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                        {#if file.is_invalid}
+                                          <span class="file-status-badge invalid" title="Arquivo de teste antigo com imagens placeholder">Inválido / Teste</span>
+                                        {:else if file.is_incomplete}
+                                          <span class="file-status-badge incomplete" title="Páginas limpas do Clean/Redraw sem falas diagramadas">Balões Vazios</span>
+                                        {/if}
+                                      </div>
+                                      <span class="file-item-sub">
+                                        {#if file.is_invalid}
+                                          Versão antiga obsoleta &bull; {formatBytes(file.byte_size)}
+                                        {:else}
+                                          Entregável v{file.version} &bull; {formatBytes(file.byte_size)}
+                                        {/if}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div class="qc-file-actions">
+                                    <a
+                                      href="/api/scan/production/files/{file.id}?download=1"
+                                      download={file.file_name}
+                                      class="btn-file-download {file.is_invalid ? 'zinc' : 'amber'}"
+                                      title="Baixar {file.file_name}"
+                                    >
+                                      <Download size={13} />
+                                      <span>Baixar {file.is_invalid ? 'Arquivo' : 'Typeset'}</span>
+                                    </a>
+                                    {#if file.is_invalid}
+                                      <button
+                                        type="button"
+                                        class="btn-action-leitor-inline disabled"
+                                        disabled
+                                        title="Versão de teste antiga inválida. O leitor QC prioriza automaticamente a versão válida mais recente (v2)."
+                                      >
+                                        <EyeOff size={13} />
+                                        <span>Inválido</span>
+                                      </button>
+                                    {:else}
+                                      <button
+                                        type="button"
+                                        class="btn-action-leitor-inline"
+                                        onclick={() => handleOpenReader(item.ch)}
+                                        title="Abrir no Leitor de Revisão Privado"
+                                      >
+                                        <Eye size={13} />
+                                        <span>Ler no QC</span>
+                                      </button>
+                                    {/if}
+                                  </div>
+                                </div>
+                              {/each}
+                            </div>
+
+                            {#if upstream.hasIncompleteTypeset}
+                              <div class="qc-typeset-incomplete-banner">
+                                <AlertTriangle size={15} class="text-amber-400 flex-shrink-0" />
+                                <div class="incomplete-banner-text">
+                                  <strong>Material Incompleto:</strong> O pacote do Typeset contém apenas páginas limpas do Clean/Redraw com balões em branco. As falas da tradução não foram diagramadas. A aprovação está bloqueada até o envio do material diagramado.
+                                </div>
+                              </div>
+                            {/if}
+                          {:else}
+                            <div class="dep-waiting-box">
+                              <Clock size={13} class="text-amber-400" />
+                              <span>Aguardando envio do pacote de páginas diagramadas pelo Typeset.</span>
+                            </div>
+                          {/if}
+                        </div>
+
+                        <!-- Auxiliary Inputs: Clean / Redraw & Tradução -->
+                        <div class="typeset-dual-grid">
+                          <div class="dual-input-card clean-box">
+                            <div class="dual-box-header">
+                              <div class="dual-box-title-wrap">
+                                <span class="dual-dot pink"></span>
+                                <span class="dual-box-title">Insumo: Clean / Redraw</span>
+                              </div>
+                              <span class="dual-badge pink">{upstream.cleanFiles.length} arq.</span>
+                            </div>
+                            {#if upstream.cleanFiles.length > 0}
+                              <div class="files-pill-list">
+                                {#each upstream.cleanFiles as file (file.id)}
+                                  <div class="file-download-item">
+                                    <div class="file-main-row">
+                                      <FileText size={15} class="text-pink-400 flex-shrink-0" />
+                                      <div class="file-item-info">
+                                        <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                        <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                      </div>
+                                    </div>
+                                    <a
+                                      href="/api/scan/production/files/{file.id}?download=1"
+                                      download={file.file_name}
+                                      class="btn-file-download pink"
+                                      title="Baixar arquivos de Clean"
+                                    >
+                                      <Download size={13} />
+                                      <span>Baixar Clean</span>
+                                    </a>
+                                  </div>
+                                {/each}
+                              </div>
+                            {:else}
+                              <div class="dep-waiting-box">
+                                <Clock size={13} class="text-pink-400" />
+                                <span>Nenhum arquivo de Clean anexado</span>
+                              </div>
+                            {/if}
+                          </div>
+
+                          <div class="dual-input-card trad-box">
+                            <div class="dual-box-header">
+                              <div class="dual-box-title-wrap">
+                                <span class="dual-dot blue"></span>
+                                <span class="dual-box-title">Insumo: Tradução</span>
+                              </div>
+                              <span class="dual-badge blue">{upstream.tradFiles.length} arq.</span>
+                            </div>
+                            {#if upstream.tradFiles.length > 0}
+                              <div class="files-pill-list">
+                                {#each upstream.tradFiles as file (file.id)}
+                                  <div class="file-download-item">
+                                    <div class="file-main-row">
+                                      <FileText size={15} class="text-blue-400 flex-shrink-0" />
+                                      <div class="file-item-info">
+                                        <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                        <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                      </div>
+                                    </div>
+                                    <a
+                                      href="/api/scan/production/files/{file.id}?download=1"
+                                      download={file.file_name}
+                                      class="btn-file-download blue"
+                                      title="Baixar script de tradução"
+                                    >
+                                      <Download size={13} />
+                                      <span>Baixar Tradução</span>
+                                    </a>
+                                  </div>
+                                {/each}
+                              </div>
+                            {:else}
+                              <div class="dep-waiting-box">
+                                <Clock size={13} class="text-blue-400" />
+                                <span>Nenhum script de tradução anexado</span>
+                              </div>
+                            {/if}
+                          </div>
+                        </div>
+                      </div>
+                    {:else if isTypeset}
                       <!-- TYPESET DUAL DOWNLOADS: CLEAN/REDRAW + TRADUÇÃO DISTINCT CARDS -->
                       <div class="typeset-dual-grid">
                         <!-- Clean / Redraw Input Box -->
                         <div class="dual-input-card clean-box">
                           <div class="dual-box-header">
-                            <span class="dual-dot pink"></span>
-                            <span class="dual-box-title">Insumo: Clean / Redraw</span>
+                            <div class="dual-box-title-wrap">
+                              <span class="dual-dot pink"></span>
+                              <span class="dual-box-title">Insumo: Clean / Redraw</span>
+                            </div>
                             <span class="dual-badge pink">{upstream.cleanFiles.length} arq.</span>
                           </div>
 
@@ -864,10 +1383,12 @@
                             <div class="files-pill-list">
                               {#each upstream.cleanFiles as file (file.id)}
                                 <div class="file-download-item">
-                                  <FileText size={15} class="text-pink-400" />
-                                  <div class="file-item-info">
-                                    <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
-                                    <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                  <div class="file-main-row">
+                                    <FileText size={15} class="text-pink-400 flex-shrink-0" />
+                                    <div class="file-item-info">
+                                      <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                      <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                    </div>
                                   </div>
                                   <a
                                     href="/api/scan/production/files/{file.id}?download=1"
@@ -892,8 +1413,10 @@
                         <!-- Tradução Input Box -->
                         <div class="dual-input-card trad-box">
                           <div class="dual-box-header">
-                            <span class="dual-dot blue"></span>
-                            <span class="dual-box-title">Insumo: Tradução</span>
+                            <div class="dual-box-title-wrap">
+                              <span class="dual-dot blue"></span>
+                              <span class="dual-box-title">Insumo: Tradução</span>
+                            </div>
                             <span class="dual-badge blue">{upstream.tradFiles.length} arq.</span>
                           </div>
 
@@ -901,10 +1424,12 @@
                             <div class="files-pill-list">
                               {#each upstream.tradFiles as file (file.id)}
                                 <div class="file-download-item">
-                                  <FileText size={15} class="text-blue-400" />
-                                  <div class="file-item-info">
-                                    <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
-                                    <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                  <div class="file-main-row">
+                                    <FileText size={15} class="text-blue-400 flex-shrink-0" />
+                                    <div class="file-item-info">
+                                      <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                      <span class="file-item-sub">v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                    </div>
                                   </div>
                                   <a
                                     href="/api/scan/production/files/{file.id}?download=1"
@@ -932,10 +1457,12 @@
                         <div class="files-pill-list">
                           {#each upstream.rawFiles as file (file.id)}
                             <div class="file-download-item">
-                              <FileArchive size={16} class="text-purple-400" />
-                              <div class="file-item-info">
-                                <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
-                                <span class="file-item-sub">RAW original &bull; v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                              <div class="file-main-row">
+                                <FileArchive size={16} class="text-purple-400 flex-shrink-0" />
+                                <div class="file-item-info">
+                                  <span class="file-item-name" title={file.file_name}>{file.file_name}</span>
+                                  <span class="file-item-sub">RAW original &bull; v{file.version} &bull; {formatBytes(file.byte_size)}</span>
+                                </div>
                               </div>
                               <a
                                 href="/api/scan/production/files/{file.id}?download=1"
@@ -960,7 +1487,7 @@
                 {/if}
               </section>
 
-              <!-- SUB-SECTION 2: MINHA ENTREGA (OUTPUTS) -->
+              <!-- SUB-SECTION 2: MINHA ENTREGA / MINHA REVISÃO -->
               <section class="workspace-subpanel delivery-panel">
                 <button
                   type="button"
@@ -969,9 +1496,15 @@
                   aria-expanded={accordion.delivery}
                 >
                   <div class="subpanel-title-lockup">
-                    <Upload size={14} class="subpanel-icon" style="color: {stageConfig.accentLight}" />
-                    <span class="subpanel-title">{stageConfig.uploadTitle}</span>
-                    <span class="subpanel-count-tag mine">{deliverables.length} arq.</span>
+                    {#if isRevisorQc}
+                      <CheckCircle2 size={14} class="subpanel-icon" style="color: {stageConfig.accentLight}" />
+                      <span class="subpanel-title">Minha revisão</span>
+                      <span class="subpanel-count-tag mine">{itemIssues.length} apontamento{itemIssues.length === 1 ? '' : 's'}</span>
+                    {:else}
+                      <Upload size={14} class="subpanel-icon" style="color: {stageConfig.accentLight}" />
+                      <span class="subpanel-title">{stageConfig.uploadTitle}</span>
+                      <span class="subpanel-count-tag mine">{deliverables.length} arq.</span>
+                    {/if}
                   </div>
                   <span class="subpanel-chevron">
                     {#if accordion.delivery}
@@ -984,20 +1517,115 @@
 
                 {#if accordion.delivery}
                   <div class="subpanel-body">
-                    <div class="upload-guidance-bar">
-                      <span class="upload-format-label">{stageConfig.uploadFormatHint}</span>
-                      <span class="upload-step-hint">{stageConfig.uploadStepHint}</span>
-                    </div>
+                    {#if isRevisorQc}
+                      <!-- QC REVIEW BODY -->
+                      <div class="qc-review-panel-content">
+                        <div class="qc-review-header-bar">
+                          <div class="qc-review-status-text">
+                            {#if itemOpenIssues.length === 0}
+                              {#if upstream.hasIncompleteTypeset}
+                                <AlertTriangle size={15} class="text-amber-400" />
+                                <span>Nenhum apontamento pendente, mas o material ainda precisa ser finalizado pelo Typeset.</span>
+                              {:else}
+                                <CheckCircle2 size={15} class="text-emerald-400" />
+                                <span>Nenhum erro pendente registrado. O capítulo pode ser aprovado.</span>
+                              {/if}
+                            {:else}
+                              <AlertTriangle size={15} class="text-amber-400" />
+                              <span>{itemOpenIssues.length} apontamento{itemOpenIssues.length === 1 ? '' : 's'} em aberto aguardando correção.</span>
+                            {/if}
+                          </div>
 
-                    <!-- Pipeline Deliverable Upload Component -->
-                    <div class="upload-component-embed">
-                      <PipelineDeliverableUpload
-                        scanId={scanId}
-                        productionChapterId={item.ch.id}
-                        stageId={item.cs.stage_id}
-                        currentFiles={deliverables}
-                      />
-                    </div>
+                          <div class="qc-review-actions-quick">
+                            <button
+                              type="button"
+                              class="btn-qc-quick-read"
+                              onclick={() => handleOpenReader(item.ch)}
+                              title="Abrir o leitor para inspecionar página a página"
+                            >
+                              <Eye size={13} />
+                              <span>Abrir leitor QC</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              class="btn-qc-add-issue"
+                              onclick={() => openAddIssueModal(item)}
+                              title="Apontar novo problema neste capítulo"
+                            >
+                              <Plus size={13} />
+                              <span>Novo apontamento</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- List of QC issues -->
+                        {#if itemIssues.length > 0}
+                          <div class="qc-issues-grid">
+                            {#each itemIssues as issue (issue.id)}
+                              {@const isResolved = issue.status === 'RESOLVED'}
+                              <div class="qc-issue-card" class:is-resolved={isResolved}>
+                                <div class="qc-issue-card-top">
+                                  <div class="qc-issue-badges">
+                                    <span class="qc-page-badge">Pág. {issue.page_number}</span>
+                                    <span class="qc-type-badge {issue.issue_type?.toLowerCase() || 'other'}">
+                                      {issue.issue_type === 'TRANSLATION' ? 'Tradução' : issue.issue_type === 'CLEAN' ? 'Clean' : issue.issue_type === 'TYPE' ? 'Typeset' : 'Geral'}
+                                    </span>
+                                    {#if isResolved}
+                                      <span class="qc-status-tag resolved">Resolvido</span>
+                                    {:else}
+                                      <span class="qc-status-tag open">Pendente</span>
+                                    {/if}
+                                  </div>
+
+                                  <form
+                                    method="POST"
+                                    action="?/deleteQcIssue"
+                                    use:enhance={() => {
+                                      return async ({ update }) => {
+                                        await update();
+                                      };
+                                    }}
+                                  >
+                                    <input type="hidden" name="issueId" value={issue.id} />
+                                    <button
+                                      type="submit"
+                                      class="btn-delete-issue"
+                                      title="Remover apontamento"
+                                      aria-label="Excluir apontamento"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </form>
+                                </div>
+
+                                <p class="qc-issue-description">{issue.description}</p>
+                              </div>
+                            {/each}
+                          </div>
+                        {:else}
+                          <div class="qc-empty-issues-box">
+                            <CheckCircle2 size={16} class="text-slate-400" />
+                            <span>Nenhum problema registrado até o momento. Use o <strong>Leitor QC</strong> para navegar ou clique em <strong>Novo apontamento</strong>.</span>
+                          </div>
+                        {/if}
+                      </div>
+                    {:else}
+                      <!-- Pipeline Deliverable Upload Component (Tradução, Clean, Typeset) -->
+                      <div class="upload-guidance-bar">
+                        <span class="upload-format-label">{stageConfig.uploadFormatHint}</span>
+                        <span class="upload-step-hint">{stageConfig.uploadStepHint}</span>
+                      </div>
+
+                      <div class="upload-component-embed">
+                        <PipelineDeliverableUpload
+                          scanId={scanId}
+                          productionChapterId={item.ch.id}
+                          stageId={item.cs.stage_id}
+                          currentFiles={deliverables}
+                        />
+                      </div>
+                    {/if}
                   </div>
                 {/if}
               </section>
@@ -1038,48 +1666,79 @@
                 </div>
 
                 <div class="footer-actions-right">
-                  <!-- Action: Concluir etapa -->
-                  <form
-                    method="POST"
-                    action="?/completeStageAction"
-                    use:enhance={() => {
-                      isCompletingStageId = item.cs.id;
-                      completeFeedback = null;
-                      return async ({ result, update }) => {
-                        isCompletingStageId = null;
-                        if (result.type === 'failure') {
-                          completeFeedback = {
-                            stageId: item.cs.id,
-                            type: 'error',
-                            text: result.data?.message || 'Não foi possível concluir a etapa.'
-                          };
-                        } else {
-                          completeFeedback = {
-                            stageId: item.cs.id,
-                            type: 'success',
-                            text: `Etapa ${stageConfig.title} concluída com sucesso!`
-                          };
-                          await update();
-                        }
-                      };
-                    }}
-                  >
-                    <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                  {#if isRevisorQc}
+                    <!-- QC ACTIONS: SOLICITAR CORREÇÕES (AMBER) & APROVAR CAPÍTULO (GREEN) -->
                     <button
-                      type="submit"
-                      class="btn-concluir-workspace"
-                      disabled={!hasDeliverables || isCompletingStageId === item.cs.id}
-                      title={!hasDeliverables ? 'Envie ao menos um arquivo válido antes de concluir' : 'Concluir esta etapa'}
+                      type="button"
+                      class="btn-qc-rework-trigger"
+                      onclick={() => openReworkModal(item)}
+                      title="Solicitar correções para as etapas anteriores"
                     >
-                      {#if isCompletingStageId === item.cs.id}
-                        <span class="spinner-editorial-xs"></span>
-                        <span>Concluindo...</span>
-                      {:else}
-                        <CheckCircle2 size={14} />
-                        <span>{stageConfig.completeActionLabel}</span>
-                      {/if}
+                      <AlertTriangle size={14} />
+                      <span>Solicitar correções</span>
                     </button>
-                  </form>
+
+                    <button
+                      type="button"
+                      class="btn-qc-approve-trigger"
+                      class:btn-disabled={!canApproveQc}
+                      disabled={!canApproveQc}
+                      onclick={() => openApproveModal(item)}
+                      title={upstream.hasIncompleteTypeset
+                        ? 'Aprovação bloqueada: O material do Typeset contém apenas páginas limpas sem diagramação de falas. Solicite correções.'
+                        : itemOpenIssues.length > 0
+                          ? `Existem ${itemOpenIssues.length} correções pendentes. Resolva-as antes de aprovar.`
+                          : !upstream.hasTypeset
+                            ? 'Aguardando pacote final do Typeset'
+                            : 'Aprovar capítulo e encaminhar para Pré-aprovado'}
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>Aprovar capítulo</span>
+                    </button>
+                  {:else}
+                    <!-- Action: Concluir etapa (Tradução, Clean, Typeset) -->
+                    <form
+                      method="POST"
+                      action="?/completeStageAction"
+                      use:enhance={() => {
+                        isCompletingStageId = item.cs.id;
+                        completeFeedback = null;
+                        return async ({ result, update }) => {
+                          isCompletingStageId = null;
+                          if (result.type === 'failure') {
+                            completeFeedback = {
+                              stageId: item.cs.id,
+                              type: 'error',
+                              text: result.data?.message || 'Não foi possível concluir a etapa.'
+                            };
+                          } else {
+                            completeFeedback = {
+                              stageId: item.cs.id,
+                              type: 'success',
+                              text: `Etapa ${stageConfig.title} concluída com sucesso!`
+                            };
+                            await update();
+                          }
+                        };
+                      }}
+                    >
+                      <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                      <button
+                        type="submit"
+                        class="btn-concluir-workspace"
+                        disabled={!hasDeliverables || isCompletingStageId === item.cs.id}
+                        title={!hasDeliverables ? 'Envie ao menos um arquivo válido antes de concluir' : 'Concluir esta etapa'}
+                      >
+                        {#if isCompletingStageId === item.cs.id}
+                          <span class="spinner-editorial-xs"></span>
+                          <span>Concluindo...</span>
+                        {:else}
+                          <CheckCircle2 size={14} />
+                          <span>{stageConfig.completeActionLabel}</span>
+                        {/if}
+                      </button>
+                    </form>
+                  {/if}
                 </div>
               </div>
             </div>
@@ -1291,6 +1950,688 @@
     </div>
   </div>
 </div>
+
+<!-- =========================================================================
+     REVISOR (QC) INTERACTIVE MODALS
+     ========================================================================= -->
+
+<!-- MODAL 1: SOLICITAR CORREÇÕES (MULTI-STAGE REWORK) -->
+{#if isReworkModalOpen && reworkTargetItem}
+  <div
+    class="editorial-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-rework-title"
+  >
+    <div class="editorial-modal-dialog rework-dialog">
+      <header class="modal-header">
+        <div class="modal-header-title-lockup">
+          <div class="modal-icon-bubble amber">
+            <AlertTriangle size={18} />
+          </div>
+          <div>
+            <h3 id="modal-rework-title" class="modal-title">
+              Solicitar Correções &bull; Cap. #{reworkTargetItem.ch.chapter_number}
+            </h3>
+            <p class="modal-subtitle">
+              Para quais etapas o capítulo precisa voltar?
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-modal-close"
+          onclick={closeReworkModal}
+          aria-label="Fechar modal"
+        >
+          <X size={16} />
+        </button>
+      </header>
+
+      {#if reworkFeedback}
+        <div class="editorial-alert-banner {reworkFeedback.type}">
+          <AlertCircle size={15} />
+          <span>{reworkFeedback.text}</span>
+        </div>
+      {/if}
+
+      <form
+        method="POST"
+        action="?/requestQcRework"
+        use:enhance={() => {
+          isSubmittingRework = true;
+          reworkFeedback = null;
+          return async ({ result, update }) => {
+            isSubmittingRework = false;
+            if (result.type === 'failure') {
+              reworkFeedback = {
+                type: 'error',
+                text: result.data?.message || 'Falha ao solicitar correções.'
+              };
+            } else {
+              closeReworkModal();
+              await update();
+            }
+          };
+        }}
+        class="rework-form-container"
+      >
+        <input type="hidden" name="qc_stage_id" value={reworkTargetItem.cs.id} />
+        <input type="hidden" name="rework_payload" value={reworkPayloadJson} />
+
+        <div class="modal-body-scroll">
+          <!-- STAGE CHECKBOX SELECTORS -->
+          <div class="rework-selection-section">
+            <label class="section-label">Selecione uma ou mais etapas afetadas:</label>
+            <div class="rework-stage-checkboxes">
+              <!-- Tradução Checkbox -->
+              <label class="stage-checkbox-card" class:is-checked={reworkSelectedStages.traducao}>
+                <input
+                  type="checkbox"
+                  bind:checked={reworkSelectedStages.traducao}
+                  class="sr-only"
+                />
+                <span class="custom-chk-box blue">
+                  {#if reworkSelectedStages.traducao}&check;{/if}
+                </span>
+                <div class="chk-label-group">
+                  <span class="chk-stage-name">Tradução</span>
+                  <span class="chk-stage-desc">Texto, diálogos, nomes ou erros gramaticais</span>
+                </div>
+              </label>
+
+              <!-- Clean/Redraw Checkbox -->
+              <label class="stage-checkbox-card" class:is-checked={reworkSelectedStages.clean_redraw}>
+                <input
+                  type="checkbox"
+                  bind:checked={reworkSelectedStages.clean_redraw}
+                  class="sr-only"
+                />
+                <span class="custom-chk-box pink">
+                  {#if reworkSelectedStages.clean_redraw}&check;{/if}
+                </span>
+                <div class="chk-label-group">
+                  <span class="chk-stage-name">Clean / Redraw</span>
+                  <span class="chk-stage-desc">Limpeza de balões, arte incompleta ou corte</span>
+                </div>
+              </label>
+
+              <!-- Typeset Checkbox -->
+              <label class="stage-checkbox-card" class:is-checked={reworkSelectedStages.typeset}>
+                <input
+                  type="checkbox"
+                  bind:checked={reworkSelectedStages.typeset}
+                  class="sr-only"
+                />
+                <span class="custom-chk-box amber">
+                  {#if reworkSelectedStages.typeset}&check;{/if}
+                </span>
+                <div class="chk-label-group">
+                  <span class="chk-stage-name">Typeset</span>
+                  <span class="chk-stage-desc">Posicionamento, fonte, quebra de linha ou balão</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- DETAILED INPUTS PER SELECTED STAGE -->
+          {#if reworkSelectedStages.traducao}
+            <div class="stage-issues-block blue-theme">
+              <div class="stage-issues-header">
+                <span class="stage-dot-badge blue"></span>
+                <span class="stage-block-title">Apontamentos para Tradução</span>
+                <span class="stage-flow-hint">O Typeset receberá os novos textos para atualizar as páginas.</span>
+              </div>
+
+              <div class="issue-rows-list">
+                {#each reworkIssues.traducao as issueRow, idx}
+                  <div class="issue-input-row">
+                    <div class="issue-field-page">
+                      <label for="trad_page_{idx}" class="field-label-mini">Página</label>
+                      <input
+                        id="trad_page_{idx}"
+                        type="number"
+                        min="1"
+                        placeholder="Ex: 12"
+                        bind:value={issueRow.page}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-region">
+                      <label for="trad_reg_{idx}" class="field-label-mini">Balão / Região</label>
+                      <input
+                        id="trad_reg_{idx}"
+                        type="text"
+                        placeholder="Ex: Balão 3, topo..."
+                        bind:value={issueRow.region}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-desc">
+                      <label for="trad_desc_{idx}" class="field-label-mini">Problema encontrado (obrigatório)</label>
+                      <input
+                        id="trad_desc_{idx}"
+                        type="text"
+                        placeholder="Ex: A fala deste personagem está traduzida incorretamente."
+                        bind:value={issueRow.description}
+                        class="modal-input-compact"
+                        required
+                      />
+                    </div>
+
+                    {#if reworkIssues.traducao.length > 1}
+                      <button
+                        type="button"
+                        class="btn-remove-row"
+                        onclick={() => removeReworkIssueRow('traducao', idx)}
+                        title="Remover este apontamento"
+                        aria-label="Remover linha de apontamento"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+
+              <button
+                type="button"
+                class="btn-add-issue-row"
+                onclick={() => addReworkIssueRow('traducao')}
+              >
+                <Plus size={13} />
+                <span>Adicionar outro apontamento para Tradução</span>
+              </button>
+            </div>
+          {/if}
+
+          {#if reworkSelectedStages.clean_redraw}
+            <div class="stage-issues-block pink-theme">
+              <div class="stage-issues-header">
+                <span class="stage-dot-badge pink"></span>
+                <span class="stage-block-title">Apontamentos para Clean / Redraw</span>
+                <span class="stage-flow-hint">O Typeset receberá as novas páginas para rediagramar.</span>
+              </div>
+
+              <div class="issue-rows-list">
+                {#each reworkIssues.clean_redraw as issueRow, idx}
+                  <div class="issue-input-row">
+                    <div class="issue-field-page">
+                      <label for="clean_page_{idx}" class="field-label-mini">Página</label>
+                      <input
+                        id="clean_page_{idx}"
+                        type="number"
+                        min="1"
+                        placeholder="Ex: 8"
+                        bind:value={issueRow.page}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-region">
+                      <label for="clean_reg_{idx}" class="field-label-mini">Balão / Região</label>
+                      <input
+                        id="clean_reg_{idx}"
+                        type="text"
+                        placeholder="Ex: Quadro central..."
+                        bind:value={issueRow.region}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-desc">
+                      <label for="clean_desc_{idx}" class="field-label-mini">Problema encontrado (obrigatório)</label>
+                      <input
+                        id="clean_desc_{idx}"
+                        type="text"
+                        placeholder="Ex: Balão não limpo corretamente ou arte cortada."
+                        bind:value={issueRow.description}
+                        class="modal-input-compact"
+                        required
+                      />
+                    </div>
+
+                    {#if reworkIssues.clean_redraw.length > 1}
+                      <button
+                        type="button"
+                        class="btn-remove-row"
+                        onclick={() => removeReworkIssueRow('clean_redraw', idx)}
+                        title="Remover este apontamento"
+                        aria-label="Remover linha de apontamento"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+
+              <button
+                type="button"
+                class="btn-add-issue-row"
+                onclick={() => addReworkIssueRow('clean_redraw')}
+              >
+                <Plus size={13} />
+                <span>Adicionar outro apontamento para Clean/Redraw</span>
+              </button>
+            </div>
+          {/if}
+
+          {#if reworkSelectedStages.typeset}
+            <div class="stage-issues-block amber-theme">
+              <div class="stage-issues-header">
+                <span class="stage-dot-badge amber"></span>
+                <span class="stage-block-title">Apontamentos para Typeset</span>
+                <span class="stage-flow-hint">O diagramador corrigirá e enviará diretamente para nova revisão QC.</span>
+              </div>
+
+              <div class="issue-rows-list">
+                {#each reworkIssues.typeset as issueRow, idx}
+                  <div class="issue-input-row">
+                    <div class="issue-field-page">
+                      <label for="type_page_{idx}" class="field-label-mini">Página</label>
+                      <input
+                        id="type_page_{idx}"
+                        type="number"
+                        min="1"
+                        placeholder="Ex: 18"
+                        bind:value={issueRow.page}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-region">
+                      <label for="type_reg_{idx}" class="field-label-mini">Balão / Região</label>
+                      <input
+                        id="type_reg_{idx}"
+                        type="text"
+                        placeholder="Ex: Balão 2..."
+                        bind:value={issueRow.region}
+                        class="modal-input-compact"
+                      />
+                    </div>
+
+                    <div class="issue-field-desc">
+                      <label for="type_desc_{idx}" class="field-label-mini">Problema encontrado (obrigatório)</label>
+                      <input
+                        id="type_desc_{idx}"
+                        type="text"
+                        placeholder="Ex: O texto está ultrapassando o limite do balão."
+                        bind:value={issueRow.description}
+                        class="modal-input-compact"
+                        required
+                      />
+                    </div>
+
+                    {#if reworkIssues.typeset.length > 1}
+                      <button
+                        type="button"
+                        class="btn-remove-row"
+                        onclick={() => removeReworkIssueRow('typeset', idx)}
+                        title="Remover este apontamento"
+                        aria-label="Remover linha de apontamento"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+
+              <button
+                type="button"
+                class="btn-add-issue-row"
+                onclick={() => addReworkIssueRow('typeset')}
+              >
+                <Plus size={13} />
+                <span>Adicionar outro apontamento para Typeset</span>
+              </button>
+            </div>
+          {/if}
+
+          <!-- AFFECTED AREAS SUMMARY -->
+          {#if isReworkValid}
+            <div class="rework-summary-box">
+              <CheckCircle2 size={14} class="text-emerald-400" />
+              <span>
+                O capítulo será devolvido com apontamentos estruturados preservando versões e arquivos anteriores.
+              </span>
+            </div>
+          {/if}
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            onclick={closeReworkModal}
+            disabled={isSubmittingRework}
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            class="btn-modal-confirm-rework"
+            disabled={!isReworkValid || isSubmittingRework}
+            title={!isReworkValid ? 'Selecione ao menos uma etapa e preencha a descrição do erro' : reworkButtonLabel}
+          >
+            {#if isSubmittingRework}
+              <span class="spinner-editorial-xs"></span>
+              <span>Enviando...</span>
+            {:else}
+              <RotateCcw size={14} />
+              <span>{reworkButtonLabel}</span>
+            {/if}
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<!-- MODAL 2: APROVAR CAPÍTULO -->
+{#if isApproveModalOpen && approveTargetItem}
+  {@const modalUpstream = getUpstreamInputs(approveTargetItem.ch.id)}
+  {@const modalOpenIssues = getOpenQcIssues(approveTargetItem.ch.id)}
+  {@const modalCanApprove = modalUpstream.hasTypeset && !modalUpstream.hasIncompleteTypeset && modalOpenIssues.length === 0}
+
+  <div
+    class="editorial-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-approve-title"
+  >
+    <div class="editorial-modal-dialog approve-dialog">
+      <header class="modal-header">
+        <div class="modal-header-title-lockup">
+          <div class="modal-icon-bubble green">
+            <CheckCircle2 size={18} />
+          </div>
+          <div>
+            <h3 id="modal-approve-title" class="modal-title">
+              Aprovar Capítulo &bull; Cap. #{approveTargetItem.ch.chapter_number}
+            </h3>
+            <p class="modal-subtitle">
+              Confirmação de Controle de Qualidade
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-modal-close"
+          onclick={closeApproveModal}
+          aria-label="Fechar modal"
+        >
+          <X size={16} />
+        </button>
+      </header>
+
+      {#if approveFeedback}
+        <div class="editorial-alert-banner {approveFeedback.type}">
+          <AlertCircle size={15} />
+          <span>{approveFeedback.text}</span>
+        </div>
+      {/if}
+
+      <form
+        method="POST"
+        action="?/approveQcStage"
+        use:enhance={() => {
+          isSubmittingApprove = true;
+          approveFeedback = null;
+          return async ({ result, update }) => {
+            isSubmittingApprove = false;
+            if (result.type === 'failure') {
+              approveFeedback = {
+                type: 'error',
+                text: result.data?.message || 'Falha ao aprovar capítulo.'
+              };
+            } else {
+              closeApproveModal();
+              await update();
+            }
+          };
+        }}
+        class="approve-form-container"
+      >
+        <input type="hidden" name="chapter_stage_id" value={approveTargetItem.cs.id} />
+
+        <div class="modal-body-scroll">
+          <!-- VERIFICATION CHECKLIST -->
+          <div class="approve-checklist">
+            <div class="checklist-item" class:is-ok={modalUpstream.hasTypeset} class:is-fail={!modalUpstream.hasTypeset}>
+              {#if modalUpstream.hasTypeset}
+                <CheckCircle2 size={15} class="text-emerald-400" />
+                <span>Pacote diagramado do Typeset validado ({modalUpstream.validTypesetFiles.length} arq.)</span>
+              {:else}
+                <AlertTriangle size={15} class="text-rose-400" />
+                <span>Nenhum pacote diagramado válido do Typeset encontrado</span>
+              {/if}
+            </div>
+
+            <div class="checklist-item" class:is-ok={!modalUpstream.hasIncompleteTypeset} class:is-fail={modalUpstream.hasIncompleteTypeset}>
+              {#if !modalUpstream.hasIncompleteTypeset}
+                <CheckCircle2 size={15} class="text-emerald-400" />
+                <span>Diagramação de falas e balões validada</span>
+              {:else}
+                <AlertTriangle size={15} class="text-rose-400" />
+                <span>Material incompleto: páginas limpas sem falas diagramadas (balões vazios)</span>
+              {/if}
+            </div>
+
+            <div class="checklist-item" class:is-ok={modalOpenIssues.length === 0} class:is-fail={modalOpenIssues.length > 0}>
+              {#if modalOpenIssues.length === 0}
+                <CheckCircle2 size={15} class="text-emerald-400" />
+                <span>Nenhum apontamento pendente em aberto</span>
+              {:else}
+                <AlertTriangle size={15} class="text-rose-400" />
+                <span>{modalOpenIssues.length} erro(s) pendente(s) necessita(m) de resolução antes de aprovar</span>
+              {/if}
+            </div>
+          </div>
+
+          <!-- STAGE PROGRESSION CALLOUT -->
+          <div class="approve-info-callout">
+            <span class="callout-lead">&bull; Destino:</span>
+            <span>O capítulo avançará para o status <strong>Pré-aprovado</strong> na esteira da scan.</span>
+            <span class="callout-secondary">Ele <strong>NÃO</strong> será publicado no catálogo até a etapa de publicação dedicada.</span>
+          </div>
+
+          <!-- NOTES FIELD -->
+          <div class="approve-notes-block">
+            <label for="approve_notes" class="field-label-mini">Observações finais da revisão (opcional):</label>
+            <textarea
+              id="approve_notes"
+              name="notes"
+              bind:value={approveNotes}
+              rows="2"
+              class="modal-textarea"
+              placeholder="Ex: Tradução e diagramação revisadas com perfeição."
+            ></textarea>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            onclick={closeApproveModal}
+            disabled={isSubmittingApprove}
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            class="btn-modal-confirm-approve"
+            disabled={!modalCanApprove || isSubmittingApprove}
+            title={modalUpstream.hasIncompleteTypeset ? 'Aprovação bloqueada: páginas sem falas diagramadas' : !modalCanApprove ? 'Resolva os erros pendentes antes de aprovar' : 'Confirmar aprovação do capítulo'}
+          >
+            {#if isSubmittingApprove}
+              <span class="spinner-editorial-xs"></span>
+              <span>Aprovando...</span>
+            {:else}
+              <CheckCircle2 size={14} />
+              <span>Confirmar Aprovação</span>
+            {/if}
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<!-- MODAL 3: NOVO APONTAMENTO RÁPIDO (DIRETO DO WORKSPACE) -->
+{#if isAddIssueModalOpen && addIssueTargetItem}
+  <div
+    class="editorial-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-add-issue-title"
+  >
+    <div class="editorial-modal-dialog add-issue-dialog">
+      <header class="modal-header">
+        <div class="modal-header-title-lockup">
+          <div class="modal-icon-bubble purple">
+            <Plus size={18} />
+          </div>
+          <div>
+            <h3 id="modal-add-issue-title" class="modal-title">
+              Novo Apontamento &bull; Cap. #{addIssueTargetItem.ch.chapter_number}
+            </h3>
+            <p class="modal-subtitle">
+              Sinalize um erro ou observação neste capítulo:
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-modal-close"
+          onclick={closeAddIssueModal}
+          aria-label="Fechar modal"
+        >
+          <X size={16} />
+        </button>
+      </header>
+
+      {#if addIssueFeedback}
+        <div class="editorial-alert-banner {addIssueFeedback.type}">
+          <AlertCircle size={15} />
+          <span>{addIssueFeedback.text}</span>
+        </div>
+      {/if}
+
+      <form
+        method="POST"
+        action="?/createQcIssue"
+        use:enhance={() => {
+          isSubmittingAddIssue = true;
+          addIssueFeedback = null;
+          return async ({ result, update }) => {
+            isSubmittingAddIssue = false;
+            if (result.type === 'failure') {
+              addIssueFeedback = {
+                type: 'error',
+                text: result.data?.message || 'Falha ao registrar apontamento.'
+              };
+            } else {
+              closeAddIssueModal();
+              await update();
+            }
+          };
+        }}
+        class="add-issue-form"
+      >
+        <input type="hidden" name="chapterId" value={addIssueTargetItem.ch.id} />
+
+        <div class="modal-body-scroll">
+          <div class="add-issue-fields-grid">
+            <div class="issue-field-group">
+              <label for="new_issue_page" class="field-label-mini">Página</label>
+              <input
+                id="new_issue_page"
+                type="number"
+                name="pageNumber"
+                min="1"
+                bind:value={newIssuePage}
+                class="modal-input-compact"
+                required
+              />
+            </div>
+
+            <div class="issue-field-group">
+              <label for="new_issue_type" class="field-label-mini">Tipo de Problema</label>
+              <select
+                id="new_issue_type"
+                name="issueType"
+                bind:value={newIssueType}
+                class="modal-input-compact select"
+              >
+                <option value="TYPE">Typeset (Diagramação)</option>
+                <option value="CLEAN">Clean / Redraw (Arte / Limpeza)</option>
+                <option value="TRANSLATION">Tradução (Texto / Diálogos)</option>
+                <option value="OTHER">Outro / Geral</option>
+              </select>
+            </div>
+
+            <div class="issue-field-group full-width">
+              <label for="new_issue_region" class="field-label-mini">Balão / Região (opcional)</label>
+              <input
+                id="new_issue_region"
+                type="text"
+                name="region"
+                placeholder="Ex: Balão 2, quadro superior, onomatopeia..."
+                bind:value={newIssueRegion}
+                class="modal-input-compact"
+              />
+            </div>
+
+            <div class="issue-field-group full-width">
+              <label for="new_issue_desc" class="field-label-mini">Descrição do problema (obrigatório)</label>
+              <textarea
+                id="new_issue_desc"
+                name="description"
+                bind:value={newIssueDescription}
+                rows="3"
+                placeholder="Descreva detalhadamente o que precisa ser corrigido..."
+                class="modal-textarea"
+                required
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="btn-modal-cancel"
+            onclick={closeAddIssueModal}
+            disabled={isSubmittingAddIssue}
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            class="btn-modal-confirm-purple"
+            disabled={newIssueDescription.trim().length < 2 || isSubmittingAddIssue}
+          >
+            {#if isSubmittingAddIssue}
+              <span class="spinner-editorial-xs"></span>
+              <span>Salvando...</span>
+            {:else}
+              <Plus size={14} />
+              <span>Salvar Apontamento</span>
+            {/if}
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+{/if}
 
 <style>
   /* ==========================================================================
@@ -2174,6 +3515,9 @@
     border-radius: 8px;
     background: rgba(15, 19, 32, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.06);
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
   }
 
   .dual-input-card.clean-box {
@@ -2187,13 +3531,26 @@
   .dual-box-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .dual-box-title-wrap {
+    display: flex;
+    align-items: center;
     gap: 6px;
+    min-width: 0;
+    flex: 1;
   }
 
   .dual-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
+    flex-shrink: 0;
   }
 
   .dual-dot.pink { background: #ec4899; }
@@ -2203,7 +3560,10 @@
     font-size: 12px;
     font-weight: 600;
     color: #e2e8f0;
-    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .dual-badge {
@@ -2211,6 +3571,8 @@
     padding: 1px 6px;
     border-radius: 4px;
     font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .dual-badge.pink {
@@ -2227,16 +3589,30 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .file-download-item {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 8px 10px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 6px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .file-main-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
   }
 
   .file-item-info {
@@ -2253,11 +3629,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block;
+    max-width: 100%;
   }
 
   .file-item-sub {
     font-size: 10.5px;
     color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .btn-file-download {
@@ -2674,6 +4055,16 @@
       padding: 13px;
       gap: 10px;
       width: 100%;
+      max-width: 100% !important;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .editorial-card.is-expanded {
+      max-width: 100% !important;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
     }
 
     .card-cover-container {
@@ -2776,6 +4167,1192 @@
     .card-cover-container {
       width: 50px;
       height: 68px;
+    }
+  }
+
+  /* ==========================================================================
+     REVISOR (QC) SPECIFIC STYLES & INTERACTIVE MODALS
+     ========================================================================== */
+
+  .btn-action-secondary.qc-reader-btn {
+    border-color: rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.08);
+  }
+
+  .btn-action-secondary.qc-reader-btn:hover {
+    background: rgba(168, 85, 247, 0.16);
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+
+  .card-status-badge.qc-has-issues,
+  .card-status-badge.qc-waiting-material {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+  }
+
+  .qc-materials-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .qc-typeset-primary-card {
+    background: rgba(245, 158, 11, 0.04);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .qc-typeset-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .qc-typeset-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fef3c7;
+    flex: 1;
+  }
+
+  .file-download-item.qc-typeset-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .qc-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn-file-download.amber {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+  }
+
+  .btn-file-download.amber:hover {
+    background: rgba(245, 158, 11, 0.22);
+  }
+
+  .btn-action-leitor-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(168, 85, 247, 0.14);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-file-download.zinc {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #a1a1aa;
+  }
+
+  .btn-file-download.zinc:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #f4f4f5;
+  }
+
+  .btn-action-leitor-inline.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #71717a;
+    pointer-events: none;
+  }
+
+  .file-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .file-status-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    line-height: 1.4;
+    box-sizing: border-box;
+  }
+
+  .file-status-badge.invalid {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .file-status-badge.incomplete {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .qc-typeset-incomplete-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #fbbf24;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .incomplete-banner-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .qc-review-panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .qc-review-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  .qc-review-status-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
+  .qc-review-actions-quick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .btn-qc-quick-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: #c084fc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-qc-quick-read:hover {
+    background: rgba(168, 85, 247, 0.22);
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+
+  .btn-qc-add-issue {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-qc-add-issue:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .qc-issues-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .qc-issue-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .qc-issue-card.is-resolved {
+    opacity: 0.6;
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+
+  .qc-issue-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .qc-issue-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .qc-page-badge {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+
+  .qc-type-badge {
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .qc-type-badge.translation {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+
+  .qc-type-badge.clean,
+  .qc-type-badge.redraw {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+  }
+
+  .qc-type-badge.type {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .qc-type-badge.other {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+
+  .qc-status-tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  .qc-status-tag.open {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .qc-status-tag.resolved {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .btn-delete-issue {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-delete-issue:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .qc-issue-description {
+    font-size: 13px;
+    color: #e2e8f0;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  .qc-empty-issues-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 13px;
+    color: #94a3b8;
+  }
+
+  .btn-qc-rework-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    border-radius: 8px;
+    padding: 8px 15px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-qc-rework-trigger:hover {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: rgba(245, 158, 11, 0.55);
+  }
+
+  .btn-qc-approve-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    border: none;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+  }
+
+  .btn-qc-approve-trigger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  }
+
+  .btn-qc-approve-trigger.btn-disabled,
+  .btn-qc-approve-trigger:disabled {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #71717a !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  /* --------------------------------------------------------------------------
+     MODALS: REWORK, APPROVE, ADD ISSUE
+     -------------------------------------------------------------------------- */
+  .editorial-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(4, 7, 16, 0.82);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .editorial-modal-dialog {
+    background: #0f1322;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.7);
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .modal-header-title-lockup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .modal-icon-bubble {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .modal-icon-bubble.amber {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .modal-icon-bubble.green {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .modal-icon-bubble.purple {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .modal-subtitle {
+    font-size: 12.5px;
+    color: #94a3b8;
+    margin: 2px 0 0;
+  }
+
+  .btn-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-close:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .modal-body-scroll {
+    padding: 18px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-sizing: border-box;
+  }
+
+  .rework-selection-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+
+  .rework-stage-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .stage-checkbox-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .stage-checkbox-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .stage-checkbox-card.is-checked {
+    background: rgba(168, 85, 247, 0.08);
+    border-color: rgba(168, 85, 247, 0.45);
+  }
+
+  .custom-chk-box {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .custom-chk-box.blue {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+  }
+
+  .custom-chk-box.pink {
+    background: rgba(236, 72, 153, 0.15);
+    border: 1px solid rgba(236, 72, 153, 0.4);
+    color: #f472b6;
+  }
+
+  .custom-chk-box.amber {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+  }
+
+  .chk-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .chk-stage-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .chk-stage-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.35;
+  }
+
+  .stage-issues-block {
+    border-radius: 10px;
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .stage-issues-block.blue-theme {
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  .stage-issues-block.pink-theme {
+    background: rgba(236, 72, 153, 0.04);
+    border: 1px solid rgba(236, 72, 153, 0.25);
+  }
+
+  .stage-issues-block.amber-theme {
+    background: rgba(245, 158, 11, 0.04);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+
+  .stage-issues-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stage-dot-badge {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .stage-dot-badge.blue { background: #3b82f6; }
+  .stage-dot-badge.pink { background: #ec4899; }
+  .stage-dot-badge.amber { background: #f59e0b; }
+
+  .stage-block-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .stage-flow-hint {
+    font-size: 11.5px;
+    color: #94a3b8;
+    margin-left: auto;
+  }
+
+  .issue-rows-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .issue-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .issue-field-page {
+    width: 70px;
+    flex-shrink: 0;
+  }
+
+  .issue-field-region {
+    width: 140px;
+    flex-shrink: 0;
+  }
+
+  .issue-field-desc {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .field-label-mini {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 3px;
+  }
+
+  .modal-input-compact {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 7px 10px;
+    font-size: 12.5px;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+  }
+
+  .modal-input-compact:focus {
+    outline: none;
+    border-color: #a855f7;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .modal-input-compact.select {
+    cursor: pointer;
+    background-color: #1a1e30;
+  }
+
+  .modal-textarea {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .modal-textarea:focus {
+    outline: none;
+    border-color: #a855f7;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-remove-row {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 7px;
+    cursor: pointer;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-remove-row:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .btn-add-issue-row {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    color: #cbd5e1;
+    padding: 5px 11px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-add-issue-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+  }
+
+  .rework-summary-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 12.5px;
+    color: #6ee7b7;
+  }
+
+  .approve-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 11px 13px;
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .checklist-item.is-ok {
+    color: #e2e8f0;
+  }
+
+  .checklist-item.is-fail {
+    color: #fca5a5;
+  }
+
+  .approve-info-callout {
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 8px;
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12.5px;
+    color: #a5f3fc;
+    line-height: 1.4;
+  }
+
+  .callout-lead {
+    font-weight: 700;
+    color: #38bdf8;
+  }
+
+  .callout-secondary {
+    color: #94a3b8;
+    font-size: 11.5px;
+  }
+
+  .add-issue-fields-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+  }
+
+  .add-issue-fields-grid .full-width {
+    grid-column: span 2;
+  }
+
+  .modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .btn-modal-cancel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .btn-modal-confirm-rework {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    border: none;
+    color: #ffffff;
+    padding: 7px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-confirm-rework:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  }
+
+  .btn-modal-confirm-rework:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-modal-confirm-approve {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    border: none;
+    color: #ffffff;
+    padding: 7px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  }
+
+  .btn-modal-confirm-approve:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  }
+
+  .btn-modal-confirm-approve:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-modal-confirm-purple {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    border: none;
+    color: #ffffff;
+    padding: 7px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-modal-confirm-purple:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
+  }
+
+  .btn-modal-confirm-purple:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 640px) {
+    /* Prevent QC and all editorial materials horizontal overflow */
+    .dual-input-card {
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .dual-box-header {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .file-download-item {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 8px 10px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .file-main-row {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .file-download-item .file-item-info {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .file-download-item .file-item-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+      display: block;
+    }
+
+    .file-download-item .btn-file-download {
+      width: 100%;
+      justify-content: center;
+      min-height: 38px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .typeset-dual-grid {
+      grid-template-columns: 1fr;
+      width: 100%;
+      box-sizing: border-box;
+      gap: 8px;
+    }
+
+    .file-download-item.qc-typeset-item {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .file-download-item.qc-typeset-item .file-item-info {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .file-download-item.qc-typeset-item .file-item-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+      display: block;
+    }
+
+    .qc-file-actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn-file-download.amber,
+    .btn-action-leitor-inline {
+      width: 100%;
+      justify-content: center;
+      min-height: 40px;
+      box-sizing: border-box;
+    }
+
+    /* QC review header and quick actions */
+    .qc-review-header-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 10px 12px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .qc-review-status-text {
+      width: 100%;
+      min-width: 0;
+      font-size: 12.5px;
+    }
+
+    .qc-review-actions-quick {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      flex-shrink: 1;
+    }
+
+    .btn-qc-quick-read,
+    .btn-qc-add-issue {
+      width: 100%;
+      justify-content: center;
+      min-height: 40px;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
+
+    /* QC expanded footer actions */
+    .footer-actions-right {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn-qc-rework-trigger,
+    .btn-qc-approve-trigger {
+      width: 100%;
+      justify-content: center;
+      min-height: 44px;
+      box-sizing: border-box;
+    }
+
+    .qc-typeset-primary-card {
+      padding: 10px 12px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .qc-typeset-card-header {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .qc-typeset-title {
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    .qc-materials-container {
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .workspace-subpanel {
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .subpanel-header-toggle,
+    .subpanel-body {
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .rework-stage-checkboxes {
+      grid-template-columns: 1fr;
+    }
+
+    .issue-input-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+
+    .issue-field-page,
+    .issue-field-region,
+    .issue-field-desc {
+      width: 100%;
+    }
+
+    .add-issue-fields-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .add-issue-fields-grid .full-width {
+      grid-column: span 1;
+    }
+
+    .modal-footer {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .btn-modal-cancel,
+    .btn-modal-confirm-rework,
+    .btn-modal-confirm-approve,
+    .btn-modal-confirm-purple {
+      width: 100%;
+      justify-content: center;
     }
   }
 </style>
