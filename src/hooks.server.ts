@@ -249,6 +249,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     const existingCacheControl = response.headers.get('Cache-Control') || '';
     const isExplicitlyPublic = existingCacheControl.includes('public');
+    const hasExplicitCache = existingCacheControl.length > 0 && !existingCacheControl.includes('no-store');
 
     if (isPrivateArea) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
@@ -258,6 +259,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     } else if (isExplicitlyPublic) {
       // Preserve explicit public caching configured by public routes (+page.server.ts)
       response.headers.set('Vary', 'Accept');
+    } else if (hasExplicitCache) {
+      // Preserve explicit private max-age caching (e.g. for anonymous user with adult/blur preferences)
+      response.headers.set('Vary', 'Cookie, Accept');
     } else if (isSharedAnonymousHome) {
       response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60');
       response.headers.set('Vary', 'Accept');
