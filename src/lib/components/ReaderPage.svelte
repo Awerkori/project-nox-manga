@@ -29,7 +29,7 @@
             preloadObserver?.disconnect();
           }
       },
-      { rootMargin: '900px' }
+      { rootMargin: '600px' }
     );
     preloadObserver.observe(root);
     visibleObserver = new IntersectionObserver(

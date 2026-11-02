@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 
 /**
  * Production is a real distributed dependency, not the local Vite server.
@@ -27,7 +28,7 @@ async function gotoLiveReader(page: import('@playwright/test').Page) {
 test.describe('Production Live Smoke Tests', () => {
   test('Live Home page renders clean footer, canvas snow, and no explore banner', async ({ page }) => {
     await page.context().addCookies([
-      { name: 'nox-age-status', value: 'ADULT', domain: 'manga.project-nox-awerkori.workers.dev', path: '/' }
+      { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
 
     const res = await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
@@ -50,7 +51,7 @@ test.describe('Production Live Smoke Tests', () => {
 
   test('Live Work page renders desktop/mobile CTAs and contextual comments', async ({ page }) => {
     await page.context().addCookies([
-      { name: 'nox-age-status', value: 'ADULT', domain: 'manga.project-nox-awerkori.workers.dev', path: '/' }
+      { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
 
     // Test Desktop
@@ -77,7 +78,7 @@ test.describe('Production Live Smoke Tests', () => {
 
   test('Live Reader page renders navigation, scroll controls, and reactions', async ({ page }) => {
     await page.context().addCookies([
-      { name: 'nox-age-status', value: 'ADULT', domain: 'manga.project-nox-awerkori.workers.dev', path: '/' }
+      { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
 
     const res = await gotoLiveReader(page);

@@ -853,7 +853,7 @@
         <input type="hidden" name="scan_id" value={currentScan?.id} />
 
         <div class="slug-input-wrapper">
-          <span class="slug-prefix">manga.project-nox-awerkori.workers.dev/scans/</span>
+          <span class="slug-prefix">projectnox.org/scans/</span>
           <input
             type="text"
             name="new_slug"

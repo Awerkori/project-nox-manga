@@ -8,7 +8,7 @@ process.loadEnvFile(".env");
 const DIR = "/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/global_mentions_homolog";
 fs.mkdirSync(DIR, { recursive: true });
 
-const PROD_URL = "https://manga.project-nox-awerkori.workers.dev";
+const PROD_URL = process.env.PUBLIC_SITE_URL || "https://projectnox.org";
 const db = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function flushOutboxIfNeeded() {

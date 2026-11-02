@@ -5,13 +5,19 @@ const { query, end } = vi.hoisted(() => ({
   end: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('pg', () => ({
-  Client: class {
+vi.mock('pg', () => {
+  class MockPool {
+    query = query;
+    end = end;
+    on = vi.fn();
+  }
+  class MockClient {
     connect = vi.fn().mockResolvedValue(undefined);
     query = query;
     end = end;
   }
-}));
+  return { Client: MockClient, Pool: MockPool };
+});
 
 import { fetchRecentReleaseTimelineFromYugabyte } from '../src/lib/server/yugabyte';
 
@@ -33,5 +39,5 @@ it('uses an indexed chapter publication timeline with a stable chapter cursor', 
   expect(sql).not.toContain('GROUP BY');
   expect(sql).not.toContain('ROW_NUMBER');
   expect(params).toEqual([24, '2026-09-28T00:00:00Z', '11111111-1111-4111-8111-111111111111', 'MANGA']);
-  expect(end).toHaveBeenCalledOnce();
+  expect(end).not.toHaveBeenCalled();
 });

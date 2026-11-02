@@ -176,9 +176,20 @@ export async function saveChapterOffline(
     }
 
     try {
-      const res = await fetch(`/media/${page.media_id}`, { signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      let blob: Blob | null = null;
+      if (typeof caches !== 'undefined') {
+        try {
+          const cached = await caches.match(`/media/${page.media_id}`);
+          if (cached && cached.ok) {
+            blob = await cached.blob();
+          }
+        } catch {}
+      }
+      if (!blob) {
+        const res = await fetch(`/media/${page.media_id}`, { signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        blob = await res.blob();
+      }
 
       if (signal?.aborted) {
         await removeOfflineChapter(chapter.id).catch(() => {});
@@ -238,9 +249,22 @@ export async function saveChapterOffline(
   let coverBlobUrl: string | null = null;
   if (work.cover_id) {
     try {
-      const coverRes = await fetch(`/media/${work.cover_id}?size=thumb&v=3`, { signal });
-      if (coverRes.ok) {
-        const coverBlob = await coverRes.blob();
+      let coverBlob: Blob | null = null;
+      if (typeof caches !== 'undefined') {
+        try {
+          const cachedCover = await caches.match(`/media/${work.cover_id}?size=thumb&v=3`);
+          if (cachedCover && cachedCover.ok) {
+            coverBlob = await cachedCover.blob();
+          }
+        } catch {}
+      }
+      if (!coverBlob) {
+        const coverRes = await fetch(`/media/${work.cover_id}?size=thumb&v=3`, { signal });
+        if (coverRes.ok) {
+          coverBlob = await coverRes.blob();
+        }
+      }
+      if (coverBlob) {
         coverBlobUrl = await new Promise<string>((resolve) => {
           const r = new FileReader();
           r.onloadend = () => resolve((r.result as string) || '');

@@ -14,7 +14,6 @@ type ReaderCacheEntry = {
 
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
-const bridgedChaptersSet = new Set<string>();
 
 function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
   const links = pages
@@ -145,65 +144,6 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
-
-  // Opportunistically bridge chapter stub into Supabase for comments & reading progression (once per chapter per isolate)
-  if (chapter && !preview && locals.db && !bridgedChaptersSet.has(chapter.id)) {
-    bridgedChaptersSet.add(chapter.id);
-    if (bridgedChaptersSet.size > 500) {
-      const first = bridgedChaptersSet.values().next().value;
-      if (first) bridgedChaptersSet.delete(first);
-    }
-    const bridgePromise = (async () => {
-      try {
-        const { data: cExists } = await (locals.db as any).from('chapters').select('id').eq('id', chapter.id).maybeSingle();
-        if (!cExists) {
-          const { privileged } = await import('$lib/server/db');
-          const adminDb = privileged();
-          const cw = (chapter.works as any) || {};
-          const cleanSlug = cw.slug || `obra-${chapter.work_id.slice(0, 8)}`;
-          const cleanTitle = cw.title || 'Obra';
-          let sanitizedSlug = cleanSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-          if (!sanitizedSlug) sanitizedSlug = `obra-${chapter.work_id.slice(0, 8)}`;
-
-          await adminDb.from('works').upsert(
-            {
-              id: chapter.work_id,
-              slug: sanitizedSlug,
-              title: cleanTitle.slice(0, 200),
-              published: true,
-              content_rating: cw.content_rating || 'GENERAL',
-              kind: cw.kind || 'MANHWA',
-              status: 'ONGOING'
-            },
-            { onConflict: 'id' }
-          );
-
-          await adminDb.from('chapters').upsert(
-            {
-              id: chapter.id,
-              work_id: chapter.work_id,
-              number: chapter.number ?? 1,
-              title: chapter.title || `Capítulo ${chapter.display_number || chapter.number || ''}`,
-              published_at: chapter.published_at || new Date().toISOString(),
-              canonical_chapter_key: chapter.canonical_chapter_key || null,
-              display_number: chapter.display_number || String(chapter.number || ''),
-              chapter_order_key: chapter.chapter_order_key || null,
-              chapter_kind: chapter.chapter_kind || 'chapter',
-              edition: chapter.edition || 'default',
-              language: chapter.language || 'und',
-              origin: 'MANUAL'
-            },
-            { onConflict: 'id' }
-          );
-        }
-      } catch (err) {
-        console.warn('[READER] Non-blocking chapter bridge error:', err);
-      }
-    })();
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(bridgePromise);
-    }
-  }
 
   if ((chapter.works as any)?.content_rating === 'ADULT_18') {
     const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;

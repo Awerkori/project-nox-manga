@@ -229,7 +229,7 @@
   {#if !currentPath?.startsWith('/obra/')}
     <meta
       property="og:image"
-      content="{(data.siteUrl || 'https://manga.project-nox-awerkori.workers.dev')}/brand/nox-symbol-256.webp"
+      content="{(data.siteUrl || 'https://projectnox.org')}/brand/nox-symbol-256.webp"
     />
     <meta property="og:image:type" content="image/webp" />
     <meta property="og:image:width" content="256" />
@@ -237,8 +237,10 @@
     <meta name="twitter:card" content="summary" />
     <meta
       name="twitter:image"
-      content="{(data.siteUrl || 'https://manga.project-nox-awerkori.workers.dev')}/brand/nox-symbol-256.webp"
+      content="{(data.siteUrl || 'https://projectnox.org')}/brand/nox-symbol-256.webp"
     />
+    <link rel="canonical" href="{`https://projectnox.org${currentPath === '/' ? '' : currentPath}`}" />
+    <meta property="og:url" content="{`https://projectnox.org${currentPath === '/' ? '' : currentPath}`}" />
   {/if}
 </svelte:head>
 

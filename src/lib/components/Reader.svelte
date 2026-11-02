@@ -187,26 +187,35 @@
       return;
     }
 
+    if (typeof caches !== 'undefined') {
+      try {
+        const cached = await caches.match(mediaUrl);
+        if (cached && cached.ok) {
+          preloadedUrls.add(mediaId);
+          preloadedCount = preloadedUrls.size;
+          updateTurboTelemetry();
+          return;
+        }
+      } catch {}
+    }
+
     const downloadPromise = (async () => {
       try {
         const isNearViewport = Math.abs(page.position - current) <= 2;
 
         if (!isNearViewport) {
-          // Download antecipado puro: carrega bytes no HTTP Cache do navegador sem decodificar bitmaps em RAM
-          const fetchTimeout = AbortSignal.timeout(15000);
+          const fetchTimeout = AbortSignal.timeout(10000);
           const fetchSignal = (AbortSignal as any).any ? (AbortSignal as any).any([signal, fetchTimeout]) : signal;
           const res = await fetch(mediaUrl, {
             signal: fetchSignal,
             cache: 'force-cache',
-            priority: page.position <= current + 4 ? 'high' : ('low' as any)
+            priority: 'low' as any
           });
           if (!res.ok && res.status >= 400) {
             throw new Error(`HTTP ${res.status}`);
           }
-          // Consumir o corpo para garantir transferência total de bytes e persistência no HTTP Cache
           await res.blob();
         } else {
-          // Decodificação assíncrona com timeout de segurança para nunca travar a aba
           await new Promise<void>((resolve, reject) => {
             const img = new Image();
             img.decoding = 'async';
@@ -217,7 +226,7 @@
                 settled = true;
                 resolve();
               }
-            }, 12000);
+            }, 10000);
 
             const handleSuccess = () => {
               if (settled) return;
@@ -262,8 +271,8 @@
         updateTurboTelemetry();
       } catch (err: any) {
         if (signal.aborted) return;
-        if (retryCount < 2) {
-          await new Promise((r) => setTimeout(r, 400 * (retryCount + 1)));
+        if (retryCount < 1) {
+          await new Promise((r) => setTimeout(r, 400));
           return streamPreloadPage(page, signal, retryCount + 1);
         }
       } finally {
@@ -276,67 +285,36 @@
     return downloadPromise;
   }
 
-  function startTurboPreloader() {
+  function updateSlidingWindowPreload(curPos: number) {
     if (typeof window === 'undefined' || !data.pages?.length) return;
-    preloadAbortController?.abort();
-    preloadAbortController = new AbortController();
+    const isEco = readerSettings.preloadMode === 'eco';
+    const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+    const conn = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
+    const isSlow = conn?.saveData || conn?.effectiveType === 'slow-2g' || conn?.effectiveType === '2g';
+    // Adaptive sliding window: 1 page ahead for slow/saveData/eco; 2 pages ahead for normal
+    const windowAhead = (isSlow || isEco) ? 1 : 2;
+
+    const pagesToQueue = data.pages.filter(
+      (p: any) => p.position > curPos && p.position <= curPos + windowAhead && !preloadedUrls.has(p.media_id)
+    );
+
+    if (!pagesToQueue.length) return;
+
+    if (!preloadAbortController) {
+      preloadAbortController = new AbortController();
+    }
     const signal = preloadAbortController.signal;
 
     turboActive = true;
-    turboFinished = false;
+    for (const p of pagesToQueue) {
+      void streamPreloadPage(p, signal);
+    }
+  }
+
+  function startTurboPreloader() {
+    if (typeof window === 'undefined' || !data.pages?.length) return;
     turboStartTime = performance.now();
-    turboTimeToFirstPage = 0;
-    turboTimeToFirst5Pages = 0;
-    turboTimeToComplete = 0;
-
-    const isEco = readerSettings.preloadMode === 'eco';
-    const maxConcurrency = getAdaptiveConcurrency();
-
-    // Eco modo: pré-carrega janela deslizante de 4 páginas
-    // Turbo inteligente padrão: pré-carrega todas as páginas do capítulo
-    const pagesToQueue = isEco
-      ? data.pages.filter((p: any) => p.position >= current && p.position <= current + 4)
-      : [...data.pages];
-
-    pendingQueue = pagesToQueue
-      .filter((p: any) => !preloadedUrls.has(p.media_id))
-      .map((p: any) => ({
-        page: p,
-        priority: calculatePagePriority(p.position, current)
-      }));
-
-    pendingQueue.sort((a, b) => a.priority - b.priority);
-    updateTurboTelemetry();
-
-    async function workerLoop() {
-      if (signal.aborted) return;
-
-      while (pendingQueue.length > 0) {
-        if (signal.aborted) return;
-        const next = pendingQueue.shift();
-        if (!next || preloadedUrls.has(next.page.media_id)) continue;
-
-        activePreloadWorkers++;
-        updateTurboTelemetry();
-        try {
-          await streamPreloadPage(next.page, signal);
-        } finally {
-          activePreloadWorkers--;
-          updateTurboTelemetry();
-        }
-      }
-
-      if (pendingQueue.length === 0 && activePreloadWorkers === 0) {
-        turboFinished = true;
-        preloadProgressPct = 100;
-        updateTurboTelemetry();
-      }
-    }
-
-    const workerSlots = Math.min(maxConcurrency, Math.max(1, pendingQueue.length));
-    for (let i = 0; i < workerSlots; i++) {
-      void workerLoop();
-    }
+    updateSlidingWindowPreload(current);
   }
 
   // =========================================================================
@@ -587,8 +565,15 @@
     }
   }
 
-  async function saveProgress(pageNumber: number) {
-    if (sending || data.preview || !isAuthenticated) return;
+  let lastSavedPage = 0;
+  let saveProgressTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async function flushSaveProgress(pageNumber: number) {
+    if (saveProgressTimer) {
+      clearTimeout(saveProgressTimer);
+      saveProgressTimer = null;
+    }
+    if (sending || data.preview || !isAuthenticated || pageNumber <= lastSavedPage) return;
     sending = true;
     try {
       await action('member', 'read_page', {
@@ -597,11 +582,27 @@
         page: pageNumber,
         total_pages: data.pages.length
       });
+      lastSavedPage = Math.max(lastSavedPage, pageNumber);
     } catch {
       // Non-blocking
     } finally {
       sending = false;
     }
+  }
+
+  function debouncedSaveProgress(pageNumber: number) {
+    if (data.preview || !isAuthenticated || pageNumber <= lastSavedPage) return;
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`nox_prog_${data.chapter.id}`, String(pageNumber));
+      }
+    } catch {}
+
+    if (saveProgressTimer) clearTimeout(saveProgressTimer);
+    saveProgressTimer = setTimeout(() => {
+      void flushSaveProgress(pageNumber);
+    }, 3000);
   }
 
   function handleSeen(page: number, isVis: boolean) {
@@ -615,10 +616,12 @@
     const arr = Array.from(visible).sort((a, b) => a - b);
     if (data.pages?.length && maxSeenPage >= data.pages.length && !xpAwardConfirmed) {
       if (arr.length) current = arr[0];
+      if (current > lastSavedPage) void flushSaveProgress(current);
       void completeChapter();
     } else if (arr.length) {
       current = arr[0];
-      void saveProgress(current);
+      debouncedSaveProgress(current);
+      updateSlidingWindowPreload(current);
     }
   }
 
@@ -786,6 +789,13 @@
 
   onDestroy(() => {
     preloadAbortController?.abort();
+    if (saveProgressTimer) {
+      clearTimeout(saveProgressTimer);
+      saveProgressTimer = null;
+    }
+    if (current > lastSavedPage) {
+      void flushSaveProgress(current);
+    }
   });
 
   function handleReaderScroll() {

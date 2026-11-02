@@ -3,13 +3,10 @@ import { env } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import type { Database } from '$lib/database.types';
-import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
-
-let lastOpportunisticSweep = 0;
 
 export const handle: Handle = async ({ event, resolve }) => {
   const reqStart = performance.now();
@@ -282,12 +279,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     )
   )
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
-
-  // Varredura oportunista e não bloqueante da outbox (máximo 1x por minuto)
-  if (event.platform?.context?.waitUntil && Date.now() - lastOpportunisticSweep > 60_000) {
-    lastOpportunisticSweep = Date.now();
-    event.platform.context.waitUntil(processPendingEmailOutbox(15).catch(() => {}));
-  }
 
   return response;
 };

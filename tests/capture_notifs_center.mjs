@@ -5,7 +5,7 @@ import path from "path";
 process.loadEnvFile(".env");
 
 const DIR = "/home/awerkori/.gemini/antigravity-cli/brain/77ca9c93-730c-4572-bdd3-2f5c6d80e854/screenshots/global_mentions_homolog";
-const PROD_URL = "https://manga.project-nox-awerkori.workers.dev";
+const PROD_URL = process.env.PUBLIC_SITE_URL || "https://projectnox.org";
 
 async function main() {
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });

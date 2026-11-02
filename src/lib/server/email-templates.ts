@@ -43,7 +43,7 @@ export function generateEmailHtml({
   context,
   recipientName = 'Membro',
   actorName,
-  baseUrl = 'https://manga.project-nox-awerkori.workers.dev',
+  baseUrl = 'https://projectnox.org',
   meta,
   ctaLabel: customCtaLabel,
   securityNotice
@@ -576,7 +576,7 @@ export function generateEmailHtml({
                 Histórias que nascem nas sombras e conquistam a noite.
               </p>
               <p style="margin: 0; font-size: 11px; color: #4b4756;">
-                &copy; ${currentYear} Project Nox &bull; <a href="${baseUrl}" style="color: #b59af5; text-decoration: none;">manga.project-nox-awerkori.workers.dev</a>
+                &copy; ${currentYear} Project Nox &bull; <a href="${baseUrl}" style="color: #b59af5; text-decoration: none;">projectnox.org</a>
               </p>
             </td>
           </tr>
@@ -588,7 +588,7 @@ export function generateEmailHtml({
 </body>
 </html>`;
 
-  const text = `${badgeText} — PROJECT NOX\n\nOlá, ${recipientName},\n\n${title}\n\n${context ? `[${context}]\n\n` : ''}${body}\n\nAcessar: ${fullUrl}\n\nProject Nox — manga.project-nox-awerkori.workers.dev`;
+  const text = `${badgeText} — PROJECT NOX\n\nOlá, ${recipientName},\n\n${title}\n\n${context ? `[${context}]\n\n` : ''}${body}\n\nAcessar: ${fullUrl}\n\nProject Nox — projectnox.org`;
 
   return { subject, html, text };
 }

@@ -84,23 +84,30 @@ var initialized = server.init({
   }
 });
 const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
+
+function shouldBypassSharedCache(req) {
+  const cookie = req.headers.get('cookie') || '';
+  return AUTHENTICATED_SESSION_COOKIE.test(cookie) || req.headers.has('authorization');
+}
 
 function getSharedCacheKey(req) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return null;
-  const cookie = req.headers.get('cookie') || '';
-  if (AUTHENTICATED_SESSION_COOKIE.test(cookie) || req.headers.has('authorization')) return null;
+  if (shouldBypassSharedCache(req)) return null;
 
   try {
     const url = new URL(req.url);
     const p = url.pathname;
-    if (p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
+    if (p.startsWith('/media/') || p.startsWith('/_app/') || p.startsWith('/api') ||
+        p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
         p.startsWith('/biblioteca') || p.startsWith('/scan') || p.startsWith('/auth') ||
-        p.startsWith('/settings') || p.startsWith('/api/internal')) {
+        p.startsWith('/settings')) {
       return null;
     }
 
-    const isAdult = /(?:^|;\s*)nox-age-status=ADULT/i.test(cookie);
-    const isBlur = !/(?:^|;\s*)nox-blur-nsfw=false/i.test(cookie);
+    const cookie = req.headers.get('cookie') || '';
+    const isAdult = /(?:^|;s*)nox-age-status=ADULT/i.test(cookie);
+    const isBlur = !/(?:^|;s*)nox-blur-nsfw=false/i.test(cookie);
     const seg = isAdult ? (isBlur ? 'ADULT_BLUR' : 'ADULT_NOBLUR') : (isBlur ? 'SAFE_BLUR' : 'SAFE_NOBLUR');
 
     const cacheUrl = new URL(req.url);
@@ -125,7 +132,7 @@ var worker_default = {
     ctx.waitUntil((async () => {
       try {
         await initialized;
-        const targetUrl = (origin || 'https://manga.project-nox-awerkori.workers.dev') + '/api/internal/email-processor?limit=25';
+        const targetUrl = (origin || 'https://projectnox.org') + '/api/internal/email-processor?limit=25';
         const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || '';
         const req = new Request(targetUrl, {
           method: 'GET',
@@ -150,16 +157,78 @@ var worker_default = {
    */
   async fetch(req, env2, ctx) {
     const url = new URL(req.url);
+
+    // 1. Canonical domain enforcement: www.projectnox.org -> projectnox.org
+    if (url.hostname === 'www.projectnox.org') {
+      const canonicalUrl = new URL(req.url);
+      canonicalUrl.hostname = 'projectnox.org';
+      canonicalUrl.protocol = 'https:';
+      return new Response(null, {
+        status: 308,
+        headers: {
+          'location': canonicalUrl.toString(),
+          'cache-control': 'public, max-age=86400'
+        }
+      });
+    }
+
+    // 2. Legacy domain transition: *.workers.dev -> projectnox.org
+    if (url.hostname.endsWith('.workers.dev') && !url.pathname.startsWith('/api') && !url.pathname.startsWith('/_app')) {
+      const canonicalUrl = new URL(req.url);
+      canonicalUrl.hostname = 'projectnox.org';
+      canonicalUrl.protocol = 'https:';
+      return new Response(null, {
+        status: 308,
+        headers: {
+          'location': canonicalUrl.toString(),
+          'cache-control': 'public, max-age=86400'
+        }
+      });
+    }
+
+    // 3. Media Edge Cache Fast-Path: public pages and covers served in <1ms without SvelteKit SSR
+    if (url.pathname.startsWith('/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const cache = typeof caches !== 'undefined' && caches.default;
+      if (cache && !req.headers.has('authorization')) {
+        const mediaId = url.pathname.slice(7);
+        if (/^[0-9a-f-]{36}$/i.test(mediaId)) {
+          const sizeParam = url.searchParams.get('size');
+          const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
+          const canonicalMediaUrl = coverVariant
+            ? `${url.origin}/media/${mediaId}?size=${coverVariant}&v=3`
+            : `${url.origin}/media/${mediaId}`;
+          const cacheKey = new Request(canonicalMediaUrl, { method: 'GET' });
+          try {
+            const cached = await cache.match(cacheKey);
+            if (cached && cached.status === 200) {
+              const etag = cached.headers.get('ETag');
+              if (etag && req.headers.get('if-none-match') === etag) {
+                const notModified = new Response(null, { status: 304, headers: cached.headers });
+                notModified.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
+                return notModified;
+              }
+              const fastRes = new Response(cached.body, cached);
+              fastRes.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
+              return fastRes;
+            }
+          } catch {
+            // Fall through to standard SvelteKit SSR pipeline
+          }
+        }
+      }
+    }
+
     if (url.pathname.startsWith('/_app/immutable/')) {
       return env2.ASSETS.fetch(req);
     }
     if (!origin) {
-      origin = new URL(req.url).origin;
+      origin = 'https://projectnox.org';
     }
     await initialized;
     let pragma = req.headers.get("cache-control") || "";
-    const sharedCacheKey = getSharedCacheKey(req);
-    let res = sharedCacheKey && !pragma.includes("no-cache") && await r2(sharedCacheKey);
+    const cacheBypassRequest = shouldBypassSharedCache(req);
+    const sharedCacheKey = !cacheBypassRequest ? getSharedCacheKey(req) : null;
+    let res = !cacheBypassRequest && !pragma.includes("no-cache") && sharedCacheKey && await r2(sharedCacheKey);
     if (res) {
       res = new Response(res.body, res);
       res.headers.set('X-Nox-Edge-Cache', 'HIT');
@@ -213,7 +282,7 @@ var worker_default = {
       });
     }
     pragma = res.headers.get("cache-control") || "";
-    return sharedCacheKey && pragma && res.status < 400 ? c(sharedCacheKey, res, ctx) : res;
+    return !cacheBypassRequest && sharedCacheKey && pragma && res.status < 400 ? c(sharedCacheKey, res, ctx) : res;
   }
 };
 export {

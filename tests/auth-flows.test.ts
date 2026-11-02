@@ -80,12 +80,12 @@ describe('account actions', () => {
   });
   it('resends confirmation for an unconfirmed login through the existing provider', async () => {
     const e = event('entrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
-    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/entrar');
+    e.url = new URL('https://projectnox.org/entrar');
     expect(await actions.default(e)).toMatchObject({ success: true, resend: true, unconfirmed: true });
     expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
       type: 'signup',
       email: 'reader@example.invalid',
-      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
+      options: { emailRedirectTo: 'https://projectnox.org/auth/confirm' }
     });
   });
   it('sends registration confirmation to the own origin without claiming unverified roles', async () => {
@@ -130,25 +130,25 @@ describe('account actions', () => {
       email: 'reader@example.invalid',
       password: 'long-password'
     });
-    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
+    e.url = new URL('https://projectnox.org/cadastrar');
     expect(await actions.default(e)).toMatchObject({ success: true });
     expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
       email: 'reader@example.invalid',
       password: 'long-password',
       options: {
-        emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm',
+        emailRedirectTo: 'https://projectnox.org/auth/confirm',
         data: { username: 'reader_qa' }
       }
     });
   });
   it('resends confirmation through the existing provider with a cooldown-capable action', async () => {
     const e = event('cadastrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
-    e.url = new URL('https://manga.project-nox-awerkori.workers.dev/cadastrar');
+    e.url = new URL('https://projectnox.org/cadastrar');
     expect(await actions.default(e)).toMatchObject({ success: true, resend: true });
     expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
       type: 'signup',
       email: 'reader@example.invalid',
-      options: { emailRedirectTo: 'https://manga.project-nox-awerkori.workers.dev/auth/confirm' }
+      options: { emailRedirectTo: 'https://projectnox.org/auth/confirm' }
     });
   });
   it('recovery requires no password and uses a fixed reset destination', async () => {

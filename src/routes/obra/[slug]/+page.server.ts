@@ -25,6 +25,8 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const preview = isStaff && ['1', 'true'].includes(url.searchParams.get('preview') || '');
 
   // 1. Authoritative lookup of complete work bundle in YugabyteDB in a SINGLE round-trip
+  // To prevent any shared edge cache pollution, only authenticated user IDs are passed for
+  // personalized rating resolution during SSR. Anonymous visitors receive clean public aggregates.
   let work: any = null;
   let chaptersList: any[] = [];
   let publicTags: any[] = [];
@@ -32,7 +34,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
 
   const yugabyteBundle = await fetchFullWorkPageFromYugabyte(
     params.slug,
-    hadExistingVisitorId ? visitorId : undefined,
+    locals.user?.id || undefined,
     locals.user?.id,
     preview,
     platform?.env
@@ -262,7 +264,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     progress,
     metrics,
     rating: resolvedRating,
-    canonical: `${url.origin}/obra/${work.slug}`,
+    canonical: `https://projectnox.org/obra/${work.slug}`,
     coverUrl,
     metaImage,
     hasCustomMetaImage: true

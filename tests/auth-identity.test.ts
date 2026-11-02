@@ -32,7 +32,7 @@ describe('Project Nox account identity', () => {
   });
 
   it('uses the canonical Worker origin for production auth callbacks', () => {
-    expect(server).toContain('manga.project-nox-awerkori.workers.dev');
+    expect(server).toContain('projectnox.org');
     expect(server).toContain('emailRedirectTo: `${redirectOrigin}/auth/confirm`');
     expect(server).not.toContain('projectnox.com');
   });

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
 
-const DEFAULT_SITE_ORIGIN = 'https://manga.project-nox-awerkori.workers.dev';
+const DEFAULT_SITE_ORIGIN = 'https://projectnox.org';
 
 function authOrigin(url: URL): string {
   // Keep local development/tests on their own origin, but ensure production

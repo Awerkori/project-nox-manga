@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { testArtifactDir } from '../test-artifacts';
 
 const SCREENSHOT_DIR = testArtifactDir(process.env.AUDIT_MODE === 'after' ? 'after' : 'before');
-const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
 const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 const VIEWPORTS = [

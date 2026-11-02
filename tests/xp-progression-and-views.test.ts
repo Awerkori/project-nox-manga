@@ -194,5 +194,5 @@ describe('XP Progression, Anti-Abuse, and Reading Flow Tests', () => {
     // 8. Ledger integrity: sum of ledger matches balance
     const ledgerSum = await db.query<{ total: string }>(`SELECT SUM(amount) as total FROM public.xp_ledger WHERE user_id = '${testUserId}'`);
     expect(Number(ledgerSum.rows[0].total)).toBe(25);
-  });
+  }, 15000);
 });

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const LIVE_URL = 'https://manga.project-nox-awerkori.workers.dev';
+const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
 
 test('verify obra page has single og:image and single twitter:image', async ({ page }) => {
   // Set age cookies so AgeGateModal is bypassed

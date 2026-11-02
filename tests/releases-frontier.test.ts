@@ -1,6 +1,18 @@
 import {expect,it,vi} from 'vitest';
 const {query,end}=vi.hoisted(()=>({query:vi.fn().mockResolvedValue({rows:[],rowCount:0}),end:vi.fn().mockResolvedValue(undefined)}));
-vi.mock('pg',()=>({Client:class {connect=vi.fn().mockResolvedValue(undefined);query=query;end=end;}}));
+vi.mock('pg', () => {
+  class MockPool {
+    query = query;
+    end = end;
+    on = vi.fn();
+  }
+  class MockClient {
+    connect = vi.fn().mockResolvedValue(undefined);
+    query = query;
+    end = end;
+  }
+  return { Client: MockClient, Pool: MockPool };
+});
 import {fetchRecentReleasesFromYugabyte} from '../src/lib/server/yugabyte';
 it('uses indexed work frontier with stable cursor and bounded per-work chapter reads',async()=>{
   await fetchRecentReleasesFromYugabyte(24,4,'2026-09-28T00:00:00Z','11111111-1111-4111-8111-111111111111',{HYPERDRIVE:{connectionString:'test'}},'manga');
@@ -15,5 +27,5 @@ it('uses indexed work frontier with stable cursor and bounded per-work chapter r
   expect(sql).toContain('(w.latest_chapter_published_at, w.id) < ($3::timestamptz, $4::uuid)');
   expect(sql).not.toContain('GROUP BY');expect(sql).not.toContain('ROW_NUMBER');
   expect(params).toEqual([24,4,'2026-09-28T00:00:00Z','11111111-1111-4111-8111-111111111111','MANGA']);
-  expect(end).toHaveBeenCalledOnce();
+  expect(end).not.toHaveBeenCalled();
 });

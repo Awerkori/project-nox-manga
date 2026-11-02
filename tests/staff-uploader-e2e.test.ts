@@ -5,7 +5,7 @@ import fs from 'fs';
 import { expandFiles } from '../src/lib/uploads';
 import { flushUploads, UploadRateLimitError, _resetAdaptiveStateForTesting } from '../src/lib/upload-queue';
 
-const prodUrl = 'https://manga.project-nox-awerkori.workers.dev';
+const prodUrl = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
 const STAFF_POOL_ID = '20c12e59-99ea-4fba-8d0e-29b445773d05';
 const MANGA_POOL_ID = '9ad5dac9-c8f7-4774-b488-59837fcef9c3';
 const PROD_POOL_ID = '8fc9115d-b975-4d1b-924a-cc077e2d860c';

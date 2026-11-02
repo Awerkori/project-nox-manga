@@ -4,13 +4,19 @@ vi.mock('$env/dynamic/private', () => ({ env: {} }));
 vi.mock('$env/dynamic/public', () => ({ env: {} }));
 
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
-vi.mock('pg', () => ({
-  Client: class {
+vi.mock('pg', () => {
+  class MockPool {
+    query = (...args: any[]) => query(...args);
+    end = vi.fn().mockResolvedValue(undefined);
+    on = vi.fn();
+  }
+  class MockClient {
     connect = vi.fn().mockResolvedValue(undefined);
     query = (...args: any[]) => query(...args);
     end = vi.fn().mockResolvedValue(undefined);
   }
-}));
+  return { Client: MockClient, Pool: MockPool };
+});
 
 import { searchWorksFromYugabyte } from '../src/lib/server/yugabyte';
 import { GET as getWorks } from '../src/routes/api/v1/[...path]/+server';
