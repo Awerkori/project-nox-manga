@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { ownerCookies } from './owner-session.mjs';
 import fs from 'fs';
 
-const targetUrl = 'https://home-preview-manga.project-nox-awerkori.workers.dev';
+const targetUrl = process.env.TARGET_URL || 'https://manga.project-nox-awerkori.workers.dev';
 const artifactDir = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
 const chapterId = 'b5a9fbf0-206d-475a-8e05-70aaa672f71e'; // Cap 85 Céu Distante
 
