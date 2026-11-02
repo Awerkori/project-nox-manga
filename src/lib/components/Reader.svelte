@@ -591,7 +591,7 @@
   }
 
   function debouncedSaveProgress(pageNumber: number) {
-    if (data.preview || !isAuthenticated || pageNumber <= lastSavedPage) return;
+    if (data.preview) return;
 
     try {
       if (typeof localStorage !== 'undefined') {
@@ -599,10 +599,19 @@
       }
     } catch {}
 
-    if (saveProgressTimer) clearTimeout(saveProgressTimer);
-    saveProgressTimer = setTimeout(() => {
-      void flushSaveProgress(pageNumber);
-    }, 3000);
+    if (!isAuthenticated || pageNumber <= lastSavedPage) return;
+
+    // Milestone-based consolidated sync: sync every 10 pages or halfway to reduce remote invocations
+    const totalPages = data.pages?.length || 1;
+    const progressDelta = pageNumber - lastSavedPage;
+    const isMilestone = progressDelta >= 10 || (lastSavedPage < totalPages / 2 && pageNumber >= totalPages / 2);
+
+    if (isMilestone) {
+      if (saveProgressTimer) clearTimeout(saveProgressTimer);
+      saveProgressTimer = setTimeout(() => {
+        void flushSaveProgress(pageNumber);
+      }, 2500);
+    }
   }
 
   function handleSeen(page: number, isVis: boolean) {

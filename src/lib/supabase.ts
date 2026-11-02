@@ -1,3 +1,4 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/public';
 
@@ -14,17 +15,27 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
     return null;
   }
 
-  browserClient = createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: 10
+  try {
+    browserClient = createBrowserClient(url, key, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
       }
-    }
-  });
+    });
+  } catch {
+    browserClient = createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
+    });
+  }
 
   return browserClient;
 }

@@ -3,7 +3,7 @@
   "name": "manga",
   "main": "src/worker-wrapper.js",
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["0 * * * *"]
   },
   "routes": [
     { "pattern": "projectnox.org", "custom_domain": true },
@@ -28,7 +28,8 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "83726ad935554261813c4bb12094c7f3"
+      "id": "83726ad935554261813c4bb12094c7f3",
+      "localConnectionString": "postgresql://postgres:postgres@localhost:5432/postgres"
     }
   ],
   "kv_namespaces": [

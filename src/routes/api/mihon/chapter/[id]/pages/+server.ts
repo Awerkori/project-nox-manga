@@ -60,5 +60,12 @@ export const GET = async ({ params, request, url }) => {
       width: p.width,
       height: p.height
     }))
+  }, {
+    headers: {
+      'Cache-Control':
+        work.content_rating === 'ADULT_18'
+          ? 'private, no-cache, no-store, must-revalidate'
+          : 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+    }
   });
 };

@@ -6,6 +6,7 @@ import type { Database } from '$lib/database.types';
 import { withTimeout } from '$lib/server/resilience';
 import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
+import { building } from '$app/environment';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -186,18 +187,23 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  const resolved = await withYugabyteReadSession(
-    event.platform?.env,
-    async (sessionEnv) => {
-      if (event.platform && sessionEnv) {
-        (event.platform as any).env = sessionEnv;
-      }
-      return resolve(event, {
+  const isPrerenderableStatic = building || event.url.pathname === '/sobre' || event.url.pathname === '/privacidade';
+  const resolved = isPrerenderableStatic
+    ? await resolve(event, {
         filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
-      });
-    },
-    1
-  );
+      })
+    : await withYugabyteReadSession(
+        event.platform?.env,
+        async (sessionEnv) => {
+          if (event.platform && sessionEnv) {
+            (event.platform as any).env = sessionEnv;
+          }
+          return resolve(event, {
+            filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
+          });
+        },
+        1
+      );
 
   // Media and static assets handle their own caching and security headers; return immediately
   if (isMedia || isStaticAsset) {

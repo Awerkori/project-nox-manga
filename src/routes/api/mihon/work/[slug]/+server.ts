@@ -63,5 +63,12 @@ export const GET = async ({ params, request, url, platform }: any) => {
       title: ch.title,
       published_at: ch.published_at
     }))
+  }, {
+    headers: {
+      'Cache-Control':
+        work.content_rating === 'ADULT_18'
+          ? 'private, no-cache, no-store, must-revalidate'
+          : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
+    }
   });
 };

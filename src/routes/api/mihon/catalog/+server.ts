@@ -44,11 +44,20 @@ export const GET = async ({ request, url, platform }: any) => {
   }));
 
   const total = catalogRes.total;
-  return json({
-    page,
-    limit,
-    total,
-    has_more: offset + items.length < total,
-    works: items
-  });
+  return json(
+    {
+      page,
+      limit,
+      total,
+      has_more: offset + items.length < total,
+      works: items
+    },
+    {
+      headers: {
+        'Cache-Control': allowAdult
+          ? 'private, no-cache, no-store, must-revalidate'
+          : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
+      }
+    }
+  );
 };
