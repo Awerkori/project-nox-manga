@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 
 export interface SqlResponse<T = any> {
   rows: T[];
@@ -289,34 +289,75 @@ export async function executeYugabyteSql<T = any>(
     }
   }
 
+let sharedPool: Pool | null = null;
+let sharedPoolConnStr = '';
+
+function getSharedPool(connStr: string): Pool {
+  if (!sharedPool || sharedPoolConnStr !== connStr) {
+    if (sharedPool) {
+      sharedPool.end().catch(() => {});
+    }
+    sharedPool = new Pool({
+      connectionString: connStr,
+      max: 6,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 10000
+    });
+    sharedPool.on('error', (err: any) => {
+      console.warn('[YUGABYTE_SHARED_POOL_WARN]', err?.message);
+    });
+    sharedPoolConnStr = connStr;
+  }
+  return sharedPool;
+}
+
   // Strategy 1: Hyperdrive native pooled connection if available
   const hyperdrive = platformEnv?.HYPERDRIVE;
   if (hyperdrive?.connectionString) {
-    const connectStart = performance.now();
-    try {
-      const client = new Client({
-        connectionString: hyperdrive.connectionString,
-        connectionTimeoutMillis: 5000,
-        query_timeout: 8000
-      });
-      await client.connect();
-      const connectDur = Math.round(performance.now() - connectStart);
+    const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
+    if (isNode) {
       try {
+        const pool = getSharedPool(hyperdrive.connectionString);
         const queryStart = performance.now();
-        const res = await client.query(query, params);
+        const res = await pool.query(query, params);
         const queryDur = Math.round(performance.now() - queryStart);
         if (queryDur > 500) {
-          console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
+          console.warn(`[YUGABYTE_SLOW_QUERY] query=${queryDur}ms`);
         }
         return {
           rows: res.rows || [],
           rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
         };
-      } finally {
-        await client.end().catch(() => {});
+      } catch (hdErr: any) {
+        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
       }
-    } catch (hdErr: any) {
-      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+    } else {
+      const connectStart = performance.now();
+      try {
+        const client = new Client({
+          connectionString: hyperdrive.connectionString,
+          connectionTimeoutMillis: 5000,
+          query_timeout: 8000
+        });
+        await client.connect();
+        const connectDur = Math.round(performance.now() - connectStart);
+        try {
+          const queryStart = performance.now();
+          const res = await client.query(query, params);
+          const queryDur = Math.round(performance.now() - queryStart);
+          if (queryDur > 500) {
+            console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
+          }
+          return {
+            rows: res.rows || [],
+            rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
+          };
+        } finally {
+          await client.end().catch(() => {});
+        }
+      } catch (hdErr: any) {
+        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+      }
     }
   }
 

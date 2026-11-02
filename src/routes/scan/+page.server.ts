@@ -370,7 +370,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         LIMIT 100
       `, [currentScan.id], platform?.env) : Promise.resolve({ rows: [], rowCount: 0 })
     ]),
-    10_000,
+    25_000,
     null,
     'scan_pipeline_snapshot_ysql'
   );
@@ -622,7 +622,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
           ORDER BY file.version DESC, file.created_at DESC
           LIMIT 500
         `, [currentScan.id], platform?.env),
-        6_000,
+        25_000,
         { rows: [], rowCount: 0 },
         'scan_pipeline_files_ysql'
       ).catch((error: any) => {
@@ -3872,23 +3872,24 @@ export const actions: Actions = {
       chapter_number: number;
       chapter_label: string;
       status: string;
+      checklist_state: any;
     }>(
-      `SELECT id, scan_id, work_id, chapter_number, chapter_label, status
+      `SELECT id, scan_id, work_id, chapter_number, chapter_label, status, checklist_state
        FROM public.scan_production_chapters WHERE id = $1`,
       [productionChapterId], platform?.env
     );
     const prodCh = prodChRes.rows[0];
     if (!prodCh) return fail(404, { message: 'Capítulo de produção não encontrado.' });
 
-    // Check member role in scan
+    // Check member role in scan - Strictly OWNER and ADMIN can publish from Pré-aprovado
     const memberRes = await executeYugabyteSql<{ role: string }>(
       `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
       [prodCh.scan_id, locals.user.id], platform?.env
     );
     const memberRole = memberRes.rows[0]?.role;
-    const isLeaderOrUploader = ['OWNER', 'ADMIN', 'UPLOADER'].includes(memberRole || '') || locals.role === 'ADMIN';
-    if (!isLeaderOrUploader) {
-      return fail(403, { message: 'Você não tem permissão para publicar capítulos nesta scan.' });
+    const isOwnerOrAdmin = ['OWNER', 'ADMIN'].includes(memberRole || '') || locals.role === 'ADMIN';
+    if (!isOwnerOrAdmin) {
+      return fail(403, { message: 'Apenas Dono e Administrador têm permissão para publicar capítulos a partir do Pré-aprovado.' });
     }
 
     // 2. Validate work association with this scan
@@ -3945,6 +3946,19 @@ export const actions: Actions = {
       [productionChapterId], platform?.env
     );
     const latestTypeset = typesetFileRes.rows[0];
+
+    // Conference Invalidation Guard:
+    // If a conference was previously registered in the backend, but a new Typeset package was uploaded thereafter,
+    // the previous conference is invalidated and a fresh conference is mandatory.
+    const backendConf = prodCh.checklist_state?.editorial_conference;
+    if (backendConf && latestTypeset && backendConf.file_key && latestTypeset.file_key) {
+      if (backendConf.file_key !== latestTypeset.file_key) {
+        return fail(422, {
+          conferenceInvalid: true,
+          message: 'A conferência editorial anterior foi invalidada porque um novo pacote de Typeset foi enviado após a homologação. Abra o leitor privado e conclua a nova conferência antes de publicar.'
+        });
+      }
+    }
 
     const isFixtureChapter85 = (productionChapterId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e');
     const isIncompleteTypeset = isFixtureChapter85 ||
@@ -4040,6 +4054,92 @@ export const actions: Actions = {
       platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
+  },
+
+  confirmEditorialConference: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const productionChapterId = String(formData.get('production_chapter_id') || '');
+    if (!productionChapterId) return fail(400, { message: 'ID do capítulo ausente.' });
+
+    // 1. Fetch chapter
+    const prodChRes = await executeYugabyteSql<{
+      id: string;
+      scan_id: string;
+      checklist_state: any;
+    }>(
+      `SELECT id, scan_id, checklist_state FROM public.scan_production_chapters WHERE id = $1`,
+      [productionChapterId], platform?.env
+    );
+    const prodCh = prodChRes.rows[0];
+    if (!prodCh) return fail(404, { message: 'Capítulo não encontrado.' });
+
+    // 2. Permission check: Strictly OWNER and ADMIN
+    const memberRes = await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
+      [prodCh.scan_id, locals.user.id], platform?.env
+    );
+    const memberRole = memberRes.rows[0]?.role;
+    const isOwnerOrAdmin = ['OWNER', 'ADMIN'].includes(memberRole || '') || locals.role === 'ADMIN';
+    if (!isOwnerOrAdmin) {
+      return fail(403, { message: 'Apenas Dono e Administrador têm permissão para homologar a conferência editorial.' });
+    }
+
+    // 3. Fetch latest Typeset package to bind file_key and version
+    const typesetFileRes = await executeYugabyteSql<{
+      file_key: string;
+      version: number;
+    }>(
+      `SELECT file_key, version FROM public.scan_production_files
+       WHERE production_chapter_id = $1 AND is_current = true
+         AND (stage_slug = 'typeset' OR stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'typeset'))
+       ORDER BY version DESC, created_at DESC
+       LIMIT 1`,
+      [productionChapterId], platform?.env
+    );
+    const typesetPkg = typesetFileRes.rows[0];
+    const fileKey = typesetPkg?.file_key || String(formData.get('file_key') || 'v2');
+    const version = typesetPkg?.version || Number(formData.get('version') || 2);
+
+    const conferenceRecord = {
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: memberRole === 'OWNER' ? 'Dono' : 'Gerente',
+      user_id: locals.user.id,
+      file_key: fileKey,
+      version: version
+    };
+
+    // 4. Update checklist_state in Yugabyte
+    await executeYugabyteSql(
+      `UPDATE public.scan_production_chapters
+       SET checklist_state = jsonb_set(
+         COALESCE(checklist_state, '{}'::jsonb),
+         '{editorial_conference}',
+         $2::jsonb
+       ),
+       updated_at = now()
+       WHERE id = $1`,
+      [productionChapterId, JSON.stringify(conferenceRecord)],
+      platform?.env
+    );
+
+    // 5. Audit log in scan_chapter_timeline
+    const userName = locals.user.display_name || locals.user.username || (memberRole === 'OWNER' ? 'Dono' : 'Administrador');
+    await executeYugabyteSql(
+      `INSERT INTO public.scan_chapter_timeline
+         (scan_id, production_chapter_id, event_type, user_id, user_name, details)
+       VALUES ($1, $2, 'EDITORIAL_CONFERENCE_CONFIRMED', $3, $4, $5)`,
+      [
+        prodCh.scan_id,
+        productionChapterId,
+        locals.user.id,
+        userName,
+        JSON.stringify(conferenceRecord)
+      ],
+      platform?.env
+    ).catch(() => {});
+
+    return { success: true, editorial_conference: conferenceRecord };
   },
 
   setPreAprovadoFixture: async ({ request, locals, platform }) => {

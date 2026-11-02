@@ -64,14 +64,31 @@
     if (typeof window !== 'undefined' && isConferenceMode) {
       const targetId = chapter?.id || chapterId;
       if (targetId) {
+        // 1. Authoritative backend conference state from chapter checklist_state
+        const serverConf = (chapter as any)?.checklist_state?.editorial_conference;
+        const curFileKey = manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || null;
+        if (serverConf && serverConf.confirmed_at) {
+          if (!curFileKey || !serverConf.file_key || serverConf.file_key === curFileKey) {
+            isAlreadyConferred = true;
+            conferredData = {
+              confirmedAt: serverConf.confirmed_at,
+              confirmedBy: serverConf.confirmed_by || 'Dono'
+            };
+            return;
+          }
+        }
+
+        // 2. Fallback to localStorage state
         try {
           const raw = localStorage.getItem(`pre_aprovado_conf_${targetId}`);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && parsed.confirmedAt) {
-              isAlreadyConferred = true;
-              conferredData = parsed;
-              return;
+              if (!curFileKey || !parsed.fileKey || parsed.fileKey === curFileKey) {
+                isAlreadyConferred = true;
+                conferredData = parsed;
+                return;
+              }
             }
           }
         } catch {}
@@ -81,15 +98,19 @@
     }
   });
 
-  function handleConfirmConference() {
+  async function handleConfirmConference() {
     const targetId = chapter?.id || chapterId;
+    const currentKey = manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || 'v2';
+    const currentVer = manifest?.typesetPackage?.version || 2;
+    const confirmedByName = userRole === 'OWNER' ? 'Dono' : (userRole === 'ADMIN' ? 'Administrador' : 'Gerente');
     const record = {
       chapterId: targetId,
       confirmedAt: new Date().toISOString(),
-      confirmedBy: userRole === 'OWNER' ? 'Dono' : 'Gerente',
-      fileKey: manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || 'v2',
-      version: manifest?.typesetPackage?.version || 2
+      confirmedBy: confirmedByName,
+      fileKey: currentKey,
+      version: currentVer
     };
+
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`pre_aprovado_conf_${targetId}`, JSON.stringify(record));
@@ -99,6 +120,33 @@
     const wasAlready = isAlreadyConferred;
     isAlreadyConferred = true;
     conferredData = record;
+
+    // Mutate local chapter object optimistically
+    if (chapter) {
+      if (!(chapter as any).checklist_state) (chapter as any).checklist_state = {};
+      (chapter as any).checklist_state.editorial_conference = {
+        confirmed_at: record.confirmedAt,
+        confirmed_by: record.confirmedBy,
+        file_key: record.fileKey,
+        version: record.version
+      };
+    }
+
+    // Persist to backend database via server action
+    try {
+      const fd = new FormData();
+      fd.append('production_chapter_id', targetId);
+      fd.append('file_key', currentKey);
+      fd.append('version', String(currentVer));
+      fetch('/scan?/confirmEditorialConference', {
+        method: 'POST',
+        headers: { 'x-sveltekit-action': 'true' },
+        body: fd
+      }).catch(err => {
+        console.warn('[CONFERENCE_PERSIST_WARN]', err);
+      });
+    } catch {}
+
     showToast(wasAlready ? 'Conferência atualizada com sucesso!' : 'Conferência do capítulo registrada com sucesso!');
     setTimeout(() => {
       onBack();

@@ -106,8 +106,36 @@
     expandedCards[stageId] = !expandedCards[stageId];
   }
 
-  // Conference tracking persisted across page views
+  // Conference tracking persisted across page views and backed by DB checklist_state
   let confirmedConferences = $state<Record<string, { confirmedAt: string; confirmedBy: string; fileKey: string }>>({});
+
+  function getConferenceData(ch: any, primaryPkg?: any): { confirmedAt: string; confirmedBy: string; fileKey?: string } | null {
+    if (!ch) return null;
+    const curPkgKey = primaryPkg?.file_key || null;
+
+    // 1. Authoritative backend conference from chapter checklist_state
+    const backendConf = ch?.checklist_state?.editorial_conference;
+    if (backendConf && backendConf.confirmed_at) {
+      if (!curPkgKey || !backendConf.file_key || backendConf.file_key === curPkgKey) {
+        return {
+          confirmedAt: backendConf.confirmed_at,
+          confirmedBy: backendConf.confirmed_by || 'Dono',
+          fileKey: backendConf.file_key
+        };
+      }
+      // If curPkgKey exists and does not match, it was invalidated by a new typeset version!
+      return null;
+    }
+
+    // 2. Fallback to localStorage
+    const local = confirmedConferences[ch.id] || (ch.target_chapter_id && confirmedConferences[ch.target_chapter_id]);
+    if (local && local.confirmedAt) {
+      if (!curPkgKey || !local.fileKey || local.fileKey === curPkgKey) {
+        return local;
+      }
+    }
+    return null;
+  }
 
   function reloadConferences() {
     if (typeof window !== 'undefined') {
@@ -353,7 +381,7 @@
     publishChapterTitle = cleanChapterTitle(rawLabel, item.ch.chapter_number);
     publishVolume = item.ch.volume ?? '';
     publishConfirmedDuplicate = false;
-    publishConferenceConfirmed = Boolean(confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id]));
+    publishConferenceConfirmed = Boolean(getConferenceData(item.ch, getPrimaryPackage(item.ch.id)));
     isSimulationMode = true; // default safe simulation
     serverErrorMessage = null;
     publishFeedback = null;
@@ -512,7 +540,8 @@
           {@const isOpen = Boolean(expandedCards[item.cs.id])}
           {@const primaryPkg = getPrimaryPackage(item.ch.id)}
           {@const isIncomplete = isItemIncomplete(item)}
-          {@const isConferred = Boolean(confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id]))}
+          {@const confData = getConferenceData(item.ch, primaryPkg)}
+          {@const isConferred = Boolean(confData)}
           {@const deliverables = getChapterDeliverables(item.ch.id)}
           {@const formattedChTitle = formatChapterDisplay(item.ch.chapter_number, item.ch.chapter_label, item.ch.chapter_title)}
 
@@ -660,7 +689,6 @@
                         <dt>Estado da Conferência:</dt>
                         <dd class={isConferred ? 'text-cyan font-semibold' : 'text-slate-400'}>
                           {#if isConferred}
-                            {@const confData = confirmedConferences[item.ch.id] || (item.ch.target_chapter_id && confirmedConferences[item.ch.target_chapter_id])}
                             <span class="status-indicator-inline cyan">
                               <Check size={12} />
                               Conferência concluída no leitor
