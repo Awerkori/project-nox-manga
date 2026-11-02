@@ -27,10 +27,13 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
   // truly anonymous Home response is safe to share at the edge.
   const hasHomePreference = Boolean(cookies.get('nox-age-status') || cookies.get('nox-blur-nsfw'));
   const canSharePublicHome = !locals.user && !forceFresh && !hasHomePreference;
-  setHeaders({
-    'cache-control': canSharePublicHome
+  const cacheControl = forceFresh
+    ? 'private, no-cache, no-store, must-revalidate'
+    : canSharePublicHome
       ? 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
-      : 'private, no-cache, no-store, must-revalidate'
+      : 'private, max-age=15, stale-while-revalidate=30';
+  setHeaders({
+    'cache-control': cacheControl
   });
 
   const hasFreshPublicCache = !forceFresh && Boolean(homePublicCache && Date.now() - homePublicCache.timestamp < HOME_CACHE_TTL_MS);

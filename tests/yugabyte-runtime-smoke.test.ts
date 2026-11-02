@@ -168,7 +168,7 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
       platform: { env: {} }
     } as any);
     expect(personalizedHeaders).toHaveBeenCalledWith({
-      'cache-control': 'private, no-cache, no-store, must-revalidate'
+      'cache-control': 'private, max-age=15, stale-while-revalidate=30'
     });
   });
 

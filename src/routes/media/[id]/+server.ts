@@ -333,7 +333,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       isChapterPage ||
       (coverVariant === 'thumb' &&
         !internalCoverWarm &&
-        ((bytes > 0 && bytes > 500_000) || pixels > 1_200_000));
+        bytes > 0 &&
+        bytes <= 1_000_000 &&
+        pixels > 2_000_000);
     if (streamOriginal) {
       headers['X-Thumbnail-Strategy'] = 'stream-original';
       if (bytes > 0) headers['Content-Length'] = String(bytes);
