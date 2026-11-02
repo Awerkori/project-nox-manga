@@ -141,7 +141,15 @@
   });
 
   let openIssuesCount = $derived(chapterQcIssues.filter((q: any) => q.status === 'OPEN').length);
-  let reworkSelectedStagesCount = $derived((affectedStages.length > 0 ? affectedStages : ['typeset']).length);
+  let reworkAffectedStages = $derived.by(() => {
+    const stages = Array.from(new Set(chapterQcIssues.filter((q: any) => q.status === 'OPEN').map((q: any) => {
+      if (q.issue_type === 'TRANSLATION') return 'traducao';
+      if (q.issue_type === 'CLEAN' || q.issue_type === 'REDRAW') return 'clean_redraw';
+      return 'typeset';
+    })));
+    return stages.length > 0 ? stages : ['typeset'];
+  });
+  let reworkSelectedStagesCount = $derived(reworkAffectedStages.length);
   let reworkAffectedPagesCount = $derived(chapterQcIssues.length > 0 ? new Set(chapterQcIssues.map((q: any) => q.page_number)).size : 0);
 
   // Auto-switch target stage when issue type changes
@@ -989,11 +997,6 @@
 
   <!-- Modal: Solicitar Correções (Rework) -->
   {#if showReworkModal}
-    {@const affectedStages = Array.from(new Set(chapterQcIssues.filter((q: any) => q.status === 'OPEN').map((q: any) => {
-      if (q.issue_type === 'TRANSLATION') return 'traducao';
-      if (q.issue_type === 'CLEAN' || q.issue_type === 'REDRAW') return 'clean_redraw';
-      return 'typeset';
-    })))}
     <div class="qc-modal-backdrop" onclick={() => showReworkModal = false} role="dialog" aria-modal="true">
       <div class="qc-modal-card qc-modal-rework" onclick={(e) => e.stopPropagation()}>
         <div class="qc-modal-header">
@@ -1029,7 +1032,7 @@
           class="qc-rework-form"
         >
           <input type="hidden" name="qc_stage_id" value={currentQcStage?.id || ''} />
-          <input type="hidden" name="rework_stages" value={JSON.stringify(affectedStages.length > 0 ? affectedStages : ['typeset'])} />
+          <input type="hidden" name="rework_stages" value={JSON.stringify(reworkAffectedStages)} />
 
           <div class="qc-rework-summary-box">
             <h4 class="summary-box-title">{isConferenceMode ? 'Resumo das Observações' : 'Resumo dos Apontamentos'}</h4>
@@ -1068,7 +1071,7 @@
             <div class="affected-stages-list">
               <span class="stages-label">Etapas que receberão o pedido de correção:</span>
               <div class="stage-tags-row">
-                {#each (affectedStages.length > 0 ? affectedStages : ['typeset']) as st}
+                {#each reworkAffectedStages as st}
                   <span class="stage-tag">{st === 'traducao' ? 'Tradução' : st === 'clean_redraw' ? 'Clean/Redraw' : 'Typeset'}</span>
                 {/each}
               </div>

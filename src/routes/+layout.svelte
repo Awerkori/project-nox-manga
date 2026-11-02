@@ -251,7 +251,7 @@
 {/if}
 
 {#if !reader}
-  <header class="site-header" class:scrolled class:admin-header={currentPath.startsWith('/admin')}>
+  <header class="site-header" class:scrolled class:admin-header={currentPath.startsWith('/admin')} class:scan-header={currentPath.startsWith('/scan')}>
     <div class="header-inner">
       <a href="/" class="brand" aria-label="Project Nox, início">
         <div class="brand-symbol-wrap">
@@ -790,7 +790,8 @@
   }
 
   @media (max-width: 950px) {
-    .site-header.admin-header {
+    .site-header.admin-header,
+    .site-header.scan-header {
       display: none !important;
     }
   }
@@ -1427,7 +1428,8 @@
   }
 
   @media (max-width: 950px) {
-    .site-header.admin-header {
+    .site-header.admin-header,
+    .site-header.scan-header {
       display: none !important;
     }
   }
