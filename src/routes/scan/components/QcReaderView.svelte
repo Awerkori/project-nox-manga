@@ -141,6 +141,8 @@
   });
 
   let openIssuesCount = $derived(chapterQcIssues.filter((q: any) => q.status === 'OPEN').length);
+  let reworkSelectedStagesCount = $derived((affectedStages.length > 0 ? affectedStages : ['typeset']).length);
+  let reworkAffectedPagesCount = $derived(chapterQcIssues.length > 0 ? new Set(chapterQcIssues.map((q: any) => q.page_number)).size : 0);
 
   // Auto-switch target stage when issue type changes
   $effect(() => {
@@ -564,10 +566,10 @@
                   type="button"
                   class="qc-btn-flag-page"
                   onclick={() => openNewIssueModal(page.index)}
-                  title="Apontar erro nesta página"
+                  title={isConferenceMode ? 'Adicionar observação nesta página' : 'Apontar erro nesta página'}
                 >
                   <Flag size={12} />
-                  <span>Apontar erro</span>
+                  <span>{isConferenceMode ? 'Observação' : 'Apontar erro'}</span>
                 </button>
               </div>
 
@@ -656,7 +658,15 @@
 
     <!-- Collapsible Observations Sidebar -->
     {#if sidebarOpen}
-      <aside class="qc-observations-sidebar">
+      <!-- Backdrop overlay on mobile -->
+      <button
+        type="button"
+        class="qc-sidebar-backdrop"
+        onclick={() => sidebarOpen = false}
+        aria-label="Fechar painel de observações"
+      ></button>
+
+      <aside class="qc-observations-sidebar" aria-label={isConferenceMode ? 'Observações da conferência' : 'Apontamentos do QC'}>
         <div class="qc-sidebar-header">
           <div class="qc-sidebar-title-row">
             <h2 class="qc-sidebar-title">
@@ -685,7 +695,7 @@
             onclick={() => openNewIssueModal(currentPage)}
           >
             <Flag size={13} />
-            <span>Novo apontamento (Pág. {currentPage})</span>
+            <span>{isConferenceMode ? `Nova observação (Pág. ${currentPage})` : `Novo apontamento (Pág. ${currentPage})`}</span>
           </button>
         </div>
 
@@ -694,8 +704,12 @@
           {#if chapterQcIssues.length === 0}
             <div class="qc-sidebar-empty">
               <CheckCircle2 size={24} class="qc-empty-icon" />
-              <p class="qc-empty-title">Nenhum erro registrado</p>
-              <p class="qc-empty-desc">Conforme navegar pelas páginas, use <strong>Apontar erro</strong> se encontrar algo incorreto.</p>
+              <p class="qc-empty-title">{isConferenceMode ? 'Nenhuma observação registrada' : 'Nenhum erro registrado'}</p>
+              <p class="qc-empty-desc">
+                {isConferenceMode
+                  ? 'Conforme navegar pelas páginas, use Adicionar observação se encontrar alguma pendência.'
+                  : 'Conforme navegar pelas páginas, use Apontar erro se encontrar algo incorreto.'}
+              </p>
             </div>
           {:else}
             {#each chapterQcIssues as issue (issue.id)}
@@ -937,12 +951,14 @@
 
           <!-- Descrição -->
           <div class="form-group">
-            <label for="qc-issue-desc" class="form-label">Descrição do Erro e Correção Esperada *</label>
+            <label for="qc-issue-desc" class="form-label">
+              {isConferenceMode ? 'Descrição da Observação e Ajuste Solicitado *' : 'Descrição do Erro e Correção Esperada *'}
+            </label>
             <textarea
               id="qc-issue-desc"
               name="description"
               rows="3"
-              placeholder="Explique detalhadamente o que precisa ser corrigido..."
+              placeholder={isConferenceMode ? "Descreva o ajuste ou problema editorial encontrado nesta página..." : "Explique detalhadamente o que precisa ser corrigido..."}
               bind:value={issueDescription}
               required
               class="form-textarea"
@@ -963,7 +979,7 @@
               disabled={submittingAction || !issueDescription.trim()}
             >
               <Flag size={14} />
-              <span>{submittingAction ? 'Salvando...' : (isConferenceMode ? 'Salvar Observação' : 'Registrar Apontamento')}</span>
+              <span>{submittingAction ? 'Salvando...' : (isConferenceMode ? 'Salvar observação' : 'Registrar Apontamento')}</span>
             </button>
           </div>
         </form>
@@ -1016,23 +1032,38 @@
           <input type="hidden" name="rework_stages" value={JSON.stringify(affectedStages.length > 0 ? affectedStages : ['typeset'])} />
 
           <div class="qc-rework-summary-box">
-            <h4 class="summary-box-title">Resumo dos Apontamentos</h4>
+            <h4 class="summary-box-title">{isConferenceMode ? 'Resumo das Observações' : 'Resumo dos Apontamentos'}</h4>
             <div class="summary-metrics">
               <div class="metric-item">
                 <span class="metric-num">{chapterQcIssues.length}</span>
-                <span class="metric-lbl">Total de erros</span>
-              </div>
-              <div class="metric-item">
-                <span class="metric-num">{affectedStages.length || 1}</span>
-                <span class="metric-lbl">Etapas afetadas</span>
-              </div>
-              <div class="metric-item">
-                <span class="metric-num">
-                  {new Set(chapterQcIssues.map((q: any) => q.page_number)).size || 1}
+                <span class="metric-lbl">
+                  {#if isConferenceMode}
+                    {chapterQcIssues.length === 1 ? 'Observação registrada' : 'Total de observações'}
+                  {:else}
+                    {chapterQcIssues.length === 1 ? 'Erro registrado' : 'Total de erros'}
+                  {/if}
                 </span>
-                <span class="metric-lbl">Páginas afetadas</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-num">{reworkSelectedStagesCount}</span>
+                <span class="metric-lbl">
+                  {reworkSelectedStagesCount === 1 ? 'Etapa afetada' : 'Etapas afetadas'}
+                </span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-num">{reworkAffectedPagesCount}</span>
+                <span class="metric-lbl">
+                  {reworkAffectedPagesCount === 1 ? 'Página afetada' : 'Páginas afetadas'}
+                </span>
               </div>
             </div>
+
+            {#if chapterQcIssues.length === 0}
+              <div class="general-rework-badge">
+                <AlertTriangle size={13} class="text-amber-400 flex-shrink-0" />
+                <span>Solicitação geral de retrabalho editorial (sem apontamentos pontuais por página).</span>
+              </div>
+            {/if}
 
             <div class="affected-stages-list">
               <span class="stages-label">Etapas que receberão o pedido de correção:</span>
@@ -1054,7 +1085,9 @@
               placeholder="Explique os ajustes gerais solicitados para os responsáveis..."
               value={manifest?.isIncompleteTypeset
                 ? 'O pacote anexado contém apenas páginas limpas do Clean/Redraw com balões em branco. As falas da tradução não foram inseridas nos balões. Necessário diagramar as falas antes de aprovar.'
-                : `Revisão QC apontou ${chapterQcIssues.length} pendências que precisam de correção.`}
+                : isConferenceMode
+                  ? (chapterQcIssues.length > 0 ? `Conferência editorial apontou ${chapterQcIssues.length} pendências que precisam de correção.` : 'Ajustes solicitados pela conferência editorial.')
+                  : `Revisão QC apontou ${chapterQcIssues.length} pendências que precisam de correção.`}
               required
             ></textarea>
           </div>
@@ -1760,6 +1793,24 @@
   /* ------------------------------------------------------------------------- */
   /* Sidebar (Apontamentos e Observações)                                     */
   /* ------------------------------------------------------------------------- */
+  .qc-sidebar-backdrop {
+    display: none;
+  }
+
+  .general-rework-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    color: #fbbf24;
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+
   .qc-observations-sidebar {
     width: 360px;
     background: #0d0d12;
@@ -2076,15 +2127,32 @@
       padding: 6px 10px;
     }
 
-    .qc-observations-sidebar {
-      position: fixed;
-      right: 0;
-      top: 58px;
-      bottom: 0;
+    .qc-sidebar-backdrop {
+      display: block;
+      position: absolute;
+      inset: 0;
       width: 100%;
-      max-width: 360px;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(2px);
+      z-index: 35;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .qc-observations-sidebar {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      width: 100%;
+      max-width: 380px;
       z-index: 40;
-      padding-bottom: calc(80px + env(safe-area-inset-bottom, 12px));
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 16px));
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: -8px 0 30px rgba(0, 0, 0, 0.8);
+      background: #0d0d14;
     }
 
     .qc-mobile-floating-bar {
@@ -2100,8 +2168,13 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 28px;
       padding: 6px 14px;
-      z-index: 100;
+      z-index: 30;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .qc-reading-canvas.sidebar-open {
+      overflow-y: hidden !important;
+      touch-action: none !important;
     }
 
     .qc-mob-btn-action {

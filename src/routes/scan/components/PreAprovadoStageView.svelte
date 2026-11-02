@@ -539,7 +539,8 @@
                     {#if isConferred}
                       <span class="meta-pill is-conferred" title="Conferência realizada no leitor">
                         <Check size={11} />
-                        <span>Conferido</span>
+                        <span class="pill-text-desktop">Conferência concluída</span>
+                        <span class="pill-text-mobile">Conferido</span>
                       </span>
                     {/if}
                   </div>
@@ -1538,6 +1539,20 @@
     background: rgba(6, 182, 212, 0.14);
     border: 1px solid rgba(6, 182, 212, 0.35);
     color: #22d3ee;
+  }
+  .pill-text-desktop {
+    display: inline;
+  }
+  .pill-text-mobile {
+    display: none;
+  }
+  @media (max-width: 900px) {
+    .pill-text-desktop {
+      display: none;
+    }
+    .pill-text-mobile {
+      display: inline;
+    }
   }
   .meta-pill.is-pkg {
     background: rgba(148, 163, 184, 0.1);

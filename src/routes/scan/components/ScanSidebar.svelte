@@ -214,6 +214,17 @@
     scanSelectorOpen = false;
     window.location.href = `/scan?id=${scanId}`;
   }
+
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    if (mobileOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  });
 </script>
 
 <svelte:window onkeydown={(event) => { if (mobileOpen && event.key === 'Escape') onCloseMobile?.(); }} />
@@ -1064,12 +1075,18 @@
 
   /* Responsive Mobile */
   @media (max-width: 900px) {
+    .sidebar-header {
+      padding-top: calc(14px + env(safe-area-inset-top, 0px));
+      padding-bottom: 14px;
+    }
+
     .workspace-sidebar {
       position: fixed;
       top: 0;
       bottom: 0;
       left: 0;
-      width: 280px;
+      width: 290px;
+      max-width: calc(100vw - 44px);
       height: 100dvh;
       max-height: 100dvh;
       transform: translateX(-100%);
@@ -1080,6 +1097,8 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      background: #090812;
+      box-shadow: 10px 0 35px rgba(0, 0, 0, 0.85);
     }
 
     .workspace-sidebar.mobile-open {
@@ -1087,7 +1106,27 @@
     }
 
     .mobile-close-btn {
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      cursor: pointer;
+      padding: 0;
+      margin-left: auto;
+      flex-shrink: 0;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .mobile-close-btn:hover, .mobile-close-btn:active {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
     }
 
     .sidebar-backdrop {

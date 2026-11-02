@@ -1289,7 +1289,10 @@
 
   main#conteudo {
     position: relative;
-    z-index: 20;
+  }
+
+  :global(body:has(.workspace-sidebar.mobile-open)) {
+    overflow: hidden !important;
   }
 
   /* Footer */
