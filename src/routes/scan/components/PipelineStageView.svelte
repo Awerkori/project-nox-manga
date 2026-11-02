@@ -54,7 +54,7 @@
     scanId = '',
     onSelectStage = (_slug: string) => {},
     onOpenChapter = (_ch: any) => {},
-    onOpenQcReader = (_ch: any) => {}
+    onOpenQcReader = (_ch: any, _fromStage?: string) => {}
   } = $props();
 
   let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
@@ -638,6 +638,7 @@
     {scanId}
     {onSelectStage}
     {onOpenChapter}
+    onOpenQcReader={(ch) => onOpenQcReader(ch, 'pre_aprovado')}
   />
 {:else if ['traducao', 'clean_redraw', 'typeset', 'revisor_qc'].some(s => matchesStageSlug(activeCanonical.slug, s))}
   <EditorialStageWorkspace
@@ -678,6 +679,7 @@
     {scanId}
     {onSelectStage}
     {onOpenChapter}
+    onOpenQcReader={(ch) => onOpenQcReader(ch, 'pre_aprovado')}
   />
 {:else}
 <div class="pipeline-stage-view-root">

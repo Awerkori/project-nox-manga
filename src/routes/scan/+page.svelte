@@ -370,6 +370,7 @@
   let showCommandPalette = $state(false);
   let activeWorkspaceChapter = $state<any>(null);
   let activeQcReaderChapter = $state<any>(null);
+  let activeQcReaderFromStage = $state<string>(page.url.searchParams.get('from_stage') || 'revisor_qc');
 
   function handleOpenChapter(ch: any) {
     if (!ch) return;
@@ -410,8 +411,9 @@
     }
   }
 
-  function handleOpenQcReader(ch: any) {
+  function handleOpenQcReader(ch: any, fromStage = 'revisor_qc') {
     if (!ch) return;
+    activeQcReaderFromStage = fromStage;
     if (typeof ch === 'string') {
       const all = [...(data.productionChapters || []), ...(chapters || [])];
       const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.target_chapter_id === ch);
@@ -424,7 +426,7 @@
       const url = new URL(window.location.href);
       url.searchParams.set('tab', 'qc_leitor');
       url.searchParams.set('id', String(targetId));
-      url.searchParams.set('from_stage', 'revisor_qc');
+      url.searchParams.set('from_stage', fromStage);
       window.history.pushState({ tab: 'qc_leitor', id: targetId }, '', url.pathname + url.search);
       lastNavigatedHref = window.location.href;
       currentWorkspaceTab = 'qc_leitor';
@@ -433,17 +435,18 @@
 
   function handleBackFromQcReader() {
     activeQcReaderChapter = null;
+    const stageToReturn = activeQcReaderFromStage || (typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get('from_stage') : null) || currentPipelineStage || 'revisor_qc';
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.set('tab', 'pipeline');
-      url.searchParams.set('stage', 'revisor_qc');
+      url.searchParams.set('stage', stageToReturn);
       url.searchParams.delete('id');
       url.searchParams.delete('from_stage');
       url.searchParams.delete('chapter_id');
-      window.history.pushState({ tab: 'pipeline', stage: 'revisor_qc' }, '', url.pathname + url.search);
+      window.history.pushState({ tab: 'pipeline', stage: stageToReturn }, '', url.pathname + url.search);
       lastNavigatedHref = window.location.href;
       currentWorkspaceTab = 'pipeline';
-      currentPipelineStage = 'revisor_qc';
+      currentPipelineStage = stageToReturn;
     }
   }
 
@@ -1212,6 +1215,7 @@
                 chapterStages={data.chapterStages || []}
                 currentUserId={data.userId}
                 userRole={data.userRole}
+                fromStage={activeQcReaderFromStage || page.url.searchParams.get('from_stage') || 'revisor_qc'}
                 onBack={handleBackFromQcReader}
               />
             {:else if activeWorkspaceChapter || currentWorkspaceTab === 'capitulo'}

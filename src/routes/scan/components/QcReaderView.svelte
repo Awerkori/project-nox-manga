@@ -39,6 +39,7 @@
     chapterStages?: any[];
     currentUserId?: string;
     userRole?: string;
+    fromStage?: string;
     onBack?: () => void;
   }
 
@@ -50,8 +51,31 @@
     chapterStages = [],
     currentUserId = '',
     userRole = 'MEMBER',
+    fromStage = 'revisor_qc',
     onBack = () => {}
   }: Props = $props();
+
+  let isConferenceMode = $derived(fromStage === 'pre_aprovado');
+
+  function handleConfirmConference() {
+    if (typeof window !== 'undefined') {
+      const targetId = chapter?.id || chapterId;
+      const record = {
+        chapterId: targetId,
+        confirmedAt: new Date().toISOString(),
+        confirmedBy: userRole === 'OWNER' ? 'Dono' : 'Gerente',
+        fileKey: manifest?.typesetFileKey || manifest?.typesetPackage?.file_key || 'v2',
+        version: manifest?.typesetPackage?.version || 2
+      };
+      try {
+        localStorage.setItem(`pre_aprovado_conf_${targetId}`, JSON.stringify(record));
+      } catch {}
+    }
+    showToast('Conferência do capítulo registrada com sucesso!');
+    setTimeout(() => {
+      onBack();
+    }, 350);
+  }
 
   // State
   let loading = $state(true);
@@ -254,15 +278,17 @@
         type="button"
         class="qc-btn-back"
         onclick={onBack}
-        title="Voltar para a área de Revisor (QC)"
+        title={isConferenceMode ? 'Voltar para o Pré-aprovado' : 'Voltar para a área de Revisor (QC)'}
       >
         <ArrowLeft size={18} />
-        <span class="btn-text-desktop">Voltar ao QC</span>
+        <span class="btn-text-desktop">{isConferenceMode ? 'Voltar ao Pré-aprovado' : 'Voltar ao QC'}</span>
         <span class="btn-text-mobile">Voltar</span>
       </button>
 
       <div class="qc-header-info">
-        <span class="qc-header-badge">QC LEITOR</span>
+        <span class="qc-header-badge" class:is-conference={isConferenceMode}>
+          {isConferenceMode ? 'CONFERÊNCIA EDITORIAL' : 'QC LEITOR'}
+        </span>
         <h1 class="qc-header-title">
           {manifest?.workTitle || chapter?.work?.title || 'Céu Distante'}
           <span class="qc-header-ch">Cap. #{manifest?.chapterNumber || chapter?.chapter_number || 84}</span>
@@ -338,39 +364,63 @@
         <span class="btn-text-desktop">Solicitar correções</span>
       </button>
 
-      <!-- Approve Button -->
-      <button
-        type="button"
-        class="qc-btn-approve"
-        class:btn-disabled={Boolean(manifest?.isIncompleteTypeset)}
-        disabled={Boolean(manifest?.isIncompleteTypeset)}
-        onclick={() => {
-          if (manifest?.isIncompleteTypeset) return;
-          showApproveModal = true;
-        }}
-        title={manifest?.isIncompleteTypeset ? "Aprovação bloqueada: páginas sem falas diagramadas" : "Aprovar qualidade do capítulo"}
-      >
-        <CheckCircle2 size={14} />
-        <span class="btn-text-desktop">Aprovar capítulo</span>
-      </button>
+      {#if isConferenceMode}
+        <button
+          type="button"
+          class="qc-btn-approve is-conference"
+          onclick={handleConfirmConference}
+          title="Concluir conferência e retornar para liberação"
+        >
+          <CheckCircle2 size={15} />
+          <span class="btn-text-desktop">Concluir Conferência</span>
+        </button>
+      {:else}
+        <!-- Approve Button -->
+        <button
+          type="button"
+          class="qc-btn-approve"
+          class:btn-disabled={Boolean(manifest?.isIncompleteTypeset)}
+          disabled={Boolean(manifest?.isIncompleteTypeset)}
+          onclick={() => {
+            if (manifest?.isIncompleteTypeset) return;
+            showApproveModal = true;
+          }}
+          title={manifest?.isIncompleteTypeset ? "Aprovação bloqueada: páginas sem falas diagramadas" : "Aprovar qualidade do capítulo"}
+        >
+          <CheckCircle2 size={14} />
+          <span class="btn-text-desktop">Aprovar capítulo</span>
+        </button>
+      {/if}
     </div>
 
     <!-- Right Actions: Mobile Compact Bar -->
     <div class="qc-bar-right mobile-actions">
-      <button
-        type="button"
-        class="qc-mob-quick-approve"
-        class:btn-disabled={Boolean(manifest?.isIncompleteTypeset)}
-        disabled={Boolean(manifest?.isIncompleteTypeset)}
-        onclick={() => {
-          if (manifest?.isIncompleteTypeset) return;
-          showApproveModal = true;
-        }}
-        title={manifest?.isIncompleteTypeset ? "Aprovação bloqueada: páginas sem falas diagramadas" : "Aprovar capítulo"}
-      >
-        <CheckCircle2 size={15} />
-        <span>Aprovar</span>
-      </button>
+      {#if isConferenceMode}
+        <button
+          type="button"
+          class="qc-mob-quick-approve is-conference"
+          onclick={handleConfirmConference}
+          title="Concluir conferência"
+        >
+          <CheckCircle2 size={15} />
+          <span>Conferido</span>
+        </button>
+      {:else}
+        <button
+          type="button"
+          class="qc-mob-quick-approve"
+          class:btn-disabled={Boolean(manifest?.isIncompleteTypeset)}
+          disabled={Boolean(manifest?.isIncompleteTypeset)}
+          onclick={() => {
+            if (manifest?.isIncompleteTypeset) return;
+            showApproveModal = true;
+          }}
+          title={manifest?.isIncompleteTypeset ? "Aprovação bloqueada: páginas sem falas diagramadas" : "Aprovar capítulo"}
+        >
+          <CheckCircle2 size={15} />
+          <span>Aprovar</span>
+        </button>
+      {/if}
 
       <button
         type="button"
@@ -1218,6 +1268,12 @@
     white-space: nowrap;
   }
 
+  .qc-header-badge.is-conference {
+    background: rgba(6, 182, 212, 0.18);
+    color: #22d3ee;
+    border-color: rgba(6, 182, 212, 0.4);
+  }
+
   .qc-header-title {
     font-size: 0.875rem;
     font-weight: 600;
@@ -1368,6 +1424,22 @@
   .qc-btn-approve:hover:not(:disabled) {
     background: #059669;
     transform: translateY(-1px);
+  }
+
+  .qc-btn-approve.is-conference {
+    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+    border-color: #0891b2;
+    box-shadow: 0 2px 10px rgba(6, 182, 212, 0.3);
+  }
+
+  .qc-btn-approve.is-conference:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
+  }
+
+  .qc-mob-quick-approve.is-conference {
+    background: #06b6d4 !important;
+    border-color: #0891b2 !important;
+    color: #ffffff !important;
   }
 
   .qc-btn-approve:disabled,

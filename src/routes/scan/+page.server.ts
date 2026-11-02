@@ -4050,14 +4050,14 @@ export const actions: Actions = {
     if (mode === 'set-ready') {
       await executeYugabyteSql(`
         UPDATE public.scan_production_chapters
-        SET status = 'IN_PRODUCTION', current_stage_slug = 'pre_aprovado', updated_at = now()
+        SET status = 'IN_PRODUCTION', current_stage_slug = 'pre_aprovado', target_chapter_id = NULL, updated_at = now()
         WHERE id = $1
       `, [chId], platform?.env);
       await executeYugabyteSql(`
         UPDATE public.scan_chapter_stages
         SET status = 'DONE', completed_at = now(), updated_at = now()
         WHERE production_chapter_id = $1
-          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'revisor_qc')
+          AND stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug IN ('raw', 'traducao', 'clean_redraw', 'typeset', 'revisor_qc'))
       `, [chId], platform?.env);
       await executeYugabyteSql(`
         UPDATE public.scan_chapter_stages

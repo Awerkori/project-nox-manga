@@ -1,18 +1,15 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { enhance } from '$app/forms';
   import {
     AlertCircle,
     AlertTriangle,
-    ArrowRight,
     BookOpen,
     Check,
     CheckCircle2,
     ChevronDown,
-    ChevronRight,
-    Clock,
     ExternalLink,
     FileArchive,
-    FileText,
     Filter,
     Globe,
     Layers,
@@ -22,11 +19,7 @@
     Search,
     ShieldAlert,
     ShieldCheck,
-    ShieldX,
-    Sparkles,
-    Trash2,
     UploadCloud,
-    User,
     X,
     Zap
   } from '@lucide/svelte';
@@ -48,6 +41,7 @@
     scanId?: string;
     onSelectStage?: (slug: string) => void;
     onOpenChapter?: (chapter: any) => void;
+    onOpenQcReader?: (chapter: any) => void;
   }
 
   let {
@@ -66,20 +60,24 @@
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
     onSelectStage = () => {},
-    onOpenChapter = () => {}
+    onOpenChapter = () => {},
+    onOpenQcReader = () => {}
   }: Props = $props();
 
-  let isOwnerOrAdmin = $derived(isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN');
+  // Role authorization: Only Owner and Admin/Gerente can publish
+  let canPublish = $derived(
+    isOwnerOrAdminProp || userRole === 'OWNER' || userRole === 'ADMIN'
+  );
 
-  // 7 Canonical stages in strict editorial order
+  // Canonical stages in strict editorial order
   const CANONICAL_STAGES = [
-    { slug: 'raw', name: 'Raw Provider', icon: '📦', color: '#94a3b8', badgeBg: 'rgba(148, 163, 184, 0.12)', badgeBorder: 'rgba(148, 163, 184, 0.28)', aliases: ['raw', 'raw provider'] },
-    { slug: 'traducao', name: 'Tradução', icon: '🌐', color: '#3b82f6', badgeBg: 'rgba(59, 130, 246, 0.12)', badgeBorder: 'rgba(59, 130, 246, 0.28)', aliases: ['traducao', 'translation'] },
-    { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', color: '#ec4899', badgeBg: 'rgba(236, 72, 153, 0.12)', badgeBorder: 'rgba(236, 72, 153, 0.28)', aliases: ['clean', 'clean_redraw', 'clean/redraw'] },
-    { slug: 'typeset', name: 'Typeset', icon: '✒️', color: '#eab308', badgeBg: 'rgba(234, 179, 8, 0.12)', badgeBorder: 'rgba(234, 179, 8, 0.28)', aliases: ['typeset'] },
-    { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', color: '#a855f7', badgeBg: 'rgba(168, 85, 247, 0.12)', badgeBorder: 'rgba(168, 85, 247, 0.28)', aliases: ['revisor_qc', 'qc', 'revisao'] },
-    { slug: 'pre_aprovado', name: 'Pré-aprovado', icon: '✅', color: '#06b6d4', badgeBg: 'rgba(6, 182, 212, 0.14)', badgeBorder: 'rgba(6, 182, 212, 0.35)', aliases: ['pre_aprovado', 'ready', 'preview', 'pronto_pra_upar', 'pré aprovado', 'pré-aprovado'] },
-    { slug: 'publicado', name: 'Publicado', icon: '📚', color: '#22c55e', badgeBg: 'rgba(34, 197, 94, 0.12)', badgeBorder: 'rgba(34, 197, 94, 0.28)', aliases: ['publicado', 'published'] }
+    { slug: 'raw', name: 'Raw Provider', icon: '📦', aliases: ['raw', 'raw provider'] },
+    { slug: 'traducao', name: 'Tradução', icon: '🌐', aliases: ['traducao', 'translation'] },
+    { slug: 'clean_redraw', name: 'Clean/Redraw', icon: '🎨', aliases: ['clean', 'clean_redraw', 'clean/redraw'] },
+    { slug: 'typeset', name: 'Typeset', icon: '✒️', aliases: ['typeset'] },
+    { slug: 'revisor_qc', name: 'Revisor (QC)', icon: '🔎', aliases: ['revisor_qc', 'qc', 'revisao'] },
+    { slug: 'pre_aprovado', name: 'Pré-aprovado', icon: '✅', aliases: ['pre_aprovado', 'ready', 'preview', 'pronto_pra_upar', 'pré aprovado', 'pré-aprovado'] },
+    { slug: 'publicado', name: 'Publicado', icon: '📚', aliases: ['publicado', 'published'] }
   ];
 
   function matchesStageSlug(candidate: any, target: string): boolean {
@@ -100,7 +98,6 @@
   // Filter and search state
   let searchQuery = $state('');
   let filterWorkId = $state<string>('ALL');
-  let filterQueueTab = $state<'ALL' | 'AVAILABLE' | 'MINE' | 'TEAM'>('ALL');
 
   // Expanded card tracking
   let expandedCards = $state<Record<string, boolean>>({});
@@ -108,6 +105,26 @@
   function toggleCard(stageId: string) {
     expandedCards[stageId] = !expandedCards[stageId];
   }
+
+  // Conference tracking persisted across page views
+  let confirmedConferences = $state<Record<string, { confirmedAt: string; confirmedBy: string; fileKey: string }>>({});
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('pre_aprovado_conf_')) {
+            const chId = k.replace('pre_aprovado_conf_', '');
+            const val = JSON.parse(localStorage.getItem(k) || '{}');
+            if (val && val.confirmedAt) {
+              confirmedConferences[chId] = val;
+            }
+          }
+        }
+      } catch {}
+    }
+  });
 
   // Publication Modal State
   let publishModalOpen = $state(false);
@@ -117,6 +134,7 @@
   let publishChapterTitle = $state('');
   let publishVolume = $state<number | string>('');
   let publishConfirmedDuplicate = $state(false);
+  let publishConferenceConfirmed = $state(false);
   let isPublishing = $state(false);
   let publishFeedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -131,30 +149,28 @@
   let stagesScrollContainer = $state<HTMLElement | null>(null);
   $effect(() => {
     if (stagesScrollContainer) {
-      const activePill = stagesScrollContainer.querySelector('.stage-pill-btn.is-active') as HTMLElement | null;
+      const activePill = stagesScrollContainer.querySelector('.stage-tab-btn.is-active') as HTMLElement | null;
       if (activePill) {
         activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
   });
 
-  // Compute live valid Pre-aprovado items
-  let preAprovadoItems = $derived.by(() => {
+  // Compute live active Pre-aprovado items: Single unified queue
+  let waitingPublishItems = $derived.by(() => {
     const list: any[] = [];
     if (!chapterStages || chapterStages.length === 0) return list;
 
     for (const cs of chapterStages) {
       const slug = cs.stage?.slug || '';
       if (!matchesStageSlug(slug, 'pre_aprovado')) continue;
-
-      // Filter out non-active stage statuses
       if (cs.status === 'BLOCKED' || cs.status === 'CANCELLED' || cs.status === 'DONE') continue;
 
       const chId = cs.production_chapter_id || cs.chapter_id;
       const ch = chapters.find((c: any) => c.id === chId);
       if (!ch) continue;
 
-      // Rule: Do NOT include published, cancelled, archived or locally published items
+      // Exclude already published, cancelled, or locally published chapters
       if (ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || locallyPublishedChapterIds[ch.id]) continue;
       if (ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') continue;
 
@@ -164,31 +180,9 @@
     return list;
   });
 
-  // Capítulos disponíveis (unassigned, AVAILABLE or REWORK)
-  let availableItems = $derived(
-    preAprovadoItems.filter((item: any) => {
-      return (item.cs.status === 'AVAILABLE' || item.cs.status === 'REWORK') && !item.cs.assigned_to;
-    })
-  );
-
-  // Meus capítulos (assigned to current user, IN_PROGRESS or REWORK)
-  let myItems = $derived(
-    preAprovadoItems.filter((item: any) => {
-      return item.cs.assigned_to === currentUserId && (item.cs.status === 'IN_PROGRESS' || item.cs.status === 'REWORK');
-    })
-  );
-
-  // Capítulos atribuídos à equipe (assigned to other team members, IN_PROGRESS or REWORK)
-  let teamItems = $derived(
-    preAprovadoItems.filter((item: any) => {
-      return item.cs.assigned_to && item.cs.assigned_to !== currentUserId && (item.cs.status === 'IN_PROGRESS' || item.cs.status === 'REWORK');
-    })
-  );
-
-  // Filtered available items (matching work and search)
-  let filteredAvailableItems = $derived(
-    availableItems.filter((item: any) => {
-      if (filterQueueTab === 'MINE' || filterQueueTab === 'TEAM') return false;
+  // Filtered queue items
+  let filteredItems = $derived(
+    waitingPublishItems.filter((item: any) => {
       const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
       const q = searchQuery.trim().toLowerCase();
       if (!q) return matchesWork;
@@ -199,35 +193,7 @@
     })
   );
 
-  // Filtered my items (matching work and search)
-  let filteredMyItems = $derived(
-    myItems.filter((item: any) => {
-      if (filterQueueTab === 'AVAILABLE' || filterQueueTab === 'TEAM') return false;
-      const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesWork;
-      const title = (item.work?.title || '').toLowerCase();
-      const num = String(item.ch.chapter_number || '');
-      const label = (item.ch.chapter_label || '').toLowerCase();
-      return matchesWork && (title.includes(q) || num.includes(q) || label.includes(q));
-    })
-  );
-
-  // Filtered team items (matching work and search)
-  let filteredTeamItems = $derived(
-    teamItems.filter((item: any) => {
-      if (filterQueueTab === 'AVAILABLE' || filterQueueTab === 'MINE') return false;
-      const matchesWork = filterWorkId === 'ALL' || item.work?.id === filterWorkId;
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesWork;
-      const title = (item.work?.title || '').toLowerCase();
-      const num = String(item.ch.chapter_number || '');
-      const label = (item.ch.chapter_label || '').toLowerCase();
-      return matchesWork && (title.includes(q) || num.includes(q) || label.includes(q));
-    })
-  );
-
-  // Calculate live counts for the 7 canonical stage switcher pills
+  // Stage counts for navigation bar
   let canonicalCounts = $derived.by(() => {
     const counts: Record<string, number> = {};
     for (const st of CANONICAL_STAGES) counts[st.slug] = 0;
@@ -242,7 +208,11 @@
         const slug = cs.stage?.slug || '';
         for (const st of CANONICAL_STAGES) {
           if (matchesStageSlug(slug, st.slug)) {
-            if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
+            if (st.slug === 'pre_aprovado') {
+              if (cs.status === 'AVAILABLE' || cs.status === 'IN_PROGRESS' || cs.status === 'REWORK') {
+                counts['pre_aprovado']++;
+              }
+            } else if ((cs.status === 'AVAILABLE' || cs.status === 'REWORK') && !cs.assigned_to) {
               counts[st.slug]++;
             }
           }
@@ -250,49 +220,23 @@
       }
     }
 
-    // Publicado shows historic count
     counts['publicado'] = chapters.filter((c: any) => c.status === 'PUBLISHED' || locallyPublishedChapterIds[c.id]).length;
     return counts;
   });
 
-  // Personal new count for Pré-aprovado
-  let personalNewCount = $derived.by(() => {
-    if (!isOwnerOrAdmin) return 0;
-    const seenMap: Record<string, boolean> = {};
-    if (Array.isArray(seenStages)) {
-      for (const s of seenStages) {
-        if (s?.chapter_stage_id) {
-          seenMap[`${s.chapter_stage_id}:${s.availability_version ?? 1}`] = true;
-        }
-      }
-    }
-
-    let c = 0;
-    for (const item of availableItems) {
-      const key = `${item.cs.id}:${item.cs.availability_version ?? 1}`;
-      if (!seenMap[key]) {
-        c++;
-      }
-    }
-    return c;
-  });
-
-  // Get deliverables for a chapter
+  // Deliverables helper
   function getChapterDeliverables(chId: string) {
-    return productionFiles.filter((f: any) => f.production_chapter_id === chId && f.is_current);
+    return productionFiles.filter((f: any) => (f.production_chapter_id === chId || f.chapter_id === chId) && f.is_current);
   }
 
   function getPrimaryPackage(chId: string) {
     const files = getChapterDeliverables(chId);
-    // Typeset or latest package is the primary publishing package
-    const typeset = files.find((f: any) => matchesStageSlug(f.stage_slug, 'typeset'));
+    const typeset = files.find((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'typeset'));
     if (typeset) return typeset;
     return files[0] || null;
   }
 
-  let publishingPrimaryFile = $derived(publishingItem ? getPrimaryPackage(publishingItem.ch.id) : null);
-
-  function formatBytes(bytes: number) {
+  function formatBytes(bytes: number | undefined | null) {
     if (!bytes || bytes <= 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -300,40 +244,83 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  // Check if publishingItem has incomplete material (like Chapter 85 with unlettered bubbles)
-  let publishingMaterialIncomplete = $derived.by(() => {
-    if (!publishingItem) return false;
-    const chId = publishingItem.ch?.id;
+  // Detect incomplete material (e.g. Chapter 85 unlettered speech bubbles)
+  function isItemIncomplete(item: any): boolean {
+    const chId = item?.ch?.id;
+    if (!chId) return false;
     if (chId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e') return true;
     const typesetFile = productionFiles.find((f: any) => {
       const cId = f.production_chapter_id || f.chapter_id;
       const slug = f.stage_slug || f.stage?.slug;
-      return cId === chId && slug === 'typeset' && f.is_current;
+      return cId === chId && matchesStageSlug(slug, 'typeset') && f.is_current;
     });
     if (!typesetFile) return true;
-    if (typesetFile.byte_size && typesetFile.byte_size < 50_000) return true;
+    const size = typesetFile.byte_size || typesetFile.file_size || 0;
+    if (size < 50_000) return true;
     if (typesetFile.file_key === 'prod_type_85_v2_1789173310574') return true;
     if (typesetFile.note && (typesetFile.note.includes('sem falas diagramadas') || typesetFile.note.includes('balões em branco'))) return true;
     return false;
+  }
+
+  let publishingPrimaryFile = $derived(publishingItem ? getPrimaryPackage(publishingItem.ch.id) : null);
+  let publishingMaterialIncomplete = $derived(publishingItem ? isItemIncomplete(publishingItem) : false);
+
+  // Auto-dismiss success feedback after 6 seconds
+  $effect(() => {
+    if (publishFeedback && publishFeedback.type === 'success') {
+      const timer = setTimeout(() => {
+        publishFeedback = null;
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
   });
 
-  // Open Publish Modal
+  // Check if target chapter number is already published for the selected work in catalog
+  let duplicateCatalogChapter = $derived.by(() => {
+    if (!publishTargetWorkId || publishChapterNumber === '' || isNaN(Number(publishChapterNumber))) return null;
+    const num = Number(publishChapterNumber);
+    const inCatalog = (catalogChapters || []).find((c: any) => {
+      const wId = c.work_id || c.works?.id || c.work?.id;
+      return wId === publishTargetWorkId && Number(c.number ?? c.chapter_number) === num;
+    });
+    if (inCatalog) return inCatalog;
+
+    const published = chapters.filter((c: any) => {
+      const wId = c.work_id || c.work?.id;
+      return (c.status === 'PUBLISHED' || locallyPublishedChapterIds[c.id]) &&
+        wId === publishTargetWorkId &&
+        Number(c.chapter_number) === num &&
+        c.id !== publishingItem?.ch?.id;
+    });
+    return published.length > 0 ? published[0] : null;
+  });
+
+  // Validation flag for publish submission
+  let canSubmitPublish = $derived(
+    Boolean(publishTargetWorkId) &&
+    publishChapterNumber !== '' &&
+    !isNaN(Number(publishChapterNumber)) &&
+    Number(publishChapterNumber) >= 0 &&
+    (!duplicateCatalogChapter || publishConfirmedDuplicate) &&
+    (isSimulationMode || !publishingMaterialIncomplete) &&
+    !isPublishing
+  );
+
   function openPublishModal(item: any) {
     publishingItem = item;
-    // Auto-select associated work: default to item's work or first associated work
     const targetWId = item.work?.id || item.ch?.work_id || (works.length > 0 ? works[0].id : '');
     publishTargetWorkId = targetWId;
     publishChapterNumber = item.ch.chapter_number ?? '';
     publishChapterTitle = item.ch.chapter_label || item.ch.chapter_title || '';
     publishVolume = item.ch.volume ?? '';
     publishConfirmedDuplicate = false;
-    isSimulationMode = true; // default to safe simulation in homologation
+    publishConferenceConfirmed = Boolean(confirmedConferences[item.ch.id]);
+    isSimulationMode = true; // default safe simulation
     serverErrorMessage = null;
     publishFeedback = null;
     publishModalOpen = true;
   }
 
-  // Ensure publishTargetWorkId is always populated when modal is open
   $effect(() => {
     if (publishModalOpen && (!publishTargetWorkId || !works.some((w: any) => w.id === publishTargetWorkId))) {
       if (publishingItem?.work?.id && works.some((w: any) => w.id === publishingItem.work.id)) {
@@ -350,47 +337,7 @@
     publishModalOpen = false;
     publishingItem = null;
     serverErrorMessage = null;
-    // Keep publishFeedback intact so the page toast banner displays the result
   }
-
-  // Auto-dismiss success feedback after 7 seconds
-  $effect(() => {
-    if (publishFeedback && publishFeedback.type === 'success') {
-      const timer = setTimeout(() => {
-        publishFeedback = null;
-      }, 7000);
-      return () => clearTimeout(timer);
-    }
-  });
-
-  // Check if target chapter number is already published for the selected work
-  let duplicateCatalogChapter = $derived.by(() => {
-    if (!publishTargetWorkId || publishChapterNumber === '' || isNaN(Number(publishChapterNumber))) return null;
-    const num = Number(publishChapterNumber);
-    // 1. Check in catalog chapters
-    const inCatalog = (catalogChapters || []).find((c: any) => {
-      const wId = c.work_id || c.works?.id || c.work?.id;
-      return wId === publishTargetWorkId && Number(c.number ?? c.chapter_number) === num;
-    });
-    if (inCatalog) return inCatalog;
-
-    // 2. Check in production chapters that are already PUBLISHED
-    const published = chapters.filter((c: any) => {
-      const wId = c.work_id || c.work?.id;
-      return (c.status === 'PUBLISHED' || locallyPublishedChapterIds[c.id]) && wId === publishTargetWorkId && Number(c.chapter_number) === num;
-    });
-    return published.length > 0 ? published[0] : null;
-  });
-
-  // Can submit publication
-  let canSubmitPublish = $derived(
-    Boolean(publishTargetWorkId) &&
-    publishChapterNumber !== '' &&
-    !isNaN(Number(publishChapterNumber)) &&
-    Number(publishChapterNumber) >= 0 &&
-    (!duplicateCatalogChapter || publishConfirmedDuplicate) &&
-    !isPublishing
-  );
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && publishModalOpen) {
@@ -402,783 +349,361 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="pre-aprovado-root">
-  <!-- Feedback Toast / Banner -->
+  <!-- TOAST FEEDBACK NOTIFICATION -->
   {#if publishFeedback}
-    <div class="publish-toast-banner" class:is-success={publishFeedback.type === 'success'} class:is-error={publishFeedback.type === 'error'}>
+    <div
+      class="publish-toast-banner"
+      class:is-success={publishFeedback.type === 'success'}
+      class:is-error={publishFeedback.type === 'error'}
+      role="status"
+    >
       <div class="toast-content">
         {#if publishFeedback.type === 'success'}
-          <CheckCircle2 size={18} class="toast-icon text-emerald" />
+          <CheckCircle2 size={18} class="text-emerald" />
         {:else}
-          <AlertCircle size={18} class="toast-icon text-amber" />
+          <AlertCircle size={18} class="text-rose-400" />
         {/if}
         <span>{publishFeedback.message}</span>
       </div>
-      <button type="button" class="btn-toast-close" onclick={() => (publishFeedback = null)}>
-        <X size={14} />
+      <button type="button" class="btn-toast-dismiss" onclick={() => (publishFeedback = null)} aria-label="Fechar aviso">
+        <X size={15} />
       </button>
     </div>
   {/if}
 
-  <!-- 1. HERO & ETAPA EDITORIAL -->
-  <header class="pre-hero-card">
-    <div class="hero-top-row">
-      <nav class="breadcrumb-nav" aria-label="Navegação estrutural">
-        <span class="crumb-parent">Produção</span>
-        <ChevronRight size={14} class="crumb-sep" />
-        <span class="crumb-parent">Pipeline</span>
-        <ChevronRight size={14} class="crumb-sep" />
-        <span class="crumb-current">Pré-aprovado</span>
-      </nav>
-
-      <div class="hero-stage-badge">
-        <span class="badge-dot"></span>
-        <span class="badge-text">Etapa Editorial · Liberação Final</span>
+  <!-- 1. COMPACT STAGE HEADER -->
+  <header class="pre-header-bar">
+    <div class="pre-title-group">
+      <div class="pre-title-row">
+        <h1 class="stage-main-title">Pré-aprovado</h1>
+        <span class="discrete-count-badge">
+          {waitingPublishItems.length} {waitingPublishItems.length === 1 ? 'aguardando' : 'aguardando'}
+        </span>
       </div>
+      <p class="stage-sub-desc">
+        Capítulos revisados aguardando liberação para o catálogo oficial.
+      </p>
     </div>
 
-    <div class="hero-main-headline">
-      <div class="hero-title-lockup">
-        <div class="hero-stage-icon-wrap" aria-hidden="true">
-          <ShieldCheck size={28} class="hero-icon-cyan" />
-        </div>
-        <div>
-          <h1 class="hero-title">Pré-aprovado</h1>
-          <p class="hero-description">
-            Capítulo validado e pré-aprovado. Pronto para liberação oficial no catálogo.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 7 Canonical Stages Switcher Bar -->
-    <nav class="stages-switcher-bar" aria-label="Navegação entre etapas do pipeline">
-      <div class="stages-pills-scroll" bind:this={stagesScrollContainer}>
-        {#each CANONICAL_STAGES as st (st.slug)}
-          {@const isActive = st.slug === 'pre_aprovado'}
-          {@const count = canonicalCounts[st.slug] || 0}
-          {@const isPreAprovado = st.slug === 'pre_aprovado'}
-          {@const showPersonal = isPreAprovado && personalNewCount > 0}
-          <button
-            type="button"
-            class="stage-pill-btn"
-            class:is-active={isActive}
-            onclick={() => onSelectStage(st.slug)}
-          >
-            <span class="pill-icon" aria-hidden="true">{st.icon}</span>
-            <span class="pill-name">{st.name}</span>
-
-            {#if showPersonal}
-              <span class="pill-badge-personal" title="{personalNewCount} novos capítulos pré-aprovados">
-                ✨ {personalNewCount} novo{personalNewCount > 1 ? 's' : ''}
-              </span>
-            {:else if count > 0}
-              <span class="pill-badge-total">{count}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-    </nav>
-  </header>
-
-  <!-- 2. BARRA DE CONTROLE & FILTROS -->
-  <section class="control-toolbar" aria-label="Controles e filtros da etapa">
-    <div class="toolbar-left">
-      <!-- Search Input -->
-      <div class="search-box">
-        <Search size={16} class="search-icon" />
+    <!-- Controls Cluster: Search & Work Filter -->
+    <div class="pre-controls-cluster">
+      <div class="search-input-shell">
+        <Search size={14} class="search-ico" />
         <input
-          type="text"
-          placeholder="Buscar por obra ou número..."
+          type="search"
           bind:value={searchQuery}
-          class="search-input"
+          placeholder="Buscar capítulo..."
+          class="compact-search-input"
+          aria-label="Buscar capítulo"
         />
         {#if searchQuery}
-          <button type="button" class="btn-clear-search" onclick={() => (searchQuery = '')} aria-label="Limpar busca">
-            <X size={14} />
+          <button type="button" class="btn-clear-q" onclick={() => (searchQuery = '')} aria-label="Limpar busca">
+            <X size={13} />
           </button>
         {/if}
       </div>
 
-      <!-- Work Filter Select -->
-      <div class="filter-select-wrap">
-        <Filter size={15} class="filter-icon" />
-        <select bind:value={filterWorkId} class="filter-select" aria-label="Filtrar por obra associada">
-          <option value="ALL">Todas as obras ({works.length})</option>
-          {#each works as w (w.id)}
-            <option value={w.id}>{w.title}</option>
-          {/each}
-        </select>
+      {#if works.length > 1}
+        <div class="work-filter-shell">
+          <Filter size={13} class="filter-ico" />
+          <select bind:value={filterWorkId} class="compact-work-select" aria-label="Filtrar por obra">
+            <option value="ALL">Todas as obras</option>
+            {#each works as w (w.id)}
+              <option value={w.id}>{w.title}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
+    </div>
+  </header>
+
+  <!-- 2. STAGE SWITCHER WITH DISCRETE COUNTERS -->
+  <nav class="stages-nav-strip" aria-label="Navegação de etapas do pipeline">
+    <div class="stages-track" bind:this={stagesScrollContainer}>
+      {#each CANONICAL_STAGES as st (st.slug)}
+        {@const isActive = matchesStageSlug(st.slug, 'pre_aprovado')}
+        {@const count = canonicalCounts[st.slug] || 0}
+        <button
+          type="button"
+          class="stage-tab-btn"
+          class:is-active={isActive}
+          onclick={() => onSelectStage(st.slug)}
+          aria-current={isActive ? 'page' : undefined}
+        >
+          <span class="stage-tab-icon">{st.icon}</span>
+          <span class="stage-tab-label">{st.name}</span>
+          <span class="stage-tab-count">{count}</span>
+        </button>
+      {/each}
+    </div>
+  </nav>
+
+  <!-- 3. MAIN QUEUE SECTION: AGUARDANDO PUBLICAÇÃO -->
+  <section class="queue-main-section" aria-labelledby="section-heading-queue">
+    <div class="queue-header-row">
+      <div class="queue-heading-lockup">
+        <div class="queue-heading-icon">
+          <Globe size={16} />
+        </div>
+        <h2 id="section-heading-queue" class="queue-heading-text">Aguardando publicação</h2>
+        <span class="queue-heading-count">{filteredItems.length}</span>
       </div>
     </div>
 
-    <!-- Queue Segment Buttons -->
-    <div class="toolbar-right">
-      <div class="queue-segment-control" role="tablist">
-        <button
-          type="button"
-          class="segment-btn"
-          class:is-active={filterQueueTab === 'ALL'}
-          onclick={() => (filterQueueTab = 'ALL')}
-        >
-          <span>Todos</span>
-          <span class="segment-pill">{filteredAvailableItems.length + filteredMyItems.length + filteredTeamItems.length}</span>
-        </button>
-        <button
-          type="button"
-          class="segment-btn"
-          class:is-active={filterQueueTab === 'AVAILABLE'}
-          onclick={() => (filterQueueTab = 'AVAILABLE')}
-        >
-          <span>Disponíveis</span>
-          <span class="segment-pill cyan">{filteredAvailableItems.length}</span>
-        </button>
-        <button
-          type="button"
-          class="segment-btn"
-          class:is-active={filterQueueTab === 'MINE'}
-          onclick={() => (filterQueueTab = 'MINE')}
-        >
-          <span>Meus</span>
-          <span class="segment-pill purple">{filteredMyItems.length}</span>
-        </button>
-        {#if teamItems.length > 0}
-          <button
-            type="button"
-            class="segment-btn"
-            class:is-active={filterQueueTab === 'TEAM'}
-            onclick={() => (filterQueueTab = 'TEAM')}
-          >
-            <span>Equipe</span>
-            <span class="segment-pill amber">{filteredTeamItems.length}</span>
-          </button>
-        {/if}
-      </div>
-    </div>
-  </section>
-
-  <!-- 3. SEÇÃO: CAPÍTULOS DISPONÍVEIS -->
-  {#if filterQueueTab === 'ALL' || filterQueueTab === 'AVAILABLE'}
-    <section class="queue-section" aria-labelledby="heading-available">
-      <div class="section-header">
-        <div class="section-title-lockup">
-          <div class="section-icon-box text-cyan">
-            <Clock size={18} />
-          </div>
-          <div>
-            <div class="section-title-row">
-              <h2 id="heading-available" class="section-heading">Capítulos disponíveis</h2>
-              <span class="section-counter-badge available-badge">{filteredAvailableItems.length}</span>
-            </div>
-            <p class="section-subtext">
-              Capítulos validados pelo QC e prontos para liberação no catálogo oficial.
-            </p>
-          </div>
+    {#if filteredItems.length === 0}
+      <div class="clean-empty-box">
+        <div class="empty-icon-circle">
+          <CheckCircle2 size={26} />
         </div>
+        <h3 class="empty-heading">Nenhum capítulo aguardando publicação</h3>
+        <p class="empty-sub">
+          {#if searchQuery || filterWorkId !== 'ALL'}
+            Nenhum capítulo corresponde aos filtros atuais. Tente limpar os filtros de busca.
+          {:else}
+            Todos os capítulos aprovados pelo QC já foram liberados no catálogo ou aguardam conclusão das etapas anteriores.
+          {/if}
+        </p>
       </div>
+    {:else}
+      <div class="cards-stack">
+        {#each filteredItems as item (item.cs.id)}
+          {@const isOpen = Boolean(expandedCards[item.cs.id])}
+          {@const primaryPkg = getPrimaryPackage(item.ch.id)}
+          {@const isIncomplete = isItemIncomplete(item)}
+          {@const isConferred = Boolean(confirmedConferences[item.ch.id])}
+          {@const deliverables = getChapterDeliverables(item.ch.id)}
 
-      {#if filteredAvailableItems.length === 0}
-        <div class="empty-state-box">
-          <div class="empty-icon-wrap">
-            <Sparkles size={28} class="empty-icon text-cyan" />
-          </div>
-          <h3 class="empty-title">Nenhum capítulo disponível no momento</h3>
-          <p class="empty-desc">
-            {#if searchQuery || filterWorkId !== 'ALL'}
-              Nenhum capítulo disponível corresponde aos filtros atuais. Tente limpar os filtros de busca.
-            {:else}
-              Todos os capítulos nesta etapa já foram assumidos pela equipe ou aguardam conclusão das etapas anteriores no pipeline.
-            {/if}
-          </p>
-        </div>
-      {:else}
-        <div class="cards-grid">
-          {#each filteredAvailableItems as item (item.cs.id)}
-            {@const isOpen = Boolean(expandedCards[item.cs.id])}
-            {@const primaryPkg = getPrimaryPackage(item.ch.id)}
-            {@const deliverables = getChapterDeliverables(item.ch.id)}
-
-            <article class="pre-card" class:is-expanded={isOpen}>
-              <!-- CARD TOP ROW -->
-              <div class="card-top-bar">
-                <div class="card-left-identity">
-                  <div class="work-thumbnail">
-                    {#if item.work?.cover_id}
-                      <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumb-img" loading="lazy" />
-                    {:else}
-                      <div class="thumb-fallback">NOX</div>
-                    {/if}
-                  </div>
-
-                  <div class="titles-cluster">
-                    <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
-                    <h3 class="chapter-title">
-                      Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
-                        <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
-                      {/if}
-                    </h3>
-                    <p class="context-subtitle">
-                      {#if item.ch.id === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e'}
-                        Homologação Editorial · Typeset v2 (44,5 MB - Aguarda falas)
-                      {:else}
-                        Homologação Editorial · Validado no QC
-                      {/if}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="card-right-status">
-                  {#if item.ch.id === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e'}
-                    <span class="badge-status-warning" title="Pacote do Typeset aguarda diagramação de falas">
-                      <AlertTriangle size={13} />
-                      <span>Typeset Incompleto</span>
-                    </span>
-                    <span class="badge-status-test" title="Semeado para homologação segura">
-                      <ShieldAlert size={11} />
-                      <span>Homologação Segura</span>
-                    </span>
+          <article class="pub-card" class:is-expanded={isOpen} class:is-incomplete={isIncomplete}>
+            <!-- CARD MAIN INFO ROW -->
+            <div class="card-main-row">
+              <div class="card-left-identity">
+                <div class="work-cover-box">
+                  {#if item.work?.cover_id}
+                    <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="cover-image" loading="lazy" />
                   {:else}
-                    <span class="badge-status-ready">
-                      <CheckCircle2 size={13} />
-                      <span>Pronto para publicar</span>
-                    </span>
-                    <span class="badge-status-test">
-                      <Zap size={11} />
-                      <span>Teste interno</span>
-                    </span>
+                    <div class="cover-placeholder">NOX</div>
                   {/if}
                 </div>
-              </div>
 
-              <!-- CARD ACTIONS BAR -->
-              <div class="card-actions-bar">
-                <div class="actions-group-left">
-                  <button
-                    type="button"
-                    class="btn-toggle-work"
-                    onclick={() => toggleCard(item.cs.id)}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{isOpen ? 'Recolher trabalho' : 'Abrir trabalho'}</span>
-                    <span class="chevron-rotator" class:is-flipped={isOpen}>
-                      <ChevronDown size={15} />
-                    </span>
-                  </button>
+                <div class="chapter-info-cluster">
+                  <span class="work-title" title={item.work?.title}>{item.work?.title || 'Obra'}</span>
+                  <span class="chapter-identity">
+                    Capítulo #{item.ch.chapter_number}{item.ch.chapter_label ? ` · ${item.ch.chapter_label}` : ''}
+                  </span>
 
-                  <button
-                    type="button"
-                    class="btn-details-secondary"
-                    onclick={() => onOpenChapter(item.ch)}
-                  >
-                    <BookOpen size={14} />
-                    <span>Ver detalhes</span>
-                  </button>
+                  <div class="card-meta-pills">
+                    {#if isIncomplete}
+                      <span class="meta-pill is-warning" title="Pacote Typeset possui balões sem texto diagramado">
+                        <AlertTriangle size={11} />
+                        <span>Typeset incompleto (balões vazios)</span>
+                      </span>
+                    {:else}
+                      <span class="meta-pill is-valid">
+                        <CheckCircle2 size={11} />
+                        <span>Validado pelo QC</span>
+                      </span>
+                    {/if}
+
+                    {#if isConferred}
+                      <span class="meta-pill is-conferred" title="Conferência realizada no leitor">
+                        <Check size={11} />
+                        <span>Conferido</span>
+                      </span>
+                    {/if}
+
+                    {#if primaryPkg}
+                      <span class="meta-pill is-pkg">
+                        <Package size={11} />
+                        <span>{primaryPkg.stage_slug || 'Typeset'} · {formatBytes(primaryPkg.byte_size || primaryPkg.file_size)}</span>
+                      </span>
+                    {/if}
+                  </div>
                 </div>
+              </div>
+            </div>
 
-                <div class="actions-group-right">
+            <!-- CARD ACTIONS ROW -->
+            <div class="card-actions-bar">
+              <!-- 1. Conferir Capítulo (Primary Action) -->
+              <button
+                type="button"
+                class="btn-action-conferir"
+                onclick={() => onOpenQcReader(item.ch)}
+                title="Abrir leitor privado para conferência das páginas antes da publicação"
+              >
+                <BookOpen size={15} />
+                <span>Conferir capítulo</span>
+              </button>
+
+              <!-- 2. Ver Detalhes Toggle -->
+              <button
+                type="button"
+                class="btn-action-details"
+                onclick={() => toggleCard(item.cs.id)}
+                aria-expanded={isOpen}
+              >
+                <span>{isOpen ? 'Menos detalhes' : 'Ver detalhes'}</span>
+                <span class="chevron-rotator" class:is-flipped={isOpen}>
+                  <ChevronDown size={14} />
+                </span>
+              </button>
+
+              <!-- 3. Publicar no Catálogo (or Blocked Indicator) -->
+              {#if canPublish}
+                {#if isIncomplete}
                   <button
                     type="button"
-                    class="btn-publish-highlight"
+                    class="btn-action-publish is-blocked"
+                    disabled
+                    title="Publicação bloqueada: o pacote Typeset contém balões vazios sem as falas diagramadas."
+                  >
+                    <Lock size={14} />
+                    <span>Publicação Bloqueada</span>
+                  </button>
+                {:else}
+                  <button
+                    type="button"
+                    class="btn-action-publish is-ready"
                     onclick={() => openPublishModal(item)}
                   >
-                    <Globe size={15} />
+                    <Globe size={14} />
                     <span>Publicar no catálogo</span>
                   </button>
-                </div>
-              </div>
+                {/if}
+              {:else}
+                <span class="badge-waiting-admin" title="Apenas Dono ou Gerente da scan podem publicar no catálogo">
+                  <Lock size={12} />
+                  <span>Aguardando Dono/Gerente</span>
+                </span>
+              {/if}
+            </div>
 
-              <!-- CARD EXPANDED CONTENT -->
-              {#if isOpen}
-                <div class="card-expanded-content">
-                  <div class="expanded-grid">
-                    <!-- BLOCO 1: RESUMO EDITORIAL -->
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <ShieldCheck size={16} class="text-purple-400" />
-                        <h4 class="panel-title">Resumo Editorial</h4>
+            <!-- CARD EXPANDED CONTENT (Only shown on "Ver detalhes") -->
+            {#if isOpen}
+              <div class="card-details-panel">
+                <div class="details-grid">
+                  <!-- Resumo Editorial -->
+                  <div class="details-panel-card">
+                    <h4 class="panel-card-title">
+                      <ShieldCheck size={14} class="text-cyan" />
+                      <span>Resumo Editorial</span>
+                    </h4>
+                    <dl class="meta-kv-list">
+                      <div class="kv-row">
+                        <dt>Obra:</dt>
+                        <dd>{item.work?.title || '—'}</dd>
                       </div>
-                      <dl class="meta-definition-list">
-                        <div class="meta-row">
-                          <dt>Obra Associada:</dt>
-                          <dd class="text-white">{item.work?.title || '—'}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Capítulo:</dt>
-                          <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Etapa Atual:</dt>
-                          <dd><span class="inline-badge cyan">Pré-aprovado</span></dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Validação QC:</dt>
-                          <dd class="text-emerald font-semibold">✓ Aprovado pelo Revisor</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Responsável:</dt>
-                          <dd class="text-muted">Fila geral (disponível)</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <!-- BLOCO 2: MATERIAIS PRONTOS -->
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <Package size={16} class="text-emerald" />
-                        <h4 class="panel-title">Materiais Prontos</h4>
+                      <div class="kv-row">
+                        <dt>Capítulo:</dt>
+                        <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
                       </div>
+                      <div class="kv-row">
+                        <dt>Etapa Atual:</dt>
+                        <dd><span class="inline-stage-tag cyan">Pré-aprovado</span></dd>
+                      </div>
+                      <div class="kv-row">
+                        <dt>Validação QC:</dt>
+                        <dd class={isIncomplete ? 'text-amber' : 'text-emerald'}>
+                          {isIncomplete ? 'Incompleto (Balões em branco)' : 'Aprovado sem pendências'}
+                        </dd>
+                      </div>
+                      <div class="kv-row">
+                        <dt>Conferência:</dt>
+                        <dd class={isConferred ? 'text-emerald font-semibold' : 'text-slate-400'}>
+                          {isConferred ? 'Realizada no leitor privado' : 'Pendente de conferência no leitor'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
 
-                      {#if primaryPkg}
-                        <div class="primary-deliverable-card">
-                          <div class="pkg-icon-wrap">
-                            <FileArchive size={20} class="text-emerald" />
-                          </div>
-                          <div class="pkg-details">
-                            <div class="pkg-filename" title={primaryPkg.file_name}>{primaryPkg.file_name}</div>
-                            <div class="pkg-meta">
-                              <span>Pacote final para o site</span>
+                  <!-- Materiais Prontos -->
+                  <div class="details-panel-card">
+                    <h4 class="panel-card-title">
+                      <Package size={14} class="text-emerald" />
+                      <span>Materiais Prontos</span>
+                    </h4>
+                    {#if primaryPkg}
+                      <div class="primary-pkg-box">
+                        <div class="pkg-icon-wrap">
+                          <FileArchive size={18} class="text-emerald" />
+                        </div>
+                        <div class="pkg-txt">
+                          <div class="pkg-name" title={primaryPkg.file_name}>{primaryPkg.file_name}</div>
+                          <div class="pkg-meta-line">
+                            <span>{primaryPkg.stage_slug || 'Typeset'}</span>
+                            <span>·</span>
+                            <span class="font-bold">{formatBytes(primaryPkg.byte_size || primaryPkg.file_size)}</span>
+                            {#if primaryPkg.created_at}
                               <span>·</span>
-                              <span>{formatBytes(primaryPkg.file_size)}</span>
-                            </div>
+                              <span>{new Date(primaryPkg.created_at).toLocaleDateString('pt-BR')}</span>
+                            {/if}
                           </div>
                         </div>
-                      {:else}
-                        <div class="missing-deliverable-alert">
-                          <AlertTriangle size={15} />
-                          <span>Nenhum pacote individual anexado. O sistema usará os insumos de Typeset.</span>
-                        </div>
-                      {/if}
-
-                      <div class="deliverables-summary-list">
-                        <div class="deliverables-count-label">
-                          Total de arquivos na produção: <strong>{deliverables.length}</strong>
-                        </div>
-                        <div class="files-mini-scroll">
-                          {#each deliverables as f (f.id)}
-                            <div class="mini-file-item">
-                              <span class="file-stage-tag">{f.stage_slug || 'arquivo'}</span>
-                              <span class="mini-filename" title={f.file_name}>{f.file_name}</span>
-                              <span class="mini-filesize">{formatBytes(f.file_size)}</span>
-                            </div>
-                          {/each}
-                        </div>
                       </div>
+                    {:else}
+                      <p class="no-files-notice">Nenhum pacote individual anexado.</p>
+                    {/if}
+
+                    <div class="deliverables-count-strip">
+                      <span>Total de arquivos no pipeline: <strong>{deliverables.length}</strong></span>
                     </div>
+                  </div>
 
-                    <!-- BLOCO 3: DESTINO DE PUBLICAÇÃO -->
-                    <div class="expanded-panel full-width">
-                      <div class="panel-header">
-                        <Globe size={16} class="text-cyan" />
-                        <h4 class="panel-title">Destino no Catálogo Oficial</h4>
-                      </div>
-                      <div class="destiny-callout">
-                        <div class="destiny-info">
-                          <p class="destiny-text">
-                            Este capítulo será vinculado à obra <strong>{item.work?.title || 'Obra'}</strong> com a numeração <strong>#{item.ch.chapter_number}</strong> e liberado para leitura pública com os créditos desta scan.
+                  <!-- Destino no Catálogo Oficial -->
+                  <div class="details-panel-card full-span">
+                    <h4 class="panel-card-title">
+                      <Globe size={14} class="text-cyan" />
+                      <span>Destino no Catálogo Oficial</span>
+                    </h4>
+                    <div class="destiny-box">
+                      <div class="destiny-text">
+                        {#if duplicateCatalogChapter}
+                          <p class="text-amber">
+                            ⚠ <strong>Atenção:</strong> Já existe um capítulo <strong>#{item.ch.chapter_number}</strong> publicado no catálogo de <strong>{item.work?.title}</strong>. A publicação substituirá o registro anterior com esta nova versão revisada.
                           </p>
-                        </div>
-                        <button
-                          type="button"
-                          class="btn-publish-highlight in-expanded"
-                          onclick={() => openPublishModal(item)}
-                        >
-                          <UploadCloud size={16} />
-                          <span>Iniciar Publicação no Catálogo</span>
-                        </button>
+                        {:else}
+                          <p>
+                            Este capítulo será liberado para leitura pública com os créditos de <strong>Project Nox</strong> como <strong>{item.work?.title} — Capítulo #{item.ch.chapter_number}</strong>.
+                          </p>
+                        {/if}
                       </div>
+
+                      {#if canPublish}
+                        {#if isIncomplete}
+                          <div class="blocked-publish-notice">
+                            <AlertTriangle size={15} />
+                            <span>Para publicar este capítulo, solicite ao Typeset que finalize as falas nos balões em branco.</span>
+                            <button
+                              type="button"
+                              class="btn-open-sim-test"
+                              onclick={() => openPublishModal(item)}
+                            >
+                              Abrir simulação de teste (Homologação)
+                            </button>
+                          </div>
+                        {:else}
+                          <button
+                            type="button"
+                            class="btn-action-publish is-ready in-panel"
+                            onclick={() => openPublishModal(item)}
+                          >
+                            <Globe size={14} />
+                            <span>Iniciar Publicação no Catálogo</span>
+                          </button>
+                        {/if}
+                      {/if}
                     </div>
                   </div>
                 </div>
-              {/if}
-            </article>
-          {/each}
-        </div>
-      {/if}
-    </section>
-  {/if}
-
-  <!-- 4. SEÇÃO: MEUS CAPÍTULOS -->
-  {#if filterQueueTab === 'ALL' || filterQueueTab === 'MINE'}
-    <section class="queue-section" aria-labelledby="heading-mine">
-      <div class="section-header">
-        <div class="section-title-lockup">
-          <div class="section-icon-box text-purple">
-            <User size={18} />
-          </div>
-          <div>
-            <div class="section-title-row">
-              <h2 id="heading-mine" class="section-heading">Meus capítulos</h2>
-              <span class="section-counter-badge mine-badge">{filteredMyItems.length}</span>
-            </div>
-            <p class="section-subtext">
-              Capítulos sob sua responsabilidade para revisão editorial e liberação no catálogo.
-            </p>
-          </div>
-        </div>
+              </div>
+            {/if}
+          </article>
+        {/each}
       </div>
+    {/if}
+  </section>
 
-      {#if filteredMyItems.length === 0}
-        <div class="empty-compact-strip">
-          <div class="compact-strip-left">
-            <div class="compact-strip-icon">
-              <CheckCircle2 size={16} class="text-purple-400" />
-            </div>
-            <span class="compact-strip-text">Nenhum capítulo atribuído a você nesta etapa.</span>
-          </div>
-          <span class="compact-strip-hint">Você pode publicar diretamente a partir dos capítulos disponíveis acima.</span>
-        </div>
-      {:else}
-        <div class="cards-grid">
-          {#each filteredMyItems as item (item.cs.id)}
-            {@const isOpen = Boolean(expandedCards[item.cs.id])}
-            {@const primaryPkg = getPrimaryPackage(item.ch.id)}
-            {@const deliverables = getChapterDeliverables(item.ch.id)}
-
-            <article class="pre-card" class:is-expanded={isOpen}>
-              <!-- CARD TOP ROW -->
-              <div class="card-top-bar">
-                <div class="card-left-identity">
-                  <div class="work-thumbnail">
-                    {#if item.work?.cover_id}
-                      <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumb-img" loading="lazy" />
-                    {:else}
-                      <div class="thumb-fallback">NOX</div>
-                    {/if}
-                  </div>
-
-                  <div class="titles-cluster">
-                    <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
-                    <h3 class="chapter-title">
-                      Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
-                        <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
-                      {/if}
-                    </h3>
-                    <p class="context-subtitle">Homologação Editorial · Atribuído a você para liberação</p>
-                  </div>
-                </div>
-
-                <div class="card-right-status">
-                  <span class="badge-status-mine">
-                    <User size={13} />
-                    <span>Em suas mãos</span>
-                  </span>
-                  <span class="badge-status-test">
-                    <Zap size={11} />
-                    <span>Teste interno</span>
-                  </span>
-                </div>
-              </div>
-
-              <!-- CARD ACTIONS BAR -->
-              <div class="card-actions-bar">
-                <div class="actions-group-left">
-                  <button
-                    type="button"
-                    class="btn-toggle-work"
-                    onclick={() => toggleCard(item.cs.id)}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{isOpen ? 'Recolher trabalho' : 'Abrir trabalho'}</span>
-                    <span class="chevron-rotator" class:is-flipped={isOpen}>
-                      <ChevronDown size={15} />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn-details-secondary"
-                    onclick={() => onOpenChapter(item.ch)}
-                  >
-                    <BookOpen size={14} />
-                    <span>Ver detalhes</span>
-                  </button>
-                </div>
-
-                <div class="actions-group-right">
-                  <button
-                    type="button"
-                    class="btn-publish-highlight"
-                    onclick={() => openPublishModal(item)}
-                  >
-                    <Globe size={15} />
-                    <span>Publicar no catálogo</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- CARD EXPANDED CONTENT -->
-              {#if isOpen}
-                <div class="card-expanded-content">
-                  <div class="expanded-grid">
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <ShieldCheck size={16} class="text-purple-400" />
-                        <h4 class="panel-title">Resumo Editorial</h4>
-                      </div>
-                      <dl class="meta-definition-list">
-                        <div class="meta-row">
-                          <dt>Obra:</dt>
-                          <dd class="text-white">{item.work?.title || '—'}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Capítulo:</dt>
-                          <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Etapa Atual:</dt>
-                          <dd><span class="inline-badge cyan">Pré-aprovado</span></dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Responsável:</dt>
-                          <dd class="text-emerald font-semibold">Você</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <Package size={16} class="text-emerald" />
-                        <h4 class="panel-title">Materiais Prontos</h4>
-                      </div>
-                      {#if primaryPkg}
-                        <div class="primary-deliverable-card">
-                          <div class="pkg-icon-wrap">
-                            <FileArchive size={20} class="text-emerald" />
-                          </div>
-                          <div class="pkg-details">
-                            <div class="pkg-filename">{primaryPkg.file_name}</div>
-                            <div class="pkg-meta">
-                              <span>Pacote validado</span>
-                              <span>·</span>
-                              <span>{formatBytes(primaryPkg.file_size)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      {/if}
-                    </div>
-
-                    <div class="expanded-panel full-width">
-                      <div class="panel-header">
-                        <Globe size={16} class="text-cyan" />
-                        <h4 class="panel-title">Ação de Publicação</h4>
-                      </div>
-                      <div class="destiny-callout">
-                        <p class="destiny-text">
-                          Tudo pronto para publicação no site. Clique no botão abaixo para confirmar os dados.
-                        </p>
-                        <button
-                          type="button"
-                          class="btn-publish-highlight in-expanded"
-                          onclick={() => openPublishModal(item)}
-                        >
-                          <Globe size={16} />
-                          <span>Publicar no Catálogo</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              {/if}
-            </article>
-          {/each}
-        </div>
-      {/if}
-    </section>
-  {/if}
-
-  <!-- 4.1. SEÇÃO: CAPÍTULOS DA EQUIPE -->
-  {#if teamItems.length > 0 && (filterQueueTab === 'ALL' || filterQueueTab === 'TEAM')}
-    <section class="queue-section" aria-labelledby="heading-team">
-      <div class="section-header">
-        <div class="section-title-lockup">
-          <div class="section-icon-box text-amber">
-            <User size={18} />
-          </div>
-          <div>
-            <div class="section-title-row">
-              <h2 id="heading-team" class="section-heading">Capítulos em andamento pela equipe</h2>
-              <span class="section-counter-badge mine-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">{filteredTeamItems.length}</span>
-            </div>
-            <p class="section-subtext">
-              Capítulos sob responsabilidade de outros membros da equipe para publicação.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {#if filteredTeamItems.length === 0}
-        <div class="empty-state-box">
-          <div class="empty-icon-wrap" style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2);">
-            <CheckCircle2 size={28} class="empty-icon" style="color: #f59e0b;" />
-          </div>
-          <h3 class="empty-title">Nenhum capítulo atribuído a outros membros</h3>
-          <p class="empty-desc">
-            Todos os capítulos em Pré-aprovado estão na fila geral ou em suas mãos.
-          </p>
-        </div>
-      {:else}
-        <div class="cards-grid">
-          {#each filteredTeamItems as item (item.cs.id)}
-            {@const isOpen = Boolean(expandedCards[item.cs.id])}
-            {@const primaryPkg = getPrimaryPackage(item.ch.id)}
-            {@const deliverables = getChapterDeliverables(item.ch.id)}
-            {@const assigneeName = item.cs.assignee?.display_name || item.cs.assignee?.username || 'Outro membro'}
-
-            <article class="pre-card" class:is-expanded={isOpen}>
-              <!-- CARD TOP BAR -->
-              <div class="card-top-bar">
-                <div class="card-left-identity">
-                  <div class="work-thumbnail">
-                    {#if item.work?.cover_id}
-                      <img src="/media/{item.work.cover_id}?size=thumb&v=3" alt={item.work.title} class="thumb-img" loading="lazy" />
-                    {:else}
-                      <div class="thumb-fallback">NOX</div>
-                    {/if}
-                  </div>
-
-                  <div class="titles-cluster">
-                    <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
-                    <h3 class="chapter-title">
-                      Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
-                        <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
-                      {/if}
-                    </h3>
-                    <p class="context-subtitle">Homologação Editorial · Atribuído a {assigneeName}</p>
-                  </div>
-                </div>
-
-                <div class="card-right-status">
-                  <span class="badge-status-mine" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.28);">
-                    <User size={13} />
-                    <span>Com {assigneeName}</span>
-                  </span>
-                  <span class="badge-status-test">
-                    <Zap size={11} />
-                    <span>Teste interno</span>
-                  </span>
-                </div>
-              </div>
-
-              <!-- CARD ACTIONS BAR -->
-              <div class="card-actions-bar">
-                <div class="actions-group-left">
-                  <button
-                    type="button"
-                    class="btn-toggle-work"
-                    onclick={() => toggleCard(item.cs.id)}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{isOpen ? 'Recolher trabalho' : 'Abrir trabalho'}</span>
-                    <span class="chevron-rotator" class:is-flipped={isOpen}>
-                      <ChevronDown size={15} />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn-details-secondary"
-                    onclick={() => onOpenChapter(item.ch)}
-                  >
-                    <BookOpen size={14} />
-                    <span>Ver detalhes</span>
-                  </button>
-                </div>
-
-                <div class="actions-group-right">
-                  <button
-                    type="button"
-                    class="btn-publish-highlight"
-                    onclick={() => openPublishModal(item)}
-                  >
-                    <Globe size={15} />
-                    <span>Publicar no catálogo</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- CARD EXPANDED CONTENT -->
-              {#if isOpen}
-                <div class="card-expanded-content">
-                  <div class="expanded-grid">
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <ShieldCheck size={16} class="text-purple-400" />
-                        <h4 class="panel-title">Resumo Editorial</h4>
-                      </div>
-                      <dl class="meta-definition-list">
-                        <div class="meta-row">
-                          <dt>Obra:</dt>
-                          <dd class="text-white">{item.work?.title || '—'}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Capítulo:</dt>
-                          <dd class="text-cyan font-bold">#{item.ch.chapter_number}</dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Etapa Atual:</dt>
-                          <dd><span class="inline-badge cyan">Pré-aprovado</span></dd>
-                        </div>
-                        <div class="meta-row">
-                          <dt>Responsável:</dt>
-                          <dd class="text-amber font-semibold">{assigneeName}</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div class="expanded-panel">
-                      <div class="panel-header">
-                        <Package size={16} class="text-emerald" />
-                        <h4 class="panel-title">Materiais Prontos</h4>
-                      </div>
-                      {#if primaryPkg}
-                        <div class="primary-deliverable-card">
-                          <div class="pkg-icon-wrap">
-                            <FileArchive size={20} class="text-emerald" />
-                          </div>
-                          <div class="pkg-details">
-                            <div class="pkg-filename">{primaryPkg.file_name}</div>
-                            <div class="pkg-meta">
-                              <span>Pacote validado</span>
-                              <span>·</span>
-                              <span>{formatBytes(primaryPkg.file_size)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      {/if}
-                    </div>
-
-                    <div class="expanded-panel full-width">
-                      <div class="panel-header">
-                        <Globe size={16} class="text-cyan" />
-                        <h4 class="panel-title">Ação de Publicação</h4>
-                      </div>
-                      <div class="destiny-callout">
-                        <p class="destiny-text">
-                          Pronto para publicação no catálogo oficial. Como líder/administrador, você pode liberar este capítulo diretamente.
-                        </p>
-                        <button
-                          type="button"
-                          class="btn-publish-highlight in-expanded"
-                          onclick={() => openPublishModal(item)}
-                        >
-                          <Globe size={16} />
-                          <span>Publicar no Catálogo</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              {/if}
-            </article>
-          {/each}
-        </div>
-      {/if}
-    </section>
-  {/if}
-
-  <!-- 5. MODAL / BOTTOM SHEET DE PUBLICAÇÃO -->
+  <!-- 4. MODAL / BOTTOM SHEET DE PUBLICAÇÃO -->
   {#if publishModalOpen && publishingItem}
     <div class="modal-backdrop" onclick={closePublishModal} role="presentation">
       <div
@@ -1192,7 +717,7 @@
         <div class="modal-header">
           <div class="modal-header-left">
             <div class="modal-icon-badge">
-              <Globe size={22} class="text-emerald" />
+              <Globe size={20} class="text-emerald" />
             </div>
             <div>
               <h3 id="modal-publish-title" class="modal-title">Publicar no Catálogo Oficial</h3>
@@ -1355,8 +880,10 @@
                   <span class="summary-val text-muted">Project Nox</span>
                 </div>
                 <div class="summary-line">
-                  <span class="summary-key">Pacote Aprovado:</span>
-                  <span class="summary-val text-emerald font-mono text-sm">{publishingPrimaryFile ? publishingPrimaryFile.file_name : 'Insumos do Typeset prontos'}</span>
+                  <span class="summary-key">Pacote Validado:</span>
+                  <span class="summary-val text-emerald font-mono text-sm">
+                    {publishingPrimaryFile ? `${publishingPrimaryFile.file_name} (${formatBytes(publishingPrimaryFile.byte_size || publishingPrimaryFile.file_size)})` : 'Insumos do Typeset prontos'}
+                  </span>
                 </div>
                 <div class="summary-line">
                   <span class="summary-key">Status de Validação:</span>
@@ -1373,13 +900,42 @@
               </div>
             </fieldset>
 
-            <!-- BLOCO 3: VALIDAÇÕES DE SEGURANÇA -->
+            <!-- BLOCO 3: CONFERÊNCIA E SEGURANÇA -->
             <fieldset class="modal-form-block">
               <legend class="block-legend">
                 <span class="legend-number">3</span>
-                <span>Validações de Segurança</span>
+                <span>Conferência e Validações de Segurança</span>
               </legend>
 
+              <!-- Conferência no Leitor Privado -->
+              <div class="security-alert-box" class:is-valid={publishConferenceConfirmed} class:is-warning={!publishConferenceConfirmed}>
+                <div class="alert-header">
+                  {#if publishConferenceConfirmed}
+                    <CheckCircle2 size={18} class="text-emerald" />
+                    <h5 class="alert-title">Conferência no Leitor Privado Realizada</h5>
+                  {:else}
+                    <AlertTriangle size={18} class="text-amber" />
+                    <h5 class="alert-title">Conferência Recomendada</h5>
+                  {/if}
+                </div>
+                <p class="alert-desc">
+                  {#if publishConferenceConfirmed}
+                    As páginas deste capítulo foram inspecionadas no leitor privado antes da solicitação de liberação.
+                  {:else}
+                    Recomendamos abrir o leitor privado através de "Conferir capítulo" para revisar diagramação e integridade antes da liberação.
+                  {/if}
+                </p>
+                <label class="confirm-duplicate-label">
+                  <input
+                    type="checkbox"
+                    bind:checked={publishConferenceConfirmed}
+                    class="confirm-checkbox"
+                  />
+                  <span>Confirmo que conferi todas as páginas deste capítulo no leitor privado.</span>
+                </label>
+              </div>
+
+              <!-- Detecção de Duplicidade -->
               {#if duplicateCatalogChapter}
                 <div class="security-alert-box is-warning">
                   <div class="alert-header">
@@ -1418,12 +974,12 @@
                     <h5 class="alert-title">Material Incompleto — Bloqueio de Publicação Real Ativo</h5>
                   </div>
                   <p class="alert-desc">
-                    O pacote do Typeset v2 possui balões sem falas diagramadas (reprovado pelo QC). O servidor rejeitará a publicação oficial deste material. Utilize o Modo Simulação Segura abaixo para homologação.
+                    O pacote vinculado possui páginas com balões em branco sem as falas diagramadas. Publicações reais com material incompleto são estritamente rejeitadas pelo servidor. Para homologação, utilize o modo de simulação abaixo.
                   </p>
                 </div>
               {/if}
 
-              <!-- Modo Simulação Segura (Homologação) -->
+              <!-- Modo de Simulação Segura (Homologação) -->
               <div class="simulation-toggle-card" class:is-active={isSimulationMode}>
                 <label class="simulation-toggle-label">
                   <input
@@ -1433,8 +989,7 @@
                   />
                   <div class="simulation-text-wrap">
                     <div class="simulation-title-row">
-                      <ShieldCheck size={16} class="text-emerald" />
-                      <span class="simulation-title">Modo Simulação Segura (Homologação)</span>
+                      <span class="simulation-title">Modo de Simulação Segura (Homologação)</span>
                       <span class="simulation-badge">Recomendado</span>
                     </div>
                     <p class="simulation-desc">
@@ -1504,1387 +1059,1059 @@
 
 <style>
   /* =====================================================================
-     THEME VARIABLES & BASE TOKENS
+     BASE ROOT & TOKENS
      ===================================================================== */
   .pre-aprovado-root {
-    --bg-page: #0b0d13;
-    --bg-card: #121622;
-    --bg-card-hover: #171c2c;
-    --bg-card-subtle: #151928;
-    --border-card: #1e2436;
-    --border-card-hover: #2d3652;
-    --border-accent-cyan: rgba(6, 182, 212, 0.4);
-
-    --color-purple: #a855f7;
-    --color-purple-hover: #9333ea;
-    --color-cyan: #06b6d4;
-    --color-cyan-glow: rgba(6, 182, 212, 0.18);
-    --color-emerald: #10b981;
-    --color-emerald-hover: #059669;
-    --color-amber: #f59e0b;
-
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    padding-bottom: 3.5rem;
     width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-    padding-bottom: 3rem;
+    max-width: 1360px;
+    margin: 0 auto;
+    color: #e2e8f0;
   }
 
-  /* =====================================================================
-     FEEDBACK BANNER
-     ===================================================================== */
+  /* TOAST BANNER */
   .publish-toast-banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1rem;
     padding: 0.85rem 1.25rem;
     border-radius: 10px;
-    background: #131c24;
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    font-size: 0.875rem;
+    animation: fadeIn 0.25s ease;
   }
   .publish-toast-banner.is-success {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
     color: #a7f3d0;
   }
   .publish-toast-banner.is-error {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.35);
-    color: #fca5a5;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    color: #fecdd3;
   }
   .toast-content {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
-    font-size: 0.925rem;
-    font-weight: 500;
-  }
-  .btn-toast-close {
-    background: none;
-    border: none;
-    color: #94a3b8;
-    cursor: pointer;
-    padding: 0.25rem;
-    display: flex;
-    border-radius: 6px;
-  }
-  .btn-toast-close:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  /* =====================================================================
-     HERO & STAGE BAR
-     ===================================================================== */
-  .pre-hero-card {
-    background: linear-gradient(180deg, #131726 0%, #101320 100%);
-    border: 1px solid var(--border-card);
-    border-radius: 14px;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
-  }
-
-  .hero-top-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
     gap: 0.75rem;
   }
-
-  .breadcrumb-nav {
+  .btn-toast-dismiss {
+    background: transparent;
+    border: none;
+    color: currentColor;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 4px;
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.825rem;
-    color: #64748b;
   }
-  .crumb-parent {
-    color: #94a3b8;
-  }
-  :global(.crumb-sep) {
-    color: #475569;
-  }
-  .crumb-current {
-    color: var(--color-cyan);
-    font-weight: 600;
-  }
+  .btn-toast-dismiss:hover { opacity: 1; }
 
-  .hero-stage-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    background: rgba(6, 182, 212, 0.12);
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    padding: 0.3rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #22d3ee;
-  }
-  .badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #06b6d4;
-    box-shadow: 0 0 8px #06b6d4;
-  }
-
-  .hero-main-headline {
+  /* 1. COMPACT STAGE HEADER */
+  .pre-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
-
-  .hero-title-lockup {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .hero-stage-icon-wrap {
-    width: 52px;
-    height: 52px;
+    gap: 1.25rem;
+    background: #111522;
+    border: 1px solid #1e2436;
     border-radius: 12px;
-    background: rgba(6, 182, 212, 0.1);
-    border: 1px solid rgba(6, 182, 212, 0.25);
+    padding: 1rem 1.35rem;
+    flex-wrap: wrap;
+  }
+  .pre-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .pre-title-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    gap: 0.65rem;
   }
-  :global(.hero-icon-cyan) {
-    color: #22d3ee;
-  }
-
-  .hero-title {
-    font-size: 1.65rem;
+  .stage-main-title {
+    font-size: 1.25rem;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
-
-  .hero-description {
-    font-size: 0.925rem;
-    color: #94a3b8;
-    margin: 0.35rem 0 0 0;
-    line-height: 1.45;
-  }
-
-  /* 7 Canonical Stages Switcher */
-  .stages-switcher-bar {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding-top: 1rem;
-  }
-
-  .stages-pills-scroll {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
-    scrollbar-width: thin;
-  }
-
-  .stage-pill-btn {
+  .discrete-count-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    background: #141826;
-    border: 1px solid #1e2436;
-    padding: 0.45rem 0.85rem;
-    border-radius: 8px;
-    font-size: 0.825rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    background: rgba(168, 85, 247, 0.14);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    color: #c084fc;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .stage-sub-desc {
+    font-size: 0.8125rem;
     color: #94a3b8;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s ease;
-    min-height: 38px;
-  }
-  .stage-pill-btn:hover {
-    background: #192033;
-    border-color: #2f3a55;
-    color: #e2e8f0;
-  }
-  .stage-pill-btn.is-active {
-    background: rgba(6, 182, 212, 0.16);
-    border-color: #06b6d4;
-    color: #ffffff;
-    font-weight: 600;
-    box-shadow: 0 0 14px rgba(6, 182, 212, 0.25);
-  }
-  .pill-icon {
-    font-size: 0.95rem;
-  }
-  .pill-badge-personal {
-    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-    color: #ffffff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.15rem 0.45rem;
-    border-radius: 9999px;
-    line-height: 1;
-  }
-  .pill-badge-total {
-    background: #252e46;
-    color: #cbd5e1;
-    font-size: 0.725rem;
-    font-weight: 600;
-    padding: 0.15rem 0.45rem;
-    border-radius: 9999px;
-  }
-  .stage-pill-btn.is-active .pill-badge-total {
-    background: #06b6d4;
-    color: #0b0d13;
-    font-weight: 700;
+    margin: 0;
   }
 
-  /* =====================================================================
-     CONTROL TOOLBAR
-     ===================================================================== */
-  .control-toolbar {
-    background: #111420;
-    border: 1px solid var(--border-card);
-    border-radius: 12px;
-    padding: 0.85rem 1.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .toolbar-left {
+  /* Controls Cluster */
+  .pre-controls-cluster {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    flex: 1;
-    min-width: 260px;
     flex-wrap: wrap;
   }
-
-  .search-box {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 1;
-    min-width: 200px;
-  }
-  :global(.search-icon) {
-    position: absolute;
-    left: 0.85rem;
-    color: #64748b;
-    pointer-events: none;
-  }
-  .search-input {
-    width: 100%;
-    background: #0d101a;
-    border: 1px solid #1e2436;
-    border-radius: 8px;
-    padding: 0.55rem 2.2rem 0.55rem 2.4rem;
-    font-size: 0.875rem;
-    color: #ffffff;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .search-input:focus {
-    border-color: #06b6d4;
-    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
-  }
-  .search-input::placeholder {
-    color: #64748b;
-  }
-  .btn-clear-search {
-    position: absolute;
-    right: 0.65rem;
-    background: none;
-    border: none;
-    color: #94a3b8;
-    cursor: pointer;
-    display: flex;
-  }
-
-  .filter-select-wrap {
+  .search-input-shell {
     position: relative;
     display: flex;
     align-items: center;
   }
-  :global(.filter-icon) {
+  :global(.search-ico) {
     position: absolute;
     left: 0.75rem;
     color: #64748b;
     pointer-events: none;
   }
-  .filter-select {
-    background: #0d101a;
-    border: 1px solid #1e2436;
+  .compact-search-input {
+    background: #161b2a;
+    border: 1px solid #232a3f;
     border-radius: 8px;
-    padding: 0.55rem 1rem 0.55rem 2.2rem;
-    font-size: 0.875rem;
-    color: #e2e8f0;
+    padding: 0.45rem 2rem 0.45rem 2.15rem;
+    color: #f1f5f9;
+    font-size: 0.8125rem;
+    outline: none;
+    width: 190px;
+    transition: all 0.2s ease;
+  }
+  .compact-search-input:focus {
+    border-color: #06b6d4;
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+    width: 220px;
+  }
+  .btn-clear-q {
+    position: absolute;
+    right: 0.5rem;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+  .work-filter-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  :global(.filter-ico) {
+    position: absolute;
+    left: 0.75rem;
+    color: #64748b;
+    pointer-events: none;
+  }
+  .compact-work-select {
+    background: #161b2a;
+    border: 1px solid #232a3f;
+    border-radius: 8px;
+    padding: 0.45rem 0.85rem 0.45rem 2.1rem;
+    color: #f1f5f9;
+    font-size: 0.8125rem;
     outline: none;
     cursor: pointer;
-    min-height: 38px;
   }
-  .filter-select:focus {
+  .compact-work-select:focus {
     border-color: #06b6d4;
   }
 
-  .queue-segment-control {
+  /* 2. STAGES NAV STRIP */
+  .stages-nav-strip {
+    width: 100%;
+    background: #111522;
+    border: 1px solid #1e2436;
+    border-radius: 12px;
+    padding: 0.45rem;
+  }
+  .stages-track {
     display: flex;
     align-items: center;
-    background: #0d101a;
-    border: 1px solid #1e2436;
-    border-radius: 8px;
-    padding: 0.2rem;
-    gap: 0.2rem;
+    gap: 0.45rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.15rem;
   }
-  .segment-btn {
+  .stage-tab-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    padding: 0.35rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.825rem;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
     color: #94a3b8;
-    cursor: pointer;
+    font-size: 0.8125rem;
     font-weight: 500;
-    transition: all 0.15s;
-    min-height: 32px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
   }
-  .segment-btn:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.05);
+  .stage-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.04);
   }
-  .segment-btn.is-active {
-    background: #1a2032;
-    color: #ffffff;
+  .stage-tab-btn.is-active {
+    background: rgba(6, 182, 212, 0.12);
+    border-color: rgba(6, 182, 212, 0.35);
+    color: #22d3ee;
     font-weight: 600;
   }
-  .segment-pill {
-    background: #232a3f;
-    padding: 0.1rem 0.45rem;
-    border-radius: 9999px;
-    font-size: 0.7rem;
-    color: #94a3b8;
-  }
-  .segment-pill.cyan {
-    background: rgba(6, 182, 212, 0.2);
-    color: #22d3ee;
-  }
-  .segment-pill.purple {
-    background: rgba(168, 85, 247, 0.2);
+  .stage-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    padding: 0 0.35rem;
+    height: 1.15rem;
+    border-radius: 999px;
+    background: rgba(168, 85, 247, 0.14);
     color: #c084fc;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .stage-tab-btn.is-active .stage-tab-count {
+    background: rgba(6, 182, 212, 0.25);
+    color: #67e8f9;
   }
 
-  /* =====================================================================
-     QUEUE SECTIONS
-     ===================================================================== */
-  .queue-section {
+  /* 3. QUEUE MAIN SECTION */
+  .queue-main-section {
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
-
-  .section-header {
+  .queue-header-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 1rem;
   }
-  .section-title-lockup {
+  .queue-heading-lockup {
     display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.65rem;
   }
-  .section-icon-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: #141826;
-    border: 1px solid #1e2436;
+  .queue-heading-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-  }
-  .section-title-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-  .section-heading {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #ffffff;
-    margin: 0;
-  }
-  .section-counter-badge {
-    padding: 0.15rem 0.55rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    line-height: 1.2;
-  }
-  .section-counter-badge.available-badge {
-    background: rgba(6, 182, 212, 0.18);
-    border: 1px solid rgba(6, 182, 212, 0.35);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.12);
     color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.25);
   }
-  .section-counter-badge.mine-badge {
-    background: rgba(168, 85, 247, 0.18);
-    border: 1px solid rgba(168, 85, 247, 0.35);
-    color: #d8b4fe;
-  }
-  .section-subtext {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    margin: 0.2rem 0 0 0;
-  }
-
-  /* =====================================================================
-     EMPTY STATES
-     ===================================================================== */
-  .empty-state-box {
-    background: #0f121d;
-    border: 1px dashed #20273c;
-    border-radius: 14px;
-    padding: 3rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .empty-icon-wrap {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: rgba(6, 182, 212, 0.08);
-    border: 1px solid rgba(6, 182, 212, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 1rem;
-  }
-  .empty-icon-wrap.purple {
-    background: rgba(168, 85, 247, 0.08);
-    border-color: rgba(168, 85, 247, 0.2);
-  }
-  .empty-title {
+  .queue-heading-text {
     font-size: 1.05rem;
     font-weight: 600;
-    color: #ffffff;
-    margin: 0 0 0.4rem 0;
-  }
-  .empty-desc {
-    font-size: 0.875rem;
-    color: #94a3b8;
-    max-width: 440px;
-    line-height: 1.5;
+    color: #f8fafc;
     margin: 0;
   }
+  .queue-heading-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
 
-  /* =====================================================================
-     CHAPTER CARDS
-     ===================================================================== */
-  .cards-grid {
+  /* CLEAN EMPTY BOX */
+  .clean-empty-box {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
-  }
-
-  .pre-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-card);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3.5rem 1.5rem;
+    background: #111522;
+    border: 1px dashed #232a3f;
     border-radius: 12px;
-    overflow: hidden;
-    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .pre-card:hover {
-    border-color: var(--border-card-hover);
+  .empty-icon-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: rgba(6, 182, 212, 0.1);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    margin-bottom: 1rem;
   }
-  .pre-card.is-expanded {
-    border-color: var(--border-accent-cyan);
-    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.1);
+  .empty-heading {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 0.4rem 0;
+  }
+  .empty-sub {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    max-width: 480px;
+    margin: 0;
+    line-height: 1.45;
   }
 
-  .card-top-bar {
-    padding: 1.25rem;
+  /* CARDS STACK */
+  .cards-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .pub-card {
+    background: #121624;
+    border: 1px solid #1e2436;
+    border-radius: 12px;
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pub-card:hover {
+    border-color: #2b354d;
+  }
+  .pub-card.is-expanded {
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Card Main Info Row */
+  .card-main-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    flex-wrap: wrap;
-    background: #111522;
   }
-
   .card-left-identity {
     display: flex;
     align-items: center;
     gap: 1rem;
+    min-width: 0;
+    flex: 1;
   }
-
-  .work-thumbnail {
-    width: 48px;
-    height: 64px;
-    border-radius: 6px;
+  .work-cover-box {
+    width: 52px;
+    height: 68px;
+    border-radius: 8px;
     overflow: hidden;
-    background: #090b12;
-    border: 1px solid #1e2436;
+    background: #1a2030;
+    border: 1px solid #232a3f;
     flex-shrink: 0;
   }
-  .thumb-img {
+  .cover-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .thumb-fallback {
+  .cover-placeholder {
     width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: #64748b;
     font-size: 0.75rem;
     font-weight: 700;
-    color: #64748b;
   }
 
-  .titles-cluster {
+  .chapter-info-cluster {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.3rem;
+    min-width: 0;
   }
-  .work-name {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  .chapter-title {
-    font-size: 1.125rem;
+  .work-title {
+    font-size: 0.9375rem;
     font-weight: 700;
     color: #ffffff;
-    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chapter-identity {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #22d3ee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-meta-pills {
     display: flex;
     align-items: center;
     gap: 0.45rem;
     flex-wrap: wrap;
+    margin-top: 0.15rem;
   }
-  .chapter-label-pill {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #cbd5e1;
-  }
-  .context-subtitle {
-    font-size: 0.825rem;
-    color: #64748b;
-    margin: 0;
-  }
-
-  .card-right-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .badge-status-ready {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: rgba(6, 182, 212, 0.12);
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    color: #22d3ee;
-    padding: 0.3rem 0.65rem;
-    border-radius: 9999px;
-    font-size: 0.775rem;
-    font-weight: 600;
-  }
-  .badge-status-mine {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: rgba(168, 85, 247, 0.12);
-    border: 1px solid rgba(168, 85, 247, 0.3);
-    color: #d8b4fe;
-    padding: 0.3rem 0.65rem;
-    border-radius: 9999px;
-    font-size: 0.775rem;
-    font-weight: 600;
-  }
-  .badge-status-test {
+  .meta-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fcd34d;
-    padding: 0.25rem 0.55rem;
-    border-radius: 9999px;
-    font-size: 0.725rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
     font-weight: 600;
   }
+  .meta-pill.is-valid {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+  }
+  .meta-pill.is-warning {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.32);
+    color: #fbbf24;
+  }
+  .meta-pill.is-conferred {
+    background: rgba(6, 182, 212, 0.14);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    color: #22d3ee;
+  }
+  .meta-pill.is-pkg {
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #cbd5e1;
+  }
 
-  /* Actions Bar */
+  /* Card Actions Bar */
   .card-actions-bar {
-    padding: 0.75rem 1.25rem;
-    border-top: 1px solid #1a2030;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.65rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #1a2032;
     flex-wrap: wrap;
-    background: #0e121c;
-  }
-  .actions-group-left {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-  .actions-group-right {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
   }
 
-  .btn-toggle-work {
+  /* 1. Conferir Capítulo (Primary Action) */
+  .btn-action-conferir {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.12);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    color: #22d3ee;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 40px;
+  }
+  .btn-action-conferir:hover {
+    background: rgba(6, 182, 212, 0.22);
+    border-color: #06b6d4;
+    color: #ffffff;
+  }
+
+  /* 2. Ver Detalhes Toggle */
+  .btn-action-details {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    background: #181d2c;
-    border: 1px solid #283149;
-    color: #ffffff;
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 0.5rem 0.95rem;
+    padding: 0.55rem 0.85rem;
     border-radius: 8px;
+    background: #161b2a;
+    border: 1px solid #232a3f;
+    color: #94a3b8;
+    font-size: 0.8125rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.15s ease;
     min-height: 40px;
   }
-  .btn-toggle-work:hover {
-    background: #20273a;
-    border-color: #3b4768;
+  .btn-action-details:hover {
+    color: #f1f5f9;
+    border-color: #334155;
   }
   .chevron-rotator {
     display: inline-flex;
-    align-items: center;
     transition: transform 0.2s ease;
   }
   .chevron-rotator.is-flipped {
     transform: rotate(180deg);
   }
 
-  .btn-details-secondary {
+  /* 3. Publicar no Catálogo / Bloqueado */
+  .btn-action-publish {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    background: transparent;
-    border: 1px solid #242c42;
-    color: #94a3b8;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 0.5rem 0.85rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.15s;
-    min-height: 40px;
-  }
-  .btn-details-secondary:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.05);
-    border-color: #3b4768;
-  }
-
-  .btn-publish-highlight {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border: 1px solid #34d399;
-    color: #ffffff;
-    font-size: 0.875rem;
-    font-weight: 700;
+    gap: 0.45rem;
     padding: 0.55rem 1.15rem;
     border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
     transition: all 0.15s ease;
+    margin-left: auto;
     min-height: 40px;
   }
-  .btn-publish-highlight:hover {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
-    box-shadow: 0 4px 18px rgba(16, 185, 129, 0.45);
+  .btn-action-publish.is-ready {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    border: 1px solid #10b981;
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+  }
+  .btn-action-publish.is-ready:hover {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
     transform: translateY(-1px);
   }
-  .btn-publish-highlight.in-expanded {
-    font-size: 0.925rem;
-    padding: 0.65rem 1.35rem;
+  .btn-action-publish.is-blocked {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    color: #fca5a5;
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+  .badge-waiting-admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    font-size: 0.75rem;
+    margin-left: auto;
   }
 
-  /* Expanded Workspace */
-  .card-expanded-content {
-    padding: 1.25rem;
-    border-top: 1px solid #1a2030;
-    background: #0d1018;
+  /* CARD EXPANDED CONTENT */
+  .card-details-panel {
+    padding-top: 1rem;
+    border-top: 1px solid #1a2032;
+    animation: fadeIn 0.2s ease;
   }
-  .expanded-grid {
+  .details-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
   }
-  .expanded-panel {
-    background: #131724;
-    border: 1px solid #1e2538;
+  .details-panel-card {
+    background: #0f131f;
+    border: 1px solid #1b2133;
     border-radius: 10px;
-    padding: 1rem;
+    padding: 0.85rem 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.65rem;
   }
-  .expanded-panel.full-width {
+  .details-panel-card.full-span {
     grid-column: 1 / -1;
   }
-
-  .panel-header {
+  .panel-card-title {
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    padding-bottom: 0.5rem;
-  }
-  .panel-title {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: #ffffff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #cbd5e1;
     margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
   }
 
-  .meta-definition-list {
+  .meta-kv-list {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.35rem;
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
-  .meta-row {
+  .kv-row {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
   }
-  .meta-row dt {
-    color: #64748b;
-  }
-  .meta-row dd {
-    margin: 0;
-    text-align: right;
-  }
-  .inline-badge.cyan {
-    background: rgba(6, 182, 212, 0.15);
-    color: #22d3ee;
-    padding: 0.15rem 0.5rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
+  .kv-row dt { color: #64748b; }
+  .kv-row dd { color: #e2e8f0; margin: 0; }
+
+  .inline-stage-tag {
+    display: inline-flex;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
     font-weight: 600;
   }
+  .inline-stage-tag.cyan {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+  }
 
-  /* Primary Deliverable */
-  .primary-deliverable-card {
+  .primary-pkg-box {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.25);
+    gap: 0.65rem;
+    background: #141926;
+    border: 1px solid #20273c;
     border-radius: 8px;
-    padding: 0.65rem 0.85rem;
+    padding: 0.55rem 0.75rem;
   }
   .pkg-icon-wrap {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: rgba(16, 185, 129, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
   }
-  .pkg-details {
+  .pkg-txt {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
-    overflow: hidden;
+    min-width: 0;
   }
-  .pkg-filename {
-    font-size: 0.85rem;
+  .pkg-name {
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: #ffffff;
+    color: #f1f5f9;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .pkg-meta {
+  .pkg-meta-line {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .deliverables-count-strip {
     font-size: 0.75rem;
-    color: #a7f3d0;
-    display: flex;
-    gap: 0.35rem;
-  }
-
-  .missing-deliverable-alert {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.25);
-    color: #fcd34d;
-    padding: 0.65rem;
-    border-radius: 8px;
-    font-size: 0.8rem;
-  }
-
-  .deliverables-summary-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-  .deliverables-count-label {
-    font-size: 0.775rem;
-    color: #94a3b8;
-  }
-  .files-mini-scroll {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    max-height: 110px;
-    overflow-y: auto;
-  }
-  .mini-file-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    background: #0e121a;
-    border: 1px solid #1a202e;
-    border-radius: 6px;
-    padding: 0.35rem 0.55rem;
-    font-size: 0.775rem;
-  }
-  .file-stage-tag {
-    background: #1c2333;
-    color: #94a3b8;
-    padding: 0.1rem 0.35rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-  }
-  .mini-filename {
-    color: #cbd5e1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-  }
-  .mini-filesize {
     color: #64748b;
-    font-size: 0.7rem;
+    margin-top: 0.2rem;
+  }
+  .no-files-notice {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0;
   }
 
-  /* Destiny Callout */
-  .destiny-callout {
+  .destiny-box {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.25rem;
+    gap: 1rem;
     flex-wrap: wrap;
-    background: rgba(6, 182, 212, 0.06);
-    border: 1px solid rgba(6, 182, 212, 0.2);
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
   }
   .destiny-text {
-    font-size: 0.875rem;
-    color: #e2e8f0;
-    margin: 0;
-    line-height: 1.5;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    flex: 1;
+  }
+  .destiny-text p { margin: 0; }
+  .blocked-publish-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 8px;
+    padding: 0.55rem 0.85rem;
+    color: #fcd34d;
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+  }
+  .btn-open-sim-test {
+    background: transparent;
+    border: 1px solid #fcd34d;
+    color: #fef08a;
+    padding: 0.25rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-action-publish.in-panel {
+    margin-left: 0;
   }
 
-  /* =====================================================================
-     PUBLICATION MODAL & BOTTOM SHEET
-     ===================================================================== */
+  /* 4. MODAL / BOTTOM SHEET */
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(3, 7, 18, 0.82);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
-    padding: calc(78px + 1.25rem) 1rem 1.5rem 1rem;
+    padding: 1.25rem;
     overflow-y: auto;
   }
-
   .publish-modal-card {
     background: #121624;
     border: 1px solid #232b40;
     border-radius: 16px;
     width: 100%;
-    max-width: 680px;
-    max-height: calc(100vh - 110px);
+    max-width: 640px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(6, 182, 212, 0.15);
+    max-height: 90vh;
     overflow: hidden;
-    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    margin: auto;
+    animation: modalPop 0.25s ease;
   }
-
-  @keyframes modalPop {
-    from {
-      opacity: 0;
-      transform: scale(0.96) translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
-  }
-
   .modal-header {
-    padding: 0.9rem 1.25rem;
-    border-bottom: 1px solid #1e263a;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #141828;
-    flex-shrink: 0;
+    padding: 1.15rem 1.35rem;
+    border-bottom: 1px solid #1e2436;
+    background: #161b2b;
   }
   .modal-header-left {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
   }
   .modal-icon-badge {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
   }
   .modal-title {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
-    line-height: 1.2;
   }
   .modal-subtitle {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    margin: 0.2rem 0 0 0;
+    margin: 0.15rem 0 0 0;
   }
   .btn-modal-close {
-    background: none;
+    background: transparent;
     border: none;
-    color: #64748b;
+    color: #94a3b8;
     cursor: pointer;
-    padding: 0.35rem;
-    border-radius: 8px;
+    padding: 6px;
+    border-radius: 6px;
     display: flex;
   }
   .btn-modal-close:hover {
     color: #ffffff;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .modal-form {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
-    min-height: 0;
     overflow: hidden;
+    flex: 1;
   }
-
   .modal-scrollable-body {
-    padding: 0.9rem 1.25rem;
+    padding: 1.15rem 1.35rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    flex: 1 1 auto;
-    min-height: 0;
+    gap: 1.15rem;
   }
-
   .modal-form-block {
-    border: 1px solid #1e263a;
-    border-radius: 10px;
-    background: #0f121d;
-    padding: 0.75rem 1rem;
+    border: 1px solid #1e2436;
+    border-radius: 12px;
+    padding: 1rem;
     margin: 0;
+    background: #151928;
   }
   .block-legend {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0 0.5rem;
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     font-weight: 700;
     color: #22d3ee;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    padding: 0 0.4rem;
   }
   .legend-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #06b6d4;
-    color: #0b0d13;
-    font-size: 0.7rem;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: rgba(6, 182, 212, 0.2);
+    color: #22d3ee;
+    font-size: 0.72rem;
   }
 
   .form-fields-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.65rem;
-    margin-top: 0.35rem;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+    margin-top: 0.5rem;
   }
   .form-group {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
   }
-  .form-group.full-col {
-    grid-column: 1 / -1;
-  }
-  .form-group.half-col {
-    grid-column: span 1;
-  }
+  .form-group.full-col { grid-column: 1 / -1; }
+  .form-group.half-col { grid-column: span 1; }
 
   .field-label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #cbd5e1;
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.2rem;
   }
-  .required-star {
-    color: #f43f5e;
+  .required-star { color: #f43f5e; }
+  .field-hint {
+    font-size: 0.72rem;
+    color: #64748b;
   }
   .field-input, .field-select {
-    background: #141826;
-    border: 1px solid #232c40;
+    background: #111420;
+    border: 1px solid #232a3f;
     border-radius: 8px;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
     color: #ffffff;
+    font-size: 0.85rem;
     outline: none;
-    transition: border-color 0.15s;
-    min-height: 38px;
   }
   .field-input:focus, .field-select:focus {
     border-color: #06b6d4;
     box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
   }
-  .field-hint {
-    font-size: 0.725rem;
-    color: #64748b;
-  }
 
-  /* Material summary card in modal */
   .material-summary-card {
-    background: #131726;
-    border: 1px solid #1e2538;
+    background: #111420;
+    border: 1px solid #1e2436;
     border-radius: 8px;
-    padding: 0.65rem 0.85rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    font-size: 0.825rem;
-    margin-top: 0.35rem;
+    margin-top: 0.5rem;
   }
   .summary-line {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
+    font-size: 0.78rem;
   }
-  .summary-key {
-    color: #64748b;
-  }
-  .summary-val {
-    text-align: right;
-  }
+  .summary-key { color: #64748b; }
+  .summary-val { color: #e2e8f0; }
 
-  /* Security alerts in modal */
+  /* Security Alert Boxes */
   .security-alert-box {
-    border-radius: 8px;
-    padding: 0.65rem 0.85rem;
-    margin-top: 0.35rem;
+    border-radius: 10px;
+    padding: 0.75rem 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
   }
   .security-alert-box.is-valid {
     background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.25);
   }
   .security-alert-box.is-warning {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+  }
+  .security-alert-box.is-error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .security-alert-box.server-error {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
   }
   .alert-header {
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    margin-bottom: 0.25rem;
   }
   .alert-title {
-    font-size: 0.85rem;
+    font-size: 0.8125rem;
     font-weight: 700;
-    color: #ffffff;
     margin: 0;
   }
+  .security-alert-box.is-valid .alert-title { color: #34d399; }
+  .security-alert-box.is-warning .alert-title { color: #fbbf24; }
+  .security-alert-box.is-error .alert-title { color: #f87171; }
   .alert-desc {
-    font-size: 0.8rem;
-    color: #cbd5e1;
-    margin: 0 0 0.35rem 0;
-    line-height: 1.4;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.35;
   }
   .confirm-duplicate-label {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
-    font-size: 0.8rem;
-    color: #fef08a;
+    font-size: 0.78rem;
+    color: #cbd5e1;
     cursor: pointer;
+    margin-top: 0.35rem;
     padding-top: 0.35rem;
-    border-top: 1px solid rgba(245, 158, 11, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
   .confirm-checkbox {
-    margin-top: 0.15rem;
+    accent-color: #10b981;
     cursor: pointer;
   }
 
-  /* Modal Footer */
-  .modal-footer {
-    padding: 0.85rem 1.25rem;
-    border-top: 1px solid #1e263a;
-    background: #141828;
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-  }
-  .cta-summary-note {
-    font-size: 0.8rem;
-    color: #94a3b8;
-    text-align: center;
-    line-height: 1.4;
-  }
-  .modal-footer-buttons {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-  }
-  .btn-modal-cancel {
-    background: transparent;
-    border: 1px solid #232c40;
-    color: #cbd5e1;
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 0.55rem 1.15rem;
-    border-radius: 8px;
-    cursor: pointer;
-    min-height: 40px;
-  }
-  .btn-modal-cancel:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #ffffff;
-  }
-  .btn-modal-submit {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border: 1px solid #34d399;
-    color: #ffffff;
-    font-size: 0.925rem;
-    font-weight: 700;
-    padding: 0.65rem 1.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
-    transition: all 0.15s;
-    min-height: 44px;
-  }
-  .btn-modal-submit:hover:not(:disabled) {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5);
-  }
-  .btn-modal-submit:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
-  }
-  :global(.spinner-animate) {
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  /* Compact Empty Strip for Meus Capítulos */
-  .empty-compact-strip {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.85rem 1.25rem;
-    background: rgba(168, 85, 247, 0.05);
-    border: 1px dashed rgba(168, 85, 247, 0.25);
-    border-radius: 12px;
-    color: #c4b5fd;
-    font-size: 0.9rem;
-  }
-  .compact-strip-left {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    font-weight: 500;
-  }
-  .compact-strip-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .compact-strip-hint {
-    font-size: 0.8rem;
-    color: #94a3b8;
-  }
-
-  /* Safe Simulation Toggle Box */
+  /* Simulation toggle card */
   .simulation-toggle-card {
     background: rgba(16, 185, 129, 0.06);
-    border: 1px solid rgba(16, 185, 129, 0.25);
+    border: 1px solid rgba(16, 185, 129, 0.22);
     border-radius: 10px;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 0.95rem;
+    margin-top: 0.5rem;
     transition: all 0.2s ease;
-    margin-top: 0.35rem;
   }
   .simulation-toggle-card.is-active {
     background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.45);
-    box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.4);
   }
   .simulation-toggle-label {
     display: flex;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: 0.65rem;
     cursor: pointer;
   }
   .simulation-checkbox {
     accent-color: #10b981;
-    width: 1.15rem;
-    height: 1.15rem;
     margin-top: 0.15rem;
     cursor: pointer;
   }
   .simulation-text-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.15rem;
   }
   .simulation-title-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
   .simulation-title {
-    font-size: 0.88rem;
-    font-weight: 600;
+    font-size: 0.8125rem;
+    font-weight: 700;
     color: #ecfdf5;
   }
   .simulation-badge {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
-    padding: 0.1rem 0.45rem;
+    padding: 0.08rem 0.4rem;
     border-radius: 4px;
     background: rgba(16, 185, 129, 0.2);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
   .simulation-desc {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.35;
+  }
+
+  /* Modal Footer */
+  .modal-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem 1.35rem;
+    border-top: 1px solid #1e2436;
+    background: #161b2b;
+  }
+  .cta-summary-note {
     font-size: 0.78rem;
     color: #94a3b8;
     line-height: 1.35;
-    margin: 0;
   }
-
-  /* Server error & invalid material alert */
-  .security-alert-box.is-error {
-    background: rgba(244, 63, 94, 0.08);
-    border: 1px solid rgba(244, 63, 94, 0.35);
-    border-radius: 10px;
-    padding: 0.75rem 1rem;
-    margin-top: 0.35rem;
+  .cta-summary-note strong { color: #ffffff; }
+  .modal-footer-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
   }
-  .security-alert-box.is-error .alert-title {
-    color: #f43f5e;
+  .btn-modal-cancel {
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    background: #161b2a;
+    border: 1px solid #232a3f;
+    color: #94a3b8;
+    font-size: 0.8125rem;
     font-weight: 600;
-    font-size: 0.88rem;
-    margin: 0;
+    cursor: pointer;
   }
-  .security-alert-box.is-error .alert-desc {
-    color: #fda4af;
-    font-size: 0.8rem;
-    line-height: 1.4;
-    margin: 0.35rem 0 0 0;
-  }
-  .security-alert-box.server-error {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: #ef4444;
-  }
-
-  /* Warning status badge on card */
-  .badge-status-warning {
+  .btn-modal-cancel:hover { color: #ffffff; }
+  .btn-modal-submit {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.65rem;
-    border-radius: 6px;
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #fbbf24;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-  .btn-modal-submit.is-simulation {
+    gap: 0.45rem;
+    padding: 0.55rem 1.25rem;
+    border-radius: 8px;
     background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+    border: 1px solid #10b981;
+    color: #ffffff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+  }
+  .btn-modal-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  }
+  .btn-modal-submit:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  :global(.spinner-animate) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes modalPop {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes sheetSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   /* =====================================================================
-     MOBILE ADAPTATIONS (<= 768px)
+     MOBILE-FIRST RESPONSIVE ADAPTATIONS (<= 768px)
      ===================================================================== */
   @media (max-width: 768px) {
     .pre-aprovado-root {
@@ -2892,141 +2119,114 @@
       padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 20px));
     }
 
-    .pre-hero-card {
-      padding: 0.95rem 1rem;
-      gap: 0.75rem;
-    }
-    .stages-switcher-bar {
-      position: relative;
-      margin: 0 -0.5rem;
-      padding: 0 0.5rem;
-    }
-    .stages-pills-scroll {
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-      overflow-x: auto;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(6, 182, 212, 0.3) transparent;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 0.35rem;
-    }
-    .empty-compact-strip {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.35rem;
-      padding: 0.75rem 1rem;
-    }
-    .hero-top-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.5rem;
-    }
-    .hero-title-lockup {
-      gap: 0.75rem;
-    }
-    .hero-stage-icon-wrap {
-      width: 44px;
-      height: 44px;
-    }
-    .hero-title {
-      font-size: 1.35rem;
-    }
-    .hero-description {
-      font-size: 0.85rem;
-    }
-
-    .control-toolbar {
-      padding: 1rem;
-      flex-direction: column;
-      align-items: stretch;
+    .pre-header-bar {
+      padding: 0.85rem 1rem;
       gap: 0.85rem;
     }
-    .toolbar-left {
-      flex-direction: column;
-      align-items: stretch;
-      min-width: 100%;
-    }
-    .filter-select-wrap {
+    .pre-title-group {
       width: 100%;
     }
-    .filter-select {
+    .pre-title-row {
+      justify-content: space-between;
       width: 100%;
     }
-    .queue-segment-control {
-      width: 100%;
-      justify-content: stretch;
+    .stage-main-title {
+      font-size: 1.15rem;
     }
-    .segment-btn {
-      flex: 1;
-      justify-content: center;
+    .stage-sub-desc {
+      display: none;
     }
 
-    /* Mobile Cards: Primary expander button on top, Details & Publish on row below */
-    .card-top-bar {
-      padding: 1rem;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.75rem;
+    .pre-controls-cluster {
+      width: 100%;
+      display: flex;
+      gap: 0.5rem;
     }
-    .card-left-identity {
+    .search-input-shell {
+      flex: 1;
+    }
+    .compact-search-input {
       width: 100%;
     }
-    .card-right-status {
+    .compact-search-input:focus {
       width: 100%;
+    }
+    .work-filter-shell {
+      flex: 1;
+    }
+    .compact-work-select {
+      width: 100%;
+    }
+
+    /* Stages Bar */
+    .stages-nav-strip {
+      padding: 0.25rem;
+      margin: 0;
+    }
+    .stage-tab-btn {
+      padding: 0.4rem 0.65rem;
+      font-size: 0.78rem;
+    }
+
+    /* Cards */
+    .pub-card {
+      padding: 0.95rem 1rem;
+      gap: 0.85rem;
+    }
+    .work-cover-box {
+      width: 46px;
+      height: 60px;
+    }
+    .work-title {
+      font-size: 0.875rem;
+    }
+    .chapter-identity {
+      font-size: 0.8125rem;
     }
 
     .card-actions-bar {
-      padding: 0.85rem 1rem;
       display: grid;
-      grid-template-columns: 1fr 1.3fr;
-      gap: 0.65rem;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      padding-top: 0.75rem;
     }
-    .actions-group-left {
-      display: contents;
-    }
-    .actions-group-right {
-      display: contents;
-    }
-    .btn-toggle-work {
+    .btn-action-conferir {
       grid-column: 1 / -1;
-      width: 100%;
       justify-content: center;
-      padding: 0.75rem 1rem;
-      font-size: 0.9rem;
+      width: 100%;
+      font-size: 0.85rem;
     }
-    .btn-details-secondary {
-      grid-column: 1;
-      width: 100%;
+    .btn-action-details {
+      grid-column: 1 / 2;
       justify-content: center;
-      padding: 0.75rem 0.5rem;
+      width: 100%;
     }
-    .btn-publish-highlight {
-      grid-column: 2;
-      width: 100%;
+    .btn-action-publish {
+      grid-column: 2 / 3;
+      margin-left: 0;
       justify-content: center;
-      padding: 0.75rem 0.5rem;
+      width: 100%;
+    }
+    .badge-waiting-admin {
+      grid-column: 2 / 3;
+      margin-left: 0;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .details-grid {
+      grid-template-columns: 1fr;
     }
 
     /* Bottom Sheet on Mobile */
     .modal-backdrop {
       align-items: flex-end;
       padding: 0;
-      overflow-y: hidden;
     }
     .publish-modal-card {
-      border-radius: 20px 20px 0 0;
+      border-radius: 18px 18px 0 0;
       max-height: 88vh;
-      margin: 0;
       animation: sheetSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes sheetSlideUp {
-      from {
-        transform: translateY(100%);
-      }
-      to {
-        transform: translateY(0);
-      }
     }
     .form-fields-grid {
       grid-template-columns: 1fr;
@@ -3035,15 +2235,18 @@
       grid-column: 1 / -1;
     }
     .modal-footer {
-      padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom, 20px));
     }
-    .modal-footer-buttons {
-      flex-direction: column;
-      width: 100%;
+  }
+
+  /* Ultra-small screens (320px) */
+  @media (max-width: 360px) {
+    .pub-card {
+      padding: 0.75rem 0.85rem;
     }
-    .btn-modal-cancel, .btn-modal-submit {
-      width: 100%;
-      justify-content: center;
+    .btn-action-conferir, .btn-action-details, .btn-action-publish {
+      font-size: 0.75rem;
+      padding: 0.45rem 0.5rem;
     }
   }
 </style>

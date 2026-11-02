@@ -2,9 +2,21 @@ import { ownerCookies } from './owner-session.mjs';
 import { createClient } from '@supabase/supabase-js';
 
 const CHAPTER_85_ID = 'b5a9fbf0-206d-475a-8e05-70aaa672f71e';
+const RAW_STAGE_ID = 'b824be67-ef62-4d87-b76f-ba7cea285edc';
+const TRAD_STAGE_ID = '01691c51-5d33-4e84-8dd6-d3c1c409ad74';
+const CLEAN_STAGE_ID = 'c0a8f087-abe3-4e15-b4ed-1ac84422f80e';
+const TYPESET_STAGE_ID = '29eaccb5-a75b-4462-a4ad-eec88b4c5ee3';
 const QC_STAGE_ID = '8e75a036-32f9-4864-bb61-8316b581384d';
 const PRE_APROVADO_STAGE_ID = '24668cc6-7fba-40af-a3ed-5e66ca90d2a8';
 const PUBLICADO_STAGE_ID = '92b620b2-2171-4292-b993-7e903e69c2cf';
+
+const PREVIOUS_STAGE_IDS = [
+  RAW_STAGE_ID,
+  TRAD_STAGE_ID,
+  CLEAN_STAGE_ID,
+  TYPESET_STAGE_ID,
+  QC_STAGE_ID
+];
 
 const targetUrl = process.env.BENCHMARK_TARGET_URL || 'https://home-preview-manga.project-nox-awerkori.workers.dev';
 
@@ -17,14 +29,18 @@ async function main() {
     await client.from('scan_production_chapters').update({
       status: 'IN_PRODUCTION',
       current_stage_slug: 'pre_aprovado',
+      target_chapter_id: null,
       updated_at: new Date().toISOString()
     }).eq('id', CHAPTER_85_ID);
 
-    await client.from('scan_chapter_stages').update({
-      status: 'DONE',
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', QC_STAGE_ID);
+    // Set all previous editorial stages to DONE so the history is 100% coherent
+    for (const stId of PREVIOUS_STAGE_IDS) {
+      await client.from('scan_chapter_stages').update({
+        status: 'DONE',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', stId);
+    }
 
     await client.from('scan_chapter_stages').update({
       status: 'AVAILABLE',
@@ -40,7 +56,7 @@ async function main() {
       updated_at: new Date().toISOString()
     }).eq('production_chapter_id', CHAPTER_85_ID).eq('stage_id', PUBLICADO_STAGE_ID);
 
-    console.log('✓ Supabase: Chapter 85 is now AVAILABLE in Pré-aprovado.');
+    console.log('✓ Supabase: Chapter 85 is now AVAILABLE in Pré-aprovado with previous stages DONE.');
   } else if (mode === 'set-empty') {
     console.log('Resetting Chapter 85 to PUBLISHED (Empty Pré-aprovado queue)...');
     await client.from('scan_production_chapters').update({
