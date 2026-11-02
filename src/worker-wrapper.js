@@ -11,15 +11,38 @@ async function e(e3, t2) {
   let r3 = await e3.match(t2);
   return n2 && r3 && (r3 = new Response(null, r3)), r3;
 }
-function t(e3, t2, n2, o2) {
-  return ("string" == typeof t2 || "GET" === t2.method) && r(n2) && (n2.headers.has("Set-Cookie") && (n2 = new Response(n2.body, n2)).headers.append("Cache-Control", "private=Set-Cookie"), o2.waitUntil(e3.put(t2, n2.clone()))), n2;
+function t(cache, req, res, ctx) {
+  if (typeof req !== 'string' && req.method !== "GET" && req.method !== "HEAD") return res;
+  if (!r(res)) return res;
+
+  const cacheHeaders = new Headers(res.headers);
+  cacheHeaders.delete('set-cookie');
+  cacheHeaders.delete('vary');
+  cacheHeaders.set('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
+
+  let bodyForCache = null;
+  let clientRes = res;
+  if (res.body) {
+    const [b1, b2] = res.body.tee();
+    clientRes = new Response(b1, res);
+    bodyForCache = b2;
+  }
+
+  const cacheResponse = new Response(bodyForCache, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: cacheHeaders
+  });
+
+  ctx.waitUntil(cache.put(req, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
+  return clientRes;
 }
 var n = /* @__PURE__ */ new Set([200, 203, 204, 300, 301, 404, 405, 410, 414, 501]);
-function r(e3) {
-  if (!n.has(e3.status)) return false;
-  if (~(e3.headers.get("Vary") || "").indexOf("*")) return false;
-  let t2 = e3.headers.get("Cache-Control") || "";
-  return !/(private|no-cache|no-store)/i.test(t2);
+function r(res) {
+  if (!n.has(res.status)) return false;
+  let cc = res.headers.get("Cache-Control") || "";
+  if (cc.includes("no-store") || cc.includes("no-cache")) return false;
+  return cc.includes("public") || (cc.includes("private") && (cc.includes("max-age=") || cc.includes("s-maxage=")));
 }
 function o(n2) {
   return async function(r3, o2) {
@@ -61,16 +84,34 @@ var initialized = server.init({
   }
 });
 const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
-const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
-function shouldBypassSharedCache(req) {
+function getSharedCacheKey(req) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null;
   const cookie = req.headers.get('cookie') || '';
-  if (AUTHENTICATED_SESSION_COOKIE.test(cookie) || req.headers.has('authorization')) return true;
+  if (AUTHENTICATED_SESSION_COOKIE.test(cookie) || req.headers.has('authorization')) return null;
+
   try {
     const url = new URL(req.url);
-    if (url.pathname === '/' && PERSONALIZED_HOME_COOKIE.test(cookie)) return true;
-  } catch {}
-  return false;
+    const p = url.pathname;
+    if (p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
+        p.startsWith('/biblioteca') || p.startsWith('/scan') || p.startsWith('/auth') ||
+        p.startsWith('/settings') || p.startsWith('/api/internal')) {
+      return null;
+    }
+
+    const isAdult = /(?:^|;\s*)nox-age-status=ADULT/i.test(cookie);
+    const isBlur = !/(?:^|;\s*)nox-blur-nsfw=false/i.test(cookie);
+    const seg = isAdult ? (isBlur ? 'ADULT_BLUR' : 'ADULT_NOBLUR') : (isBlur ? 'SAFE_BLUR' : 'SAFE_NOBLUR');
+
+    const cacheUrl = new URL(req.url);
+    cacheUrl.searchParams.set('__nox_cache_seg', seg);
+    return new Request(cacheUrl.toString(), {
+      method: 'GET',
+      headers: { 'accept-encoding': req.headers.get('accept-encoding') || '' }
+    });
+  } catch {
+    return null;
+  }
 }
 
 // APPLICATION_ROUTE_GUARD
@@ -117,8 +158,8 @@ var worker_default = {
     }
     await initialized;
     let pragma = req.headers.get("cache-control") || "";
-    const cacheBypassRequest = shouldBypassSharedCache(req);
-    let res = !cacheBypassRequest && !pragma.includes("no-cache") && await r2(req);
+    const sharedCacheKey = getSharedCacheKey(req);
+    let res = sharedCacheKey && !pragma.includes("no-cache") && await r2(sharedCacheKey);
     if (res) {
       res = new Response(res.body, res);
       res.headers.set('X-Nox-Edge-Cache', 'HIT');
@@ -172,7 +213,7 @@ var worker_default = {
       });
     }
     pragma = res.headers.get("cache-control") || "";
-    return !cacheBypassRequest && pragma && res.status < 400 ? c(req, res, ctx) : res;
+    return sharedCacheKey && pragma && res.status < 400 ? c(sharedCacheKey, res, ctx) : res;
   }
 };
 export {
