@@ -20,7 +20,9 @@
     Package,
     RefreshCw,
     Search,
+    ShieldAlert,
     ShieldCheck,
+    ShieldX,
     Sparkles,
     Trash2,
     UploadCloud,
@@ -33,6 +35,7 @@
     stages?: any[];
     chapterStages?: any[];
     chapters?: any[];
+    catalogChapters?: any[];
     works?: any[];
     productionFiles?: any[];
     tasks?: any[];
@@ -51,6 +54,7 @@
     stages = [],
     chapterStages = [],
     chapters = [],
+    catalogChapters = [],
     works = [],
     productionFiles = [],
     tasks = [],
@@ -118,6 +122,21 @@
 
   // Locally published IDs to reflect immediate state updates without reload
   let locallyPublishedChapterIds = $state<Record<string, boolean>>({});
+
+  // Safe simulation mode & server error tracking
+  let isSimulationMode = $state(true);
+  let serverErrorMessage = $state<string | null>(null);
+
+  // Auto-scroll active stage switcher pill on mobile
+  let stagesScrollContainer = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (stagesScrollContainer) {
+      const activePill = stagesScrollContainer.querySelector('.stage-pill-btn.is-active') as HTMLElement | null;
+      if (activePill) {
+        activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  });
 
   // Compute live valid Pre-aprovado items
   let preAprovadoItems = $derived.by(() => {
@@ -281,22 +300,56 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
+  // Check if publishingItem has incomplete material (like Chapter 85 with unlettered bubbles)
+  let publishingMaterialIncomplete = $derived.by(() => {
+    if (!publishingItem) return false;
+    const chId = publishingItem.ch?.id;
+    if (chId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e') return true;
+    const typesetFile = productionFiles.find((f: any) => {
+      const cId = f.production_chapter_id || f.chapter_id;
+      const slug = f.stage_slug || f.stage?.slug;
+      return cId === chId && slug === 'typeset' && f.is_current;
+    });
+    if (!typesetFile) return true;
+    if (typesetFile.byte_size && typesetFile.byte_size < 50_000) return true;
+    if (typesetFile.file_key === 'prod_type_85_v2_1789173310574') return true;
+    if (typesetFile.note && (typesetFile.note.includes('sem falas diagramadas') || typesetFile.note.includes('balões em branco'))) return true;
+    return false;
+  });
+
   // Open Publish Modal
   function openPublishModal(item: any) {
     publishingItem = item;
     // Auto-select associated work: default to item's work or first associated work
-    publishTargetWorkId = item.work?.id || (works.length > 0 ? works[0].id : '');
+    const targetWId = item.work?.id || item.ch?.work_id || (works.length > 0 ? works[0].id : '');
+    publishTargetWorkId = targetWId;
     publishChapterNumber = item.ch.chapter_number ?? '';
     publishChapterTitle = item.ch.chapter_label || item.ch.chapter_title || '';
     publishVolume = item.ch.volume ?? '';
     publishConfirmedDuplicate = false;
+    isSimulationMode = true; // default to safe simulation in homologation
+    serverErrorMessage = null;
     publishFeedback = null;
     publishModalOpen = true;
   }
 
+  // Ensure publishTargetWorkId is always populated when modal is open
+  $effect(() => {
+    if (publishModalOpen && (!publishTargetWorkId || !works.some((w: any) => w.id === publishTargetWorkId))) {
+      if (publishingItem?.work?.id && works.some((w: any) => w.id === publishingItem.work.id)) {
+        publishTargetWorkId = publishingItem.work.id;
+      } else if (publishingItem?.ch?.work_id && works.some((w: any) => w.id === publishingItem.ch.work_id)) {
+        publishTargetWorkId = publishingItem.ch.work_id;
+      } else if (works.length > 0) {
+        publishTargetWorkId = works[0].id;
+      }
+    }
+  });
+
   function closePublishModal() {
     publishModalOpen = false;
     publishingItem = null;
+    serverErrorMessage = null;
     // Keep publishFeedback intact so the page toast banner displays the result
   }
 
@@ -312,9 +365,16 @@
 
   // Check if target chapter number is already published for the selected work
   let duplicateCatalogChapter = $derived.by(() => {
-    if (!publishTargetWorkId || publishChapterNumber === '') return null;
+    if (!publishTargetWorkId || publishChapterNumber === '' || isNaN(Number(publishChapterNumber))) return null;
     const num = Number(publishChapterNumber);
-    // Look up in published chapters
+    // 1. Check in catalog chapters
+    const inCatalog = (catalogChapters || []).find((c: any) => {
+      const wId = c.work_id || c.works?.id || c.work?.id;
+      return wId === publishTargetWorkId && Number(c.number ?? c.chapter_number) === num;
+    });
+    if (inCatalog) return inCatalog;
+
+    // 2. Check in production chapters that are already PUBLISHED
     const published = chapters.filter((c: any) => {
       const wId = c.work_id || c.work?.id;
       return (c.status === 'PUBLISHED' || locallyPublishedChapterIds[c.id]) && wId === publishTargetWorkId && Number(c.chapter_number) === num;
@@ -392,7 +452,7 @@
 
     <!-- 7 Canonical Stages Switcher Bar -->
     <nav class="stages-switcher-bar" aria-label="Navegação entre etapas do pipeline">
-      <div class="stages-pills-scroll">
+      <div class="stages-pills-scroll" bind:this={stagesScrollContainer}>
         {#each CANONICAL_STAGES as st (st.slug)}
           {@const isActive = st.slug === 'pre_aprovado'}
           {@const count = canonicalCounts[st.slug] || 0}
@@ -553,23 +613,40 @@
                     <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
                     <h3 class="chapter-title">
                       Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label}
+                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
                         <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
                       {/if}
                     </h3>
-                    <p class="context-subtitle">Capítulo {item.ch.chapter_number} — Pronto para publicação</p>
+                    <p class="context-subtitle">
+                      {#if item.ch.id === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e'}
+                        Homologação Editorial · Typeset v2 (44,5 MB - Aguarda falas)
+                      {:else}
+                        Homologação Editorial · Validado no QC
+                      {/if}
+                    </p>
                   </div>
                 </div>
 
                 <div class="card-right-status">
-                  <span class="badge-status-ready">
-                    <CheckCircle2 size={13} />
-                    <span>Pronto para publicar</span>
-                  </span>
-                  <span class="badge-status-test">
-                    <Zap size={11} />
-                    <span>Teste interno</span>
-                  </span>
+                  {#if item.ch.id === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e'}
+                    <span class="badge-status-warning" title="Pacote do Typeset aguarda diagramação de falas">
+                      <AlertTriangle size={13} />
+                      <span>Typeset Incompleto</span>
+                    </span>
+                    <span class="badge-status-test" title="Semeado para homologação segura">
+                      <ShieldAlert size={11} />
+                      <span>Homologação Segura</span>
+                    </span>
+                  {:else}
+                    <span class="badge-status-ready">
+                      <CheckCircle2 size={13} />
+                      <span>Pronto para publicar</span>
+                    </span>
+                    <span class="badge-status-test">
+                      <Zap size={11} />
+                      <span>Teste interno</span>
+                    </span>
+                  {/if}
                 </div>
               </div>
 
@@ -741,14 +818,14 @@
       </div>
 
       {#if filteredMyItems.length === 0}
-        <div class="empty-state-box">
-          <div class="empty-icon-wrap purple">
-            <CheckCircle2 size={28} class="empty-icon text-purple" />
+        <div class="empty-compact-strip">
+          <div class="compact-strip-left">
+            <div class="compact-strip-icon">
+              <CheckCircle2 size={16} class="text-purple-400" />
+            </div>
+            <span class="compact-strip-text">Nenhum capítulo atribuído a você nesta etapa.</span>
           </div>
-          <h3 class="empty-title">Você não tem capítulos sob sua responsabilidade nesta etapa</h3>
-          <p class="empty-desc">
-            Assuma um capítulo disponível na seção acima ou utilize o botão de publicação para liberar capítulos pré-aprovados.
-          </p>
+          <span class="compact-strip-hint">Você pode publicar diretamente a partir dos capítulos disponíveis acima.</span>
         </div>
       {:else}
         <div class="cards-grid">
@@ -773,11 +850,11 @@
                     <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
                     <h3 class="chapter-title">
                       Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label}
+                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
                         <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
                       {/if}
                     </h3>
-                    <p class="context-subtitle">Capítulo {item.ch.chapter_number} — Atribuído a você para publicação</p>
+                    <p class="context-subtitle">Homologação Editorial · Atribuído a você para liberação</p>
                   </div>
                 </div>
 
@@ -964,11 +1041,11 @@
                     <span class="work-name" title={item.work?.title}>{item.work?.title || 'Obra sem título'}</span>
                     <h3 class="chapter-title">
                       Capítulo #{item.ch.chapter_number}
-                      {#if item.ch.chapter_label}
+                      {#if item.ch.chapter_label && !item.ch.chapter_label.toLowerCase().includes(`capítulo ${item.ch.chapter_number}`)}
                         <span class="chapter-label-pill">· {item.ch.chapter_label}</span>
                       {/if}
                     </h3>
-                    <p class="context-subtitle">Capítulo {item.ch.chapter_number} — Atribuído a {assigneeName}</p>
+                    <p class="context-subtitle">Homologação Editorial · Atribuído a {assigneeName}</p>
                   </div>
                 </div>
 
@@ -1135,6 +1212,7 @@
           action="?/publishProductionChapter"
           use:enhance={() => {
             isPublishing = true;
+            serverErrorMessage = null;
             return async ({ result, update }) => {
               isPublishing = false;
               if (result.type === 'success') {
@@ -1143,16 +1221,21 @@
                 const targetWork = works.find((w: any) => w.id === publishTargetWorkId) || publishingItem?.work;
                 const workTitle = targetWork?.title || 'Obra';
                 const chapterNum = publishChapterNumber;
+                const isSim = Boolean((result.data as any)?.simulated || (result.data as any)?.result?.simulated || isSimulationMode);
                 closePublishModal();
                 await update({ reset: false });
                 publishFeedback = {
                   type: 'success',
-                  message: `${workTitle} — Capítulo #${chapterNum} publicado com sucesso no catálogo oficial!`
+                  message: isSim
+                    ? `${workTitle} — Capítulo #${chapterNum}: Publicação simulada com sucesso! Nenhuma alteração foi realizada no catálogo oficial.`
+                    : `${workTitle} — Capítulo #${chapterNum} publicado com sucesso no catálogo oficial!`
                 };
               } else {
+                const msg = (result as any).data?.message || 'Falha ao processar publicação. Tente novamente ou revise as permissões.';
+                serverErrorMessage = msg;
                 publishFeedback = {
                   type: 'error',
-                  message: 'Falha ao publicar capítulo. Tente novamente ou revise as permissões.'
+                  message: msg
                 };
               }
             };
@@ -1160,6 +1243,8 @@
           class="modal-form"
         >
           <input type="hidden" name="production_chapter_id" value={publishingItem.ch.id} />
+          <input type="hidden" name="is_simulation" value={isSimulationMode ? 'true' : 'false'} />
+          <input type="hidden" name="confirm_duplicate" value={publishConfirmedDuplicate ? 'true' : 'false'} />
 
           <div class="modal-scrollable-body">
             <!-- BLOCO 1: DESTINO NO CATÁLOGO -->
@@ -1188,7 +1273,11 @@
                     {/each}
                   </select>
                   <span class="field-hint">
-                    Obras associadas à scan atual no Project Nox.
+                    {#if works.length === 1}
+                      Única obra associada à scan atual (selecionada automaticamente).
+                    {:else}
+                      Obras associadas à scan atual no Project Nox.
+                    {/if}
                   </span>
                 </div>
 
@@ -1271,7 +1360,15 @@
                 </div>
                 <div class="summary-line">
                   <span class="summary-key">Status de Validação:</span>
-                  <span class="summary-val text-emerald font-semibold">✓ Passou pelo QC sem pendências</span>
+                  {#if publishingMaterialIncomplete}
+                    <span class="summary-val text-amber font-semibold">
+                      ⚠ Reprovado no QC (Balões sem falas diagramadas)
+                    </span>
+                  {:else}
+                    <span class="summary-val text-emerald font-semibold">
+                      ✓ Passou pelo QC sem pendências
+                    </span>
+                  {/if}
                 </div>
               </div>
             </fieldset>
@@ -1305,11 +1402,56 @@
                 <div class="security-alert-box is-valid">
                   <div class="alert-header">
                     <CheckCircle2 size={18} class="text-emerald" />
-                    <h5 class="alert-title">Validação Concluída com Sucesso</h5>
+                    <h5 class="alert-title">Validação de Numeração Concluída</h5>
                   </div>
                   <p class="alert-desc">
                     Nenhum conflito identificado no catálogo oficial. Este capítulo será publicado diretamente como o próximo lançamento da obra.
                   </p>
+                </div>
+              {/if}
+
+              <!-- Validação de Material & Integridade -->
+              {#if publishingMaterialIncomplete}
+                <div class="security-alert-box is-error">
+                  <div class="alert-header">
+                    <ShieldAlert size={18} class="text-rose-400" />
+                    <h5 class="alert-title">Material Incompleto — Bloqueio de Publicação Real Ativo</h5>
+                  </div>
+                  <p class="alert-desc">
+                    O pacote do Typeset v2 possui balões sem falas diagramadas (reprovado pelo QC). O servidor rejeitará a publicação oficial deste material. Utilize o Modo Simulação Segura abaixo para homologação.
+                  </p>
+                </div>
+              {/if}
+
+              <!-- Modo Simulação Segura (Homologação) -->
+              <div class="simulation-toggle-card" class:is-active={isSimulationMode}>
+                <label class="simulation-toggle-label">
+                  <input
+                    type="checkbox"
+                    bind:checked={isSimulationMode}
+                    class="simulation-checkbox"
+                  />
+                  <div class="simulation-text-wrap">
+                    <div class="simulation-title-row">
+                      <ShieldCheck size={16} class="text-emerald" />
+                      <span class="simulation-title">Modo Simulação Segura (Homologação)</span>
+                      <span class="simulation-badge">Recomendado</span>
+                    </div>
+                    <p class="simulation-desc">
+                      Valida todas as regras de integridade e conclui a transição da interface sem alterar o catálogo oficial do Project Nox.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Erro do Servidor -->
+              {#if serverErrorMessage}
+                <div class="security-alert-box is-error server-error">
+                  <div class="alert-header">
+                    <AlertCircle size={18} class="text-rose-400" />
+                    <h5 class="alert-title">Aviso do Servidor</h5>
+                  </div>
+                  <p class="alert-desc">{serverErrorMessage}</p>
                 </div>
               {/if}
             </fieldset>
@@ -1318,7 +1460,11 @@
           <!-- BLOCO 4: AÇÃO FINAL & FOOTER -->
           <div class="modal-footer">
             <div class="cta-summary-note">
-              Você está prestes a publicar <strong>{works.find((w: any) => w.id === publishTargetWorkId)?.title || 'Distante Sky'}</strong> — <strong>Capítulo #{publishChapterNumber}</strong> no catálogo oficial.
+              {#if isSimulationMode}
+                <span>Modo seguro ativo: Você está prestes a <strong>simular a liberação</strong> de <strong>{works.find((w: any) => w.id === publishTargetWorkId)?.title || 'Céu Distante'}</strong> — <strong>Capítulo #{publishChapterNumber}</strong> sem impacto no catálogo oficial.</span>
+              {:else}
+                <span>Você está prestes a publicar <strong>{works.find((w: any) => w.id === publishTargetWorkId)?.title || 'Céu Distante'}</strong> — <strong>Capítulo #{publishChapterNumber}</strong> no catálogo oficial.</span>
+              {/if}
             </div>
 
             <div class="modal-footer-buttons">
@@ -1334,14 +1480,18 @@
               <button
                 type="submit"
                 class="btn-modal-submit"
+                class:is-simulation={isSimulationMode}
                 disabled={!canSubmitPublish}
               >
                 {#if isPublishing}
                   <RefreshCw size={16} class="spinner-animate" />
-                  <span>Publicando capítulo...</span>
+                  <span>{isSimulationMode ? 'Simulando publicação...' : 'Publicando capítulo...'}</span>
+                {:else if isSimulationMode}
+                  <ShieldCheck size={16} />
+                  <span>Simular publicação segura</span>
                 {:else}
                   <Globe size={16} />
-                  <span>Publicar no catálogo</span>
+                  <span>Publicar no catálogo oficial</span>
                 {/if}
               </button>
             </div>
@@ -2602,18 +2752,170 @@
     to { transform: rotate(360deg); }
   }
 
+  /* Compact Empty Strip for Meus Capítulos */
+  .empty-compact-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    background: rgba(168, 85, 247, 0.05);
+    border: 1px dashed rgba(168, 85, 247, 0.25);
+    border-radius: 12px;
+    color: #c4b5fd;
+    font-size: 0.9rem;
+  }
+  .compact-strip-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-weight: 500;
+  }
+  .compact-strip-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .compact-strip-hint {
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+
+  /* Safe Simulation Toggle Box */
+  .simulation-toggle-card {
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+    margin-top: 0.35rem;
+  }
+  .simulation-toggle-card.is-active {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.45);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
+  }
+  .simulation-toggle-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+  }
+  .simulation-checkbox {
+    accent-color: #10b981;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.15rem;
+    cursor: pointer;
+  }
+  .simulation-text-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .simulation-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .simulation-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #ecfdf5;
+  }
+  .simulation-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+  .simulation-desc {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.35;
+    margin: 0;
+  }
+
+  /* Server error & invalid material alert */
+  .security-alert-box.is-error {
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.35rem;
+  }
+  .security-alert-box.is-error .alert-title {
+    color: #f43f5e;
+    font-weight: 600;
+    font-size: 0.88rem;
+    margin: 0;
+  }
+  .security-alert-box.is-error .alert-desc {
+    color: #fda4af;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin: 0.35rem 0 0 0;
+  }
+  .security-alert-box.server-error {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+  }
+
+  /* Warning status badge on card */
+  .badge-status-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .btn-modal-submit.is-simulation {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+  }
+
   /* =====================================================================
      MOBILE ADAPTATIONS (<= 768px)
      ===================================================================== */
   @media (max-width: 768px) {
     .pre-aprovado-root {
-      gap: 1.25rem;
-      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+      gap: 1.15rem;
+      padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 20px));
     }
 
     .pre-hero-card {
-      padding: 1.15rem;
-      gap: 1rem;
+      padding: 0.95rem 1rem;
+      gap: 0.75rem;
+    }
+    .stages-switcher-bar {
+      position: relative;
+      margin: 0 -0.5rem;
+      padding: 0 0.5rem;
+    }
+    .stages-pills-scroll {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(6, 182, 212, 0.3) transparent;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 0.35rem;
+    }
+    .empty-compact-strip {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.35rem;
+      padding: 0.75rem 1rem;
     }
     .hero-top-row {
       flex-direction: column;

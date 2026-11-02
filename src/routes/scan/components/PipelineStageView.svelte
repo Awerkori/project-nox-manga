@@ -41,6 +41,7 @@
     stages = [],
     chapterStages = [],
     chapters = [],
+    catalogChapters = [],
     works = [],
     productionFiles = [],
     tasks = [],
@@ -664,6 +665,7 @@
     {stages}
     {chapterStages}
     {chapters}
+    {catalogChapters}
     {works}
     {productionFiles}
     {tasks}

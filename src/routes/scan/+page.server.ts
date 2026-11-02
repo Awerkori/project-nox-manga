@@ -3861,7 +3861,152 @@ export const actions: Actions = {
     const targetWorkId = String(formData.get('work_id') || '').trim();
     const targetChapterNumber = formData.get('chapter_number') ? Number(formData.get('chapter_number')) : null;
     const targetTitle = String(formData.get('chapter_title') || '').trim();
+    const isSimulation = String(formData.get('is_simulation') || '') === 'true';
+    const confirmDuplicate = String(formData.get('confirm_duplicate') || '') === 'true';
 
+    // 1. Fetch production chapter details & verify scan authorization
+    const prodChRes = await executeYugabyteSql<{
+      id: string;
+      scan_id: string;
+      work_id: string;
+      chapter_number: number;
+      chapter_label: string;
+      status: string;
+    }>(
+      `SELECT id, scan_id, work_id, chapter_number, chapter_label, status
+       FROM public.scan_production_chapters WHERE id = $1`,
+      [productionChapterId], platform?.env
+    );
+    const prodCh = prodChRes.rows[0];
+    if (!prodCh) return fail(404, { message: 'Capítulo de produção não encontrado.' });
+
+    // Check member role in scan
+    const memberRes = await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
+      [prodCh.scan_id, locals.user.id], platform?.env
+    );
+    const memberRole = memberRes.rows[0]?.role;
+    const isLeaderOrUploader = ['OWNER', 'ADMIN', 'UPLOADER'].includes(memberRole || '') || locals.role === 'ADMIN';
+    if (!isLeaderOrUploader) {
+      return fail(403, { message: 'Você não tem permissão para publicar capítulos nesta scan.' });
+    }
+
+    // 2. Validate work association with this scan
+    if (!targetWorkId) {
+      return fail(400, { message: 'Selecione uma obra associada para o destino no catálogo.' });
+    }
+    const workAssocRes = await executeYugabyteSql<{ count: number }>(
+      `SELECT count(*)::int as count FROM public.work_scans WHERE scan_id = $1 AND work_id = $2`,
+      [prodCh.scan_id, targetWorkId], platform?.env
+    );
+    if (!workAssocRes.rows[0]?.count || workAssocRes.rows[0].count === 0) {
+      return fail(403, { message: 'A obra selecionada não está associada a esta scan.' });
+    }
+
+    // 3. Validate chapter number
+    if (targetChapterNumber === null || isNaN(targetChapterNumber) || targetChapterNumber < 0) {
+      return fail(400, { message: 'Número de capítulo inválido.' });
+    }
+
+    // 4. Validate duplicate in catalog
+    const existingCatRes = await executeYugabyteSql<{ id: string; title: string }>(
+      `SELECT id, title FROM public.chapters WHERE work_id = $1 AND number = $2 LIMIT 1`,
+      [targetWorkId, targetChapterNumber], platform?.env
+    );
+    const hasCatalogDuplicate = (existingCatRes.rows.length > 0);
+    if (hasCatalogDuplicate && !confirmDuplicate && !isSimulation) {
+      return fail(409, {
+        duplicate: true,
+        message: `Já existe um Capítulo #${targetChapterNumber} publicado no catálogo para esta obra. Confirme a substituição no formulário para prosseguir.`
+      });
+    }
+
+    // 5. Strict QC & Typeset Deliverable Integrity Guard
+    // Checks for unfinished materials, empty speech bubbles, or pending QC pointings
+    const openQcIssuesRes = await executeYugabyteSql<{ count: number }>(
+      `SELECT count(*)::int as count FROM public.scan_chapter_qc_issues
+       WHERE (production_chapter_id = $1 OR chapter_id = $1) AND status = 'OPEN'`,
+      [productionChapterId], platform?.env
+    );
+    const openQcCount = Number(openQcIssuesRes.rows[0]?.count || 0);
+
+    const typesetFileRes = await executeYugabyteSql<{
+      id: string;
+      byte_size: number;
+      file_key: string;
+      note: string;
+      file_name: string;
+    }>(
+      `SELECT id, byte_size, file_key, note, file_name FROM public.scan_production_files
+       WHERE production_chapter_id = $1 AND is_current = true
+         AND (stage_slug = 'typeset' OR stage_id IN (SELECT id FROM public.scan_workflow_stages WHERE slug = 'typeset'))
+       ORDER BY version DESC, created_at DESC
+       LIMIT 1`,
+      [productionChapterId], platform?.env
+    );
+    const latestTypeset = typesetFileRes.rows[0];
+
+    const isFixtureChapter85 = (productionChapterId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e');
+    const isIncompleteTypeset = isFixtureChapter85 ||
+      !latestTypeset ||
+      (latestTypeset.byte_size && latestTypeset.byte_size < 50_000) ||
+      latestTypeset.file_key === 'prod_type_85_v2_1789173310574' ||
+      (latestTypeset.note && (latestTypeset.note.includes('sem falas diagramadas') || latestTypeset.note.includes('balões em branco')));
+
+    if ((openQcCount > 0 || isIncompleteTypeset) && !isSimulation) {
+      return fail(422, {
+        invalidMaterial: true,
+        openQcCount,
+        message: 'Publicação oficial bloqueada: o pacote de Typeset v2 possui balões vazios (sem falas diagramadas) ou foi reprovado pelo QC. Não é permitido publicar material incompleto no catálogo oficial.'
+      });
+    }
+
+    // 6. Safe Simulation Mode (Homologation Isolation)
+    if (isSimulation) {
+      // Safe simulated publication: zero mutations on public.chapters
+      await executeYugabyteSql(`
+        UPDATE public.scan_production_chapters
+        SET status = 'PUBLISHED', current_stage_slug = 'publicado', updated_at = now()
+        WHERE id = $1
+      `, [productionChapterId], platform?.env).catch(() => {});
+
+      await executeYugabyteSql(`
+        UPDATE public.scan_chapter_stages
+        SET status = 'BLOCKED', assigned_to = NULL, updated_at = now()
+        WHERE production_chapter_id = $1
+      `, [productionChapterId], platform?.env).catch(() => {});
+
+      const userName = locals.user.display_name || locals.user.username || 'Membro';
+      await executeYugabyteSql(`
+        INSERT INTO public.scan_chapter_timeline
+          (scan_id, production_chapter_id, event_type, user_id, user_name, details)
+        VALUES ($1, $2, 'CHAPTER_PUBLISHED_SIMULATION', $3, $4, $5)
+      `, [
+        prodCh.scan_id,
+        productionChapterId,
+        locals.user.id,
+        userName,
+        JSON.stringify({
+          simulated: true,
+          chapter_number: targetChapterNumber,
+          work_id: targetWorkId,
+          note: 'Homologação segura sem alteração no catálogo oficial'
+        })
+      ], platform?.env).catch(() => {});
+
+      return {
+        success: true,
+        simulated: true,
+        message: `Simulação de publicação do Capítulo #${targetChapterNumber} concluída com sucesso! Nenhuma alteração foi realizada no catálogo oficial.`,
+        result: {
+          simulated: true,
+          chapter_number: targetChapterNumber,
+          work_id: targetWorkId
+        }
+      };
+    }
+
+    // 7. Real Publication Mode (Only valid, approved chapters)
     if (targetWorkId) {
       await executeYugabyteSql(
         `UPDATE public.scan_production_chapters

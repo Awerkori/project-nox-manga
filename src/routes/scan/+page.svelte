@@ -1294,6 +1294,7 @@
                 stages={data.stages || []}
                 chapterStages={data.chapterStages || []}
                 chapters={data.productionChapters || []}
+                catalogChapters={data.chapters || []}
                 works={works}
                 productionFiles={data.productionFiles || []}
                 tasks={data.tasks || []}
