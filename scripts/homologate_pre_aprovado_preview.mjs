@@ -119,6 +119,7 @@ async function main() {
 
     // Scroll card into view on mobile so all actions are verified
     await mobPage.locator('.pre-card').first().scrollIntoViewIfNeeded();
+    await mobPage.evaluate(() => window.scrollBy(0, 160));
     await mobPage.waitForTimeout(800);
 
     const mobPopulatedPath = join(artifactDir, 'pre_aprovado_populated_mobile.png');
@@ -174,6 +175,11 @@ async function main() {
     // Verify queue returned to 0
     const postAvailableCount = await deskPage.locator('.available-badge').innerText();
     console.log(`Post-publish Available count: ${postAvailableCount}`);
+
+    // Verify sidebar badge is also 0 / gone
+    const sidebarPreBtn = deskPage.locator('button.nav-sub-btn:has-text("Pré-aprovado")');
+    const personalBadgeCount = await sidebarPreBtn.locator('.nav-sub-personal-badge').count();
+    console.log(`Sidebar personal badge count: ${personalBadgeCount}`);
 
     const deskPostPublishPath = join(artifactDir, 'pre_aprovado_post_publish_desktop.png');
     await deskPage.screenshot({ path: deskPostPublishPath, fullPage: false });

@@ -130,7 +130,7 @@
 
     for (const cs of chapterStages) {
       const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
-      if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+      if (!ch || ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
         continue;
       }
       const slug = cs.stage?.slug || '';
@@ -460,7 +460,7 @@
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
         const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
-        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
           continue;
         }
         const slug = cs.stage?.slug || '';
@@ -520,7 +520,7 @@
       const stageSlug = cs.stage?.slug || '';
       if (matchesStageSlug(stageSlug, target)) {
         const ch = chapters.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
-        if (ch && ch.status !== 'PUBLISHED' && ch.status !== 'ARCHIVED' && ch.status !== 'INACTIVE') {
+        if (ch && ch.status !== 'PUBLISHED' && ch.status !== 'CANCELLED' && ch.status !== 'ARCHIVED' && ch.status !== 'INACTIVE') {
           const work = ch.work || works.find((w: any) => w.id === ch.work_id);
           result.push({ ch, cs, work });
         }

@@ -135,8 +135,8 @@
       const ch = chapters.find((c: any) => c.id === chId);
       if (!ch) continue;
 
-      // Rule: Do NOT include published, archived or locally published items
-      if (ch.status === 'PUBLISHED' || locallyPublishedChapterIds[ch.id]) continue;
+      // Rule: Do NOT include published, cancelled, archived or locally published items
+      if (ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || locallyPublishedChapterIds[ch.id]) continue;
       if (ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') continue;
 
       const work = ch.work || works.find((w: any) => w.id === ch.work_id);
@@ -217,7 +217,7 @@
       for (const cs of chapterStages) {
         const chId = cs.production_chapter_id || cs.chapter_id;
         const ch = chapters.find((c: any) => c.id === chId);
-        if (!ch || ch.status === 'PUBLISHED' || locallyPublishedChapterIds[ch.id]) continue;
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || locallyPublishedChapterIds[ch.id]) continue;
         if (ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') continue;
 
         const slug = cs.stage?.slug || '';
@@ -497,7 +497,7 @@
   </section>
 
   <!-- 3. SEÇÃO: CAPÍTULOS DISPONÍVEIS -->
-  {#if filterQueueTab !== 'MINE'}
+  {#if filterQueueTab === 'ALL' || filterQueueTab === 'AVAILABLE'}
     <section class="queue-section" aria-labelledby="heading-available">
       <div class="section-header">
         <div class="section-title-lockup">
@@ -721,7 +721,7 @@
   {/if}
 
   <!-- 4. SEÇÃO: MEUS CAPÍTULOS -->
-  {#if filterQueueTab !== 'AVAILABLE'}
+  {#if filterQueueTab === 'ALL' || filterQueueTab === 'MINE'}
     <section class="queue-section" aria-labelledby="heading-mine">
       <div class="section-header">
         <div class="section-title-lockup">
@@ -911,7 +911,7 @@
   {/if}
 
   <!-- 4.1. SEÇÃO: CAPÍTULOS DA EQUIPE -->
-  {#if teamItems.length > 0 && filterQueueTab !== 'AVAILABLE' && filterQueueTab !== 'MINE'}
+  {#if teamItems.length > 0 && (filterQueueTab === 'ALL' || filterQueueTab === 'TEAM')}
     <section class="queue-section" aria-labelledby="heading-team">
       <div class="section-header">
         <div class="section-title-lockup">
@@ -1142,12 +1142,13 @@
                 if (pubChId) locallyPublishedChapterIds[pubChId] = true;
                 const targetWork = works.find((w: any) => w.id === publishTargetWorkId) || publishingItem?.work;
                 const workTitle = targetWork?.title || 'Obra';
-                publishFeedback = {
-                  type: 'success',
-                  message: `${workTitle} — Capítulo #${publishChapterNumber} publicado com sucesso no catálogo oficial!`
-                };
+                const chapterNum = publishChapterNumber;
                 closePublishModal();
                 await update({ reset: false });
+                publishFeedback = {
+                  type: 'success',
+                  message: `${workTitle} — Capítulo #${chapterNum} publicado com sucesso no catálogo oficial!`
+                };
               } else {
                 publishFeedback = {
                   type: 'error',
@@ -2312,7 +2313,7 @@
   }
 
   .modal-header {
-    padding: 1.25rem 1.5rem;
+    padding: 0.9rem 1.25rem;
     border-bottom: 1px solid #1e263a;
     display: flex;
     align-items: center;
@@ -2323,11 +2324,11 @@
   .modal-header-left {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
+    gap: 0.75rem;
   }
   .modal-icon-badge {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.3);
@@ -2337,23 +2338,23 @@
     flex-shrink: 0;
   }
   .modal-title {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
     line-height: 1.2;
   }
   .modal-subtitle {
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     color: #94a3b8;
-    margin: 0.25rem 0 0 0;
+    margin: 0.2rem 0 0 0;
   }
   .btn-modal-close {
     background: none;
     border: none;
     color: #64748b;
     cursor: pointer;
-    padding: 0.4rem;
+    padding: 0.35rem;
     border-radius: 8px;
     display: flex;
   }
@@ -2371,11 +2372,11 @@
   }
 
   .modal-scrollable-body {
-    padding: 1.25rem 1.5rem;
+    padding: 0.9rem 1.25rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.75rem;
     flex: 1 1 auto;
     min-height: 0;
   }
@@ -2384,7 +2385,7 @@
     border: 1px solid #1e263a;
     border-radius: 10px;
     background: #0f121d;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     margin: 0;
   }
   .block-legend {
@@ -2392,19 +2393,19 @@
     align-items: center;
     gap: 0.45rem;
     padding: 0 0.5rem;
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     font-weight: 700;
     color: #22d3ee;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .legend-number {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #06b6d4;
     color: #0b0d13;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 800;
     display: flex;
     align-items: center;
@@ -2414,13 +2415,13 @@
   .form-fields-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-top: 0.5rem;
+    gap: 0.65rem;
+    margin-top: 0.35rem;
   }
   .form-group {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.25rem;
   }
   .form-group.full-col {
     grid-column: 1 / -1;
@@ -2430,7 +2431,7 @@
   }
 
   .field-label {
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: #cbd5e1;
     display: flex;
@@ -2444,19 +2445,19 @@
     background: #141826;
     border: 1px solid #232c40;
     border-radius: 8px;
-    padding: 0.6rem 0.85rem;
-    font-size: 0.875rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.85rem;
     color: #ffffff;
     outline: none;
     transition: border-color 0.15s;
-    min-height: 42px;
+    min-height: 38px;
   }
   .field-input:focus, .field-select:focus {
     border-color: #06b6d4;
     box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
   }
   .field-hint {
-    font-size: 0.75rem;
+    font-size: 0.725rem;
     color: #64748b;
   }
 
@@ -2465,12 +2466,12 @@
     background: #131726;
     border: 1px solid #1e2538;
     border-radius: 8px;
-    padding: 0.85rem 1rem;
+    padding: 0.65rem 0.85rem;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
+    gap: 0.35rem;
+    font-size: 0.825rem;
+    margin-top: 0.35rem;
   }
   .summary-line {
     display: flex;
@@ -2488,8 +2489,8 @@
   /* Security alerts in modal */
   .security-alert-box {
     border-radius: 8px;
-    padding: 0.85rem 1rem;
-    margin-top: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    margin-top: 0.35rem;
   }
   .security-alert-box.is-valid {
     background: rgba(16, 185, 129, 0.08);
@@ -2503,28 +2504,28 @@
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.25rem;
   }
   .alert-title {
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
   }
   .alert-desc {
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     color: #cbd5e1;
-    margin: 0 0 0.5rem 0;
-    line-height: 1.45;
+    margin: 0 0 0.35rem 0;
+    line-height: 1.4;
   }
   .confirm-duplicate-label {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     color: #fef08a;
     cursor: pointer;
-    padding-top: 0.4rem;
+    padding-top: 0.35rem;
     border-top: 1px solid rgba(245, 158, 11, 0.2);
   }
   .confirm-checkbox {
@@ -2534,15 +2535,15 @@
 
   /* Modal Footer */
   .modal-footer {
-    padding: 1.25rem 1.5rem;
+    padding: 0.85rem 1.25rem;
     border-top: 1px solid #1e263a;
     background: #141828;
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 0.65rem;
   }
   .cta-summary-note {
-    font-size: 0.825rem;
+    font-size: 0.8rem;
     color: #94a3b8;
     text-align: center;
     line-height: 1.4;
@@ -2557,12 +2558,12 @@
     background: transparent;
     border: 1px solid #232c40;
     color: #cbd5e1;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    padding: 0.65rem 1.25rem;
+    padding: 0.55rem 1.15rem;
     border-radius: 8px;
     cursor: pointer;
-    min-height: 44px;
+    min-height: 40px;
   }
   .btn-modal-cancel:hover {
     background: rgba(255, 255, 255, 0.05);

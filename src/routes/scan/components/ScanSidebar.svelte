@@ -89,7 +89,7 @@
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
         const ch = chapters?.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
-        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
           continue;
         }
         const slug = cs.stage?.slug || '';
@@ -146,7 +146,7 @@
     if (chapterStages && chapterStages.length > 0) {
       for (const cs of chapterStages) {
         const ch = chapters?.find((c: any) => c.id === (cs.production_chapter_id || cs.chapter_id));
-        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
+        if (!ch || ch.status === 'PUBLISHED' || ch.status === 'CANCELLED' || ch.status === 'ARCHIVED' || ch.status === 'INACTIVE') {
           continue;
         }
         const slug = cs.stage?.slug || '';
