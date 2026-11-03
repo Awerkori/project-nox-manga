@@ -50,9 +50,8 @@ describe('Publicado Redesign & Zero-Notification Rule', () => {
 
     // 4. Primary & Secondary Actions pointing to official domain projectnox.org
     expect(source).toContain('class="btn-read-chapter"');
-    expect(source).toContain('OFFICIAL_SITE_ORIGIN = \'https://projectnox.org\';');
+    expect(source).toContain("OFFICIAL_SITE_ORIGIN = 'https://projectnox.org';");
     expect(source).toContain('getOfficialReaderUrl(item)');
-    expect(source).toContain('https://projectnox.org/ler/{item.targetChapterId || item.id}');
     expect(source).toContain('class="btn-toggle-details"');
     expect(source).toContain('is-demo-disabled');
 
@@ -62,16 +61,25 @@ describe('Publicado Redesign & Zero-Notification Rule', () => {
     expect(source).not.toContain('Iniciar edição');
     expect(source).not.toContain('Enviar arquivo');
 
-    // 6. Expanded details sections
+    // 6. Two-tier expanded details with collapsible technical sub-accordion & 1-click UUID copy
     expect(source).toContain('card-expanded-panel');
-    expect(source).toContain('Origem Editorial');
-    expect(source).toContain('Link no Catálogo');
+    expect(source).toContain('Informações Principais');
+    expect(source).toContain('Informações técnicas');
+    expect(source).toContain('btn-copy-uuid');
+    expect(source).toContain('friendly-catalog-link');
 
-    // 7. Preview Visual Homologation Fixtures for isolated testing
-    expect(source).toContain('homologation-toolbar');
+    // 7. Preview Visual Homologation Dropdown ("Cenários de teste")
+    expect(source).toContain('homologation-utility-bar');
+    expect(source).toContain('Cenários de teste:');
     expect(source).toContain('1 Capítulo');
     expect(source).toContain('5 Capítulos');
     expect(source).toContain('Dezenas (24)');
-    expect(source).toContain('Vazio');
+    expect(source).toContain('Histórico Vazio');
+
+    // 8. Mobile Cover Thumbnail (44x62px) and Horizontal Stage Centering & Scroll Cues
+    expect(source).toContain('stages-scroll-cue-left');
+    expect(source).toContain('stages-scroll-cue-right');
+    expect(source).toContain('cover-thumb-wrapper');
+    expect(source).toContain('card-main-info-group');
   });
 });
