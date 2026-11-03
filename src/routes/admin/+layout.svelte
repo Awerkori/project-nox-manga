@@ -451,7 +451,7 @@
                 </a>
               {/if}
 
-              {#if isAdmin || role === 'STAFF_SITE' || role === 'GERENTE'}
+              {#if isAdmin}
                 <a
                   href="/admin/tickets?tab=obras"
                   class="nav-link"

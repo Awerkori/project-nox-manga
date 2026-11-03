@@ -1765,14 +1765,14 @@ export const actions: Actions = {
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const workId = formData.get('work_id') as string;
-    const message = (formData.get('message') as string)?.trim() || '';
+    const message = (formData.get('message') as string)?.trim() || null;
 
     if (!scanId || !workId) {
       return fail(400, { message: 'Identificadores da scan e da obra são obrigatórios.' });
     }
 
-    // 1. Strict Server-Side RBAC Guard: scan OWNER, scan ADMIN, or global site ADMIN / STAFF_SITE
-    const isAuthorizedGlobal = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+    // 1. Strict Server-Side RBAC Guard: scan OWNER, scan ADMIN, or global site ADMIN
+    const isAuthorizedGlobal = locals.role === 'ADMIN';
     if (!isAuthorizedGlobal) {
       const permRes = await executeYugabyteSql<{ role: string }>(
         `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,

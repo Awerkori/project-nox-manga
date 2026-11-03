@@ -507,7 +507,7 @@
         </a>
       {/if}
 
-      {#if data.isAdmin || data.isSiteManager}
+      {#if data.isAdmin}
         <a
           href="/admin/tickets?tab=obras"
           class="tab-btn"
@@ -1768,7 +1768,7 @@
   {/if}
 
   <!-- TAB 4: ADESÃO DE OBRAS (ADMIN OU GERENTE AUTORIZADO) -->
-  {#if activeTab === 'obras' && (data.isAdmin || data.isSiteManager)}
+  {#if activeTab === 'obras' && data.isAdmin}
     <section class="tab-panel" aria-label="Adesão de Obras de Scans">
       <!-- Status Filters & Search Bar -->
       <div class="toolbar-bar">

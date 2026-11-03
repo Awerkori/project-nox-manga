@@ -16,8 +16,8 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     return json({ error: 'scan_id é obrigatório' }, { status: 400 });
   }
 
-  // 2. Strict RBAC: scan OWNER, scan ADMIN, or global site ADMIN / STAFF_SITE can search works to request
-  const isAuthorizedGlobal = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+  // 2. Strict RBAC: scan OWNER, scan ADMIN, or global site ADMIN can search works to request
+  const isAuthorizedGlobal = locals.role === 'ADMIN';
   if (!isAuthorizedGlobal) {
     const permRes = await executeYugabyteSql<{ role: string }>(
       `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
@@ -49,7 +49,11 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     const prefixPattern = `${cleanQ}%`;
 
     // Query published works matching title, aliases, or unaccented text.
-    // Also annotate with linkage status for this specific scan.
+    // Order of relevance:
+    // 0 = Title starts with query
+    // 1 = Title contains query
+    // 2 = Alternative title (alias) starts with query
+    // 3 = Alternative title or search_text contains query
     const query = `
       SELECT 
         w.id,
@@ -82,7 +86,15 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
              LIKE translate(lower($1), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
         )
       ORDER BY 
-        CASE WHEN w.title ILIKE $3 THEN 0 ELSE 1 END,
+        CASE 
+          WHEN w.title ILIKE $3 THEN 0
+          WHEN w.title ILIKE $1 THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM unnest(COALESCE(w.aliases, ARRAY[]::text[])) AS a(t)
+            WHERE a.t ILIKE $3
+          ) THEN 2
+          ELSE 3
+        END,
         w.views_total DESC,
         w.title ASC
       LIMIT $4;
@@ -94,6 +106,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
       platform?.env
     );
 
+    const cleanLower = cleanQ.toLowerCase();
     const results = (res.rows || []).map((row) => {
       let link_status: 'AVAILABLE' | 'LINKED' | 'PENDING' = 'AVAILABLE';
       let link_label = 'Disponível para vincular';
@@ -106,12 +119,25 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
         link_label = 'Solicitação já pendente';
       }
 
+      // Check if matched by alternative title
+      let matched_alias: string | null = null;
+      const titleLower = (row.title || '').toLowerCase();
+      if (!titleLower.includes(cleanLower) && Array.isArray(row.aliases)) {
+        const foundAlias = row.aliases.find((a: string) =>
+          typeof a === 'string' && a.toLowerCase().includes(cleanLower)
+        );
+        if (foundAlias) {
+          matched_alias = foundAlias.trim();
+        }
+      }
+
       return {
         id: row.id,
         title: row.title,
         slug: row.slug,
         cover_id: row.cover_id,
         aliases: row.aliases || [],
+        matched_alias,
         kind: row.kind,
         status: row.status,
         author: row.author,

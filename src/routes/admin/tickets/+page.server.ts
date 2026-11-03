@@ -19,15 +19,11 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   }
 
   const isAdmin = locals.role === 'ADMIN';
-  const isSiteManager = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+  const isSiteManager = isAdmin;
   const requestedTab = url.searchParams.get('tab') || 'relatorios';
 
-  // Strict permission guard: non-admin users cannot access 'scans' or 'moderacao',
-  // and non-managers cannot access 'obras'
-  if (!isSiteManager && requestedTab === 'obras') {
-    throw redirect(303, '/admin/tickets?tab=relatorios');
-  }
-  if (!isAdmin && (requestedTab === 'scans' || requestedTab === 'moderacao')) {
+  // Strict permission guard: non-admin users cannot access 'scans', 'moderacao' or 'obras'
+  if (!isAdmin && (requestedTab === 'scans' || requestedTab === 'moderacao' || requestedTab === 'obras')) {
     throw redirect(303, '/admin/tickets?tab=relatorios');
   }
 
@@ -35,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ? 'scans'
     : (requestedTab === 'moderacao' && isAdmin)
     ? 'moderacao'
-    : (requestedTab === 'obras' && isSiteManager)
+    : (requestedTab === 'obras' && isAdmin)
     ? 'obras'
     : 'relatorios';
 
@@ -1195,8 +1191,8 @@ export const actions: Actions = {
   },
 
   reviewWorkRequest: async ({ request, locals, platform }) => {
-    if (!locals.user || !['ADMIN', 'STAFF_SITE'].includes(locals.role || '')) {
-      return fail(403, { message: 'Acesso negado. Apenas Administradores ou Gerentes Globais autorizados.' });
+    if (!locals.user || locals.role !== 'ADMIN') {
+      return fail(403, { message: 'Acesso negado. Apenas Administradores Gerais do site possuem autorização para avaliar adesão de obras.' });
     }
 
     const formData = await request.formData();

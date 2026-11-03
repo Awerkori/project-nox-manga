@@ -444,6 +444,7 @@
   let failedCoverIds = $state(new Set<string>());
   let projectSearchAbortController: AbortController | null = null;
   let projectSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let projectSearchRequestId = 0;
 
   function markCoverFailed(id: string) {
     const next = new Set(failedCoverIds);
@@ -462,6 +463,7 @@
 
     const trimmed = value.trim();
     if (trimmed.length < 1) {
+      projectSearchRequestId++;
       projectSearchResults = [];
       projectIsSearching = false;
       projectSearchError = null;
@@ -471,6 +473,8 @@
 
     projectIsSearching = true;
     projectSearchError = null;
+
+    const currentReqId = ++projectSearchRequestId;
 
     projectSearchDebounceTimer = setTimeout(async () => {
       const controller = new AbortController();
@@ -483,19 +487,25 @@
           { signal: controller.signal }
         );
 
+        if (currentReqId !== projectSearchRequestId) return;
+
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || 'Erro ao buscar obras.');
         }
 
         const resData = await res.json();
+        if (currentReqId !== projectSearchRequestId) return;
+
         projectSearchResults = resData.results || [];
         projectHasSearched = true;
       } catch (err: any) {
-        if (err.name === 'AbortError') return;
+        if (err.name === 'AbortError' || currentReqId !== projectSearchRequestId) return;
         projectSearchError = err.message || 'Erro de conexão na busca.';
       } finally {
-        projectIsSearching = false;
+        if (currentReqId === projectSearchRequestId) {
+          projectIsSearching = false;
+        }
       }
     }, 280);
   }
@@ -2724,9 +2734,9 @@
                             onerror={() => markCoverFailed(w.id)}
                           />
                         {:else}
-                          <div class="result-cover-fallback">
-                            <BookOpen size={16} class="fallback-icon" />
-                            <span class="fallback-brand">NOX</span>
+                          <div class="result-cover-fallback" role="img" aria-label="Capa indisponível para {w.title}">
+                            <BookOpen size={16} class="fallback-icon" aria-hidden="true" />
+                            <span class="fallback-brand" aria-hidden="true">NOX</span>
                           </div>
                         {/if}
                       </div>
@@ -2739,7 +2749,12 @@
                           </span>
                         </div>
 
-                        {#if w.aliases && w.aliases.length > 0}
+                        {#if w.matched_alias}
+                          <div class="result-matched-pill">
+                            <span class="match-tag">Correspondência:</span>
+                            <span class="match-value">título alternativo "{w.matched_alias}"</span>
+                          </div>
+                        {:else if w.aliases && w.aliases.length > 0}
                           <span class="result-aliases">Alt: {w.aliases.slice(0, 2).join(', ')}</span>
                         {/if}
 
@@ -2772,9 +2787,9 @@
                         onerror={() => markCoverFailed(selectedWork.id)}
                       />
                     {:else}
-                      <div class="result-cover-fallback">
-                        <BookOpen size={18} class="fallback-icon" />
-                        <span class="fallback-brand">NOX</span>
+                      <div class="result-cover-fallback" role="img" aria-label="Capa indisponível para {selectedWork.title}">
+                        <BookOpen size={18} class="fallback-icon" aria-hidden="true" />
+                        <span class="fallback-brand" aria-hidden="true">NOX</span>
                       </div>
                     {/if}
                   </div>
@@ -4184,7 +4199,7 @@
     font-weight: 600;
   }
 
-  .form-field input,
+  .form-field input:not(.smart-search-input),
   .form-field textarea {
     padding: 0.75rem 1rem;
     background: rgba(255, 255, 255, 0.04);
@@ -4196,7 +4211,7 @@
     transition: border-color 0.2s ease;
   }
 
-  .form-field input:focus,
+  .form-field input:not(.smart-search-input):focus,
   .form-field textarea:focus {
     border-color: #8b5cf6;
   }
@@ -5098,6 +5113,17 @@
     z-index: 10;
     flex-shrink: 0;
   }
+  .project-search-modal .modal-actions .btn-secondary,
+  .project-search-modal .modal-actions .btn-primary {
+    padding: 0.65rem 1.25rem;
+    font-size: 0.85rem;
+    border-radius: 9px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+  }
 
   /* Robust Specificity & Search Field Architecture */
   .form-field .search-input-wrap,
@@ -5124,16 +5150,14 @@
     justify-content: center;
   }
 
-  .form-field .search-input-wrap input.smart-search-input,
-  .form-field input.smart-search-input,
-  .smart-search-input {
+  .form-field .search-input-wrap .smart-search-input {
     width: 100%;
     height: 44px;
     box-sizing: border-box;
-    padding: 0 44px 0 44px !important;
+    padding: 0 44px 0 44px;
     border-radius: 9px;
     background: #0f1420;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #ffffff;
     font-size: 14px;
     line-height: 44px;
@@ -5141,11 +5165,9 @@
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
-  .form-field .search-input-wrap input.smart-search-input:focus,
-  .form-field input.smart-search-input:focus,
-  .smart-search-input:focus {
-    border-color: #8b5cf6 !important;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25) !important;
+  .form-field .search-input-wrap .smart-search-input:focus {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
     outline: none;
   }
 
@@ -5310,6 +5332,32 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .result-matched-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #c084fc;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-top: 1px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .result-matched-pill .match-tag {
+    font-weight: 700;
+    color: #a855f7;
+    flex-shrink: 0;
+  }
+  .result-matched-pill .match-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .result-meta-line {
     display: flex;
     align-items: center;
@@ -5336,8 +5384,32 @@
       max-height: calc(100dvh - 24px);
       border-radius: 12px;
     }
-    .form-field .search-input-wrap input.smart-search-input {
+    .form-field .search-input-wrap .smart-search-input {
       font-size: 13.5px;
+    }
+    .project-search-modal .modal-actions {
+      padding: 0.65rem 1rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+      gap: 0.5rem;
+    }
+    .project-search-modal .modal-actions .btn-secondary,
+    .project-search-modal .modal-actions .btn-primary {
+      flex: 1;
+      justify-content: center;
+      padding: 0.6rem 0.65rem;
+      font-size: 0.8rem;
+      min-height: 42px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .project-search-modal .modal-actions {
+      flex-direction: column-reverse;
+      gap: 0.5rem;
+    }
+    .project-search-modal .modal-actions .btn-secondary,
+    .project-search-modal .modal-actions .btn-primary {
+      width: 100%;
+      min-height: 44px;
     }
   }
 

@@ -159,6 +159,20 @@
   let isFormSubmitting = $state(false);
   let formNotice = $state<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
+  // Project requests history filter
+  let reqStatusFilter = $state<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+
+  let pendingProjectRequests = $derived((projectRequests || []).filter((r: any) => r.status === 'PENDING'));
+  let approvedProjectRequests = $derived((projectRequests || []).filter((r: any) => r.status === 'APPROVED'));
+  let rejectedProjectRequests = $derived((projectRequests || []).filter((r: any) => r.status === 'REJECTED'));
+
+  let displayedProjectRequests = $derived.by(() => {
+    if (reqStatusFilter === 'PENDING') return pendingProjectRequests;
+    if (reqStatusFilter === 'APPROVED') return approvedProjectRequests;
+    if (reqStatusFilter === 'REJECTED') return rejectedProjectRequests;
+    return projectRequests || [];
+  });
+
   // Mock fixtures definitions
   const MOCK_FIXTURES: Record<FixtureMode, Work[]> = {
     REAL: [], // uses actual works prop
@@ -975,55 +989,117 @@
           </div>
         {/if}
 
-        <!-- PENDING PROJECT REQUESTS -->
+        <!-- PROJECT REQUESTS (HISTORY & PENDING) -->
         {#if projectRequests && projectRequests.length > 0}
           <div class="project-requests-card">
             <div class="sub-header-row">
-              <Clock size={16} class="sub-ico text-amber" />
-              <h3 class="sub-heading">Solicitações de Obras em Andamento ({projectRequests.length})</h3>
+              <div class="sub-header-title-wrap">
+                <Clock size={16} class="sub-ico text-amber" />
+                <h3 class="sub-heading">
+                  {#if reqStatusFilter === 'PENDING'}
+                    Solicitações em Andamento ({pendingProjectRequests.length})
+                  {:else if reqStatusFilter === 'APPROVED'}
+                    Solicitações Aprovadas ({approvedProjectRequests.length})
+                  {:else if reqStatusFilter === 'REJECTED'}
+                    Solicitações Recusadas ({rejectedProjectRequests.length})
+                  {:else}
+                    Histórico de Solicitações ({projectRequests.length})
+                  {/if}
+                </h3>
+              </div>
+              <div class="req-filter-tabs" role="tablist" aria-label="Filtro de solicitações de obras">
+                <button
+                  type="button"
+                  class="req-filter-pill"
+                  class:active={reqStatusFilter === 'ALL'}
+                  onclick={() => reqStatusFilter = 'ALL'}
+                  aria-selected={reqStatusFilter === 'ALL'}
+                >
+                  Todas ({projectRequests.length})
+                </button>
+                <button
+                  type="button"
+                  class="req-filter-pill"
+                  class:active={reqStatusFilter === 'PENDING'}
+                  onclick={() => reqStatusFilter = 'PENDING'}
+                  aria-selected={reqStatusFilter === 'PENDING'}
+                >
+                  Em Andamento ({pendingProjectRequests.length})
+                </button>
+                <button
+                  type="button"
+                  class="req-filter-pill"
+                  class:active={reqStatusFilter === 'APPROVED'}
+                  onclick={() => reqStatusFilter = 'APPROVED'}
+                  aria-selected={reqStatusFilter === 'APPROVED'}
+                >
+                  Aprovadas ({approvedProjectRequests.length})
+                </button>
+                <button
+                  type="button"
+                  class="req-filter-pill"
+                  class:active={reqStatusFilter === 'REJECTED'}
+                  onclick={() => reqStatusFilter = 'REJECTED'}
+                  aria-selected={reqStatusFilter === 'REJECTED'}
+                >
+                  Recusadas ({rejectedProjectRequests.length})
+                </button>
+              </div>
             </div>
-            <div class="requests-list-stack">
-              {#each projectRequests as req (req.id)}
-                <div class="request-item-row status-{req.status.toLowerCase()}">
-                  <div class="req-cover-col">
-                    {#if req.works?.cover_id}
-                      <img src="/media/{req.works.cover_id}?size=thumb&v=3" alt="" class="req-mini-cover" />
-                    {:else}
-                      <div class="req-mini-cover-placeholder">NOX</div>
-                    {/if}
-                  </div>
-                  <div class="req-info-col">
-                    <strong class="req-work-title">{req.works?.title || 'Obra solicitada'}</strong>
-                    {#if req.message}
-                      <span class="req-message-quote">"{req.message}"</span>
-                    {/if}
-                    {#if req.status === 'REJECTED' && req.rejection_reason}
-                      <span class="req-rejection-alert">
-                        <AlertTriangle size={12} />
-                        <span>Motivo: {req.rejection_reason}</span>
+
+            {#if displayedProjectRequests.length === 0}
+              <div class="req-empty-filter">
+                <p>Nenhuma solicitação encontrada para o filtro selecionado.</p>
+              </div>
+            {:else}
+              <div class="requests-list-stack">
+                {#each displayedProjectRequests as req (req.id)}
+                  <div class="request-item-row status-{req.status.toLowerCase()}">
+                    <div class="req-cover-col">
+                      {#if req.works?.cover_id}
+                        <img
+                          src="/media/{req.works.cover_id}?size=thumb&v=3"
+                          alt="Capa de {req.works?.title || 'obra'}"
+                          class="req-mini-cover"
+                          loading="lazy"
+                        />
+                      {:else}
+                        <div class="req-mini-cover-placeholder" role="img" aria-label="Capa indisponível">NOX</div>
+                      {/if}
+                    </div>
+                    <div class="req-info-col">
+                      <strong class="req-work-title">{req.works?.title || 'Obra solicitada'}</strong>
+                      {#if req.message}
+                        <span class="req-message-quote">"{req.message}"</span>
+                      {/if}
+                      {#if req.status === 'REJECTED' && req.rejection_reason}
+                        <span class="req-rejection-alert">
+                          <AlertTriangle size={12} />
+                          <span>Motivo: {req.rejection_reason}</span>
+                        </span>
+                      {/if}
+                    </div>
+                    <div class="req-actions-col">
+                      <span class="status-badge-req status-{req.status.toLowerCase()}">
+                        {req.status === 'PENDING'
+                          ? 'Em Análise'
+                          : req.status === 'APPROVED'
+                            ? 'Aprovada'
+                            : req.status === 'CANCELLED'
+                              ? 'Cancelada'
+                              : 'Recusada'}
                       </span>
-                    {/if}
+                      {#if req.status === 'PENDING' && effectiveIsOwnerOrAdmin}
+                        <form method="POST" action="?/cancelProjectRequest" use:enhance>
+                          <input type="hidden" name="request_id" value={req.id} />
+                          <button type="submit" class="btn-cancel-req">Cancelar Pedido</button>
+                        </form>
+                      {/if}
+                    </div>
                   </div>
-                  <div class="req-actions-col">
-                    <span class="status-badge-req status-{req.status.toLowerCase()}">
-                      {req.status === 'PENDING'
-                        ? 'Em Análise'
-                        : req.status === 'APPROVED'
-                          ? 'Aprovada'
-                          : req.status === 'CANCELLED'
-                            ? 'Cancelada'
-                            : 'Recusada'}
-                    </span>
-                    {#if req.status === 'PENDING' && effectiveIsOwnerOrAdmin}
-                      <form method="POST" action="?/cancelProjectRequest" use:enhance>
-                        <input type="hidden" name="request_id" value={req.id} />
-                        <button type="submit" class="btn-cancel-req">Cancelar Pedido</button>
-                      </form>
-                    {/if}
-                  </div>
-                </div>
-              {/each}
-            </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/if}
       </section>
@@ -2351,8 +2427,57 @@
   .sub-header-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .sub-header-title-wrap {
+    display: flex;
+    align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.75rem;
+  }
+
+  .req-filter-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .req-filter-pill {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .req-filter-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+  }
+
+  .req-filter-pill.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
+    font-weight: 600;
+  }
+
+  .req-empty-filter {
+    padding: 1.25rem 1rem;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.01);
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
   }
 
   .sub-heading {
@@ -3675,6 +3800,19 @@
     .hero-cover-box {
       width: 52px;
       height: 74px;
+    }
+
+    .sub-header-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+
+    .req-filter-tabs {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
     }
   }
 
