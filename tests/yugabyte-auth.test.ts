@@ -96,4 +96,21 @@ describe('yugabyte-auth JWT and cookie handling', () => {
     expect(cookiesDeleted).toContain(`${AUTH_COOKIE_NAME}.0`);
     expect(cookiesDeleted).not.toContain('other_cookie');
   });
+
+  it('signs and verifies password recovery JWT tokens with type claim', async () => {
+    const secret = getAuthSecret();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const payload = {
+      sub: '11111111-2222-3333-4444-555555555555',
+      email: 'user@example.com',
+      type: 'recovery',
+      exp: nowSec + 1800
+    };
+
+    const token = await signSessionJwt(payload, secret);
+    const verified = await verifySessionJwt(token, secret);
+    expect(verified).not.toBeNull();
+    expect(verified?.sub).toBe(payload.sub);
+    expect((verified as any)?.type).toBe('recovery');
+  });
 });

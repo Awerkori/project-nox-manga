@@ -172,28 +172,48 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  // Security: staff_manual and staff_chapter must NEVER be treated as public!
-  const isStaffPurpose = media.purpose === 'staff_manual' || media.purpose === 'staff_chapter';
+  // Media Access Classification:
+  // 1. Explicit private access classes MUST NEVER be treated as public.
+  // 2. Internal/unreleased purposes (staff_manual, pipeline, etc.) MUST NOT be public unless explicitly marked PUBLIC.
+  // 3. Published chapters (editorial, staff_chapter, scan_chapter), covers, avatars, banners are public.
+  const isExplicitlyPrivate =
+    media.access_class === 'STAFF_ONLY' ||
+    media.access_class === 'AUTHENTICATED' ||
+    media.access_class === 'PRIVATE' ||
+    media.access_class === 'RESTRICTED';
+
+  const isInternalPurpose =
+    media.purpose === 'staff_manual' ||
+    media.purpose === 'pipeline' ||
+    media.purpose === 'scan_pipeline' ||
+    media.purpose === 'production';
+
   const isPublic =
-    !isStaffPurpose &&
+    !isExplicitlyPrivate &&
     (media.access_class === 'PUBLIC' ||
-      media.purpose === 'editorial' ||
-      media.purpose === 'avatar' ||
-      media.purpose === 'banner' ||
-      media.purpose === 'scan_logo' ||
-      media.purpose === 'scan_banner' ||
-      !media.access_class);
+      (!isInternalPurpose &&
+        (media.purpose === 'editorial' ||
+          media.purpose === 'staff_chapter' ||
+          media.purpose === 'scan_chapter' ||
+          media.purpose === 'avatar' ||
+          media.purpose === 'banner' ||
+          media.purpose === 'scan_logo' ||
+          media.purpose === 'scan_banner' ||
+          media.purpose === 'cosmetic' ||
+          !media.access_class)));
 
   if (!isPublic) {
     let verifiedSession = null;
-    const raw = extractFullAuthCookie(cookies.getAll());
-    if (raw) {
-      const { jwt, accessToken } = decodeSessionJwt(raw);
+    const rawCookie = extractFullAuthCookie(cookies.getAll());
+    const authHeader = request.headers.get('authorization') || '';
+    const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
+    if (token) {
+      const { jwt, accessToken } = decodeSessionJwt(token);
       if (jwt) {
         try {
           verifiedSession = await resolveSessionData(locals.db, jwt, accessToken, platform?.env);
         } catch {
-          // ignore session resolution failure for anonymous fallback
+          // Authentication resolution failure
         }
       }
     }

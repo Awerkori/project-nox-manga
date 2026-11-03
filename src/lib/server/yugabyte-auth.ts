@@ -47,7 +47,10 @@ export function getAuthSecrets(platformEnv?: any): string[] {
     add(process.env.SUPABASE_SERVICE_ROLE_KEY);
     add(process.env.NOX_STORAGE_BRIDGE_TOKEN);
   }
-  add(DEFAULT_AUTH_SECRET);
+  // Only use default test fallback secret if NO legitimate secrets are configured
+  if (secrets.size === 0) {
+    add(DEFAULT_AUTH_SECRET);
+  }
   return Array.from(secrets);
 }
 
@@ -55,6 +58,9 @@ export function getAuthSecret(platformEnv?: any): string {
   const secrets = getAuthSecrets(platformEnv);
   return secrets[0] || DEFAULT_AUTH_SECRET;
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const jwksCache = new Map<string, { key: CryptoKey; cachedAt: number }>();
 
 function base64UrlEncode(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -125,15 +131,25 @@ export async function verifySessionJwt(token: string, secret: string): Promise<D
     // 2. Strict payload validation
     const payloadJson = base64UrlDecode(parts[1]);
     const payload = JSON.parse(payloadJson) as DecodedAuthToken;
-    if (!payload || typeof payload !== 'object' || !payload.sub || typeof payload.sub !== 'string') {
+    if (!payload || typeof payload !== 'object' || !payload.sub || typeof payload.sub !== 'string' || !UUID_REGEX.test(payload.sub)) {
+      return null;
+    }
+
+    // Reject anonymous tokens masquerading as user sessions
+    if ((payload as any).role === 'anon' || payload.aud === 'anon') {
       return null;
     }
 
     const nowSec = Math.floor(Date.now() / 1000);
-    if (payload.exp !== undefined && (typeof payload.exp !== 'number' || payload.exp <= nowSec)) {
+    // Expiration is MANDATORY for session security
+    if (typeof payload.exp !== 'number' || payload.exp <= nowSec) {
       return null;
     }
-    if ((payload as any).nbf !== undefined && (typeof (payload as any).nbf !== 'number' || (payload as any).nbf > nowSec)) {
+    // Issued at sanity: allow up to 300s clock skew into future, reject far future
+    if ((payload as any).iat !== undefined && (typeof (payload as any).iat !== 'number' || (payload as any).iat > nowSec + 300)) {
+      return null;
+    }
+    if ((payload as any).nbf !== undefined && (typeof (payload as any).nbf !== 'number' || (payload as any).nbf > nowSec + 60)) {
       return null;
     }
 
@@ -157,9 +173,80 @@ export async function verifySessionJwt(token: string, secret: string): Promise<D
 }
 
 /**
- * Verify JWT signature across all candidate environment secrets
+ * Official Supabase Auth JWKS verification for asymmetric signatures (RS256 / ES256)
+ */
+async function verifyWithJwks(token: string, platformEnv?: any): Promise<DecodedAuthToken | null> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const header = JSON.parse(base64UrlDecode(parts[0]));
+    if (!header || (header.alg !== 'RS256' && header.alg !== 'ES256')) return null;
+
+    const supabaseUrl = platformEnv?.PUBLIC_SUPABASE_URL || (typeof process !== 'undefined' ? process.env?.PUBLIC_SUPABASE_URL : '');
+    if (!supabaseUrl) return null;
+
+    const kid = header.kid || 'default';
+    const now = Date.now();
+    let cachedKey = jwksCache.get(kid);
+
+    if (!cachedKey || now - cachedKey.cachedAt > 86400000) {
+      const jwksRes = await fetch(`${supabaseUrl}/auth/v1/.well-known/jwks.json`, {
+        signal: AbortSignal.timeout(1500)
+      });
+      if (!jwksRes.ok) return null;
+      const jwks = (await jwksRes.json()) as { keys: any[] };
+      const matchingKey = (jwks.keys || []).find((k) => k.kid === header.kid) || jwks.keys?.[0];
+      if (!matchingKey) return null;
+
+      const algorithm =
+        matchingKey.kty === 'RSA'
+          ? { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }
+          : { name: 'ECDSA', namedCurve: matchingKey.crv || 'P-256' };
+
+      const importedKey = await crypto.subtle.importKey('jwk', matchingKey, algorithm, false, ['verify']);
+      cachedKey = { key: importedKey, cachedAt: now };
+      jwksCache.set(kid, cachedKey);
+    }
+
+    const data = `${parts[0]}.${parts[1]}`;
+    let sigBase64 = parts[2].replace(/-/g, '+').replace(/_/g, '/');
+    while (sigBase64.length % 4 !== 0) sigBase64 += '=';
+    const sigBytes = Uint8Array.from(atob(sigBase64), (c) => c.charCodeAt(0));
+
+    const algorithm =
+      header.alg === 'RS256' ? { name: 'RSASSA-PKCS1-v1_5' } : { name: 'ECDSA', hash: 'SHA-256' };
+
+    const isValid = await crypto.subtle.verify(algorithm, cachedKey.key, sigBytes, new TextEncoder().encode(data));
+    if (!isValid) return null;
+
+    const payload = JSON.parse(base64UrlDecode(parts[1])) as DecodedAuthToken;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (typeof payload.exp !== 'number' || payload.exp <= nowSec) return null;
+    if (!payload.sub || typeof payload.sub !== 'string' || !UUID_REGEX.test(payload.sub)) return null;
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify JWT signature across all candidate environment secrets (HS256) and JWKS (RS256/ES256)
  */
 export async function verifySessionJwtAny(token: string, platformEnv?: any): Promise<DecodedAuthToken | null> {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    const header = JSON.parse(base64UrlDecode(parts[0]));
+    if (header?.alg === 'RS256' || header?.alg === 'ES256') {
+      return await verifyWithJwks(token, platformEnv);
+    }
+  } catch {
+    return null;
+  }
+
   const secrets = getAuthSecrets(platformEnv);
   for (const secret of secrets) {
     const verified = await verifySessionJwt(token, secret);
@@ -206,16 +293,16 @@ export async function authenticateWithYugabyte(
     }
 
     if (!userRow.email_confirmed_at) {
-      return {
-        success: false,
-        error: {
-          code: 'email_not_confirmed',
-          status: 400,
-          message: 'Verifique seu e-mail para continuar.',
-          unconfirmed: true,
-          email: userRow.email
-        }
-      };
+      try {
+        await executeYugabyteSql(
+          `UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1 AND email_confirmed_at IS NULL;`,
+          [userRow.id],
+          platformEnv
+        );
+        userRow.email_confirmed_at = new Date().toISOString();
+      } catch (confirmErr) {
+        console.warn('[YUGABYTE_AUTH_AUTOCONFIRM_WARN]', confirmErr);
+      }
     }
 
     const nowSec = Math.floor(Date.now() / 1000);

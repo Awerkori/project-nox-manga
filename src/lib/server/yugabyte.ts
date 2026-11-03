@@ -270,25 +270,6 @@ export async function withYugabyteReadSession<T>(
   }
 }
 
-/**
- * Execute raw SQL query against authoritative YugabyteDB.
- * Strategy 1: Hyperdrive native connection via platform.env.HYPERDRIVE (sub-millisecond connection in worker)
- * Strategy 2: High-speed internal Cloudflare Worker Gateway fallback (if secret is present in environment)
- */
-export async function executeYugabyteSql<T = any>(
-  query: string,
-  params: any[] = [],
-  platformEnv?: any
-): Promise<SqlResponse<T>> {
-  const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
-  if (activeSession) {
-    try {
-      return await activeSession.query<T>(query, params);
-    } catch (hdErr: any) {
-      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
-    }
-  }
-
 let sharedPool: Pool | null = null;
 let sharedPoolConnStr = '';
 
@@ -310,6 +291,25 @@ function getSharedPool(connStr: string): Pool {
   }
   return sharedPool;
 }
+
+/**
+ * Execute raw SQL query against authoritative YugabyteDB.
+ * Strategy 1: Hyperdrive native connection via platform.env.HYPERDRIVE (sub-millisecond connection in worker)
+ * Strategy 2: High-speed internal Cloudflare Worker Gateway fallback (if secret is present in environment)
+ */
+export async function executeYugabyteSql<T = any>(
+  query: string,
+  params: any[] = [],
+  platformEnv?: any
+): Promise<SqlResponse<T>> {
+  const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
+  if (activeSession) {
+    try {
+      return await activeSession.query<T>(query, params);
+    } catch (hdErr: any) {
+      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+    }
+  }
 
   // Strategy 1: Hyperdrive native pooled connection if available
   const hyperdrive = platformEnv?.HYPERDRIVE;

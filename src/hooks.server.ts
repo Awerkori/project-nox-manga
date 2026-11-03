@@ -9,10 +9,7 @@ import { withYugabyteReadSession } from '$lib/server/yugabyte';
 import { building } from '$app/environment';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
-export const handle: Handle = async ({ event, resolve }) => {
-  const reqStart = performance.now();
-  if (!env.PUBLIC_SUPABASE_URL || !env.PUBLIC_SUPABASE_ANON_KEY)
-    error(503, 'A plataforma está em manutenção. Volte em instantes.');
+async function handleRequest(event: any, resolve: any, reqStart: number) {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method)) {
     const isInternal = event.url.pathname.startsWith('/api/internal/');
     if (!isInternal && event.request.headers.get('origin') !== event.url.origin) error(403, 'Origem inválida');
@@ -187,23 +184,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  const isPrerenderableStatic = building || event.url.pathname === '/sobre' || event.url.pathname === '/privacidade';
-  const resolved = isPrerenderableStatic
-    ? await resolve(event, {
-        filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
-      })
-    : await withYugabyteReadSession(
-        event.platform?.env,
-        async (sessionEnv) => {
-          if (event.platform && sessionEnv) {
-            (event.platform as any).env = sessionEnv;
-          }
-          return resolve(event, {
-            filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
-          });
-        },
-        1
-      );
+  const resolved = await resolve(event, {
+    filterSerializedResponseHeaders: (name: string) => name === 'content-range' || name === 'x-supabase-api-version'
+  });
 
   // Media and static assets handle their own caching and security headers; return immediately
   if (isMedia || isStaticAsset) {
@@ -287,6 +270,28 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 
   return response;
+}
+
+export const handle: Handle = async ({ event, resolve }) => {
+  const reqStart = performance.now();
+  if (!env.PUBLIC_SUPABASE_URL || !env.PUBLIC_SUPABASE_ANON_KEY)
+    error(503, 'A plataforma está em manutenção. Volte em instantes.');
+
+  const isPrerenderableStatic = building || event.url.pathname === '/sobre' || event.url.pathname === '/privacidade';
+  if (isPrerenderableStatic) {
+    return handleRequest(event, resolve, reqStart);
+  }
+
+  return withYugabyteReadSession(
+    event.platform?.env,
+    async (sessionEnv) => {
+      if (event.platform && sessionEnv) {
+        (event.platform as any).env = sessionEnv;
+      }
+      return handleRequest(event, resolve, reqStart);
+    },
+    2
+  );
 };
 
 export const handleError = ({ error, event }: any) => {

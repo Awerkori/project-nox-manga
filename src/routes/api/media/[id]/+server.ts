@@ -55,16 +55,31 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  const isStaffPurpose = media.purpose === 'staff_manual' || media.purpose === 'staff_chapter';
+  const isExplicitlyPrivate =
+    media.access_class === 'STAFF_ONLY' ||
+    media.access_class === 'AUTHENTICATED' ||
+    media.access_class === 'PRIVATE' ||
+    media.access_class === 'RESTRICTED';
+
+  const isInternalPurpose =
+    media.purpose === 'staff_manual' ||
+    media.purpose === 'pipeline' ||
+    media.purpose === 'scan_pipeline' ||
+    media.purpose === 'production';
+
   const isPublic =
-    !isStaffPurpose &&
+    !isExplicitlyPrivate &&
     (media.access_class === 'PUBLIC' ||
-      media.purpose === 'editorial' ||
-      media.purpose === 'avatar' ||
-      media.purpose === 'banner' ||
-      media.purpose === 'scan_logo' ||
-      media.purpose === 'scan_banner' ||
-      !media.access_class);
+      (!isInternalPurpose &&
+        (media.purpose === 'editorial' ||
+          media.purpose === 'staff_chapter' ||
+          media.purpose === 'scan_chapter' ||
+          media.purpose === 'avatar' ||
+          media.purpose === 'banner' ||
+          media.purpose === 'scan_logo' ||
+          media.purpose === 'scan_banner' ||
+          media.purpose === 'cosmetic' ||
+          !media.access_class)));
 
   // For non-public media, require authentic cryptographic verification
   if (!isPublic) {

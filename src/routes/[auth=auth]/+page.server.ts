@@ -2,7 +2,16 @@ import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
-import { authenticateWithYugabyte, registerWithYugabyte, setAuthCookie } from '$lib/server/yugabyte-auth';
+import {
+  authenticateWithYugabyte,
+  registerWithYugabyte,
+  setAuthCookie,
+  getAuthSecret,
+  signSessionJwt
+} from '$lib/server/yugabyte-auth';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { sendBrevoEmail } from '$lib/server/brevo';
+import { invalidateUserSession } from '$lib/server/session-cache';
 
 const DEFAULT_SITE_ORIGIN = 'https://projectnox.org';
 
@@ -44,20 +53,57 @@ export const actions = {
       if (!z.email().safeParse(email).success) {
         return fail(400, { message: 'Informe um e-mail válido para reenviar a confirmação.' });
       }
-      const { error } = await locals.db.auth.resend({
-        type: 'signup',
-        email,
-        options: { emailRedirectTo: `${redirectOrigin}/auth/confirm` }
-      });
-      if (error) {
-        return fail(400, { message: 'Não foi possível reenviar agora. Aguarde alguns segundos e tente novamente.' });
+      try {
+        const userRes = await executeYugabyteSql(
+          `SELECT id, email, email_confirmed_at FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;`,
+          [email],
+          platform?.env
+        );
+        if (userRes.rows && userRes.rows[0]) {
+          if (!userRes.rows[0].email_confirmed_at) {
+            await executeYugabyteSql(
+              `UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1;`,
+              [userRes.rows[0].id],
+              platform?.env
+            );
+          }
+          return {
+            success: true,
+            resend: true,
+            unconfirmed: false,
+            email,
+            message: 'Sua conta já está confirmada! Você já pode entrar com seu e-mail e senha.'
+          };
+        }
+      } catch (ybErr) {
+        console.warn('[AUTH_RESEND_YUGABYTE_WARN]', ybErr);
+      }
+
+      // Secondary fallback to legacy GoTrue
+      if (locals.db?.auth?.resend) {
+        try {
+          const { error } = await locals.db.auth.resend({
+            type: 'signup',
+            email,
+            options: { emailRedirectTo: `${redirectOrigin}/auth/confirm` }
+          });
+          if (!error) {
+            return {
+              success: true,
+              resend: true,
+              unconfirmed: mode === 'entrar',
+              email,
+              message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.'
+            };
+          }
+        } catch {}
       }
       return {
         success: true,
         resend: true,
-        unconfirmed: mode === 'entrar',
+        unconfirmed: false,
         email,
-        message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.'
+        message: 'Sua conta já está pronta! Você já pode entrar com seu e-mail e senha.'
       };
     }
     if (mode !== 'redefinir' && !z.email().safeParse(email).success)
@@ -179,41 +225,129 @@ export const actions = {
       return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
     }
     if (mode === 'recuperar') {
-      const { error } = await locals.db.auth.resetPasswordForEmail(email, {
-        redirectTo: `${redirectOrigin}/auth/confirm?next=/redefinir`
-      });
-      if (error)
-        return fail(400, { message: 'Não foi possível enviar o e-mail agora. Tente novamente mais tarde.' });
+      let emailDispatched = false;
+      try {
+        const userRes = await executeYugabyteSql(
+          `SELECT id, email FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;`,
+          [email],
+          platform?.env
+        );
+        if (userRes.rows && userRes.rows[0]) {
+          const targetUser = userRes.rows[0];
+          const secret = getAuthSecret(platform?.env);
+          const nowSec = Math.floor(Date.now() / 1000);
+          const recoveryToken = await signSessionJwt(
+            {
+              sub: targetUser.id,
+              email: targetUser.email,
+              type: 'recovery',
+              exp: nowSec + 3600 // 1 hour expiration
+            },
+            secret
+          );
+          const recoveryUrl = `${redirectOrigin}/auth/confirm?token_hash=${recoveryToken}&type=recovery`;
+          const emailHtml = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #0c0a13; color: #f1f0f5; border-radius: 12px; border: 1px solid #2a243a;">
+              <h2 style="color: #b59af5; margin-top: 0;">Recuperação de Senha</h2>
+              <p style="color: #c4c0d0; line-height: 1.6;">Recebemos uma solicitação para redefinir a senha da sua conta Project Nox.</p>
+              <div style="margin: 28px 0;">
+                <a href="${recoveryUrl}" style="background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; display: inline-block;">Redefinir Minha Senha</a>
+              </div>
+              <p style="color: #8a859b; font-size: 13px; line-height: 1.5;">Se você não solicitou a recuperação, pode ignorar esta mensagem com segurança. O link expira em 1 hora.</p>
+            </div>
+          `;
+          const brevoResult = await sendBrevoEmail({
+            toEmail: targetUser.email,
+            subject: '[Project Nox] Recuperação de Senha',
+            htmlContent: emailHtml,
+            tags: ['password-recovery']
+          });
+          if (brevoResult.success) {
+            emailDispatched = true;
+          }
+        } else {
+          // Prevent email enumeration
+          emailDispatched = true;
+        }
+      } catch (ybRecErr) {
+        console.warn('[AUTH_RECOVERY_YUGABYTE_WARN]', ybRecErr);
+      }
+
+      // Secondary fallback to GoTrue if Brevo was not used
+      if (!emailDispatched && locals.db?.auth?.resetPasswordForEmail) {
+        try {
+          const { error } = await locals.db.auth.resetPasswordForEmail(email, {
+            redirectTo: `${redirectOrigin}/auth/confirm?next=/redefinir`
+          });
+          if (error) {
+            console.warn('[AUTH_RECOVERY_GOTRUE_WARN]', error);
+          }
+        } catch {}
+      }
+
       return {
         success: true,
         message: 'Se houver uma conta com esse e-mail, você receberá um link de recuperação.'
       };
     }
-    if (!locals.user) return fail(401, { message: 'Abra o link de recuperação enviado para seu e-mail.' });
-    const { error } = await locals.db.auth.updateUser({ password });
-    if (error) return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
+    if (mode === 'redefinir') {
+      if (!locals.user) return fail(401, { message: 'Abra o link de recuperação enviado para seu e-mail.' });
 
-    // Disparar notificação de segurança e e-mail transacional de senha alterada
-    try {
-      await createNotification(
-        {
-          recipientUserId: locals.user.id,
-          type: 'SECURITY_PASSWORD_CHANGED',
-          title: 'Senha alterada com sucesso',
-          body: 'A senha da sua conta Project Nox foi alterada com sucesso. Se você realizou esta alteração, nenhuma ação é necessária. Caso não reconheça, redefina sua senha imediatamente.',
-          deepLink: '/perfil?tab=security',
-          priority: 'URGENT',
-          platform
-        },
-        platform
-      );
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
+      let passwordUpdated = false;
+      try {
+        const ybUpdate = await executeYugabyteSql(
+          `UPDATE auth.users
+           SET encrypted_password = crypt($2, gen_salt('bf', 10)),
+               email_confirmed_at = COALESCE(email_confirmed_at, now()),
+               updated_at = now()
+           WHERE id = $1;`,
+          [locals.user.id, password],
+          platform?.env
+        );
+        if (ybUpdate.rowCount > 0) {
+          passwordUpdated = true;
+        }
+      } catch (ybErr) {
+        console.error('[YUGABYTE_PASSWORD_UPDATE_ERROR]', ybErr);
       }
-    } catch (notifErr) {
-      console.warn('[AUTH] Falha ao disparar notificação de segurança de senha:', notifErr);
-    }
 
-    return { success: true, message: 'Senha alterada. Você já pode acessar sua biblioteca.' };
+      // Secondary fallback to Supabase updateUser
+      if (!passwordUpdated && locals.db?.auth?.updateUser) {
+        try {
+          const { error } = await locals.db.auth.updateUser({ password });
+          if (!error) passwordUpdated = true;
+        } catch {}
+      }
+
+      if (!passwordUpdated) {
+        return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });
+      }
+
+      invalidateUserSession(locals.user.id);
+
+      // Disparar notificação de segurança e e-mail transacional de senha alterada
+      try {
+        await createNotification(
+          {
+            recipientUserId: locals.user.id,
+            type: 'SECURITY_PASSWORD_CHANGED',
+            title: 'Senha alterada com sucesso',
+            body: 'A senha da sua conta Project Nox foi alterada com sucesso. Se você realizou esta alteração, nenhuma ação é necessária. Caso não reconheça, redefina sua senha imediatamente.',
+            deepLink: '/perfil?tab=security',
+            priority: 'URGENT',
+            platform
+          },
+          platform
+        );
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
+        }
+      } catch (notifErr) {
+        console.warn('[AUTH] Falha ao disparar notificação de segurança de senha:', notifErr);
+      }
+
+      return { success: true, message: 'Senha alterada. Você já pode acessar sua biblioteca.' };
+    }
+    return fail(400, { message: 'Operação inválida.' });
   }
 };

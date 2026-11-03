@@ -1,7 +1,7 @@
 import { withTimeout } from './resilience';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { executeYugabyteSql } from './yugabyte';
-import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny } from './yugabyte-auth';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny } from '$lib/server/yugabyte-auth';
 
 export interface DecodedJwt {
   sub: string;
@@ -195,25 +195,36 @@ export async function resolveSessionData(
       let unreadCount = 0;
 
       try {
-        const [ybProfile, ybRole, ybScans, ybUnread] = await Promise.all([
-          executeYugabyteSql(`SELECT * FROM members WHERE id = $1 LIMIT 1;`, [userId], platformEnv),
-          executeYugabyteSql(`SELECT role, suspended FROM access_roles WHERE user_id = $1 LIMIT 1;`, [userId], platformEnv),
-          executeYugabyteSql(
-            `SELECT sm.role, sm.scan_id, s.id, s.name, s.slug, s.logo_id, s.status
-             FROM scan_members sm
-             JOIN scans s ON s.id = sm.scan_id
-             WHERE sm.user_id = $1 AND s.status = 'ACTIVE';`,
-            [userId],
-            platformEnv
-          ),
-          executeYugabyteSql(`SELECT count(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL;`, [userId], platformEnv)
-        ]);
+        const ybRes = await executeYugabyteSql(
+          `SELECT 
+             (SELECT row_to_json(m) FROM (SELECT * FROM members WHERE id = $1 LIMIT 1) m) AS profile,
+             (SELECT row_to_json(r) FROM (SELECT role, suspended FROM access_roles WHERE user_id = $1 LIMIT 1) r) AS role,
+             (SELECT coalesce(json_agg(row_to_json(sc)), '[]'::json) FROM (
+                SELECT sm.role, sm.scan_id, s.id, s.name, s.slug, s.logo_id, s.status
+                FROM scan_members sm
+                JOIN scans s ON s.id = sm.scan_id
+                WHERE sm.user_id = $1 AND s.status = 'ACTIVE'
+             ) sc) AS scans,
+             (SELECT count(*)::int FROM notifications WHERE user_id = $1 AND read_at IS NULL) AS unread_count;`,
+          [userId],
+          platformEnv
+        );
 
-        if (ybProfile.rows[0]) {
-          profileData = ybProfile.rows[0];
-          roleData = ybRole.rows[0] || null;
-          userScansList = ybScans.rows || [];
-          unreadCount = parseInt(ybUnread.rows[0]?.count || '0', 10);
+        const row = ybRes.rows[0];
+        if (row) {
+          if (row.profile !== undefined || row.unread_count !== undefined) {
+            profileData = row.profile || null;
+            roleData = typeof row.role === 'object' && row.role !== null ? row.role : (row.role ? { role: row.role, suspended: Boolean(row.suspended) } : null);
+            userScansList = Array.isArray(row.scans) ? row.scans : [];
+            unreadCount = parseInt(row.unread_count || '0', 10);
+          } else {
+            if (row.role) {
+              roleData = typeof row.role === 'object' ? row.role : { role: row.role, suspended: Boolean(row.suspended) };
+            }
+            if (row.username || row.display_name) {
+              profileData = row;
+            }
+          }
         }
       } catch {
         // Fallback to db.from if YugabyteDB is degraded
@@ -239,7 +250,7 @@ export async function resolveSessionData(
               .eq('user_id', userId)
               .is('read_at', null)
           ]),
-          2000,
+          400,
           [{ data: null }, { data: null }, { data: [] }, { data: [] }, { count: 0 }] as any,
           'session_resolver_batch'
         );
