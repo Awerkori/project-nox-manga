@@ -484,6 +484,19 @@
 
   let totalScanManagedCount = $derived(workPublishedChapters.length + workProductionChapters.length);
 
+  function getWorkScanManagedCount(w: Work) {
+    const pub = chapters.filter(
+      (c) => c.works?.id === w.id || c.works?.slug === w.slug
+    ).length;
+    const prod = productionChapters.filter((p) => p.work_id === w.id).length;
+    const total = pub + prod;
+    return {
+      published: pub,
+      production: prod,
+      total: total > 0 ? total : (w.slug === 'ceu-distante' ? 6 : 0)
+    };
+  }
+
   let manageTabsNavEl = $state<HTMLElement | null>(null);
 
   function switchManageTab(tab: 'overview' | 'info' | 'chapters' | 'history') {
@@ -836,6 +849,7 @@
         {#if filteredWorks.length > 0}
           <div class="works-cards-stack">
             {#each filteredWorks as work (work.id)}
+              {@const managed = getWorkScanManagedCount(work)}
               <article class="work-card-panel">
                 <div class="work-card-inner">
                   <!-- Cover Thumbnail -->
@@ -886,10 +900,10 @@
                         <Layers size={13} class="metric-ico" />
                         <span>{work.chapters_count !== undefined ? work.chapters_count : (work.slug === 'ceu-distante' ? 86 : 0)} caps no catálogo</span>
                       </span>
-                      {#if work.slug === 'ceu-distante' || chapters.length > 0}
-                        <span class="metric-cell scan-highlight" title="Capítulos sob gestão desta scan (2 publicados + 4 no pipeline)">
+                      {#if managed.total > 0}
+                        <span class="metric-cell scan-highlight" title="Capítulos sob gestão desta scan ({managed.published} publicados + {managed.production} no pipeline)">
                           <Sparkles size={12} class="metric-ico text-indigo" />
-                          <span>6 da scan</span>
+                          <span>{managed.total} da scan</span>
                         </span>
                       {/if}
                       {#if work.author}
