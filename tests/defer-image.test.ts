@@ -61,4 +61,16 @@ describe('deferred cover loading', () => {
     expect(node.src).toBe('/cover');
     action.destroy();
   });
+
+  it('updates a displayed cover when its keyed card receives a new URL', () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver);
+    const node = image();
+    const action = deferImage(node, { src: '/old' });
+    FakeObserver.instances[0].trigger(node);
+    expect(node.src).toBe('/old');
+    action.update({ src: '/new' });
+    expect(node.src).toBe('/new');
+    expect(FakeObserver.instances).toHaveLength(1);
+    action.destroy();
+  });
 });

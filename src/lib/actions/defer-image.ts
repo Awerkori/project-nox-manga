@@ -71,8 +71,15 @@ export function deferImage(node: HTMLImageElement, initial: DeferredImageOptions
   observe();
   return {
     update(next: DeferredImageOptions) {
+      const previousSrc = options.src;
       options = next;
-      if (!loaded) observe();
+      if (!loaded) {
+        observe();
+      } else if (next.src && next.src !== previousSrc) {
+        // A keyed card can receive an updated cover after it was displayed.
+        // Keep the already-visible card current without observing it again.
+        node.src = next.src;
+      }
     },
     destroy: stop
   };

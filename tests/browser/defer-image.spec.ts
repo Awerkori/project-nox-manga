@@ -14,4 +14,6 @@ test('loads covers near the viewport and defers distant covers until scrolling',
   await expect(page.locator('#far')).not.toHaveAttribute('src', /.+/);
   await page.locator('#far').scrollIntoViewIfNeeded();
   await expect(page.locator('#far')).toHaveAttribute('src', '/far.svg');
+  await page.locator('#far').evaluate((image) => image.dispatchEvent(new CustomEvent('cover-change', { detail: '/updated.svg' })));
+  await expect(page.locator('#far')).toHaveAttribute('src', '/updated.svg');
 });
