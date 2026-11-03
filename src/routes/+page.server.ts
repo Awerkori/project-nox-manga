@@ -89,7 +89,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
       }
       for (const [wid, rows] of grouped.entries()) {
         const sorted = rows.sort((a: any, b: any) => compareChapterIdentity(b.chapters || {}, a.chapters || {}));
-        const mostRecent = rows.sort((a: any, b: any) => b.updated_at.localeCompare(a.updated_at))[0];
+        const mostRecent = rows.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
         const highestRead = sorted[0];
         const currentCh = highestRead.chapters as any;
         const work = currentCh.works as any;
@@ -108,10 +108,10 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
           destinationUrl: `/obra/${work.slug}`,
           progressText: `Em dia · Cap. ${chapterDisplayNumber(currentCh)}`,
           actionLabel: 'Ver obra ↗',
-          updatedAt: mostRecent.updated_at
+          updatedAt: new Date(mostRecent.updated_at).toISOString()
         });
       }
-      continueReading.sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt));
+      continueReading.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       continueReading = continueReading.slice(0, 10);
     }
 
@@ -201,7 +201,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
           destinationUrl: `/ler/${ch.id}`,
           progressText: `Capítulo ${chapterDisplayNumber(ch)} · Pág. ${incomplete.page}`,
           actionLabel: 'Retomar leitura ↗',
-          updatedAt: incomplete.updated_at
+          updatedAt: new Date(incomplete.updated_at).toISOString()
         });
       } else {
         needsNextChapter.push({ wid, rows, currentCh: rows[0].chapters as any });
@@ -211,21 +211,36 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     // Single batch query for next chapters instead of N separate round-trips
     if (needsNextChapter.length > 0) {
       const workIds = Array.from(new Set(needsNextChapter.map((n) => n.wid)));
-      const nextChaptersRes = await withTimeout(
-        locals.db
-          .from('chapters')
-          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,work_id')
-          .in('work_id', workIds)
-          .not('published_at', 'is', null)
-          .order('chapter_order_key', { ascending: true, nullsFirst: false })
-          .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
-          .order('id', { ascending: true }),
-        1500,
-        { data: [] } as any,
-        'home_batch_next_chapters'
-      );
+      let allNext: any[] = [];
+      try {
+        const ybChapters = await executeYugabyteSql(
+          `SELECT id, number, display_number, canonical_chapter_key, chapter_order_key, work_id
+           FROM public.chapters
+           WHERE work_id = ANY($1::uuid[])
+             AND published_at IS NOT NULL
+           ORDER BY chapter_order_key ASC NULLS LAST, number ASC;`,
+          [workIds],
+          platform?.env
+        );
+        allNext = ybChapters.rows || [];
+      } catch {}
 
-      const allNext = nextChaptersRes?.data || [];
+      if (allNext.length === 0 && locals.db?.from) {
+        const nextChaptersRes = await withTimeout(
+          locals.db
+            .from('chapters')
+            .select('id,number,display_number,canonical_chapter_key,chapter_order_key,work_id')
+            .in('work_id', workIds)
+            .not('published_at', 'is', null)
+            .order('chapter_order_key', { ascending: true, nullsFirst: false })
+            .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
+            .order('id', { ascending: true }),
+          1500,
+          { data: [] } as any,
+          'home_batch_next_chapters'
+        );
+        allNext = nextChaptersRes?.data || [];
+      }
 
       for (const { wid, rows, currentCh } of needsNextChapter) {
         const ordered = allNext.filter((c: any) => c.work_id === wid)
@@ -246,7 +261,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
             destinationUrl: `/ler/${nextCh.id}`,
             progressText: `Próximo: Capítulo ${chapterDisplayNumber(nextCh)}`,
             actionLabel: 'Ler próximo ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: new Date(mostRecent.updated_at).toISOString()
           });
         } else {
           continueReading.push({
@@ -260,13 +275,13 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
             destinationUrl: `/obra/${work.slug}`,
             progressText: `Em dia · Cap. ${chapterDisplayNumber(currentCh)}`,
             actionLabel: 'Ver obra ↗',
-            updatedAt: mostRecent.updated_at
+            updatedAt: new Date(mostRecent.updated_at).toISOString()
           });
         }
       }
     }
 
-    continueReading.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    continueReading.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     continueReading = continueReading.slice(0, 10);
   }
 

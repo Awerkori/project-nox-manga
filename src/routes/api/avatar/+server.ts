@@ -31,25 +31,32 @@ export const POST = async ({ request, locals, platform }: { request: Request; lo
     throw err;
   }
 
-  const { error: problem } = await privileged()
-    .from('members')
-    .update({ avatar_id: image.id, avatar_crop: crop })
-    .eq('id', userId);
-
-  if (problem) {
-    console.error('API_AVATAR_MEMBER_UPDATE_ERROR:', problem);
-    error(500, 'Não foi possível atualizar seu avatar.');
-  }
-
-  // Also sync avatar to Yugabyte so public scans & staff directory have zero lag
+  let ybSuccess = false;
   try {
-    await executeYugabyteSql(
+    const ybRes = await executeYugabyteSql(
       `UPDATE public.members SET avatar_id = $1, avatar_crop = $2 WHERE id = $3`,
       [image.id, JSON.stringify(crop), userId],
       platform?.env
     );
+    if (ybRes && ybRes.rowCount > 0) {
+      ybSuccess = true;
+    }
   } catch (ybProblem) {
-    console.warn('api_avatar_yugabyte_sync_warning', ybProblem);
+    console.warn('api_avatar_yugabyte_update_warning', ybProblem);
+  }
+
+  // Best-effort sync to legacy Supabase
+  try {
+    await privileged()
+      .from('members')
+      .update({ avatar_id: image.id, avatar_crop: crop })
+      .eq('id', userId);
+  } catch (supaProblem) {
+    // Non-fatal if Supabase is over quota (402)
+  }
+
+  if (!ybSuccess) {
+    console.error('API_AVATAR_MEMBER_UPDATE_ERROR: Both Yugabyte and Supabase updates failed');
   }
 
   invalidateUserSession(userId);

@@ -2,37 +2,64 @@ import { error, fail } from '@sveltejs/kit';
 import { NOX_TITLES } from '$lib/levels';
 import { formatScanRoleTitle, formatScanBadgeText, getScanPreposition } from '$lib/scans';
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 export const load = async ({ locals, params, platform }: any) => {
-  const { data: member } = await locals.db
-    .from('members')
-    .select(`
-      id,
-      username,
-      display_name,
-      bio,
-      xp,
-      avatar_id,
-      banner_id,
-      equipped_banner_id,
-      avatar_frame_id,
-      name_color,
-      equipped_title_id,
-      equipped_badge_id,
-      featured_achievement_id,
-      privacy_show_achievements,
-      privacy_show_cosmetics,
-      privacy_show_favorites,
-      privacy_show_reading_history,
-      privacy_show_scans,
-      privacy_scan_mode,
-      admin_hide_scan_badges,
-      avatar_crop,
-      banner_crop,
-      created_at
-    `)
-    .eq('username', params.username)
-    .maybeSingle();
+  let member: any = null;
+  try {
+    const mRes = await executeYugabyteSql(
+      `SELECT id, username, display_name, bio, xp, avatar_id, banner_id,
+              equipped_banner_id, avatar_frame_id, name_color,
+              equipped_title_id, equipped_badge_id, featured_achievement_id,
+              privacy_show_achievements, privacy_show_cosmetics,
+              privacy_show_favorites, privacy_show_reading_history,
+              privacy_show_scans, privacy_scan_mode, admin_hide_scan_badges,
+              avatar_crop, banner_crop, created_at
+       FROM public.members
+       WHERE LOWER(username) = LOWER($1)
+       LIMIT 1;`,
+      [params.username],
+      platform?.env
+    );
+    if (mRes.rows && mRes.rows[0]) {
+      member = mRes.rows[0];
+    }
+  } catch (err) {
+    console.warn('u_member_yugabyte_warning', err);
+  }
+
+  if (!member) {
+    const { data: supaMember } = await locals.db
+      .from('members')
+      .select(`
+        id,
+        username,
+        display_name,
+        bio,
+        xp,
+        avatar_id,
+        banner_id,
+        equipped_banner_id,
+        avatar_frame_id,
+        name_color,
+        equipped_title_id,
+        equipped_badge_id,
+        featured_achievement_id,
+        privacy_show_achievements,
+        privacy_show_cosmetics,
+        privacy_show_favorites,
+        privacy_show_reading_history,
+        privacy_show_scans,
+        privacy_scan_mode,
+        admin_hide_scan_badges,
+        avatar_crop,
+        banner_crop,
+        created_at
+      `)
+      .eq('username', params.username)
+      .maybeSingle();
+    member = supaMember;
+  }
 
   if (!member) {
     error(404, 'Perfil não encontrado');
@@ -192,7 +219,25 @@ export const load = async ({ locals, params, platform }: any) => {
   ]);
 
   // Format unlocked achievements
-  const achievements = (achievementsRes.data || []).map((row: any) => ({
+  let rawAchievements = achievementsRes.data || [];
+  if (rawAchievements.length === 0 && canViewAchievements) {
+    try {
+      const ybAch = await executeYugabyteSql(
+        `SELECT ma.unlocked_at, row_to_json(a.*) AS achievements
+         FROM public.member_achievements ma
+         JOIN public.achievements a ON a.id = ma.achievement_id
+         WHERE ma.user_id = $1
+         ORDER BY ma.unlocked_at DESC;`,
+        [member.id],
+        platform?.env
+      );
+      if (ybAch.rows && ybAch.rows.length > 0) {
+        rawAchievements = ybAch.rows;
+      }
+    } catch {}
+  }
+
+  const achievements = rawAchievements.map((row: any) => ({
     unlocked_at: row.unlocked_at,
     ...row.achievements
   }));
@@ -231,8 +276,26 @@ export const load = async ({ locals, params, platform }: any) => {
   }
 
   // Format cosmetic items and deduplicate (canonical inventory + legacy items)
+  let rawInventory = inventoryRes.data || [];
+  if (rawInventory.length === 0 && canViewCosmetics) {
+    try {
+      const ybInv = await executeYugabyteSql(
+        `SELECT mi.item_id, mi.origin, mi.acquired_at, row_to_json(si.*) AS shop_items
+         FROM public.member_inventory mi
+         JOIN public.shop_items si ON si.id = mi.item_id
+         WHERE mi.user_id = $1
+         ORDER BY mi.acquired_at DESC;`,
+        [member.id],
+        platform?.env
+      );
+      if (ybInv.rows && ybInv.rows.length > 0) {
+        rawInventory = ybInv.rows;
+      }
+    } catch {}
+  }
+
   const cosmeticsMap = new Map<string, any>();
-  for (const row of inventoryRes.data || []) {
+  for (const row of rawInventory) {
     const itemKey = row.item_id || row.shop_items?.id;
     if (!itemKey || cosmeticsMap.has(itemKey)) continue;
 
@@ -351,7 +414,26 @@ export const load = async ({ locals, params, platform }: any) => {
 
   const cosmetics = Array.from(cosmeticsMap.values());
 
-  const rpcStats = statsRes.data?.[0];
+  let rpcStats = statsRes.data?.[0];
+  if (!rpcStats) {
+    try {
+      const statsYb = await executeYugabyteSql(
+        `SELECT
+          (SELECT COUNT(DISTINCT chapter_id) FROM public.reading WHERE user_id = $1) AS chapters_read,
+          (SELECT COUNT(DISTINCT work_id) FROM public.reading WHERE user_id = $1) AS total_works,
+          (SELECT COUNT(DISTINCT work_id) FROM public.reading WHERE user_id = $1 AND completed_at IS NOT NULL) AS completed_works,
+          (SELECT COUNT(*) FROM public.library WHERE user_id = $1 AND favorite = true) AS favorites,
+          (SELECT COUNT(*) FROM public.achievements) AS achievements_total,
+          (SELECT COUNT(*) FROM public.member_inventory WHERE user_id = $1) AS cosmetics_count;`,
+        [member.id],
+        platform?.env
+      );
+      if (statsYb.rows && statsYb.rows[0]) {
+        rpcStats = statsYb.rows[0];
+      }
+    } catch {}
+  }
+
   const profileStats = {
     chapters_read: Number(rpcStats?.chapters_read ?? 0),
     total_works: Number(rpcStats?.total_works ?? 0),
@@ -364,9 +446,27 @@ export const load = async ({ locals, params, platform }: any) => {
 
   const favorites = (favoritesRes.data || []).map((r: any) => r.works).filter(Boolean);
 
+  let rawReading = readingRes.data || [];
+  if (rawReading.length === 0 && canViewReadingHistory) {
+    try {
+      const ybRead = await executeYugabyteSql(
+        `SELECT chapter_id, work_id, page, max_page, completed_at, updated_at
+         FROM public.reading
+         WHERE user_id = $1
+         ORDER BY updated_at DESC
+         LIMIT 80;`,
+        [member.id],
+        platform?.env
+      );
+      if (ybRead.rows && ybRead.rows.length > 0) {
+        rawReading = ybRead.rows;
+      }
+    } catch {}
+  }
+
   const enrichedReadings =
-    Array.isArray(readingRes.data) && readingRes.data.length > 0
-      ? await enrichReadingRowsWithCatalog(readingRes.data, locals.db, platform?.env)
+    Array.isArray(rawReading) && rawReading.length > 0
+      ? await enrichReadingRowsWithCatalog(rawReading, locals.db, platform?.env)
       : [];
 
   const readingMap = new Map<string, any>();
@@ -480,11 +580,21 @@ export const load = async ({ locals, params, platform }: any) => {
 };
 
 export const actions = {
-  toggleScanPrivacy: async ({ request, locals }) => {
+  toggleScanPrivacy: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const showScans = formData.get('show_scans') === 'on';
     const mode = (formData.get('mode') as string) || 'PRIMARY';
+
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members SET privacy_show_scans = $1, privacy_scan_mode = $2 WHERE id = $3;`,
+        [showScans, mode, locals.user.id],
+        platform?.env
+      );
+      return { success: true, action: 'toggleScanPrivacy' };
+    } catch {}
+
     const { error: rpcErr } = await locals.db.rpc('toggle_user_scan_privacy', {
       p_show_scans: showScans,
       p_mode: mode
@@ -493,11 +603,21 @@ export const actions = {
     return { success: true, action: 'toggleScanPrivacy' };
   },
 
-  moderateUserScans: async ({ request, locals }) => {
+  moderateUserScans: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const targetUserId = (formData.get('target_user_id') as string)?.trim();
     const hideBadges = formData.get('hide_badges') === 'true';
+
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members SET admin_hide_scan_badges = $1 WHERE id = $2;`,
+        [hideBadges, targetUserId],
+        platform?.env
+      );
+      return { success: true, action: 'moderateUserScans' };
+    } catch {}
+
     const { error: rpcErr } = await locals.db.rpc('admin_moderate_user_scans', {
       p_target_user_id: targetUserId,
       p_hide_badges: hideBadges

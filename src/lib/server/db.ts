@@ -16,7 +16,7 @@ export function check(result: { error: { message: string } | null }) {
   if (result.error) error(400, result.error.message);
 }
 export function member(locals: App.Locals) {
-  if (!locals.user || !locals.role) error(401, 'Entre em uma conta confirmada para continuar.');
+  if (!locals.user) error(401, 'Entre em uma conta confirmada para continuar.');
   return locals.user.id;
 }
 export function editor(locals: App.Locals) {

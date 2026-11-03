@@ -8,6 +8,7 @@ import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
 import { building } from '$app/environment';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
+import { setAuthCookie, signSessionJwt, getAuthSecret, type AuthSession } from '$lib/server/yugabyte-auth';
 
 async function handleRequest(event: any, resolve: any, reqStart: number) {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method)) {
@@ -29,15 +30,20 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     cookies: {
       getAll: () => event.cookies.getAll(),
       setAll: (cookies) =>
-        cookies.forEach(({ name, value, options }) =>
+        cookies.forEach(({ name, value, options }) => {
+          // Supabase SSR client must NEVER clear or overwrite Nox authentication cookies.
+          // Native Yugabyte auth manages sessions and explicit user logout clears them.
+          if (!value && (name.includes('auth-token') || name === 'nox-auth-token')) {
+            return;
+          }
           event.cookies.set(name, value, {
             ...options,
             path: '/',
             httpOnly: true,
             sameSite: 'lax',
             secure: event.url.protocol === 'https:'
-          })
-        )
+          });
+        })
     }
   });
 
@@ -80,6 +86,27 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
         role = sessionData.role;
         authState = 'AUTHENTICATED';
         event.locals.sessionCache = sessionData;
+        event.locals.user = user;
+        event.locals.role = role;
+
+        // Sliding session renewal: if less than 7 days left on 30-day session, renew
+        if (jwt.exp && jwt.exp - nowSec < 60 * 60 * 24 * 7) {
+          try {
+            const secret = getAuthSecret(event.platform?.env);
+            const freshExp = nowSec + (60 * 60 * 24 * 30);
+            const freshJwt = await signSessionJwt({ ...jwt, iat: nowSec, exp: freshExp }, secret);
+            const freshSession: AuthSession = {
+              access_token: freshJwt,
+              refresh_token: crypto.randomUUID(),
+              token_type: 'bearer',
+              expires_in: 60 * 60 * 24 * 30,
+              expires_at: freshExp,
+              user
+            };
+            const isSecure = event.url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(event.url.hostname);
+            setAuthCookie(event.cookies, freshSession, isSecure);
+          } catch {}
+        }
       } catch {
         // Decoding a JWT is not signature verification; never authorize this identity.
         user = null;
@@ -102,6 +129,8 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
           sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, refreshed.data.session?.access_token || accessToken || '', event.platform?.env);
           role = sessionData.role;
           event.locals.sessionCache = sessionData;
+          event.locals.user = user;
+          event.locals.role = role;
         } else {
           authState = 'ANONYMOUS';
           user = null;

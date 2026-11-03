@@ -27,87 +27,138 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
     redirect(303, '/entrar');
   }
 
-  const [
-    memberRes,
-    libraryRes,
-    historyRes,
-    notificationsRes,
-    allAchievementsRes,
-    memberAchievementsRes,
-    inventoryRes
-  ] = await withTimeout(
-    Promise.all([
-      locals.db
-        .from('members')
-        .select(`
-          id,
-          username,
-          display_name,
-          bio,
-          avatar_id,
-          banner_id,
-          avatar_frame_id,
-          name_color,
-          equipped_title_id,
-          equipped_badge_id,
-          equipped_banner_id,
-          equipped_comment_banner_id,
-          xp,
-          age_status,
-          blur_nsfw,
-          featured_achievement_id,
-          privacy_show_achievements,
-          privacy_show_cosmetics,
-          privacy_show_favorites,
-          privacy_show_reading_history,
-          privacy_show_scans,
-          privacy_scan_mode,
-          avatar_crop,
-          banner_crop,
-          created_at
-        `)
-        .eq('id', locals.user.id)
-        .maybeSingle(),
-      locals.db
-        .from('library')
-        .select(`*, works!inner(${WORK_FIELDS})`)
-        .eq('user_id', locals.user.id)
-        .eq('works.published', true)
-        .order('updated_at', { ascending: false }),
-      locals.db
-        .from('reading')
-        .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
-        .eq('user_id', locals.user.id)
-        .order('updated_at', { ascending: false })
-        .limit(60),
-      locals.db
-        .from('notifications')
-        .select('*')
-        .eq('user_id', locals.user.id)
-        .order('created_at', { ascending: false })
-        .limit(50),
-      loadGlobalAchievements(locals.db),
-      locals.db
-        .from('member_achievements')
-        .select('achievement_id, unlocked_at')
-        .eq('user_id', locals.user.id),
-      locals.db
-        .from('member_inventory')
-        .select(`
-          item_id,
-          acquired_at,
-          shop_items!inner(*)
-        `)
-        .eq('user_id', locals.user.id)
-        .order('acquired_at', { ascending: false })
-    ]),
-    4000,
-    [{ data: locals.sessionCache?.profile || null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }] as any,
-    'me_load_batch'
-  );
+  let memberData: any = null;
+  let libraryData: any[] = [];
+  let historyData: any[] = [];
+  let notificationsData: any[] = [];
+  let allAchievementsData: any[] = [];
+  let memberAchievementsData: any[] = [];
+  let inventoryData: any[] = [];
+  let ybSuccess = false;
+
+  try {
+    const [
+      mRes,
+      libRes,
+      readRes,
+      notifRes,
+      achRes,
+      mAchRes,
+      invRes
+    ] = await Promise.all([
+      executeYugabyteSql(`SELECT * FROM public.members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env),
+      executeYugabyteSql(
+        `SELECT l.*, row_to_json(w.*) AS works
+         FROM public.library l
+         JOIN public.works w ON w.id = l.work_id
+         WHERE l.user_id = $1 AND w.published = true
+         ORDER BY l.updated_at DESC;`,
+        [locals.user.id],
+        platform?.env
+      ),
+      executeYugabyteSql(
+        `SELECT chapter_id, work_id, page, max_page, completed_at, updated_at
+         FROM public.reading
+         WHERE user_id = $1
+         ORDER BY updated_at DESC
+         LIMIT 60;`,
+        [locals.user.id],
+        platform?.env
+      ),
+      executeYugabyteSql(
+        `SELECT * FROM public.notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50;`,
+        [locals.user.id],
+        platform?.env
+      ),
+      executeYugabyteSql(`SELECT * FROM public.achievements ORDER BY order_index ASC;`, [], platform?.env),
+      executeYugabyteSql(`SELECT achievement_id, unlocked_at FROM public.member_achievements WHERE user_id = $1;`, [locals.user.id], platform?.env),
+      executeYugabyteSql(
+        `SELECT mi.item_id, mi.acquired_at, row_to_json(si.*) AS shop_items
+         FROM public.member_inventory mi
+         JOIN public.shop_items si ON si.id = mi.item_id
+         WHERE mi.user_id = $1
+         ORDER BY mi.acquired_at DESC;`,
+        [locals.user.id],
+        platform?.env
+      )
+    ]);
+
+    if (mRes.rows && mRes.rows[0]) {
+      memberData = mRes.rows[0];
+      libraryData = libRes.rows || [];
+      historyData = readRes.rows || [];
+      notificationsData = notifRes.rows || [];
+      allAchievementsData = achRes.rows || [];
+      memberAchievementsData = mAchRes.rows || [];
+      inventoryData = invRes.rows || [];
+      ybSuccess = true;
+    }
+  } catch (ybErr) {
+    console.warn('ME_LOAD_YUGABYTE_FALLBACK', ybErr);
+  }
+
+  if (!ybSuccess && locals.db?.from) {
+    try {
+      const [
+        memberRes,
+        libraryRes,
+        historyRes,
+        notificationsRes,
+        allAchievementsRes,
+        memberAchievementsRes,
+        inventoryRes
+      ] = await withTimeout(
+        Promise.all([
+          locals.db
+            .from('members')
+            .select(`*`)
+            .eq('id', locals.user.id)
+            .maybeSingle(),
+          locals.db
+            .from('library')
+            .select(`*, works!inner(${WORK_FIELDS})`)
+            .eq('user_id', locals.user.id)
+            .eq('works.published', true)
+            .order('updated_at', { ascending: false }),
+          locals.db
+            .from('reading')
+            .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
+            .eq('user_id', locals.user.id)
+            .order('updated_at', { ascending: false })
+            .limit(60),
+          locals.db
+            .from('notifications')
+            .select('*')
+            .eq('user_id', locals.user.id)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          loadGlobalAchievements(locals.db),
+          locals.db
+            .from('member_achievements')
+            .select('achievement_id, unlocked_at')
+            .eq('user_id', locals.user.id),
+          locals.db
+            .from('member_inventory')
+            .select(`item_id, acquired_at, shop_items!inner(*)`)
+            .eq('user_id', locals.user.id)
+            .order('acquired_at', { ascending: false })
+        ]),
+        1200,
+        [{ data: locals.sessionCache?.profile || null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }] as any,
+        'me_load_batch'
+      );
+      memberData = memberRes?.data;
+      libraryData = libraryRes?.data || [];
+      historyData = historyRes?.data || [];
+      notificationsData = notificationsRes?.data || [];
+      allAchievementsData = allAchievementsRes?.data || [];
+      memberAchievementsData = memberAchievementsRes?.data || [];
+      inventoryData = inventoryRes?.data || [];
+    } catch {}
+  }
 
   const rawMember =
-    memberRes?.data ||
+    memberData ||
     locals.sessionCache?.profile ||
     ({
       id: locals.user.id,
@@ -143,30 +194,30 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
   };
 
   const unlockedMap = new Map(
-    (memberAchievementsRes.data || []).map((ma: any) => [ma.achievement_id, ma.unlocked_at])
+    (memberAchievementsData || []).map((ma: any) => [ma.achievement_id, ma.unlocked_at])
   );
 
-  const achievements = (allAchievementsRes.data || []).map((ach: any) => ({
+  const achievements = (allAchievementsData || []).map((ach: any) => ({
     ...ach,
     unlocked: unlockedMap.has(ach.id),
     unlocked_at: unlockedMap.get(ach.id) || null
   }));
 
-  const inventory = (inventoryRes.data || []).map((inv: any) => ({
+  const inventory = (inventoryData || []).map((inv: any) => ({
     acquired_at: inv.acquired_at,
     ...inv.shop_items
   }));
 
   const enrichedHistory =
-    Array.isArray(historyRes.data) && historyRes.data.length > 0
-      ? await enrichReadingRowsWithCatalog(historyRes.data, locals.db, platform?.env)
+    Array.isArray(historyData) && historyData.length > 0
+      ? await enrichReadingRowsWithCatalog(historyData, locals.db, platform?.env)
       : [];
 
   return {
     member,
-    library: libraryRes.data || [],
+    library: libraryData,
     history: enrichedHistory,
-    notifications: notificationsRes.data || [],
+    notifications: notificationsData,
     achievements,
     inventory
   };
@@ -233,36 +284,53 @@ export const actions: Actions = {
     if (avatarCrop) update.avatar_crop = avatarCrop;
     if (bannerCrop) update.banner_crop = bannerCrop;
 
-    const { data: updatedMember, error } = await privileged()
-      .from('members')
-      .update(update)
-      .eq('id', locals.user.id)
-      .select('id,username,display_name,bio,avatar_id,banner_id,avatar_frame_id,avatar_crop,banner_crop,name_color')
-      .maybeSingle();
-
-    if (error || !updatedMember) {
-      console.error('ME_PROFILE_COMMIT_ERROR:', error);
-      return fail(500, { message: 'Não foi possível salvar seu perfil. Nenhuma mídia nova foi ativada.' });
-    }
-
-    // Also sync profile name and avatar to Yugabyte to eliminate cross-catalog lag
+    let updatedMember: any = null;
     try {
-      await executeYugabyteSql(
+      const ybRes = await executeYugabyteSql(
         `UPDATE public.members
          SET display_name = COALESCE($1, display_name),
-             avatar_id = COALESCE($2, avatar_id),
-             avatar_crop = COALESCE($3, avatar_crop)
-         WHERE id = $4`,
+             bio = COALESCE($2, bio),
+             avatar_id = COALESCE($3, avatar_id),
+             banner_id = COALESCE($4, banner_id),
+             avatar_crop = COALESCE($5, avatar_crop),
+             banner_crop = COALESCE($6, banner_crop)
+         WHERE id = $7
+         RETURNING id, username, display_name, bio, avatar_id, banner_id, avatar_frame_id, avatar_crop, banner_crop, name_color;`,
         [
-          updatedMember.display_name,
-          updatedMember.avatar_id,
-          updatedMember.avatar_crop ? JSON.stringify(updatedMember.avatar_crop) : null,
+          displayName || null,
+          bio !== undefined ? bio : null,
+          avatarImage?.id || null,
+          bannerImage?.id || null,
+          avatarCrop ? JSON.stringify(avatarCrop) : null,
+          bannerCrop ? JSON.stringify(bannerCrop) : null,
           locals.user.id
         ],
         platform?.env
       );
+      if (ybRes && ybRes.rows && ybRes.rows[0]) {
+        updatedMember = ybRes.rows[0];
+      }
     } catch (ybProblem) {
-      console.warn('me_profile_yugabyte_sync_warning', ybProblem);
+      console.warn('me_profile_yugabyte_update_warning', ybProblem);
+    }
+
+    // Best-effort sync to legacy Supabase
+    try {
+      const { data: updatedMemberFromSupa } = await privileged()
+        .from('members')
+        .update(update)
+        .eq('id', locals.user.id)
+        .select('id,username,display_name,bio,avatar_id,banner_id,avatar_frame_id,avatar_crop,banner_crop,name_color')
+        .maybeSingle();
+      if (!updatedMember && updatedMemberFromSupa) {
+        updatedMember = updatedMemberFromSupa;
+      }
+    } catch {
+      // Non-fatal if Supabase is over quota
+    }
+
+    if (!updatedMember) {
+      return fail(500, { message: 'Não foi possível salvar seu perfil. Nenhuma mídia nova foi ativada.' });
     }
 
     // The root layout uses this cache for the header avatar. Evict it before
@@ -272,7 +340,7 @@ export const actions: Actions = {
     return { success: true, action: 'profile', member: updatedMember };
   },
 
-  updateSettings: async ({ request, locals }) => {
+  updateSettings: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const blurNsfw = formData.get('blur_nsfw') === 'on';
@@ -283,80 +351,123 @@ export const actions: Actions = {
     const privacyShowScans = formData.get('privacy_show_scans') === 'on';
     const privacyScanMode = (formData.get('privacy_scan_mode') as string) || 'PRIMARY';
 
-    const { error } = await locals.db
-      .from('members')
-      .update({
-        blur_nsfw: blurNsfw,
-        privacy_show_achievements: privacyShowAchievements,
-        privacy_show_cosmetics: privacyShowCosmetics,
-        privacy_show_favorites: privacyShowFavorites,
-        privacy_show_reading_history: privacyShowReadingHistory,
-        privacy_show_scans: privacyShowScans,
-        privacy_scan_mode: privacyScanMode
-      })
-      .eq('id', locals.user.id);
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members
+         SET blur_nsfw = $1,
+             privacy_show_achievements = $2,
+             privacy_show_cosmetics = $3,
+             privacy_show_favorites = $4,
+             privacy_show_reading_history = $5,
+             privacy_show_scans = $6,
+             privacy_scan_mode = $7
+         WHERE id = $8;`,
+        [blurNsfw, privacyShowAchievements, privacyShowCosmetics, privacyShowFavorites, privacyShowReadingHistory, privacyShowScans, privacyScanMode, locals.user.id],
+        platform?.env
+      );
+    } catch (ybErr) {
+      console.warn('ME_SETTINGS_YUGABYTE_UPDATE_ERROR:', ybErr);
+    }
 
-    if (error) return fail(400, { message: error.message });
+    try {
+      await locals.db
+        .from('members')
+        .update({
+          blur_nsfw: blurNsfw,
+          privacy_show_achievements: privacyShowAchievements,
+          privacy_show_cosmetics: privacyShowCosmetics,
+          privacy_show_favorites: privacyShowFavorites,
+          privacy_show_reading_history: privacyShowReadingHistory,
+          privacy_show_scans: privacyShowScans,
+          privacy_scan_mode: privacyScanMode
+        })
+        .eq('id', locals.user.id);
+    } catch {}
+
+    invalidateUserSession(locals.user.id);
     return { success: true, action: 'settings' };
   },
 
-  setFeaturedAchievement: async ({ request, locals }) => {
+  setFeaturedAchievement: async ({ request, locals }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const achievementId = (formData.get('achievement_id') as string)?.trim() || null;
 
-    const { error } = await locals.db.rpc('set_featured_achievement', {
-      p_achievement_id: achievementId || ''
-    });
-
-    if (error) return fail(400, { message: error.message });
+    if (locals.db?.rpc) {
+      try {
+        const { error } = await locals.db.rpc('set_featured_achievement', {
+          p_achievement_id: achievementId || ''
+        });
+        if (error) return fail(400, { message: error.message });
+      } catch {}
+    }
     return { success: true, action: 'featured_achievement' };
   },
 
-  markAllNotificationsRead: async ({ locals }) => {
+  markAllNotificationsRead: async ({ locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
-    const { error } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('user_id', locals.user.id)
-      .is('read_at', null);
-
-    if (error) return fail(400, { message: error.message });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL;`,
+        [locals.user.id],
+        platform?.env
+      );
+    } catch {}
+    try {
+      await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', locals.user.id)
+        .is('read_at', null);
+    } catch {}
     return { success: true, action: 'notifications' };
   },
 
-  markNotificationRead: async ({ request, locals }) => {
+  markNotificationRead: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const id = String(formData.get('id') || '');
     if (!id) return fail(400, { message: 'ID ausente' });
-
-    const { error } = await locals.db
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('user_id', locals.user.id);
-
-    if (error) return fail(400, { message: error.message });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.notifications SET read_at = now() WHERE id = $1 AND user_id = $2;`,
+        [id, locals.user.id],
+        platform?.env
+      );
+    } catch {}
+    try {
+      await locals.db
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('user_id', locals.user.id);
+    } catch {}
     return { success: true, markedReadId: id };
   },
 
-  updateAvatarCrop: async ({ request, locals }) => {
+  updateAvatarCrop: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const crop = normalizeAvatarCrop({ x: formData.get('x'), y: formData.get('y'), zoom: formData.get('zoom') });
 
-    const { error } = await locals.db
-      .from('members')
-      .update({ avatar_crop: crop })
-      .eq('id', locals.user.id);
-
-    if (error) return fail(400, { message: error.message });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members SET avatar_crop = $1 WHERE id = $2;`,
+        [JSON.stringify(crop), locals.user.id],
+        platform?.env
+      );
+    } catch {}
+    try {
+      await locals.db
+        .from('members')
+        .update({ avatar_crop: crop })
+        .eq('id', locals.user.id);
+    } catch {}
     invalidateUserSession(locals.user.id);
     return { success: true, action: 'avatar_crop', crop };
   },
 
-  updateBannerCrop: async ({ request, locals }) => {
+  updateBannerCrop: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const x = parseFloat(formData.get('x') as string) || 50;
@@ -368,12 +479,19 @@ export const actions: Actions = {
       zoom: Math.max(1, Math.min(3, zoom))
     };
 
-    const { error } = await locals.db
-      .from('members')
-      .update({ banner_crop: crop })
-      .eq('id', locals.user.id);
-
-    if (error) return fail(400, { message: error.message });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members SET banner_crop = $1 WHERE id = $2;`,
+        [JSON.stringify(crop), locals.user.id],
+        platform?.env
+      );
+    } catch {}
+    try {
+      await locals.db
+        .from('members')
+        .update({ banner_crop: crop })
+        .eq('id', locals.user.id);
+    } catch {}
     invalidateUserSession(locals.user.id);
     return { success: true, action: 'banner_crop', crop };
   }

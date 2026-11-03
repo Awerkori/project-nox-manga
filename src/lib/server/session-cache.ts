@@ -1,7 +1,7 @@
 import { withTimeout } from './resilience';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny } from '$lib/server/yugabyte-auth';
+import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny, AUTH_COOKIE_NAME } from '$lib/server/yugabyte-auth';
 
 export interface DecodedJwt {
   sub: string;
@@ -34,22 +34,70 @@ const sessionCache = new Map<string, CachedSession>();
 const activeFlights = new Map<string, Promise<CachedSession>>();
 const verifiedTokens = new Map<string, { userId: string; expiresAt: number }>();
 
+function decodeBase64Safe(str: string): string {
+  let normalized = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (normalized.length % 4 !== 0) {
+    normalized += '=';
+  }
+  const binary = atob(normalized);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 /**
  * Reconstruct full auth cookie string even when chunked into .0, .1, etc.
- * Strictly excludes helper cookies like -code-verifier or -provider.
+ * Strictly avoids concatenating unchunked and chunked cookies together or merging different cookie roots.
  */
 export function extractFullAuthCookie(cookies: Array<{ name: string; value: string }>): string | null {
+  if (!Array.isArray(cookies) || cookies.length === 0) return null;
   const authCookieRegex = /^sb-[a-zA-Z0-9_-]+-auth-token(?:\.\d+)?$/;
-  const authCookies = cookies
-    .filter((c) => authCookieRegex.test(c.name))
-    .sort((a, b) => {
-      const idxA = a.name.includes('.') ? Number(a.name.split('.').pop()) || 0 : 0;
-      const idxB = b.name.includes('.') ? Number(b.name.split('.').pop()) || 0 : 0;
-      return idxA - idxB;
+  const authCookies = cookies.filter((c) => authCookieRegex.test(c.name) && c.value);
+  if (authCookies.length === 0) return null;
+
+  // 1. Prioritize canonical AUTH_COOKIE_NAME unchunked if valid
+  const canonicalUnchunked = authCookies.find((c) => c.name === AUTH_COOKIE_NAME);
+  if (canonicalUnchunked?.value) {
+    const test = decodeSessionJwt(canonicalUnchunked.value);
+    if (test.jwt) return canonicalUnchunked.value;
+  }
+
+  // 2. Check other unchunked cookies that decode to valid JWT
+  const unchunkedList = authCookies.filter((c) => !c.name.includes('.'));
+  for (const c of unchunkedList) {
+    const test = decodeSessionJwt(c.value);
+    if (test.jwt) return c.value;
+  }
+
+  // 3. If chunked cookies exist, group by base name and join only chunks belonging to the same root cookie
+  const chunked = authCookies.filter((c) => c.name.includes('.'));
+  if (chunked.length > 0) {
+    const grouped = new Map<string, Array<{ name: string; value: string }>>();
+    for (const c of chunked) {
+      const baseName = c.name.replace(/\.\d+$/, '');
+      if (!grouped.has(baseName)) grouped.set(baseName, []);
+      grouped.get(baseName)!.push(c);
+    }
+
+    const baseNames = Array.from(grouped.keys()).sort((a, b) => {
+      if (a === AUTH_COOKIE_NAME) return -1;
+      if (b === AUTH_COOKIE_NAME) return 1;
+      return 0;
     });
 
-  if (authCookies.length === 0) return null;
-  return authCookies.map((c) => c.value).join('');
+    for (const baseName of baseNames) {
+      const list = grouped.get(baseName)!;
+      list.sort((a, b) => {
+        const idxA = Number(a.name.split('.').pop()) || 0;
+        const idxB = Number(b.name.split('.').pop()) || 0;
+        return idxA - idxB;
+      });
+      const joined = list.map((c) => c.value).join('');
+      const test = decodeSessionJwt(joined);
+      if (test.jwt) return joined;
+    }
+  }
+
+  return unchunkedList[0] ? unchunkedList[0].value : null;
 }
 
 /**
@@ -57,7 +105,11 @@ export function extractFullAuthCookie(cookies: Array<{ name: string; value: stri
  */
 export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; accessToken: string } {
   try {
-    let raw = rawCookie;
+    if (!rawCookie || typeof rawCookie !== 'string') return { jwt: null, accessToken: '' };
+    let raw = rawCookie.trim();
+    if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
+      raw = raw.slice(1, -1).trim();
+    }
     if (raw.includes('%')) {
       try {
         raw = decodeURIComponent(raw);
@@ -66,7 +118,7 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
       }
     }
     if (raw.startsWith('base64-')) {
-      raw = atob(raw.slice(7));
+      raw = decodeBase64Safe(raw.slice(7));
     }
     let token = '';
     if (raw.startsWith('{')) {
@@ -83,24 +135,14 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
     if (parts.length !== 3) return { jwt: null, accessToken: '' };
 
     // Decode and validate header
-    const base64UrlHeader = parts[0];
-    let base64H = base64UrlHeader.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64H.length % 4 !== 0) base64H += '=';
-    const headerJson = new TextDecoder().decode(Uint8Array.from(atob(base64H), (c) => c.charCodeAt(0)));
+    const headerJson = decodeBase64Safe(parts[0]);
     const header = JSON.parse(headerJson);
     if (!header || typeof header !== 'object' || !['HS256', 'RS256', 'ES256'].includes(header.alg)) {
       return { jwt: null, accessToken: '' };
     }
 
     // Decode and validate payload
-    const base64Url = parts[1];
-    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4 !== 0) {
-      base64 += '=';
-    }
-    const binaryStr = atob(base64);
-    const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0));
-    const jsonStr = new TextDecoder().decode(bytes);
+    const jsonStr = decodeBase64Safe(parts[1]);
     const payload = JSON.parse(jsonStr) as DecodedJwt;
 
     if (!payload || typeof payload !== 'object' || !payload.sub || typeof payload.sub !== 'string') {
@@ -280,8 +322,8 @@ export async function resolveSessionData(
 
       // Guarantee platform owner role when DB is degraded or role not explicitly set in table (UUID-based RBAC, never email)
       const isPlatformOwner = Boolean(userId && (userId === (process.env.STAFF_OWNER_USER_ID || '732fbe87-5040-41fb-9983-0aedb2af44c8')));
-      if (!effectiveRole && isPlatformOwner) {
-        effectiveRole = 'ADMIN';
+      if (!effectiveRole && !roleData?.suspended) {
+        effectiveRole = isPlatformOwner ? 'ADMIN' : 'USER';
       }
 
       // Build consolidated user scans preserving official OWNER / ADMIN / MEMBER model

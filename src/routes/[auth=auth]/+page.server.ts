@@ -60,19 +60,52 @@ export const actions = {
           platform?.env
         );
         if (userRes.rows && userRes.rows[0]) {
-          if (!userRes.rows[0].email_confirmed_at) {
-            await executeYugabyteSql(
-              `UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1;`,
-              [userRes.rows[0].id],
-              platform?.env
-            );
+          const targetUser = userRes.rows[0];
+          if (targetUser.email_confirmed_at) {
+            return {
+              success: true,
+              resend: true,
+              unconfirmed: false,
+              email,
+              message: 'Sua conta já está confirmada! Você já pode entrar com seu e-mail e senha.'
+            };
           }
+
+          const secret = getAuthSecret(platform?.env);
+          const nowSec = Math.floor(Date.now() / 1000);
+          const confirmToken = await signSessionJwt(
+            {
+              sub: targetUser.id,
+              email: targetUser.email,
+              type: 'signup',
+              exp: nowSec + 86400 // 24 hours
+            },
+            secret
+          );
+          const confirmUrl = `${redirectOrigin}/auth/confirm?token_hash=${confirmToken}&type=signup`;
+          const emailHtml = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #0c0a13; color: #f1f0f5; border-radius: 12px; border: 1px solid #2a243a;">
+              <h2 style="color: #b59af5; margin-top: 0;">Confirmação de Conta</h2>
+              <p style="color: #c4c0d0; line-height: 1.6;">Você solicitou um novo link para confirmar sua conta no Project Nox.</p>
+              <div style="margin: 28px 0;">
+                <a href="${confirmUrl}" style="background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; display: inline-block;">Confirmar Minha Conta</a>
+              </div>
+              <p style="color: #8a859b; font-size: 13px; line-height: 1.5;">O link é válido por 24 horas.</p>
+            </div>
+          `;
+          await sendBrevoEmail({
+            toEmail: targetUser.email,
+            subject: '[Project Nox] Confirme sua conta',
+            htmlContent: emailHtml,
+            tags: ['email-confirmation']
+          });
+
           return {
             success: true,
             resend: true,
-            unconfirmed: false,
+            unconfirmed: mode === 'entrar',
             email,
-            message: 'Sua conta já está confirmada! Você já pode entrar com seu e-mail e senha.'
+            message: 'Enviamos uma nova confirmação para o seu e-mail. Abra o e-mail mais recente.'
           };
         }
       } catch (ybErr) {
@@ -122,6 +155,7 @@ export const actions = {
         const isSecure = url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(url.hostname);
         setAuthCookie(cookies, ybResult.session, isSecure);
         locals.user = ybResult.session.user as any;
+        locals.role = ybResult.session.user.role || 'USER';
       } else if (ybResult.error?.unconfirmed) {
         return fail(400, {
           message: 'Verifique seu e-mail para continuar.',
@@ -157,7 +191,11 @@ export const actions = {
       }
 
       try {
-        await claimInvite(locals);
+        if (platform?.env) {
+          await claimInvite(locals, platform.env);
+        } else {
+          await claimInvite(locals);
+        }
       } catch {
         // Non-fatal
       }
@@ -182,8 +220,40 @@ export const actions = {
 
       // 1. Authoritative direct YugabyteDB registration
       const ybReg = await registerWithYugabyte(email, password, rawUsername, displayName, platform?.env);
-      if (ybReg.success) {
-        return { success: true, message: 'Conta criada com sucesso! Você já pode entrar com seu e-mail e senha.' };
+      if (ybReg.success && ybReg.user) {
+        try {
+          const secret = getAuthSecret(platform?.env);
+          const nowSec = Math.floor(Date.now() / 1000);
+          const confirmToken = await signSessionJwt(
+            {
+              sub: ybReg.user.id,
+              email: ybReg.user.email,
+              type: 'signup',
+              exp: nowSec + 86400 // 24 hours
+            },
+            secret
+          );
+          const confirmUrl = `${redirectOrigin}/auth/confirm?token_hash=${confirmToken}&type=signup`;
+          const emailHtml = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #0c0a13; color: #f1f0f5; border-radius: 12px; border: 1px solid #2a243a;">
+              <h2 style="color: #b59af5; margin-top: 0;">Bem-vindo ao Project Nox!</h2>
+              <p style="color: #c4c0d0; line-height: 1.6;">Obrigado por se cadastrar. Confirme seu e-mail para ativar sua conta e acessar todas as obras e recursos.</p>
+              <div style="margin: 28px 0;">
+                <a href="${confirmUrl}" style="background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; display: inline-block;">Confirmar Minha Conta</a>
+              </div>
+              <p style="color: #8a859b; font-size: 13px; line-height: 1.5;">O link expira em 24 horas.</p>
+            </div>
+          `;
+          await sendBrevoEmail({
+            toEmail: ybReg.user.email,
+            subject: '[Project Nox] Confirme sua conta',
+            htmlContent: emailHtml,
+            tags: ['email-confirmation']
+          });
+        } catch (mailErr) {
+          console.warn('[SIGNUP_EMAIL_WARN]', mailErr);
+        }
+        return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
       }
       if (ybReg.error?.status === 400) {
         return fail(400, { message: ybReg.error.message });
@@ -228,7 +298,7 @@ export const actions = {
       let emailDispatched = false;
       try {
         const userRes = await executeYugabyteSql(
-          `SELECT id, email FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;`,
+          `SELECT id, email, encrypted_password, updated_at FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;`,
           [email],
           platform?.env
         );
@@ -236,11 +306,13 @@ export const actions = {
           const targetUser = userRes.rows[0];
           const secret = getAuthSecret(platform?.env);
           const nowSec = Math.floor(Date.now() / 1000);
+          const fp = targetUser.encrypted_password ? targetUser.encrypted_password.slice(-10) : (targetUser.updated_at || 'initial');
           const recoveryToken = await signSessionJwt(
             {
               sub: targetUser.id,
               email: targetUser.email,
               type: 'recovery',
+              fp,
               exp: nowSec + 3600 // 1 hour expiration
             },
             secret
@@ -324,6 +396,40 @@ export const actions = {
       }
 
       invalidateUserSession(locals.user.id);
+
+      try {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const expiresIn = 60 * 60 * 24 * 30; // 30 days
+        const exp = nowSec + expiresIn;
+        const secret = getAuthSecret(platform?.env);
+        const sessionJwt = await signSessionJwt(
+          {
+            aud: 'authenticated',
+            exp,
+            iat: nowSec,
+            sub: locals.user.id,
+            email: locals.user.email,
+            role: 'authenticated'
+          },
+          secret
+        );
+        const freshSession: any = {
+          access_token: sessionJwt,
+          refresh_token: crypto.randomUUID(),
+          token_type: 'bearer',
+          expires_in: expiresIn,
+          expires_at: exp,
+          user: {
+            id: locals.user.id,
+            email: locals.user.email || '',
+            aud: 'authenticated',
+            role: 'authenticated',
+            email_confirmed_at: new Date().toISOString()
+          }
+        };
+        const isSecure = url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(url.hostname);
+        setAuthCookie(cookies, freshSession, isSecure);
+      } catch {}
 
       // Disparar notificação de segurança e e-mail transacional de senha alterada
       try {

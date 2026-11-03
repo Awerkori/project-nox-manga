@@ -39,24 +39,36 @@ export function getAuthSecrets(platformEnv?: any): string[] {
   add(platformEnv?.JWT_SECRET);
   add(platformEnv?.BETTER_AUTH_SECRET);
   add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
+  add(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY);
   add(platformEnv?.NOX_STORAGE_BRIDGE_TOKEN);
   if (typeof process !== 'undefined' && process.env) {
     add(process.env.SUPABASE_JWT_SECRET);
     add(process.env.JWT_SECRET);
     add(process.env.BETTER_AUTH_SECRET);
     add(process.env.SUPABASE_SERVICE_ROLE_KEY);
+    add(process.env.STAFF_SUPABASE_SERVICE_ROLE_KEY);
     add(process.env.NOX_STORAGE_BRIDGE_TOKEN);
   }
-  // Only use default test fallback secret if NO legitimate secrets are configured
+  // Only allow test fallback secret in development / test environments (e.g. Vitest)
+  const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');
   if (secrets.size === 0) {
-    add(DEFAULT_AUTH_SECRET);
+    if (isTest) {
+      add(DEFAULT_AUTH_SECRET);
+    } else {
+      throw new Error('FAIL_CLOSED: No cryptographic authentication secrets configured in environment.');
+    }
   }
   return Array.from(secrets);
 }
 
 export function getAuthSecret(platformEnv?: any): string {
   const secrets = getAuthSecrets(platformEnv);
-  return secrets[0] || DEFAULT_AUTH_SECRET;
+  if (secrets.length === 0) {
+    const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');
+    if (isTest) return DEFAULT_AUTH_SECRET;
+    throw new Error('FAIL_CLOSED: No cryptographic authentication secret available.');
+  }
+  return secrets[0];
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -293,20 +305,18 @@ export async function authenticateWithYugabyte(
     }
 
     if (!userRow.email_confirmed_at) {
-      try {
-        await executeYugabyteSql(
-          `UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1 AND email_confirmed_at IS NULL;`,
-          [userRow.id],
-          platformEnv
-        );
-        userRow.email_confirmed_at = new Date().toISOString();
-      } catch (confirmErr) {
-        console.warn('[YUGABYTE_AUTH_AUTOCONFIRM_WARN]', confirmErr);
-      }
+      return {
+        success: false,
+        error: {
+          message: 'Verifique seu e-mail para continuar.',
+          unconfirmed: true,
+          status: 400
+        }
+      };
     }
 
     const nowSec = Math.floor(Date.now() / 1000);
-    const expiresIn = 60 * 60 * 24 * 7; // 7 days
+    const expiresIn = 60 * 60 * 24 * 30; // 30 days
     const exp = nowSec + expiresIn;
     const secret = getAuthSecret(platformEnv);
 
@@ -358,9 +368,23 @@ export async function authenticateWithYugabyte(
  * Set the standard base64-encoded cookie recognized by @supabase/ssr and session-cache
  */
 export function setAuthCookie(cookies: Cookies, session: AuthSession, isSecure: boolean): void {
+  // Clear any stale chunked cookies (.0, .1, etc.) before writing the fresh session
+  if (typeof cookies.getAll === 'function') {
+    for (const c of cookies.getAll()) {
+      if (/^sb-.*-auth-token\.\d+$/.test(c.name)) {
+        cookies.delete(c.name, { path: '/' });
+      }
+    }
+  }
+
   const jsonStr = JSON.stringify(session);
-  const b64Url = base64UrlEncode(jsonStr);
-  const cookieVal = `base64-${b64Url}`;
+  const bytes = new TextEncoder().encode(jsonStr);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const b64 = btoa(binary);
+  const cookieVal = `base64-${b64}`;
 
   cookies.set(AUTH_COOKIE_NAME, cookieVal, {
     path: '/',
@@ -375,9 +399,16 @@ export function setAuthCookie(cookies: Cookies, session: AuthSession, isSecure: 
  * Clear all Supabase and Nox auth cookies
  */
 export function clearAllAuthCookies(cookies: Cookies): void {
-  for (const c of cookies.getAll()) {
-    if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME) {
-      cookies.delete(c.name, { path: '/' });
+  try {
+    cookies.delete(AUTH_COOKIE_NAME, { path: '/' });
+    cookies.delete('nox-auth-token', { path: '/' });
+  } catch {}
+
+  if (typeof cookies.getAll === 'function') {
+    for (const c of cookies.getAll()) {
+      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME || c.name === 'nox-auth-token') {
+        cookies.delete(c.name, { path: '/' });
+      }
     }
   }
 }
@@ -437,7 +468,7 @@ export async function registerWithYugabyte(
 
     await executeYugabyteSql(
       `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, raw_app_meta_data)
-       VALUES ($1, $2, crypt($3, gen_salt('bf', 10)), now(), $4::jsonb, $5::jsonb);`,
+       VALUES ($1, $2, crypt($3, gen_salt('bf', 10)), NULL, $4::jsonb, $5::jsonb);`,
       [userId, trimmedEmail, rawPassword, metadata, appMetadata],
       platformEnv
     );
@@ -460,7 +491,7 @@ export async function registerWithYugabyte(
 
     return {
       success: true,
-      user: { id: userId, email: trimmedEmail, username, display_name: name }
+      user: { id: userId, email: trimmedEmail, username, display_name: name, unconfirmed: true }
     };
   } catch (err: any) {
     console.error('[YUGABYTE_SIGNUP_ERROR]', err?.message || err);

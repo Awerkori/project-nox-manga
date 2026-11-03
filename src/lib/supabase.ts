@@ -1,4 +1,3 @@
-import { createBrowserClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/public';
 
@@ -15,27 +14,21 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
     return null;
   }
 
-  try {
-    browserClient = createBrowserClient(url, key, {
-      realtime: {
-        params: {
-          eventsPerSecond: 10
-        }
+  // Use createClient with persistSession: false so that Supabase JS client
+  // NEVER accesses, synchronizes, or wipes browser cookies.
+  browserClient = createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10
       }
-    });
-  } catch {
-    browserClient = createClient(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true
-      },
-      realtime: {
-        params: {
-          eventsPerSecond: 10
-        }
-      }
-    });
-  }
+    }
+  });
 
   return browserClient;
 }
+

@@ -89,20 +89,34 @@ async function toUint8Array(body: BodyInit, idleTimeoutMs = COVER_BODY_IDLE_TIME
   return new Uint8Array();
 }
 
+async function downloadTelegramMedia(
+  client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
+  providerKey: string
+): Promise<ReadableStream<Uint8Array> | Uint8Array> {
+  if (providerKey.startsWith('tgc:')) {
+    const rawChunks = providerKey.slice(4).split(',');
+    const downloaded: Uint8Array[] = [];
+    for (const chunk of rawChunks) {
+      const fileId = chunk.split(':')[0].trim();
+      if (!fileId) continue;
+      const stream = await downloadCoverWithTransientRetry(client, fileId);
+      const bytes = await toUint8Array(stream);
+      downloaded.push(bytes);
+    }
+    const totalBytes = downloaded.reduce((acc, c) => acc + c.length, 0);
+    const combined = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const c of downloaded) {
+      combined.set(c, offset);
+      offset += c.length;
+    }
+    return combined;
+  }
+  return downloadCoverWithTransientRetry(client, providerKey);
+}
+
 export const GET = async ({ locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
-
-  // Stale media alias redirection: self-heal known broken historical media pointers
-  if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1') {
-    return new Response(null, {
-      status: 302,
-      headers: {
-        'Location': '/media/4c812f93-6bb1-40f9-9151-dc2d20e86e5e',
-        'Cache-Control': 'public, max-age=86400'
-      }
-    });
-  }
-
 
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
@@ -310,7 +324,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
     const client = resolveBotDownloadClient(botRef);
     try {
-      const stream = await downloadCoverWithTransientRetry(client, media.provider_key);
+      const stream = await downloadTelegramMedia(client, media.provider_key);
       body = stream;
     } catch (firstErr) {
       const isTg400 = firstErr instanceof TelegramStorageError && firstErr.status === 400;
@@ -319,7 +333,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         const altBotRef = botRef === 'MANGA_STORAGE_2' ? 'MANGA_STORAGE_01' : 'MANGA_STORAGE_2';
         try {
           const altClient = resolveBotDownloadClient(altBotRef);
-          const stream = await altClient.download(media.provider_key);
+          const stream = await downloadTelegramMedia(altClient, media.provider_key);
           body = stream;
           botRef = altBotRef;
           // Self-heal DB mapping in background
@@ -404,7 +418,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         });
         try {
           const retryClient = resolveBotDownloadClient(downloadBotRef);
-          body = await downloadCoverWithTransientRetry(retryClient, media.provider_key);
+          body = await downloadTelegramMedia(retryClient, media.provider_key);
           headers['X-Thumbnail-Strategy'] = 'fallback-original';
           if (bytes > 0) headers['Content-Length'] = String(bytes);
         } catch {
@@ -421,6 +435,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   } else {
     if (media.bytes && Number(media.bytes) > 0) {
       headers['Content-Length'] = String(media.bytes);
+    } else if (body instanceof Uint8Array) {
+      headers['Content-Length'] = String(body.byteLength);
     } else if (body instanceof ArrayBuffer) {
       headers['Content-Length'] = String(body.byteLength);
     } else if (body instanceof Blob) {

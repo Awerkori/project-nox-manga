@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { signSessionJwt, verifySessionJwt, getAuthSecret, setAuthCookie, AUTH_COOKIE_NAME, clearAllAuthCookies } from '../src/lib/server/yugabyte-auth';
-import { decodeSessionJwt } from '../src/lib/server/session-cache';
+import { decodeSessionJwt, extractFullAuthCookie } from '../src/lib/server/session-cache';
 
 describe('yugabyte-auth JWT and cookie handling', () => {
   it('signs and verifies HS256 JWT tokens using Web Crypto', async () => {
@@ -112,5 +112,43 @@ describe('yugabyte-auth JWT and cookie handling', () => {
     expect(verified).not.toBeNull();
     expect(verified?.sub).toBe(payload.sub);
     expect((verified as any)?.type).toBe('recovery');
+  });
+
+  it('safely handles double-quoted and whitespace-padded cookie strings', async () => {
+    const secret = getAuthSecret();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const payload = { sub: '22222222-3333-4444-5555-666666666666', exp: nowSec + 3600 };
+    const token = await signSessionJwt(payload, secret);
+    const session = {
+      access_token: token,
+      refresh_token: 'uuid',
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: nowSec + 3600,
+      user: { id: payload.sub }
+    };
+    const b64 = Buffer.from(JSON.stringify(session)).toString('base64');
+    const rawWithQuotes = ` "base64-${b64}" `;
+
+    const decoded = decodeSessionJwt(rawWithQuotes);
+    expect(decoded.jwt).not.toBeNull();
+    expect(decoded.jwt?.sub).toBe(payload.sub);
+    expect(decoded.accessToken).toBe(token);
+  });
+
+  it('extractFullAuthCookie prioritizes canonical AUTH_COOKIE_NAME and groups chunked cookies properly', async () => {
+    const secret = getAuthSecret();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const validPayload = { sub: '33333333-4444-5555-6666-777777777777', exp: nowSec + 3600 };
+    const token = await signSessionJwt(validPayload, secret);
+    const sessionVal = `base64-${Buffer.from(JSON.stringify({ access_token: token })).toString('base64')}`;
+
+    const cookies = [
+      { name: 'sb-obsolete-auth-token', value: 'invalid-or-expired' },
+      { name: AUTH_COOKIE_NAME, value: sessionVal }
+    ];
+
+    const extracted = extractFullAuthCookie(cookies);
+    expect(extracted).toBe(sessionVal);
   });
 });
