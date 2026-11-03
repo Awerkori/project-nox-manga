@@ -464,8 +464,6 @@
               </div>
             {/if}
           </div>
-        {:else if data.authState === 'AUTH_PENDING' || data.authState === 'AUTH_ERROR'}
-          <div class="user-avatar-skeleton" title="Sincronizando sessão..." aria-label="Carregando conta"></div>
         {:else}
           <a class="btn-login-nav" href="/entrar">
             <span>Entrar</span>

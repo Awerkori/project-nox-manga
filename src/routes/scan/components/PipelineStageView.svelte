@@ -55,6 +55,7 @@
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
     scanName = 'Project Nox',
+    isProductionSite = false,
     onSelectStage = (_slug: string) => {},
     onOpenChapter = (_ch: any) => {},
     onOpenQcReader = (_ch: any, _fromStage?: string) => {}
@@ -701,6 +702,7 @@
     {isOwnerOrAdmin}
     {scanId}
     {scanName}
+    {isProductionSite}
     {onSelectStage}
     {onOpenChapter}
   />

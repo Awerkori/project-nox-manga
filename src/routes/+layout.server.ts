@@ -50,29 +50,8 @@ export const load = async ({ locals, url, cookies, platform }: any) => {
                     .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
                 };
               }
-            } catch {
-              try {
-                const res = await withTimeout(
-                  locals.db
-                    .from('shop_items')
-                    .select('id, asset_url, style_data')
-                    .eq('kind', 'AVATAR_FRAME')
-                    .neq('asset_url', ''),
-                  800,
-                  { data: null } as any,
-                  'custom_frames'
-                );
-                if (Array.isArray(res?.data)) {
-                  cachedCustomFrames = {
-                    timestamp: Date.now(),
-                    frames: res.data
-                      .filter((f: any) => f.asset_url)
-                      .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
-                  };
-                }
-              } catch {
-                // Keep stale frames
-              }
+            } catch (err: any) {
+              console.warn('[LAYOUT_FRAMES_YUGABYTE_WARN]', err?.message || err);
             } finally {
               if (customFramesFlight?.promise === run) customFramesFlight = null;
             }
@@ -100,24 +79,8 @@ export const load = async ({ locals, url, cookies, platform }: any) => {
                 );
                 cachedSettings = { timestamp: Date.now(), config: nextConfig };
               }
-            } catch {
-              try {
-                databaseConfig();
-                const settingsRes = await withTimeout(
-                  locals.db.rpc('public_settings'),
-                  800,
-                  { data: null } as any,
-                  'public_settings'
-                );
-                if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
-                  const nextConfig = Object.fromEntries(
-                    settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
-                  );
-                  cachedSettings = { timestamp: Date.now(), config: nextConfig };
-                }
-              } catch {
-                // Keep stale config
-              }
+            } catch (err: any) {
+              console.warn('[LAYOUT_SETTINGS_YUGABYTE_WARN]', err?.message || err);
             } finally {
               if (settingsFlight?.promise === run) settingsFlight = null;
             }
@@ -147,20 +110,9 @@ export const load = async ({ locals, url, cookies, platform }: any) => {
             { count: parseInt(ybNotif.rows[0]?.count || '0', 10) },
             { data: ybScans.rows || [] }
           ];
-        } catch {
-          return withTimeout(
-            Promise.all([
-              locals.db.from('members').select('*').eq('id', locals.user!.id).maybeSingle(),
-              locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user!.id).is('read_at', null),
-              locals.db
-                .from('scan_members')
-                .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-                .eq('user_id', locals.user!.id)
-            ]),
-            1000,
-            [{ data: null }, { count: 0 }, { data: [] }] as any,
-            'layout_user_batch'
-          );
+        } catch (err: any) {
+          console.warn('[LAYOUT_USER_YUGABYTE_WARN]', err?.message || err);
+          return [{ data: null }, { count: 0 }, { data: [] }];
         }
       })();
 

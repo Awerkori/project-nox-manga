@@ -132,43 +132,5 @@ export async function storeImage(input: Request | FormData, userId: string, defa
     }
   }
 
-  // Fallback to Supabase Storage if Telegram is completely absent
-  const db = privileged();
-  const id = crypto.randomUUID();
-  const hash = Array.from(
-    new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)),
-    (b) => b.toString(16).padStart(2, '0')
-  ).join('');
-
-  const { error: reservation } = await db.rpc('reserve_media', {
-    p_id: id,
-    p_user: userId,
-    p_provider: 'supabase',
-    p_mime: info.mime,
-    p_width: info.width,
-    p_height: info.height,
-    p_bytes: size,
-    p_sha256: hash,
-    p_purpose: purpose
-  });
-  if (reservation) error(400, reservation.message);
-
-  try {
-    const { error: problem } = await db.storage
-      .from('nox-media')
-      .upload(id, bytes as unknown as ArrayBuffer, { contentType: info.mime, upsert: false });
-    if (problem) throw new Error('Não foi possível armazenar a imagem.');
-
-    const { error: updateErr } = await db
-      .from('media')
-      .update({ provider_key: id, storage_ready: true })
-      .eq('id', id);
-    if (updateErr) throw new Error('Não foi possível registrar a imagem.');
-
-    return { id, ...info, bytes: size };
-  } catch (failure) {
-    await db.storage.from('nox-media').remove([id]);
-    await db.from('media').delete().eq('id', id);
-    error(502, 'Não foi possível armazenar a imagem. Tente novamente.');
-  }
+  error(503, 'Serviço de armazenamento temporariamente indisponível. Tente novamente em instantes.');
 }

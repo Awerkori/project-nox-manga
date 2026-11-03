@@ -40,6 +40,7 @@
     isOwnerOrAdmin?: boolean;
     scanId?: string;
     scanName?: string;
+    isProductionSite?: boolean;
     onSelectStage?: (slug: string) => void;
     onOpenChapter?: (chapter: any) => void;
   }
@@ -61,6 +62,7 @@
     isOwnerOrAdmin = false,
     scanId = '',
     scanName = 'Project Nox',
+    isProductionSite: isProductionSiteProp = false,
     onSelectStage = () => {},
     onOpenChapter = () => {}
   }: Props = $props();
@@ -196,7 +198,17 @@
   type FixtureMode = 'REAL' | 'ONE' | 'FIVE' | 'MULTI' | 'EMPTY';
   let fixtureMode = $state<FixtureMode>('REAL');
   let isScenariosMenuOpen = $state(false);
-  let isProductionSite = $state(false);
+  // Strict multi-layer production environment guard
+  // Never expose demo fixtures or preview toolbar in the official production site
+  let isProductionSite = $derived.by(() => {
+    if (isProductionSiteProp) return true;
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname.toLowerCase();
+      if (host === 'projectnox.org' || host === 'www.projectnox.org' || host.endsWith('.projectnox.org')) return true;
+      if (!host.includes('workers.dev') && !host.includes('localhost') && !host.includes('127.0.0.1')) return true;
+    }
+    return false;
+  });
 
   function getFixtureModeLabel(mode: FixtureMode): string {
     switch (mode) {
@@ -281,9 +293,6 @@
 
   onMount(() => {
     if (typeof window !== 'undefined') {
-      const host = window.location.hostname.toLowerCase();
-      isProductionSite = host === 'projectnox.org' || host === 'www.projectnox.org';
-
       if (!isProductionSite) {
         const params = new URLSearchParams(window.location.search);
         const fix = params.get('fixture')?.toUpperCase();

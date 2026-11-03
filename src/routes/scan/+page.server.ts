@@ -1320,7 +1320,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     creditSnapshots: creditSnapshotsRes.data || [],
     seenStages: seenStagesRes.data || [],
     pendingAppsCount,
-    activeTab: requestedTab
+    activeTab: requestedTab,
+    isProductionSite: url.hostname === 'projectnox.org' || url.hostname === 'www.projectnox.org' || (!url.hostname.includes('workers.dev') && !url.hostname.includes('localhost') && !url.hostname.includes('127.0.0.1'))
   };
   }, 4);
 };

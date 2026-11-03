@@ -200,17 +200,14 @@ export async function resolveSessionData(
           identityVerified = true;
         }
 
-        // Secondary fallback for legacy/external Supabase sessions if not yet verified
+        // Secondary verification if db.auth.getUser is provided (e.g. test mock environments)
         if (!identityVerified && db?.auth?.getUser) {
-          const verified = await withTimeout(
-            db.auth.getUser(accessToken),
-            1000,
-            null,
-            'session_verify_user'
-          );
-          if (verified?.data?.user && verified.data.user.id === decoded.sub) {
-            identityVerified = true;
-          }
+          try {
+            const verified = await db.auth.getUser(accessToken);
+            if (verified?.data?.user && verified.data.user.id === decoded.sub) {
+              identityVerified = true;
+            }
+          } catch {}
         }
 
         // Cryptographic verification is MANDATORY: never accept an identity merely
@@ -268,51 +265,17 @@ export async function resolveSessionData(
             }
           }
         }
-      } catch {
-        // Fallback to db.from if YugabyteDB is degraded
+      } catch (err: any) {
+        console.warn('[SESSION_YUGABYTE_READ_WARN]', err?.message || err);
       }
 
       if (!profileData && db?.from) {
-        const [profileRes, roleRes, userScansRes, ownedScansRes, unreadRes] = await withTimeout(
-          Promise.all([
-            db.from('members').select('*').eq('id', userId).maybeSingle(),
-            db.from('access_roles').select('role, suspended').eq('user_id', userId).maybeSingle(),
-            db
-              .from('scan_members')
-              .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-              .eq('user_id', userId),
-            db
-              .from('scans')
-              .select('id, name, slug, logo_id, status')
-              .eq('owner_id', userId)
-              .eq('status', 'ACTIVE'),
-            db
-              .from('notifications')
-              .select('id', { count: 'exact', head: true })
-              .eq('user_id', userId)
-              .is('read_at', null)
-          ]),
-          400,
-          [{ data: null }, { data: null }, { data: [] }, { data: [] }, { count: 0 }] as any,
-          'session_resolver_batch'
-        );
-
-        profileData = profileRes?.data || null;
-        roleData = roleRes?.data || null;
-        unreadCount = unreadRes?.count || 0;
-
-        if (Array.isArray(ownedScansRes?.data)) {
-          for (const s of ownedScansRes.data) {
-            userScansList.push({ ...s, role: 'OWNER' });
-          }
-        }
-        if (Array.isArray(userScansRes?.data)) {
-          for (const m of userScansRes.data) {
-            if (m.scans) {
-              userScansList.push({ ...m.scans, role: m.role });
-            }
-          }
-        }
+        try {
+          const profileRes = await db.from('members').select('*').eq('id', userId).maybeSingle();
+          const roleRes = await db.from('access_roles').select('role, suspended').eq('user_id', userId).maybeSingle();
+          profileData = profileRes?.data || null;
+          roleData = roleRes?.data || null;
+        } catch {}
       }
 
       let effectiveRole = null;

@@ -1311,6 +1311,7 @@
                 isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
                 scanId={data.currentScan?.id || ''}
                 scanName={data.currentScan?.name || 'Project Nox'}
+                isProductionSite={data.isProductionSite ?? false}
                 onSelectStage={(slug: string) => handleSelectTab('pipeline', slug)}
                 onOpenChapter={handleOpenChapter}
                 onOpenQcReader={handleOpenQcReader}

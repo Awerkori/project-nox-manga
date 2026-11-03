@@ -26,29 +26,18 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     if (Number(event.request.headers.get('content-length') || 0) > max)
       error(413, 'Arquivo ou solicitação acima do limite');
   }
-  const supaClient = createServerClient<Database>(env.PUBLIC_SUPABASE_URL, env.PUBLIC_SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll: () => event.cookies.getAll(),
-      setAll: (cookies) =>
-        cookies.forEach(({ name, value, options }) => {
-          // Supabase SSR client must NEVER clear or overwrite Nox authentication cookies.
-          // Native Yugabyte auth manages sessions and explicit user logout clears them.
-          if (!value && (name.includes('auth-token') || name === 'nox-auth-token')) {
-            return;
-          }
-          event.cookies.set(name, value, {
-            ...options,
-            path: '/',
-            httpOnly: true,
-            sameSite: 'lax',
-            secure: event.url.protocol === 'https:'
-          });
-        })
-    }
-  });
-
-  // Restore authoritative Supabase client for all session, auth, storage, and application tables
-  event.locals.db = supaClient;
+  // Safe decoupled locals.db proxy - all real data operations run on authoritative YugabyteDB
+  event.locals.db = {
+    auth: {
+      getUser: async () => ({ data: { user: null }, error: null }),
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signOut: async () => ({ error: null })
+    },
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }), is: () => ({ data: null }) })
+    }),
+    rpc: async () => ({ data: null, error: null })
+  };
 
   const allCookies = event.cookies.getAll();
   const rawAuthCookie = extractFullAuthCookie(allCookies);
@@ -82,69 +71,53 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     if (jwt && isNotExpired) {
       try {
         sessionData = await resolveSessionData(event.locals.db, jwt, accessToken, event.platform?.env);
-        user = sessionData.user;
-        role = sessionData.role;
-        authState = 'AUTHENTICATED';
-        event.locals.sessionCache = sessionData;
-        event.locals.user = user;
-        event.locals.role = role;
-
-        // Sliding session renewal: if less than 7 days left on 30-day session, renew
-        if (jwt.exp && jwt.exp - nowSec < 60 * 60 * 24 * 7) {
-          try {
-            const secret = getAuthSecret(event.platform?.env);
-            const freshExp = nowSec + (60 * 60 * 24 * 30);
-            const freshJwt = await signSessionJwt({ ...jwt, iat: nowSec, exp: freshExp }, secret);
-            const freshSession: AuthSession = {
-              access_token: freshJwt,
-              refresh_token: crypto.randomUUID(),
-              token_type: 'bearer',
-              expires_in: 60 * 60 * 24 * 30,
-              expires_at: freshExp,
-              user
-            };
-            const isSecure = event.url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(event.url.hostname);
-            setAuthCookie(event.cookies, freshSession, isSecure);
-          } catch {}
-        }
-      } catch {
-        // Decoding a JWT is not signature verification; never authorize this identity.
-        user = null;
-        authState = 'AUTH_PENDING';
-        role = null;
-      }
-    } else if (hasAuthCookie) {
-      // Token parsing failed or token expired: fallback to server-side getUser()
-      try {
-        const authResult = await withTimeout(
-          event.locals.db.auth.getUser(),
-          1500,
-          { data: { user: null }, error: new Error('AUTH_TIMEOUT') } as any,
-          'auth_get_user_refresh'
-        );
-        if (authResult?.data?.user) {
-          user = authResult.data.user;
-          authState = 'AUTHENTICATED';
-          const refreshed = await event.locals.db.auth.getSession();
-          sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, refreshed.data.session?.access_token || accessToken || '', event.platform?.env);
+        if (sessionData?.user) {
+          user = sessionData.user;
           role = sessionData.role;
+          authState = 'AUTHENTICATED';
           event.locals.sessionCache = sessionData;
           event.locals.user = user;
           event.locals.role = role;
+
+          // Sliding session renewal: if less than 7 days left on 30-day session, renew
+          if (jwt.exp && jwt.exp - nowSec < 60 * 60 * 24 * 7) {
+            try {
+              const secret = getAuthSecret(event.platform?.env);
+              const freshExp = nowSec + (60 * 60 * 24 * 30);
+              const freshJwt = await signSessionJwt({ ...jwt, iat: nowSec, exp: freshExp }, secret);
+              const freshSession: AuthSession = {
+                access_token: freshJwt,
+                refresh_token: crypto.randomUUID(),
+                token_type: 'bearer',
+                expires_in: 60 * 60 * 24 * 30,
+                expires_at: freshExp,
+                user
+              };
+              const isSecure = event.url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(event.url.hostname);
+              setAuthCookie(event.cookies, freshSession, isSecure);
+            } catch {}
+          }
         } else {
-          authState = 'ANONYMOUS';
+          // Token claims unverified or member row missing in YugabyteDB
           user = null;
+          authState = 'ANONYMOUS';
           role = null;
+          clearAllAuthCookies(event.cookies);
         }
       } catch {
-        authState = 'ANONYMOUS';
+        // Cryptographic signature invalid, expired, or verification error.
+        // Immediately treat as anonymous and clear the broken cookie to prevent infinite syncing loop.
         user = null;
+        authState = 'ANONYMOUS';
         role = null;
+        clearAllAuthCookies(event.cookies);
       }
     } else {
+      // Token missing, expired, or invalid. Clear cookie cleanly.
       authState = 'ANONYMOUS';
       user = null;
       role = null;
+      clearAllAuthCookies(event.cookies);
     }
   }
 
