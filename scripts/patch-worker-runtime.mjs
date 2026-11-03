@@ -211,7 +211,7 @@ ${mediaFastPathSnippet}
 
   content = content.replace(
     /if \(!origin\) \{\s*origin = new URL\(req\.url\)\.origin;\s*\}/g,
-    "if (!origin) {\n      origin = 'https://projectnox.org';\n    }"
+    "if (!origin) {\n      if (url.hostname.includes('preview')) {\n        origin = url.origin;\n      } else {\n        origin = 'https://projectnox.org';\n      }\n    }"
   );
 
   // Dynamic SvelteKit routes must not fall through to the static asset binding

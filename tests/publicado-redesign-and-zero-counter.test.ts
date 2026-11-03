@@ -48,10 +48,13 @@ describe('Publicado Redesign & Zero-Notification Rule', () => {
     expect(source).toContain('compact-sort-select');
     expect(source).toContain('pagination-bar');
 
-    // 4. Primary & Secondary Actions
+    // 4. Primary & Secondary Actions pointing to official domain projectnox.org
     expect(source).toContain('class="btn-read-chapter"');
-    expect(source).toContain('href="/ler/{item.targetChapterId || item.id}"');
+    expect(source).toContain('OFFICIAL_SITE_ORIGIN = \'https://projectnox.org\';');
+    expect(source).toContain('getOfficialReaderUrl(item)');
+    expect(source).toContain('https://projectnox.org/ler/{item.targetChapterId || item.id}');
     expect(source).toContain('class="btn-toggle-details"');
+    expect(source).toContain('is-demo-disabled');
 
     // 5. Strictly no operational task-claiming buttons
     expect(source).not.toContain('Pegar trabalho');

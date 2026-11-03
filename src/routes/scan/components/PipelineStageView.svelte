@@ -1483,7 +1483,7 @@
                 <div class="accordion-header-right">
                   {#if isPublicado}
                     <a
-                      href="/ler/{item.ch.target_chapter_id || item.ch.id}"
+                      href="https://projectnox.org/ler/{item.ch.target_chapter_id || item.ch.id}"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="btn-view-chapter-outline"

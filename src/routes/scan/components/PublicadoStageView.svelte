@@ -124,6 +124,21 @@
     return counts;
   });
 
+  const OFFICIAL_SITE_ORIGIN = 'https://projectnox.org';
+
+  function isValidChapterUuid(id?: string | null): boolean {
+    if (!id || typeof id !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  }
+
+  function getOfficialReaderUrl(item: any): string | null {
+    const targetId = item?.targetChapterId || (isValidChapterUuid(item?.id) ? item.id : null);
+    if (targetId && isValidChapterUuid(targetId)) {
+      return `${OFFICIAL_SITE_ORIGIN}/ler/${targetId}`;
+    }
+    return null;
+  }
+
   // Query, filter, sort and pagination state
   let searchQuery = $state('');
   let filterWorkId = $state<string>('ALL');
@@ -732,18 +747,30 @@
 
               <!-- Action Cluster -->
               <div class="card-actions-cluster">
-                <!-- Primary Action: Ler no site oficial -->
-                <a
-                  href="/ler/{item.targetChapterId || item.id}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn-read-chapter"
-                  title="Abrir capítulo no leitor oficial do catálogo"
-                >
-                  <BookOpen size={14} class="action-ico" />
-                  <span>Ler capítulo</span>
-                  <ExternalLink size={12} class="ext-ico" />
-                </a>
+                <!-- Primary Action: Ler no site oficial (projectnox.org) -->
+                {#if getOfficialReaderUrl(item)}
+                  <a
+                    href={getOfficialReaderUrl(item)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn-read-chapter"
+                    title="Abrir capítulo no leitor oficial do catálogo em projectnox.org"
+                  >
+                    <BookOpen size={14} class="action-ico" />
+                    <span>Ler capítulo</span>
+                    <ExternalLink size={12} class="ext-ico" />
+                  </a>
+                {:else}
+                  <button
+                    type="button"
+                    class="btn-read-chapter is-demo-disabled"
+                    disabled
+                    title="Capítulo demonstrativo em homologação — não publicado no catálogo oficial"
+                  >
+                    <BookOpen size={14} class="action-ico" />
+                    <span>Demonstração</span>
+                  </button>
+                {/if}
 
                 <!-- Secondary Action: Ver detalhes históricos -->
                 <button
@@ -785,7 +812,22 @@
                       </div>
                       <div class="dl-row">
                         <dt>Obra Associada:</dt>
-                        <dd>{item.workTitle}</dd>
+                        <dd>
+                          {#if item.workSlug && !item.isDemo}
+                            <a
+                              href="https://projectnox.org/obra/{item.workSlug}"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="catalog-link-work"
+                              title="Ver obra no catálogo oficial de projectnox.org"
+                            >
+                              {item.workTitle}
+                              <ExternalLink size={10} />
+                            </a>
+                          {:else}
+                            <span>{item.workTitle}</span>
+                          {/if}
+                        </dd>
                       </div>
                       <div class="dl-row">
                         <dt>Número Efetivo:</dt>
@@ -794,15 +836,22 @@
                       <div class="dl-row">
                         <dt>Link no Catálogo:</dt>
                         <dd>
-                          <a
-                            href="/ler/{item.targetChapterId || item.id}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="catalog-link-mono"
-                          >
-                            /ler/{item.targetChapterId || item.id}
-                            <ExternalLink size={10} />
-                          </a>
+                          {#if getOfficialReaderUrl(item)}
+                            <a
+                              href={getOfficialReaderUrl(item)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="catalog-link-mono"
+                              title="Abrir URL oficial em projectnox.org"
+                            >
+                              https://projectnox.org/ler/{item.targetChapterId || item.id}
+                              <ExternalLink size={10} />
+                            </a>
+                          {:else}
+                            <span class="catalog-link-mono is-demo-label" title="Item de demonstração visual isolada">
+                              Demonstração (sem publicação no catálogo oficial)
+                            </span>
+                          {/if}
                         </dd>
                       </div>
                     </dl>
@@ -1481,6 +1530,19 @@
     box-shadow: 0 2px 10px rgba(34, 197, 94, 0.3);
   }
 
+  .btn-read-chapter.is-demo-disabled {
+    background: #1e293b;
+    border: 1px dashed rgba(148, 163, 184, 0.3);
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+
+  .btn-read-chapter.is-demo-disabled:hover {
+    background: #1e293b;
+    box-shadow: none;
+  }
+
   .btn-toggle-details {
     display: inline-flex;
     align-items: center;
@@ -1586,6 +1648,25 @@
     color: #60a5fa;
     font-family: monospace;
     font-size: 0.75rem;
+    text-decoration: underline;
+  }
+
+  .catalog-link-mono.is-demo-label {
+    text-decoration: none;
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .catalog-link-work {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #38bdf8;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .catalog-link-work:hover {
     text-decoration: underline;
   }
 

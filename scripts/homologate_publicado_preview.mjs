@@ -45,6 +45,14 @@ async function main() {
     await page1440.screenshot({ path: shot1, fullPage: false });
     console.log(`✓ Saved ${shot1}`);
 
+    // Verify official reader link on real chapter
+    const readBtn = page1440.locator('.btn-read-chapter').first();
+    const readHref = await readBtn.getAttribute('href');
+    console.log(`  Ler capítulo button href: ${readHref} (must start with https://projectnox.org/ler/)`);
+    if (!readHref || !readHref.startsWith('https://projectnox.org/ler/')) {
+      throw new Error(`Invalid reader link: ${readHref}`);
+    }
+
     // =========================================================================
     // 2. MOBILE WITH 1 PUBLISHED CHAPTER (390x844 - iPhone 14)
     // =========================================================================
@@ -77,6 +85,14 @@ async function main() {
     await page1920.screenshot({ path: shot3, fullPage: false });
     console.log(`✓ Saved ${shot3}`);
 
+    // Verify demo buttons are disabled and do not create fake public links
+    const demoButtons = page1920.locator('.btn-read-chapter.is-demo-disabled');
+    const demoCount = await demoButtons.count();
+    console.log(`  Demo mock cards with disabled links count: ${demoCount} (expected > 0)`);
+    if (demoCount === 0) {
+      throw new Error('Expected at least one demo mock card to have disabled link');
+    }
+
     // =========================================================================
     // 4. MOBILE WITH MULTIPLE CHAPTERS (360x780 - Samsung Galaxy)
     // =========================================================================
@@ -107,6 +123,14 @@ async function main() {
     const shot5Desk = join(artifactDir, 'publicado_card_expanded_desktop.png');
     await page1440.screenshot({ path: shot5Desk, fullPage: false });
     console.log(`✓ Saved ${shot5Desk}`);
+
+    // Verify catalog link in expanded details points to https://projectnox.org/ler/
+    const catMonoLink = page1440.locator('.catalog-link-mono').first();
+    const catMonoHref = await catMonoLink.getAttribute('href');
+    console.log(`  Catalog link href in details: ${catMonoHref}`);
+    if (!catMonoHref || !catMonoHref.startsWith('https://projectnox.org/ler/')) {
+      throw new Error(`Expected catalog link to start with https://projectnox.org/ler/, got ${catMonoHref}`);
+    }
 
     // Click expand on mobile
     const detailBtnMob = page390.locator('.btn-toggle-details').first();

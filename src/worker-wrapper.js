@@ -222,7 +222,11 @@ var worker_default = {
       return env2.ASSETS.fetch(req);
     }
     if (!origin) {
-      origin = 'https://projectnox.org';
+      if (url.hostname.includes('preview')) {
+        origin = url.origin;
+      } else {
+        origin = 'https://projectnox.org';
+      }
     }
     await initialized;
     let pragma = req.headers.get("cache-control") || "";
