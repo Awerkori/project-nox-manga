@@ -33,7 +33,7 @@
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { CURATED_BANNER_BACKGROUNDS } from '$lib/cosmetic-banners';
   import { getNameColorInfo } from '$lib/name-colors';
-  import { registerDynamicFrame } from '$lib/cosmetics-catalog';
+  import { registerDynamicFrame } from '$lib/frame-config';
 
   let { data } = $props();
 
