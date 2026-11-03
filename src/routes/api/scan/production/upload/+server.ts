@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { deleteTelegramObject, uploadPipelineFileToStorage } from '$lib/server/storage-router';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { RateLimitError } from '$lib/server/media';
-import { getScanArtifactStorage, removeScanArtifact } from '$lib/server/scan-artifact-storage';
+import { removeScanArtifact } from '$lib/server/scan-artifact-storage';
 import crypto from 'node:crypto';
 
 const BLOCKED_EXTENSIONS = ['.exe', '.apk', '.bat', '.cmd', '.sh', '.bin', '.dll', '.msi', '.vbs', '.ps1', '.scr', '.com', '.pif', '.hta', '.cpl', '.jar'];
@@ -199,57 +199,32 @@ export const POST = async ({ locals, request, platform }) => {
   const artifactKey = `production/${scanId}/${productionChapterId}/${stage.slug}/${deliveryKey}/${uploadId}-${safeFilename}`;
   let storedArtifactKey: string | null = null;
   let storedArtifactProvider: string | null = null;
-  const storeInArtifacts = async () => {
-    // Private artifact storage is separate from the authoritative YSQL data
-    // plane. Metadata, memberships and state transitions never use Supabase.
-    const staffStorage = getScanArtifactStorage(platform?.env);
-    const { error } = await staffStorage.storage.from('scan-artifacts').upload(artifactKey, buffer, {
-      contentType: file.type || 'application/octet-stream', upsert: false
-    });
-    if (error) throw error;
-    storedArtifactKey = artifactKey;
-    storedArtifactProvider = 'STORAGE';
-    return {
-      provider: 'STORAGE', fileKey: artifactKey, shardId: null, poolId: null,
-      botReference: 'PRODUCTION_STORAGE', telegramFileId: null,
-      telegramMessageId: null, telegramChatId: null, telegramUniqueFileId: null,
-      sha256: checksum, byteSize: file.size
-    };
-  };
 
   let storedRecord: {
     provider: string; fileKey: string; shardId: string | null; poolId: string | null;
     botReference: string; telegramFileId: string | null; telegramMessageId: string | null;
     telegramChatId: string | null; telegramUniqueFileId: string | null; sha256: string; byteSize: number;
   } | undefined;
+
   try {
-    if (file.size > LARGE_FILE_THRESHOLD) {
-      storedRecord = await storeInArtifacts();
-    } else {
-      try {
-        const telegramRecord = await uploadPipelineFileToStorage({
-          bytes: new Uint8Array(buffer), fileName: safeFilename, mime: file.type || 'application/octet-stream',
-          userId: locals.user.id, scanId, productionChapterId, stageId
-        }, platform?.env);
-        storedRecord = {
-          provider: 'TELEGRAM', fileKey: `prod_${checksum.slice(0, 16)}_${Date.now()}`,
-          shardId: telegramRecord.shardId, poolId: telegramRecord.poolId,
-          botReference: telegramRecord.botReference, telegramFileId: telegramRecord.telegramFileId,
-          telegramMessageId: telegramRecord.telegramMessageId, telegramChatId: telegramRecord.telegramChatId,
-          telegramUniqueFileId: telegramRecord.telegramUniqueFileId,
-          sha256: telegramRecord.sha256 || checksum, byteSize: telegramRecord.byteSize
-        };
-      } catch (error: any) {
-        if (error instanceof RateLimitError) {
-          const response = await failAttempt('Rate limit temporário do armazenamento. Tente novamente em instantes.', 429, 'RATE_LIMIT');
-          response.headers.set('Retry-After', String(error.retryAfter));
-          return response;
-        }
-        if (!error?.message?.includes('FAIL_CLOSED') && !error?.message?.includes('TELEGRAM_BOT_PRODUCTION_STORAGE')) throw error;
-        storedRecord = await storeInArtifacts();
-      }
+    const telegramRecord = await uploadPipelineFileToStorage({
+      bytes: new Uint8Array(buffer), fileName: safeFilename, mime: file.type || 'application/octet-stream',
+      userId: locals.user.id, scanId, productionChapterId, stageId
+    }, platform?.env);
+    storedRecord = {
+      provider: 'TELEGRAM', fileKey: `prod_${checksum.slice(0, 16)}_${Date.now()}`,
+      shardId: telegramRecord.shardId, poolId: telegramRecord.poolId,
+      botReference: telegramRecord.botReference, telegramFileId: telegramRecord.telegramFileId,
+      telegramMessageId: telegramRecord.telegramMessageId, telegramChatId: telegramRecord.telegramChatId,
+      telegramUniqueFileId: telegramRecord.telegramUniqueFileId,
+      sha256: telegramRecord.sha256 || checksum, byteSize: telegramRecord.byteSize
+    };
+  } catch (error: any) {
+    if (error instanceof RateLimitError) {
+      const response = await failAttempt('Rate limit temporário do armazenamento. Tente novamente em instantes.', 429, 'RATE_LIMIT');
+      response.headers.set('Retry-After', String(error.retryAfter));
+      return response;
     }
-  } catch (error) {
     logYsqlFailure('upload_storage', error);
     return failAttempt('Falha ao enviar o arquivo ao armazenamento. Você pode tentar novamente sem perder os demais arquivos.', 502, 'STORAGE_FAILED');
   }
@@ -292,13 +267,25 @@ export const POST = async ({ locals, request, platform }) => {
   } catch (error: any) {
     const conflict = /REPLACEMENT_NOT_CURRENT|STAGE_NO_LONGER_ACCEPTS_UPLOAD|STAGE_ASSIGNMENT_CHANGED|UPLOAD_ATTEMPT_NOT_FINALIZABLE/.test(String(error?.message || ''));
     if (storedArtifactProvider === 'STORAGE' && storedArtifactKey) {
+      // Legacy scan-artifacts bucket compensation
       await removeScanArtifact(platform?.env, storedArtifactKey).catch((cleanupError) => {
         logYsqlFailure('upload_storage_compensation', cleanupError);
       });
     }
-    if (storedRecord?.provider === 'TELEGRAM' && storedRecord.telegramMessageId && storedRecord.telegramChatId) {
-      await deleteTelegramObject(storedRecord.botReference, storedRecord.telegramChatId, storedRecord.telegramMessageId)
-        .catch((cleanupError) => logYsqlFailure('upload_telegram_compensation', cleanupError));
+    if (storedRecord?.provider === 'TELEGRAM') {
+      if (storedRecord.telegramFileId?.startsWith('[')) {
+        try {
+          const chunks = JSON.parse(storedRecord.telegramFileId);
+          for (const chunk of chunks) {
+            if (chunk.messageId && storedRecord.telegramChatId) {
+              await deleteTelegramObject(storedRecord.botReference, storedRecord.telegramChatId, chunk.messageId).catch(() => {});
+            }
+          }
+        } catch {}
+      } else if (storedRecord.telegramMessageId && storedRecord.telegramChatId) {
+        await deleteTelegramObject(storedRecord.botReference, storedRecord.telegramChatId, storedRecord.telegramMessageId)
+          .catch((cleanupError) => logYsqlFailure('upload_telegram_compensation', cleanupError));
+      }
     }
     logYsqlFailure('upload_finalize', error);
     return failAttempt(

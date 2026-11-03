@@ -2,7 +2,11 @@ import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 
-const SUPABASE_DB_URL = 'postgresql://postgres:ZJGsV8lUOarRFjDo@db.izregkwaqdygwioqzwwo.supabase.co:5432/postgres';
+const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL;
+if (!SUPABASE_DB_URL) {
+  console.error('ERROR: SUPABASE_DB_URL environment variable is required.');
+  process.exit(1);
+}
 const BACKUP_DIR = '/home/awerkori/.config/project-nox/backups';
 
 async function main() {

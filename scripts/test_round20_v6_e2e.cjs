@@ -20,7 +20,7 @@ for (const envPath of ['.dev.vars.preview_full', '.dev.vars.deploy', '.env']) {
 const PREVIEW_URL = 'https://home-preview-manga.project-nox-awerkori.workers.dev';
 const ARTIFACTS_DIR = '/home/awerkori/.gemini/antigravity-cli/brain/fa6d1923-db0b-428b-bc07-4973adaffd49';
 const CHAPTER_URL = `${PREVIEW_URL}/ler/b88c0c5f-9664-5fae-a6d9-d5ad03af1369`;
-const SUPABASE_DB_URL = 'postgresql://postgres:ZJGsV8lUOarRFjDo@db.izregkwaqdygwioqzwwo.supabase.co:5432/postgres';
+const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL || '';
 
 async function runV6TestSuite() {
   console.log('=== INICIANDO AUDITORIA COMPLETA DA RODADA 20 V6 ===');

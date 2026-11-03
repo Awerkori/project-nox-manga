@@ -131,7 +131,7 @@ async function main() {
 
   // Verify deletion in database
   const client = new Client({
-    connectionString: 'postgresql://postgres:ZJGsV8lUOarRFjDo@db.izregkwaqdygwioqzwwo.supabase.co:5432/postgres',
+    connectionString: process.env.SUPABASE_DB_URL || '',
     ssl: { rejectUnauthorized: false }
   });
   await client.connect();

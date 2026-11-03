@@ -22,8 +22,8 @@ export interface ScanArtifactStorageClient {
  * Strictly fails closed when credentials are missing or mismatched (Supabase Zero policy).
  */
 export function getScanArtifactStorage(platformEnv?: RuntimeEnv): ScanArtifactStorageClient {
-  const url = String(platformEnv?.STAFF_STORAGE_URL ?? platformEnv?.STAFF_SUPABASE_URL ?? '').trim();
-  const key = String(platformEnv?.STAFF_STORAGE_KEY ?? platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  const url = String(platformEnv?.STAFF_STORAGE_URL ?? '').trim();
+  const key = String(platformEnv?.STAFF_STORAGE_KEY ?? '').trim();
 
   // Fail closed if not configured
   if (!url || !key) {
@@ -76,14 +76,12 @@ export function getScanArtifactStorage(platformEnv?: RuntimeEnv): ScanArtifactSt
       from: (bucket: string): StorageBucketClient => ({
         async upload(fileKey, body, opts) {
           try {
-            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
+            const endpoint = `${url.replace(/\/$/, '')}/artifacts/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
             const res = await fetch(endpoint, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${key}`,
-                apikey: key,
-                'Content-Type': opts?.contentType || 'application/octet-stream',
-                'x-upsert': opts?.upsert ? 'true' : 'false'
+                'Content-Type': opts?.contentType || 'application/octet-stream'
               },
               body
             });
@@ -98,11 +96,10 @@ export function getScanArtifactStorage(platformEnv?: RuntimeEnv): ScanArtifactSt
         },
         async download(fileKey) {
           try {
-            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
+            const endpoint = `${url.replace(/\/$/, '')}/artifacts/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
             const res = await fetch(endpoint, {
               headers: {
-                Authorization: `Bearer ${key}`,
-                apikey: key
+                Authorization: `Bearer ${key}`
               }
             });
             if (!res.ok) {
@@ -116,12 +113,11 @@ export function getScanArtifactStorage(platformEnv?: RuntimeEnv): ScanArtifactSt
         },
         async remove(fileKeys) {
           try {
-            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}`;
+            const endpoint = `${url.replace(/\/$/, '')}/artifacts/${bucket}`;
             const res = await fetch(endpoint, {
               method: 'DELETE',
               headers: {
                 Authorization: `Bearer ${key}`,
-                apikey: key,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({ prefixes: fileKeys })

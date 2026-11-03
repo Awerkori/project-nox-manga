@@ -24,7 +24,7 @@
 const pg = require('pg');
 const crypto = require('crypto');
 
-const CONNECTION_STRING = 'postgresql://postgres:ZJGsV8lUOarRFjDo@db.izregkwaqdygwioqzwwo.supabase.co:5432/postgres';
+const CONNECTION_STRING = process.env.SUPABASE_DB_URL || '';
 
 // Level calculation formula (from src/lib/levels.ts)
 function getLevelFromXp(xp) {

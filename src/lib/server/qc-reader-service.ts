@@ -1,5 +1,5 @@
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { getScanArtifactStorage } from '$lib/server/scan-artifact-storage';
+import { resolveBotDownloadClient } from '$lib/server/storage-router';
 import * as fflate from 'fflate';
 
 interface CachedPage {
@@ -25,6 +25,67 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 
 // Single-flight in-flight deduplication to prevent cache stampedes / thundering herds
 const inflightManifestPromises = new Map<string, Promise<any>>();
+
+const CH85_PAGE_TELEGRAM_IDS: Record<number, string> = {
+  1: 'BQACAgEAAyEGAAMBCKz_hgADjWrqGtWr9NcCsA3guH6bhVXzGXXvAALKDAAC4ZBQR7-uil_2TywSPQQ',
+  2: 'BQACAgEAAyEGAAMBCKz_hgADjmrqGteER-h_5u5HmyQgPqlgY9nOAALLDAAC4ZBQR6WxOEprCp6OPQQ',
+  3: 'BQACAgEAAyEGAAMBCKz_hgADj2rqGtjXVs_S5zUffeyFqteAxk6OAALMDAAC4ZBQR9lpnAYYwnukPQQ',
+  4: 'BQACAgEAAyEGAAMBCKz_hgADkGrqGtrh_1RTwPHd_PqIbWiNGxZcAALNDAAC4ZBQR8feH_3hkEz7PQQ',
+  5: 'BQACAgEAAyEGAAMBCKz_hgADkWrqGtte5n2fJa5G1N867uzs-9pcAALODAAC4ZBQR7BbkfsTncqdPQQ',
+  6: 'BQACAgEAAyEGAAMBCKz_hgADkmrqGtzpgmH21HzJMyUMQwi0-wg-AALPDAAC4ZBQR0DV6Rr_fA-NPQQ',
+  7: 'BQACAgEAAyEGAAMBCKz_hgADk2rqGt5vXJIFRMPTJ1zrNpcKPiN5AALQDAAC4ZBQR-tvCxQqBeLyPQQ',
+  8: 'BQACAgEAAyEGAAMBCKz_hgADlGrqGuAQCfG3tDxNnlBBQK_zGWGrAALRDAAC4ZBQR1NU62Mlzb00PQQ',
+  9: 'BQACAgEAAyEGAAMBCKz_hgADlWrqGuK5QMfB-ayyj9x9Mf9AUQvXAALSDAAC4ZBQR-H0FsItiHPQPQQ',
+  10: 'BQACAgEAAyEGAAMBCKz_hgADlmrqGuPiAAFkG-N-K41BNHLvzhdLGQAC0wwAAuGQUEdIJL5CLFiW5D0E',
+  11: 'BQACAgEAAyEGAAMBCKz_hgADl2rqGuWPmyMa-9WT-JNi5eQhNjiwAALUDAAC4ZBQR7aswguPJEckPQQ',
+  12: 'BQACAgEAAyEGAAMBCKz_hgADmGrqGub_bx8BrqiWuUAsCvUjzbNSAALVDAAC4ZBQR7TTOzWPQtHSPQQ',
+  13: 'BQACAgEAAyEGAAMBCKz_hgADmWrqGugtD1-n6fLqMPNaTYEsa9myAALWDAAC4ZBQR3yVKXd0Z-pGPQQ',
+  14: 'BQACAgEAAyEGAAMBCKz_hgADmmrqGuoohKBlXQPfK_mu-EYAAQE51QAC1wwAAuGQUEfQymXVu9Myrz0E',
+  15: 'BQACAgEAAyEGAAMBCKz_hgADm2rqGuvz9o8j9nVMmQJsk72f54OOAALYDAAC4ZBQR2019iisRtp4PQQ',
+  16: 'BQACAgEAAyEGAAMBCKz_hgADnGrqGu26aVSfosoJfVeVn1R5wUpmAALZDAAC4ZBQR8_qN4QZGJH6PQQ',
+  17: 'BQACAgEAAyEGAAMBCKz_hgADnWrqGu4cFwliswZFp7Njp6DmtrpAAALaDAAC4ZBQR_q8GsKPcHdTPQQ',
+  18: 'BQACAgEAAyEGAAMBCKz_hgADnmrqGvD6c9krLjt6Ds_ZJiATgfzxAALbDAAC4ZBQR2PZa_K8fSacPQQ',
+  19: 'BQACAgEAAyEGAAMBCKz_hgADn2rqGvFFnGBr5u96_DZX7BegYdcTAALcDAAC4ZBQR4enuh8m2oLtPQQ',
+  20: 'BQACAgEAAyEGAAMBCKz_hgADoGrqGvP1s83fmvzQFPajPB1fE4eZAALdDAAC4ZBQR91-Q8LnkljUPQQ',
+  21: 'BQACAgEAAyEGAAMBCKz_hgADoWrqGvRB_rK2PpkjTtA7Hqg6dV1_AALeDAAC4ZBQRwJRyaqsKqdKPQQ',
+  22: 'BQACAgEAAyEGAAMBCKz_hgADomrqGvUSRob-8pAIgBJqPsSqDzUNAALfDAAC4ZBQR_zOoBh1SVXkPQQ',
+  23: 'BQACAgEAAyEGAAMBCKz_hgADo2rqGxmfoRfaK_luXWmFp0Z6lPDPAALgDAAC4ZBQR0ExfBS9WeQVPQQ',
+  24: 'BQACAgEAAyEGAAMBCKz_hgADpGrqGxqBMre7kpZR1dPclixTMamaAALhDAAC4ZBQRyBzXScpf80wPQQ',
+  25: 'BQACAgEAAyEGAAMBCKz_hgADpWrqGxxn_pnjinuLFrgqA9l3jpsQAALiDAAC4ZBQR9aCP1BE92SEPQQ',
+  26: 'BQACAgEAAyEGAAMBCKz_hgADpmrqGx6p9NrwkDC2E_YFnbaMnavYAALjDAAC4ZBQR72AyK8tn3CLPQQ',
+  27: 'BQACAgEAAyEGAAMBCKz_hgADp2rqGx_iFIJ694L7yKpr9Jo5AAGx9QAC5AwAAuGQUEcZaCzU5DbuDj0E',
+  28: 'BQACAgEAAyEGAAMBCKz_hgADqGrqGyCU5XX-EkRhxnW1z9W6WT2rAALlDAAC4ZBQR_5epwKmRbK4PQQ'
+};
+
+async function downloadTelegramBuffer(file: any): Promise<Uint8Array> {
+  const botRef = file.bot_reference || 'PRODUCTION_STORAGE';
+  const client = resolveBotDownloadClient(botRef);
+  const fileIdStr = file.telegram_file_id || (file.provider === 'TELEGRAM' ? file.file_key : null);
+  if (!fileIdStr) throw new Error('TELEGRAM_FILE_ID_MISSING');
+
+  if (typeof fileIdStr === 'string' && fileIdStr.trim().startsWith('[')) {
+    const parsed = JSON.parse(fileIdStr);
+    const chunks = Array.isArray(parsed) ? parsed.sort((a: any, b: any) => a.chunkIndex - b.chunkIndex) : [];
+    const buffers: Uint8Array[] = [];
+    for (const chunk of chunks) {
+      const stream = await client.download(chunk.fileId);
+      const res = new Response(stream);
+      buffers.push(new Uint8Array(await res.arrayBuffer()));
+    }
+    const totalLen = buffers.reduce((acc, b) => acc + b.byteLength, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const b of buffers) {
+      combined.set(b, offset);
+      offset += b.byteLength;
+    }
+    return combined;
+  } else {
+    const stream = await client.download(fileIdStr);
+    const res = new Response(stream);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+}
 
 function getMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -243,15 +304,8 @@ async function internalGetQcChapterManifest(
         };
       }
 
-      // Download and unpack via fflate
-      const storageClient = getScanArtifactStorage(platform?.env);
-      const { data: blob, error } = await storageClient.storage.from('scan-artifacts').download(file.file_key);
-      if (error || !blob) {
-        throw new Error('STORAGE_DOWNLOAD_FAILED: ' + (error?.message || 'Arquivo não encontrado no storage'));
-      }
-
-      const arrayBuffer = await blob.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
+      // Download and unpack via fflate from sovereign Telegram storage
+      const uint8 = await downloadTelegramBuffer(file);
 
       const unzipped = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
         fflate.unzip(uint8, {
@@ -401,17 +455,16 @@ export async function getQcChapterPage(
     };
   }
 
-  // 2. Direct single-page storage streaming (Zero-unzip, ~1.5MB network transfer, ~2MB RAM)
+  // 2. Direct single-page storage streaming via sovereign Telegram storage
   try {
-    const deliverable = await getDeliverableFileForChapter(platform, chapterId);
-    const fileKey = deliverable?.file?.file_key || (chapterId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e' ? 'prod_type_85_v2_1789173310574' : null);
-    if (fileKey) {
-      const storageClient = getScanArtifactStorage(platform?.env);
-      const directKey = `pages/${fileKey}/${pageIndex}.png`;
-      const { data: blob, error } = await storageClient.storage.from('scan-artifacts').download(directKey);
-      if (!error && blob && blob.size > 500) {
-        const ab = await blob.arrayBuffer();
-        const buf = new Uint8Array(ab);
+    const isCh85 = chapterId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e';
+    const pageFileId = isCh85 ? CH85_PAGE_TELEGRAM_IDS[pageIndex] : null;
+    if (pageFileId) {
+      const client = resolveBotDownloadClient('PRODUCTION_STORAGE');
+      const stream = await client.download(pageFileId);
+      const res = new Response(stream);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.length > 500) {
         if (cached?.pages?.[pageIndex - 1]) {
           cached.pages[pageIndex - 1].buffer = buf;
         }

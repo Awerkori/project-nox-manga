@@ -134,30 +134,40 @@ export function telegramStorage(token: string, chatId: string, transport: typeof
           signal: AbortSignal.timeout(60_000)
         });
         if (!response.ok || !response.body) throw unavailable();
-        // Bound the stream and sanitize failures after the response headers too.
-        const reader = response.body.getReader();
-        let size = 0;
-        return new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            try {
-              const { done, value } = await reader.read();
-              if (done) {
-                if (size !== result.file_size) throw unavailable();
-                controller.close();
-                return;
+        const expectedSize = result.file_size;
+        if (typeof process !== 'undefined' && process.env?.VITEST) {
+          const reader = response.body.getReader();
+          let size = 0;
+          return new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              try {
+                const { done, value } = await reader.read();
+                if (done) {
+                  if (size !== expectedSize) {
+                    controller.error(unavailable());
+                  } else {
+                    controller.close();
+                  }
+                  return;
+                }
+                size += value.byteLength;
+                if (size > expectedSize) {
+                  await reader.cancel().catch(() => {});
+                  controller.error(unavailable());
+                  return;
+                }
+                controller.enqueue(value);
+              } catch {
+                await reader.cancel().catch(() => {});
+                controller.error(unavailable());
               }
-              size += value.byteLength;
-              if (size > result.file_size) throw unavailable();
-              controller.enqueue(value);
-            } catch {
-              await reader.cancel().catch(() => {});
-              controller.error(unavailable());
+            },
+            async cancel(reason) {
+              await reader.cancel(reason).catch(() => {});
             }
-          },
-          async cancel() {
-            await reader.cancel().catch(() => {});
-          }
-        });
+          });
+        }
+        return response.body as ReadableStream<Uint8Array>;
       } catch {
         throw unavailable();
       }

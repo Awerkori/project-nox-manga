@@ -507,10 +507,11 @@ export async function uploadPipelineFileToStorage(
 ): Promise<PipelineFileStoredRecord> {
   const { bytes, mime, scanId } = options;
 
-  const MAX_PIPELINE_SIZE = 20_971_520; // 20 MB (Telegram Bot API getFile ceiling)
+  const MAX_SINGLE_UPLOAD_SIZE = 20_971_520; // 20 MB (Telegram Bot API getFile ceiling)
+  const MAX_PIPELINE_SIZE = 524_288_000; // 500 MB ceiling
   if (bytes.byteLength > MAX_PIPELINE_SIZE) {
     throw new Error(
-      `Arquivo excede o limite máximo de 20 MB permitido pela API de bots do Telegram (${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB enviado).`
+      `Arquivo excede o limite máximo de 500 MB permitido (${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB enviado).`
     );
   }
 
@@ -561,14 +562,48 @@ export async function uploadPipelineFileToStorage(
 
     const fileId = crypto.randomUUID();
     const startTime = Date.now();
-    let receipt: TelegramUploadReceipt;
+    let finalTelegramFileId: string;
+    let finalMessageId: string | null = null;
+    let finalChatId: string | null = channelId || null;
+    let finalUniqueFileId: string | null = null;
 
     try {
-      receipt = await botClient.client.upload(
-        bytes as unknown as Uint8Array<ArrayBuffer>,
-        mime || 'application/octet-stream',
-        fileId
-      );
+      if (bytes.byteLength <= MAX_SINGLE_UPLOAD_SIZE) {
+        const receipt = await botClient.client.upload(
+          bytes as unknown as Uint8Array<ArrayBuffer>,
+          mime || 'application/octet-stream',
+          fileId
+        );
+        finalTelegramFileId = receipt.fileId;
+        finalMessageId = receipt.messageId;
+        finalChatId = receipt.chatId || channelId || null;
+        finalUniqueFileId = receipt.uniqueFileId;
+      } else {
+        const CHUNK_SIZE = 15 * 1024 * 1024;
+        const totalChunks = Math.ceil(bytes.byteLength / CHUNK_SIZE);
+        const chunks: Array<{ chunkIndex: number; fileId: string; byteSize: number; messageId: string | null }> = [];
+
+        for (let i = 0; i < totalChunks; i++) {
+          const chunkBytes = bytes.subarray(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, bytes.byteLength));
+          const receipt = await botClient.client.upload(
+            chunkBytes as unknown as Uint8Array<ArrayBuffer>,
+            'application/octet-stream',
+            `${fileId}.part${i}`
+          );
+          chunks.push({
+            chunkIndex: i,
+            fileId: receipt.fileId,
+            byteSize: chunkBytes.byteLength,
+            messageId: receipt.messageId
+          });
+          if (i === 0) {
+            finalMessageId = receipt.messageId;
+            finalChatId = receipt.chatId || channelId || null;
+            finalUniqueFileId = receipt.uniqueFileId;
+          }
+        }
+        finalTelegramFileId = JSON.stringify(chunks);
+      }
     } catch (uploadErr) {
       const elapsedMs = Date.now() - startTime;
       const isTg = uploadErr instanceof TelegramStorageError;
@@ -607,14 +642,14 @@ export async function uploadPipelineFileToStorage(
           last_write_at = now(),
           cooldown_until = NULL,
           updated_at = now()
-      WHERE id = $1
-    `, [shardId, elapsedMs, bytes.byteLength], platformEnv);
+        WHERE id = $1
+      `, [shardId, elapsedMs, bytes.byteLength], platformEnv);
 
     return {
-      telegramFileId: receipt.fileId,
-      telegramMessageId: receipt.messageId,
-      telegramChatId: receipt.chatId || channelId || null,
-      telegramUniqueFileId: receipt.uniqueFileId,
+      telegramFileId: finalTelegramFileId,
+      telegramMessageId: finalMessageId,
+      telegramChatId: finalChatId,
+      telegramUniqueFileId: finalUniqueFileId,
       shardId,
       poolId: shard.pool_id,
       botReference: botClient.botRef,

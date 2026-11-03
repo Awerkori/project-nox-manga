@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { deleteTelegramObject, resolveBotDownloadClient } from '$lib/server/storage-router';
-import { getScanArtifactStorage } from '$lib/server/scan-artifact-storage';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -78,50 +77,36 @@ export const GET = async ({ locals, params, url, platform }) => {
     });
   }
 
+function streamTelegramChunks(
+  chunks: Array<{ chunkIndex: number; fileId: string; byteSize: number }>,
+  botRef: string,
+  platform?: any
+): ReadableStream<Uint8Array> {
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const client = resolveBotDownloadClient(botRef);
+
+  const pipingPromise = (async () => {
+    try {
+      for (const chunk of chunks) {
+        const stream = await client.download(chunk.fileId);
+        await stream.pipeTo(writable, { preventClose: true });
+      }
+      await writable.close();
+    } catch (err) {
+      await writable.abort(err).catch(() => {});
+    }
+  })();
+
+  if (platform?.context?.waitUntil) {
+    platform.context.waitUntil(pipingPromise);
+  }
+
+  return readable;
+}
+
   const disposition = url.searchParams.get('download') === '0' ? 'inline' : 'attachment';
   const safeFilename = (file.file_name || 'arquivo').replace(/["\r\n\\]/g, '_');
   const encodedFilename = encodeURIComponent(file.file_name || 'arquivo');
-
-  // Artifact bytes are private storage, while file records and authorization
-  // above are authoritative YSQL. No client receives a storage URL.
-  if (['STORAGE', 'scan_artifacts', 'supabase'].includes(file.provider)) {
-    try {
-      const staffStorage = getScanArtifactStorage(platform?.env);
-      const { data: blob, error } = await staffStorage.storage.from('scan-artifacts').download(file.file_key);
-      if (error || !blob) {
-        console.error('scan_pipeline_file_storage_download_failed', { code: error?.name || null, message: String(error?.message || 'not_found').slice(0, 240), key: file.file_key });
-        return json({
-          error: 'O arquivo não está disponível no armazenamento neste momento.',
-          details: {
-            reason: error?.message || 'not_found',
-            code: error?.name || 'NOT_FOUND',
-            provider: file.provider,
-            fileKey: file.file_key
-          }
-        }, { status: 502 });
-      }
-
-      const headers = {
-        'Content-Type': file.mime_type || blob.type || 'application/octet-stream',
-        'Content-Disposition': `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
-        'Content-Length': String(blob.size),
-        'Cache-Control': 'private, no-transform, max-age=3600',
-        'X-Content-Type-Options': 'nosniff'
-      };
-
-      return new Response(blob.stream(), { status: 200, headers });
-    } catch (error: any) {
-      console.error('scan_pipeline_file_storage_stream_failed', { message: String(error?.message || 'unknown').slice(0, 240) });
-      return json({
-        error: 'Não foi possível iniciar o download agora.',
-        details: {
-          reason: error?.message || 'unknown_error',
-          provider: file.provider,
-          fileKey: file.file_key
-        }
-      }, { status: 502 });
-    }
-  }
 
   const telegramFileId = file.telegram_file_id || (file.provider === 'TELEGRAM' ? file.file_key : null);
   if (!telegramFileId) {
@@ -130,17 +115,29 @@ export const GET = async ({ locals, params, url, platform }) => {
       details: { provider: file.provider, fileKey: file.file_key }
     }, { status: 404 });
   }
+
+  const headers: Record<string, string> = {
+    'Content-Type': file.mime_type || 'application/octet-stream',
+    'Content-Disposition': `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
+    'Cache-Control': 'private, no-transform, max-age=3600',
+    'X-Content-Type-Options': 'nosniff'
+  };
+  if (file.byte_size && Number.isFinite(Number(file.byte_size))) {
+    headers['Content-Length'] = String(file.byte_size);
+  }
+
   try {
-    const client = resolveBotDownloadClient(file.bot_reference || 'PRODUCTION_STORAGE');
-    const bytes = await client.download(telegramFileId);
-    const headers = {
-      'Content-Type': file.mime_type || 'application/octet-stream',
-      'Content-Disposition': `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
-      'Content-Length': String(bytes.byteLength),
-      'Cache-Control': 'private, no-transform, max-age=3600',
-      'X-Content-Type-Options': 'nosniff'
-    };
-    return new Response(bytes, { status: 200, headers });
+    const botRef = file.bot_reference || 'PRODUCTION_STORAGE';
+    if (typeof telegramFileId === 'string' && telegramFileId.trim().startsWith('[')) {
+      const parsed = JSON.parse(telegramFileId);
+      const chunks = Array.isArray(parsed) ? parsed.sort((a: any, b: any) => a.chunkIndex - b.chunkIndex) : [];
+      const stream = streamTelegramChunks(chunks, botRef, platform);
+      return new Response(stream, { status: 200, headers });
+    }
+
+    const client = resolveBotDownloadClient(botRef);
+    const stream = await client.download(telegramFileId);
+    return new Response(stream, { status: 200, headers });
   } catch (error: any) {
     console.error('scan_pipeline_file_telegram_download_failed', { message: String(error?.message || 'unknown').slice(0, 240) });
     return json({
